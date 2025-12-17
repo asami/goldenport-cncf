@@ -1,0 +1,28 @@
+*~
+bin
+gen
+lib_managed
+lib
+*.bak
+target
+.*
+boot
+
+### Metals (VS Code Scala extension) ###
+.metals/
+project/**/.metals/
+
+# metals.sbt をすべての階層で無視
+metals.sbt
+project/**/metals.sbt
+
+### BSP / bloop ###
+.bloop/
+project/**/.bloop/
+
+### VSCode ###
+.vscode/
+
+### BSP logs ###
+bsp.log
+project/**/bsp.log

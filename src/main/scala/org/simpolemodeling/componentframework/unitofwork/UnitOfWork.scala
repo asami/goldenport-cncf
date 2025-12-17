@@ -6,6 +6,11 @@ import org.simplemodeling.componentframework.*
 import org.simplemodeling.componentframework.entity.EntityStore
 import org.simplemodeling.componentframework.entity.EntityStore.*
 
+/*
+ * @since   Apr. 11, 2025
+ * @version Apr. 11, 2025
+ * @author  ASAMI, Tomoharu
+ */
 class UnitOfWork(
   context: ExecutionContext
 ) {

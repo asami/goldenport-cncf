@@ -2,6 +2,11 @@ package org.simplemodeling.componentframework.datatype
 
 import scala.util.*
 
+/*
+ * @since   Apr. 11, 2025
+ * @version Apr. 11, 2025
+ * @author  ASAMI, Tomoharu
+ */
 trait EntityId {
   def string: String
 }

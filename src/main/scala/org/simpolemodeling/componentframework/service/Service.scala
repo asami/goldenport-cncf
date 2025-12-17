@@ -1,9 +1,12 @@
-package org.simplemodeling.componentframework.event
+package org.simplemodeling.componentframework.service
 
 /*
  * @since   Apr. 11, 2025
  * @version Apr. 11, 2025
  * @author  ASAMI, Tomoharu
  */
-trait Event {
+trait Service {
+}
+
+object Service {
 }
