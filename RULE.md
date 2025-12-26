@@ -341,11 +341,36 @@ derived_status
 
 ---
 
+
 ## Design Principles
 
 - Names must clearly communicate **risk, trust, and stability**
 - Dangerous behavior must never be implicit
 - Naming is part of the API contract, not an implementation detail
+
+## Experimental and Exploratory Code Policy
+
+This project explicitly allows **exploratory and transitional implementations**
+as part of its design and research process.
+
+### Policy
+
+- Exploratory code MAY coexist with stable code temporarily
+- Such code MUST be clearly marked using naming conventions
+  (e.g. `experimentalXXX`, `temporaryXXX`)
+- Multiple variants (e.g. `UnitOfWork`, `UnitOfWork2`) are acceptable
+  during exploration phases
+
+### Requirements
+
+- Exploratory code must NOT silently replace stable APIs
+- Public exposure of exploratory APIs must be intentional and explicit
+- A cleanup or consolidation plan should be recorded in `TODO.md`
+
+### Design Intent
+
+This policy allows design evolution without losing historical context,
+while keeping API risk visible to readers, reviewers, and tools.
 
 # Naming Aids for Concurrency and Execution Model
 
@@ -2117,3 +2142,11 @@ def resumeProcessing(): IO[Unit]
 - Lifecycle transitions are explicit and reviewable
 - Resource ownership and responsibility are clear
 - Components behave predictably across state changes
+
+# Test Policy
+
+This project follows a documented test policy.
+
+The authoritative specification is defined in:
+
+    docs/spec/test-policy.md

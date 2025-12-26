@@ -4,9 +4,10 @@ gen
 lib_managed
 lib
 *.bak
-target
-.*
+/target/
+/project/**/target/
 boot
+.tmp-sbt
 
 ### Metals (VS Code Scala extension) ###
 .metals/
@@ -19,6 +20,7 @@ project/**/metals.sbt
 ### BSP / bloop ###
 .bloop/
 project/**/.bloop/
+.bsp/
 
 ### VSCode ###
 .vscode/
@@ -26,3 +28,10 @@ project/**/.bloop/
 ### BSP logs ###
 bsp.log
 project/**/bsp.log
+
+# OS / env
+.DS_Store
+.env
+
+### IntelliJ IDEA ###
+.idea/

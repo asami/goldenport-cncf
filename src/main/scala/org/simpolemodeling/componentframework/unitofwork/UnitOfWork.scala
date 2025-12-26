@@ -2,13 +2,13 @@ package org.simplemodeling.componentframework.unitofwork
 
 import scala.util.{Try, Success, Failure}
 import java.io.File
-import org.simplemodeling.componentframework.*
+import org.simplemodeling.componentframework.context.ExecutionContext
 import org.simplemodeling.componentframework.entity.EntityStore
 import org.simplemodeling.componentframework.entity.EntityStore.*
 
 /*
  * @since   Apr. 11, 2025
- * @version Apr. 11, 2025
+ * @version Dec. 21, 2025
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
@@ -99,7 +99,7 @@ object UnitOfWork {
     val store: EntityStore = ???
     val data: Record = Map.empty
 
-    val ctx = ExecutionContext.create()
+    val ctx: ExecutionContext = ???
 
     implicit val instance = new EntityInstance[Product] {
     }
@@ -110,7 +110,7 @@ object UnitOfWork {
 
   trait ServiceOperation[T] {
     def execute() = {
-      val ctx = ExecutionContext.create()
+      val ctx: ExecutionContext = ???
       val uowi = UnitOfWorkInterpreter.create(ctx)
       val program = operation_program
       val r = program.foldMap(uowi)
@@ -159,7 +159,7 @@ object UnitOfWork {
     val program = for {
       r <- create(store, data)
     } yield r
-    program.foldMap(ctx.unitOfWorkInterpreter)
+    program.foldMap(ctx.runtime.unitOfWorkInterpreter)
   }
 }
 

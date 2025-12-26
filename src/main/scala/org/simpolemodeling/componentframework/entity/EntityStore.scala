@@ -1,10 +1,11 @@
 package org.simplemodeling.componentframework.entity
 
+import org.simplemodeling.Consequence
 import org.simplemodeling.componentframework.*
 
 /*
  * @since   Apr. 11, 2025
- * @version Apr. 11, 2025
+ * @version Dec. 18, 2025
  * @author  ASAMI, Tomoharu
  */
 case class EntityStore(name: String) {

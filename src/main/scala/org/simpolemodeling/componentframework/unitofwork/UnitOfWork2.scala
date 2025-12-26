@@ -1,12 +1,13 @@
 package org.simplemodeling.componentframework.unitofwork
 
+import org.simplemodeling.Consequence
 import org.simplemodeling.componentframework.*
 import org.simplemodeling.componentframework.entity.EntityStore
 import org.simplemodeling.componentframework.entity.EntityStore.*
 
 /*
  * @since   Apr. 11, 2025
- * @version Apr. 11, 2025
+ * @version Dec. 18, 2025
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork2 {
@@ -104,17 +105,17 @@ object UnitOfWork2 {
   }
 
   trait ServiceOperation[T] {
-    def execute() = {
+    def execute(): Consequence[T] = {
       val uowi = UnitOfWorkInterpreter.create()
       val program = operation_program
       val r = program.foldMap(uowi)
       r match {
-        case Consequence.Success(s) =>
+        case m: Consequence.Success[T] =>
           uowi.commit()
-          s
-        case Consequence.Error(e) =>
+          m
+        case m: Consequence.Failure[T] =>
           uowi.abort()
-          e
+          m
       }
     }
 
