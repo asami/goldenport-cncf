@@ -3,11 +3,13 @@ val scala3Version = "3.6.2"
 lazy val root = project
   .in(file("."))
   .settings(
-    organization := "org.simplemodeling",
-    name := "component-framework",
-    version := "0.1.2",
+    organization := "org.goldenport",
+    name := "cncf",
+    version := "0.2.0",
 
     scalaVersion := scala3Version,
+
+    resolvers += "GitHub Packages" at "https://maven.pkg.github.com/asami/maven-repository",
 
     libraryDependencies ++= Seq(
       // Functional core
@@ -24,9 +26,17 @@ lazy val root = project
       "io.circe" %% "circe-generic" % "0.14.6",
       "io.circe" %% "circe-parser"  % "0.14.6",
 
-      "org.simplemodeling" %% "core" % "0.0.1-SNAPSHOT",
+      "org.goldenport" %% "core" % "0.1.0",
 
       // Testing
       "org.scalatest" %% "scalatest" % "3.2.18" % Test
-    )
+    ),
+
+    publishTo := Some(
+      "GitHub Packages" at "https://maven.pkg.github.com/asami/maven-repository"
+    ),
+
+    credentials += Credentials(Path.userHome / ".sbt" / ".credentials"),
+
+    publishMavenStyle := true
   )
