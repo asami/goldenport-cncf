@@ -3,16 +3,28 @@ package org.goldenport.cncf.action
 import org.goldenport.Consequence
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.protocol.spec.OperationDefinition
 import org.goldenport.cncf.component.ComponentActionEntry
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
-import org.goldenport.cncf.security.AuthorizationDecision
-import org.goldenport.cncf.security.AuthorizationEngine
+import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
+
+type Engine = ActionEngine
+
+trait ActionCallBuilder {
+  def build(
+    opdef: OperationDefinition,
+    request: Request,
+    executionContext: ExecutionContext,
+    correlationId: Option[CorrelationId]
+  ): Consequence[ActionCall]
+}
 
 /*
  * @since   Apr. 11, 2025
  *  version Apr. 15, 2025
  *  version Dec. 21, 2025
- * @version Jan.  1, 2026
+ *  version Jan.  1, 2026
+ * @version Jan.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionExecutor {
@@ -36,13 +48,13 @@ class DefaultActionExecutor(
   ): Consequence[OperationResponse] = {
     builder.build(entry.opdef, request, executionContext, correlationId).flatMap { basecall =>
       val call = ActionLogicCall(basecall, entry.logic)
-      call.apply(call.request)
+      call.execute()
     }
   }
 }
 
 class EngineActionExecutor(
-  engine: Engine,
+  engine: ActionEngine,
   builder: ActionCallBuilder
 ) extends ActionExecutor {
 
@@ -62,14 +74,11 @@ class EngineActionExecutor(
 final case class ActionLogicCall(
   base: ActionCall,
   logic: ActionLogic
-) extends ActionCall {
-  def action: Action = base.action
-  def executionContext: ExecutionContext = base.executionContext
-  def correlationId: Option[CorrelationId] = base.correlationId
-  def request = base.request
+) extends ActionCall(base.core) {
+  override def action: Action = base.action
   def accesses: Seq[ResourceAccess] = base.accesses
 
-  def apply(req: org.goldenport.protocol.operation.OperationRequest): Consequence[OperationResponse] =
+  def execute(): Consequence[OperationResponse] =
     logic.execute(this)
 }
 
@@ -79,91 +88,45 @@ abstract class ActionLogic {
   ): Consequence[OperationResponse]
 }
 
-class Engine(
-  authorizationEngine: AuthorizationEngine
-) {
-  def run(
-    call: ActionCall
-  ): Consequence[OperationResponse] =
-    Consequence {
-      val ec = call.executionContext
-      observe_enter(call)
-      val r = call().take
-      observe_leave(call, Consequence.Success(r))
-      r
-    }
-
-  def execute(
-    call: ActionCall
-  ): Consequence[OperationResponse] = {
-    val ec = call.executionContext
-
-    val authresult: Consequence[Unit] =
-      Consequence {
-        security_authorize(call, ec)
-        ()
-      }
-
-    authresult.flatMap { _ =>
-      Consequence run {
-        observe_enter(call)
-        try {
-          val r = call()
-          ec.runtime.commit()
-          observe_leave(call, r)
-          r
-        } catch {
-          case e: Throwable =>
-            ec.runtime.abort()
-            observe_leave(call, Consequence.Failure(org.goldenport.Conclusion.from(e)))
-            throw e
-        } finally {
-          ec.runtime.dispose()
-        }
-      }
-    }
-  }
-
-  def toExecutionContext(p: String): Consequence[ExecutionContext] = ???
-
-  def toExecutionContext(p: Array[Byte]): Consequence[ExecutionContext] = ???
-
-  protected def observe_enter(
-    call: ActionCall
-  ): Unit = {
-  }
-
-  protected def observe_leave(
-    call: ActionCall,
-    result: Consequence[OperationResponse]
-  ): Unit = {
-  }
-
-  protected def security_authorize(
-    call: ActionCall,
-    ec: ExecutionContext
-  ): Unit = {
-    call.accesses.foreach { access =>
-      val decision =
-        authorizationEngine.authorize(
-          ec,
-          access.resource,
-          access.action
+final class DefaultActionCallBuilder extends ActionCallBuilder {
+  def build(
+    opdef: OperationDefinition,
+    request: Request,
+    executionContext: ExecutionContext,
+    correlationId: Option[CorrelationId]
+  ): Consequence[ActionCall] = {
+    opdef.createOperationRequest(request).map { opreq =>
+      val action = ProtocolAction(request.operation)
+      DefaultActionCall(
+        action,
+        core = ActionCall.Core(
+          action = action,
+          executionContext = executionContext,
+          correlationId = correlationId
         )
-      observe_authorization(call, decision)
+      )
     }
-  }
-
-  protected def observe_authorization(
-    call: ActionCall,
-    decision: AuthorizationDecision
-  ): Unit = {
   }
 }
 
-object Engine {
-  def create(
-    authorizationEngine: AuthorizationEngine
-  ): Engine =
-    new Engine(authorizationEngine)
+final case class DefaultActionCall(
+  override val action: Action,
+  override val core: ActionCall.Core
+) extends ActionCall(core) {
+  def accesses: Seq[ResourceAccess] = Nil
+
+  def execute(): Consequence[OperationResponse] =
+    Consequence.failure("ActionCall execution is not implemented in Phase 1")
+}
+
+final case class ResourceAccess(
+  resource: SecuredResource,
+  action: SecurityAction
+)
+
+private final case class ProtocolAction(
+  name: String
+) extends Action {
+  def createCall(core: ActionCall.Core): ActionCall =
+    DefaultActionCall(this, core)
 }

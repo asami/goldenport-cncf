@@ -22,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  1, 2026
- * @version Jan.  1, 2026
+ * @version Jan.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentActionRouteSpec extends AnyWordSpec with Matchers {
@@ -216,7 +216,7 @@ final class TestActionLogic extends ActionLogic {
     _invoked = true
     _received_execution_context = Some(call.executionContext)
     _received_correlation_id = call.executionContext.observability.correlationId
-    Consequence.success(new OperationResponse() {})
+    Consequence.success(OperationResponse.Void)
   }
 }
 
@@ -232,27 +232,42 @@ final class RecordingActionCallBuilder extends ActionCallBuilder {
     correlationId: Option[CorrelationId]
   ): Consequence[ActionCall] = {
     _invoked = true
+    val action =
+      new Command(request.operation) {
+        override def createCall(
+          core: ActionCall.Core
+        ): ActionCall =
+          RecordingActionCall(core)
+      }
+    val _ = opdef.createOperationRequest(request)
     Consequence.success(
       RecordingActionCall(
-        action = new Command(request.operation) {},
-        executionContext = executionContext,
-        correlationId = correlationId,
-        request = opdef.createOperationRequest(request).take
+        core = ActionCall.Core(
+          action = action,
+          executionContext = executionContext,
+          correlationId = correlationId
+        )
       )
     )
   }
 }
 
 final case class RecordingActionCall(
-  action: Action,
-  executionContext: ExecutionContext,
-  correlationId: Option[CorrelationId],
-  request: OperationRequest
-) extends ActionCall {
+  override val core: ActionCall.Core
+) extends ActionCall(core) {
+  private val _action: Action =
+    new Command("recording") {
+      override def createCall(
+        core: ActionCall.Core
+      ): ActionCall =
+        RecordingActionCall(core)
+    }
+
+  override def action: Action = _action
   def accesses: Seq[ResourceAccess] = Nil
 
-  def apply(req: OperationRequest): Consequence[OperationResponse] =
-    Consequence.failure("RecordingActionCall does not execute")
+  def execute(): Consequence[OperationResponse] =
+    Consequence.failure("stub: Phase 3 Action execution not implemented")
 }
 
 final case class TestPrincipal() extends Principal {

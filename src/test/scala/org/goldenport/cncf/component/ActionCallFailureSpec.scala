@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  1, 2026
- * @version Jan.  1, 2026
+ * @version Jan.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionCallFailureSpec extends AnyWordSpec with Matchers {
@@ -137,7 +137,7 @@ final class RecordingActionLogic extends ActionLogic {
     call: ActionCall
   ): Consequence[OperationResponse] = {
     _invoked = true
-    Consequence.success(new OperationResponse() {})
+    Consequence.success(OperationResponse.Void)
   }
 }
 
@@ -153,12 +153,21 @@ final class FailureActionCallBuilder extends ActionCallBuilder {
     correlationId: Option[CorrelationId]
   ): Consequence[ActionCall] = {
     _invoked = true
-    opdef.createOperationRequest(request).map { opreq =>
+    opdef.createOperationRequest(request).map { _ =>
+      val action =
+        new Command(request.operation) {
+          override def createCall(
+            core: ActionCall.Core
+          ): ActionCall =
+            RecordingActionCall(core)
+        }
       DefaultActionCall(
-        action = new Command(request.operation) {},
-        executionContext = executionContext,
-        correlationId = correlationId,
-        request = opreq
+        action = action,
+        core = ActionCall.Core(
+          action = action,
+          executionContext = executionContext,
+          correlationId = correlationId
+        )
       )
     }
   }

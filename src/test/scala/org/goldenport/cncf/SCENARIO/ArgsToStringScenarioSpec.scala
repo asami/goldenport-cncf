@@ -1,17 +1,21 @@
 package org.goldenport.cncf.SCENARIO
 
 import cats.data.NonEmptyVector
+import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.spec
 import org.goldenport.protocol.Request
+import org.goldenport.protocol.Response
 import org.goldenport.protocol.Argument
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.ingress.IngressCollection
 import org.goldenport.protocol.handler.ingress.DefaultArgsIngress
 import org.goldenport.protocol.handler.egress.EgressCollection
+import org.goldenport.protocol.handler.egress.Egress
 import org.goldenport.protocol.handler.projection.ProjectionCollection
-import org.goldenport.protocol.operation.OperationRequest
+import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.logic.ProtocolLogic
+import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, Query, ResourceAccess}
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -28,7 +32,7 @@ import org.scalatest.matchers.should.Matchers
  */
 /*
  * @since   Jan.  1, 2026
- * @version Jan.  2, 2026
+ * @version Jan.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen with Matchers {
@@ -73,13 +77,40 @@ private object TestQueryOperation extends spec.OperationDefinition {
     req.arguments.headOption match {
       case Some(arg) =>
         org.goldenport.Consequence.Success(
-          new OperationRequest {
+          new Query("query") {
+            override def createCall(
+              core: ActionCall.Core
+            ): ActionCall = {
+              val actionself = this
+              new ActionCall(core) {
+                override def action: Action = actionself
+                override def accesses: Seq[ResourceAccess] = Nil
+                override def execute(): org.goldenport.Consequence[OperationResponse] =
+                  org.goldenport.Consequence.Success(
+                    new OperationResponse {
+                      override def toResponse: Response = Response.Scalar[String](toString)
+                      override def toString: String = s"Query(${arg.value})"
+                    }
+                  )
+              }
+            }
+
             override def toString: String = s"Query(${arg.value})"
           }
         )
       case None =>
         org.goldenport.Consequence.failure("missing argument: query")
     }
+  }
+}
+
+import org.goldenport.protocol.handler.egress.Egress
+
+private object TestStringEgress extends Egress[String] {
+  def kind: Egress.Kind[String] = Egress.Kind.`String`
+
+  override def egress(res: Response): Consequence[String] = {
+    Consequence("OK") // TODO
   }
 }
 
@@ -108,7 +139,9 @@ private object TestProtocol {
               Vector(DefaultArgsIngress())
             ),
           egresses =
-            EgressCollection(),
+            EgressCollection(
+              Vector(TestStringEgress)
+            ),
           projections =
             ProjectionCollection()
         )
@@ -123,11 +156,20 @@ final case class ScenarioResult(
 object TestComponent {
   val protocol: Protocol = TestProtocol.protocol
   val protocolLogic = ProtocolLogic(protocol)
+  val engine = ActionEngine.create()
 
   def runCli(args: Array[String]): ScenarioResult = {
     protocolLogic.makeOperationRequest(args) match {
       case org.goldenport.Consequence.Success(opreq) =>
-        ScenarioResult(isSuccess = true, value = opreq.toString)
+        opreq match {
+          case action: Action =>
+            val ac = engine.createActionCall(action)
+            val r = for {
+              res <- engine.execute(ac)
+              r <- protocolLogic.makeStringOperationResponse(res)
+            } yield r
+            ScenarioResult(isSuccess = true, value = opreq.toString)
+        }
       case org.goldenport.Consequence.Failure(err) =>
         println("MESSAGE      : " + err.message)
         println("STATUS       : " + err.status)

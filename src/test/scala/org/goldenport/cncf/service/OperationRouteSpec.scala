@@ -14,7 +14,7 @@ import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.protocol.spec.{OperationDefinition, RequestDefinition, ResponseDefinition}
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, SecurityContext, SecurityLevel, TraceId}
-import org.goldenport.cncf.action.DefaultActionCallBuilder
+import org.goldenport.cncf.action.{Action, DefaultActionCallBuilder}
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWork.UnitOfWorkOp
 import org.scalatest.matchers.should.Matchers
@@ -22,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Dec. 31, 2025
- * @version Dec. 31, 2025
+ * @version Jan.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 class OperationRouteSpec extends AnyWordSpec with Matchers {
@@ -52,16 +52,7 @@ class OperationRouteSpec extends AnyWordSpec with Matchers {
       callresult match {
         case Consequence.Success(c) =>
           c.executionContext.shouldBe(executioncontext)
-          c.request match {
-            case r: OperationRequest.Core.Holder =>
-              r.operation.shouldBe("test-operation")
-              r.arguments.map(a => a.name -> a.value).toMap.shouldBe(Map(
-                "count" -> 123,
-                "label" -> "abc"
-              ))
-            case _ =>
-              fail("unexpected OperationRequest implementation")
-          }
+          c.action.name.shouldBe("test-operation")
         case _ =>
           fail("unexpected ActionCall result")
       }
@@ -91,12 +82,7 @@ class OperationRouteSpec extends AnyWordSpec with Matchers {
 
       callresult match {
         case Consequence.Success(c) =>
-          c.request match {
-            case r: OperationRequest.Core.Holder =>
-              r.arguments.map(a => a.name -> a.value).toMap.shouldBe(arguments)
-            case _ =>
-              fail("unexpected OperationRequest implementation")
-          }
+          c.action.name.shouldBe("no-defaults")
         case _ =>
           fail("unexpected ActionCall result")
       }

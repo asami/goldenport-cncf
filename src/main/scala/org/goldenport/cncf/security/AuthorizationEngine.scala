@@ -5,7 +5,8 @@ import org.goldenport.cncf.context.SecurityLevel
 
 /*
  * @since   Dec. 21, 2025
- * @version Dec. 21, 2025
+ *  version Dec. 21, 2025
+ * @version Jan.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait AuthorizationDecision
@@ -21,6 +22,10 @@ trait AuthorizationEngine {
     resource: SecuredResource,
     action: Action
   ): AuthorizationDecision
+}
+
+object AuthorizationEngine {
+  def create(): AuthorizationEngine = DefaultAuthorizationEngine()
 }
 
 final class DefaultAuthorizationEngine extends AuthorizationEngine {
