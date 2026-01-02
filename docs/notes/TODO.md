@@ -8,6 +8,12 @@ Cozy-generated components based on Event-Centered Architecture.
 
 ---
 
+## Migration Status (Done)
+
+- [x] Introduce core EnvironmentContext adapter in CNCF
+- [x] Normalize runtime/observability IDs to wrap CanonicalId
+- [x] Disable CNCF-side CanonicalId generation
+
 ## 1. Core Runtime Foundations
 
 ### 1.1 Component / Componentlet Runtime

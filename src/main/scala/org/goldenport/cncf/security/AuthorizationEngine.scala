@@ -29,12 +29,10 @@ final class DefaultAuthorizationEngine extends AuthorizationEngine {
     resource: SecuredResource,
     action: Action
   ): AuthorizationDecision =
-    ctx.security match {
-      case Some(sec) if sec.level == resource.securityLevel =>
-        AuthorizationDecision.Allow
-      case _ =>
-        AuthorizationDecision.Deny
-    }
+    if (ctx.security.level == resource.securityLevel)
+      AuthorizationDecision.Allow
+    else
+      AuthorizationDecision.Deny
 }
 
 // TEMPORARY (to be removed after demo)

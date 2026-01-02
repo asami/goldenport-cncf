@@ -29,6 +29,26 @@ Its responsibility is to define and standardize:
 Semantic Integration Engine (SIE) is the first real consumer,
 but it is **NOT** the owner of these mechanisms.
 
+## Core Dependencies
+
+CNCF depends on goldenport core for the following abstractions:
+
+- `EnvironmentContext`
+- `ExecutionContext` (core abstraction; CNCF provides a runtime-bound instance)
+- `CanonicalId`
+
+These abstractions are **core-owned**.
+CNCF must not reinterpret or extend their semantics.
+
+CNCF responsibilities are limited to:
+
+- detecting environment facts at bootstrap (currently via `EnvironmentContext.Local.detect`)
+- explicitly constructing core contexts
+- injecting contexts into runtime flows
+- using `CanonicalId` as a correlation identifier only
+
+CanonicalId generation is not implemented in CNCF.
+
 ## Purpose
 
 The primary purpose of this framework is to answer the following question:
@@ -121,7 +141,7 @@ The stable execution boundary of the framework remains the **OperationCall**.
 The Interaction Contract describes how operations and events are *admitted*
 into the system before execution is coordinated by the runtime.
 
-This conceptual layer is documented in more detail in `docs/component-architecture.md`
+This conceptual layer is documented in more detail in `docs/design/component-model.md`
 and is expected to inform future refinement of the Component and OperationCall models.
 
 
@@ -188,8 +208,12 @@ ExecutionContext is:
 - Not implicit
 - Not visible in domain function signatures
 
+ExecutionContext is a CNCF runtime contract for CNCF consumers.
+Consumers (including SIE) should rely on CNCF documentation only;
+knowledge of core abstractions is not required.
+
 Authoritative execution semantics are defined in:
-- docs/execution-model.md
+- docs/design/execution-model.md
 
 ---
 

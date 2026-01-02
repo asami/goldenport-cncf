@@ -1,6 +1,7 @@
 package org.goldenport.cncf.context
 
 import java.time.Instant
+import org.goldenport.id.UniversalId
 
 /*
  * @since   Dec. 21, 2025

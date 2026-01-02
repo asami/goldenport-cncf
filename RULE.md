@@ -200,6 +200,27 @@ protected def experimental_stream_apply(cmd: Command): Result
 
 ---
 
+## Execution naming
+
+- prepare: Action / Scenario の意味構造を構築する（非実行）
+- execute: prepared な ActionCall を実行する
+- run: interpreter / scenario / workflow を駆動する
+
+Free Monad / interpreter モデルでは:
+- execute = algebra evaluation
+- run = program interpretation
+
+---
+
+## Collection / Group idiom
+
+- Collection / Group 系の型は以下を必ず提供すること:
+  - default empty 引数
+  - canonical empty 値
+  - zero-arg apply()（binary compatibility のため）
+
+---
+
 ## Unsafe
 
 ### Meaning
