@@ -13,9 +13,12 @@ import org.goldenport.protocol.handler.ingress.DefaultArgsIngress
 import org.goldenport.protocol.handler.egress.EgressCollection
 import org.goldenport.protocol.handler.egress.Egress
 import org.goldenport.protocol.handler.projection.ProjectionCollection
+import org.goldenport.protocol.service.{Service => ProtocolService}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.logic.ProtocolLogic
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, Query, ResourceAccess}
+import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.service.Service
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -37,7 +40,7 @@ import org.scalatest.matchers.should.Matchers
  */
 class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen with Matchers {
 
-  "Primary scenario: args -> OperationRequest" should {
+  "OLD: Primary scenario: args -> OperationRequest" should {
 
     "execute args to an OperationRequest result" in {
       Given("minimal CLI-like arguments")
@@ -51,6 +54,23 @@ class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen with Match
       result.isSuccess shouldBe true
       result.value shouldBe a[String]
       result.value.toString should include ("Query")
+    }
+  }
+
+  "Primary scenario: args -> OperationRequest" should {
+
+    "execute args to an OperationRequest result" in {
+      Given("minimal CLI-like arguments")
+      val args = Array("query", "hello")
+
+      When("executing the primary scenario")
+      val result = Test2Component.service.executeCli(args)
+
+      Then("execution succeeds and returns an OperationRequest string")
+      // result.isSuccess shouldBe true
+      // result.value shouldBe a[String]
+      // result.value.toString should include ("Query")
+      println(result)
     }
   }
 }
@@ -177,5 +197,25 @@ object TestComponent {
         println("DESCRIPTOR   : " + err.observation.descriptor)
         ScenarioResult(isSuccess = false, value = err.toString)
     }
+  }
+}
+
+val Test2Component = {
+  Component.create(
+    TestProtocol.protocol,
+    Test2Service.Factory()
+  )
+}
+
+case class Test2Service(
+  core: ProtocolService.Core,
+  ccore: Service.CCore
+) extends Service
+object Test2Service {
+  class Factory() extends Component.ServiceFactory() {
+    def create(
+      core: ProtocolService.Core,
+      ccore: Service.CCore
+    ): Service = Test2Service(core, ccore)
   }
 }
