@@ -198,6 +198,12 @@ class UsecaseSpec extends AnyWordSpec with GivenWhenThen {
 | **Purpose**          | Specify semantics of individual interfaces | Specify semantics of complete use cases     |
 | **Viewpoint**        | Component-level, isolated interface semantics | Scenario-level, holistic domain semantics    |
 | **Granularity**      | Fine-grained, detailed input/output rules  | Coarse-grained, end-to-end semantic flows   |
+| **Stability**        | More stable, tied to interface contracts   | More volatile, reflecting evolving use cases|
+| **Naming**           | Named after interfaces or operations        | Named after use cases or scenarios           |
+
+---
+
+Both kinds of specifications are **executable semantic interpretations** that answer different questions about the model meaning. They provide complementary perspectives and together ensure comprehensive semantic documentation.
 
 ---
 
@@ -217,12 +223,54 @@ Primary scenario example:
 - Scenario specs may start with stubs.
 - Scenario specs are refined incrementally.
 - This staged approach is intentional and encouraged in CNCF.
-| **Stability**        | More stable, tied to interface contracts   | More volatile, reflecting evolving use cases|
-| **Naming**           | Named after interfaces or operations        | Named after use cases or scenarios           |
 
----
+## Scenario Spec as Executable Requirement
 
-Both kinds of specifications are **executable semantic interpretations** that answer different questions about the model meaning. They provide complementary perspectives and together ensure comprehensive semantic documentation.
+Scenario Specs are executable requirements validating externally observable CNCF behavior at the system boundary (Protocol → Component → Job / Result).  
+Scenario Specs MUST NOT depend on internal mechanisms, classes, or execution strategies.
+
+### Placement and Package Rule (MUST)
+
+- Ordinary Executable Specs (unit / component-level) MUST reside in the same package as their production code. This is governed by the general `PACKAGE PLACEMENT RULE`.
+- Requirement-level Scenario Specs MUST be placed under a dedicated `SCENARIO` package.
+- The use of the uppercase package name `SCENARIO` is intentional to emphasize semantic distinction from ordinary specs.
+- The `SCENARIO` package is reserved exclusively for requirement-level specifications.
+
+### Naming and Structure Rules (MUST)
+
+- Scenario Spec class names MUST end with `ScenarioSpec`.
+- Scenario Specs MUST use Given / When / Then structure.
+- Scenario Specs MUST assert only public inputs and outputs (Args / Request in, JobId / Status / Result out).
+
+### Prohibited Dependencies (MUST NOT)
+
+- Scenario Specs MUST NOT reference internal classes (e.g. JobRecord, InMemoryJobEngine).
+- Scenario Specs MUST NOT assert on execution mechanisms, timing precision, thread counts, or log output.
+- Scenario Specs MUST NOT bypass Protocol ingress/egress for result observation.
+
+## Scenario Spec as Executable Requirement
+
+Scenario Specs are executable requirements validating externally observable CNCF behavior at the system boundary (Protocol → Component → Job / Result).  
+Scenario Specs MUST NOT depend on internal mechanisms, classes, or execution strategies.
+
+### Placement and Package Rule (MUST)
+
+- Ordinary Executable Specs (unit / component-level) MUST reside in the same package as their production code. This is governed by the general `PACKAGE PLACEMENT RULE`.
+- Requirement-level Scenario Specs MUST be placed under a dedicated `SCENARIO` package.
+- The use of the uppercase package name `SCENARIO` is intentional to emphasize semantic distinction from ordinary specs.
+- The `SCENARIO` package is reserved exclusively for requirement-level specifications.
+
+### Naming and Structure Rules (MUST)
+
+- Scenario Spec class names MUST end with `ScenarioSpec`.
+- Scenario Specs MUST use Given / When / Then structure.
+- Scenario Specs MUST assert only public inputs and outputs (Args / Request in, JobId / Status / Result out).
+
+### Prohibited Dependencies (MUST NOT)
+
+- Scenario Specs MUST NOT reference internal classes (e.g. JobRecord, InMemoryJobEngine).
+- Scenario Specs MUST NOT assert on execution mechanisms, timing precision, thread counts, or log output.
+- Scenario Specs MUST NOT bypass Protocol ingress/egress for result observation.
 
 ---
 

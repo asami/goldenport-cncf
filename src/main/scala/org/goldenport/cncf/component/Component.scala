@@ -9,12 +9,14 @@ import org.goldenport.protocol.service.{Service => ProtocolService}
 // import org.goldenport.cncf.action.ActionLogic
 import org.goldenport.cncf.action.ActionEngine
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
+import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.service.{Service, ServiceGroup}
 import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
 
 /*
  * @since   Jan.  1, 2026
- * @version Jan.  3, 2026
+ *  version Jan.  3, 2026
+ * @version Jan.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component extends Component.Core.Holder {
@@ -39,6 +41,7 @@ object Component {
     protocol: Protocol,
     protocolLogic: ProtocolLogic,
     actionEngine: ActionEngine,
+    jobEngine: JobEngine,
     serviceFactory: ServiceFactory
   )
   object Core {
@@ -48,6 +51,7 @@ object Component {
       def protocol = core.protocol
       def protocolLogic = core.protocolLogic
       def actionEngine = core.actionEngine
+      def jobEngine = core.jobEngine
       def serviceFactory = core.serviceFactory
     }
   }
@@ -90,6 +94,7 @@ object Component {
       protocol,
       ProtocolLogic(protocol),
       ActionEngine.create(),
+      InMemoryJobEngine.create(),
       serviceFactory
     )
     serviceFactory.setup(r)
@@ -100,12 +105,14 @@ object Component {
     protocol: Protocol,
     protocolLogic: ProtocolLogic,
     actionEngine: ActionEngine,
+    jobEngine: JobEngine,
     serviceFactory: ServiceFactory
   ): Component = {
     val core = Core(
       protocol,
       protocolLogic,
       actionEngine,
+      jobEngine,
       serviceFactory
     )
     Instance(core)

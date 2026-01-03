@@ -5,21 +5,49 @@ import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.{Protocol, Request, Response}
 import org.goldenport.protocol.service.{Service as ProtocolService}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
-import org.goldenport.cncf.action.Action
+import org.goldenport.cncf.action.{Action, Command, Query}
 import org.goldenport.cncf.action.ActionEngine
 import org.goldenport.cncf.component.{Component, ComponentLogic}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
+import org.goldenport.cncf.job.{ActionId, ActionTask, JobContext}
 
 /*
  * @since   Apr. 11, 2025
  *  version Dec. 31, 2025
- * @version Jan.  3, 2026
+ *  version Jan.  3, 2026
+ * @version Jan.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Service extends ProtocolService with Service.CCore.Holder {
+  def call(
+    name: String,
+    request: Request,
+    executionContext: ExecutionContext,
+    correlationId: Option[CorrelationId]
+  ): Consequence[OperationResponse] = {
+    val _ = name
+    logic.makeOperationRequest(request).flatMap {
+      case action: Command =>
+        val actionid = ActionId.generate()
+        val task = ActionTask(actionid, action, logic.component.actionEngine)
+        val jobid = logic.submitJob(List(task), executionContext)
+        Consequence.success(OperationResponse.Scalar(jobid.value))
+      case action: Query =>
+        val actionid = ActionId.generate()
+        val jobcontext = JobContext(None, None, Some(actionid))
+        val ctx = ExecutionContext.withJobContext(executionContext, jobcontext)
+        val task = ActionTask(actionid, action, logic.component.actionEngine)
+        task.run(ctx).result
+      case _ =>
+        Consequence.failure("OperationRequest must be Action")
+    }
+  }
+
   def executeCli(args: Array[String]): Consequence[String] =
     for {
-      opreq <- logic.makeOperationRequest(args)
-      res <- _execute(opreq)
+      req <- logic.component.protocolLogic.makeRequest(args)
+      ctx = ExecutionContext.create()
+      res <- call(req.operation, req, ctx, ctx.observability.correlationId)
       r <- logic.makeStringOperationResponse(res)
     } yield r
 

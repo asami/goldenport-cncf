@@ -4,12 +4,15 @@ import org.goldenport.id.UniversalId
 
 /*
  * @since   Dec. 21, 2025
- * @version Dec. 31, 2025
+ *  version Dec. 31, 2025
+ * @version Jan.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TraceId(
   underlying: UniversalId
-) extends UniversalId(underlying.value)
+) {
+  def value: String = underlying.value
+}
 
 object TraceId {
   @deprecated(
@@ -24,11 +27,15 @@ object TraceId {
 
 final case class SpanId(
   underlying: UniversalId
-) extends UniversalId(underlying.value)
+) {
+  def value: String = underlying.value
+}
 
 final case class CorrelationId(
   underlying: UniversalId
-) extends UniversalId(underlying.value)
+) {
+  def value: String = underlying.value
+}
 
 final case class ObservabilityContext(
   traceId: TraceId,
