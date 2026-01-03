@@ -16,9 +16,11 @@ import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.service.{Service => ProtocolService}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.logic.ProtocolLogic
-import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, Query, ResourceAccess}
+import org.goldenport.test.matchers.ConsequenceMatchers
+import org.goldenport.cncf.action.{Action, ActionCall, Query, ResourceAccess}
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.service.Service
+import org.goldenport.cncf.context.ExecutionContext
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -38,39 +40,43 @@ import org.scalatest.matchers.should.Matchers
  * @version Jan.  3, 2026
  * @author  ASAMI, Tomoharu
  */
-class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen with Matchers {
+class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen
+    with Matchers with ConsequenceMatchers {
 
-  "OLD: Primary scenario: args -> OperationRequest" should {
-
-    "execute args to an OperationRequest result" in {
+  "Primary scenario: args -> OperationRequest" should {
+    "execute args to an OperationRequest result using inner logic" in {
       Given("minimal CLI-like arguments")
       val args = Array("query", "hello")
 
       When("executing the primary scenario")
-      val result =
-        TestComponent.runCli(args)
+      val result = TestComponent.runCli(args)
 
       Then("execution succeeds and returns an OperationRequest string")
       result.isSuccess shouldBe true
       result.value shouldBe a[String]
-      result.value.toString should include ("Query")
+      result.value.toString should include ("Query(hello)")
     }
-  }
 
-  "Primary scenario: args -> OperationRequest" should {
-
-    "execute args to an OperationRequest result" in {
+    "execute args to an OperationRequest result using Component" in {
       Given("minimal CLI-like arguments")
       val args = Array("query", "hello")
 
       When("executing the primary scenario")
-      val result = Test2Component.service.executeCli(args)
+      val result = TestComponentUsingComponent.service.executeCli(args)
 
       Then("execution succeeds and returns an OperationRequest string")
-      // result.isSuccess shouldBe true
-      // result.value shouldBe a[String]
-      // result.value.toString should include ("Query")
-      println(result)
+      result should be_success("Query(hello)")
+    }
+
+    "execute args to an OperationRequest result using Component with custom Service" in {
+      Given("minimal CLI-like arguments")
+      val args = Array("query", "hello")
+
+      When("executing the primary scenario")
+      val result = TestComponentUsingComponentWithCustomService.service.executeCli(args)
+
+      Then("execution succeeds and returns an OperationRequest string")
+      result should be_success("Query(hello)")
     }
   }
 }
@@ -130,7 +136,12 @@ private object TestStringEgress extends Egress[String] {
   def kind: Egress.Kind[String] = Egress.Kind.`String`
 
   override def egress(res: Response): Consequence[String] = {
-    Consequence("OK") // TODO
+    res match {
+      case Response.Scalar(value: String) =>
+        Consequence.success(value)
+      case _ =>
+        Consequence.failure("unsupported response type")
+    }
   }
 }
 
@@ -174,48 +185,51 @@ final case class ScenarioResult(
 )
 
 object TestComponent {
-  val protocol: Protocol = TestProtocol.protocol
-  val protocolLogic = ProtocolLogic(protocol)
-  val engine = ActionEngine.create()
+  val component: Component = TestComponentUsingComponent
 
   def runCli(args: Array[String]): ScenarioResult = {
-    protocolLogic.makeOperationRequest(args) match {
+    component.logic.makeOperationRequest(args) match {
       case org.goldenport.Consequence.Success(opreq) =>
         opreq match {
           case action: Action =>
-            val ac = engine.createActionCall(action)
+            val executioncontext = ExecutionContext.test()
+            val correlationid = executioncontext.observability.correlationId
+            val core = ActionCall.Core(action, executioncontext, correlationid)
+            val ac = action.createCall(core)
             val r = for {
-              res <- engine.execute(ac)
-              r <- protocolLogic.makeStringOperationResponse(res)
+              res <- component.logic.execute(ac)
+              r <- component.logic.makeStringOperationResponse(res)
             } yield r
-            ScenarioResult(isSuccess = true, value = opreq.toString)
+            ScenarioResult(isSuccess = true, value = r.take)
         }
       case org.goldenport.Consequence.Failure(err) =>
-        println("MESSAGE      : " + err.message)
-        println("STATUS       : " + err.status)
-        println("OBSERVATION  : " + err.observation)
-        println("DESCRIPTOR   : " + err.observation.descriptor)
+        // println("MESSAGE      : " + err.message)
+        // println("STATUS       : " + err.status)
+        // println("OBSERVATION  : " + err.observation)
+        // println("DESCRIPTOR   : " + err.observation.descriptor)
         ScenarioResult(isSuccess = false, value = err.toString)
     }
   }
 }
 
-val Test2Component = {
+val TestComponentUsingComponent = Component.create(TestProtocol.protocol)
+
+val TestComponentUsingComponentWithCustomService = {
   Component.create(
     TestProtocol.protocol,
-    Test2Service.Factory()
+    CustomTestService.Factory()
   )
 }
 
-case class Test2Service(
+case class CustomTestService(
   core: ProtocolService.Core,
   ccore: Service.CCore
 ) extends Service
-object Test2Service {
+object CustomTestService {
   class Factory() extends Component.ServiceFactory() {
     def create(
       core: ProtocolService.Core,
       ccore: Service.CCore
-    ): Service = Test2Service(core, ccore)
+    ): Service = CustomTestService(core, ccore)
   }
 }

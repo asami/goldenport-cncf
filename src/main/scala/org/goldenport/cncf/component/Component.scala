@@ -65,8 +65,21 @@ object Component {
 
     def create(core: ProtocolService.Core, ccore: Service.CCore): Service
   }
+  object ServiceFactory {
+    def apply(): ServiceFactory = Instance()
+
+    case class Instance() extends ServiceFactory {
+      def create(core: ProtocolService.Core, ccore: Service.CCore): Service =
+        Service(core, ccore)
+    }
+  }
 
   case class Instance(core: Core) extends Component {
+  }
+
+  def create(protocol: Protocol): Component = {
+    val servicefactory = ServiceFactory()
+    create(protocol, servicefactory)
   }
 
   def create(

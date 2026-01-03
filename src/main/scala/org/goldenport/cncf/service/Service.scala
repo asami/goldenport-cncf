@@ -48,6 +48,9 @@ object Service {
   case class Instance(core: ProtocolService.Core, ccore: CCore)
       extends Service with CCore.Holder {
   }
+
+  def apply(core: ProtocolService.Core, ccore: CCore): Service =
+    Instance(core, ccore)
 }
 
 case class ServiceGroup(services: Vector[Service] = Vector.empty)
