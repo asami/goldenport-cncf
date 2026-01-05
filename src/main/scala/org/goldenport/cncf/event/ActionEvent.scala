@@ -17,6 +17,9 @@ object ActionResult {
   case object AuthorizationFailed extends ActionResult
 }
 
+/**
+ * Outcome/fact event for actions (persisted via EventEngine/DataStore).
+ */
 final case class ActionEvent(
   executionContextId: ExecutionContextId,
   actionName: String,

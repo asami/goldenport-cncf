@@ -109,12 +109,14 @@ class ActionEngine(
   protected def observe_enter(
     call: ActionCall
   ): Unit = {
+    // Execution observation hook (not persisted).
   }
 
   protected def observe_leave(
     call: ActionCall,
     result: Consequence[OperationResponse]
   ): Unit = {
+    // Execution observation hook (not persisted).
   }
 
   protected def security_authorize(

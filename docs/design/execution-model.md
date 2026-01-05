@@ -192,6 +192,7 @@ Design Notes (Observability / Audit)
 - Observability handles behavioral/diagnostic information, while SystemEvent / ActionEvent / DomainEvent represent facts (primary information).
 - Audit is a view over primary facts (Events) and has a different purpose and lifecycle from Observability.
 - The contract that observe_enter/leave are not emitted on authorization failure exists to guarantee that the action did not start.
+- Execution observation hooks (observe_enter/leave) capture runtime behavior, while ActionEvent records the factual outcome, including non-execution.
 
 
 ----------------------------------------------------------------------
