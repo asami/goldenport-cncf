@@ -258,5 +258,6 @@ The following invariants MUST always hold:
 - ExecutionContext is bound to ActionCall
 - Engine is a pure execution boundary
 - Observability must never lie about whether an action started
+- EventEngine.prepare fixes pending events for the transaction; commit operates only on the prepared events
 
 These invariants are foundational to CNCF.
