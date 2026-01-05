@@ -1,4 +1,5 @@
 # TODO — Cloud Native Component Framework
+Event-Driven Job Management (Phase 1–2) is **frozen** and finalized.
 
 This document tracks planned work items for the Cloud Native Component Framework (CNCF).
 Items are grouped roughly from **core runtime** to **integration and documentation**.
@@ -84,18 +85,24 @@ Cozy-generated components based on Event-Centered Architecture.
 
 ### 2.2 Job Management
 
-- [ ] Define `Job` domain model
-- [ ] Define Job lifecycle states
-  - pending
-  - running
-  - completed
-  - failed
-- [ ] Define retry / compensation hooks
-- [ ] Define cancellation and suspension semantics
-- [ ] Define relationship between Job and OTel trace/span
+#### DONE (Phase 1–2)
 
-> Note: Job management is not yet fully implemented in code.
-> This section defines the target design and execution model.
+- Event-Driven Job Management (Phase 1–2)
+- JobPlan / ExpectedEvent
+- JobEventJournal (in-memory)
+- JobEventLogEntry (journal / ledger)
+- JobStateProjector (pure, replayable)
+- EventId / EventTypeId
+- Idempotent event handling
+- Observability-independent job state derivation
+- Single-node job execution model
+
+#### FUTURE (Phase 3)
+
+- Actor-based JobEngine (HA / SPOF removal)
+- Distributed job coordination
+- Shared persistent job journal
+- Promotion of coordination events onto a service bus
 
 ---
 

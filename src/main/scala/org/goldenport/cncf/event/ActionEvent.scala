@@ -2,6 +2,7 @@ package org.goldenport.cncf.event
 
 import java.time.Instant
 import org.goldenport.cncf.context.ExecutionContextId
+import org.goldenport.cncf.job.{JobId, TaskId}
 
 /*
  * @since   Jan.  6, 2026
@@ -25,7 +26,9 @@ final case class ActionEvent(
   actionName: String,
   result: ActionResult,
   reason: Option[String],
-  occurredAt: Instant
+  occurredAt: Instant,
+  override val jobId: Option[JobId] = None,
+  override val taskId: Option[TaskId] = None
 ) extends DomainEvent
 
 object ActionEvent {

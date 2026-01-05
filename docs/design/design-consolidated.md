@@ -100,6 +100,18 @@ Execution is explicitly phased (docs/execution-model.md):
     `docs/design/component-internal-execution-model.md`
   - DataStore and Aggregate Persistence Model
     `docs/design/datastore-and-aggregate-persistence-model.md`
+- Event-Driven Job Management (Phase 1–2) — canonical overview
+  - `docs/design/event-driven-job-management.md`
+  - JobPlan and ExpectedEvent (supporting)
+    `docs/design/job-plan-expected-event.md`
+  - JobState transition (supporting)
+    `docs/design/job-state-transition.md`
+  - JobEventLog persistence (supporting)
+    `docs/design/job-event-log.md`
+  - Canonical event shape (supporting)
+    `docs/design/event-shape.md`
+  - EventId and EventType (supporting)
+    `docs/design/event-id-event-type.md`
 - See the Observability / Audit design notes in `docs/design/execution-model.md`.
   (Events are primary facts, Observability is diagnostic, Audit is a view over Events)
 Error handling:

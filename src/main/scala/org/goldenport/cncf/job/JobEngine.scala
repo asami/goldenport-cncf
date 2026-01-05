@@ -3,10 +3,10 @@ package org.goldenport.cncf.job
 import java.util.concurrent.ConcurrentHashMap
 import scala.concurrent.{ExecutionContext as ScalaExecutionContext, Future}
 import org.goldenport.{Conclusion, Consequence}
-import org.goldenport.id.UniversalId
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.id.UniversalId
 
 /*
  * @since   Jan.  4, 2026
