@@ -54,8 +54,8 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
         "DataStore.prepare",
         "EventEngine.prepare",
         "UnitOfWork.abort",
-        "DataStore.abort",
-        "EventEngine.abort"
+        "EventEngine.abort",
+        "DataStore.abort"
       )
     }
   }

@@ -57,8 +57,8 @@ class UnitOfWork(
       } match {
         case Some(reason) =>
           recorder.record("UnitOfWork.abort")
-          dataStore.abort(tx)
           eventEngine.abort(tx)
+          dataStore.abort(tx)
           Consequence.failure(reason)
         case None =>
           recorder.record("UnitOfWork.commit")
@@ -75,8 +75,8 @@ class UnitOfWork(
     try {
       val tx = TransactionContext.create()
       recorder.record("UnitOfWork.abort")
-      dataStore.abort(tx)
       eventEngine.abort(tx)
+      dataStore.abort(tx)
       Consequence.success(())
     } catch {
       case e: Throwable =>
