@@ -19,7 +19,9 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers {
       val action = new Command("test") {
         override def createCall(core: ActionCall.Core): ActionCall = {
           val actionself = this
-          new ActionCall(core) {
+          val _core_ = core
+          new ActionCall {
+            override val core: ActionCall.Core = _core_
             override def action: Action = actionself
             def accesses: Seq[ResourceAccess] = Nil
             def execute(): Consequence[OperationResponse] =

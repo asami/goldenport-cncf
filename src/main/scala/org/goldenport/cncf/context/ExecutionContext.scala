@@ -39,13 +39,21 @@ abstract class ExecutionContext
 object ExecutionContext {
 
   /**
+   * Marker for application-specific execution context carried by CNCF.
+   * CNCF transports this value but does not interpret it.
+   */
+  trait ApplicationContext
+
+  /**
    * Runtime namespace for CNCF-only extensions.
    */
   case class CncfCore(
     security: SecurityContext,
     observability: ObservabilityContext,
     runtime: RuntimeContext,
-    jobContext: org.goldenport.cncf.job.JobContext
+    jobContext: org.goldenport.cncf.job.JobContext,
+    application: Option[ApplicationContext] = None,
+    system: SystemContext = SystemContext.empty
   )
   object CncfCore {
     trait Holder {
@@ -55,6 +63,8 @@ object ExecutionContext {
       def observability: ObservabilityContext = cncfCore.observability
       def runtime: RuntimeContext = cncfCore.runtime
       def jobContext: org.goldenport.cncf.job.JobContext = cncfCore.jobContext
+      def application: Option[ApplicationContext] = cncfCore.application
+      def system: SystemContext = cncfCore.system
     }
   }
 
@@ -78,11 +88,24 @@ object ExecutionContext {
         security = security,
         observability = observability,
         runtime = new _TestRuntimeContext(() => context),
-        jobContext = org.goldenport.cncf.job.JobContext.empty
+        jobContext = org.goldenport.cncf.job.JobContext.empty,
+        system = SystemContext.empty
       )
     )
     context
   }
+
+  def createWith(
+    application: Option[ApplicationContext]
+  ): ExecutionContext =
+    application
+      .map(app => withApplicationContext(create(), app))
+      .getOrElse(create())
+
+  def createWithSystem(
+    system: SystemContext
+  ): ExecutionContext =
+    withSystemContext(create(), system)
 
   /**
    * Test and Executable Spec ExecutionContext.
@@ -101,6 +124,34 @@ object ExecutionContext {
     case i: Instance =>
       i.copy(
         cncfCore = i.cncfCore.copy(jobContext = jobContext)
+      )
+    case _ =>
+      ctx
+  }
+
+  def withApplicationContext(
+    ctx: ExecutionContext,
+    app: ApplicationContext
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(
+        cncfCore = i.cncfCore.copy(
+          application = Some(app)
+        )
+      )
+    case _ =>
+      ctx
+  }
+
+  def withSystemContext(
+    ctx: ExecutionContext,
+    system: SystemContext
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(
+        cncfCore = i.cncfCore.copy(
+          system = system
+        )
       )
     case _ =>
       ctx

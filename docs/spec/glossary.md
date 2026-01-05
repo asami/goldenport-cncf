@@ -72,8 +72,8 @@ outside of OperationCall.
 4. ExecutionContext
 ----------------------------------------------------------------------
 
-ExecutionContext represents implicit runtime information
-available during operation execution.
+ExecutionContext represents action-scoped runtime information
+explicitly bound to ActionCall.
 
 Typical contents include:
 
@@ -83,9 +83,43 @@ Typical contents include:
     - rule sets
     - tracing identifiers
 
-ExecutionContext is implicitly propagated.
-
 It must not appear in domain function signatures.
+
+ExecutionContext is explicitly bound to ActionCall (action-scoped).
+
+----------------------------------------------------------------------
+4.1 SystemContext
+----------------------------------------------------------------------
+
+SystemContext represents system-scoped runtime assumptions provided at
+bootstrap time. It does not include core ExecutionContext.Core.
+
+----------------------------------------------------------------------
+4.2 core ExecutionContext.Core
+----------------------------------------------------------------------
+
+core ExecutionContext.Core represents the VM-level execution baseline
+used as a stable runtime foundation.
+
+----------------------------------------------------------------------
+4.3 Observability (Design Note)
+----------------------------------------------------------------------
+
+- Information used for diagnosis and tracing (logs / traces / metrics).
+- Events (SystemEvent / ActionEvent / DomainEvent) are primary facts and serve a different purpose from Observability.
+
+----------------------------------------------------------------------
+4.4 Audit (Design Note)
+----------------------------------------------------------------------
+
+- A view over primary Event facts.
+- Distinct from Observability and treated as a separate responsibility.
+
+----------------------------------------------------------------------
+4.5 Query / ReadCommand (Design Note, Open Question)
+----------------------------------------------------------------------
+
+- The idea that a read with irreversible meaning should be promoted to ReadCommand remains an open question.
 
 
 ----------------------------------------------------------------------
@@ -123,6 +157,20 @@ Events emphasize decoupling over determinism.
 
 They are first-class execution artifacts
 in Event-Centered Architecture.
+
+----------------------------------------------------------------------
+6.1 SecurityEvent (Design Note)
+----------------------------------------------------------------------
+
+A SecurityEvent represents a security-relevant outcome or violation.
+It is distinct from ActionEvent and DomainEvent.
+
+----------------------------------------------------------------------
+6.2 Authorization (Design Note)
+----------------------------------------------------------------------
+
+Authorization is evaluated pre-execution, and security-relevant outcomes
+may also occur during execution. These are represented as SecurityEvent.
 
 
 ----------------------------------------------------------------------

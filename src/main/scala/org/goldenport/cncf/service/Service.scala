@@ -1,8 +1,10 @@
 package org.goldenport.cncf.service
 
+import java.nio.charset.StandardCharsets
 import org.goldenport.Consequence
-import org.goldenport.http.{HttpRequest, HttpResponse}
-import org.goldenport.protocol.{Protocol, Request, Response}
+import org.goldenport.bag.Bag
+import org.goldenport.http.{ContentType, HttpRequest, HttpResponse, HttpStatus, MimeType, StringResponse}
+import org.goldenport.protocol.{Request, Response}
 import org.goldenport.protocol.service.{Service as ProtocolService}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.cncf.action.{Action, Command, Query}
@@ -19,7 +21,7 @@ import org.goldenport.cncf.job.{ActionId, ActionTask, JobContext}
  * @author  ASAMI, Tomoharu
  */
 abstract class Service extends ProtocolService with Service.CCore.Holder {
-  def call(
+  private def invoke(
     name: String,
     request: Request,
     executionContext: ExecutionContext,
@@ -43,15 +45,35 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
     }
   }
 
-  def executeCli(args: Array[String]): Consequence[String] =
+  def invokeCli(args: Array[String]): Consequence[String] =
     for {
       req <- logic.component.protocolLogic.makeRequest(args)
-      ctx = ExecutionContext.create()
-      res <- call(req.operation, req, ctx, ctx.observability.correlationId)
-      r <- logic.makeStringOperationResponse(res)
+      res <- invokeRequest(req)
+      r <- logic.component.protocolLogic.makeStringResponse(res)
     } yield r
 
-  def executeHttp(req: HttpRequest): Consequence[HttpResponse] = ???
+  def invokeHttp(req: HttpRequest): Consequence[HttpResponse] =
+    for {
+      request <- _to_request(req)
+      response <- invokeRequest(request)
+      http <- _to_http_response(response)
+    } yield http
+
+  def invokeRequest(
+    request: Request
+  ): Consequence[Response] = {
+    val ctx = _execution_context_from_request(request)
+    val cid = ctx.observability.correlationId
+    for {
+      opres <- invoke(request.operation, request, ctx, cid)
+      res <- Consequence.success(_to_response(opres))
+    } yield res
+  }
+
+  private def _to_response(
+    op: OperationResponse
+  ): Response =
+    op.toResponse
 
   private def _execute(p: OperationRequest) = p match {
     case action: Action =>
@@ -59,6 +81,72 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
       logic.execute(ac)
     case m => ???
   }
+
+  private def _execution_context_from_request(
+    request: Request
+  ): ExecutionContext = {
+    val _ = request
+    ExecutionContext.create()
+  }
+
+  private def _to_request(
+    req: HttpRequest
+  ): Consequence[Request] = {
+    val _ = req
+    Consequence.failure("invokeHttp: request conversion not implemented")
+  }
+
+  private def _to_http_response(
+    res: Response
+  ): Consequence[HttpResponse] = {
+    Consequence.success(_to_http_response_body(res))
+  }
+
+  private def _to_http_response_body(
+    res: Response
+  ): HttpResponse = {
+    res match {
+      case Response.Json(json) =>
+        _string_response(
+          HttpStatus.Ok,
+          _content_type_json(),
+          json
+        )
+      case Response.Scalar(value) =>
+        _string_response(
+          HttpStatus.Ok,
+          _content_type_text(),
+          value.toString
+        )
+      case Response.Void =>
+        _string_response(
+          HttpStatus.Ok,
+          _content_type_text(),
+          ""
+        )
+      case _ =>
+        _string_response(
+          HttpStatus.InternalServerError,
+          _content_type_text(),
+          res.toString
+        )
+    }
+  }
+
+  private def _string_response(
+    status: HttpStatus,
+    contentType: ContentType,
+    body: String
+  ): HttpResponse = {
+    val bag = Bag.text(body, StandardCharsets.UTF_8)
+    StringResponse(status, contentType, bag)
+  }
+
+  private def _content_type_json(): ContentType =
+    ContentType(MimeType("application/json"), Some(StandardCharsets.UTF_8))
+
+  private def _content_type_text(): ContentType =
+    ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8))
 }
 
 object Service {

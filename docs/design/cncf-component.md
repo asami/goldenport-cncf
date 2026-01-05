@@ -8,6 +8,9 @@ Its purpose is to establish a **stable target specification** for implementation
 
 The model is informed by UML, DDD, CQRS, Event-driven architecture, and the Actor model, but is **reconstructed with implementation feasibility as the top priority**.
 
+For the DomainComponent contract and Cozy integration boundary, see:
+- `docs/design/domain-component.md`
+
 ---
 
 ## 2. CNCF Component Overview
@@ -138,6 +141,12 @@ abstract class ComponentActionLogic {
 - Manage Job lifecycle  
 - Control asynchronous execution  
 - Handle Messages or Receptors  
+
+**Design Notes (Security)**
+
+- Security decisions can occur before execution and during execution.
+- SecurityEvent is used for security-relevant outcomes and is not mixed with ActionEvent / DomainEvent.
+- Component owns security/observability concerns; ActionLogic remains domain-only.
 
 ---
 

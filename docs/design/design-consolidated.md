@@ -8,6 +8,7 @@ Sources consulted (non-exhaustive):
 - docs/execution-model.md
 - docs/execution-context.md
 - docs/component-model.md
+- docs/design/domain-component.md
 - docs/glossary.md
 - docs/job-management.md
 - docs/adync-model.md
@@ -26,6 +27,9 @@ componentlets in cloud-native, event-centered systems. It standardizes:
 - The runtime context model (ExecutionContext)
 - The execution coordinator (Engine)
 - Separation between domain logic and infrastructure
+
+DomainComponent architecture is defined in:
+- docs/design/domain-component.md (DomainComponent / Cozy integration contract)
 
 Compared to goldenport core, CNCF focuses on execution orchestration,
 context binding, and operational semantics (authorization, observability,
@@ -91,9 +95,14 @@ Execution is explicitly phased (docs/execution-model.md):
    - Failure: abort, observe_leave(Failure(Conclusion)).
    - Exactly one observe_leave for any started operation.
 
+- See the Observability / Audit design notes in `docs/design/execution-model.md`.
+  (Events are primary facts, Observability is diagnostic, Audit is a view over Events)
 Error handling:
 - All paths use Consequence; exceptions are mapped to Conclusion.
 - Authorization failure is not an operation failure.
+
+Security notes:
+- Security design notes (pre-execution vs in-action decisions, SecurityEvent) are summarized in `docs/design/execution-model.md`.
 
 Current Engine.scala:
 - execute() follows this shape but does not yet enforce authorization

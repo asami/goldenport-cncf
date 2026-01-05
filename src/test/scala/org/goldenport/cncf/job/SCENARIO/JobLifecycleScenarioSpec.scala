@@ -47,7 +47,7 @@ class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
       val args = Array("command", "hello")
 
       When("the command is submitted")
-      val result = ScenarioAdapter.executeCli(args)
+      val result = ScenarioAdapter.invokeCli(args)
 
       Then("a JobId is returned immediately")
       result should be_success
@@ -81,7 +81,7 @@ class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
       val args = Array("command-fail", "boom")
 
       When("the command is submitted")
-      val result = ScenarioAdapter.executeCli(args)
+      val result = ScenarioAdapter.invokeCli(args)
 
       Then("a JobId is returned immediately")
       result should be_success
@@ -112,7 +112,7 @@ class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
       val args = Array("query", "hello")
 
       When("the query is executed")
-      val result = ScenarioAdapter.executeCli(args)
+      val result = ScenarioAdapter.invokeCli(args)
 
       Then("result is returned synchronously via protocol egress as a scalar")
       result should be_success("Query(hello)")
@@ -125,8 +125,8 @@ private object ScenarioAdapter {
   private val serviceFactory = new RecordingService.Factory()
   private val component: Component = Component.create(TestProtocol.protocol, serviceFactory)
 
-  def executeCli(args: Array[String]): Consequence[String] =
-    component.service.executeCli(args)
+  def invokeCli(args: Array[String]): Consequence[String] =
+    component.service.invokeCli(args)
 
   def lastJobId: Option[JobId] =
     serviceFactory.lastJobId
@@ -149,30 +149,27 @@ private case class RecordingService(
 
   def lastJobId: Option[JobId] = _lastJobId
 
-  override def call(
-    name: String,
-    request: Request,
-    executionContext: org.goldenport.cncf.context.ExecutionContext,
-    correlationId: Option[org.goldenport.cncf.context.CorrelationId]
-  ): Consequence[OperationResponse] = {
-    val _ = name
+  override def invokeRequest(
+    request: Request
+  ): Consequence[Response] = {
+    val executioncontext = org.goldenport.cncf.context.ExecutionContext.create()
     logic.makeOperationRequest(request).flatMap {
       case action: Command =>
         val actionid = ActionId.generate()
         val task = ActionTask(actionid, action, logic.component.actionEngine)
-        val jobid = logic.submitJob(List(task), executionContext)
+        val jobid = logic.submitJob(List(task), executioncontext)
         _lastJobId = Some(jobid)
-        Consequence.success(OperationResponse.Scalar(jobid.value))
+        Consequence.success(OperationResponse.Scalar(jobid.value).toResponse)
       case action: Query =>
         _lastJobId = None
         val actionid = ActionId.generate()
         val jobcontext = JobContext(None, None, Some(actionid))
         val ctx = org.goldenport.cncf.context.ExecutionContext.withJobContext(
-          executionContext,
+          executioncontext,
           jobcontext
         )
         val task = ActionTask(actionid, action, logic.component.actionEngine)
-        task.run(ctx).result
+        task.run(ctx).result.map(_.toResponse)
       case _ =>
         Consequence.failure("OperationRequest must be Action")
     }
@@ -222,7 +219,9 @@ private object TestCommandOperation extends spec.OperationDefinition {
               core: ActionCall.Core
             ): ActionCall = {
               val actionself = this
-              new ActionCall(core) {
+              val _core_ = core
+              new ActionCall {
+                override val core: ActionCall.Core = _core_
                 override def action: Action = actionself
                 override def accesses: Seq[ResourceAccess] = Nil
                 override def execute(): Consequence[OperationResponse] =
@@ -265,7 +264,9 @@ private object TestCommandFailOperation extends spec.OperationDefinition {
               core: ActionCall.Core
             ): ActionCall = {
               val actionself = this
-              new ActionCall(core) {
+              val _core_ = core
+              new ActionCall {
+                override val core: ActionCall.Core = _core_
                 override def action: Action = actionself
                 override def accesses: Seq[ResourceAccess] = Nil
                 override def execute(): Consequence[OperationResponse] =
@@ -308,7 +309,9 @@ private object TestQueryOperation extends spec.OperationDefinition {
               core: ActionCall.Core
             ): ActionCall = {
               val actionself = this
-              new ActionCall(core) {
+              val _core_ = core
+              new ActionCall {
+                override val core: ActionCall.Core = _core_
                 override def action: Action = actionself
                 override def accesses: Seq[ResourceAccess] = Nil
                 override def execute(): Consequence[OperationResponse] =

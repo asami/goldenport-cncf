@@ -10,17 +10,30 @@ Consumers MUST rely only on this specification.
 Knowledge of goldenport core specifications is not required.
 
 ## Purpose
-CNCF ExecutionContext represents an immutable, runtime-wide execution
+CNCF ExecutionContext represents an immutable, action-scoped execution
 assumption snapshot provided by CNCF.
 
-It is constructed at bootstrap and injected into runtime flows,
-including ingress, operation call construction, and egress.
+ExecutionContext is composed from:
+- SystemContext (system-scoped runtime assumptions)
+- core ExecutionContext.Core (VM-level execution baseline)
+
+The Action ExecutionContext is the only point where these layers merge.
 
 ## Provisioning
-- CNCF constructs ExecutionContext during server startup.
+- CNCF constructs SystemContext during server startup.
 - Construction is explicit.
-- ExecutionContext is shared and read-only.
-- ExecutionContext is NOT created per request.
+- SystemContext is shared and read-only.
+- ExecutionContext is created per action and bound to ActionCall.
+
+Constraints:
+- SystemContext MUST NOT hold core ExecutionContext.Core.
+- core ExecutionContext.Core and SystemContext are parallel layers.
+- Action ExecutionContext is the sole merge point.
+
+Design Notes (Security)
+-----------------------
+- Security policy definitions live in SystemContext as system-scoped policy handles.
+- Policy evaluation uses the Action ExecutionContext as input at the execution boundary.
 
 ## Visibility
 - Available to ingress adapters

@@ -107,6 +107,8 @@ Phase 1: Authorization (Pre-Execution)
 --------------------------------------
 
 - Authorization is evaluated
+- Policy evaluation is defined in SystemContext and executed using the
+  Action ExecutionContext as input
 - No observability events are emitted
 - If authorization fails:
   - the action is considered not started
@@ -114,6 +116,13 @@ Phase 1: Authorization (Pre-Execution)
   - observe_leave MUST NOT be called
 
 Authorization failure is not an action failure.
+observe_enter / observe_leave MUST NOT be emitted on authorization failure.
+
+Design Notes (Security)
+-----------------------
+- Security decisions can occur before execution and during execution.
+- Pre-execution authorization failure is treated as "not started," so observe_enter/leave are not emitted.
+- Access denials or constraints during execution are handled as SecurityEvent and remain distinct from ActionEvent / DomainEvent.
 
 
 Phase 2: Action Start
@@ -154,6 +163,12 @@ Action success           | YES           | YES (Success)
 Action failure           | YES           | YES (Failure)
 
 Observability MUST NOT lie about whether an action started.
+
+Design Notes (Observability / Audit)
+------------------------------------
+- Observability handles behavioral/diagnostic information, while SystemEvent / ActionEvent / DomainEvent represent facts (primary information).
+- Audit is a view over primary facts (Events) and has a different purpose and lifecycle from Observability.
+- The contract that observe_enter/leave are not emitted on authorization failure exists to guarantee that the action did not start.
 
 
 ----------------------------------------------------------------------

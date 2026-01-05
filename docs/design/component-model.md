@@ -214,6 +214,12 @@ Engines may differ by environment
 (local, cloud, test),
 but must preserve semantics.
 
+Design Notes (Security)
+-----------------------
+- Component owns security and observability responsibilities at the runtime boundary.
+- Domain logic remains pure and does not interpret security policy or outcomes.
+- SecurityEvent is treated as a system-level event distinct from ActionEvent / DomainEvent.
+
 
 ----------------------------------------------------------------------
 7. Execution Flow

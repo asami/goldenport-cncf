@@ -8,7 +8,7 @@ import org.goldenport.protocol.spec.{OperationDefinition, ServiceDefinition}
 import org.goldenport.protocol.service.{Service => ProtocolService}
 // import org.goldenport.cncf.action.ActionLogic
 import org.goldenport.cncf.action.ActionEngine
-import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, SystemContext}
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.service.{Service, ServiceGroup}
 import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
@@ -20,21 +20,45 @@ import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
  * @author  ASAMI, Tomoharu
  */
 abstract class Component extends Component.Core.Holder {
+  private var _application_config: Component.ApplicationConfig = Component.ApplicationConfig()
+  private var _system_context: SystemContext = SystemContext.empty
+
   lazy val services: ServiceGroup =
     ServiceGroup(protocol.services.services.map(_to_service))
 
   lazy val receptors: ReceptorGroup = ReceptorGroup.empty // TODO
 
-  lazy val logic: ComponentLogic = ComponentLogic(this)
+  lazy val logic: ComponentLogic = ComponentLogic(this, _system_context)
 
   private def _to_service(p: ServiceDefinition): Service = {
     p.createService(serviceFactory)
   }
 
   def service: Service = services.services.head // TODO
+
+  def applicationConfig: Component.ApplicationConfig = _application_config
+
+  def withApplicationConfig(ac: Component.ApplicationConfig): Component = {
+    _application_config = ac
+    this
+  }
+
+  def systemContext: SystemContext = _system_context
+
+  def withSystemContext(sc: SystemContext): Component = {
+    _system_context = sc
+    this
+  }
 }
 
 object Component {
+  final case class ApplicationConfig(
+    applicationContext: Option[ApplicationContext] = None
+  )
+
+  type ApplicationContext =
+    org.goldenport.cncf.context.ExecutionContext.ApplicationContext
+
   case class Config()
 
   case class Core(
@@ -84,6 +108,14 @@ object Component {
   def create(protocol: Protocol): Component = {
     val servicefactory = ServiceFactory()
     create(protocol, servicefactory)
+  }
+
+  def create(
+    protocol: Protocol,
+    applicationConfig: ApplicationConfig
+  ): Component = {
+    val c = create(protocol)
+    c.withApplicationConfig(applicationConfig)
   }
 
   def create(

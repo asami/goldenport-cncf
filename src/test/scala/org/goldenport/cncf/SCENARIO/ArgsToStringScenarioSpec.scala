@@ -62,7 +62,7 @@ class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen
       val args = Array("query", "hello")
 
       When("executing the primary scenario")
-      val result = TestComponentUsingComponent.service.executeCli(args)
+      val result = TestComponentUsingComponent.service.invokeCli(args)
 
       Then("execution succeeds and returns an OperationRequest string")
       result should be_success("Query(hello)")
@@ -73,7 +73,7 @@ class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen
       val args = Array("query", "hello")
 
       When("executing the primary scenario")
-      val result = TestComponentUsingComponentWithCustomService.service.executeCli(args)
+      val result = TestComponentUsingComponentWithCustomService.service.invokeCli(args)
 
       Then("execution succeeds and returns an OperationRequest string")
       result should be_success("Query(hello)")
@@ -108,7 +108,9 @@ private object TestQueryOperation extends spec.OperationDefinition {
               core: ActionCall.Core
             ): ActionCall = {
               val actionself = this
-              new ActionCall(core) {
+              val _core_ = core
+              new ActionCall {
+                override val core: ActionCall.Core = _core_
                 override def action: Action = actionself
                 override def accesses: Seq[ResourceAccess] = Nil
                 override def execute(): org.goldenport.Consequence[OperationResponse] =
