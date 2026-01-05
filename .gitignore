@@ -8,6 +8,7 @@ lib
 /project/**/target/
 boot
 .tmp-sbt
+WARP.md
 
 ### Metals (VS Code Scala extension) ###
 .metals/

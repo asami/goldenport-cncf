@@ -4,8 +4,8 @@ lazy val root = project
   .in(file("."))
   .settings(
     organization := "org.goldenport",
-    name := "cncf",
-    version := "0.2.0",
+    name := "goldenport-cncf",
+    version := "0.2.1",
 
     scalaVersion := scala3Version,
 
@@ -26,7 +26,7 @@ lazy val root = project
       "io.circe" %% "circe-generic" % "0.14.6",
       "io.circe" %% "circe-parser"  % "0.14.6",
 
-      "org.goldenport" %% "core" % "0.1.0",
+      "org.goldenport" %% "goldenport-core" % "0.1.1",
 
       // Testing
       "org.scalatest" %% "scalatest" % "3.2.18" % Test
