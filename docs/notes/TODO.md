@@ -193,7 +193,6 @@ Cozy-generated components based on Event-Centered Architecture.
 ## 10. Refactoring and Cleanup
 
 - [ ] Review existing implementations of Command / Event / OperationCall
-- [ ] Consolidate or remove experimental variants (e.g. UnitOfWork2)
 - [ ] Mark exploratory code explicitly as experimental where appropriate
 - [ ] Remove editor backup files (`*~`) from the repository
 - [ ] Define a deprecation policy for exploratory APIs
