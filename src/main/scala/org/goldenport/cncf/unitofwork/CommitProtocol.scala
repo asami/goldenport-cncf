@@ -1,21 +1,10 @@
 package org.goldenport.cncf.unitofwork
 
-import java.util.UUID
-
 /*
  * @since   Jan.  6, 2026
  * @version Jan.  6, 2026
  * @author  ASAMI, Tomoharu
  */
-final case class TransactionContext(
-  id: String
-)
-
-object TransactionContext {
-  def create(): TransactionContext =
-    TransactionContext(UUID.randomUUID().toString)
-}
-
 sealed trait PrepareResult {
   def isRejected: Boolean
   def reasonOption: Option[String]
