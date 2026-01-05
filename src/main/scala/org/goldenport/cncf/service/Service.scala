@@ -17,7 +17,7 @@ import org.goldenport.cncf.job.{ActionId, ActionTask, JobContext}
  * @since   Apr. 11, 2025
  *  version Dec. 31, 2025
  *  version Jan.  3, 2026
- * @version Jan.  4, 2026
+ * @version Jan.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Service extends ProtocolService with Service.CCore.Holder {
@@ -118,7 +118,7 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
           _content_type_text(),
           value.toString
         )
-      case Response.Void =>
+      case Response.Void() =>
         _string_response(
           HttpStatus.Ok,
           _content_type_text(),

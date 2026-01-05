@@ -9,6 +9,7 @@ import org.goldenport.util.StringUtils.objectToSnakeName
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
+import org.goldenport.cncf.unitofwork.UnitOfWork
 
 /*
  * @since   Apr. 11, 2025
@@ -16,7 +17,7 @@ import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
  *  version Dec. 31, 2025
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
- * @version Jan.  4, 2026
+ * @version Jan.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall() extends ActionCall.Core.Holder {
@@ -26,6 +27,12 @@ abstract class ActionCall() extends ActionCall.Core.Holder {
   def accesses: Seq[ResourceAccess]
 
   def execute(): Consequence[OperationResponse]
+
+  def commit(): Consequence[UnitOfWork.CommitResult] = {
+    val uow = executionContext.runtime.unitOfWork
+    uow.record("ActionCall.commit")
+    uow.commit()
+  }
 
   /** Returns the ApplicationContext bound to the current ExecutionContext.
     *

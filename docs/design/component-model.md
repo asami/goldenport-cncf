@@ -220,6 +220,29 @@ Design Notes (Security)
 - Domain logic remains pure and does not interpret security policy or outcomes.
 - SecurityEvent is treated as a system-level event distinct from ActionEvent / DomainEvent.
 
+Authorization Failure Handling
+------------------------------
+
+Authorization is evaluated *before* an ActionCall is constructed or executed.
+
+If authorization fails:
+
+- The ActionCall is **not created and not invoked**
+- Action execution does not occur
+- An ActionEvent with result = `AuthorizationFailed` is created
+- The ActionEngine directly invokes `UnitOfWork.commit(events)`
+- The event is persisted and published through the same 2-phase commit
+  path as successful actions (UnitOfWork → EventEngine → DataStore)
+
+This design ensures that authorization failures are:
+
+- Fully observable and auditable
+- Persisted using the same transactional guarantees as normal actions
+- Clearly separated from action execution concerns
+
+ActionCall remains the execution unit for *authorized* actions only.
+Authorization failures are treated as first-class events, not exceptions.
+
 
 ----------------------------------------------------------------------
 7. Execution Flow

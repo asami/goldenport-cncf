@@ -3,15 +3,20 @@ package org.goldenport.cncf.action
 import org.goldenport.Consequence
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
+import java.time.Instant
+import org.goldenport.cncf.context.ExecutionContextId
+import org.goldenport.cncf.event.ActionEvent
 import org.goldenport.cncf.security.AuthorizationDecision
 import org.goldenport.cncf.security.AuthorizationEngine
+import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
 
 /*
  * @since   Apr. 11, 2025
  *  version Apr. 15, 2025
  *  version Dec. 21, 2025
  *  version Jan.  1, 2026
- * @version Jan.  2, 2026
+ *  version Jan.  2, 2026
+ * @version Jan.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -55,6 +60,7 @@ class ActionEngine(
 
     authresult.flatMap { _ =>
       Consequence run {
+        // Observation hooks apply only to executed actions.
         observe_enter(call)
         try {
           val r = call.execute()
@@ -72,6 +78,29 @@ class ActionEngine(
       }
     }
   }
+
+  def executeAuthorized(
+    actionName: String,
+    ec: ExecutionContext
+  )(
+    buildCall: => ActionCall
+  ): Consequence[OperationResponse] =
+    authorize_pre(actionName, ec) match {
+      case AuthorizationDecision.Allow =>
+        val call = buildCall
+        execute(call)
+      case AuthorizationDecision.Deny =>
+        val reason = "authorization denied"
+        val event = ActionEvent.authorizationFailed(
+          ExecutionContextId.generate(),
+          actionName,
+          reason,
+          Instant.now()
+        )
+        ec.runtime.unitOfWork.commit(Seq(event)).flatMap { _ =>
+          Consequence.failure(reason)
+        }
+    }
 
   def toExecutionContext(p: String): Consequence[ExecutionContext] = ???
 
@@ -99,6 +128,17 @@ class ActionEngine(
     call: ActionCall,
     decision: AuthorizationDecision
   ): Unit = {
+  }
+
+  protected def authorize_pre(
+    actionName: String,
+    ec: ExecutionContext
+  ): AuthorizationDecision = {
+    val resource = new SecuredResource {
+      def securityLevel = ec.security.level
+    }
+    val action = SecurityAction(actionName)
+    authorizationEngine.authorize(ec, resource, action)
   }
 }
 

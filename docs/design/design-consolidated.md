@@ -95,6 +95,11 @@ Execution is explicitly phased (docs/execution-model.md):
    - Failure: abort, observe_leave(Failure(Conclusion)).
    - Exactly one observe_leave for any started operation.
 
+- Component execution and persistence models:
+  - Component Internal Execution Model
+    `docs/design/component-internal-execution-model.md`
+  - DataStore and Aggregate Persistence Model
+    `docs/design/datastore-and-aggregate-persistence-model.md`
 - See the Observability / Audit design notes in `docs/design/execution-model.md`.
   (Events are primary facts, Observability is diagnostic, Audit is a view over Events)
 Error handling:
@@ -103,6 +108,7 @@ Error handling:
 
 Security notes:
 - Security design notes (pre-execution vs in-action decisions, SecurityEvent) are summarized in `docs/design/execution-model.md`.
+- Authorization failure handling is specified in `docs/design/execution-model.md`.
 
 Current Engine.scala:
 - execute() follows this shape but does not yet enforce authorization

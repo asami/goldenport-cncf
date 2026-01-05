@@ -2,17 +2,25 @@ package org.goldenport.cncf.unitofwork
 
 import scala.util.{Try, Success, Failure}
 import java.io.File
+import org.goldenport.{Consequence, Conclusion}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.entity.EntityStore.*
+import org.goldenport.cncf.event.EventEngine
+import org.goldenport.cncf.event.DomainEvent
 
 /*
  * @since   Apr. 11, 2025
- * @version Dec. 21, 2025
+ *  version Dec. 21, 2025
+ * @version Jan.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
-  context: ExecutionContext
+  context: ExecutionContext,
+  dataStore: DataStore = DataStore.noop(),
+  eventEngine: EventEngine = EventEngine.noop(DataStore.noop()),
+  recorder: CommitRecorder = CommitRecorder.noop
 ) {
   import UnitOfWork.*
 
@@ -30,9 +38,53 @@ class UnitOfWork(
 
   def sendMessage(msg: Message): Try[Unit] = ???
 
-  def commit(): Try[CommitResult] = ???
+  def commit(): Consequence[CommitResult] =
+    commit(Nil)
 
-  def abort(): Try[AbortResult] = ???
+  def commit(
+    events: Seq[DomainEvent]
+  ): Consequence[CommitResult] =
+    try {
+      val tx = TransactionContext.create()
+      eventEngine.stage(events)
+      recorder.record("UnitOfWork.prepare")
+      val prepares = List(
+        dataStore.prepare(tx),
+        eventEngine.prepare(tx)
+      )
+      prepares.collectFirst {
+        case PrepareResult.Rejected(reason) => reason
+      } match {
+        case Some(reason) =>
+          recorder.record("UnitOfWork.abort")
+          dataStore.abort(tx)
+          eventEngine.abort(tx)
+          Consequence.failure(reason)
+        case None =>
+          recorder.record("UnitOfWork.commit")
+          dataStore.commit(tx)
+          eventEngine.commit(tx)
+          Consequence.success(())
+      }
+    } catch {
+      case e: Throwable =>
+        Consequence.Failure(Conclusion.from(e))
+    }
+
+  def abort(): Consequence[AbortResult] =
+    try {
+      val tx = TransactionContext.create()
+      recorder.record("UnitOfWork.abort")
+      dataStore.abort(tx)
+      eventEngine.abort(tx)
+      Consequence.success(())
+    } catch {
+      case e: Throwable =>
+        Consequence.Failure(Conclusion.from(e))
+    }
+
+  def record(message: String): Unit =
+    recorder.record(message)
 }
 
 object UnitOfWork {
