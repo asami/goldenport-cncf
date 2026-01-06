@@ -100,6 +100,22 @@ Execution is explicitly phased (docs/execution-model.md):
     `docs/design/component-internal-execution-model.md`
   - DataStore and Aggregate Persistence Model
     `docs/design/datastore-and-aggregate-persistence-model.md`
+- Component and application responsibilities
+  `docs/design/component-and-application-responsibilities.md`
+- Memory-First Domain Architecture
+  - Defines a domain runtime architecture where entities are
+    operated in memory and persistence serves durability.
+  - Establishes the execution model for domain subsystems,
+    including entity classification (resource / task) and
+    event handling.
+  - See: memory-first-domain-architecture.md
+- Configuration Model
+  - Defines how system and subsystem configurations are normalized
+    into a semantic configuration model and compiled into
+    platform-specific DSLs (e.g. CDK).
+  - Canonical reference for configuration, validation, and
+    platform compilation architecture.
+  - See: configuration-model.md
 - Event-Driven Job Management (Phase 1–2) — canonical overview
   - `docs/design/event-driven-job-management.md`
   - JobPlan and ExpectedEvent (supporting)
