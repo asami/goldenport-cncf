@@ -1,6 +1,8 @@
 package org.goldenport.cncf.entity
 
 import org.goldenport.Consequence
+import org.goldenport.id.UniversalId
+import org.goldenport.cncf.datastore.{DataStore, QueryDirective, SelectResult}
 import org.goldenport.cncf.*
 
 /*
@@ -8,44 +10,52 @@ import org.goldenport.cncf.*
  * @version Dec. 18, 2025
  * @author  ASAMI, Tomoharu
  */
-case class EntityStore(name: String) {
-
+trait EntityStore[E] {
+  def name: String
+  def serialize(entity: E): DataStore.Record
+  def deserialize(record: DataStore.Record): E
+  def create(id: UniversalId, entity: E): Unit
+  def load(id: UniversalId): Option[E]
+  def store(id: UniversalId, entity: E): Unit
+  def update(id: UniversalId, changes: DataStore.Record): Unit
+  def delete(id: UniversalId): Unit
+  def select(directive: QueryDirective): SelectResult
 }
 
 object EntityStore {
-  type Record = Map[String, Any]
+  type Record = DataStore.Record
 
   trait EntityInstance[T] {
   }
 
-  sealed trait EntityId {
-  }
+  final case class EntityId(value: UniversalId)
 
-  def create[T](store: EntityStore, data: Record)(using instance: EntityInstance[T]): Consequence[CreateResult[T]] = {
+  def create[T](store: EntityStore[T], data: Record)(using instance: EntityInstance[T]): Consequence[CreateResult[T]] = {
     ???
   }
 
-  def get[T](store: EntityStore)(using instance: EntityInstance[T]): Consequence[GetResult[T]] = {
+  def load[T](store: EntityStore[T])(using instance: EntityInstance[T]): Consequence[GetResult[T]] = {
     ???
   }
 
-  def list[T](store: EntityStore, directive: ListDirective)(using instance: EntityInstance[T]): Consequence[ListResult[T]] = {
+  def select[T](store: EntityStore[T], directive: QueryDirective)(using instance: EntityInstance[T]): Consequence[SelectResult] = {
     ???
   }
 
-  def update[T](store: EntityStore, id: EntityId, data: Record)(using instance: EntityInstance[T]): Consequence[UpdateResult[T]] = {
+  def store[T](store: EntityStore[T], id: EntityId, data: Record)(using instance: EntityInstance[T]): Consequence[UpdateResult[T]] = {
     ???
   }
 
-  def delete[T](store: EntityStore, data: Record)(using instance: EntityInstance[T]): Consequence[DeleteResult[T]] = {
+  def update[T](store: EntityStore[T], id: EntityId, changes: Record)(using instance: EntityInstance[T]): Consequence[UpdateResult[T]] = {
     ???
   }
 
-  case class ListDirective()
+  def delete[T](store: EntityStore[T], data: Record)(using instance: EntityInstance[T]): Consequence[DeleteResult[T]] = {
+    ???
+  }
 
   case class CreateResult[T]()
   case class GetResult[T]()
-  case class ListResult[T]()
   case class UpdateResult[T]()
   case class DeleteResult[T]()
 }

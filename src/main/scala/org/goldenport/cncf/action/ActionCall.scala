@@ -20,7 +20,9 @@ import org.goldenport.cncf.unitofwork.UnitOfWork
  * @version Jan.  6, 2026
  * @author  ASAMI, Tomoharu
  */
-abstract class ActionCall() extends ActionCall.Core.Holder {
+abstract class ActionCall()
+  extends ActionCall.Core.Holder
+  with OperationCallDataStorePart {
   def name: String = objectToSnakeName("ActionCall", this)
 
   def action: Action

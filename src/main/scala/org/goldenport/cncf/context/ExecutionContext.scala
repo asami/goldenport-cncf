@@ -62,6 +62,7 @@ object ExecutionContext {
       def security: SecurityContext = cncfCore.security
       def observability: ObservabilityContext = cncfCore.observability
       def runtime: RuntimeContext = cncfCore.runtime
+      def unitOfWork: org.goldenport.cncf.unitofwork.UnitOfWork = runtime.unitOfWork
       def jobContext: org.goldenport.cncf.job.JobContext = cncfCore.jobContext
       def application: Option[ApplicationContext] = cncfCore.application
       def system: SystemContext = cncfCore.system
@@ -228,8 +229,15 @@ object ExecutionContext {
     def unitOfWorkEitherInterpreter[T](op: UnitOfWork.UnitOfWorkOp[T]): Either[Throwable, T] =
       Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in test context"))
 
-    def commit(): Unit = {}
-    def abort(): Unit = {}
+    def commit(): Unit = {
+      unitOfWork.commit()
+      ()
+    }
+
+    def abort(): Unit = {
+      unitOfWork.rollback()
+      ()
+    }
     def dispose(): Unit = {}
 
     def toToken: String = "execution-context-test"

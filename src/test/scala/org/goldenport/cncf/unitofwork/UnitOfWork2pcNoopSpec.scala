@@ -135,6 +135,17 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
   private final class RejectingDataStore(
     recorder: CommitRecorder
   ) extends DataStore {
+    def create(id: org.goldenport.id.UniversalId, record: DataStore.Record): Unit = {}
+
+    def load(id: org.goldenport.id.UniversalId): Option[DataStore.Record] =
+      None
+
+    def store(id: org.goldenport.id.UniversalId, record: DataStore.Record): Unit = {}
+
+    def update(id: org.goldenport.id.UniversalId, changes: DataStore.Record): Unit = {}
+
+    def delete(id: org.goldenport.id.UniversalId): Unit = {}
+
     def prepare(tx: TransactionContext): PrepareResult = {
       recorder.record("DataStore.prepare")
       PrepareResult.Rejected("rejected")

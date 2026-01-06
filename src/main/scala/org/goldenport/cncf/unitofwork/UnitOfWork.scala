@@ -4,7 +4,7 @@ import scala.util.{Try, Success, Failure}
 import java.io.File
 import org.goldenport.{Consequence, Conclusion}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.datastore.{DataStore, QueryDirective, SelectResult, SelectableDataStore}
 import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.entity.EntityStore.*
 import org.goldenport.cncf.event.EventEngine
@@ -18,21 +18,29 @@ import org.goldenport.cncf.event.DomainEvent
  */
 class UnitOfWork(
   context: ExecutionContext,
-  dataStore: DataStore = DataStore.noop(),
-  eventEngine: EventEngine = EventEngine.noop(DataStore.noop()),
+  val datastore: DataStore = DataStore.noop(),
+  eventengine: EventEngine = EventEngine.noop(DataStore.noop()),
   recorder: CommitRecorder = CommitRecorder.noop
 ) {
   import UnitOfWork.*
 
-  def create[T](store: EntityStore, data: Record)(using instance: EntityInstance[T]): Try[CreateResult[T]] = ???
+  def create[T](store: EntityStore[T], data: Record)(using instance: EntityInstance[T]): Try[CreateResult[T]] = ???
 
-  def get[T](store: EntityStore)(using instance: EntityInstance[T]): Try[GetResult[T]] = ???
+  def load[T](store: EntityStore[T])(using instance: EntityInstance[T]): Try[GetResult[T]] = ???
 
-  def list[T](store: EntityStore, directive: ListDirective)(using instance: EntityInstance[T]): Try[ListResult[T]] = ???
+  def select[T](store: EntityStore[T], directive: QueryDirective)(using instance: EntityInstance[T]): Try[SelectResult] = ???
 
-  def update[T](store: EntityStore, id: EntityId, data: Record)(using instance: EntityInstance[T]): Try[UpdateResult[T]] = ???
+  def store[T](store: EntityStore[T], id: EntityId, data: Record)(using instance: EntityInstance[T]): Try[UpdateResult[T]] = ???
 
-  def delete[T](store: EntityStore, data: Record)(using instance: EntityInstance[T]): Try[DeleteResult[T]] = ???
+  def update[T](store: EntityStore[T], id: EntityId, changes: Record)(using instance: EntityInstance[T]): Try[UpdateResult[T]] = ???
+
+  def delete[T](store: EntityStore[T], data: Record)(using instance: EntityInstance[T]): Try[DeleteResult[T]] = ???
+
+  def selectableDatastore: Option[SelectableDataStore] =
+    datastore match {
+      case s: SelectableDataStore => Some(s)
+      case _ => None
+    }
 
   def createFile(file: File, data: String): Try[Unit] = ???
 
@@ -46,24 +54,24 @@ class UnitOfWork(
   ): Consequence[CommitResult] =
     try {
       val tx = TransactionContext.create()
-      eventEngine.stage(events)
+      eventengine.stage(events)
       recorder.record("UnitOfWork.prepare")
       val prepares = List(
-        dataStore.prepare(tx),
-        eventEngine.prepare(tx)
+        datastore.prepare(tx),
+        eventengine.prepare(tx)
       )
       prepares.collectFirst {
         case PrepareResult.Rejected(reason) => reason
       } match {
         case Some(reason) =>
           recorder.record("UnitOfWork.abort")
-          eventEngine.abort(tx)
-          dataStore.abort(tx)
+          eventengine.abort(tx)
+          datastore.abort(tx)
           Consequence.failure(reason)
         case None =>
           recorder.record("UnitOfWork.commit")
-          dataStore.commit(tx)
-          eventEngine.commit(tx)
+          datastore.commit(tx)
+          eventengine.commit(tx)
           Consequence.success(())
       }
     } catch {
@@ -75,13 +83,16 @@ class UnitOfWork(
     try {
       val tx = TransactionContext.create()
       recorder.record("UnitOfWork.abort")
-      eventEngine.abort(tx)
-      dataStore.abort(tx)
+      eventengine.abort(tx)
+      datastore.abort(tx)
       Consequence.success(())
     } catch {
       case e: Throwable =>
         Consequence.Failure(Conclusion.from(e))
     }
+
+  def rollback(): Consequence[AbortResult] =
+    abort()
 
   def record(message: String): Unit =
     recorder.record(message)
@@ -98,7 +109,7 @@ object UnitOfWork {
   type Message = String
 
   sealed trait UnitOfWorkOp[T]
-  case class CreateEntity[ENTITY](store: EntityStore, data: Record, instance: EntityInstance[ENTITY]) extends UnitOfWorkOp[Try[CreateResult[ENTITY]]]
+  case class CreateEntity[ENTITY](store: EntityStore[ENTITY], data: Record, instance: EntityInstance[ENTITY]) extends UnitOfWorkOp[Try[CreateResult[ENTITY]]]
 
   type UnitOfWorkFM[T] = Free[UnitOfWorkOp, T]
 
@@ -110,7 +121,7 @@ object UnitOfWork {
 
   type UnitOfWorkRWSEitherFM[T] = RWST[UnitOfWorkEitherFM, Config, Log, State, T]
 
-  def create[A](store: EntityStore, data: Record)(using instance: EntityInstance[A]): UnitOfWorkFM[Try[CreateResult[A]]] =
+  def create[A](store: EntityStore[A], data: Record)(using instance: EntityInstance[A]): UnitOfWorkFM[Try[CreateResult[A]]] =
     Free.liftF(CreateEntity(store, data, instance))
 
   // def interpreterUnitOfWork[ENTITY, T](unitofwork: UnitOfWorkFM[T]): T = {
@@ -140,7 +151,7 @@ object UnitOfWork {
     }
   }
 
-  def program[T](store: EntityStore, data: Record)(using instance: EntityInstance[T]): UnitOfWorkFM[Try[CreateResult[T]]] =
+  def program[T](store: EntityStore[T], data: Record)(using instance: EntityInstance[T]): UnitOfWorkFM[Try[CreateResult[T]]] =
     for {
       r <- create(store, data) 
     } yield r
@@ -148,7 +159,7 @@ object UnitOfWork {
   case class Product()
 
   def z: Try[CreateResult[Product]] = {
-    val store: EntityStore = ???
+    val store: EntityStore[Product] = ???
     val data: Record = Map.empty
 
     val ctx: ExecutionContext = ???
@@ -181,7 +192,7 @@ object UnitOfWork {
 
   class XOperation extends ServiceOperation[CreateResult[Product]] {
     protected def operation_program: UnitOfWorkFM[Try[CreateResult[Product]]] = {
-      val store: EntityStore = ???
+      val store: EntityStore[Product] = ???
       val data: Record = Map.empty
 
       implicit val instance = new EntityInstance[Product] {
@@ -205,7 +216,7 @@ object UnitOfWork {
   }
 
   def x(using ctx: ExecutionContext) = {
-    val store: EntityStore = ???
+    val store: EntityStore[Product] = ???
     val data: Record = Map.empty
 
     val program = for {
