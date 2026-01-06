@@ -144,6 +144,18 @@ object ExecutionContext {
       ctx
   }
 
+  def withRuntimeContext(
+    ctx: ExecutionContext,
+    runtime: RuntimeContext
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(
+        cncfCore = i.cncfCore.copy(runtime = runtime)
+      )
+    case _ =>
+      ctx
+  }
+
   def withSystemContext(
     ctx: ExecutionContext,
     system: SystemContext

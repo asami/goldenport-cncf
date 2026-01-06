@@ -9,9 +9,12 @@ import org.goldenport.protocol.service.{Service => ProtocolService}
 // import org.goldenport.cncf.action.ActionLogic
 import org.goldenport.cncf.action.ActionEngine
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, SystemContext}
+import org.goldenport.cncf.config.model.Config
+import org.goldenport.cncf.datastore.DataStackFactory
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.service.{Service, ServiceGroup}
 import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
+import org.goldenport.cncf.unitofwork.UnitOfWork
 
 /*
  * @since   Jan.  1, 2026
@@ -22,6 +25,7 @@ import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
 abstract class Component extends Component.Core.Holder {
   private var _application_config: Component.ApplicationConfig = Component.ApplicationConfig()
   private var _system_context: SystemContext = SystemContext.empty
+  private var _unit_of_work: UnitOfWork = DataStackFactory.create(Config.empty)
 
   lazy val services: ServiceGroup =
     ServiceGroup(protocol.services.services.map(_to_service))
@@ -49,17 +53,22 @@ abstract class Component extends Component.Core.Holder {
     _system_context = sc
     this
   }
+
+  def unitOfWork: UnitOfWork = _unit_of_work
+
+  private def _init_data_stack(config: Config): Unit = {
+    _unit_of_work = DataStackFactory.create(config)
+  }
 }
 
 object Component {
   final case class ApplicationConfig(
-    applicationContext: Option[ApplicationContext] = None
+    applicationContext: Option[ApplicationContext] = None,
+    config: Option[org.goldenport.cncf.config.model.Config] = None
   )
 
   type ApplicationContext =
     org.goldenport.cncf.context.ExecutionContext.ApplicationContext
-
-  case class Config()
 
   case class Core(
     protocol: Protocol,
@@ -116,6 +125,9 @@ object Component {
   ): Component = {
     val c = create(protocol)
     c.withApplicationConfig(applicationConfig)
+    val conf = applicationConfig.config.getOrElse(org.goldenport.cncf.config.model.Config.empty)
+    c._init_data_stack(conf)
+    c
   }
 
   def create(

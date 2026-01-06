@@ -103,6 +103,9 @@ object UnitOfWork {
   import cats.data._
   import cats.free._
   import cats.implicits._
+  import org.goldenport.cncf.context.{ExecutionContext, SystemContext}
+  import org.goldenport.cncf.event.EventEngine
+  import org.goldenport.cncf.datastore.DataStore
 
   type CommitResult = Unit
   type AbortResult = Unit
@@ -157,6 +160,12 @@ object UnitOfWork {
     } yield r
 
   case class Product()
+
+  def simple(datastore: DataStore): UnitOfWork = {
+    val base = ExecutionContext.createWithSystem(SystemContext.empty)
+    val eventengine = EventEngine.noop(datastore)
+    new UnitOfWork(base, datastore, eventengine)
+  }
 
   def z: Try[CreateResult[Product]] = {
     val store: EntityStore[Product] = ???

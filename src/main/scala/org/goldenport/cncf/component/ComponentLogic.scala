@@ -5,8 +5,10 @@ import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.Response
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.cncf.action.{Action, ActionCall}
-import org.goldenport.cncf.context.{ExecutionContext, SystemContext}
+import cats.{Id, ~>}
+import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemContext}
 import org.goldenport.cncf.job.{JobEngine, JobId, JobResult, JobStatus, JobTask}
+import org.goldenport.cncf.unitofwork.UnitOfWork
 
 /*
  * @since   Jan.  3, 2026
@@ -51,11 +53,48 @@ case class ComponentLogic(
 
   private def _execution_context(): ExecutionContext = {
     val base = ExecutionContext.createWithSystem(system)
+    val runtime = new _ComponentRuntimeContext(component.unitOfWork)
+    val withruntime = ExecutionContext.withRuntimeContext(base, runtime)
     component.applicationConfig.applicationContext match {
       case Some(app) =>
-        ExecutionContext.withApplicationContext(base, app)
+        ExecutionContext.withApplicationContext(withruntime, app)
       case None =>
-        base
+        withruntime
     }
+  }
+
+  private final class _ComponentRuntimeContext(
+    uow: UnitOfWork
+  ) extends RuntimeContext {
+    def unitOfWork: UnitOfWork = uow
+
+    def unitOfWorkInterpreter[T]: (UnitOfWork.UnitOfWorkOp ~> Id) =
+      new (UnitOfWork.UnitOfWorkOp ~> Id) {
+        def apply[A](fa: UnitOfWork.UnitOfWorkOp[A]): Id[A] =
+          throw new UnsupportedOperationException("unitOfWorkInterpreter is not available in component runtime")
+      }
+
+    def unitOfWorkTryInterpreter[T]: (UnitOfWork.UnitOfWorkOp ~> scala.util.Try) =
+      new (UnitOfWork.UnitOfWorkOp ~> scala.util.Try) {
+        def apply[A](fa: UnitOfWork.UnitOfWorkOp[A]): scala.util.Try[A] =
+          throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not available in component runtime")
+      }
+
+    def unitOfWorkEitherInterpreter[T](op: UnitOfWork.UnitOfWorkOp[T]): Either[Throwable, T] =
+      Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not available in component runtime"))
+
+    def commit(): Unit = {
+      unitOfWork.commit()
+      ()
+    }
+
+    def abort(): Unit = {
+      unitOfWork.rollback()
+      ()
+    }
+
+    def dispose(): Unit = {}
+
+    def toToken: String = "component-runtime-context"
   }
 }
