@@ -6,6 +6,8 @@ import org.goldenport.protocol.Request
 import org.goldenport.protocol.Response
 import org.goldenport.protocol.handler.egress.Egress
 import org.goldenport.protocol.spec.{OperationDefinition, ServiceDefinition}
+import org.goldenport.record.Record
+import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 
@@ -48,11 +50,74 @@ final case class Subsystem(
     }
   }
 
+  def execute(request: Request): Consequence[Response] = {
+    val r: Consequence[Response] = for {
+      route <- _resolve_route(request) match {
+        case Some(r) =>
+          Consequence.success(r)
+        case None =>
+          Consequence.failure("Operation route not found")
+      }
+      response <- {
+        val (component, _, _) = route
+        component.logic.makeOperationRequest(request).flatMap { r =>
+          r match {
+            case action: Action =>
+              val call = component.logic.createActionCall(action)
+              component.logic.execute(call).flatMap(opres => Consequence.success(opres.toResponse))
+            case _ =>
+              Consequence.failure("OperationRequest must be Action")
+          }
+        }
+      }
+    } yield response
+    r match {
+      case Consequence.Failure(c) =>
+        val _ = _subsystem_scope_context.observe_error(
+          "execute_failed",
+          attributes = Record.data(
+            "reason" -> c.status.toString,
+            "request" -> request.toString
+          )
+        )
+      case _ =>
+        ()
+    }
+    r
+  }
+
   private def _resolve_route(
     req: HttpRequest
   ): Option[(Component, ServiceDefinition, OperationDefinition)] = {
     req.pathParts match {
       case Vector(componentname, servicename, operationname) =>
+        for {
+          component <- _components.get(componentname)
+          service <- component.protocol.services.services.find(_.name == servicename)
+          operation <- service.operations.operations.find(_.name == operationname)
+        } yield (component, service, operation)
+      case _ =>
+        None
+    }
+  }
+
+  private def _resolve_route(
+    request: Request
+  ): Option[(Component, ServiceDefinition, OperationDefinition)] = {
+    request.service match {
+      case Some(serviceid) =>
+        _resolve_route(serviceid, request.operation)
+      case None =>
+        None
+    }
+  }
+
+  private def _resolve_route(
+    serviceid: String,
+    operationname: String
+  ): Option[(Component, ServiceDefinition, OperationDefinition)] = {
+    serviceid.split("\\.") match {
+      case Array(componentname, servicename) =>
         for {
           component <- _components.get(componentname)
           service <- component.protocol.services.services.find(_.name == servicename)

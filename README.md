@@ -67,6 +67,12 @@ Cloud Native Component Framework provides:
 
 ---
 
+## CLI Log Backend Defaults
+
+- command / client: no logs by default
+- server: SLF4J logging enabled
+- `--log-backend=stdout|stderr|nop|slf4j` overrides defaults
+
 ## Configuration Resolution (Foundational Layer)
 
 The first concrete and highest-priority subsystem in this framework is

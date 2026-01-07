@@ -1,6 +1,8 @@
 package org.goldenport.cncf.context
 
 import org.goldenport.id.UniversalId
+import org.goldenport.record.Record
+import org.goldenport.cncf.observability.ObservabilityEngine
 
 /*
  * @since   Dec. 21, 2025
@@ -48,6 +50,27 @@ final case class ObservabilityContext(
       spanId = spanId,
       correlationId = correlationId
     )
+
+  def emitInfo(
+    scope: ScopeContext,
+    name: String,
+    attributes: Record
+  ): Unit =
+    ObservabilityEngine.emitInfo(this, scope, name, attributes)
+
+  def emitWarn(
+    scope: ScopeContext,
+    name: String,
+    attributes: Record
+  ): Unit =
+    ObservabilityEngine.emitWarn(this, scope, name, attributes)
+
+  def emitError(
+    scope: ScopeContext,
+    name: String,
+    attributes: Record
+  ): Unit =
+    ObservabilityEngine.emitError(this, scope, name, attributes)
 }
 
 object ObservabilityContext {

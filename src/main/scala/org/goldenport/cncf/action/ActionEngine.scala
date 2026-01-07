@@ -9,8 +9,7 @@ import org.goldenport.cncf.event.ActionEvent
 import org.goldenport.cncf.security.AuthorizationDecision
 import org.goldenport.cncf.security.AuthorizationEngine
 import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
-import org.slf4j.LoggerFactory
-import org.goldenport.cncf.cli.LogBackendHolder
+import org.goldenport.cncf.log.LogBackendHolder
 
 /*
  * @since   Apr. 11, 2025
@@ -25,7 +24,6 @@ class ActionEngine(
   config: ActionEngine.Config,
   authorizationEngine: AuthorizationEngine
 ) {
-  private val _logger = LoggerFactory.getLogger(classOf[ActionEngine])
 
   def createActionCall(
     action: Action
@@ -55,8 +53,6 @@ class ActionEngine(
     call: ActionCall
   ): Consequence[OperationResponse] = {
     val ec = call.executionContext
-    // TEMP(Stage 1): execution path snapshot
-    println(s"[SNAPSHOT][ActionEngine] enter action=${call.action.name}")
 
     val authresult: Consequence[Unit] =
       Consequence {
@@ -67,22 +63,16 @@ class ActionEngine(
     authresult.flatMap { _ =>
       Consequence run {
         // Observation hooks apply only to executed actions.
-        // TEMP(Stage 1): execution path snapshot
-        println(s"[SNAPSHOT][ActionEngine] before invoke action=${call.action.name}")
         observe_enter(call)
         try {
           val r = call.execute()
           ec.runtime.commit()
           observe_leave(call, r)
-          // TEMP(Stage 1): execution path snapshot
-          println(s"[SNAPSHOT][ActionEngine] leave action=${call.action.name}")
           r
         } catch {
           case e: Throwable =>
             ec.runtime.abort()
             observe_leave(call, Consequence.Failure(org.goldenport.Conclusion.from(e)))
-            // TEMP(Stage 1): execution path snapshot
-            println(s"[SNAPSHOT][ActionEngine] error action=${call.action.name}")
             throw e
         } finally {
           ec.runtime.dispose()
@@ -122,7 +112,7 @@ class ActionEngine(
     call: ActionCall
   ): Unit = {
     // Execution observation hook (not persisted).
-    _log_backend_("enter", call)
+    _log_backend_("enter", Some(call.action.name), "", None)
     observe_info("Action started", call)
   }
 
@@ -133,10 +123,10 @@ class ActionEngine(
     // Execution observation hook (not persisted).
     result match {
       case Consequence.Success(_) =>
-        _log_backend_("leave", call)
+        _log_backend_("leave", Some(call.action.name), "", None)
         observe_info("Action completed successfully", call)
       case Consequence.Failure(conclusion) =>
-        _log_backend_("error", call)
+        _log_backend_("error", Some(call.action.name), "", None)
         val message = s"Action failed: ${conclusion.message}"
         observe_error(message, conclusion.getException, call)
     }
@@ -218,28 +208,8 @@ class ActionEngine(
   ): Unit = {
     val ctx = _observation_context(call)
     val text = if (ctx.isEmpty) message else s"$message $ctx"
-    try {
-      level match {
-        case "fatal" | "error" =>
-          cause match {
-            case Some(c) => _logger.error(text, c)
-            case None => _logger.error(text)
-          }
-        case "warning" =>
-          _logger.warn(text)
-        case "info" =>
-          _logger.info(text)
-        case "debug" =>
-          _logger.debug(text)
-        case "trace" =>
-          _logger.trace(text)
-        case _ =>
-          _logger.info(text)
-      }
-    } catch {
-      case _: Throwable =>
-        ()
-    }
+    val actionname = call.map(_.action.name)
+    _log_backend_(level, actionname, text, cause)
   }
 
   private def _observation_context(
@@ -260,12 +230,19 @@ class ActionEngine(
   }
 
   private def _log_backend_(
-    eventtype: String,
-    call: ActionCall
+    level: String,
+    actionname: Option[String],
+    message: String,
+    cause: Option[Throwable]
   ): Unit = {
     LogBackendHolder.backend.foreach { backend =>
-      val message = s"event=$eventtype scope=Action name=${call.action.name}"
-      backend.log(eventtype, message)
+      val name = actionname.getOrElse("unknown")
+      val prefix = s"event=$level scope=Action name=$name "
+      val text = cause match {
+        case Some(c) => s"$message cause=${c.getMessage}"
+        case None => message
+      }
+      backend.log(level, s"$prefix$text")
     }
   }
 

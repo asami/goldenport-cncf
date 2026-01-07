@@ -7,6 +7,7 @@ scope = internal development strategy
 - Provide a shared, top-level strategy for growing CNCF in stages.
 - Prevent scope drift by making phase boundaries explicit.
 - Serve as the meta-context for future notes and design documents.
+- This document covers strategy only; execution, verification, and results live in notes.
 
 ## 2. Development Philosophy
 - Bootstrap first.
@@ -19,24 +20,24 @@ scope = internal development strategy
 
 ### Phase 1: HelloWorld Bootstrap
 - Goal: no-setting startup guarantee.
-- Artifact: `helloworld-bootstrap.md`.
+- Artifact (notes): `docs/notes/helloworld-bootstrap.md`.
 - Excluded: CRUD, CML, persistence, authentication.
 
 ### Phase 1.5: Subsystem Execution Model Fix (Internal)
 - Goal: fix execution responsibilities.
-- Artifact: `helloworld-step2-subsystem-execution.md`.
+- Artifact (notes): `docs/notes/helloworld-step2-subsystem-execution.md`.
 - Internal design note, not a demo or article.
 
 ### Phase 2: HelloWorld Demo Strategy
 - Goal: user-visible demo experience.
-- Artifact: `helloworld-demo-strategy.md`.
+- Artifact (notes): `docs/notes/helloworld-demo-strategy.md`.
 - Covers: server, OpenAPI, client, command, component demo.
 - This phase exists to support a concrete demo article.
 
 ### Phase 3: CML → CRUD Domain Subsystem
 - Goal: domain modeling and runtime bootstrap.
 - Not driven by demo requirements.
-- Artifact: `cml-crud-domain-subsystem-bootstrap.md`.
+- Artifact (notes): `docs/notes/cml-crud-domain-subsystem-bootstrap.md`.
 
 ## 4. Relationship Between Phases
 - Later phases depend on earlier phases.
@@ -47,6 +48,7 @@ scope = internal development strategy
 - CNCF developers: use this strategy to sequence work.
 - Demo/article authors: respect phase boundaries.
 - AI assistants (Codex / ChatGPT): treat this as the top-level planning context.
+- Notes contain execution details and results for each phase.
 
 ## 6. Explicit Non-Goals
 - No skipping phases.

@@ -22,6 +22,9 @@ Its goal is to ensure that:
 This bootstrap phase prioritizes **“it runs safely”**
 over domain logic, configuration, or persistence.
 
+This document is the single source of truth for the HelloWorld bootstrap,
+demo stages, and stage results.
+
 ---
 
 ## 2. User Experience Flow
@@ -261,7 +264,142 @@ the stable foundation for all later extensions.
 
 ---
 
-## 9. Summary
+## 9. HelloWorld Demo (Plan)
+
+### 9.1 Goal and Scope
+This section defines the minimal, experience-first path to complete the
+HelloWorld demo before entering CRUD / CML development.
+
+The objective is to stabilize the demo experience and execution boundary,
+so that later CRUD/CML work can build on a proven, user-visible flow.
+
+Scope is intentionally demo-first:
+- Establish a clean startup and execution path.
+- Validate the user experience across server, client, and command modes.
+
+CRUD / CML is explicitly out of scope for this phase.
+
+### 9.2 Terminology
+This document uses the term **Stage** to describe user-visible demo milestones.
+
+The term **Step** is reserved for concrete implementation tasks and
+is intentionally not used at the structural level in this section.
+
+### 9.3 Target Demo Experience
+The demo experience should provide:
+- No-setting HelloWorld server startup
+- OpenAPI-based API specification exposure
+- Client mode usage
+- Command mode usage
+- First custom HelloWorld Component implementation
+
+### 9.4 Architectural Principles
+- Subsystem is the stable execution boundary.
+- Component / Service / Operation model is reused across modes.
+- No special REST adapter is introduced.
+- Projection-based outputs (OpenAPI, CLI help) are the primary interface.
+- A single implementation supports multiple projections.
+
+### 9.5 Demo Stages
+The demo is completed through a sequence of **Stages**.
+Each stage represents a stable, user-visible capability.
+Implementation steps may be broken down separately.
+
+#### Stage 1: No-Setting HelloWorld Server
+- Default Subsystem instantiation
+- AdminComponent availability
+- HTTP server delegation to `Subsystem.executeHttp`
+
+##### Observability (Stage 1 Completion Criteria)
+This stage validates the basic observability wiring between the execution model
+and external visibility. The goal is not advanced monitoring, but to ensure that
+execution events can be observed during development and debugging.
+
+Completion criteria:
+
+- The observation DSL is defined:
+  - observe_fatal
+  - observe_error
+  - observe_warning
+  - observe_info
+  - observe_debug
+  - observe_trace
+
+- Action execution automatically resolves its observation scope
+  (component / service / operation) without explicit specification
+  by the action implementation.
+
+- The following observation events are emitted:
+  - observe_info on Subsystem startup
+  - observe_error on Action execution failure
+  - observe_fatal on unrecoverable execution failures
+
+- Observation events are emitted via a temporary SLF4J-based sink:
+  - No SLF4J StaticLoggerBinder warnings are emitted at startup
+  - Observation output is visible in standard logs
+
+- Observation does not affect execution control:
+  - observe_* does not throw, retry, or alter execution flow
+  - Execution control remains the responsibility of ActionEngine
+
+#### Stage 2: Executable HelloWorld API
+- `ping` operation returning 200 OK
+- Health / info as future extensions
+
+#### Stage 3: OpenAPI Projection
+- Read-only OpenAPI generation from Subsystem model
+- No manual spec writing
+- Projection, not adapter
+
+#### Stage 4: Client and Command Modes
+- `cncf` client execution
+- Remote Subsystem invocation
+- Same Component/Operation model
+- Local Subsystem execution as a command
+- Batch / admin use cases
+- Shared implementation with server mode
+
+#### Stage 5: First Custom HelloWorld Component Extension
+- Add a simple operation (e.g. `hello(name)`)
+- Verify propagation to server / OpenAPI / client / command
+
+#### Stage 6: Demo Consolidation
+This stage focuses on polishing the demo experience:
+- Documentation and demo script preparation
+- Error handling and messaging improvements
+- Ensuring consistency across server, OpenAPI, client, and command modes
+
+No new architectural features are introduced at this stage.
+
+### 9.6 Stage Execution Order
+1. Stage 1: No-Setting HelloWorld Server
+2. Stage 2: Executable HelloWorld API
+3. Stage 3: OpenAPI Projection
+4. Stage 4: Client and Command Modes
+5. Stage 5: First Custom HelloWorld Component Extension
+6. Stage 6: Demo Consolidation
+
+The HelloWorld demo is considered complete only after all six stages are finished.
+
+### 9.7 Non-Goals
+- No CML parsing
+- No CRUD generation
+- No persistence or memory-first logic
+- No authentication or authorization
+- No UI beyond projections
+
+### 9.8 Transition to CRUD / CML
+The following artifacts are expected to carry forward:
+- Subsystem execution boundary
+- Component / Service / Operation model
+- Projection-based outputs
+
+This demo plan validates the demo experience first and then transitions into
+CRUD / CML with a stable, reusable execution model.
+
+---
+
+## 10. Summary
 
 > The HelloWorld Bootstrap guarantees that CNCF
 > can always start safely, visibly, and understandably.
@@ -292,3 +430,81 @@ Stage 1 の目的は、Observability の基盤導入と ScopeContext 階層化�
 ### Stage Boundary Declaration
 - Stage 1 は「観測基盤の導入」までで完了している。
 - command 実行系の接続は Stage 2 の責務である。
+
+## Observability — Stage 2 Plan
+
+### Purpose
+Stage 2 の目的は、command 実行系を Subsystem 実行モデルに接続し、
+Server / Command の両モードで同一の Action 実行経路と観測を成立させることである。
+
+### Scope
+- 対象は HelloWorld Bootstrap に限定する。
+- command 実行は in-process 実行とする（HTTP は介さない）。
+- ping のような「必ず成功する Action」を基準にする。
+
+### Planned Work Items
+- command 実行要求を Subsystem.execute に委譲する。
+- Component / Service / ActionEngine の通常実行経路を通す。
+- ActionEngine の enter / leave / error が観測されることを確認する。
+- 実行結果を標準出力（stdout backend）で確認できるようにする。
+
+### Out of Scope
+- 永続化
+- 認証・認可
+- 高度な CLI UX
+- エラーハンドリングの洗練
+
+### Expected Result
+- `cncf run command admin.system.ping` が
+  - ActionEngine に到達し
+  - enter / leave が観測され
+  - 既知の固定レスポンスを返す
+
+Stage 2 は、command 実行モデルを確定する段階であり、
+以降の Batch / Tooling / Automation の前提となる。
+
+## Observability — Stage 2 Result
+
+### Implemented Items (Facts)
+- ActionEngine の enter / leave が観測できた。
+- command 実行時はログが抑制され、結果のみ stdout に出る。
+- --log-backend 指定により観測ログを明示的に出力できる。
+
+### Stage 2 Result: CLI Execution
+- command / client の成功時は stdout に結果のみが出力される（例: `ok`）。
+- 失敗時は stderr にエラーが出力され、exit code は 1 になる。
+- exit code 規約は success=0 / failure=1 である。
+- デフォルトではログは出ない（NopLogBackend）。
+
+### Stage 2 Result: Observability Architecture
+- Observability の構造は以下の四層で固定された。
+  - ScopeContext
+  - ObservabilityContext
+  - ObservabilityEngine
+  - LogBackend
+- フローは以下である。
+  - ScopeContext → ObservabilityContext → ObservabilityEngine → LogBackend
+- 各層の責務は以下である。
+  - ScopeContext: スコープ情報の保持と委譲
+  - ObservabilityContext: 入口としての委譲
+  - ObservabilityEngine: 観測イベントの組み立てと出力の正規化
+  - LogBackend: 出力先の差し替え
+- 振る舞いは Stage 1 から変更していない（構造整理のみ）。
+
+### Log / Backend Policy (Stage 2)
+- command / client:
+  - デフォルトは NopLogBackend。
+  - `--log-backend` 指定時のみ観測出力が出る。
+- server:
+  - デフォルトは Slf4jLogBackend（現時点）。
+- SLF4J は backend の一実装であり、ActionEngine などからは直接呼ばない。
+
+### Stage Boundary Declaration
+- Stage 2 で確立したこと:
+  - 実行経路（CLI → Subsystem → ActionEngine）
+  - 観測責務の分離
+  - CLI として予測可能な入出力
+- Stage 3 以降の対象:
+  - Metrics / Trace / OpenTelemetry
+  - ObservabilityEngine 拡張
+  - exit code 拡張（分類）
