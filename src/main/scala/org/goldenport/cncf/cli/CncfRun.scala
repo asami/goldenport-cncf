@@ -5,6 +5,7 @@ import org.goldenport.cli.CliEngine
 import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.cncf.subsystem.DefaultSubsystemProvider
 import org.goldenport.cncf.subsystem.HelloWorldSubsystemMapping
+import org.goldenport.cncf.http.HelloWorldHttpServer
 
 /*
  * @since   Jan.  7, 2026
@@ -29,5 +30,20 @@ object CncfRun {
   }
 }
 
-@main def cncf(args: String*): Unit =
-  CncfRun.run(args.toArray)
+object ServerLauncher {
+  def start(args: Array[String]): Unit = {
+    HelloWorldHttpServer.start(args)
+  }
+}
+
+object ClientLauncher {
+  def execute(args: Array[String]): Unit = {
+    val _ = CncfRun.run(args)
+  }
+}
+
+object CommandLauncher {
+  def execute(args: Array[String]): Unit = {
+    val _ = CncfRun.run(args)
+  }
+}

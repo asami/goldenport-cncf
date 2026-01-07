@@ -10,6 +10,7 @@ import org.goldenport.cncf.security.AuthorizationDecision
 import org.goldenport.cncf.security.AuthorizationEngine
 import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
 import org.slf4j.LoggerFactory
+import org.goldenport.cncf.cli.LogBackendHolder
 
 /*
  * @since   Apr. 11, 2025
@@ -54,6 +55,8 @@ class ActionEngine(
     call: ActionCall
   ): Consequence[OperationResponse] = {
     val ec = call.executionContext
+    // TEMP(Stage 1): execution path snapshot
+    println(s"[SNAPSHOT][ActionEngine] enter action=${call.action.name}")
 
     val authresult: Consequence[Unit] =
       Consequence {
@@ -64,16 +67,22 @@ class ActionEngine(
     authresult.flatMap { _ =>
       Consequence run {
         // Observation hooks apply only to executed actions.
+        // TEMP(Stage 1): execution path snapshot
+        println(s"[SNAPSHOT][ActionEngine] before invoke action=${call.action.name}")
         observe_enter(call)
         try {
           val r = call.execute()
           ec.runtime.commit()
           observe_leave(call, r)
+          // TEMP(Stage 1): execution path snapshot
+          println(s"[SNAPSHOT][ActionEngine] leave action=${call.action.name}")
           r
         } catch {
           case e: Throwable =>
             ec.runtime.abort()
             observe_leave(call, Consequence.Failure(org.goldenport.Conclusion.from(e)))
+            // TEMP(Stage 1): execution path snapshot
+            println(s"[SNAPSHOT][ActionEngine] error action=${call.action.name}")
             throw e
         } finally {
           ec.runtime.dispose()
@@ -113,6 +122,7 @@ class ActionEngine(
     call: ActionCall
   ): Unit = {
     // Execution observation hook (not persisted).
+    _log_backend_("enter", call)
     observe_info("Action started", call)
   }
 
@@ -123,8 +133,10 @@ class ActionEngine(
     // Execution observation hook (not persisted).
     result match {
       case Consequence.Success(_) =>
+        _log_backend_("leave", call)
         observe_info("Action completed successfully", call)
       case Consequence.Failure(conclusion) =>
+        _log_backend_("error", call)
         val message = s"Action failed: ${conclusion.message}"
         observe_error(message, conclusion.getException, call)
     }
@@ -245,6 +257,16 @@ class ActionEngine(
       executionid.map(e => s"executionId=$e")
     ).flatten
     if (parts.isEmpty) "" else parts.mkString("[", " ", "]")
+  }
+
+  private def _log_backend_(
+    eventtype: String,
+    call: ActionCall
+  ): Unit = {
+    LogBackendHolder.backend.foreach { backend =>
+      val message = s"event=$eventtype scope=Action name=${call.action.name}"
+      backend.log(eventtype, message)
+    }
   }
 
   protected def authorize_pre(

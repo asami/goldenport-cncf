@@ -17,16 +17,24 @@ import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 final case class Subsystem(
   name: String,
   components: Map[String, Component],
-  scopeContext: ScopeContext = ScopeContext(
-    kind = ScopeKind.Subsystem,
-    name = name,
-    parent = None,
-    observabilityContext = ExecutionContext.create().observability
-  )
+  scopeContext: Option[ScopeContext] = None
 ) {
+  private val _subsystem_scope_context: ScopeContext =
+    scopeContext.getOrElse {
+      ScopeContext(
+        kind = ScopeKind.Subsystem,
+        name = name,
+        parent = None,
+        observabilityContext = ExecutionContext.create().observability
+      )
+    }
+
   private val _components: Map[String, Component] =
     components.map { case (componentname, component) =>
-      val sc = scopeContext.createChildScope(ScopeKind.Component, componentname)
+      val sc = _subsystem_scope_context.createChildScope(
+        ScopeKind.Component,
+        componentname
+      )
       component.withScopeContext(sc)
       componentname -> component
     }

@@ -46,8 +46,10 @@ protected def purchase_order(cmd: PurchaseOrder): Consequence[PurchaseResult]
 
 ## Private Methods
 
-- Start with an underscore (`_`)
-- Use snake_case
+- Start with a single leading underscore (`_`)
+- Use snake_case (never camelCase)
+- The canonical form is `_xx_yy` (leading underscore, snake_case, no trailing underscore)
+- **CamelCase is forbidden for private methods.**
 
 ### Example
 
@@ -57,14 +59,22 @@ private def _purchase_order(cmd: PurchaseOrder): Consequence[PurchaseResult]
 
 ## Method‑Local Helper Methods
 
+- Applies **only to helper methods defined *inside another method*** (method-local scope).
 - Start and end with an underscore (`_`)
 - Use snake_case
+- **Method-local helpers MUST use the form `_xx_yy_` (leading and trailing underscore).**
+- **This form MUST NOT be used for class-level private methods.**
 
 ### Example
 
 ```
 def _validate_order_(cmd: PurchaseOrder): Boolean
 ```
+
+### Note
+
+- The `_xx_yy_` pattern is reserved for method-local helpers and must not appear at the class level.
+# Variable Names
 
 # Variable Names
 
@@ -2181,3 +2191,9 @@ This project follows a documented test policy.
 The authoritative specification is defined in:
 
     docs/spec/test-policy.md
+
+
+## Rationale for Private and Method‑Local Naming
+
+- `camelCase` implies public or externally callable semantics and must never be used for private or helper methods.
+- Leading and/or trailing underscores are used intentionally as a visual and semantic signal of non‑API (internal or helper) code.

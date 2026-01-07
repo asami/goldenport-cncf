@@ -1,6 +1,7 @@
 package org.goldenport.cncf.http
 
-import cats.effect.{IO, IOApp}
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.comcast.ip4s.Port
 import org.http4s.{HttpRoutes, MediaType, Response as HResponse, Status as HStatus}
 import org.http4s.ember.server.EmberServerBuilder
@@ -17,10 +18,15 @@ import org.goldenport.cncf.subsystem.HelloWorldSubsystemFactory
  * @version Jan.  7, 2026
  * @author  ASAMI, Tomoharu
  */
-object HelloWorldHttpServer extends IOApp.Simple {
+object HelloWorldHttpServer {
   private val _subsystem = HelloWorldSubsystemFactory.helloWorld()
 
-  def run: IO[Unit] = {
+  def start(args: Array[String] = Array.empty): Unit = {
+    val _ = args
+    _server().unsafeRunSync()
+  }
+
+  private def _server(): IO[Unit] = {
     val scope = ScopeContext(
       kind = ScopeKind.Subsystem,
       name = "hello-world",
@@ -29,9 +35,11 @@ object HelloWorldHttpServer extends IOApp.Simple {
     )
     scope.observe_infoC(
       message = "started",
-      attributes = Record(
-        "kind" -> scope.kind.toString,
-        "name" -> scope.name
+      attributes = Record.create(
+        Vector(
+          "kind" -> scope.kind.toString,
+          "name" -> scope.name
+        )
       )
     )
     val routes = HttpRoutes.of[IO] { req =>

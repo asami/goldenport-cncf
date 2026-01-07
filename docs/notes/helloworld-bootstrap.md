@@ -269,3 +269,26 @@ the stable foundation for all later extensions.
 > It establishes the operational baseline upon which
 > all domain logic, configuration, and runtime evolution
 > can be layered incrementally.
+
+## Observability — Stage 1 Result
+
+### Purpose
+Stage 1 の目的は、Observability の基盤導入と ScopeContext 階層化の確立である。
+
+### Implemented Items (Facts)
+- ScopeKind / ScopeContext / ObservationDsl を導入した。
+- Subsystem → Component → Service → Action の ScopeContext 伝播を実装した。
+- stdout / stderr / slf4j backend の整理を行い、SLF4J をデフォルトとした。
+- Action の enter/leave/error 観測フックを仕込んだ。
+
+### Verified Behavior
+- server 起動時に観測ログが出力されることを確認した。
+- action 実行経路に到達した場合に enter/leave が発火することを確認した。
+
+### Known Limitations / Defects
+- command 実行経路が ActionEngine に到達していない。
+- これはプログラミングバグではなく、実行経路未実装の不具合（defect）である。
+
+### Stage Boundary Declaration
+- Stage 1 は「観測基盤の導入」までで完了している。
+- command 実行系の接続は Stage 2 の責務である。

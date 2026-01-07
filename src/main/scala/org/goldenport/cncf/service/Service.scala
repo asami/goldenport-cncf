@@ -63,7 +63,10 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
     request: Request
   ): Consequence[Response] = {
     val servicescope =
-      logic.component.scopeContext.createChildScope(ScopeKind.Service, name)
+      logic.component.scopeContext.createChildScope(
+        ScopeKind.Service,
+        serviceDefinition.name
+      )
     val _ = servicescope
     val ctx = _execution_context_from_request(request)
     val cid = ctx.observability.correlationId

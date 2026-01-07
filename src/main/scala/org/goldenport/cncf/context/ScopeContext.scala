@@ -28,4 +28,7 @@ final case class ScopeContext(
 
   protected def observability_Context: ObservabilityContext =
     observabilityContext
+
+  override protected def scope_context: Option[ScopeContext] =
+    Some(this)
 }

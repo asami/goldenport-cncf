@@ -17,12 +17,10 @@ import org.goldenport.cncf.component.Component
  */
 object AdminComponentFactory {
   def helloWorld(): Component = {
-    val op = spec.OperationDefinition.Instance(
-      spec.OperationDefinition.Specification(
-        name = "ping",
-        request = spec.RequestDefinition(),
-        response = spec.ResponseDefinition()
-      )
+    val op = spec.OperationDefinition(
+      name = "ping",
+      request = spec.RequestDefinition(),
+      response = spec.ResponseDefinition()
     )
     val service = spec.ServiceDefinition(
       name = "system",
