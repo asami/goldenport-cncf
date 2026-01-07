@@ -975,18 +975,28 @@ protected def do_test(p: XXX): Result
 
 ### Naming Rule
 
-- Capitalize the following word to signal override intent
+- Protected methods that are intended to be overridden **must use the form `xxx_Xxxx`**.
+- `xxx_` is a snake_case base name describing the operation or action.
+- `Xxxx` is a capitalized suffix indicating the override hook.
+
+This general rule makes the override intent visually explicit and consistently recognizable.
 
 ### Example
 
+Generic:
+```
+protected def handle_Request(req: Request): Result
+```
+
+Domain-specific:
 ```
 protected def do_Test(p: XXX): Result
 ```
 
 ### Design Notes
 
-- The camelCase form visually distinguishes hooks from subroutines
-- Subclasses are expected to override this method
+- The capitalized suffix after the underscore clearly distinguishes overridable hooks from subroutines and template methods.
+- Subclasses are expected to override such methods to customize behavior.
 
 ---
 

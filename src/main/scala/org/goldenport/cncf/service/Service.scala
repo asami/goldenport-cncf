@@ -10,14 +10,14 @@ import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.cncf.action.{Action, Command, Query}
 import org.goldenport.cncf.action.ActionEngine
 import org.goldenport.cncf.component.{Component, ComponentLogic}
-import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeKind}
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobContext}
 
 /*
  * @since   Apr. 11, 2025
  *  version Dec. 31, 2025
  *  version Jan.  3, 2026
- * @version Jan.  6, 2026
+ * @version Jan.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Service extends ProtocolService with Service.CCore.Holder {
@@ -62,6 +62,9 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
   def invokeRequest(
     request: Request
   ): Consequence[Response] = {
+    val servicescope =
+      logic.component.scopeContext.createChildScope(ScopeKind.Service, name)
+    val _ = servicescope
     val ctx = _execution_context_from_request(request)
     val cid = ctx.observability.correlationId
     for {

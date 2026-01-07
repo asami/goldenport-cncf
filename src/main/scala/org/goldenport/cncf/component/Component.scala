@@ -8,7 +8,7 @@ import org.goldenport.protocol.spec.{OperationDefinition, ServiceDefinition}
 import org.goldenport.protocol.service.{Service => ProtocolService}
 // import org.goldenport.cncf.action.ActionLogic
 import org.goldenport.cncf.action.ActionEngine
-import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, SystemContext}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeContext, ScopeKind, SystemContext}
 import org.goldenport.cncf.config.model.Config
 import org.goldenport.cncf.datastore.DataStackFactory
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
@@ -19,13 +19,14 @@ import org.goldenport.cncf.unitofwork.UnitOfWork
 /*
  * @since   Jan.  1, 2026
  *  version Jan.  3, 2026
- * @version Jan.  4, 2026
+ * @version Jan.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component extends Component.Core.Holder {
   private var _application_config: Component.ApplicationConfig = Component.ApplicationConfig()
   private var _system_context: SystemContext = SystemContext.empty
   private var _unit_of_work: UnitOfWork = DataStackFactory.create(Config.empty)
+  private var _scope_context: Option[ScopeContext] = None
 
   lazy val services: ServiceGroup =
     ServiceGroup(protocol.services.services.map(_to_service))
@@ -56,9 +57,25 @@ abstract class Component extends Component.Core.Holder {
 
   def unitOfWork: UnitOfWork = _unit_of_work
 
+  def scopeContext: ScopeContext =
+    _scope_context.getOrElse(_default_scope_context())
+
+  def withScopeContext(sc: ScopeContext): Component = {
+    _scope_context = Some(sc)
+    this
+  }
+
   private def _init_data_stack(config: Config): Unit = {
     _unit_of_work = DataStackFactory.create(config)
   }
+
+  private def _default_scope_context(): ScopeContext =
+    ScopeContext(
+      kind = ScopeKind.Component,
+      name = "component",
+      parent = None,
+      observabilityContext = ExecutionContext.create().observability
+    )
 }
 
 object Component {

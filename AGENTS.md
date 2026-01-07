@@ -6,6 +6,15 @@
 - Scala + functional programming minimizes example-based unit tests.
 - Agents must follow the order: rules -> spec -> design -> code.
 
+## AI-Assisted Development Rules
+
+This repository follows the common AI-assisted development rules:
+
+- `docs/rules/ai-assisted-development-rules.md`
+
+Agents must comply with these rules before performing any action,
+especially before editing files or generating implementation results.
+
 ## Scope (CNCF)
 
 This repository contains CNCF (Cloud-Native Component Framework) code

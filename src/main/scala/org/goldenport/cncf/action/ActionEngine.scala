@@ -9,6 +9,7 @@ import org.goldenport.cncf.event.ActionEvent
 import org.goldenport.cncf.security.AuthorizationDecision
 import org.goldenport.cncf.security.AuthorizationEngine
 import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
+import org.slf4j.LoggerFactory
 
 /*
  * @since   Apr. 11, 2025
@@ -16,13 +17,15 @@ import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
  *  version Dec. 21, 2025
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
- * @version Jan.  6, 2026
+ * @version Jan.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
   config: ActionEngine.Config,
   authorizationEngine: AuthorizationEngine
 ) {
+  private val _logger = LoggerFactory.getLogger(classOf[ActionEngine])
+
   def createActionCall(
     action: Action
   ): ActionCall = {
@@ -110,6 +113,7 @@ class ActionEngine(
     call: ActionCall
   ): Unit = {
     // Execution observation hook (not persisted).
+    observe_info("Action started", call)
   }
 
   protected def observe_leave(
@@ -117,6 +121,13 @@ class ActionEngine(
     result: Consequence[OperationResponse]
   ): Unit = {
     // Execution observation hook (not persisted).
+    result match {
+      case Consequence.Success(_) =>
+        observe_info("Action completed successfully", call)
+      case Consequence.Failure(conclusion) =>
+        val message = s"Action failed: ${conclusion.message}"
+        observe_error(message, conclusion.getException, call)
+    }
   }
 
   protected def security_authorize(
@@ -130,6 +141,110 @@ class ActionEngine(
     call: ActionCall,
     decision: AuthorizationDecision
   ): Unit = {
+  }
+
+  protected def observe_fatal(
+    message: String,
+    cause: Option[Throwable] = None
+  ): Unit =
+    _observe("fatal", message, cause, None)
+
+  protected def observe_error(
+    message: String,
+    cause: Option[Throwable] = None
+  ): Unit =
+    _observe("error", message, cause, None)
+
+  protected def observe_warning(
+    message: String
+  ): Unit =
+    _observe("warning", message, None, None)
+
+  protected def observe_info(
+    message: String
+  ): Unit =
+    _observe("info", message, None, None)
+
+  protected def observe_debug(
+    message: String
+  ): Unit = {
+    // TODO: make debug control configurable.
+    val enabled = false
+    if (enabled) {
+      _observe("debug", message, None, None)
+    }
+  }
+
+  protected def observe_trace(
+    message: String
+  ): Unit = {
+    // TODO: make trace control configurable.
+    val enabled = false
+    if (enabled) {
+      _observe("trace", message, None, None)
+    }
+  }
+
+  protected def observe_info(
+    message: String,
+    call: ActionCall
+  ): Unit =
+    _observe("info", message, None, Some(call))
+
+  protected def observe_error(
+    message: String,
+    cause: Option[Throwable],
+    call: ActionCall
+  ): Unit =
+    _observe("error", message, cause, Some(call))
+
+  private def _observe(
+    level: String,
+    message: String,
+    cause: Option[Throwable],
+    call: Option[ActionCall]
+  ): Unit = {
+    val ctx = _observation_context(call)
+    val text = if (ctx.isEmpty) message else s"$message $ctx"
+    try {
+      level match {
+        case "fatal" | "error" =>
+          cause match {
+            case Some(c) => _logger.error(text, c)
+            case None => _logger.error(text)
+          }
+        case "warning" =>
+          _logger.warn(text)
+        case "info" =>
+          _logger.info(text)
+        case "debug" =>
+          _logger.debug(text)
+        case "trace" =>
+          _logger.trace(text)
+        case _ =>
+          _logger.info(text)
+      }
+    } catch {
+      case _: Throwable =>
+        ()
+    }
+  }
+
+  private def _observation_context(
+    call: Option[ActionCall]
+  ): String = {
+    val scope = call.map(_ => "action").getOrElse("operation")
+    val actionname = call.map(_.action.name)
+    val ec = call.map(_.executionContext)
+    val traceid = ec.map(_.observability.traceId.value)
+    val executionid = ec.flatMap(_.observability.correlationId.map(_.value))
+    val parts = Vector(
+      Some(s"scope=$scope"),
+      actionname.map(n => s"action=$n"),
+      traceid.map(t => s"traceId=$t"),
+      executionid.map(e => s"executionId=$e")
+    ).flatten
+    if (parts.isEmpty) "" else parts.mkString("[", " ", "]")
   }
 
   protected def authorize_pre(

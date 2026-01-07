@@ -9,12 +9,31 @@ import org.http4s.dsl.io.*
 import org.goldenport.record.Record
 import org.goldenport.http.HttpRequest
 import org.goldenport.http.HttpResponse
+import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.subsystem.HelloWorldSubsystemFactory
 
+/*
+ * @since   Jan.  7, 2026
+ * @version Jan.  7, 2026
+ * @author  ASAMI, Tomoharu
+ */
 object HelloWorldHttpServer extends IOApp.Simple {
   private val _subsystem = HelloWorldSubsystemFactory.helloWorld()
 
   def run: IO[Unit] = {
+    val scope = ScopeContext(
+      kind = ScopeKind.Subsystem,
+      name = "hello-world",
+      parent = None,
+      observabilityContext = ExecutionContext.create().observability
+    )
+    scope.observe_infoC(
+      message = "started",
+      attributes = Record(
+        "kind" -> scope.kind.toString,
+        "name" -> scope.name
+      )
+    )
     val routes = HttpRoutes.of[IO] { req =>
       for {
         core <- _to_http_request(req)

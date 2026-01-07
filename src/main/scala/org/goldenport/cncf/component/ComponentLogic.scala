@@ -6,13 +6,13 @@ import org.goldenport.protocol.Response
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.cncf.action.{Action, ActionCall}
 import cats.{Id, ~>}
-import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemContext}
+import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeKind, SystemContext}
 import org.goldenport.cncf.job.{JobEngine, JobId, JobResult, JobStatus, JobTask}
 import org.goldenport.cncf.unitofwork.UnitOfWork
 
 /*
  * @since   Jan.  3, 2026
- * @version Jan.  4, 2026
+ * @version Jan.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -35,6 +35,9 @@ case class ComponentLogic(
 
   def createActionCall(action: Action): ActionCall = {
     val ctx = _execution_context()
+    // TODO: action scope should be derived from service scope once available.
+    val actionscope = component.scopeContext.createChildScope(ScopeKind.Action, action.name)
+    val _ = actionscope
     val core = ActionCall.Core(action, ctx, ctx.observability.correlationId)
     action.createCall(core)
   }

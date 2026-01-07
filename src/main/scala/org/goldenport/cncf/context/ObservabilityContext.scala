@@ -5,7 +5,7 @@ import org.goldenport.id.UniversalId
 /*
  * @since   Dec. 21, 2025
  *  version Dec. 31, 2025
- * @version Jan.  4, 2026
+ * @version Jan.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TraceId(
@@ -41,7 +41,14 @@ final case class ObservabilityContext(
   traceId: TraceId,
   spanId: Option[SpanId],
   correlationId: Option[CorrelationId]
-)
+) {
+  def createChild(kind: ScopeKind, name: String): ObservabilityContext =
+    ObservabilityContext(
+      traceId = traceId,
+      spanId = spanId,
+      correlationId = correlationId
+    )
+}
 
 object ObservabilityContext {
   @deprecated(

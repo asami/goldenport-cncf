@@ -130,6 +130,8 @@ Execution is explicitly phased (docs/execution-model.md):
     `docs/design/event-id-event-type.md`
 - See the Observability / Audit design notes in `docs/design/execution-model.md`.
   (Events are primary facts, Observability is diagnostic, Audit is a view over Events)
+- AI-Assisted Development Rules
+  - workflow rules for AI-assisted development
 Error handling:
 - All paths use Consequence; exceptions are mapped to Conclusion.
 - Authorization failure is not an operation failure.

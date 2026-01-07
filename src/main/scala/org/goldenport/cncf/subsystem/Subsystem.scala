@@ -7,6 +7,7 @@ import org.goldenport.protocol.Response
 import org.goldenport.protocol.handler.egress.Egress
 import org.goldenport.protocol.spec.{OperationDefinition, ServiceDefinition}
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 
 /*
  * @since   Jan.  7, 2026
@@ -15,8 +16,20 @@ import org.goldenport.cncf.component.Component
  */
 final case class Subsystem(
   name: String,
-  components: Map[String, Component]
+  components: Map[String, Component],
+  scopeContext: ScopeContext = ScopeContext(
+    kind = ScopeKind.Subsystem,
+    name = name,
+    parent = None,
+    observabilityContext = ExecutionContext.create().observability
+  )
 ) {
+  private val _components: Map[String, Component] =
+    components.map { case (componentname, component) =>
+      val sc = scopeContext.createChildScope(ScopeKind.Component, componentname)
+      component.withScopeContext(sc)
+      componentname -> component
+    }
 
   def executeHttp(req: HttpRequest): HttpResponse = {
     _resolve_route(req) match {
@@ -33,7 +46,7 @@ final case class Subsystem(
     req.pathParts match {
       case Vector(componentname, servicename, operationname) =>
         for {
-          component <- components.get(componentname)
+          component <- _components.get(componentname)
           service <- component.protocol.services.services.find(_.name == servicename)
           operation <- service.operations.operations.find(_.name == operationname)
         } yield (component, service, operation)
