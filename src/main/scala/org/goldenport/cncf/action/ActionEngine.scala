@@ -10,6 +10,8 @@ import org.goldenport.cncf.security.AuthorizationDecision
 import org.goldenport.cncf.security.AuthorizationEngine
 import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
 import org.goldenport.cncf.log.LogBackendHolder
+import org.goldenport.cncf.observability.{ObservabilityEngine, OperationContext}
+import org.goldenport.cncf.context.{ScopeContext, ScopeKind}
 
 /*
  * @since   Apr. 11, 2025
@@ -17,7 +19,7 @@ import org.goldenport.cncf.log.LogBackendHolder
  *  version Dec. 21, 2025
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
- * @version Jan.  7, 2026
+ * @version Jan.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -68,11 +70,37 @@ class ActionEngine(
           val r = call.execute()
           ec.runtime.commit()
           observe_leave(call, r)
+          val _ = ObservabilityEngine.build(
+            scope = ScopeContext(
+              kind = ScopeKind.Action,
+              name = call.action.name,
+              parent = None,
+              observabilityContext = ec.observability
+            ),
+            http = None,
+            operation = Some(OperationContext(call.action.name)),
+            outcome = r match {
+              case Consequence.Success(_) => Right(())
+              case Consequence.Failure(c) => Left(c)
+            }
+          )
           r
         } catch {
           case e: Throwable =>
             ec.runtime.abort()
-            observe_leave(call, Consequence.Failure(org.goldenport.Conclusion.from(e)))
+            val conclusion = org.goldenport.Conclusion.from(e)
+            observe_leave(call, Consequence.Failure(conclusion))
+            val _ = ObservabilityEngine.build(
+              scope = ScopeContext(
+                kind = ScopeKind.Action,
+                name = call.action.name,
+                parent = None,
+                observabilityContext = ec.observability
+              ),
+              http = None,
+              operation = Some(OperationContext(call.action.name)),
+              outcome = Left(conclusion)
+            )
             throw e
         } finally {
           ec.runtime.dispose()

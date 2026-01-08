@@ -12,7 +12,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWork
 
 /*
  * @since   Jan.  3, 2026
- * @version Jan.  7, 2026
+ * @version Jan.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -72,24 +72,10 @@ case class ComponentLogic(
     val isping =
       request.service.contains("admin.system") && request.operation == "ping"
     if (isping) {
-      Some(Consequence.success(PingAction()))
+      Some(Consequence.success(ComponentLogic.PingAction()))
     } else {
       None
     }
-  }
-
-  private final case class PingAction() extends Query("ping") {
-    def createCall(core: ActionCall.Core): ActionCall =
-      PingActionCall(core)
-  }
-
-  private final case class PingActionCall(
-    core: ActionCall.Core
-  ) extends ActionCall {
-    override def action: Action = core.action
-    def accesses: Seq[ResourceAccess] = Nil
-    def execute(): Consequence[OperationResponse] =
-      Consequence.success(OperationResponse.Scalar("ok"))
   }
 
   private final class _ComponentRuntimeContext(
@@ -125,5 +111,21 @@ case class ComponentLogic(
     def dispose(): Unit = {}
 
     def toToken: String = "component-runtime-context"
+  }
+}
+
+object ComponentLogic {
+  final case class PingAction() extends Query("ping") {
+    def createCall(core: ActionCall.Core): ActionCall =
+      PingActionCall(core)
+  }
+
+  final case class PingActionCall(
+    core: ActionCall.Core
+  ) extends ActionCall {
+    override def action: Action = core.action
+    def accesses: Seq[ResourceAccess] = Nil
+    def execute(): Consequence[OperationResponse] =
+      Consequence.success(OperationResponse.Scalar("ok"))
   }
 }

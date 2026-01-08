@@ -2,25 +2,24 @@ package org.goldenport.cncf.cli
 
 import org.goldenport.Consequence
 import org.goldenport.protocol.Request
-import org.goldenport.protocol.handler.ingress.DefaultArgsIngress
-import org.goldenport.protocol.spec.ServiceDefinitionGroup
+import org.goldenport.protocol.spec.RequestDefinition
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan.  7, 2026
+ * @version Jan.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime {
   def run(args: Array[String]): Unit = {
+    // TODO use Request.parseArgs
     val (backendoption, actualargs) = _log_backend(args)
     if (actualargs.isEmpty) {
       _print_usage()
       return
     }
-    val ingress = DefaultArgsIngress()
     val r: Consequence[Request] =
-      ingress.encode(ServiceDefinitionGroup(Vector.empty), actualargs)
+      Request.parseArgs(RequestDefinition(), actualargs)
     r match {
       case Consequence.Success(req) =>
         if (req.operation.isEmpty) {
@@ -38,6 +37,9 @@ object CncfRuntime {
           case Some(RunMode.Command) =>
             _install_log_backend(_decide_backend(backendoption, RunMode.Command))
             CommandLauncher.execute(actualargs.drop(1))
+          case Some(RunMode.ServerEmulator) =>
+            _install_log_backend(_decide_backend(backendoption, RunMode.ServerEmulator))
+            ServerEmulatorLauncher.execute(actualargs.drop(1))
           case None =>
             _print_error(s"Unknown mode: ${req.operation}")
             _print_usage()
@@ -103,6 +105,7 @@ object CncfRuntime {
           case RunMode.Command => LogBackend.NopLogBackend
           case RunMode.Client => LogBackend.NopLogBackend
           case RunMode.Server => LogBackend.Slf4jLogBackend
+          case RunMode.ServerEmulator => LogBackend.NopLogBackend
         }
     }
   }
@@ -112,4 +115,5 @@ object CncfRuntime {
   ): Unit = {
     LogBackendHolder.install(backend)
   }
+
 }

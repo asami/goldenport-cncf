@@ -34,6 +34,70 @@ scope = internal development strategy
 - Covers: server, OpenAPI, client, command, component demo.
 - This phase exists to support a concrete demo article.
 
+### Phase 2.5: Error Semantics Consolidation
+
+**Goal**
+Finalize and freeze the error / failure semantics of CNCF
+before entering CML and CRUD-oriented development.
+
+**Scope**
+- Consolidate core-level semantics:
+  - Observation
+  - Conclusion
+  - Cause / CauseKind
+  - Detail error code strategy
+- Define CNCF-level projections:
+  - CLI exit code mapping
+  - HTTP status mapping
+  - Client-visible error representation
+
+**Non-goals**
+- No CML modeling
+- No CRUD generation
+- No workflow or job orchestration
+
+**Rationale**
+Error semantics must be completed before domain expansion.
+CML and CRUD layers will rely on this frozen contract.
+
+**Artifacts**
+- CNCF note: `error-semantics.md`
+- Core note: `core-error-semantics.md`
+- Related design notes:
+  - `docs/notes/scope-context-design.md`
+  - `docs/notes/conclusion-observation-design.md`
+  - `docs/notes/observability-engine-build-emit-design.md`
+
+### Phase 2.6: Demo Completion on Frozen Platform
+
+**Goal**
+Complete remaining Phase 2.0 demo stages on top of frozen platform contracts.
+
+**Scope**
+- No platform contract changes:
+  - Execution model
+  - Error semantics
+  - Observability semantics
+  - ScopeContext model
+- Complete demo stages:
+  - OpenAPI projection
+  - Client demo
+  - Custom component demo
+  - Demo consolidation
+
+**Exit Criteria**
+- See: `docs/notes/phase-2.6-demo-done-checklist.md`
+
+**Relationship**
+Phase 2.0 may be incomplete; Phase 2.6 completes it without re-opening
+platform contracts. Phase 3 starts only after Phase 2.6 exit criteria are met.
+
+**References**
+- `docs/notes/helloworld-demo-strategy.md`
+- `docs/notes/helloworld-bootstrap.md`
+- `docs/notes/phase-2.5-observability-overview.md`
+- `docs/notes/interrupt-ticket.md`
+
 ### Phase 3: CML → CRUD Domain Subsystem
 - Goal: domain modeling and runtime bootstrap.
 - Not driven by demo requirements.

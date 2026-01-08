@@ -6,21 +6,19 @@ import com.comcast.ip4s.Port
 import org.http4s.{HttpRoutes, MediaType, Response as HResponse, Status as HStatus}
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.headers.`Content-Type`
+import org.http4s.Charset
 import org.http4s.dsl.io.*
 import org.goldenport.record.Record
-import org.goldenport.http.HttpRequest
+import org.goldenport.http.{HttpContext, HttpRequest}
 import org.goldenport.http.HttpResponse
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
-import org.goldenport.cncf.subsystem.HelloWorldSubsystemFactory
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan.  7, 2026
+ * @version Jan.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object HelloWorldHttpServer {
-  private val _subsystem = HelloWorldSubsystemFactory.helloWorld()
-
   def start(args: Array[String] = Array.empty): Unit = {
     val _ = args
     _server().unsafeRunSync()
@@ -43,10 +41,16 @@ object HelloWorldHttpServer {
       )
     )
     val routes = HttpRoutes.of[IO] { req =>
-      for {
-        core <- _to_http_request(req)
-        res <- _to_http_response(_subsystem.executeHttp(core))
-      } yield res
+      try {
+        for {
+          core <- _to_http_request(req)
+          res <- _to_http_response(HelloWorldHttpEngineFactory.helloWorldEngine().execute(core))
+        } yield res
+      } catch {
+        case e: Throwable =>
+          e.printStackTrace(Console.err)
+          IO.pure(HResponse[IO](HStatus.InternalServerError))
+      }
     }
     EmberServerBuilder
       .default[IO]
@@ -70,13 +74,19 @@ object HelloWorldHttpServer {
     val header = Record.create(
       req.headers.headers.map(h => h.name.toString -> h.value)
     )
+    val context = HttpContext(
+      scheme = req.uri.scheme.map(_.value),
+      authority = req.uri.authority.map(_.renderString),
+      originalUri = Some(req.uri.renderString)
+    )
     IO.pure(
-      HttpRequest(
-        url = new java.net.URL(req.uri.renderString),
+      HttpRequest.fromPath(
         method = method,
+        path = req.uri.path.renderString,
         query = query,
-        form = Record.empty,
-        header = header
+        header = header,
+        context = context,
+        form = Record.empty
       )
     )
   }
@@ -84,11 +94,16 @@ object HelloWorldHttpServer {
   private def _to_http_response(
     res: HttpResponse
   ): IO[org.http4s.Response[IO]] = {
-    val status = HStatus.fromInt(res.code).getOrElse(HStatus.InternalServerError)
+    val status = res.code match {
+      case 200 => HStatus.Ok
+      case 400 => HStatus.BadRequest
+      case 404 => HStatus.NotFound
+      case _ => HStatus.InternalServerError
+    }
     val body = res.getString.getOrElse("")
-    val base = HResponse[IO](status).withEntity(body)
-    val contentType =
-      MediaType.parse(res.mime.toString).toOption.map(`Content-Type`(_))
-    IO.pure(contentType.fold(base)(base.putHeaders(_)))
+    val contentType = `Content-Type`(MediaType.text.plain, Charset.`UTF-8`)
+    IO.pure(
+      HResponse[IO](status).withEntity(body).withContentType(contentType)
+    )
   }
 }

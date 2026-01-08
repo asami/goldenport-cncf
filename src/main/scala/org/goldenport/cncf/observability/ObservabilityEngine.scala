@@ -1,15 +1,62 @@
 package org.goldenport.cncf.observability
 
+import org.goldenport.Conclusion
+import org.goldenport.http.HttpRequest
 import org.goldenport.record.Record
 import org.goldenport.cncf.context.{ObservabilityContext, ScopeContext}
 import org.goldenport.cncf.log.LogBackendHolder
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan.  7, 2026
+ * @version Jan.  8, 2026
  * @author  ASAMI, Tomoharu
  */
+final case class OperationContext(
+  operationFqn: String
+)
+
 object ObservabilityEngine {
+  def build(
+    scope: ScopeContext,
+    http: Option[HttpRequest],
+    operation: Option[OperationContext],
+    outcome: Either[Conclusion, Unit]
+  ): Record = {
+    val scopeRecord = Record.data(
+      "scope.subsystem" -> scope.name,
+      "scope.ingress" -> scope.kind.toString
+    )
+    val httpRecord = http.map { req =>
+      Record.data(
+        "http.method" -> req.method.toString,
+        "http.path" -> req.path.asString
+      )
+    }.getOrElse(Record.empty)
+    val operationRecord = operation.map { op =>
+      Record.data(
+        "operation.fqn" -> op.operationFqn
+      )
+    }.getOrElse(Record.empty)
+    val outcomeRecord = outcome match {
+      case Right(_) =>
+        Record.data(
+          "result.success" -> true
+        )
+      case Left(conclusion) =>
+        Record.data(
+          "result.success" -> false,
+          "error.kind" -> conclusion.observation.causeKind.toString,
+          "error.code" -> conclusion.status.webCode.code
+        )
+    }
+    Record(
+      scopeRecord.fields ++
+        httpRecord.fields ++
+        operationRecord.fields ++
+        outcomeRecord.fields
+    )
+  }
+
   def emitInfo(
     context: ObservabilityContext,
     scope: ScopeContext,

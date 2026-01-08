@@ -2,16 +2,17 @@ package org.goldenport.cncf.cli
 
 import org.goldenport.Consequence
 import org.goldenport.cli.CliEngine
+import org.goldenport.http.HttpRequest
 import org.goldenport.protocol.{Request, Response}
 import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.cncf.subsystem.DefaultSubsystemProvider
 import org.goldenport.cncf.subsystem.HelloWorldSubsystemFactory
 import org.goldenport.cncf.subsystem.HelloWorldSubsystemMapping
-import org.goldenport.cncf.http.HelloWorldHttpServer
+import org.goldenport.cncf.http.{HelloWorldHttpEngineFactory, HelloWorldHttpServer}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan.  7, 2026
+ * @version Jan.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRun {
@@ -70,6 +71,64 @@ object CommandLauncher {
   }
 
 }
+
+object ServerEmulatorLauncher {
+  def execute(args: Array[String]): Unit = {
+    val (includeHeader, rest) = _include_header(args)
+    val normalized = rest.map { arg =>
+      if (arg.startsWith("/")) s"http://localhost${arg}"
+      else arg
+    }
+    HttpRequest.fromCurlLike(normalized) match {
+      case Consequence.Success(req) =>
+        val engine = HelloWorldHttpEngineFactory.helloWorldEngine()
+        val res = engine.execute(req)
+        if (includeHeader) {
+          _print_with_header(res)
+        } else {
+          _print_body(res)
+        }
+        sys.exit(0)
+      case Consequence.Failure(conclusion) =>
+        Console.err.println(conclusion.message)
+        sys.exit(1)
+    }
+  }
+
+  private def _include_header(
+    args: Array[String]
+  ): (Boolean, Seq[String]) = {
+    var includeHeader = false
+    val rest = args.filter { arg =>
+      if (arg == "-i" || arg == "--include") {
+        includeHeader = true
+        false
+      } else {
+        true
+      }
+    }
+    (includeHeader, rest.toIndexedSeq)
+  }
+
+  private def _print_with_header(
+    res: org.goldenport.http.HttpResponse
+  ): Unit = {
+    val statusLine = s"HTTP ${res.code}"
+    val contentType = s"Content-Type: ${res.contentType}"
+    Console.out.println(statusLine)
+    Console.out.println(contentType)
+    Console.out.println()
+    _print_body(res)
+  }
+
+  private def _print_body(
+    res: org.goldenport.http.HttpResponse
+  ): Unit = {
+    val body = res.getString.getOrElse(res.show)
+    Console.out.println(body)
+  }
+}
+
 
 private def _print_response(res: Response): Unit = {
   res match {
