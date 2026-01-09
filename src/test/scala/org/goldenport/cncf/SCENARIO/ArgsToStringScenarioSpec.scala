@@ -21,6 +21,7 @@ import org.goldenport.cncf.action.{Action, ActionCall, Query, ResourceAccess}
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.service.Service
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -214,12 +215,14 @@ object TestComponent {
   }
 }
 
-val TestComponentUsingComponent = Component.create(TestProtocol.protocol)
+val TestComponentUsingComponent =
+  TestComponentFactory.create("test", TestProtocol.protocol)
 
 val TestComponentUsingComponentWithCustomService = {
-  Component.create(
+  TestComponentFactory.create(
+    "test",
     TestProtocol.protocol,
-    CustomTestService.Factory()
+    Some(CustomTestService.Factory())
   )
 }
 

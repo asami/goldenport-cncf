@@ -98,6 +98,41 @@ platform contracts. Phase 3 starts only after Phase 2.6 exit criteria are met.
 - `docs/notes/phase-2.5-observability-overview.md`
 - `docs/notes/interrupt-ticket.md`
 
+### Phase 2.8: Infrastructure Hygiene
+
+**Purpose**
+Resolve architectural technical debt discovered during Phase 2.6 without adding new features.
+
+**Scope**
+- Path alias resolution logic
+- Canonical vs alias routing normalization
+
+**Non-goals**
+- No semantic changes
+- No new features
+
+**Artifact (notes)**
+- `docs/notes/phase-2.8-infrastructure-hygiene.md`
+
+### Phase 2.9: Error Model Realignment
+
+**Purpose**
+Re-align error taxonomy and definitions before Phase 3 (CML).
+
+**Scope**
+- Use Phase 2.5 semantics as foundation
+- Incorporate practical issues discovered in Phase 2.6
+
+**Non-goals**
+- No CML modeling
+- No CRUD generation
+
+**Artifact (notes)**
+- `docs/notes/phase-2.9-error-realignment.md`
+
+**Relationship**
+Phase 3.0 starts only after Phase 2.9 is complete.
+
 ### Phase 3: CML → CRUD Domain Subsystem
 - Goal: domain modeling and runtime bootstrap.
 - Not driven by demo requirements.

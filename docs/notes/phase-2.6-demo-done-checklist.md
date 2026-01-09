@@ -1,4 +1,4 @@
-# Phase 2.6 DONE Checklist — HelloWorld Demo Completion
+# Phase 2.6 DONE Checklist — Demo Completion
 status = draft
 
 ## Scope
@@ -7,9 +7,35 @@ status = draft
 
 ## Checklist
 ### 1. OpenAPI projection (Stage 3)
-- [ ] Evidence: command(s) to generate or serve OpenAPI are documented
-- [ ] Evidence: sample output or endpoint is documented
-- [ ] Evidence: how to verify is documented
+This stage validates the canonical execution boundary:
+CLI / server-emulator / HTTP requests are normalized into
+(component, service, operation) and executed exclusively
+via Subsystem.executeHttp.
+
+- Note:
+  - Component rule violations discovered during implementation are addressed within Phase 2.6.
+  - Path alias logic refactoring is explicitly deferred to Phase 2.8.
+  - Error taxonomy refinement is deferred to Phase 2.9.
+- [x] Evidence (verified): command(s) to generate or serve OpenAPI are documented
+  - command admin system ping
+  - command admin.system.ping
+  - command spec export openapi
+- [x] Evidence (verified): sample output or endpoint is documented
+  - Expected stdout: ok
+  - Expected stdout: JSON containing "openapi" and "paths"
+- [x] Evidence (verified): how to verify is documented
+  - Specs:
+    - CommandExecuteComponentSpec
+    - OpenApiProjectionScenarioSpec
+  - Repro:
+    - sbt -no-colors "testOnly *CommandExecuteComponentSpec"
+    - sbt -no-colors "testOnly *OpenApiProjectionScenarioSpec"
+
+Result:
+Stage 3 is complete with executable evidence.
+No platform contracts were changed; all remaining concerns
+(projection completeness, visibility policy, alias hygiene)
+are explicitly deferred to Phase 2.8.
 
 ### 2. Client demo (Stage 4)
 - [ ] Evidence: client mode invocation(s) documented

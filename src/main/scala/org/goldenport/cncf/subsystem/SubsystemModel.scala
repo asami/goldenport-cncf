@@ -26,16 +26,16 @@ object SubsystemKind {
 }
 
 object DefaultSubsystemProvider {
-  def helloWorld(): SubsystemModel =
+  def default(): SubsystemModel =
     SubsystemModel(
-      name = "hello-world",
+      name = "cncf",
       tier = SubsystemTier.Domain,
       kind = SubsystemKind.Service,
       components = Vector.empty
     )
 }
 
-object HelloWorldSubsystemMapping {
+object DefaultSubsystemMapping {
   def toServiceDefinitionGroup(
     subsystem: SubsystemModel
   ): spec.ServiceDefinitionGroup = {

@@ -16,6 +16,7 @@ import org.goldenport.cncf.action.{Action, ActionCall, Command, Query, ResourceA
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobContext, JobId, JobResult, JobStatus}
 import org.goldenport.cncf.service.Service
+import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.protocol.service.{Service as ProtocolService}
 import org.scalatest.GivenWhenThen
 import org.scalatest.Assertions.{fail, succeed}
@@ -123,7 +124,8 @@ class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
 
 private object ScenarioAdapter {
   private val serviceFactory = new RecordingService.Factory()
-  private val component: Component = Component.create(TestProtocol.protocol, serviceFactory)
+  private val component: Component =
+    TestComponentFactory.create("test", TestProtocol.protocol, Some(serviceFactory))
 
   def invokeCli(args: Array[String]): Consequence[String] =
     component.service.invokeCli(args)

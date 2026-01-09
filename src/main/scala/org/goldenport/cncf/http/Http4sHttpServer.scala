@@ -9,16 +9,18 @@ import org.http4s.headers.`Content-Type`
 import org.http4s.Charset
 import org.http4s.dsl.io.*
 import org.goldenport.record.Record
-import org.goldenport.http.{HttpContext, HttpRequest}
-import org.goldenport.http.HttpResponse
+import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse}
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan.  8, 2026
+ * @version Jan.  9, 2026
  * @author  ASAMI, Tomoharu
  */
-object HelloWorldHttpServer {
+final class Http4sHttpServer(
+  engine: HttpExecutionEngine,
+  port: Int = 8080
+) extends HttpServer(engine) {
   def start(args: Array[String] = Array.empty): Unit = {
     val _ = args
     _server().unsafeRunSync()
@@ -27,7 +29,7 @@ object HelloWorldHttpServer {
   private def _server(): IO[Unit] = {
     val scope = ScopeContext(
       kind = ScopeKind.Subsystem,
-      name = "hello-world",
+      name = "cncf",
       parent = None,
       observabilityContext = ExecutionContext.create().observability
     )
@@ -44,7 +46,7 @@ object HelloWorldHttpServer {
       try {
         for {
           core <- _to_http_request(req)
-          res <- _to_http_response(HelloWorldHttpEngineFactory.helloWorldEngine().execute(core))
+          res <- _to_http_response(execute(core))
         } yield res
       } catch {
         case e: Throwable =>
@@ -54,7 +56,7 @@ object HelloWorldHttpServer {
     }
     EmberServerBuilder
       .default[IO]
-      .withPort(Port.fromInt(8080).get)
+      .withPort(Port.fromInt(port).get)
       .withHttpApp(routes.orNotFound)
       .build
       .useForever
@@ -101,9 +103,20 @@ object HelloWorldHttpServer {
       case _ => HStatus.InternalServerError
     }
     val body = res.getString.getOrElse("")
-    val contentType = `Content-Type`(MediaType.text.plain, Charset.`UTF-8`)
+    val mime = MediaType.parse(res.mime.value).fold(_ => MediaType.text.plain, identity)
+    val charset: Option[org.http4s.Charset] =
+      res.charset.map(c => org.http4s.Charset.fromNioCharset(c))
+    val contentType = `Content-Type`(mime, charset)
     IO.pure(
       HResponse[IO](status).withEntity(body).withContentType(contentType)
     )
   }
+
+}
+
+object Http4sHttpServer {
+  def create(): Http4sHttpServer =
+    new Http4sHttpServer(
+      HttpExecutionEngine.Factory.engine()
+    )
 }
