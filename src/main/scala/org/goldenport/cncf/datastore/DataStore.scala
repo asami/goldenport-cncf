@@ -1,24 +1,23 @@
 package org.goldenport.cncf.datastore
 
 import org.goldenport.id.UniversalId
+import org.goldenport.record.Record
 import org.goldenport.cncf.unitofwork.{CommitParticipant, CommitRecorder, PrepareResult, TransactionContext}
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan.  6, 2026
+ * @version Jan. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {
-  def create(id: UniversalId, record: DataStore.Record): Unit
-  def load(id: UniversalId): Option[DataStore.Record]
-  def store(id: UniversalId, record: DataStore.Record): Unit
-  def update(id: UniversalId, changes: DataStore.Record): Unit
+  def create(id: UniversalId, record: Record): Unit
+  def load(id: UniversalId): Option[Record]
+  def store(id: UniversalId, record: Record): Unit
+  def update(id: UniversalId, changes: Record): Unit
   def delete(id: UniversalId): Unit
 }
 
 object DataStore {
-  type Record = Map[String, Any]
-
   def noop(
     recorder: CommitRecorder = CommitRecorder.noop
   ): DataStore =
@@ -37,14 +36,14 @@ object DataStore {
   private final class NoopDataStore(
     recorder: CommitRecorder
   ) extends DataStore {
-    def create(id: UniversalId, record: DataStore.Record): Unit = {}
+    def create(id: UniversalId, record: Record): Unit = {}
 
-    def load(id: UniversalId): Option[DataStore.Record] =
+    def load(id: UniversalId): Option[Record] =
       None
 
-    def store(id: UniversalId, record: DataStore.Record): Unit = {}
+    def store(id: UniversalId, record: Record): Unit = {}
 
-    def update(id: UniversalId, changes: DataStore.Record): Unit = {}
+    def update(id: UniversalId, changes: Record): Unit = {}
 
     def delete(id: UniversalId): Unit = {}
 
@@ -63,23 +62,23 @@ object DataStore {
   private final class InMemoryDataStore(
     recorder: CommitRecorder
   ) extends DataStore {
-    private var _entries: Map[UniversalId, DataStore.Record] = Map.empty
+    private var _entries: Map[UniversalId, Record] = Map.empty
 
-    def create(id: UniversalId, record: DataStore.Record): Unit = {
+    def create(id: UniversalId, record: Record): Unit = {
       if (_entries.contains(id)) {
         throw new IllegalStateException(s"record already exists: ${id}")
       }
       _entries = _entries.updated(id, record)
     }
 
-    def load(id: UniversalId): Option[DataStore.Record] =
+    def load(id: UniversalId): Option[Record] =
       _entries.get(id)
 
-    def store(id: UniversalId, record: DataStore.Record): Unit = {
+    def store(id: UniversalId, record: Record): Unit = {
       _entries = _entries.updated(id, record)
     }
 
-    def update(id: UniversalId, changes: DataStore.Record): Unit = {
+    def update(id: UniversalId, changes: Record): Unit = {
       _entries.get(id) match {
         case Some(existing) =>
           _entries = _entries.updated(id, existing ++ changes)
@@ -107,10 +106,10 @@ object DataStore {
   private final class InMemorySelectableDataStore(
     recorder: CommitRecorder
   ) extends SelectableDataStore {
-    private var _entries: Map[UniversalId, DataStore.Record] = Map.empty
+    private var _entries: Map[UniversalId, Record] = Map.empty
     private var _order: Vector[UniversalId] = Vector.empty
 
-    def create(id: UniversalId, record: DataStore.Record): Unit = {
+    def create(id: UniversalId, record: Record): Unit = {
       if (_entries.contains(id)) {
         throw new IllegalStateException(s"record already exists: ${id}")
       }
@@ -118,10 +117,10 @@ object DataStore {
       _order = _order :+ id
     }
 
-    def load(id: UniversalId): Option[DataStore.Record] =
+    def load(id: UniversalId): Option[Record] =
       _entries.get(id)
 
-    def store(id: UniversalId, record: DataStore.Record): Unit = {
+    def store(id: UniversalId, record: Record): Unit = {
       val exists = _entries.contains(id)
       _entries = _entries.updated(id, record)
       if (!exists) {
@@ -129,7 +128,7 @@ object DataStore {
       }
     }
 
-    def update(id: UniversalId, changes: DataStore.Record): Unit = {
+    def update(id: UniversalId, changes: Record): Unit = {
       _entries.get(id) match {
         case Some(existing) =>
           _entries = _entries.updated(id, existing ++ changes)
@@ -150,15 +149,15 @@ object DataStore {
           ordered
         case QueryProjection.Fields(names) =>
           val keyset = names.toSet
-          ordered.map(_.filter { case (k, _) => keyset.contains(k) })
+          ordered.map(_.filterKeys(keyset))
       }
       val sorted = directive.order match {
         case QueryOrder.None =>
           projected
         case QueryOrder.By(field, OrderDirection.Asc) =>
-          projected.sortBy(_.get(field).map(_.toString).getOrElse(""))
+          projected.sortBy(_.getString(field).getOrElse(""))
         case QueryOrder.By(field, OrderDirection.Desc) =>
-          projected.sortBy(_.get(field).map(_.toString).getOrElse(""))(Ordering[String].reverse)
+          projected.sortBy(_.getString(field).getOrElse(""))(Ordering[String].reverse)
       }
       directive.limit match {
         case QueryLimit.Unbounded =>
@@ -222,7 +221,7 @@ object QueryLimit {
 }
 
 final case class SelectResult(
-  records: Vector[DataStore.Record],
+  records: Vector[Record],
   range: ResultRange,
   cursor: Option[Cursor] = None
 )

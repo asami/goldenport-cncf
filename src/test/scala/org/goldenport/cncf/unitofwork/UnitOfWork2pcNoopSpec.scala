@@ -7,6 +7,7 @@ import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemCont
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.record.Record
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import org.goldenport.test.matchers.ConsequenceMatchers
@@ -100,19 +101,19 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
 
     def unitOfWork: UnitOfWork = _unit_of_work
 
-    def unitOfWorkInterpreter[T]: (UnitOfWork.UnitOfWorkOp ~> Id) =
-      new (UnitOfWork.UnitOfWorkOp ~> Id) {
-        def apply[A](fa: UnitOfWork.UnitOfWorkOp[A]): Id[A] =
+    def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> Id) =
+      new (UnitOfWorkOp ~> Id) {
+        def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in NOOP spec")
       }
 
-    def unitOfWorkTryInterpreter[T]: (UnitOfWork.UnitOfWorkOp ~> scala.util.Try) =
-      new (UnitOfWork.UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWork.UnitOfWorkOp[A]): scala.util.Try[A] =
+    def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
+      new (UnitOfWorkOp ~> scala.util.Try) {
+        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
           throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in NOOP spec")
       }
 
-    def unitOfWorkEitherInterpreter[T](op: UnitOfWork.UnitOfWorkOp[T]): Either[Throwable, T] =
+    def unitOfWorkEitherInterpreter[T](op: UnitOfWorkOp[T]): Either[Throwable, T] =
       Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in NOOP spec"))
 
     def commit(): Unit = {}
@@ -135,14 +136,14 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
   private final class RejectingDataStore(
     recorder: CommitRecorder
   ) extends DataStore {
-    def create(id: org.goldenport.id.UniversalId, record: DataStore.Record): Unit = {}
+    def create(id: org.goldenport.id.UniversalId, record: Record): Unit = {}
 
-    def load(id: org.goldenport.id.UniversalId): Option[DataStore.Record] =
+    def load(id: org.goldenport.id.UniversalId): Option[Record] =
       None
 
-    def store(id: org.goldenport.id.UniversalId, record: DataStore.Record): Unit = {}
+    def store(id: org.goldenport.id.UniversalId, record: Record): Unit = {}
 
-    def update(id: org.goldenport.id.UniversalId, changes: DataStore.Record): Unit = {}
+    def update(id: org.goldenport.id.UniversalId, changes: Record): Unit = {}
 
     def delete(id: org.goldenport.id.UniversalId): Unit = {}
 

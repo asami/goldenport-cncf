@@ -8,6 +8,7 @@ import org.goldenport.context.{EnvironmentContext as CoreEnvironmentContext, Exe
 import org.goldenport.id.{UniversalId as CoreUniversalId}
 import org.goldenport.log.Logger
 import org.goldenport.cncf.unitofwork.UnitOfWork
+import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import cats.~>
 
 /**
@@ -22,7 +23,7 @@ import cats.~>
 /*
  * @since   Dec. 21, 2025
  *  version Dec. 31, 2025
- * @version Jan.  4, 2026
+ * @version Jan. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -226,19 +227,19 @@ object ExecutionContext {
   ) extends RuntimeContext {
     lazy val unitOfWork: UnitOfWork = new UnitOfWork(context())
 
-    def unitOfWorkInterpreter[T]: (UnitOfWork.UnitOfWorkOp ~> cats.Id) =
-      new (UnitOfWork.UnitOfWorkOp ~> cats.Id) {
-        def apply[A](fa: UnitOfWork.UnitOfWorkOp[A]): cats.Id[A] =
+    def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> cats.Id) =
+      new (UnitOfWorkOp ~> cats.Id) {
+        def apply[A](fa: UnitOfWorkOp[A]): cats.Id[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in test context")
       }
 
-    def unitOfWorkTryInterpreter[T]: (UnitOfWork.UnitOfWorkOp ~> scala.util.Try) =
-      new (UnitOfWork.UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWork.UnitOfWorkOp[A]): scala.util.Try[A] =
+    def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
+      new (UnitOfWorkOp ~> scala.util.Try) {
+        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
           throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in test context")
       }
 
-    def unitOfWorkEitherInterpreter[T](op: UnitOfWork.UnitOfWorkOp[T]): Either[Throwable, T] =
+    def unitOfWorkEitherInterpreter[T](op: UnitOfWorkOp[T]): Either[Throwable, T] =
       Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in test context"))
 
     def commit(): Unit = {

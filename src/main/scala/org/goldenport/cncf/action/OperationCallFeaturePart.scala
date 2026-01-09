@@ -1,12 +1,17 @@
 package org.goldenport.cncf.action
 
+import cats.free.Free
+import org.goldenport.ConsequenceT
 import org.goldenport.id.UniversalId
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork}
+import org.goldenport.cncf.unitofwork.UnitOfWorkOp
+import org.goldenport.http.HttpResponse
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan.  6, 2026
+ * @version Jan. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 trait OperationCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -14,19 +19,121 @@ trait OperationCallFeaturePart { self: ActionCall.Core.Holder =>
     executionContext
 }
 
+trait OperationCallHttpPart extends OperationCallFeaturePart { self: ActionCall.Core.Holder =>
+
+  // Declarative DSL (UoW / Free)
+  protected final def http_get(path: String): ExecUowM[HttpResponse] = {
+    val op = _op_http_get(path)
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  protected final def http_post(
+    path: String,
+    body: Option[String] = None,
+    headers: Map[String, String] = Map.empty
+  ): ExecUowM[HttpResponse] = {
+    val op = _op_http_post(path, body, headers)
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  // Direct execution variants
+  protected final def http_get_direct(
+    path: String
+  )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): HttpResponse = {
+    val op = _op_http_get(path)
+    uow.execute(op)
+  }
+
+  protected final def http_post_direct(
+    path: String,
+    body: Option[String] = None,
+    headers: Map[String, String] = Map.empty
+  )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): HttpResponse = {
+    val op = _op_http_post(path, body, headers)
+    uow.execute(op)
+  }
+
+  // Private helpers to build UnitOfWorkOp
+  private def _op_http_get(path: String): UnitOfWorkOp[HttpResponse] =
+    UnitOfWorkOp.HttpGet(path)
+
+  private def _op_http_post(
+    path: String,
+    body: Option[String],
+    headers: Map[String, String]
+  ): UnitOfWorkOp[HttpResponse] =
+    UnitOfWorkOp.HttpPost(path, body, headers)
+}
+
 trait OperationCallDataStorePart extends OperationCallFeaturePart { self: ActionCall.Core.Holder =>
-  protected final def ds_get(id: UniversalId): Option[DataStore.Record] = {
-    val datastore = execution_context.runtime.unitOfWork.datastore
-    datastore.load(id)
+  // // Legacy direct datastore access (pre-UoW DSL)
+  // protected final def ds_get(id: UniversalId): Option[DataStore.Record] = {
+  //   val datastore = execution_context.runtime.unitOfWork.datastore
+  //   datastore.load(id)
+  // }
+
+  // protected final def ds_put(id: UniversalId, record: DataStore.Record): Unit = {
+  //   val datastore = execution_context.runtime.unitOfWork.datastore
+  //   datastore.store(id, record)
+  // }
+
+  // protected final def ds_delete(id: UniversalId): Unit = {
+  //   val datastore = execution_context.runtime.unitOfWork.datastore
+  //   datastore.delete(id)
+  // }
+
+  // Declarative DSL (UoW / Free)
+  protected final def store_load(id: UniversalId): ExecUowM[Option[Record]] = {
+    val op = _op_store_load(id)
+    ConsequenceT.liftF(Free.liftF(op))
   }
 
-  protected final def ds_put(id: UniversalId, record: DataStore.Record): Unit = {
-    val datastore = execution_context.runtime.unitOfWork.datastore
-    datastore.store(id, record)
+  protected final def store_save(id: UniversalId, record: Record): ExecUowM[Unit] = {
+    val op = _op_store_save(id, record)
+    ConsequenceT.liftF(Free.liftF(op))
   }
 
-  protected final def ds_delete(id: UniversalId): Unit = {
-    val datastore = execution_context.runtime.unitOfWork.datastore
-    datastore.delete(id)
+  protected final def store_delete(id: UniversalId): ExecUowM[Unit] = {
+    val op = _op_store_delete(id)
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  // Direct execution variants (immediate execution)
+  protected final def store_load_direct(
+    id: UniversalId
+  )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Option[Record] = {
+    val op = _op_store_load(id)
+    uow.execute(op)
+  }
+
+  protected final def store_save_direct(
+    id: UniversalId,
+    record: Record
+  )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Unit = {
+    val op = _op_store_save(id, record)
+    uow.execute(op)
+  }
+
+  protected final def store_delete_direct(
+    id: UniversalId
+  )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Unit = {
+    val op = _op_store_delete(id)
+    uow.execute(op)
+  }
+
+  // Private helpers to build UnitOfWorkOp
+  private def _op_store_load(id: UniversalId): UnitOfWorkOp[Option[Record]] = {
+    // TODO: Implement DataStoreLoad operation
+    UnitOfWorkOp.DataStoreLoad(id)
+  }
+
+  private def _op_store_save(id: UniversalId, record: Record): UnitOfWorkOp[Unit] = {
+    // TODO: Implement DataStoreSave operation
+    UnitOfWorkOp.DataStoreSave(id, record)
+  }
+
+  private def _op_store_delete(id: UniversalId): UnitOfWorkOp[Unit] = {
+    // TODO: Implement DataStoreDelete operation
+    UnitOfWorkOp.DataStoreDelete(id)
   }
 }

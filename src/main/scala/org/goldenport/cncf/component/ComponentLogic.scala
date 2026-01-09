@@ -9,10 +9,11 @@ import cats.{Id, ~>}
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeKind, SystemContext}
 import org.goldenport.cncf.job.{JobEngine, JobId, JobResult, JobStatus, JobTask}
 import org.goldenport.cncf.unitofwork.UnitOfWork
+import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 
 /*
  * @since   Jan.  3, 2026
- * @version Jan.  8, 2026
+ * @version Jan. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -83,19 +84,19 @@ case class ComponentLogic(
   ) extends RuntimeContext {
     def unitOfWork: UnitOfWork = uow
 
-    def unitOfWorkInterpreter[T]: (UnitOfWork.UnitOfWorkOp ~> Id) =
-      new (UnitOfWork.UnitOfWorkOp ~> Id) {
-        def apply[A](fa: UnitOfWork.UnitOfWorkOp[A]): Id[A] =
+    def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> Id) =
+      new (UnitOfWorkOp ~> Id) {
+        def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not available in component runtime")
       }
 
-    def unitOfWorkTryInterpreter[T]: (UnitOfWork.UnitOfWorkOp ~> scala.util.Try) =
-      new (UnitOfWork.UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWork.UnitOfWorkOp[A]): scala.util.Try[A] =
+    def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
+      new (UnitOfWorkOp ~> scala.util.Try) {
+        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
           throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not available in component runtime")
       }
 
-    def unitOfWorkEitherInterpreter[T](op: UnitOfWork.UnitOfWorkOp[T]): Either[Throwable, T] =
+    def unitOfWorkEitherInterpreter[T](op: UnitOfWorkOp[T]): Either[Throwable, T] =
       Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not available in component runtime"))
 
     def commit(): Unit = {

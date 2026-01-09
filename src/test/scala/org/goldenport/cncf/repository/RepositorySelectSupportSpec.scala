@@ -4,15 +4,16 @@ import cats.{Id, ~>}
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemContext}
 import org.goldenport.cncf.datastore.{DataStore, OrderDirection, Query, QueryDirective, QueryLimit, QueryOrder, QueryProjection, ResultRange}
 import org.goldenport.cncf.event.EventEngine
-import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork}
+import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkOp}
 import org.goldenport.id.UniversalId
+import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan.  6, 2026
+ * @version Jan. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class RepositorySelectSupportSpec
@@ -72,7 +73,7 @@ class RepositorySelectSupportSpec
         )
       )
 
-      asc.records.map(_("name")) shouldBe Vector("a", "b", "c")
+      asc.records.map(_.getString("name").getOrElse(fail("missing name"))) shouldBe Vector("a", "b", "c")
 
       val desc = repo.listForView(
         QueryDirective(
@@ -83,7 +84,7 @@ class RepositorySelectSupportSpec
         )
       )
 
-      desc.records.map(_("name")) shouldBe Vector("c", "b", "a")
+      desc.records.map(_.getString("name").getOrElse(fail("missing name"))) shouldBe Vector("c", "b", "a")
     }
   }
 
@@ -113,9 +114,9 @@ class RepositorySelectSupportSpec
     val a = new UniversalId("cncf", "repo", "record") {}
     val b = new UniversalId("cncf", "repo", "record") {}
     val c = new UniversalId("cncf", "repo", "record") {}
-    datastore.create(a, Map("name" -> "b", "state" -> "s1"))
-    datastore.create(b, Map("name" -> "a", "state" -> "s2"))
-    datastore.create(c, Map("name" -> "c", "state" -> "s3"))
+    datastore.create(a, Record.data("name" -> "b", "state" -> "s1"))
+    datastore.create(b, Record.data("name" -> "a", "state" -> "s2"))
+    datastore.create(c, Record.data("name" -> "c", "state" -> "s3"))
   }
 
   private final class TestRuntimeContext extends RuntimeContext {
@@ -127,19 +128,19 @@ class RepositorySelectSupportSpec
 
     def unitOfWork: UnitOfWork = _unit_of_work
 
-    def unitOfWorkInterpreter[T]: (UnitOfWork.UnitOfWorkOp ~> Id) =
-      new (UnitOfWork.UnitOfWorkOp ~> Id) {
-        def apply[A](fa: UnitOfWork.UnitOfWorkOp[A]): Id[A] =
+    def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> Id) =
+      new (UnitOfWorkOp ~> Id) {
+        def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in repository spec")
       }
 
-    def unitOfWorkTryInterpreter[T]: (UnitOfWork.UnitOfWorkOp ~> scala.util.Try) =
-      new (UnitOfWork.UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWork.UnitOfWorkOp[A]): scala.util.Try[A] =
+    def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
+      new (UnitOfWorkOp ~> scala.util.Try) {
+        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
           throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in repository spec")
       }
 
-    def unitOfWorkEitherInterpreter[T](op: UnitOfWork.UnitOfWorkOp[T]): Either[Throwable, T] =
+    def unitOfWorkEitherInterpreter[T](op: UnitOfWorkOp[T]): Either[Throwable, T] =
       Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in repository spec"))
 
     def commit(): Unit = {

@@ -1,11 +1,12 @@
 package org.goldenport.cncf.repository
 
+import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.{Cursor, DataStore, QueryDirective, ResultRange, SelectResult, SelectableDataStore}
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan.  6, 2026
+ * @version Jan. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 trait RepositorySupport {
@@ -33,6 +34,6 @@ trait RepositorySupport {
 
   protected final def mapRecords[A](
     result: SelectResult
-  )(f: DataStore.Record => A): (Vector[A], ResultRange, Option[Cursor]) =
+  )(f: Record => A): (Vector[A], ResultRange, Option[Cursor]) =
     (result.records.map(f), result.range, result.cursor)
 }

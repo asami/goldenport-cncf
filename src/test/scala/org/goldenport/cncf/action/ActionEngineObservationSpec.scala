@@ -6,7 +6,7 @@ import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemCont
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.security.AuthorizationDecision
-import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork}
+import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkOp}
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -167,19 +167,19 @@ class ActionEngineObservationSpec extends AnyWordSpec with Matchers with Consequ
 
     def unitOfWork: UnitOfWork = _unit_of_work
 
-    def unitOfWorkInterpreter[T]: (UnitOfWork.UnitOfWorkOp ~> Id) =
-      new (UnitOfWork.UnitOfWorkOp ~> Id) {
-        def apply[A](fa: UnitOfWork.UnitOfWorkOp[A]): Id[A] =
+    def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> Id) =
+      new (UnitOfWorkOp ~> Id) {
+        def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in observation spec")
       }
 
-    def unitOfWorkTryInterpreter[T]: (UnitOfWork.UnitOfWorkOp ~> scala.util.Try) =
-      new (UnitOfWork.UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWork.UnitOfWorkOp[A]): scala.util.Try[A] =
+    def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
+      new (UnitOfWorkOp ~> scala.util.Try) {
+        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
           throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in observation spec")
       }
 
-    def unitOfWorkEitherInterpreter[T](op: UnitOfWork.UnitOfWorkOp[T]): Either[Throwable, T] =
+    def unitOfWorkEitherInterpreter[T](op: UnitOfWorkOp[T]): Either[Throwable, T] =
       Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in observation spec"))
 
     def commit(): Unit = {}

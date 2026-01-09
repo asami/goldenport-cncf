@@ -12,6 +12,7 @@ without introducing new features or semantic changes.
 
 - Path alias hard-coding → declarative / logical resolution
 - Canonical path normalization
+- Purpose-aware string rendering (DisplayIntent / Printable)
 
 ## CLI Hygiene
 
@@ -53,6 +54,28 @@ without introducing new features or semantic changes.
 - Positioning:
   - This is CLI/adapter hygiene, not an execution model change.
   - It does not affect Phase 2.6 completion.
+
+## Purpose-Aware String Rendering (Candidate)
+
+Phase 2.8 also considers introducing a structured vocabulary for
+purpose-aware string rendering.
+
+The intent is to replace ad-hoc `toString` usage with an explicit,
+context-aware rendering model that distinguishes output purposes
+such as logging, interactive display, debugging, and embedding.
+
+This candidate introduces the following core concepts:
+
+- **DisplayIntent**: an explicit representation of output intent
+  (print, display, show, embed, literal)
+- **Printable**: an optional interface for values that can render
+  themselves according to an explicit output intent
+
+This item is a documentation-level design anchor only.
+No runtime wiring or semantic changes are introduced in Phase 2.8.
+
+See also:
+- docs/notes/purpose-aware-string-rendering.md
 
 ## Non-Goals
 

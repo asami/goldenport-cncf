@@ -6,8 +6,9 @@ import org.goldenport.id.UniversalId
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemContext}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.EventEngine
-import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork}
+import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkOp}
 import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -16,7 +17,7 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan.  6, 2026
+ * @version Jan. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionCallDataStoreRouteSpec
@@ -97,13 +98,15 @@ class ActionCallDataStoreRouteSpec
     override def action: Action = core.action
     override def accesses: Seq[ResourceAccess] = Nil
     override def execute(): Consequence[OperationResponse] = {
-      val record: DataStore.Record = Map("id" -> id, "value" -> value)
-      ds_put(entityid, record)
-      val v = ds_get(entityid).flatMap(_("value") match {
-        case s: String => Some(s)
-        case _ => None
-      }).getOrElse("missing")
-      ds_delete(entityid)
+      val record = Record.data("id" -> id, "value" -> value)
+      // DataStore ops in UnitOfWorkOp are not wired yet; use direct DataStore API.
+      val datastore = executionContext.runtime.unitOfWork.datastore
+      datastore.store(entityid, record)
+      val v = datastore
+        .load(entityid)
+        .flatMap(_.getString("value"))
+        .getOrElse("missing")
+      datastore.delete(entityid)
       Consequence.success(OperationResponse.Scalar(v))
     }
   }
@@ -117,19 +120,19 @@ class ActionCallDataStoreRouteSpec
 
     def unitOfWork: UnitOfWork = _unit_of_work
 
-    def unitOfWorkInterpreter[T]: (UnitOfWork.UnitOfWorkOp ~> Id) =
-      new (UnitOfWork.UnitOfWorkOp ~> Id) {
-        def apply[A](fa: UnitOfWork.UnitOfWorkOp[A]): Id[A] =
+    def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> Id) =
+      new (UnitOfWorkOp ~> Id) {
+        def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in datastore route spec")
       }
 
-    def unitOfWorkTryInterpreter[T]: (UnitOfWork.UnitOfWorkOp ~> scala.util.Try) =
-      new (UnitOfWork.UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWork.UnitOfWorkOp[A]): scala.util.Try[A] =
+    def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
+      new (UnitOfWorkOp ~> scala.util.Try) {
+        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
           throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in datastore route spec")
       }
 
-    def unitOfWorkEitherInterpreter[T](op: UnitOfWork.UnitOfWorkOp[T]): Either[Throwable, T] =
+    def unitOfWorkEitherInterpreter[T](op: UnitOfWorkOp[T]): Either[Throwable, T] =
       Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in datastore route spec"))
 
     def commit(): Unit = {

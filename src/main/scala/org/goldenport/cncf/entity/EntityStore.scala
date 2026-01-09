@@ -2,29 +2,29 @@ package org.goldenport.cncf.entity
 
 import org.goldenport.Consequence
 import org.goldenport.id.UniversalId
+import org.goldenport.record.Record
 import org.goldenport.cncf.datastore.{DataStore, QueryDirective, SelectResult}
 import org.goldenport.cncf.*
 
 /*
  * @since   Apr. 11, 2025
- * @version Dec. 18, 2025
+ *  version Dec. 18, 2025
+ * @version Jan. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityStore[E] {
   def name: String
-  def serialize(entity: E): DataStore.Record
-  def deserialize(record: DataStore.Record): E
+  def serialize(entity: E): Record
+  def deserialize(record: Record): E
   def create(id: UniversalId, entity: E): Unit
   def load(id: UniversalId): Option[E]
   def store(id: UniversalId, entity: E): Unit
-  def update(id: UniversalId, changes: DataStore.Record): Unit
+  def update(id: UniversalId, changes: Record): Unit
   def delete(id: UniversalId): Unit
   def select(directive: QueryDirective): SelectResult
 }
 
 object EntityStore {
-  type Record = DataStore.Record
-
   trait EntityInstance[T] {
   }
 

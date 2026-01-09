@@ -4,6 +4,7 @@ import scala.util.{Try, Success, Failure}
 import java.io.File
 import org.goldenport.{Consequence, Conclusion}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.context.SystemContext
 import org.goldenport.cncf.datastore.{DataStore, QueryDirective, SelectResult, SelectableDataStore}
 import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.entity.EntityStore.*
@@ -13,7 +14,7 @@ import org.goldenport.cncf.event.DomainEvent
 /*
  * @since   Apr. 11, 2025
  *  version Dec. 21, 2025
- * @version Jan.  6, 2026
+ * @version Jan. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
@@ -41,6 +42,9 @@ class UnitOfWork(
       case s: SelectableDataStore => Some(s)
       case _ => None
     }
+
+  def execute[A](op: UnitOfWorkOp[A])(using http: org.goldenport.cncf.http.HttpDriver): A =
+    new UnitOfWorkInterpreter(this, http).executeDirect(op).asInstanceOf[A]
 
   def createFile(file: File, data: String): Try[Unit] = ???
 
@@ -99,232 +103,244 @@ class UnitOfWork(
 }
 
 object UnitOfWork {
-  import cats._
-  import cats.data._
-  import cats.free._
-  import cats.implicits._
-  import org.goldenport.cncf.context.{ExecutionContext, SystemContext}
-  import org.goldenport.cncf.event.EventEngine
-  import org.goldenport.cncf.datastore.DataStore
-
   type CommitResult = Unit
   type AbortResult = Unit
   type Message = String
-
-  sealed trait UnitOfWorkOp[T]
-  case class CreateEntity[ENTITY](store: EntityStore[ENTITY], data: Record, instance: EntityInstance[ENTITY]) extends UnitOfWorkOp[Try[CreateResult[ENTITY]]]
-
-  type UnitOfWorkFM[T] = Free[UnitOfWorkOp, T]
-
-  type UnitOfWorkEitherFM[T] = EitherT[UnitOfWorkFM, Throwable, T]
-
-  type Config = ExecutionContext
-  type Log = List[String]
-  type State = Map[String, Any]
-
-  type UnitOfWorkRWSEitherFM[T] = RWST[UnitOfWorkEitherFM, Config, Log, State, T]
-
-  def create[A](store: EntityStore[A], data: Record)(using instance: EntityInstance[A]): UnitOfWorkFM[Try[CreateResult[A]]] =
-    Free.liftF(CreateEntity(store, data, instance))
-
-  // def interpreterUnitOfWork[ENTITY, T](unitofwork: UnitOfWorkFM[T]): T = {
-  //   unitofwork.foldMap {
-  //     case m: CreateEntity[ENTITY] => ???
-  //   }
-  // }
-
-  def x: UnitOfWorkOp ~> Id = new (UnitOfWorkOp ~> Id) {
-    def apply[A](fa: UnitOfWorkOp[A]): Id[A] = fa match {
-      case m: CreateEntity[_] => ???
-    }
-  }
-
-  class UnitOfWorkInterpreter(unitofwork: UnitOfWork) extends (UnitOfWorkOp ~> Id) {
-    def apply[A](fa: UnitOfWorkOp[A]): Id[A] = fa match {
-      case m: CreateEntity[_] => ???
-    }
-
-    def commit() = unitofwork.commit()
-    def abort() = unitofwork.abort()
-  }
-  object UnitOfWorkInterpreter {
-    def create(ctx: ExecutionContext): UnitOfWorkInterpreter = {
-      val uow = new UnitOfWork(ctx)
-      new UnitOfWorkInterpreter(uow)
-    }
-  }
-
-  def program[T](store: EntityStore[T], data: Record)(using instance: EntityInstance[T]): UnitOfWorkFM[Try[CreateResult[T]]] =
-    for {
-      r <- create(store, data) 
-    } yield r
-
-  case class Product()
 
   def simple(datastore: DataStore): UnitOfWork = {
     val base = ExecutionContext.createWithSystem(SystemContext.empty)
     val eventengine = EventEngine.noop(datastore)
     new UnitOfWork(base, datastore, eventengine)
   }
-
-  def z: Try[CreateResult[Product]] = {
-    val store: EntityStore[Product] = ???
-    val data: Record = Map.empty
-
-    val ctx: ExecutionContext = ???
-
-    implicit val instance = new EntityInstance[Product] {
-    }
-
-    program[Product](store, data).foldMap(x)
-    program[Product](store, data).foldMap(UnitOfWorkInterpreter.create(ctx))
-  }
-
-  trait ServiceOperation[T] {
-    def execute() = {
-      val ctx: ExecutionContext = ???
-      val uowi = UnitOfWorkInterpreter.create(ctx)
-      val program = operation_program
-      val r = program.foldMap(uowi)
-      r match {
-        case Success(s) =>
-          uowi.commit()
-          s
-        case Failure(e) =>
-          uowi.abort()
-          e
-      }
-    }
-
-    protected def operation_program: UnitOfWorkFM[Try[T]]
-  }
-
-  class XOperation extends ServiceOperation[CreateResult[Product]] {
-    protected def operation_program: UnitOfWorkFM[Try[CreateResult[Product]]] = {
-      val store: EntityStore[Product] = ???
-      val data: Record = Map.empty
-
-      implicit val instance = new EntityInstance[Product] {
-      }
-
-      for {
-        r <- create(store, data)
-      } yield r
-    }
-  }
-
-  trait LogicOperation[T] {
-    def apply()(using ctx: ExecutionContext) = {
-      ???
-    }
-
-    protected def operation_program: UnitOfWorkFM[Try[T]]
-  }
-
-  given EntityInstance[Product] with {
-  }
-
-  def x(using ctx: ExecutionContext) = {
-    val store: EntityStore[Product] = ???
-    val data: Record = Map.empty
-
-    val program = for {
-      r <- create(store, data)
-    } yield r
-    program.foldMap(ctx.runtime.unitOfWorkInterpreter)
-  }
 }
 
-object Tryout {
-  import cats._
-  import cats.data._
-  import cats.free._
-  import cats.implicits._
+// object UnitOfWork {
+//   import cats._
+//   import cats.data._
+//   import cats.free._
+//   import cats.implicits._
+//   import org.goldenport.cncf.context.{ExecutionContext, SystemContext}
+//   import org.goldenport.cncf.event.EventEngine
+//   import org.goldenport.cncf.datastore.DataStore
 
-  sealed trait TryoutOp[T]
-  case class Plus(lhs: Int, rhs: Int) extends TryoutOp[Int]
-  case class PlusTry(lhs: Int, rhs: Int) extends TryoutOp[Try[Int]]
+//   type CommitResult = Unit
+//   type AbortResult = Unit
+//   type Message = String
 
-  type TryoutFM[T] = Free[TryoutOp, T]
-  type TryoutEitherFM[T] = EitherT[TryoutFM, Throwable, T]
+//   sealed trait UnitOfWorkOp[T]
+//   case class CreateEntity[ENTITY](store: EntityStore[ENTITY], data: Record, instance: EntityInstance[ENTITY]) extends UnitOfWorkOp[Try[CreateResult[ENTITY]]]
 
-  type Config = Map[String, String]
-  type Log = List[String]
-  type State = Map[String, String]
-  type XMonad[T] = RWST[Id, Config, Log, State, TryoutEitherFM[T]]
+//   type UnitOfWorkFM[T] = Free[UnitOfWorkOp, T]
 
-  type YMonad[T] = RWST[TryoutFM, Config, Log, State, Try[T]]
+//   type UnitOfWorkEitherFM[T] = EitherT[UnitOfWorkFM, Throwable, T]
 
-  type ZMonad[T] = RWST[TryoutFM, Config, Log, State, Either[Throwable, T]]
+//   type Config = ExecutionContext
+//   type Log = List[String]
+//   type State = Map[String, Any]
 
-  type WMonad[T] = RWST[TryoutEitherFM, Config, Log, State, T]
+//   type UnitOfWorkRWSEitherFM[T] = RWST[UnitOfWorkEitherFM, Config, Log, State, T]
 
-  def wwi: TryoutOp ~> Id = new (TryoutOp ~> Id) {
-    def apply[T](fa: TryoutOp[T]): Id[T] = fa match {
-      case Plus(lhs, rhs) => ???
-      case PlusTry(lhs, rhs) => ???
-    }
-  }
+//   def create[A](store: EntityStore[A], data: Record)(using instance: EntityInstance[A]): UnitOfWorkFM[Try[CreateResult[A]]] =
+//     Free.liftF(CreateEntity(store, data, instance))
 
-  def ww: Try[Int] = {
-    val program = for {
-      r <- www
-    } yield r
-    val a = program.run(Map.empty, Map.empty).value.foldMap(wwi)
-    a match {
-      case Right((log, state, value)) => Success(value)
-      case Left(e) => Failure(e)
-    }
-  }
+//   // def interpreterUnitOfWork[ENTITY, T](unitofwork: UnitOfWorkFM[T]): T = {
+//   //   unitofwork.foldMap {
+//   //     case m: CreateEntity[ENTITY] => ???
+//   //   }
+//   // }
 
-  def yy = {
-    // def _f_(p: Int): YMonad[Int] = RWST { (config, state) =>
-    //   ???
-    //   (result, state, config)
-    // }
+//   def x: UnitOfWorkOp ~> Id = new (UnitOfWorkOp ~> Id) {
+//     def apply[A](fa: UnitOfWorkOp[A]): Id[A] = fa match {
+//       case m: CreateEntity[_] => ???
+//     }
+//   }
+
+//   class UnitOfWorkInterpreter(unitofwork: UnitOfWork) extends (UnitOfWorkOp ~> Id) {
+//     def apply[A](fa: UnitOfWorkOp[A]): Id[A] = fa match {
+//       case m: CreateEntity[_] => ???
+//     }
+
+//     def commit() = unitofwork.commit()
+//     def abort() = unitofwork.abort()
+//   }
+//   object UnitOfWorkInterpreter {
+//     def create(ctx: ExecutionContext): UnitOfWorkInterpreter = {
+//       val uow = new UnitOfWork(ctx)
+//       new UnitOfWorkInterpreter(uow)
+//     }
+//   }
+
+//   def program[T](store: EntityStore[T], data: Record)(using instance: EntityInstance[T]): UnitOfWorkFM[Try[CreateResult[T]]] =
+//     for {
+//       r <- create(store, data) 
+//     } yield r
+
+//   case class Product()
+
+//   def simple(datastore: DataStore): UnitOfWork = {
+//     val base = ExecutionContext.createWithSystem(SystemContext.empty)
+//     val eventengine = EventEngine.noop(datastore)
+//     new UnitOfWork(base, datastore, eventengine)
+//   }
+
+//   def z: Try[CreateResult[Product]] = {
+//     val store: EntityStore[Product] = ???
+//     val data: Record = Map.empty
+
+//     val ctx: ExecutionContext = ???
+
+//     implicit val instance = new EntityInstance[Product] {
+//     }
+
+//     program[Product](store, data).foldMap(x)
+//     program[Product](store, data).foldMap(UnitOfWorkInterpreter.create(ctx))
+//   }
+
+//   trait ServiceOperation[T] {
+//     def execute() = {
+//       val ctx: ExecutionContext = ???
+//       val uowi = UnitOfWorkInterpreter.create(ctx)
+//       val program = operation_program
+//       val r = program.foldMap(uowi)
+//       r match {
+//         case Success(s) =>
+//           uowi.commit()
+//           s
+//         case Failure(e) =>
+//           uowi.abort()
+//           e
+//       }
+//     }
+
+//     protected def operation_program: UnitOfWorkFM[Try[T]]
+//   }
+
+//   class XOperation extends ServiceOperation[CreateResult[Product]] {
+//     protected def operation_program: UnitOfWorkFM[Try[CreateResult[Product]]] = {
+//       val store: EntityStore[Product] = ???
+//       val data: Record = Map.empty
+
+//       implicit val instance = new EntityInstance[Product] {
+//       }
+
+//       for {
+//         r <- create(store, data)
+//       } yield r
+//     }
+//   }
+
+//   trait LogicOperation[T] {
+//     def apply()(using ctx: ExecutionContext) = {
+//       ???
+//     }
+
+//     protected def operation_program: UnitOfWorkFM[Try[T]]
+//   }
+
+//   given EntityInstance[Product] with {
+//   }
+
+//   def x(using ctx: ExecutionContext) = {
+//     val store: EntityStore[Product] = ???
+//     val data: Record = Map.empty
 
 //     val program = for {
-//       a <- yyy
-// //      r <- _f_(a)
+//       r <- create(store, data)
 //     } yield r
-    //    program.run()
-    ???
-  }
+//     program.foldMap(ctx.runtime.unitOfWorkInterpreter)
+//   }
+// }
 
-  def zz = {
-    val interpreter = ???
+// object Tryout {
+//   import cats._
+//   import cats.data._
+//   import cats.free._
+//   import cats.implicits._
 
-    val program = for {
-      _ <- zzz
-    } yield ()
-    // program.run()
-    ???
-  }
+//   sealed trait TryoutOp[T]
+//   case class Plus(lhs: Int, rhs: Int) extends TryoutOp[Int]
+//   case class PlusTry(lhs: Int, rhs: Int) extends TryoutOp[Try[Int]]
 
-  def xxx: XMonad[Int] = {
-    IndexedReaderWriterStateT.liftF(EitherT.right(Free.liftF(Plus(1, 2))))
-  }
+//   type TryoutFM[T] = Free[TryoutOp, T]
+//   type TryoutEitherFM[T] = EitherT[TryoutFM, Throwable, T]
 
-  def yyy: YMonad[Int] = {
-    IndexedReaderWriterStateT.liftF(Free.liftF(PlusTry(1, 2)))
-  }
+//   type Config = Map[String, String]
+//   type Log = List[String]
+//   type State = Map[String, String]
+//   type XMonad[T] = RWST[Id, Config, Log, State, TryoutEitherFM[T]]
 
-  def zzz: ZMonad[Int] = {
-    IndexedReaderWriterStateT.liftF(Free.liftF(PlusTry(1, 2)).map(_.toEither))
-  }
+//   type YMonad[T] = RWST[TryoutFM, Config, Log, State, Try[T]]
 
-  def www: WMonad[Int] = RWST { (config, state) =>
-//    val result: EitherT[TryoutFM, Throwable, Int] = ???
-    val result: EitherT[TryoutFM, Throwable, (Log, Config, Int)] = EitherT(
-      Free.liftF(PlusTry(1, 2)).map(_.toEither.map(x => (Nil, config, x)))
-    )
-    // (result, state, config)
-    result
-  }
+//   type ZMonad[T] = RWST[TryoutFM, Config, Log, State, Either[Throwable, T]]
 
-  def www2: WMonad[Int] = RWST { (config, state) =>
-    EitherT {
-      Free.liftF(PlusTry(1, 2)).map(_.toEither.map(x => (Nil, config, x)))
-    }
-  }
-}
+//   type WMonad[T] = RWST[TryoutEitherFM, Config, Log, State, T]
+
+//   def wwi: TryoutOp ~> Id = new (TryoutOp ~> Id) {
+//     def apply[T](fa: TryoutOp[T]): Id[T] = fa match {
+//       case Plus(lhs, rhs) => ???
+//       case PlusTry(lhs, rhs) => ???
+//     }
+//   }
+
+//   def ww: Try[Int] = {
+//     val program = for {
+//       r <- www
+//     } yield r
+//     val a = program.run(Map.empty, Map.empty).value.foldMap(wwi)
+//     a match {
+//       case Right((log, state, value)) => Success(value)
+//       case Left(e) => Failure(e)
+//     }
+//   }
+
+//   def yy = {
+//     // def _f_(p: Int): YMonad[Int] = RWST { (config, state) =>
+//     //   ???
+//     //   (result, state, config)
+//     // }
+
+// //     val program = for {
+// //       a <- yyy
+// // //      r <- _f_(a)
+// //     } yield r
+//     //    program.run()
+//     ???
+//   }
+
+//   def zz = {
+//     val interpreter = ???
+
+//     val program = for {
+//       _ <- zzz
+//     } yield ()
+//     // program.run()
+//     ???
+//   }
+
+//   def xxx: XMonad[Int] = {
+//     IndexedReaderWriterStateT.liftF(EitherT.right(Free.liftF(Plus(1, 2))))
+//   }
+
+//   def yyy: YMonad[Int] = {
+//     IndexedReaderWriterStateT.liftF(Free.liftF(PlusTry(1, 2)))
+//   }
+
+//   def zzz: ZMonad[Int] = {
+//     IndexedReaderWriterStateT.liftF(Free.liftF(PlusTry(1, 2)).map(_.toEither))
+//   }
+
+//   def www: WMonad[Int] = RWST { (config, state) =>
+// //    val result: EitherT[TryoutFM, Throwable, Int] = ???
+//     val result: EitherT[TryoutFM, Throwable, (Log, Config, Int)] = EitherT(
+//       Free.liftF(PlusTry(1, 2)).map(_.toEither.map(x => (Nil, config, x)))
+//     )
+//     // (result, state, config)
+//     result
+//   }
+
+//   def www2: WMonad[Int] = RWST { (config, state) =>
+//     EitherT {
+//       Free.liftF(PlusTry(1, 2)).map(_.toEither.map(x => (Nil, config, x)))
+//     }
+//   }
+// }
