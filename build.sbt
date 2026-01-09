@@ -5,7 +5,7 @@ lazy val root = project
   .settings(
     organization := "org.goldenport",
     name := "goldenport-cncf",
-    version := "0.2.2",
+    version := "0.2.3",
 
     scalaVersion := scala3Version,
 
@@ -17,6 +17,10 @@ lazy val root = project
       "org.typelevel" %% "cats-free"   % "2.10.0",
       "org.typelevel" %% "cats-effect" % "3.5.4",
 
+      "org.http4s" %% "http4s-ember-server" % "0.23.27",
+      "org.http4s" %% "http4s-core"         % "0.23.27",
+      "org.http4s" %% "http4s-dsl"          % "0.23.27",
+
       // Actor system (Akka-compatible, Scala 3 supported)
       "org.apache.pekko" %% "pekko-actor"  % "1.0.2",
       "org.apache.pekko" %% "pekko-stream" % "1.0.2",
@@ -26,7 +30,9 @@ lazy val root = project
       "io.circe" %% "circe-generic" % "0.14.6",
       "io.circe" %% "circe-parser"  % "0.14.6",
 
-      "org.goldenport" %% "goldenport-core" % "0.1.1",
+      "org.slf4j" % "slf4j-simple" % "2.0.12",
+
+      "org.goldenport" %% "goldenport-core" % "0.1.2",
 
       // Testing
       "org.scalatest" %% "scalatest" % "3.2.18" % Test
