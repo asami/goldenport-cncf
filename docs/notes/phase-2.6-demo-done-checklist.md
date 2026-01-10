@@ -38,9 +38,35 @@ No platform contracts were changed; all remaining concerns
 are explicitly deferred to Phase 2.8.
 
 ### 2. Client demo (Stage 4)
-- [ ] Evidence: client mode invocation(s) documented
-- [ ] Evidence: expected stdout/stderr + exit code behavior documented
-- [ ] Evidence: end-to-end example included
+Status: DONE (2026-01-11)
+
+#### Evidence (real http)
+
+$ sbt 'run server'
+$ sbt 'run client admin system ping --no-exit'
+=> ok
+
+#### Evidence (fake http)
+
+$ sbt -Dcncf.http.driver=fake 'run client admin system ping --no-exit'
+=> ok
+
+Notes:
+- CLI -> ClientComponent -> HttpDriver -> Server Action path verified.
+- Quick-hack runtime stub removed.
+- Client prints HTTP body for HTTP-backed OperationResponse (curl/server-emulator equivalent).
+- Config keys: cncf.http.driver, cncf.http.baseurl.
+
+- [x] Evidence: client mode invocation(s) documented
+  - sbt 'run client admin system ping --no-exit'
+  - sbt -Dcncf.http.driver=fake 'run client admin system ping --no-exit'
+- [x] Evidence: expected stdout/stderr + exit code behavior documented
+  - Expected stdout: ok
+  - Expected stderr: (empty)
+  - Exit behavior: process continues with --no-exit
+- [x] Evidence: end-to-end example included
+  - Server: sbt 'run server'
+  - Client: sbt 'run client admin system ping --no-exit'
 
 ### 3. Custom component demo (Stage 5, scala-cli)
 - [ ] Evidence: one scala-cli script runs BOTH server and client modes (as per Stage 5 note)

@@ -7,6 +7,7 @@ import java.util.Locale
 import org.goldenport.context.{EnvironmentContext as CoreEnvironmentContext, ExecutionContext as CoreExecutionContext, I18nContext, RandomContext, VirtualMachineContext}
 import org.goldenport.id.{UniversalId as CoreUniversalId}
 import org.goldenport.log.Logger
+import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import cats.~>
@@ -23,7 +24,7 @@ import cats.~>
 /*
  * @since   Dec. 21, 2025
  *  version Dec. 31, 2025
- * @version Jan. 10, 2026
+ * @version Jan. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -54,7 +55,9 @@ object ExecutionContext {
     runtime: RuntimeContext,
     jobContext: org.goldenport.cncf.job.JobContext,
     application: Option[ApplicationContext] = None,
-    system: SystemContext = SystemContext.empty
+    system: SystemContext = SystemContext.empty,
+    componentHttpDriver: Option[HttpDriver] = None,
+    subsystemHttpDriver: Option[HttpDriver] = None
   )
   object CncfCore {
     trait Holder {
@@ -67,6 +70,10 @@ object ExecutionContext {
       def jobContext: org.goldenport.cncf.job.JobContext = cncfCore.jobContext
       def application: Option[ApplicationContext] = cncfCore.application
       def system: SystemContext = cncfCore.system
+      def componentHttpDriver: Option[HttpDriver] = cncfCore.componentHttpDriver
+      def subsystemHttpDriver: Option[HttpDriver] = cncfCore.subsystemHttpDriver
+      def resolve_http_driver: Option[HttpDriver] =
+        componentHttpDriver.orElse(subsystemHttpDriver)
     }
   }
 
@@ -165,6 +172,34 @@ object ExecutionContext {
       i.copy(
         cncfCore = i.cncfCore.copy(
           system = system
+        )
+      )
+    case _ =>
+      ctx
+  }
+
+  def withComponentHttpDriver(
+    ctx: ExecutionContext,
+    httpDriver: Option[HttpDriver]
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(
+        cncfCore = i.cncfCore.copy(
+          componentHttpDriver = httpDriver
+        )
+      )
+    case _ =>
+      ctx
+  }
+
+  def withSubsystemHttpDriver(
+    ctx: ExecutionContext,
+    httpDriver: Option[HttpDriver]
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(
+        cncfCore = i.cncfCore.copy(
+          subsystemHttpDriver = httpDriver
         )
       )
     case _ =>

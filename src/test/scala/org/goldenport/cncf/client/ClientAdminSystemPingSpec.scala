@@ -1,0 +1,342 @@
+package org.goldenport.cncf.client
+
+import cats.~>
+
+import java.nio.charset.StandardCharsets
+import org.goldenport.bag.Bag
+import org.goldenport.Consequence
+import org.goldenport.cncf.action.ActionCall
+import org.goldenport.cncf.cli.CncfRuntime
+import org.goldenport.cncf.component.ComponentInitParams
+import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.cncf.context.SystemContext
+import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
+import org.goldenport.http.{ContentType, HttpRequest, HttpResponse, HttpStatus, MimeType, StringResponse}
+import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.protocol.{Request, Response}
+import org.goldenport.test.matchers.ConsequenceMatchers
+import org.scalatest.GivenWhenThen
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
+
+/*
+ * @since   Jan. 10, 2026
+ * @version Jan. 11, 2026
+ * @author  ASAMI, Tomoharu
+ */
+class ClientAdminSystemPingSpec
+  extends AnyWordSpec
+  with Matchers
+  with GivenWhenThen
+  with ConsequenceMatchers {
+
+  "Client admin system ping" should {
+    "route Action DSL through UnitOfWork and HttpDriver" in {
+      Given("a client component with a fake HTTP driver")
+      val response = _response_pong()
+      val driver = new FakeHttpDriver(response)
+      val harness = _build_harness(driver)
+
+      When("the client action is executed")
+      val action = new GetQuery(
+        "system.ping",
+        HttpRequest.fromPath(HttpRequest.GET, "/admin/system/ping")
+      )
+      val result = harness.executeAction(action)
+
+      Then("the UnitOfWork interpreter invokes the HTTP driver")
+      result should be_success
+      driver.calls shouldBe Vector(
+        HttpCall("GET", "/admin/system/ping", None, Map.empty)
+      )
+      result match {
+        case org.goldenport.Consequence.Success(OperationResponse.Http(res)) =>
+          res.code shouldBe response.code
+        case other =>
+          fail(s"unexpected result: ${other}")
+      }
+    }
+
+    "route CLI client ping to the client component" in {
+      Given("a subsystem with the client component wired to a fake HTTP driver")
+      val response = _response_pong()
+      val driver = new FakeHttpDriver(response)
+      val harness = _build_harness(driver)
+      val _ = harness.component.withApplicationConfig(
+        org.goldenport.cncf.component.Component.ApplicationConfig(
+          httpDriver = Some(driver)
+        )
+      )
+
+      When("the client CLI request is executed")
+      val request = CncfRuntime.parseClientArgs(
+        Array("http", "get", "/admin/system/ping")
+      )
+      val result = request.flatMap { req =>
+        _client_action_from_request(req).flatMap(harness.executeAction)
+      }
+
+      Then("the HTTP driver is invoked with the expected path")
+      result should be_success
+      driver.calls shouldBe Vector(
+        HttpCall("GET", "http://localhost:8080/admin/system/ping", None, Map.empty)
+      )
+      val _ = response
+    }
+
+    "route CLI client POST ping to the client component" in {
+      Given("a subsystem with the client component wired to a fake HTTP driver")
+      val response = _response_pong()
+      val driver = new FakeHttpDriver(response)
+      val harness = _build_harness(driver)
+
+      When("the client CLI request is executed")
+      val request = CncfRuntime.parseClientArgs(
+        Array("http", "post", "/admin/system/ping", "-d", "pong")
+      )
+      val result = request.flatMap { req =>
+        _client_action_from_request(req).flatMap(harness.executeAction)
+      }
+
+      Then("the HTTP driver is invoked with the expected path and body")
+      result should be_success
+      driver.calls shouldBe Vector(
+        HttpCall("POST", "http://localhost:8080/admin/system/ping", Some("pong"), Map.empty)
+      )
+    }
+  }
+
+  private final case class HttpCall(
+    method: String,
+    path: String,
+    body: Option[String],
+    headers: Map[String, String]
+  )
+
+  private final class FakeHttpDriver(
+    response: HttpResponse
+  ) extends HttpDriver {
+    private val buffer = scala.collection.mutable.ArrayBuffer.empty[HttpCall]
+
+    def calls: Vector[HttpCall] =
+      buffer.toVector
+
+    def get(path: String): HttpResponse = {
+      buffer += HttpCall("GET", path, None, Map.empty)
+      response
+    }
+
+    def post(
+      path: String,
+      body: Option[String],
+      headers: Map[String, String]
+    ): HttpResponse = {
+      buffer += HttpCall("POST", path, body, headers)
+      response
+    }
+  }
+
+  private def _response_pong(): HttpResponse = {
+    val contentType = ContentType(
+      MimeType("text/plain"),
+      Some(StandardCharsets.UTF_8)
+    )
+    StringResponse(
+      HttpStatus.Ok,
+      contentType,
+      Bag.text("pong", StandardCharsets.UTF_8)
+    )
+  }
+
+  private def _client_component(): ClientComponent = {
+    val subsystem = Subsystem("cncf-client-test")
+    val params = ComponentInitParams(subsystem)
+    val component = ClientComponent.Factory.create(params).collectFirst {
+      case c: ClientComponent => c
+    }.getOrElse {
+      fail("client component factory did not produce ClientComponent")
+    }
+    component
+  }
+
+  private def _client_action_from_request(
+    req: Request
+  ): Consequence[org.goldenport.cncf.action.Action] = {
+    val baseurl = req.properties.find(_.name == "baseurl")
+      .map(_.value.toString).getOrElse("http://localhost:8080")
+    req.arguments.find(_.name == "path").map(_.value.toString) match {
+      case Some(path) =>
+        val url = _build_client_url(baseurl, path)
+        req.operation match {
+          case "post" =>
+            _client_body(req).map { body =>
+              new PostCommand(
+                "system.ping",
+                HttpRequest.fromUrl(
+                  method = HttpRequest.POST,
+                  url = new java.net.URL(url),
+                  body = body
+                )
+              )
+            }
+          case _ =>
+            Consequence.success(
+              new GetQuery(
+                "system.ping",
+                HttpRequest.fromUrl(
+                  method = HttpRequest.GET,
+                  url = new java.net.URL(url)
+                )
+              )
+            )
+        }
+      case None =>
+        Consequence.failure("client http path is required")
+    }
+  }
+
+  private def _client_body(
+    req: Request
+  ): Consequence[Option[Bag]] =
+    req.properties.find(_.name == "-d") match {
+      case Some(p) =>
+        p.value match {
+          case b: Bag => Consequence.success(Some(b))
+          case s: String => Consequence.success(Some(Bag.text(s, StandardCharsets.UTF_8)))
+          case _ => Consequence.failure("client -d must be a Bag or String")
+        }
+      case None =>
+        Consequence.success(None)
+    }
+
+  private def _build_client_url(
+    baseurl: String,
+    path: String
+  ): String = {
+    val base = if (baseurl.endsWith("/")) baseurl.dropRight(1) else baseurl
+    val suffix = if (path.startsWith("/")) path else s"/${path}"
+    s"${base}${suffix}"
+  }
+
+  private final case class TestHarness(
+    subsystem: Subsystem,
+    component: ClientComponent,
+    runtime: TestRuntimeContext,
+    interpreter: UnitOfWorkInterpreter
+  ) {
+    def executeAction(action: org.goldenport.cncf.action.Action): Consequence[OperationResponse] = {
+      val ctx = _execution_context(runtime)
+      val core = ActionCall.Core(action, ctx, None)
+      val call = action.createCall(core)
+      component.logic.execute(call)
+    }
+
+    def executeRequest(request: Request): Consequence[Response] = {
+      val ctx = _execution_context(runtime)
+      component.logic.makeOperationRequest(request).flatMap {
+        case action: org.goldenport.cncf.action.Action =>
+          val core = ActionCall.Core(action, ctx, None)
+          val call = action.createCall(core)
+          component.logic.execute(call).map(_.toResponse)
+        case _ =>
+          Consequence.failure("OperationRequest must be Action")
+      }
+    }
+  }
+
+  private final class TestRuntimeContext(
+    uow: UnitOfWork,
+    interpreter: UnitOfWorkInterpreter
+  ) extends org.goldenport.cncf.context.RuntimeContext {
+    def unitOfWork: UnitOfWork = uow
+
+    def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> cats.Id) =
+      new (UnitOfWorkOp ~> cats.Id) {
+        def apply[A](fa: UnitOfWorkOp[A]): cats.Id[A] =
+          interpreter.executeDirect(fa)
+      }
+
+    def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
+      new (UnitOfWorkOp ~> scala.util.Try) {
+        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
+          scala.util.Try(interpreter.executeDirect(fa))
+      }
+
+    def unitOfWorkEitherInterpreter[T](op: UnitOfWorkOp[T]): Either[Throwable, T] =
+      try Right(interpreter.executeDirect(op))
+      catch {
+        case e: Throwable => Left(e)
+      }
+
+    def commit(): Unit = {
+      unitOfWork.commit()
+      ()
+    }
+
+    def abort(): Unit = {
+      unitOfWork.rollback()
+      ()
+    }
+
+    def dispose(): Unit = {}
+
+    def toToken: String = "client-admin-system-ping-spec-runtime"
+  }
+
+  private final class BootstrapRuntimeContext
+    extends org.goldenport.cncf.context.RuntimeContext {
+    def unitOfWork: UnitOfWork =
+      throw new UnsupportedOperationException("bootstrap runtime has no UnitOfWork")
+
+    def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> cats.Id) =
+      new (UnitOfWorkOp ~> cats.Id) {
+        def apply[A](fa: UnitOfWorkOp[A]): cats.Id[A] =
+          throw new UnsupportedOperationException("bootstrap runtime has no interpreter")
+      }
+
+    def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
+      new (UnitOfWorkOp ~> scala.util.Try) {
+        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
+          throw new UnsupportedOperationException("bootstrap runtime has no interpreter")
+      }
+
+    def unitOfWorkEitherInterpreter[T](op: UnitOfWorkOp[T]): Either[Throwable, T] =
+      Left(new UnsupportedOperationException("bootstrap runtime has no interpreter"))
+
+    def commit(): Unit = {}
+    def abort(): Unit = {}
+    def dispose(): Unit = {}
+
+    def toToken: String = "client-admin-system-ping-spec-bootstrap-runtime"
+  }
+
+  private def _build_harness(driver: FakeHttpDriver): TestHarness = {
+    val subsystem = Subsystem("cncf-client-test")
+    val component = _client_component()
+    subsystem.add(Seq(component))
+    val base = org.goldenport.cncf.context.ExecutionContext.create()
+    val bootstrap = new BootstrapRuntimeContext
+    val uowcontext = org.goldenport.cncf.context.ExecutionContext.Instance(
+      base.core,
+      base.cncfCore.copy(runtime = bootstrap, system = SystemContext.empty)
+    )
+    val datastore = org.goldenport.cncf.datastore.DataStore.noop()
+    val eventengine = org.goldenport.cncf.event.EventEngine.noop(datastore)
+    val uow = new UnitOfWork(uowcontext, datastore, eventengine, CommitRecorder.noop)
+    val interpreter = new UnitOfWorkInterpreter(uow, driver)
+    val runtime = new TestRuntimeContext(uow, interpreter)
+    TestHarness(subsystem, component, runtime, interpreter)
+  }
+
+  private def _execution_context(
+    runtime: org.goldenport.cncf.context.RuntimeContext
+  ): org.goldenport.cncf.context.ExecutionContext = {
+    val base = org.goldenport.cncf.context.ExecutionContext.create()
+    org.goldenport.cncf.context.ExecutionContext.Instance(
+      base.core,
+      base.cncfCore.copy(runtime = runtime, system = SystemContext.empty)
+    )
+  }
+
+}

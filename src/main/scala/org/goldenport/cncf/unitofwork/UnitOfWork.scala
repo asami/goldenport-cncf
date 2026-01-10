@@ -10,11 +10,12 @@ import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.entity.EntityStore.*
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.event.DomainEvent
+import org.goldenport.cncf.http.HttpDriver
 
 /*
  * @since   Apr. 11, 2025
  *  version Dec. 21, 2025
- * @version Jan. 10, 2026
+ * @version Jan. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
@@ -24,6 +25,7 @@ class UnitOfWork(
   recorder: CommitRecorder = CommitRecorder.noop
 ) {
   import UnitOfWork.*
+  private var _http_driver: Option[HttpDriver] = None
 
   def create[T](store: EntityStore[T], data: Record)(using instance: EntityInstance[T]): Try[CreateResult[T]] = ???
 
@@ -43,8 +45,17 @@ class UnitOfWork(
       case _ => None
     }
 
+  def http_driver: Option[HttpDriver] =
+    _http_driver.orElse(context.resolve_http_driver)
+
+  def withHttpDriver(driver: Option[HttpDriver]): UnitOfWork = {
+    _http_driver = driver
+    this
+  }
+
   def execute[A](op: UnitOfWorkOp[A])(using http: org.goldenport.cncf.http.HttpDriver): A =
-    new UnitOfWorkInterpreter(this, http).executeDirect(op).asInstanceOf[A]
+    withHttpDriver(Some(http))
+    new UnitOfWorkInterpreter(this).executeDirect(op).asInstanceOf[A]
 
   def createFile(file: File, data: String): Try[Unit] = ???
 

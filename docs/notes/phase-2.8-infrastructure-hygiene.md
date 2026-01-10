@@ -81,3 +81,29 @@ See also:
 
 - No semantic changes
 - No new features
+
+## Pending Item: curl-Compatible Client Parameter Specification
+
+The curl-compatible client parameter specification discussed during client feature development
+is formally deferred to **Phase 2.8 (Infrastructure Hygiene)**.
+
+### Scope
+
+- Normalize client CLI parameters based on curl conventions (e.g. `-X`, `-d`, headers, baseurl).
+- Treat `-d @file` inputs as **Bag** at Request construction time.
+- Align Request property/argument structure with future RestIngress behavior.
+- Do NOT introduce ad-hoc shortcuts or emulator-only semantics.
+
+### Rationale
+
+- The specification affects CLI ingress, Request construction, and ClientComponent contracts.
+- Premature fixation would risk inconsistency with RestIngress and HTTP semantics.
+- Deferring allows validation against real client/server round-trip behavior.
+
+### Status
+
+- Identified
+- Deferred
+- Not implemented
+
+This item MUST be revisited before Phase 2.8 completion.

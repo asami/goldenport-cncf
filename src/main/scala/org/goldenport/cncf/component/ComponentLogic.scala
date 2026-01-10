@@ -7,13 +7,15 @@ import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.cncf.action.{Action, ActionCall, Query, ResourceAccess}
 import cats.{Id, ~>}
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeKind, SystemContext}
+import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.job.{JobEngine, JobId, JobResult, JobStatus, JobTask}
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
+import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 
 /*
  * @since   Jan.  3, 2026
- * @version Jan. 10, 2026
+ * @version Jan. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -56,9 +58,19 @@ case class ComponentLogic(
     component.jobEngine.getResult(jobId)
 
   private def _execution_context(): ExecutionContext = {
-    val base = ExecutionContext.createWithSystem(system)
-    val runtime = new _ComponentRuntimeContext(component.unitOfWork)
-    val withruntime = ExecutionContext.withRuntimeContext(base, runtime)
+    val base0 = ExecutionContext.createWithSystem(system)
+    val base1 = ExecutionContext.withSubsystemHttpDriver(
+      base0,
+      component.subsystem.flatMap(_.httpDriver)
+    )
+    val base2 = ExecutionContext.withComponentHttpDriver(
+      base1,
+      component.applicationConfig.httpDriver
+    )
+    val resolved = base2.resolve_http_driver
+    val uow = component.unitOfWork.withHttpDriver(resolved)
+    val runtime = new _ComponentRuntimeContext(uow)
+    val withruntime = ExecutionContext.withRuntimeContext(base2, runtime)
     component.applicationConfig.applicationContext match {
       case Some(app) =>
         ExecutionContext.withApplicationContext(withruntime, app)
@@ -87,7 +99,7 @@ case class ComponentLogic(
     def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> Id) =
       new (UnitOfWorkOp ~> Id) {
         def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
-          throw new UnsupportedOperationException("unitOfWorkInterpreter is not available in component runtime")
+          new UnitOfWorkInterpreter(uow).executeDirect(fa)
       }
 
     def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
@@ -113,6 +125,19 @@ case class ComponentLogic(
 
     def toToken: String = "component-runtime-context"
   }
+
+  private def _fallback_http_driver_(): HttpDriver =
+    new HttpDriver {
+      def get(path: String): HttpResponse =
+        throw new UnsupportedOperationException(s"HttpDriver not configured: GET ${path}")
+
+      def post(
+        path: String,
+        body: Option[String],
+        headers: Map[String, String]
+      ): HttpResponse =
+        throw new UnsupportedOperationException(s"HttpDriver not configured: POST ${path}")
+    }
 }
 
 object ComponentLogic {

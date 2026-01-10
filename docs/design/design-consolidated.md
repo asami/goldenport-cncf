@@ -118,6 +118,8 @@ Execution is explicitly phased (docs/execution-model.md):
   - See: configuration-model.md
 - Event-Driven Job Management (Phase 1–2) — canonical overview
   - `docs/design/event-driven-job-management.md`
+- Client execution / demo specs
+  - `docs/design/client-component-action-api.md` — Stage 4 finalized behavior (execution path, driver resolution chain, output contract, config keys).
   - JobPlan and ExpectedEvent (supporting)
     `docs/design/job-plan-expected-event.md`
   - JobState transition (supporting)

@@ -16,17 +16,22 @@ import org.goldenport.cncf.component.{
 }
 import org.goldenport.cncf.component.ComponentLocator.NameLocator
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.http.HttpDriver
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan.  9, 2026
+ * @version Jan. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
   val name: String,
-  scopeContext: Option[ScopeContext] = None // TODO
+  scopeContext: Option[ScopeContext] = None, // TODO
+  httpdriver: Option[HttpDriver] = None
 ) {
   private var _component_space: ComponentSpace = ComponentSpace.empty
+  private val _http_driver: Option[HttpDriver] = httpdriver
+
+  def httpDriver: Option[HttpDriver] = _http_driver
 
   def add(comps: Seq[Component]): Subsystem = {
     val injected = comps.map(x => _inject_context(x.name, x))

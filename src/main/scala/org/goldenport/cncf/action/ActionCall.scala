@@ -9,6 +9,7 @@ import org.goldenport.util.StringUtils.objectToSnakeName
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
+import org.goldenport.cncf.unitofwork.ExecUowM
 import org.goldenport.cncf.unitofwork.UnitOfWork
 
 /*
@@ -17,7 +18,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWork
  *  version Dec. 31, 2025
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
- * @version Jan.  6, 2026
+ * @version Jan. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
@@ -63,6 +64,20 @@ abstract class ActionCall()
           s"ApplicationContext not found, expected: ${ct.runtimeClass.getName}"
         )
     }
+}
+
+abstract class FunctionalActionCall extends ActionCall {
+  protected def build_Program: ExecUowM[OperationResponse]
+
+  final override def execute(): Consequence[OperationResponse] =
+    build_Program.value.foldMap(executionContext.runtime.unitOfWorkInterpreter)
+}
+
+abstract class ProcedureActionCall extends ActionCall {
+  protected def procedure(): Consequence[OperationResponse]
+
+  final override def execute(): Consequence[OperationResponse] =
+    procedure()
 }
 
 object ActionCall {

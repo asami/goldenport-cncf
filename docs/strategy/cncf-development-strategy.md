@@ -84,6 +84,7 @@ Complete remaining Phase 2.0 demo stages on top of frozen platform contracts.
   - Client demo
   - Custom component demo
   - Demo consolidation
+- Stage 4 (Client demo) is DONE; client demo verified via real/fake HttpDriver with curl-equivalent output (`ok`).
 
 **Exit Criteria**
 - See: `docs/notes/phase-2.6-demo-done-checklist.md`
@@ -106,6 +107,10 @@ Resolve architectural technical debt discovered during Phase 2.6 without adding 
 **Scope**
 - Path alias resolution logic
 - Canonical vs alias routing normalization
+- Normalize `CncfMain` command invocation:
+  - Introduce `OperationDefinition` for CLI command definitions.
+  - Definition-driven parameter validation and execution dispatch.
+  - Consolidate command-line arguments and configuration inputs.
 
 **Non-goals**
 - No semantic changes
@@ -122,6 +127,17 @@ Re-align error taxonomy and definitions before Phase 3 (CML).
 **Scope**
 - Use Phase 2.5 semantics as foundation
 - Incorporate practical issues discovered in Phase 2.6
+- Define CNCF-level exit code policy:
+  - OS / shell exit codes are constrained to 8-bit (0–255) and exposed as `Int`.
+  - `Conclusion.detailCode` is planned as `Long` and represents semantic detail.
+  - Exit codes MUST NOT be derived directly from `detailCode`.
+- Introduce a CNCF framework policy to compute exit codes from `Conclusion`:
+  - Mapping extracts only operationally relevant information
+    (e.g. success vs failure, retryable vs non-retryable, usage vs defect).
+  - Mapping normalizes results to valid 8-bit exit codes.
+- Centralize process termination:
+  - `CncfMain` is the sole component allowed to invoke `sys.exit`.
+  - All other layers propagate failures via `Consequence` / `Conclusion` only.
 
 **Non-goals**
 - No CML modeling
