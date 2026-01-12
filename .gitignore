@@ -9,6 +9,7 @@ lib
 boot
 .tmp-sbt
 WARP.md
+.scala-build
 
 ### Metals (VS Code Scala extension) ###
 .metals/

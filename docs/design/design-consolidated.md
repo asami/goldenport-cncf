@@ -80,6 +80,8 @@ Engine
   and observability (enter/leave).
 - Must not construct or mutate ExecutionContext.
 - Must not rely on implicit ExecutionContext.
+- Variation and Extension Points
+  - `docs/design/variation-and-extension-points.md` — canonical distinction between value variation and behavior extension in CNCF.
 
 
 Execution Model
@@ -120,6 +122,10 @@ Execution is explicitly phased (docs/execution-model.md):
   - `docs/design/event-driven-job-management.md`
 - Client execution / demo specs
   - `docs/design/client-component-action-api.md` — Stage 4 finalized behavior (execution path, driver resolution chain, output contract, config keys).
+- Component repository
+  - `docs/design/component-repository.md` — canonical specification for repository types, CLI syntax, and discovery unification.
+- Component instantiation
+  - `docs/design/component-factory.md` — Factory/Provider/Group contract for turning discovered classes into Component instances.
   - JobPlan and ExpectedEvent (supporting)
     `docs/design/job-plan-expected-event.md`
   - JobState transition (supporting)

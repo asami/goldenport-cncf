@@ -107,3 +107,27 @@ is formally deferred to **Phase 2.8 (Infrastructure Hygiene)**.
 - Not implemented
 
 This item MUST be revisited before Phase 2.8 completion.
+
+## Deferred Development Items from Phase 2.6 / Stage 5
+
+The following items were identified during Phase 2.6 demo completion and were
+explicitly deferred to Phase 2.8 for resolution. Phase 2.8 includes design work
+and implementation necessary to close these items.
+
+- ComponentDefinition / DSL definition formalization
+  - Clarify contract between DSL-based definitions and class-based Components.
+  - Decide instantiation and lifecycle rules.
+
+- Multiple Component Repository priority and override rules
+  - Define deterministic resolution order across repositories.
+  - Specify override and shadowing behavior.
+
+- Bootstrap log persistence and operational integration
+  - Define persistence strategy.
+  - Integrate with runtime logging / observability pipeline.
+
+- Full integration contract: config → initialize → runtime
+  - Define a single, end-to-end initialization contract.
+  - Align configuration loading, Component.initialize, and runtime execution.
+
+These items constitute the core scope of Phase 2.8.

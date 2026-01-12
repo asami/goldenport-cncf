@@ -22,7 +22,7 @@ import org.goldenport.protocol.spec as spec
  * @version Jan.  9, 2026
  * @author  ASAMI, Tomoharu
  */
-final class SpecificationComponent(val core: Component.Core) extends Component {
+final class SpecificationComponent(override val core: Component.Core) extends Component {
 }
 
 object SpecificationComponent {

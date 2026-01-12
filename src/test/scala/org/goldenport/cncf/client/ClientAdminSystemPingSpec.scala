@@ -7,14 +7,20 @@ import org.goldenport.bag.Bag
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.cli.CncfRuntime
-import org.goldenport.cncf.component.ComponentInitParams
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentInitParams, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.context.SystemContext
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.http.{ContentType, HttpRequest, HttpResponse, HttpStatus, MimeType, StringResponse}
+import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.{Request, Response}
+import org.goldenport.protocol.handler.ProtocolHandler
+import org.goldenport.protocol.handler.egress.EgressCollection
+import org.goldenport.protocol.handler.ingress.IngressCollection
+import org.goldenport.protocol.handler.projection.ProjectionCollection
+import org.goldenport.protocol.spec as spec
 import org.goldenport.test.matchers.ConsequenceMatchers
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -151,13 +157,31 @@ class ClientAdminSystemPingSpec
 
   private def _client_component(): ClientComponent = {
     val subsystem = Subsystem("cncf-client-test")
-    val params = ComponentInitParams(subsystem)
+    val params = ComponentInitParams(subsystem, _bootstrap_core(), ComponentOrigin.Builtin)
     val component = ClientComponent.Factory.create(params).collectFirst {
       case c: ClientComponent => c
     }.getOrElse {
       fail("client component factory did not produce ClientComponent")
     }
     component
+  }
+
+  private def _bootstrap_core(): Component.Core = {
+    val name = "bootstrap"
+    val componentId = ComponentId(name)
+    val instanceId = ComponentInstanceId.default(componentId)
+    Component.Core.create(name, componentId, instanceId, _empty_protocol())
+  }
+
+  private def _empty_protocol(): Protocol = {
+    Protocol(
+      services = spec.ServiceDefinitionGroup(services = Vector.empty),
+      handler = ProtocolHandler(
+        ingresses = IngressCollection(Vector.empty),
+        egresses = EgressCollection(Vector.empty),
+        projections = ProjectionCollection()
+      )
+    )
   }
 
   private def _client_action_from_request(

@@ -24,7 +24,7 @@ object TestComponentFactory {
         Component.create(name, componentId, instanceId, protocol)
     }
     val dummy = Subsystem("test")
-    val params = ComponentInitParams(dummy)
+    val params = ComponentInitParams(dummy, c.core, ComponentOrigin.Builtin)
     c.initialize(params)
   }
 }

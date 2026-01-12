@@ -1,17 +1,24 @@
 package org.goldenport.cncf.component.admin
 
 import cats.data.NonEmptyVector
+import java.nio.file.Paths
 import org.goldenport.Consequence
+import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall, Query, ResourceAccess}
 import org.goldenport.cncf.component.{Component, ComponentInitParams}
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.component.ComponentInstanceId
 import org.goldenport.cncf.component.ComponentLogic
+import org.goldenport.cncf.config.ConfigResolver
+import org.goldenport.cncf.config.model.ConfigValue
+import org.goldenport.cncf.config.source.ConfigSources
+import org.goldenport.cncf.config.trace.ConfigOrigin
+import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.egress.{EgressCollection, RestEgress}
 import org.goldenport.protocol.handler.ingress.{IngressCollection, RestIngress}
 import org.goldenport.protocol.handler.projection.ProjectionCollection
-import org.goldenport.protocol.operation.OperationRequest
+import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 
 /*
@@ -19,7 +26,7 @@ import org.goldenport.protocol.spec as spec
  * @version Jan.  9, 2026
  * @author  ASAMI, Tomoharu
  */
-class AdminComponent(val core: Component.Core) extends Component {
+class AdminComponent(override val core: Component.Core) extends Component {
 }
 
 object AdminComponent {
@@ -28,21 +35,71 @@ object AdminComponent {
 
   object Factory extends Component.Factory {
     protected def create_Components(params: ComponentInitParams): Vector[Component] = {
-      Vector(_admin())
+      Vector(_admin(params))
     }
 
-    private def _admin(): Component = {
+    private def _admin(params: ComponentInitParams): Component = {
       val request = spec.RequestDefinition()
       val response = spec.ResponseDefinition()
-      val op = new PingOperationDefinition(request, response)
-      val service = spec.ServiceDefinition(
+      val opPing = new PingOperationDefinition(request, response)
+      val opComponentList = new ComponentListOperationDefinition(
+        request,
+        response,
+        params.subsystem
+      )
+      val opConfigShow = new ConfigShowOperationDefinition(
+        request,
+        response,
+        params.subsystem
+      )
+      val opVariationList = new VariationListOperationDefinition(
+        request,
+        response,
+        params.subsystem
+      )
+      val opExtensionList = new ExtensionListOperationDefinition(
+        request,
+        response,
+        params.subsystem
+      )
+      val serviceSystem = spec.ServiceDefinition(
         name = "system",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(op)
+          operations = NonEmptyVector.of(opPing)
+        )
+      )
+      val serviceComponent = spec.ServiceDefinition(
+        name = "component",
+        operations = spec.OperationDefinitionGroup(
+          operations = NonEmptyVector.of(opComponentList)
+        )
+      )
+      val serviceConfig = spec.ServiceDefinition(
+        name = "config",
+        operations = spec.OperationDefinitionGroup(
+          operations = NonEmptyVector.of(opConfigShow)
+        )
+      )
+      val serviceVariation = spec.ServiceDefinition(
+        name = "variation",
+        operations = spec.OperationDefinitionGroup(
+          operations = NonEmptyVector.of(opVariationList)
+        )
+      )
+      val serviceExtension = spec.ServiceDefinition(
+        name = "extension",
+        operations = spec.OperationDefinitionGroup(
+          operations = NonEmptyVector.of(opExtensionList)
         )
       )
       val services = spec.ServiceDefinitionGroup(
-        services = Vector(service)
+        services = Vector(
+          serviceSystem,
+          serviceComponent,
+          serviceConfig,
+          serviceVariation,
+          serviceExtension
+        )
       )
       val protocol = Protocol(
         services = services,
@@ -79,6 +136,273 @@ object AdminComponent {
     ): Consequence[OperationRequest] = {
       val _ = req
       Consequence.success(ComponentLogic.PingAction())
+    }
+  }
+
+  private final class ComponentListOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "list",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: org.goldenport.protocol.Request
+    ): Consequence[OperationRequest] = {
+      val _ = req
+      Consequence.success(ComponentListAction(subsystem))
+    }
+  }
+
+  private final class VariationListOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "list",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: org.goldenport.protocol.Request
+    ): Consequence[OperationRequest] = {
+      val _ = req
+      Consequence.success(VariationListAction(subsystem))
+    }
+  }
+
+  private final class ExtensionListOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "list",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: org.goldenport.protocol.Request
+    ): Consequence[OperationRequest] = {
+      val _ = req
+      Consequence.success(ExtensionListAction(subsystem))
+    }
+  }
+
+  private final class ConfigShowOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "show",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: org.goldenport.protocol.Request
+    ): Consequence[OperationRequest] = {
+      val _ = req
+      Consequence.success(ConfigShowAction(subsystem))
+    }
+  }
+
+  private final case class ComponentListAction(
+    subsystem: Subsystem
+  ) extends Query("component.list") {
+    def createCall(core: ActionCall.Core): ActionCall =
+      ComponentListActionCall(core, subsystem)
+  }
+
+  private final case class ComponentListActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    override def action: Action = core.action
+    override def accesses: Seq[ResourceAccess] = Nil
+
+    protected def procedure(): Consequence[OperationResponse] = {
+      val comps = subsystem.components
+      val text = _component_lines_(comps, "Components")
+      Consequence.success(OperationResponse.Scalar(text))
+    }
+  }
+
+  private final case class ConfigShowAction(
+    subsystem: Subsystem
+  ) extends Query("config.show") {
+    def createCall(core: ActionCall.Core): ActionCall =
+      ConfigShowActionCall(core, subsystem)
+  }
+
+  private final case class ConfigShowActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    override def action: Action = core.action
+    override def accesses: Seq[ResourceAccess] = Nil
+
+    protected def procedure(): Consequence[OperationResponse] = {
+      _config_snapshot_().map { text =>
+        OperationResponse.Scalar(text)
+      }
+    }
+  }
+
+  private final case class VariationListAction(
+    subsystem: Subsystem
+  ) extends Query("variation.list") {
+    def createCall(core: ActionCall.Core): ActionCall =
+      VariationListActionCall(core, subsystem)
+  }
+
+  private final case class VariationListActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    override def action: Action = core.action
+    override def accesses: Seq[ResourceAccess] = Nil
+
+    protected def procedure(): Consequence[OperationResponse] = {
+      _config_snapshot_().map { text =>
+        OperationResponse.Scalar(_variation_lines_(text))
+      }
+    }
+  }
+
+  private final case class ExtensionListAction(
+    subsystem: Subsystem
+  ) extends Query("extension.list") {
+    def createCall(core: ActionCall.Core): ActionCall =
+      ExtensionListActionCall(core, subsystem)
+  }
+
+  private final case class ExtensionListActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    override def action: Action = core.action
+    override def accesses: Seq[ResourceAccess] = Nil
+
+    protected def procedure(): Consequence[OperationResponse] = {
+      val comps = subsystem.components
+      val text = _extension_lines_(comps)
+      Consequence.success(OperationResponse.Scalar(text))
+    }
+  }
+
+  private def _component_origin_(comp: Component): String = {
+    comp.origin.label
+  }
+
+  private def _component_lines_(
+    comps: Seq[Component],
+    header: String
+  ): String = {
+    val lines = Vector.newBuilder[String]
+    lines += s"${header} (total: ${comps.size})"
+    lines += ""
+    comps.foreach { comp =>
+      val origin = _component_origin_(comp)
+      lines += s"- ${comp.name}"
+      lines += s"  class : ${comp.getClass.getName}"
+      lines += s"  origin: ${origin}"
+      lines += ""
+    }
+    lines.result().mkString("\n").trim
+  }
+
+  private def _config_snapshot_(): Consequence[String] = {
+    val cwd = Paths.get("").toAbsolutePath.normalize
+    val sources = ConfigSources.standard(cwd)
+    ConfigResolver.default.resolve(sources).map { resolved =>
+      val lines = Vector.newBuilder[String]
+      lines += "Config Snapshot"
+      lines += ""
+      resolved.config.values.toVector.sortBy(_._1).foreach {
+        case (key, value) =>
+          val source = resolved.trace.get(key).map(r => _origin_(r.origin)).getOrElse("unknown")
+          lines += s"${key} = ${_value_(value)}"
+          lines += s"  source: ${source}"
+          lines += ""
+      }
+      lines.result().mkString("\n").trim
+    }
+  }
+
+  private def _variation_lines_(
+    configSnapshot: String
+  ): String = {
+    val lines = Vector.newBuilder[String]
+    lines += "Variation Points"
+    lines += ""
+    configSnapshot.split("\n").foreach { line =>
+      if (line.trim.nonEmpty && !line.startsWith("Config Snapshot")) {
+        if (!line.startsWith("  ")) {
+          val parts = line.split("=", 2)
+          if (parts.length == 2) {
+            val key = parts(0).trim
+            val value = parts(1).trim
+            lines += s"- ${key}"
+            lines += s"  value : ${value}"
+          }
+        } else if (line.trim.startsWith("source:")) {
+          lines += s"  ${line.trim}"
+          lines += ""
+        }
+      }
+    }
+    lines.result().mkString("\n").trim
+  }
+
+  private def _extension_lines_(
+    comps: Seq[Component]
+  ): String = {
+    val lines = Vector.newBuilder[String]
+    lines += "Extension Points"
+    lines += ""
+    comps.foreach { comp =>
+      val origin = _component_origin_(comp)
+      lines += s"- component: ${comp.name}"
+      lines += s"  class : ${comp.getClass.getName}"
+      lines += s"  origin: ${origin}"
+      lines += ""
+    }
+    lines.result().mkString("\n").trim
+  }
+
+  private def _value_(value: ConfigValue): String = {
+    value match {
+      case ConfigValue.StringValue(v) => v
+      case ConfigValue.NumberValue(v) => v.toString
+      case ConfigValue.BooleanValue(v) => v.toString
+      case ConfigValue.ListValue(vs) => vs.map(_value_).mkString("[", ", ", "]")
+      case ConfigValue.ObjectValue(vs) =>
+        vs.map { case (k, v) => s"${k}=${_value_(v)}" }.mkString("{", ", ", "}")
+      case ConfigValue.NullValue => "null"
+    }
+  }
+
+  private def _origin_(origin: ConfigOrigin): String = {
+    origin match {
+      case ConfigOrigin.Arguments => "cli"
+      case ConfigOrigin.Environment => "env"
+      case ConfigOrigin.Default => "default"
+      case ConfigOrigin.Home => "file"
+      case ConfigOrigin.Project => "file"
+      case ConfigOrigin.Cwd => "file"
     }
   }
 }

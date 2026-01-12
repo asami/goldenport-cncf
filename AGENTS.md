@@ -148,4 +148,11 @@ Executable Specifications are organized by package.
 - "improve" architecture speculatively; ask first if intent is unclear
 
 
+## AI Working Agreements
+
+AI agents MUST follow the AI–Human Collaboration Convention.
+
+Canonical reference:
+- docs/ai/ai-human-collaboration-convention.md
+
 END OF AGENTS.md

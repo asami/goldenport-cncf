@@ -18,6 +18,7 @@ import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.service.{Service, ServiceGroup}
 import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
 import org.goldenport.cncf.unitofwork.UnitOfWork
+import scala.util.control.NonFatal
 
 /*
  * @since   Jan.  1, 2026
@@ -26,12 +27,20 @@ import org.goldenport.cncf.unitofwork.UnitOfWork
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
+  private var _core: Option[Component.Core] = None
+  private var _origin: Option[ComponentOrigin] = None
   private var _application_config: Component.ApplicationConfig = Component.ApplicationConfig()
   private var _system_context: SystemContext = SystemContext.empty
   private var _unit_of_work: UnitOfWork = DataStackFactory.create(Config.empty)
   private var _scope_context: Option[ScopeContext] = None
   private var _services: Option[ServiceGroup] = None
   private var _subsystem: Option[Subsystem] = None
+
+  override def core: Component.Core =
+    _core.getOrElse(throw new IllegalStateException("Component core is not initialized."))
+
+  def origin: ComponentOrigin =
+    _origin.getOrElse(ComponentOrigin.Unknown)
 
   def services: ServiceGroup = _services.getOrElse {
     throw new IllegalStateException("Component does not initialized.")
@@ -42,6 +51,8 @@ abstract class Component() extends Component.Core.Holder {
   lazy val logic: ComponentLogic = ComponentLogic(this, _system_context)
 
   def initialize(params: ComponentInitParams): Component = {
+    _core = Some(params.core)
+    _origin = Some(params.origin)
     _subsystem = Some(params.subsystem)
     _inherit_http_driver_(params)
     _services = Some(ServiceGroup(protocol.services.services.map(_to_service)))
@@ -205,10 +216,24 @@ object Component {
   trait Factory {
     final def create(params: ComponentInitParams): Vector[Component] = {
       val xs = create_Components(params)
-      xs.map(_.initialize(params))
+      xs.map { comp =>
+        val core = _resolve_core(params, comp)
+        comp.initialize(ComponentInitParams(params.subsystem, core, params.origin))
+      }
     }
 
     protected def create_Components(params: ComponentInitParams): Vector[Component]
+
+    private def _resolve_core(
+      params: ComponentInitParams,
+      comp: Component
+    ): Component.Core = {
+      try {
+        comp.core
+      } catch {
+        case NonFatal(_) => params.core
+      }
+    }
   }
 
   abstract class ServiceFactory extends ServiceDefinition.Factory[Service] {
@@ -233,7 +258,7 @@ object Component {
     }
   }
 
-  case class Instance(core: Core) extends Component {
+  case class Instance(override val core: Core) extends Component {
   }
 
   def create(
@@ -403,8 +428,24 @@ object ComponentLocator {
 }
 
 final case class ComponentInitParams( // TODO use config
-  subsystem: Subsystem
+  subsystem: Subsystem,
+  core: Component.Core,
+  origin: ComponentOrigin
 )
+
+sealed trait ComponentOrigin {
+  def label: String
+}
+
+object ComponentOrigin {
+  case object Builtin extends ComponentOrigin {
+    val label: String = "builtin"
+  }
+  final case class Repository(label: String) extends ComponentOrigin
+  case object Unknown extends ComponentOrigin {
+    val label: String = "unknown"
+  }
+}
 
 // trait ComponentActionEntry {
 //   def name: String

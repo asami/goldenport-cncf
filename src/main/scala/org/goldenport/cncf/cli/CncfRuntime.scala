@@ -6,6 +6,7 @@ import java.nio.file.{Files, Paths}
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
 import org.goldenport.cncf.client.{ClientComponent, GetQuery, PostCommand}
+import org.goldenport.cncf.component.{Component, ComponentInitParams}
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.{Argument, Property, Request, Response}
 import org.goldenport.protocol.operation.OperationResponse
@@ -20,12 +21,28 @@ import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime {
-  def buildSubsystem(): Subsystem = {
-    DefaultSubsystemFactory.default()
+  def buildSubsystem(
+    extraComponents: Subsystem => Seq[Component] = _ => Nil
+  ): Subsystem = {
+    val subsystem = DefaultSubsystemFactory.default()
+    val extras = extraComponents(subsystem)
+    if (extras.nonEmpty) {
+      subsystem.add(extras)
+    }
+    subsystem
   }
 
   def startServer(args: Array[String]): Unit = {
     val engine = new HttpExecutionEngine(buildSubsystem())
+    val server = new Http4sHttpServer(engine)
+    server.start(args)
+  }
+
+  def startServer(
+    args: Array[String],
+    extraComponents: Subsystem => Seq[Component]
+  ): Unit = {
+    val engine = new HttpExecutionEngine(buildSubsystem(extraComponents))
     val server = new Http4sHttpServer(engine)
     server.start(args)
   }
@@ -48,8 +65,46 @@ object CncfRuntime {
     _exit_code(result)
   }
 
+  def executeClient(
+    args: Array[String],
+    extraComponents: Subsystem => Seq[Component]
+  ): Int = {
+    val subsystem = buildSubsystem(extraComponents)
+    val result = _client_component(subsystem).flatMap { component =>
+      parseClientArgs(args).flatMap { req =>
+        _client_action_from_request(req).flatMap { action =>
+          component.execute(action)
+        }
+      }
+    }
+    result match {
+      case Consequence.Success(res) =>
+        _print_operation_response(res)
+      case Consequence.Failure(conclusion) =>
+        Console.err.println(conclusion.message)
+    }
+    _exit_code(result)
+  }
+
   def executeCommand(args: Array[String]): Int = {
     val subsystem = buildSubsystem()
+    val result = _to_request(args).flatMap { req =>
+      subsystem.execute(req)
+    }
+    result match {
+      case Consequence.Success(res) =>
+        _print_response(res)
+      case Consequence.Failure(conclusion) =>
+        Console.err.println(conclusion.message)
+    }
+    _exit_code(result)
+  }
+
+  def executeCommand(
+    args: Array[String],
+    extraComponents: Subsystem => Seq[Component]
+  ): Int = {
+    val subsystem = buildSubsystem(extraComponents)
     val result = _to_request(args).flatMap { req =>
       subsystem.execute(req)
     }
@@ -87,8 +142,77 @@ object CncfRuntime {
     _exit_code(result)
   }
 
+  def executeServerEmulator(
+    args: Array[String],
+    extraComponents: Subsystem => Seq[Component]
+  ): Int = {
+    val (includeHeader, rest) = _include_header(args)
+    val result = normalizeServerEmulatorArgs(rest) match {
+      case Consequence.Success(normalized) =>
+        HttpRequest.fromCurlLike(normalized) match {
+          case Consequence.Success(req) =>
+            val engine = new HttpExecutionEngine(buildSubsystem(extraComponents))
+            val res = engine.execute(req)
+            if (includeHeader) {
+              _print_with_header(res)
+            } else {
+              _print_body(res)
+            }
+            Consequence.success(res)
+          case Consequence.Failure(conclusion) =>
+            Console.err.println(conclusion.message)
+            Consequence.Failure(conclusion)
+        }
+      case Consequence.Failure(conclusion) =>
+        Console.err.println(conclusion.message)
+        Consequence.Failure(conclusion)
+    }
+    _exit_code(result)
+  }
   def runExitCode(args: Array[String]): Int =
     run(args)
+
+  def runWithExtraComponents(
+    args: Array[String],
+    extraComponents: Subsystem => Seq[Component]
+  ): Int = {
+    val (backendoption, actualargs) = _log_backend(args)
+    if (actualargs.isEmpty) {
+      _print_usage()
+      return 2
+    }
+    val r: Consequence[Request] =
+      Request.parseArgs(RequestDefinition(), actualargs)
+    r match {
+      case Consequence.Success(req) =>
+        if (req.operation.isEmpty) {
+          _print_usage()
+          return 2
+        }
+        val mode = RunMode.from(req.operation)
+        mode match {
+          case Some(RunMode.Server) =>
+            _install_log_backend(_decide_backend(backendoption, RunMode.Server))
+            startServer(actualargs.drop(1), extraComponents)
+            0
+          case Some(RunMode.Client) =>
+            _install_log_backend(_decide_backend(backendoption, RunMode.Client))
+            executeClient(actualargs.drop(1), extraComponents)
+          case Some(RunMode.Command) =>
+            _install_log_backend(_decide_backend(backendoption, RunMode.Command))
+            executeCommand(actualargs.drop(1), extraComponents)
+          case Some(RunMode.ServerEmulator) =>
+            _install_log_backend(_decide_backend(backendoption, RunMode.ServerEmulator))
+            executeServerEmulator(actualargs.drop(1), extraComponents)
+          case _ =>
+            _print_usage()
+            2
+        }
+      case Consequence.Failure(conclusion) =>
+        Console.err.println(conclusion.message)
+        _exit_code(Consequence.Failure(conclusion))
+    }
+  }
 
   def run(args: Array[String]): Int = {
     // TODO use Request.parseArgs

@@ -99,7 +99,7 @@ platform contracts. Phase 3 starts only after Phase 2.6 exit criteria are met.
 - `docs/notes/phase-2.5-observability-overview.md`
 - `docs/notes/interrupt-ticket.md`
 
-### Phase 2.8: Infrastructure Hygiene
+### Phase 2.8: Deferred Development Resolution
 
 **Purpose**
 Resolve architectural technical debt discovered during Phase 2.6 without adding new features.
@@ -154,10 +154,34 @@ Phase 3.0 starts only after Phase 2.9 is complete.
 - Not driven by demo requirements.
 - Artifact (notes): `docs/notes/cml-crud-domain-subsystem-bootstrap.md`.
 
+### Phase 4: State Machine Foundation
+- Goal: introduce a first-class state machine model usable by domain subsystems and components.
+- Scope:
+- Define state / transition / guard / effect representation.
+- Enable introspection outputs (e.g., transition table / diagram source).
+- Provide runtime hooks for validating transitions during execution.
+- Non-goals:
+- No workflow engine.
+- No persistence/event sourcing requirements.
+- Artifact (notes): `docs/notes/state-machine-foundation.md`.
+
+### Phase 5: Event Foundation
+- Goal: introduce a first-class event model for domain and runtime observability.
+- Scope:
+- Define event envelope (id, time, correlation, payload).
+- Define event emission points from execution / domain actions.
+- Define minimal event handling contract (publish/subscribe boundary).
+- Non-goals:
+- No event sourcing mandate.
+- No distributed saga/orchestration engine.
+- Artifact (notes): `docs/notes/event-foundation.md`.
+
 ## 4. Relationship Between Phases
 - Later phases depend on earlier phases.
 - Phase 1.5 constrains Phase 2 and Phase 3.
 - Execution model must not be changed by demo needs.
+- Phase 4 depends on Phase 3 outputs (domain model / CRUD scaffolding as baseline consumers).
+- Phase 5 depends on Phase 4 (events may reference state transitions and state machine lifecycle).
 
 ## 5. How to Read the Documents
 - CNCF developers: use this strategy to sequence work.

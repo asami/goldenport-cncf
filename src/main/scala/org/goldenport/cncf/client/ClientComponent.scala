@@ -23,7 +23,7 @@ import java.nio.charset.StandardCharsets
  * @version Jan. 11, 2026
  * @author  ASAMI, Tomoharu
  */
-final class ClientComponent(val core: Component.Core) extends Component {
+final class ClientComponent(override val core: Component.Core) extends Component {
 }
 
 object ClientComponent {

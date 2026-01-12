@@ -2197,3 +2197,10 @@ The authoritative specification is defined in:
 
 - `camelCase` implies public or externally callable semantics and must never be used for private or helper methods.
 - Leading and/or trailing underscores are used intentionally as a visual and semantic signal of non‑API (internal or helper) code.
+
+## AI Working Agreements
+
+AI agents MUST follow the AI–Human Collaboration Convention.
+
+Canonical reference:
+- docs/ai/ai-human-collaboration-convention.md

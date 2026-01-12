@@ -5,12 +5,18 @@ import java.nio.charset.StandardCharsets
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
 import org.goldenport.cncf.action.Action
-import org.goldenport.cncf.component.{Component, ComponentInitParams}
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentInitParams, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.http.{HttpRequest, HttpResponse}
+import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.{Argument, Property, Request}
+import org.goldenport.protocol.handler.ProtocolHandler
+import org.goldenport.protocol.handler.egress.EgressCollection
+import org.goldenport.protocol.handler.ingress.IngressCollection
+import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.protocol.spec as spec
 import org.goldenport.test.matchers.ConsequenceMatchers
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -174,7 +180,11 @@ class ClientComponentSpec
   private def _client_component(
     driver: FakeHttpDriver
   ): ClientComponent = {
-    val params = ComponentInitParams(Subsystem("client-component-spec"))
+    val params = ComponentInitParams(
+      Subsystem("client-component-spec"),
+      _bootstrap_core(),
+      ComponentOrigin.Builtin
+    )
     val component = ClientComponent.Factory.create(params).collectFirst {
       case c: ClientComponent => c
     }.getOrElse {
@@ -184,6 +194,24 @@ class ClientComponentSpec
       Component.ApplicationConfig(httpDriver = Some(driver))
     )
     component
+  }
+
+  private def _bootstrap_core(): Component.Core = {
+    val name = "bootstrap"
+    val componentId = ComponentId(name)
+    val instanceId = ComponentInstanceId.default(componentId)
+    Component.Core.create(name, componentId, instanceId, _empty_protocol())
+  }
+
+  private def _empty_protocol(): Protocol = {
+    Protocol(
+      services = spec.ServiceDefinitionGroup(services = Vector.empty),
+      handler = ProtocolHandler(
+        ingresses = IngressCollection(Vector.empty),
+        egresses = EgressCollection(Vector.empty),
+        projections = ProjectionCollection()
+      )
+    )
   }
 
   private def _execute_request(
