@@ -15,6 +15,8 @@ import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.spec.RequestDefinition
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 import org.goldenport.cncf.http.{Http4sHttpServer, HttpExecutionEngine}
+import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
+import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
 
 /*
@@ -95,7 +97,7 @@ object CncfRuntime {
 
   def executeCommand(args: Array[String]): Int = {
     val subsystem = buildSubsystem(mode = Some(RunMode.Command))
-    val result = _to_request(args).flatMap { req =>
+    val result = _to_request(subsystem, args).flatMap { req =>
       subsystem.execute(req)
     }
     result match {
@@ -112,7 +114,7 @@ object CncfRuntime {
     extraComponents: Subsystem => Seq[Component]
   ): Int = {
     val subsystem = buildSubsystem(extraComponents, Some(RunMode.Command))
-    val result = _to_request(args).flatMap { req =>
+    val result = _to_request(subsystem, args).flatMap { req =>
       subsystem.execute(req)
     }
     result match {
@@ -182,19 +184,22 @@ object CncfRuntime {
     extraComponents: Subsystem => Seq[Component]
   ): Consequence[Response] = {
     val subsystem = buildSubsystem(extraComponents, Some(RunMode.Script))
-    _to_request_script(args).flatMap { req =>
+    _to_request_script(subsystem, args).flatMap { req =>
       subsystem.execute(req)
     }
   }
 
-  private def _to_request_script(args: Array[String]) = {
+  private def _to_request_script(
+    subsystem: Subsystem,
+    args: Array[String]
+  ) = {
     val in = args.toVector
     (in.lift(0), in.lift(1), in.lift(2)) match {
       case (Some("SCRIPT"), Some("DEFAULT"), Some("RUN")) =>
-        parseCommandArgs(args)
+        parseCommandArgs(subsystem, args)
       case _ =>
         val xs = Vector("SCRIPT", "DEFAULT", "RUN") ++ in
-        parseCommandArgs(xs.toArray)
+        parseCommandArgs(subsystem, xs.toArray)
     }
   }
 
@@ -387,9 +392,11 @@ object CncfRuntime {
       case None => Consequence.failure("client component not available")
     }
 
-  private def _to_request(args: Array[String]): Consequence[Request] = {
-    parseCommandArgs(args)
-  }
+  private def _to_request(
+    subsystem: Subsystem,
+    args: Array[String]
+  ): Consequence[Request] =
+    parseCommandArgs(subsystem, args)
 
   private def _apply_system_context(
     subsystem: Subsystem,
@@ -539,26 +546,69 @@ object CncfRuntime {
   }
 
   private[cli] def parseCommandArgs(
+    subsystem: Subsystem,
     args: Array[String]
-  ): Consequence[Request] = {
-    if (args.isEmpty) {
-      Consequence.failure("command name is required")
-    } else {
-      _parse_component_service_operation(args.toIndexedSeq).map {
-        case (component, service, operation) =>
-          Request.of(
-            component = component,
-            service = service,
-            operation = operation,
-            arguments = args.toList.drop(3).zipWithIndex.map {
-              (x, i) => Argument(s"arg${i + 1}", x)
-            },
-            switches = Nil,
-            properties = Nil
+  ): Consequence[Request] =
+    _selectorAndArguments(args.toIndexedSeq).flatMap { case (selector, tail) =>
+      subsystem.resolver.resolve(selector, allowPrefix = false, allowImplicit = false) match {
+        case ResolutionResult.Resolved(_, component, service, operation) =>
+          val arguments = _build_request_arguments(tail)
+          Consequence.success(
+            Request.of(
+              component = component,
+              service = service,
+              operation = operation,
+              arguments = arguments,
+              switches = Nil,
+              properties = Nil
+            )
           )
+        case ResolutionResult.NotFound(stage, input) =>
+          Consequence.failure(s"${stage.toString.toLowerCase} not found: $input")
+        case ResolutionResult.Ambiguous(input, candidates) =>
+          Consequence.failure(s"ambiguous selector '$input': ${candidates.mkString(", ")}")
+        case ResolutionResult.Invalid(reason) =>
+          Consequence.failure(s"invalid selector: $reason")
+      }
+    }
+
+  private def _selectorAndArguments(
+    args: Seq[String]
+  ): Consequence[(String, Seq[String])] = {
+    args.toVector match {
+      case Vector() =>
+        Consequence.failure("command name is required")
+      case Vector(component, service, operation, rest @ _*) =>
+        Consequence.success((s"$component.$service.$operation", rest.toVector))
+      case Vector(single, rest @ _*) if single.contains("/") =>
+        _selectorFromPath(single, "/").map(_ -> rest.toVector)
+      case Vector(single, rest @ _*) =>
+        Consequence.success((single, rest.toVector))
+    }
+  }
+
+  private def _selectorFromPath(
+    value: String,
+    delimiter: String
+  ): Consequence[String] = {
+    val segments = value.split(delimiter).toVector.filter(_.nonEmpty)
+    if (segments.size == 3) {
+      Consequence.success(segments.mkString("."))
+    } else {
+      delimiter match {
+        case "/" => Consequence.failure("command path must be /component/service/operation")
+        case "." => Consequence.failure("command must be component.service.operation")
+        case _ => Consequence.failure("command selector is invalid")
       }
     }
   }
+
+  private def _build_request_arguments(
+    values: Seq[String]
+  ): List[Argument] =
+    values.zipWithIndex.map { case (value, index) =>
+      Argument(s"arg${index + 1}", value)
+    }.toList
 
   private def _parse_component_service_operation(
     args: Seq[String]

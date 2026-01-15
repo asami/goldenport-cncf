@@ -1,5 +1,10 @@
 package org.goldenport.cncf.bootstrap
 
+/*
+ * @since   Jan. 12, 2026
+ * @version Jan. 12, 2026
+ * @author  ASAMI, Tomoharu
+ */
 trait BootstrapLog {
   def info(msg: String): Unit
   def warn(msg: String): Unit

@@ -11,14 +11,15 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  9, 2026
- * @version Jan.  9, 2026
+ * @version Jan. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
 
   "CncfRuntime.parseCommandArgs" should {
     "parse component service operation form" in {
-      CncfRuntime.parseCommandArgs(Array("admin", "system", "ping")) match {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      CncfRuntime.parseCommandArgs(subsystem, Array("admin", "system", "ping")) match {
         case Consequence.Success(req: Request) =>
           req.component.getOrElse(fail("missing component")).shouldBe("admin")
           req.service.getOrElse(fail("missing service")).shouldBe("system")
@@ -29,7 +30,8 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
     }
 
     "parse component.service.operation form" in {
-      CncfRuntime.parseCommandArgs(Array("admin.system.ping")) match {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      CncfRuntime.parseCommandArgs(subsystem, Array("admin.system.ping")) match {
         case Consequence.Success(req: Request) =>
           req.component.getOrElse(fail("missing component")).shouldBe("admin")
           req.service.getOrElse(fail("missing service")).shouldBe("system")

@@ -459,6 +459,12 @@ Acceptance:
 - A new reader can follow the article
   and successfully execute every demo.
 
+Note:
+- When using GitHub Packages as a Maven repository,
+  users must configure a Personal Access Token (PAT)
+  with `read:packages` permission.
+- See: ~/.config/coursier/credentials.properties
+- This is a GitHub Packages requirement, not a CNCF constraint.
 
 Publication Constraint (Non-blocking)
 ----------------------------------------------------------------------

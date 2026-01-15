@@ -20,6 +20,8 @@ import org.goldenport.cncf.component.ComponentLocator.NameLocator
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind, SystemContext}
 import org.goldenport.cncf.http.HttpDriver
 
+import org.goldenport.cncf.subsystem.resolver.OperationResolver
+
 /*
  * @since   Jan.  7, 2026
  * @version Jan. 15, 2026
@@ -32,6 +34,7 @@ final class Subsystem(
   httpdriver: Option[HttpDriver] = None
 ) {
   private var _component_space: ComponentSpace = ComponentSpace()
+  private var _resolver: OperationResolver = OperationResolver.empty
   private val _http_driver: Option[HttpDriver] = httpdriver
 
   def httpDriver: Option[HttpDriver] = _http_driver
@@ -39,6 +42,7 @@ final class Subsystem(
   def add(comps: Seq[Component]): Subsystem = {
     val injected = comps.map(x => _inject_context(x.name, x))
     _component_space = _component_space.add(injected)
+    _rebuildResolver()
     this
   }
 
@@ -98,6 +102,13 @@ final class Subsystem(
   //   )
 
   def components: Vector[Component] = _component_space.components
+
+  def resolver: OperationResolver = _resolver
+
+  def operationResolver: OperationResolver = _resolver
+
+  private def _rebuildResolver(): Unit =
+    _resolver = OperationResolver.build(_component_space.components)
 
   def executeHttp(req: HttpRequest): HttpResponse = {
     _resolve_route(req) match {

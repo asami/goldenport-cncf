@@ -188,6 +188,168 @@ Once the operation resolution mechanism is finalized, this test should be re-ena
 
 ---
 
+## Design Record: Operation Resolution vs Configuration (Phase 2.8)
+
+This section records clarified design decisions derived from document review
+during Phase 2.8. These decisions are considered **locked for this phase**
+and are intended to prevent accidental semantic drift.
+
+### Resolver Core vs Configuration
+
+- Operation resolution logic (Component / Service / Operation lookup) is
+  **independent of configuration source resolution**.
+- Configuration resolution is responsible only for:
+  - discovery (HOME / PROJECT / CWD)
+  - source ordering
+  - merging
+  - normalization into a semantic configuration model
+- Resolver semantics (alias, prefix matching, default rules) must not depend
+  on raw configuration paths, files, or DSL fragments.
+
+This separation is consistent with:
+- `config-resolution.md` (resolution ≠ semantics)
+- `configuration-model.md` (no raw config exposure to domain logic)
+
+### Prefix Matching (Resolver Core)
+
+- The resolver core uses **prefix matching** as its primary search strategy.
+- Prefix matching applies uniformly to:
+  - component
+  - service
+  - operation
+- Resolution proceeds deterministically:
+  - unique match → Resolved
+  - no match → NotFound
+  - multiple matches → Ambiguous (explicit candidate list)
+- Prefix matching is part of the canonical resolver and is **always enabled**.
+- This mechanism replaces earlier notions of “incremental matching”.
+
+### Single Operation Optimization (CLI / Script Only)
+
+This phase introduces a **limited UX optimization** for CLI and Script usage
+when exactly one non-builtin operation exists.
+
+This optimization is intentionally conservative and MUST NOT affect
+application-level inputs or resolver core semantics.
+
+#### Scope
+
+- Applies only to CLI / Script entry points.
+- Does NOT apply to HTTP or application payload resolution.
+- Executed only after canonical resolver lookup results in NotFound.
+
+#### Resolution Rules
+
+- Prefix matching is explicitly **disabled** for this optimization.
+- Alias expansion is NOT applied.
+- Implicit context resolution is NOT applied.
+- The selector MUST be a fully qualified operation name (FQN):
+  `component.service.operation`
+- Operation name-only inputs (e.g. `ping`, `find`, `test.html`) are
+  explicitly excluded to avoid collisions with built-in or shell-level commands.
+
+### Single Operation Optimization — Finalized Semantics (Phase 2.8)
+
+This section records the finalized semantics confirmed by
+`OperationResolverSpec` and test completion.
+
+#### Positioning
+
+- Single Operation Optimization is a **CLI / Script–only UX optimization**.
+- It is **not part of the canonical resolver core semantics**.
+- It is evaluated **only as a fallback** when canonical resolution
+  results in `NotFound`.
+
+#### Rules
+
+- The optimization applies **only after** canonical resolution fails.
+- **Prefix matching is NOT applied**.
+- **0-dot selectors are NOT eligible**.
+  - Inputs such as `ping`, `find`, or file-like strings (e.g. `test.html`)
+    must not be captured by this optimization.
+- The selector MUST be a fully qualified operation name (FQN):
+  `component.service.operation`.
+- Resolution uses **exact match only**.
+- The candidate set is limited to **non-builtin components**.
+- Resolution succeeds **only if exactly one operation exists globally**.
+- Otherwise, the result remains `NotFound` or `Ambiguous`.
+
+#### Rationale
+
+This design prevents accidental capture of:
+- shell-level commands
+- built-in admin operations
+- application payload strings
+
+while still allowing concise CLI / Script usage when the target
+operation is globally unique and explicitly specified.
+
+#### Explicit Non-Goals
+
+- No implicit defaults
+- No alias expansion
+- No heuristic or incremental matching
+- No application-level input relaxation
+
+These constraints are intentional and locked for Phase 2.8.
+
+#### Semantics
+
+- Candidate evaluation uses **exact match only**.
+- Target scope is limited to **non-builtin components**.
+- Resolution succeeds only if the candidate set is globally unique:
+  - component = 1
+  - service = 1
+  - operation = 1
+- Otherwise, the result MUST remain NotFound or Ambiguous.
+
+#### Rationale
+
+This optimization is designed to reduce verbosity for users who already
+have precise knowledge of the target operation, while preserving strict,
+deterministic resolver semantics.
+
+Potential conflicts with application-level payload strings
+(e.g. `admin.default.ping`) are intentionally out of scope for Phase 2.8
+and should be handled by higher-level command or script structures
+(e.g. `SCRIPT.DEFAULT.RUN`).
+
+### Alias Handling (Configuration-Driven)
+
+- Aliases are **not resolver logic** but **configuration-provided metadata**.
+- Alias expansion is:
+  - deterministic
+  - based on exact match only
+  - applied before resolver lookup
+- Alias definitions must be supplied via the normalized configuration model.
+- Resolver implementations must treat aliases as immutable input data and
+  must not embed alias definitions in code.
+
+Alias implementation is deferred until full configuration support is in place.
+
+### Explicitly Deferred Items
+
+The following items are intentionally deferred and must not be implemented
+before the above rules are completed:
+
+- Implicit context-based resolution (component / service defaults)
+- Interactive or REPL-style input abbreviation
+- Non-deterministic or heuristic resolution shortcuts
+
+These items depend on runtime context or UX policy and are out of scope for
+the resolver core in Phase 2.8.
+
+### Rationale
+
+The above decisions ensure that:
+
+- Resolver behavior is deterministic and testable
+- Configuration changes do not introduce semantic branching
+- CLI / Script / HTTP surfaces can share a single canonical resolver
+- Future UX-oriented extensions can be layered without rewriting core logic
+
+---
+
 ### Phase 2.8 completion condition (related)
 
 This reference item is considered resolved when:

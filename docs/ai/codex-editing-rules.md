@@ -31,6 +31,38 @@ Codex is an **execution tool**, not a design agent.
 
 ## Operating Modes
 
+### Mode Selection Rules (Normative)
+
+The execution mode MUST be determined explicitly or implicitly
+from the instruction.
+
+#### Explicit Mode Declaration
+If the instruction explicitly declares a mode (Mode A / B / C),
+Codex MUST follow it.
+
+#### Investigation Trigger (Implicit Mode C)
+If the instruction explicitly includes phrases such as:
+- 調査
+- 提案
+- 調査＆提案
+- audit
+- investigation
+- analysis only
+
+Codex MUST operate in Mode C (Investigate & Propose),
+even if editing might appear possible.
+
+#### Default
+If no investigation-related intent is expressed,
+Codex operates in Mode A or Mode B as appropriate.
+
+#### Conflict
+If an instruction contains both:
+- investigation intent, and
+- explicit edit / patch / implement intent
+
+Codex MUST STOP and request clarification.
+
 ### Mode A: Design / Spec Changes (Strict Scope)
 
 Use this mode for any work that changes behavior, specifications, architecture, or tests.
