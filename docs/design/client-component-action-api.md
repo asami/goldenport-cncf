@@ -58,7 +58,10 @@ END.
 
 ### Output Contract (curl-equivalent)
 - For HTTP-backed `OperationResponse`, the client prints the HTTP response body to stdout.
-- This aligns `run client ...` output with curl/server-emulator output (e.g. `ok` for `admin system ping`).
+- This aligns `run client ...` output with curl/server-emulator output (e.g. the ping runtime text block for `admin system ping`).
+
+Canonical output formats, default presentation, and recommended suffixes
+are specified in `docs/spec/output-format.md`.
 
 ### Configuration
 - `cncf.http.driver = real | fake` (default: real)

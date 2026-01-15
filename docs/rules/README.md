@@ -17,3 +17,6 @@ define shared structure and boundaries across the codebase.
 
 - **context-and-scope.md**  
   Architecture rules for context and scope separation across runtime boundaries.
+- document-boundary.md — Document roles, immutability, and evolution rules (anchor/process vs design/spec vs notes)
+- **stage-status-and-checklist-convention.md**  
+  Canonical rule for Stage Status blocks and checklist semantics.

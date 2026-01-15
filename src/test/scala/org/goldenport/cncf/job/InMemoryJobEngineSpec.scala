@@ -10,20 +10,20 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  4, 2026
- * @version Jan.  4, 2026
+ * @version Jan. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class InMemoryJobEngineSpec extends AnyWordSpec with Matchers {
   "InMemoryJobEngine" should {
     "execute a Command as a Job and store the result" in {
-      val action = new Command("test") {
+      val action = new Command() {
+        val name = "test"
         override def createCall(core: ActionCall.Core): ActionCall = {
           val actionself = this
           val _core_ = core
           new ActionCall {
             override val core: ActionCall.Core = _core_
             override def action: Action = actionself
-            def accesses: Seq[ResourceAccess] = Nil
             def execute(): Consequence[OperationResponse] =
               Consequence.success(OperationResponse.Scalar("ok"))
           }

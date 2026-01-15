@@ -189,6 +189,10 @@ Phase 3.0 starts only after Phase 2.9 is complete.
 - AI assistants (Codex / ChatGPT): treat this as the top-level planning context.
 - Notes contain execution details and results for each phase.
 
+## Process Status Pointers
+- Active checklist: `docs/notes/phase-2.6-demo-done-checklist.md`
+- Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
+
 ## 6. Explicit Non-Goals
 - No skipping phases.
 - No CRUD before demo foundation.

@@ -14,7 +14,7 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan.  6, 2026
+ * @version Jan. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMatchers {
@@ -75,7 +75,8 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
     val uow = new UnitOfWork(ctx, dataStore, eventEngine, recorder)
     runtime.bind(uow)
 
-    val action = new Command("test") {
+    val action = new Command() {
+      val name = "test"
       def createCall(core: ActionCall.Core): ActionCall =
         new TestActionCall(core)
     }
@@ -87,7 +88,6 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
     override val core: ActionCall.Core
   ) extends ActionCall {
     override def action: Action = core.action
-    override def accesses: Seq[ResourceAccess] = Nil
     override def execute(): Consequence[OperationResponse] =
       Consequence.success(OperationResponse.Scalar("ok"))
   }

@@ -10,38 +10,33 @@ import org.goldenport.bag.TextBag
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 11, 2026
+ * @version Jan. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class HttpCommand(
-  name: String
-) extends Command(name)
+) extends Command()
 
 abstract class HttpQuery(
-  name: String
-) extends Query(name)
+) extends Query()
 
-final class PostCommand(
+final case class PostCommand(
   name: String,
-  val request: HttpRequest
-) extends HttpCommand(name) {
+  request: HttpRequest
+) extends HttpCommand() {
   override def createCall(core: ActionCall.Core): ActionCall =
     ClientHttpPostCall(core, request)
 }
 
-final class GetQuery(
+final case class GetQuery(
   name: String,
-  val request: HttpRequest
-) extends HttpQuery(name) {
+  request: HttpRequest
+) extends HttpQuery() {
   override def createCall(core: ActionCall.Core): ActionCall =
     ClientHttpGetCall(core, request)
 }
 
 sealed trait ClientHttpActionCall extends FunctionalActionCall with OperationCallHttpPart {
   def request: HttpRequest
-
-  override def action: Action = core.action
-  def accesses: Seq[ResourceAccess] = Nil
 
   protected final def build_Program: ExecUowM[OperationResponse] = {
     Functor[ExecUowM].map(_uow(request))(OperationResponse.Http.apply)

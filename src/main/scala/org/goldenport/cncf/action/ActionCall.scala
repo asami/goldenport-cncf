@@ -18,16 +18,14 @@ import org.goldenport.cncf.unitofwork.UnitOfWork
  *  version Dec. 31, 2025
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
- * @version Jan. 11, 2026
+ * @version Jan. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
   extends ActionCall.Core.Holder
   with OperationCallDataStorePart {
   def name: String = objectToSnakeName("ActionCall", this)
-
-  def action: Action
-  def accesses: Seq[ResourceAccess]
+  def accesses: Vector[ResourceAccess] = Vector.empty
 
   def execute(): Consequence[OperationResponse]
 
@@ -74,10 +72,7 @@ abstract class FunctionalActionCall extends ActionCall {
 }
 
 abstract class ProcedureActionCall extends ActionCall {
-  protected def procedure(): Consequence[OperationResponse]
-
-  final override def execute(): Consequence[OperationResponse] =
-    procedure()
+  override def execute(): Consequence[OperationResponse]
 }
 
 object ActionCall {

@@ -64,6 +64,7 @@ Cloud Native Component Framework provides:
 - Clear separation between domain logic and infrastructure
 - Compatibility with AI-assisted and knowledge-driven workflows
 - Design and rules index: `docs/rules/README.md`
+- Phase / Stage process overview: `docs/strategy/cncf-development-strategy.md`
 
 ---
 

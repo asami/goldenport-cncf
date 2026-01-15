@@ -372,6 +372,90 @@ derived_status
 
 ---
 
+# Scala 3 Indentation Style Rule
+
+This project adopts the following rule for Scala 3 indentation syntax.
+
+## Rule
+
+**Scala 3 indentation syntax MUST be used only at AST leaf levels.**
+
+Indent syntax is allowed only for:
+- Small expression blocks
+- Lambda bodies
+- DSL terminal expressions
+- Method-local logic
+- Script-level execution bodies
+
+Indent syntax MUST NOT be used for:
+- Top-level structural definitions
+- class / trait / object bodies
+- Component / Service / Operation structural composition
+- Public API shape definition
+- DSL structure that represents domain or framework hierarchy
+
+## Rationale
+
+Using indentation syntax for structural code:
+
+- Obscures the actual AST structure
+- Makes DSL boundaries unclear
+- Breaks readability in large-scale designs
+- Degrades diff quality and reviewability
+- Significantly reduces AI-assisted reasoning accuracy
+
+In this codebase, indentation syntax is treated as a
+**presentation convenience**, not a **structural language feature**.
+
+Braces (`{ ... }`) are the canonical representation of structure.
+
+## Examples
+
+### Allowed (AST leaf)
+
+```scala
+operation("greeting") {
+  run { _ =>
+    "hello"
+  }
+}
+```
+
+```scala
+run { _ =>
+  "hello"
+}
+```
+
+### Forbidden (structural level)
+
+```scala
+class MyComponent:
+  service("x"):
+    operation("y"):
+      ...
+```
+
+The above MUST be written using braces:
+
+```scala
+class MyComponent {
+  service("x") {
+    operation("y") {
+      ...
+    }
+  }
+}
+```
+
+## Design Intent
+
+- Structural clarity has priority over syntactic brevity
+- DSLs must preserve explicit hierarchy
+- AST shape must be visually obvious
+- Formatting must support long-term evolution and AI collaboration
+
+---
 
 ## Design Principles
 

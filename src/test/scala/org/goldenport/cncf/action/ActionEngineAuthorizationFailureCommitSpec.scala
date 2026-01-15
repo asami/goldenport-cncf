@@ -14,7 +14,7 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan.  6, 2026
+ * @version Jan. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngineAuthorizationFailureCommitSpec extends AnyWordSpec with Matchers with ConsequenceMatchers{
@@ -35,7 +35,8 @@ class ActionEngineAuthorizationFailureCommitSpec extends AnyWordSpec with Matche
       var buildCalled = false
       val engine = new DenyingActionEngine
 
-      val action = new Query("test-action") {
+      val action = new Query() {
+        val name = "test-action"
         def createCall(core: ActionCall.Core): ActionCall =
           new TestActionCall(core)
       }
@@ -71,8 +72,6 @@ class ActionEngineAuthorizationFailureCommitSpec extends AnyWordSpec with Matche
   private final class TestActionCall(
     override val core: ActionCall.Core
   ) extends ActionCall {
-    override def action: Action = core.action
-    override def accesses: Seq[ResourceAccess] = Nil
     override def execute(): Consequence[OperationResponse] =
       Consequence.success(OperationResponse.Scalar("ok"))
   }

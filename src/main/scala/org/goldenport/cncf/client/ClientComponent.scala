@@ -3,7 +3,8 @@ package org.goldenport.cncf.client
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
-import org.goldenport.cncf.component.{Component, ComponentInitParams}
+import org.goldenport.cncf.component.{Component, ComponentInit}
+import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.component.ComponentInstanceId
 import org.goldenport.protocol.Protocol
@@ -20,10 +21,10 @@ import java.nio.charset.StandardCharsets
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 11, 2026
+ * @version Jan. 14, 2026
  * @author  ASAMI, Tomoharu
  */
-final class ClientComponent(override val core: Component.Core) extends Component {
+final class ClientComponent() extends Component {
 }
 
 object ClientComponent {
@@ -31,11 +32,15 @@ object ClientComponent {
   val componentId = ComponentId(name) // TODO static
 
   object Factory extends Component.Factory {
-    protected def create_Components(params: ComponentInitParams): Vector[Component] = {
+    protected def create_Components(params: ComponentCreate): Vector[Component] = {
       Vector(_client())
     }
 
     private def _client(): Component = {
+      ClientComponent()
+    }
+
+    protected def create_Core(params: ComponentCreate, comp: Component): Component.Core = {
       val request = spec.RequestDefinition()
       val response = spec.ResponseDefinition()
       val opget = new ClientGetOperationDefinition(request, response)
@@ -58,13 +63,12 @@ object ClientComponent {
         )
       )
       val instanceid = ComponentInstanceId.default(componentId)
-      val core = Component.Core.create(
+      Component.Core.create(
         name,
         componentId,
         instanceid,
         protocol
       )
-      ClientComponent(core)
     }
   }
 

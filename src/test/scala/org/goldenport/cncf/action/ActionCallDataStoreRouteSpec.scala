@@ -17,7 +17,7 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan. 10, 2026
+ * @version Jan. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionCallDataStoreRouteSpec
@@ -81,7 +81,8 @@ class ActionCallDataStoreRouteSpec
     value: String,
     ctx: ExecutionContext
   ): ActionCall = {
-    val action = new Command("datastore-action") {
+    val action = new Command() {
+      val name = "datastore-action"
       def createCall(core: ActionCall.Core): ActionCall =
         new DataStoreActionCall(core, entityid, id, value)
     }
@@ -95,8 +96,6 @@ class ActionCallDataStoreRouteSpec
     id: String,
     value: String
   ) extends ActionCall {
-    override def action: Action = core.action
-    override def accesses: Seq[ResourceAccess] = Nil
     override def execute(): Consequence[OperationResponse] = {
       val record = Record.data("id" -> id, "value" -> value)
       // DataStore ops in UnitOfWorkOp are not wired yet; use direct DataStore API.

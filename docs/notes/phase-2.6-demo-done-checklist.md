@@ -1,5 +1,14 @@
 # Phase 2.6 DONE Checklist — Demo Completion
-status = draft
+status = done
+
+Position in Process
+-------------------
+- This checklist is the authoritative source of truth for
+  current work status in Phase 2.6.
+- Phase / Stage definitions are defined in:
+  - docs/strategy/cncf-development-strategy.md
+- Stage Status and checklist semantics are defined in:
+  - docs/rules/stage-status-and-checklist-convention.md
 
 ## Scope
 - Phase 2.6 completes remaining demo stages defined in `docs/notes/helloworld-demo-strategy.md`
@@ -21,7 +30,11 @@ via Subsystem.executeHttp.
   - command admin.system.ping
   - command spec export openapi
 - [x] Evidence (verified): sample output or endpoint is documented
-  - Expected stdout: ok
+  - Expected stdout:
+    - runtime: cncf
+    - mode: command
+    - subsystem: cncf
+    - version: 0.3.0-SNAPSHOT
   - Expected stdout: JSON containing "openapi" and "paths"
 - [x] Evidence (verified): how to verify is documented
   - Specs:
@@ -44,12 +57,18 @@ Status: DONE (2026-01-11)
 
 $ sbt 'run server'
 $ sbt 'run client admin system ping --no-exit'
-=> ok
+=> runtime: cncf
+=> mode: server
+=> subsystem: cncf
+=> version: 0.3.0-SNAPSHOT
 
 #### Evidence (fake http)
 
 $ sbt -Dcncf.http.driver=fake 'run client admin system ping --no-exit'
-=> ok
+=> runtime: cncf
+=> mode: client
+=> subsystem: cncf
+=> version: 0.3.0-SNAPSHOT
 
 Notes:
 - CLI -> ClientComponent -> HttpDriver -> Server Action path verified.
@@ -61,7 +80,11 @@ Notes:
   - sbt 'run client admin system ping --no-exit'
   - sbt -Dcncf.http.driver=fake 'run client admin system ping --no-exit'
 - [x] Evidence: expected stdout/stderr + exit code behavior documented
-  - Expected stdout: ok
+  - Expected stdout:
+    - runtime: cncf
+    - mode: server
+    - subsystem: cncf
+    - version: 0.3.0-SNAPSHOT
   - Expected stderr: (empty)
   - Exit behavior: process continues with --no-exit
 - [x] Evidence: end-to-end example included
@@ -225,6 +248,7 @@ Deferred items (all relocated):
 - [x] Full integration contract: config → initialize → runtime  
       -> Relocated to: Phase 2.8 (Deferred Development Resolution)
 
+
 Acceptance:
 - [x] All deferred items are explicitly listed.
 - [x] Each item has a single, named relocation target.
@@ -233,47 +257,230 @@ Acceptance:
 Stage 5 is DONE when Steps 1–3 evidence is verified
 and all deferred items above are relocated.
 
+
 ### 4. Demo consolidation (Stage 6)
 
-Stage 6 consolidates all demo stages into a coherent, reproducible flow
-that serves as the primary entry point for new users.
+Status
+----------------------------------------------------------------------
+- Current status: DONE
+- Current step: Completed
+- Status owner: Phase 2.6 / Stage 6
+- Status update rule:
+  - Update this field when a checklist step is completed
+  - Stage is CLOSED only when all Stage 6 checkboxes are checked
 
-The goal is not to introduce new behavior, but to present existing demos
-in a clear, linear, and discoverable form.
+Stage 6 completes when the CNCF introduction & demo article
+on SimpleModeling.org has all embedded demos fully working.
 
-#### Step 1: Single entry point
+Stage 6 is article-driven, but remains contract-based.
 
-- Provide one clear starting document for all demos.
-- All demo paths originate from this entry point.
+
+Purpose
+----------------------------------------------------------------------
+- Introduce CNCF to new users via a SimpleModeling.org article
+- Use the article as the single narrative entry point
+- Ensure every demo described in the article actually works end-to-end
+
+This stage finalizes demo usability, not platform redesign.
+
+
+Stage 6 Completion Definition (Overridden / Extended)
+----------------------------------------------------------------------
+Stage 6 is DONE when:
+
+- The CNCF introduction & demo article exists (draft level)
+- Every demo described in the article runs successfully
+- All demo commands are copy-paste reproducible
+- Any required fixes are completed (no known broken demo remains)
+
+
+Allowed Work in Stage 6
+----------------------------------------------------------------------
+- Demo plan design for the article
+- Drafting the demo article
+- Running demos described in the article
+- Bug fixes required to make demos work
+- Minimal supporting implementation required for demo correctness
+
+Disallowed:
+- Quick hacks purely for presentation
+- Untracked design changes
+- Silent contract changes
+
+
+Stage 6 Checklist (Engineering Management)
+----------------------------------------------------------------------
+
+#### Step 1: Demo plan for article
+- [x] Demo article scope and narrative flow defined
+- [x] All demos listed explicitly (no implicit demo)
+- [x] Each demo mapped to an existing Stage 3–5 artifact
 
 Evidence:
-- A single document is identified as the starting point.
+- Demo plan section in the article draft or separate planning doc
 
-#### Step 2: Linear demo flow
 
-- Demo steps are ordered and sequential.
-- Users can follow the demo without backtracking or guesswork.
-
-Evidence:
-- Demo sequence is explicitly documented.
-
-#### Step 3: Verification guidance
-
-- Each demo step includes:
-  - the exact command to run
-  - the expected output
-- Users can verify correctness at every stage.
+#### Step 2: Demo article draft
+- [x] CNCF introduction section written
+- [x] Demo flow written in linear order
+- [x] Each demo includes:
+      - exact command
+      - expected output
+      - verification hint
 
 Evidence:
-- Verification steps are included for all demo stages.
+- Draft article text exists (local or SimpleModeling.org repo)
 
-#### Step 4: Link completeness
 
-- All referenced documents and commands are reachable.
-- No dead ends or missing links exist.
+#### Step 3: Demo execution & verification
+Execution rule:
+- Step 3 items are executed and verified sequentially.
+- Implementation fixes MAY be performed during Step 3.
+- Documentation updates MUST NOT be performed during Step 3.
+- Unresolved or deferred items are collected in Step 4.
+
+##### 3.1 Command demo (Docker)
+- [x] Docker command: admin system ping
+      - Expected:
+        - mode: command
+        - runtime / subsystem names and versions are correct
+- [x] Docker command: spec export openapi
+      - Expected:
+        - OpenAPI JSON is produced
+        - No errors
+- [x] OpenAPI minimum implementation for demo usage
+      - Service-level operation lists are visible in OpenAPI
+      - Output is sufficient for demo explanation (paths + operations)
+      - This item represents active demo-driven development
+
+##### 3.2 Server demo (Docker)
+- [x] Server starts successfully in Docker
+      - Expected:
+        - No startup errors
+- [x] HTTP GET /admin/system/ping
+      - Expected:
+        - mode: server
+        - runtime / subsystem names and versions are correct
+- [x] HTTP GET /openapi
+      - Expected:
+        - OpenAPI JSON is returned
+Verification scope:
+- OpenAPI minimum implementation introduced in Step 3.1
+  is re-verified via server HTTP surface.
+---
+Decision record (Stage 6):
+- OpenAPI projection is currently sufficient for demo usage
+  when consumed via `spec export openapi.json`.
+- Text output is accepted as canonical behavior,
+  but JSON output is used in demos for readability.
+- This decision is recorded here as a demo-time constraint,
+  not as a platform or spec-level contract.
+---
+
+##### 3.3 Client demo
+- [x] Client ping via real HTTP
+      - Expected:
+        - HTTP path used
+        - mode reflects client/server correctly
+- [x] Client ping via fake HTTP
+      - Expected:
+        - Fake driver used
+        - mode reflects client
+
+##### 3.4 Custom component demo
+- [x] Custom component appears in component list
+  - Note:
+    - ScriptExecutionComponent is visible via `admin component list`.
+    - Naming / alias / canonical normalization is not finalized.
+    - Component/service/operation canonical construction is deferred to Phase 2.8.
+- [x] Custom component command executes successfully
+      - Scope:
+        - Script execution path only (SCRIPT DEFAULT RUN).
+      - Non-goals:
+        - Full integration with command / server / client execution surfaces.
+        - These are explicitly deferred to Phase 2.8.
+
+
+#### Step 4: Required development during demo validation
+(This step is conditional)
+
+- [x] Any required implementation work is:
+      - directly necessary for demo correctness
+      - minimal and justified
+      - documented as “Stage 6 demo-driven fix”
+  - Note:
+    - No additional demo-driven fixes were required.
+    - All remaining concerns are explicitly deferred to Phase 2.8+.
+
+- [x] Non-essential improvements are deferred to Phase 2.8+
+
+Deferred items discovered in Stage 6:
+- [x] ping structured output via suffix (e.g. ping.json, ping.yaml)
+      -> Deferred: Phase 2.8+
+      -> Origin: Phase 2.6 / Stage 6
+      -> Rationale: output format contract requires separate design freeze
+      -> Status: Explicitly deferred; Phase 2.6 responsibility completed
+- [x] OpenAPI full projection features
+      -> Deferred: Phase 2.8+
+      -> Includes:
+         - Schema / response model definitions
+         - Error response specification
+         - Tagging and grouping policy
+         - Versioning and compatibility rules
+         - Formal OpenAPI contract stabilization
+      -> Status: Demo-sufficient minimum confirmed; advanced features deferred
+
+- [x] Canonical representation vs suffix-based format rule
+      -> Deferred: Phase 2.8+
+      -> Origin: Phase 2.6 / Stage 6
+      -> Rationale:
+           Canonical vs representation-selection is a protocol-level rule;
+           demo accepts current behavior until Phase 2.8.
+      -> Status: Decision recorded; implementation deferred
+
+- [x] HttpDriver responsibility and naming clarification
+      -> Deferred: Phase 2.8+
+      -> Origin: Phase 2.6 / Stage 6
+      -> Rationale:
+           Current fake driver = in-process loopback.
+           Renaming / reclassification requires broader contract review.
+      -> Status: Scope clarified; refactoring deferred
+
+Evidence:
+- Commit messages / notes referencing demo-driven fixes
+
+
+#### Step 5: Final demo completion check
+- [x] All demos in the article run end-to-end
+- [x] No known broken demo remains
+- [x] Stage 6 checklist fully checked
 
 Acceptance:
-- A new user can complete the entire demo sequence without external guidance.
+- A new reader can follow the article
+  and successfully execute every demo.
+
+
+Publication Constraint (Non-blocking)
+----------------------------------------------------------------------
+- Target publication date: 2026-01-19
+- Article publication timing does NOT override engineering correctness
+- Avoid quick hacks purely for article convenience
+
+
+Stage 6 Acceptance Rule
+----------------------------------------------------------------------
+- Stage 6 is DONE only when all above checkboxes are checked
+- Demo correctness has priority over article polish
+- Any remaining issue must be explicitly deferred
+
+## Phase 2.6 Closure
+
+- Phase 2.6 is declared DONE.
+- All Stage 3–6 checklists are fully checked with executable evidence.
+- All demo scenarios described in the article run end-to-end.
+- No known broken demo remains.
+- All non-essential or unresolved items are explicitly deferred to Phase 2.8+.
+- No platform contract changes were introduced in Phase 2.6.
 
 ## Acceptance Rule
 - Phase 2.6 is DONE only when every checkbox is checked with explicit evidence (commands + expected outputs and/or links to outputs).

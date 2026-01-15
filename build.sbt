@@ -1,11 +1,11 @@
-val scala3Version = "3.6.2"
+val scala3Version = "3.3.7"
 
 lazy val root = project
   .in(file("."))
   .settings(
     organization := "org.goldenport",
     name := "goldenport-cncf",
-    version := "0.2.3",
+    version := "0.3.0-SNAPSHOT",
 
     scalaVersion := scala3Version,
 
@@ -32,7 +32,7 @@ lazy val root = project
 
       "org.slf4j" % "slf4j-simple" % "2.0.12",
 
-      "org.goldenport" %% "goldenport-core" % "0.1.2",
+      "org.goldenport" %% "goldenport-core" % "0.2.0-SNAPSHOT",
 
       // Testing
       "org.scalatest" %% "scalatest" % "3.2.18" % Test
@@ -46,3 +46,100 @@ lazy val root = project
 
     publishMavenStyle := true
   )
+
+ThisBuild / semanticdbEnabled := true
+ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
+ThisBuild / scalafixOnCompile := false
+
+addCommandAlias("fmt",      ";scalafmtAll;scalafmtSbt")
+addCommandAlias("fmtCheck", ";scalafmtCheckAll;scalafmtSbtCheck")
+addCommandAlias("fix",      ";scalafixAll")
+addCommandAlias("fixCheck", ";scalafixAll --check")
+
+assembly / assemblyJarName := "goldenport-cncf.jar"
+
+assembly / mainClass := Some("org.goldenport.cncf.CncfMain")
+
+assembly / test := {}
+
+assembly / assemblyMergeStrategy := {
+  case PathList("META-INF", xs @ _*) =>
+    xs match {
+      case "MANIFEST.MF" :: Nil => MergeStrategy.discard
+      case _                    => MergeStrategy.first
+    }
+  case _ => MergeStrategy.first
+}
+
+// ---- Docker / Dist integration ----
+
+lazy val copyJar = taskKey[Unit]("Copy CNCF fat jar to dist/")
+
+copyJar := {
+  val jar = (Compile / assembly).value
+  val dist = baseDirectory.value / "dist"
+  IO.createDirectory(dist)
+  IO.copyFile(
+    jar,
+    dist / "goldenport-cncf.jar",
+    preserveLastModified = true
+  )
+  streams.value.log.info("Copied goldenport-cncf.jar to dist/")
+}
+
+lazy val dockerBuild = taskKey[Unit]("Build Docker image for CNCF (local only)")
+
+dockerBuild := {
+  val log = streams.value.log
+
+  // 1) Build fat jar
+  (Compile / assembly).value
+
+  // 2) Copy jar to dist/
+  copyJar.value
+
+  // 3) Docker build (local)
+  val latest = "goldenport-cncf:latest"
+  val verTag = s"goldenport-cncf:${version.value}"
+
+  val cmd =
+    s"docker build --no-cache -t $latest -t $verTag ."
+
+  if (sys.process.Process(cmd).! != 0)
+    sys.error("Docker build failed")
+
+  log.info(s"Docker images built locally: $latest, $verTag")
+}
+
+lazy val dockerPush = taskKey[Unit]("Push CNCF Docker image to GHCR")
+
+dockerPush := {
+  val log = streams.value.log
+
+  val repo = "ghcr.io/asami/goldenport-cncf"
+  val verTag = s"$repo:${version.value}"
+  val latest = s"$repo:latest"
+
+  val tagCmds = Seq(
+    s"docker tag goldenport-cncf:${version.value} $verTag",
+    s"docker tag goldenport-cncf:latest $latest"
+  )
+
+  tagCmds.foreach { cmd =>
+    if (sys.process.Process(cmd).! != 0)
+      sys.error(s"Tagging failed: $cmd")
+  }
+
+  val pushCmd = s"docker push $repo --all-tags"
+  if (sys.process.Process(pushCmd).! != 0)
+    sys.error("Docker push failed")
+
+  log.info("Docker images pushed to GHCR.")
+}
+
+lazy val dockerDeploy = taskKey[Unit]("Build and push CNCF Docker image")
+
+dockerDeploy := Def.sequential(
+  dockerBuild,
+  dockerPush
+).value

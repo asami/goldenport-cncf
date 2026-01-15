@@ -4,7 +4,8 @@ import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, Query, ResourceAccess}
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.component.ComponentInitParams
+import org.goldenport.cncf.component.ComponentCreate
+import org.goldenport.cncf.component.ComponentInit
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.component.ComponentInstanceId
 import org.goldenport.cncf.openapi.OpenApiProjector
@@ -19,10 +20,10 @@ import org.goldenport.protocol.spec as spec
 
 /*
  * @since   Jan.  8, 2026
- * @version Jan.  9, 2026
+ * @version Jan. 15, 2026
  * @author  ASAMI, Tomoharu
  */
-final class SpecificationComponent(override val core: Component.Core) extends Component {
+final class SpecificationComponent() extends Component {
 }
 
 object SpecificationComponent {
@@ -30,7 +31,14 @@ object SpecificationComponent {
   val componentId = ComponentId(name) // TODO static
 
   class Factory extends Component.Factory {
-    protected def create_Components(params: ComponentInitParams): Vector[Component] = {
+    protected def create_Components(params: ComponentCreate): Vector[Component] = {
+      Vector(SpecificationComponent())
+    }
+
+    protected def create_Core(
+      params: ComponentCreate,
+      comp: Component
+    ): Component.Core = {
       val subsystem = params.subsystem
       val exportService = new DefaultExportSpecificationService(subsystem)
       val request = spec.RequestDefinition()
@@ -54,13 +62,12 @@ object SpecificationComponent {
         )
       )
       val instanceid = ComponentInstanceId.default(componentId)
-      val core = Component.Core.create(
+      Component.Core.create(
         name,
         componentId,
         instanceid,
         protocol
       )
-      Vector(SpecificationComponent(core))
     }
   }
 }
@@ -104,7 +111,9 @@ private final class ExportOperationDefinition(
 private final case class ExportSpecificationAction(
   format: String,
   exportService: ExportSpecificationService
-) extends Query("openapi") {
+) extends Query() {
+  val name = "openapi"
+
   def createCall(core: ActionCall.Core): ActionCall =
     ExportSpecificationCall(core, format, exportService)
 }
@@ -114,8 +123,6 @@ private final case class ExportSpecificationCall(
   format: String,
   exportService: ExportSpecificationService
 ) extends ActionCall {
-  override def action: Action = core.action
-  def accesses: Seq[ResourceAccess] = Nil
   def execute(): Consequence[OperationResponse] =
     Consequence.success(
       OperationResponse.Scalar(exportService.exportSpec(format))

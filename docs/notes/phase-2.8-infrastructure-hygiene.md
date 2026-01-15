@@ -131,3 +131,70 @@ and implementation necessary to close these items.
   - Align configuration loading, Component.initialize, and runtime execution.
 
 These items constitute the core scope of Phase 2.8.
+
+## Reference: Script DSL operation resolution status
+
+### Background
+
+The following test case in `ScriptDslSpec` is currently marked as `ignore`:
+
+- reject unknown script component
+
+This is **intentional** and does **not** indicate an implementation bug.
+
+The test depends on a precise and finalized construction rule for:
+
+- component
+- service
+- operation
+- aliases
+- implicit defaults (SCRIPT / DEFAULT / RUN)
+
+These rules are not yet fully specified in Phase 2.6.
+
+---
+
+### Why this is deferred to Phase 2.8
+
+At the moment, the runtime cannot reliably distinguish between:
+
+- NotFound (component/service/operation does not exist)
+- Rejection (request was syntactically valid but semantically rejected)
+- BadRequest (invalid request structure)
+
+This ambiguity exists because the **operation name resolution pipeline** is not fully defined.
+
+In particular, the following questions are still open:
+
+- How implicit defaults are applied when arguments are omitted
+- How aliases are expanded and at which stage
+- How Script DSL shortcuts map onto canonical Component DSL identifiers
+- At which point a request should be judged as "not found"
+
+Until these are formally defined, asserting `NotFound` behavior would be incorrect.
+
+---
+
+### Design intent
+
+The current `ignore` serves as a **semantic freeze marker**, not as a temporary workaround.
+
+It indicates:
+- The test scenario is valid
+- The expected behavior is understood
+- The resolution rules are intentionally postponed
+
+Once the operation resolution mechanism is finalized, this test should be re-enabled.
+
+---
+
+### Phase 2.8 completion condition (related)
+
+This reference item is considered resolved when:
+
+- Component / Service / Operation resolution rules are explicitly defined
+- Alias and implicit default expansion order is fixed
+- Script DSL and Component DSL share a consistent resolution pipeline
+- Error classification (NotFound vs Rejection) is deterministic
+
+At that point, the ignored test can be safely converted into an active assertion.

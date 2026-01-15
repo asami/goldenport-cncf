@@ -6,8 +6,8 @@ import java.util.ServiceLoader
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import org.goldenport.cncf.cli.CncfRuntime
-import org.goldenport.cncf.component.{Component, ComponentId, ComponentInitParams, ComponentInstanceId, ComponentOrigin}
-import org.goldenport.cncf.component.repository.{ComponentRepository, ComponentRepositorySpec}
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentCreate, ComponentInit, ComponentInstanceId, ComponentOrigin}
+import org.goldenport.cncf.component.repository.{ComponentRepository}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -18,7 +18,7 @@ import org.goldenport.protocol.spec as spec
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 12, 2026
+ * @version Jan. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfMain {
@@ -68,7 +68,7 @@ object CncfMain {
 
   private def _take_component_repository(
     args: Array[String]
-  ): (Either[String, Vector[ComponentRepositorySpec]], Array[String]) = {
+  ): (Either[String, Vector[ComponentRepository.Specification]], Array[String]) = {
     val buffer = Vector.newBuilder[String]
     val specs = Vector.newBuilder[String]
     var i = 0
@@ -94,7 +94,7 @@ object CncfMain {
     } else {
       val cwd = Paths.get("").toAbsolutePath.normalize
       var error: Option[String] = None
-      val parsed = Vector.newBuilder[ComponentRepositorySpec]
+      val parsed = Vector.newBuilder[ComponentRepository.Specification]
       specValues.foreach { value =>
         ComponentRepository.parseSpecs(value, cwd) match {
           case Left(err) =>
@@ -154,17 +154,17 @@ object CncfMain {
       _ => Nil
     } else {
       (subsystem: Subsystem) => {
-        val params = ComponentInitParams(subsystem, _bootstrap_core(), ComponentOrigin.Builtin)
+        val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
         _discover_from_class_dirs_(params, classDirs, _package_prefixes_())
       }
     }
   }
 
   private def _discover_from_repositories(
-    specs: Seq[ComponentRepositorySpec]
+    specs: Seq[ComponentRepository.Specification]
   ): Subsystem => Seq[Component] = {
     (subsystem: Subsystem) => {
-      val params = ComponentInitParams(subsystem, _bootstrap_core(), ComponentOrigin.Builtin)
+      val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
       specs.flatMap { spec =>
         spec.build(params).discover()
       }
@@ -194,28 +194,17 @@ object CncfMain {
     }
   }
 
-  private def _bootstrap_core(): org.goldenport.cncf.component.Component.Core = {
-    val name = "bootstrap"
-    val componentId = ComponentId(name)
-    val instanceId = ComponentInstanceId.default(componentId)
-    org.goldenport.cncf.component.Component.Core.create(
-      name,
-      componentId,
-      instanceId,
-      _empty_protocol()
-    )
-  }
-
-  private def _empty_protocol(): Protocol = {
-    Protocol(
-      services = spec.ServiceDefinitionGroup(services = Vector.empty),
-      handler = ProtocolHandler(
-        ingresses = IngressCollection(Vector.empty),
-        egresses = EgressCollection(Vector.empty),
-        projections = ProjectionCollection()
-      )
-    )
-  }
+  // private def _bootstrap_core(): org.goldenport.cncf.component.Component.Core = {
+  //   val name = "bootstrap"
+  //   val componentId = ComponentId(name)
+  //   val instanceId = ComponentInstanceId.default(componentId)
+  //   org.goldenport.cncf.component.Component.Core.create(
+  //     name,
+  //     componentId,
+  //     instanceId,
+  //     _empty_protocol()
+  //   )
+  // }
 
   private def _scala_cli_classes_dirs_(workspace: Path): Vector[Path] = {
     val root = workspace.resolve(".scala-build")
@@ -267,7 +256,7 @@ object CncfMain {
   }
 
   private def _discover_from_class_dirs_(
-    params: ComponentInitParams,
+    params: ComponentCreate,
     classDirs: Seq[Path],
     packagePrefixes: Seq[String]
   ): Seq[Component] = {
@@ -293,7 +282,7 @@ object CncfMain {
 
   private def _discover_service_loader_(
     loader: URLClassLoader,
-    params: ComponentInitParams
+    params: ComponentCreate
   ): Vector[Component] = {
     val components =
       ServiceLoader.load(classOf[Component], loader).iterator.asScala.toVector
@@ -310,7 +299,7 @@ object CncfMain {
 
   private def _discover_by_scan_(
     loader: URLClassLoader,
-    params: ComponentInitParams,
+    params: ComponentCreate,
     classDirs: Seq[Path],
     packagePrefixes: Seq[String]
   ): Vector[Component] = {
@@ -331,11 +320,13 @@ object CncfMain {
   }
 
   private def _initialize_component_(
-    params: ComponentInitParams
+    params: ComponentCreate
   )(
     comp: Component
   ): Component = {
-    comp.initialize(params)
+    val core = Component.createScriptCore()
+    val init = params.toInit(core)
+    comp.initialize(init)
     comp
   }
 

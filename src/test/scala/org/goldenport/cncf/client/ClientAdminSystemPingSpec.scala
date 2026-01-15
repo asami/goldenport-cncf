@@ -7,7 +7,8 @@ import org.goldenport.bag.Bag
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.cli.CncfRuntime
-import org.goldenport.cncf.component.{Component, ComponentId, ComponentInitParams, ComponentInstanceId, ComponentOrigin}
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
+import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.context.SystemContext
@@ -28,7 +29,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 11, 2026
+ * @version Jan. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientAdminSystemPingSpec
@@ -157,7 +158,7 @@ class ClientAdminSystemPingSpec
 
   private def _client_component(): ClientComponent = {
     val subsystem = Subsystem("cncf-client-test")
-    val params = ComponentInitParams(subsystem, _bootstrap_core(), ComponentOrigin.Builtin)
+    val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
     val component = ClientComponent.Factory.create(params).collectFirst {
       case c: ClientComponent => c
     }.getOrElse {

@@ -30,6 +30,36 @@ Constraints:
 - core ExecutionContext.Core and SystemContext are parallel layers.
 - Action ExecutionContext is the sole merge point.
 
+## Admin system ping (runtime introspection)
+
+The `admin.system.ping` operation provides minimal runtime
+introspection information derived from the current
+ExecutionContext and SystemContext.
+
+This operation is intended for validation and inspection of
+the active CNCF runtime, not as a sentinel connectivity check.
+
+### Output (text)
+
+The output is a human-readable text block with fixed field order:
+
+- runtime: goldenport-cncf
+- runtime.version: <current runtime version>
+- mode: command | server | client
+- subsystem: <subsystem name>
+- subsystem.version: <subsystem version>
+
+Notes:
+- The previous sentinel-style response (e.g. `ok`) is not used.
+- Structured output via suffix (e.g. `ping.json`) is intentionally
+  deferred to Phase 2.8+.
+- A blank line separates runtime and mode sections.
+
+Output format semantics, canonical formats, and suffix-based selection
+are defined in `docs/spec/output-format.md`.
+
+Canonical output format: text (see docs/spec/output-format.md).
+
 Design Notes (Security)
 -----------------------
 - Security policy definitions live in SystemContext as system-scoped policy handles.

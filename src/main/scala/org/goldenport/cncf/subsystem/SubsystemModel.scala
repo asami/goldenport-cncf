@@ -28,7 +28,7 @@ object SubsystemKind {
 object DefaultSubsystemProvider {
   def default(): SubsystemModel =
     SubsystemModel(
-      name = "cncf",
+      name = "goldenport-cncf",
       tier = SubsystemTier.Domain,
       kind = SubsystemKind.Service,
       components = Vector.empty

@@ -14,7 +14,7 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan.  6, 2026
+ * @version Jan. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngineObservationSpec extends AnyWordSpec with Matchers with ConsequenceMatchers {
@@ -34,7 +34,8 @@ class ActionEngineObservationSpec extends AnyWordSpec with Matchers with Consequ
 
       val engine = new RecordingDenyActionEngine
 
-      val action = new Query("test-action") {
+      val action = new Query() {
+        val name = "test-action"
         def createCall(core: ActionCall.Core): ActionCall =
           new TestActionCall(core, engine)
       }
@@ -60,7 +61,8 @@ class ActionEngineObservationSpec extends AnyWordSpec with Matchers with Consequ
       runtime.bind(uow)
 
       val engine = new RecordingAllowActionEngine
-      val action = new Query("test-action") {
+      val action = new Query() {
+        val name = "test-action"
         def createCall(core: ActionCall.Core): ActionCall =
           new TestActionCall(core, engine)
       }
@@ -82,8 +84,6 @@ class ActionEngineObservationSpec extends AnyWordSpec with Matchers with Consequ
     override val core: ActionCall.Core,
     engine: RecordingEngine
   ) extends ActionCall {
-    override def action: Action = core.action
-    override def accesses: Seq[ResourceAccess] = Nil
     override def execute(): Consequence[OperationResponse] = {
       engine.record("execute")
       Consequence.success(OperationResponse.Scalar("ok"))

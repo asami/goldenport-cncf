@@ -33,7 +33,7 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 /*
  * @since   Jan.  4, 2026
- * @version Jan.  4, 2026
+ * @version Jan. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -216,7 +216,8 @@ private object TestCommandOperation extends spec.OperationDefinition {
     req.arguments.headOption match {
       case Some(arg) =>
         Consequence.Success(
-          new Command("command") {
+          new Command() {
+            val name = "command"
             override def createCall(
               core: ActionCall.Core
             ): ActionCall = {
@@ -225,7 +226,6 @@ private object TestCommandOperation extends spec.OperationDefinition {
               new ActionCall {
                 override val core: ActionCall.Core = _core_
                 override def action: Action = actionself
-                override def accesses: Seq[ResourceAccess] = Nil
                 override def execute(): Consequence[OperationResponse] =
                   Consequence.success(OperationResponse.Scalar(s"Command(${arg.value})"))
               }
@@ -261,7 +261,8 @@ private object TestCommandFailOperation extends spec.OperationDefinition {
     req.arguments.headOption match {
       case Some(arg) =>
         Consequence.Success(
-          new Command("command-fail") {
+          new Command() {
+            val name = "command-fail"
             override def createCall(
               core: ActionCall.Core
             ): ActionCall = {
@@ -270,7 +271,6 @@ private object TestCommandFailOperation extends spec.OperationDefinition {
               new ActionCall {
                 override val core: ActionCall.Core = _core_
                 override def action: Action = actionself
-                override def accesses: Seq[ResourceAccess] = Nil
                 override def execute(): Consequence[OperationResponse] =
                   Consequence.failure(s"Command failed: ${arg.value}")
               }
@@ -306,7 +306,8 @@ private object TestQueryOperation extends spec.OperationDefinition {
     req.arguments.headOption match {
       case Some(arg) =>
         Consequence.Success(
-          new Query("query") {
+          new Query() {
+            val name = "query"
             override def createCall(
               core: ActionCall.Core
             ): ActionCall = {
@@ -315,7 +316,6 @@ private object TestQueryOperation extends spec.OperationDefinition {
               new ActionCall {
                 override val core: ActionCall.Core = _core_
                 override def action: Action = actionself
-                override def accesses: Seq[ResourceAccess] = Nil
                 override def execute(): Consequence[OperationResponse] =
                   Consequence.success(OperationResponse.Scalar(s"Query(${arg.value})"))
               }

@@ -2,7 +2,7 @@ package org.goldenport.cncf.component.repository
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.bootstrap.BootstrapLog
-import org.goldenport.cncf.component.{Component, ComponentDefinition, ComponentId, ComponentInitParams, ComponentInstanceId, ComponentOrigin, GeneratedComponent}
+import org.goldenport.cncf.component.{Component, ComponentDefinition, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin, GeneratedComponent}
 import org.goldenport.cncf.component.Component.Core
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.Protocol
@@ -15,7 +15,7 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Jan. 12, 2026
- * @version Jan. 12, 2026
+ * @version Jan. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentProvider {
@@ -88,7 +88,7 @@ object ComponentProvider {
     origin: ComponentOrigin
   ): Consequence[Component] = {
     _catch_non_fatal {
-      comp.initialize(ComponentInitParams(subsystem, core, origin))
+      comp.initialize(ComponentInit(subsystem, core, origin))
     }
   }
 

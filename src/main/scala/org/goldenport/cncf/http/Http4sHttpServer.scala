@@ -2,6 +2,7 @@ package org.goldenport.cncf.http
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import com.comcast.ip4s.Host
 import com.comcast.ip4s.Port
 import org.http4s.{HttpRoutes, MediaType, Response as HResponse, Status as HStatus}
 import org.http4s.ember.server.EmberServerBuilder
@@ -14,13 +15,15 @@ import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan.  9, 2026
+ * @version Jan. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
   engine: HttpExecutionEngine,
   port: Int = 8080
 ) extends HttpServer(engine) {
+  private val _bind_host = Host.fromString("0.0.0.0").get
+
   def start(args: Array[String] = Array.empty): Unit = {
     val _ = args
     _server().unsafeRunSync()
@@ -56,10 +59,14 @@ final class Http4sHttpServer(
     }
     EmberServerBuilder
       .default[IO]
+      .withHost(_bind_host)
       .withPort(Port.fromInt(port).get)
       .withHttpApp(routes.orNotFound)
       .build
-      .useForever
+      .use { _ =>
+        // Block forever to keep server mode alive.
+        IO.never
+      }
   }
 
   private def _to_http_request(

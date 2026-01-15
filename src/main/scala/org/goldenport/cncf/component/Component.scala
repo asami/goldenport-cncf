@@ -6,6 +6,7 @@ import org.goldenport.protocol.{Protocol, Request}
 import org.goldenport.protocol.logic.ProtocolLogic
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.spec.{OperationDefinition, ServiceDefinition}
+import org.goldenport.protocol.spec.ServiceDefinitionGroup
 import org.goldenport.protocol.service.{Service => ProtocolService}
 // import org.goldenport.cncf.action.ActionLogic
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeContext, ScopeKind, SystemContext}
@@ -23,7 +24,7 @@ import scala.util.control.NonFatal
 /*
  * @since   Jan.  1, 2026
  *  version Jan.  3, 2026
- * @version Jan. 11, 2026
+ * @version Jan. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -50,7 +51,7 @@ abstract class Component() extends Component.Core.Holder {
 
   lazy val logic: ComponentLogic = ComponentLogic(this, _system_context)
 
-  def initialize(params: ComponentInitParams): Component = {
+  def initialize(params: ComponentInit): Component = {
     _core = Some(params.core)
     _origin = Some(params.origin)
     _subsystem = Some(params.subsystem)
@@ -65,7 +66,7 @@ abstract class Component() extends Component.Core.Holder {
     p.createService(serviceFactory)
   }
 
-  protected def initialize_Component(params: ComponentInitParams): Unit = {}
+  protected def initialize_Component(params: ComponentInit): Unit = {}
 
   def service: Service = services.services.head // TODO
 
@@ -105,7 +106,7 @@ abstract class Component() extends Component.Core.Holder {
   }
 
   private def _inherit_http_driver_(
-    params: ComponentInitParams
+    params: ComponentInit
   ): Unit = {
     if (_application_config.httpDriver.isEmpty) {
       params.subsystem.httpDriver.foreach { driver =>
@@ -126,6 +127,40 @@ abstract class Component() extends Component.Core.Holder {
 }
 
 object Component {
+  // private var _script_count = 0
+  // private def _script_number(): String = {
+  //   val s = if (_script_count == 0) "" else _script_count.toString
+  //   _script_count = _script_count + 1
+  //   s
+  // }
+
+  // private def _create_script_component_name(): String =
+  //   s"SCRIPT${_script_number()}"
+  
+  def createScriptCore(): org.goldenport.cncf.component.Component.Core =
+    createScriptCore(Protocol.empty)
+
+  def createScriptCore(service: ServiceDefinition): org.goldenport.cncf.component.Component.Core =
+    createScriptCore(Vector(service))
+
+  def createScriptCore(services: Seq[ServiceDefinition]): org.goldenport.cncf.component.Component.Core =
+    createScriptCore(Protocol(services))
+
+  def createScriptCore(services: ServiceDefinitionGroup): org.goldenport.cncf.component.Component.Core =
+    createScriptCore(Protocol(services))
+
+  def createScriptCore(protocol: Protocol): org.goldenport.cncf.component.Component.Core = {
+    val name = "SCRIPT" // _create_script_component_name()
+    val componentId = ComponentId("script")
+    val instanceId = ComponentInstanceId.default(componentId)
+    org.goldenport.cncf.component.Component.Core.create(
+      name,
+      componentId,
+      instanceId,
+      protocol
+    )
+  }
+
   final case class ApplicationConfig(
     applicationContext: Option[ApplicationContext] = None,
     httpDriver: Option[HttpDriver] = None,
@@ -213,27 +248,32 @@ object Component {
     }
   }
 
-  trait Factory {
-    final def create(params: ComponentInitParams): Vector[Component] = {
+  abstract class Factory {
+    final def create(params: ComponentCreate): Vector[Component] = {
       val xs = create_Components(params)
       xs.map { comp =>
-        val core = _resolve_core(params, comp)
-        comp.initialize(ComponentInitParams(params.subsystem, core, params.origin))
+        val core = create_Core(params, comp)
+        comp.initialize(ComponentInit(params.subsystem, core, params.origin))
       }
     }
 
-    protected def create_Components(params: ComponentInitParams): Vector[Component]
+    protected def create_Components(params: ComponentCreate): Vector[Component]
 
-    private def _resolve_core(
-      params: ComponentInitParams,
+    protected def create_Core(
+      params: ComponentCreate,
       comp: Component
-    ): Component.Core = {
-      try {
-        comp.core
-      } catch {
-        case NonFatal(_) => params.core
-      }
-    }
+    ): Component.Core
+
+    // private def _resolve_core(
+    //   params: ComponentInitParams,
+    //   comp: Component
+    // ): Component.Core = {
+    //   try {
+    //     comp.core
+    //   } catch {
+    //     case NonFatal(_) => params.core
+    //   }
+    // }
   }
 
   abstract class ServiceFactory extends ServiceDefinition.Factory[Service] {
@@ -427,7 +467,17 @@ object ComponentLocator {
   final case class NameLocator(name: String) extends ComponentLocator
 }
 
-final case class ComponentInitParams( // TODO use config
+final case class ComponentCreate(
+  subsystem: Subsystem,
+  origin: ComponentOrigin
+) {
+  def withOrigin(p: ComponentOrigin) = copy(origin = p)
+
+  def toInit(core: Component.Core): ComponentInit =
+    ComponentInit(subsystem, core, origin)
+}
+
+final case class ComponentInit( // TODO use config
   subsystem: Subsystem,
   core: Component.Core,
   origin: ComponentOrigin
@@ -442,6 +492,9 @@ object ComponentOrigin {
     val label: String = "builtin"
   }
   final case class Repository(label: String) extends ComponentOrigin
+  case object Main extends ComponentOrigin {
+    val label: String = "main"
+  }
   case object Unknown extends ComponentOrigin {
     val label: String = "unknown"
   }

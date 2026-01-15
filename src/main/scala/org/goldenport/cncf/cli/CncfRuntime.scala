@@ -6,7 +6,9 @@ import java.nio.file.{Files, Paths}
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
 import org.goldenport.cncf.client.{ClientComponent, GetQuery, PostCommand}
-import org.goldenport.cncf.component.{Component, ComponentInitParams}
+import org.goldenport.cncf.CncfVersion
+import org.goldenport.cncf.component.{Component, ComponentInit, PingRuntime}
+import org.goldenport.cncf.context.SystemContext
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.{Argument, Property, Request, Response}
 import org.goldenport.protocol.operation.OperationResponse
@@ -17,23 +19,28 @@ import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 11, 2026
+ * @version Jan. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime {
   def buildSubsystem(
-    extraComponents: Subsystem => Seq[Component] = _ => Nil
+    extraComponents: Subsystem => Seq[Component] = _ => Nil,
+    mode: Option[RunMode] = None
   ): Subsystem = {
-    val subsystem = DefaultSubsystemFactory.default()
+    val modeLabel = mode.map(_.name)
+    val subsystem = DefaultSubsystemFactory.default(modeLabel)
     val extras = extraComponents(subsystem)
     if (extras.nonEmpty) {
       subsystem.add(extras)
+    }
+    modeLabel.foreach { label =>
+      _apply_system_context(subsystem, label)
     }
     subsystem
   }
 
   def startServer(args: Array[String]): Unit = {
-    val engine = new HttpExecutionEngine(buildSubsystem())
+    val engine = new HttpExecutionEngine(buildSubsystem(mode = Some(RunMode.Server)))
     val server = new Http4sHttpServer(engine)
     server.start(args)
   }
@@ -42,13 +49,13 @@ object CncfRuntime {
     args: Array[String],
     extraComponents: Subsystem => Seq[Component]
   ): Unit = {
-    val engine = new HttpExecutionEngine(buildSubsystem(extraComponents))
+    val engine = new HttpExecutionEngine(buildSubsystem(extraComponents, Some(RunMode.Server)))
     val server = new Http4sHttpServer(engine)
     server.start(args)
   }
 
   def executeClient(args: Array[String]): Int = {
-    val subsystem = buildSubsystem()
+    val subsystem = buildSubsystem(mode = Some(RunMode.Client))
     val result = _client_component(subsystem).flatMap { component =>
       parseClientArgs(args).flatMap { req =>
         _client_action_from_request(req).flatMap { action =>
@@ -69,7 +76,7 @@ object CncfRuntime {
     args: Array[String],
     extraComponents: Subsystem => Seq[Component]
   ): Int = {
-    val subsystem = buildSubsystem(extraComponents)
+    val subsystem = buildSubsystem(extraComponents, Some(RunMode.Client))
     val result = _client_component(subsystem).flatMap { component =>
       parseClientArgs(args).flatMap { req =>
         _client_action_from_request(req).flatMap { action =>
@@ -87,7 +94,7 @@ object CncfRuntime {
   }
 
   def executeCommand(args: Array[String]): Int = {
-    val subsystem = buildSubsystem()
+    val subsystem = buildSubsystem(mode = Some(RunMode.Command))
     val result = _to_request(args).flatMap { req =>
       subsystem.execute(req)
     }
@@ -104,7 +111,7 @@ object CncfRuntime {
     args: Array[String],
     extraComponents: Subsystem => Seq[Component]
   ): Int = {
-    val subsystem = buildSubsystem(extraComponents)
+    val subsystem = buildSubsystem(extraComponents, Some(RunMode.Command))
     val result = _to_request(args).flatMap { req =>
       subsystem.execute(req)
     }
@@ -123,7 +130,7 @@ object CncfRuntime {
       case Consequence.Success(normalized) =>
         HttpRequest.fromCurlLike(normalized) match {
           case Consequence.Success(req) =>
-            val engine = new HttpExecutionEngine(buildSubsystem())
+            val engine = new HttpExecutionEngine(buildSubsystem(mode = Some(RunMode.ServerEmulator)))
             val res = engine.execute(req)
             if (includeHeader) {
               _print_with_header(res)
@@ -151,7 +158,7 @@ object CncfRuntime {
       case Consequence.Success(normalized) =>
         HttpRequest.fromCurlLike(normalized) match {
           case Consequence.Success(req) =>
-            val engine = new HttpExecutionEngine(buildSubsystem(extraComponents))
+            val engine = new HttpExecutionEngine(buildSubsystem(extraComponents, Some(RunMode.ServerEmulator)))
             val res = engine.execute(req)
             if (includeHeader) {
               _print_with_header(res)
@@ -169,6 +176,28 @@ object CncfRuntime {
     }
     _exit_code(result)
   }
+
+  def executeScript(
+    args: Array[String],
+    extraComponents: Subsystem => Seq[Component]
+  ): Consequence[Response] = {
+    val subsystem = buildSubsystem(extraComponents, Some(RunMode.Script))
+    _to_request_script(args).flatMap { req =>
+      subsystem.execute(req)
+    }
+  }
+
+  private def _to_request_script(args: Array[String]) = {
+    val in = args.toVector
+    (in.lift(0), in.lift(1), in.lift(2)) match {
+      case (Some("SCRIPT"), Some("DEFAULT"), Some("RUN")) =>
+        parseCommandArgs(args)
+      case _ =>
+        val xs = Vector("SCRIPT", "DEFAULT", "RUN") ++ in
+        parseCommandArgs(xs.toArray)
+    }
+  }
+
   def runExitCode(args: Array[String]): Int =
     run(args)
 
@@ -362,6 +391,19 @@ object CncfRuntime {
     parseCommandArgs(args)
   }
 
+  private def _apply_system_context(
+    subsystem: Subsystem,
+    mode: String
+  ): Unit = {
+    val system = PingRuntime.systemContext(
+      mode = mode,
+      subsystem = subsystem.name,
+      runtimeVersion = CncfVersion.current,
+      subsystemVersion = subsystem.version
+    )
+    subsystem.components.foreach(_.withSystemContext(system))
+  }
+
   def parseClientArgs(
     args: Array[String]
   ): Consequence[Request] = {
@@ -389,6 +431,7 @@ object CncfRuntime {
     }
   }
 
+  // TODO duplicate parseClientAction
   private def _client_action_from_request(
     req: Request
   ): Consequence[org.goldenport.cncf.action.Action] = {
@@ -400,7 +443,7 @@ object CncfRuntime {
           case "post" =>
             _client_body_from_request(req).map { body =>
               new PostCommand(
-                "system.ping",
+                "system.ping", // TODO generic
                 HttpRequest.fromUrl(
                   method = HttpRequest.POST,
                   url = new URL(url),
@@ -455,6 +498,7 @@ object CncfRuntime {
         Consequence.success(None)
     }
 
+  // TODO duplicate _client_action_from_request
   def parseClientAction(
     args: Array[String]
   ): Consequence[org.goldenport.cncf.action.Action] = {
@@ -472,7 +516,7 @@ object CncfRuntime {
                   operation match {
                     case "post" =>
                       new PostCommand(
-                        "system.ping",
+                        "system.ping", // TODO generic
                         HttpRequest.fromUrl(
                           method = HttpRequest.POST,
                           url = new URL(url),
@@ -506,7 +550,9 @@ object CncfRuntime {
             component = component,
             service = service,
             operation = operation,
-            arguments = Nil,
+            arguments = args.toList.drop(3).zipWithIndex.map {
+              (x, i) => Argument(s"arg${i + 1}", x)
+            },
             switches = Nil,
             properties = Nil
           )
@@ -520,7 +566,7 @@ object CncfRuntime {
     args.toVector match {
       case Vector(component, service, operation, _*) =>
         Consequence.success((component, service, operation))
-      case Vector(single) =>
+      case Vector(single) if single.contains("/") || single.contains(".") =>
         _parse_component_service_operation_string(single)
       case _ =>
         Consequence.failure("command must be component service operation or component.service.operation")
@@ -758,19 +804,13 @@ object CncfRuntime {
   }
 }
 
-sealed trait RunMode
-
+enum RunMode(val name: String) {
+  case Server extends RunMode("server")
+  case Client extends RunMode("client")
+  case Command extends RunMode("command")
+  case Script extends RunMode("script")
+  case ServerEmulator extends RunMode("server-emulator")
+}
 object RunMode {
-  case object Server extends RunMode
-  case object Client extends RunMode
-  case object Command extends RunMode
-  case object ServerEmulator extends RunMode
-
-  def from(p: String): Option[RunMode] = p match {
-    case "server" => Some(Server)
-    case "client" => Some(Client)
-    case "command" => Some(Command)
-    case "server-emulator" => Some(ServerEmulator)
-    case _ => None
-  }
+  def from(p: String): Option[RunMode] = values.find(_.name == p)
 }

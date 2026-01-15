@@ -15,7 +15,7 @@ import java.time.Instant
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan.  7, 2026
+ * @version Jan. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngineObservabilitySeparationSpec
@@ -38,7 +38,8 @@ class ActionEngineObservabilitySeparationSpec
 
       var buildCalled = false
       val engine = new RecordingDenyActionEngine
-      val action = new Query("test-action") {
+      val action = new Query() {
+        val name = "test-action"
         def createCall(core: ActionCall.Core): ActionCall =
           new TestActionCall(core, engine)
       }
@@ -75,7 +76,8 @@ class ActionEngineObservabilitySeparationSpec
       runtime.bind(uow)
 
       val engine = new RecordingAllowActionEngine
-      val action = new Query("test-action") {
+      val action = new Query() {
+        val name = "test-action"
         def createCall(core: ActionCall.Core): ActionCall =
           new TestActionCall(core, engine)
       }
@@ -105,8 +107,6 @@ class ActionEngineObservabilitySeparationSpec
     override val core: ActionCall.Core,
     engine: RecordingEngine
   ) extends ActionCall {
-    override def action: Action = core.action
-    override def accesses: Seq[ResourceAccess] = Nil
     override def execute(): Consequence[OperationResponse] = {
       engine.record("execute")
       Consequence.success(OperationResponse.Scalar("ok"))

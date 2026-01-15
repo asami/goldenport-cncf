@@ -1,6 +1,8 @@
 package org.goldenport.cncf.cli
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.CncfVersion
+import org.goldenport.cncf.component.{PingRuntime, PingRuntimeInfo}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.http.HttpRequest
 import org.goldenport.protocol.Request
@@ -40,28 +42,34 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
 
   "server-emulator normalization" should {
     "execute via Subsystem.executeHttp" in {
-      val subsystem = DefaultSubsystemFactory.default()
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val normalized = CncfRuntime.normalizeServerEmulatorArgs(Seq("admin", "system", "ping"))
       val httpReq = normalized.flatMap(HttpRequest.fromCurlLike)
       httpReq match {
         case Consequence.Success(req: HttpRequest) =>
           val res = subsystem.executeHttp(req)
+          val expected = PingRuntime.format(
+            PingRuntimeInfo("server", "goldenport-cncf", CncfVersion.current, CncfVersion.current)
+          )
           res.code.shouldBe(200)
-          res.getString.getOrElse("").should(include("ok"))
+          res.getString.getOrElse("").shouldBe(expected)
         case Consequence.Failure(c) =>
           fail(s"unexpected failure: ${c}")
       }
     }
 
     "execute via dot-form input" in {
-      val subsystem = DefaultSubsystemFactory.default()
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val normalized = CncfRuntime.normalizeServerEmulatorArgs(Seq("admin.system.ping"))
       val httpReq = normalized.flatMap(HttpRequest.fromCurlLike)
       httpReq match {
         case Consequence.Success(req: HttpRequest) =>
           val res = subsystem.executeHttp(req)
+          val expected = PingRuntime.format(
+            PingRuntimeInfo("server", "goldenport-cncf", CncfVersion.current, CncfVersion.current)
+          )
           res.code.shouldBe(200)
-          res.getString.getOrElse("").should(include("ok"))
+          res.getString.getOrElse("").shouldBe(expected)
         case Consequence.Failure(c) =>
           fail(s"unexpected failure: ${c}")
       }

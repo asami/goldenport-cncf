@@ -77,8 +77,11 @@ This page is intended for **human users**.
 curl http://localhost:8080/admin/ping
 ```
 
-```json
-{ "status": "ok" }
+```text
+runtime: cncf
+mode: server
+subsystem: cncf
+version: 0.3.0-SNAPSHOT
 ```
 
 Other available endpoints:

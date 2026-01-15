@@ -1,5 +1,7 @@
 package org.goldenport.cncf.subsystem
 
+import org.goldenport.cncf.CncfVersion
+import org.goldenport.cncf.component.{PingRuntime, PingRuntimeInfo}
 import org.goldenport.http.HttpRequest
 import org.scalatest.OptionValues
 import org.scalatest.matchers.should.Matchers
@@ -14,13 +16,16 @@ class SubsystemExecuteHttpSpec extends AnyWordSpec with Matchers with OptionValu
 
   "Subsystem.executeHttp" should {
 
-    "return ok for admin.system.ping" in {
-      val subsystem = DefaultSubsystemFactory.default()
+    "return runtime introspection for admin.system.ping" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val req = HttpRequest.fromPath(HttpRequest.GET, "/admin/system/ping")
       val res = subsystem.executeHttp(req)
+      val expected = PingRuntime.format(
+        PingRuntimeInfo("server", "goldenport-cncf", CncfVersion.current, CncfVersion.current)
+      )
 
       res.code shouldBe 200
-      res.getString.value.should(include("ok"))
+      res.getString.value.shouldBe(expected)
     }
 
     "return not found for unknown operation" in {

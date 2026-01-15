@@ -4,7 +4,8 @@ import cats.data.NonEmptyVector
 import java.nio.file.Paths
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall, Query, ResourceAccess}
-import org.goldenport.cncf.component.{Component, ComponentInitParams}
+import org.goldenport.cncf.component.{Component, ComponentInit}
+import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.component.ComponentInstanceId
 import org.goldenport.cncf.component.ComponentLogic
@@ -23,10 +24,10 @@ import org.goldenport.protocol.spec as spec
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan.  9, 2026
+ * @version Jan. 15, 2026
  * @author  ASAMI, Tomoharu
  */
-class AdminComponent(override val core: Component.Core) extends Component {
+class AdminComponent() extends Component {
 }
 
 object AdminComponent {
@@ -34,11 +35,14 @@ object AdminComponent {
   val componentId = ComponentId(name) // TODO static
 
   object Factory extends Component.Factory {
-    protected def create_Components(params: ComponentInitParams): Vector[Component] = {
-      Vector(_admin(params))
+    protected def create_Components(params: ComponentCreate): Vector[Component] = {
+      Vector(AdminComponent())
     }
 
-    private def _admin(params: ComponentInitParams): Component = {
+    protected def create_Core(
+      params: ComponentCreate,
+      comp: Component
+    ): Component.Core = {
       val request = spec.RequestDefinition()
       val response = spec.ResponseDefinition()
       val opPing = new PingOperationDefinition(request, response)
@@ -110,13 +114,12 @@ object AdminComponent {
         )
       )
       val instanceid = ComponentInstanceId.default(componentId)
-      val core = Component.Core.create(
+      Component.Core.create(
         name,
         componentId,
         instanceid,
         protocol
       )
-      AdminComponent(core)
     }
   }
 
@@ -221,7 +224,9 @@ object AdminComponent {
 
   private final case class ComponentListAction(
     subsystem: Subsystem
-  ) extends Query("component.list") {
+  ) extends Query() {
+    val name = "component.list"
+
     def createCall(core: ActionCall.Core): ActionCall =
       ComponentListActionCall(core, subsystem)
   }
@@ -230,10 +235,7 @@ object AdminComponent {
     core: ActionCall.Core,
     subsystem: Subsystem
   ) extends ProcedureActionCall {
-    override def action: Action = core.action
-    override def accesses: Seq[ResourceAccess] = Nil
-
-    protected def procedure(): Consequence[OperationResponse] = {
+    def execute(): Consequence[OperationResponse] = {
       val comps = subsystem.components
       val text = _component_lines_(comps, "Components")
       Consequence.success(OperationResponse.Scalar(text))
@@ -242,7 +244,9 @@ object AdminComponent {
 
   private final case class ConfigShowAction(
     subsystem: Subsystem
-  ) extends Query("config.show") {
+  ) extends Query() {
+    val name = "config.show"
+
     def createCall(core: ActionCall.Core): ActionCall =
       ConfigShowActionCall(core, subsystem)
   }
@@ -251,10 +255,7 @@ object AdminComponent {
     core: ActionCall.Core,
     subsystem: Subsystem
   ) extends ProcedureActionCall {
-    override def action: Action = core.action
-    override def accesses: Seq[ResourceAccess] = Nil
-
-    protected def procedure(): Consequence[OperationResponse] = {
+    def execute(): Consequence[OperationResponse] = {
       _config_snapshot_().map { text =>
         OperationResponse.Scalar(text)
       }
@@ -263,7 +264,9 @@ object AdminComponent {
 
   private final case class VariationListAction(
     subsystem: Subsystem
-  ) extends Query("variation.list") {
+  ) extends Query() {
+    val name = "variation.list"
+
     def createCall(core: ActionCall.Core): ActionCall =
       VariationListActionCall(core, subsystem)
   }
@@ -272,10 +275,7 @@ object AdminComponent {
     core: ActionCall.Core,
     subsystem: Subsystem
   ) extends ProcedureActionCall {
-    override def action: Action = core.action
-    override def accesses: Seq[ResourceAccess] = Nil
-
-    protected def procedure(): Consequence[OperationResponse] = {
+    def execute(): Consequence[OperationResponse] = {
       _config_snapshot_().map { text =>
         OperationResponse.Scalar(_variation_lines_(text))
       }
@@ -284,7 +284,9 @@ object AdminComponent {
 
   private final case class ExtensionListAction(
     subsystem: Subsystem
-  ) extends Query("extension.list") {
+  ) extends Query() {
+    val name = "extension.list"
+
     def createCall(core: ActionCall.Core): ActionCall =
       ExtensionListActionCall(core, subsystem)
   }
@@ -294,9 +296,8 @@ object AdminComponent {
     subsystem: Subsystem
   ) extends ProcedureActionCall {
     override def action: Action = core.action
-    override def accesses: Seq[ResourceAccess] = Nil
 
-    protected def procedure(): Consequence[OperationResponse] = {
+    def execute(): Consequence[OperationResponse] = {
       val comps = subsystem.components
       val text = _extension_lines_(comps)
       Consequence.success(OperationResponse.Scalar(text))

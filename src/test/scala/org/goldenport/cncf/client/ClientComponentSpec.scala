@@ -5,7 +5,7 @@ import java.nio.charset.StandardCharsets
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
 import org.goldenport.cncf.action.Action
-import org.goldenport.cncf.component.{Component, ComponentId, ComponentInitParams, ComponentInstanceId, ComponentOrigin}
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentCreate, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.http.{HttpRequest, HttpResponse}
@@ -25,7 +25,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 11, 2026
+ * @version Jan. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientComponentSpec
@@ -180,9 +180,8 @@ class ClientComponentSpec
   private def _client_component(
     driver: FakeHttpDriver
   ): ClientComponent = {
-    val params = ComponentInitParams(
+    val params = ComponentCreate(
       Subsystem("client-component-spec"),
-      _bootstrap_core(),
       ComponentOrigin.Builtin
     )
     val component = ClientComponent.Factory.create(params).collectFirst {

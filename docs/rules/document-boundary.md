@@ -158,3 +158,66 @@ Completion Criteria
 - The document is written entirely in English
 - Document placement rules are clear and mechanically applicable
 - Future documentation changes can be reviewed against this rule
+
+## Document Roles and Evolution
+
+This project classifies documents by role.  
+Editing permissions and immutability rules are determined by this role,
+not by file location or document format.
+
+### Anchor / Process Documents
+
+Anchor / Process documents define historical or procedural facts,
+such as project bootstrap state, phase or stage completion evidence,
+and authoritative process anchors.
+
+Examples include (but are not limited to):
+- Phase or stage checklists
+- Demo bootstrap documents used as process anchors
+- Strategy documents that define phase sequencing
+
+Rules:
+- Anchor / Process documents MUST be treated as immutable once the
+  relevant phase or stage is CLOSED or DONE.
+- These documents MUST NOT be edited to reflect later behavior,
+  even if the current implementation has evolved.
+- Corrections are allowed only as explicit errata sections with
+  clear timestamps and rationale, and MUST NOT alter original content.
+
+### Design / Specification Documents
+
+Design / Specification documents define canonical behavior,
+contracts, and semantics of the system.
+
+Rules:
+- These documents MAY be updated to reflect the current
+  canonical behavior of the system.
+- They MUST NOT contain process history, checklist status,
+  or stage-specific execution evidence.
+- When behavior evolves, changes SHOULD be integrated into
+  existing design documents rather than creating new ones.
+
+### Notes Documents
+
+Notes documents capture exploratory ideas, historical discussion,
+or non-normative context.
+
+Rules:
+- Notes documents MAY evolve freely.
+- Notes documents MUST NOT override or contradict
+  Design / Specification documents.
+- Notes documents MUST NOT be used as substitutes for
+  canonical design or process documentation.
+
+### Anti-Fragmentation Rule
+
+To prevent documentation fragmentation:
+
+- New standalone documents MUST NOT be created unless:
+  - their role is clearly identified, and
+  - they have an explicit integration or reference point
+    from an existing canonical document.
+- When existing documents can be extended without violating
+  their role, extension is preferred over creating new files.
+
+These rules are normative and apply across all phases and stages.

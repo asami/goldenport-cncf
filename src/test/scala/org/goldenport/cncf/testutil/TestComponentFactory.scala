@@ -6,7 +6,7 @@ import org.goldenport.cncf.subsystem.Subsystem
 
 /*
  * @since   Jan.  8, 2026
- * @version Jan.  9, 2026
+ * @version Jan. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object TestComponentFactory {
@@ -24,7 +24,7 @@ object TestComponentFactory {
         Component.create(name, componentId, instanceId, protocol)
     }
     val dummy = Subsystem("test")
-    val params = ComponentInitParams(dummy, c.core, ComponentOrigin.Builtin)
+    val params = ComponentInit(dummy, c.core, ComponentOrigin.Builtin)
     c.initialize(params)
   }
 }

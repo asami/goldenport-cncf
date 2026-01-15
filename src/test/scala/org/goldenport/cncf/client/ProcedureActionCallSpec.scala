@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 11, 2026
- * @version Jan. 11, 2026
+ * @version Jan. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class ProcedureActionCallSpec
@@ -39,7 +39,8 @@ class ProcedureActionCallSpec
         val driver = new FakeHttpDriver
         val runtime = new SpyRuntimeContext
         val ctx = _execution_context(runtime)
-        val action = new Command("procedure-test") {
+        val action = new Command() {
+          val name = "procedure-test"
           def createCall(core: ActionCall.Core): ActionCall =
             TestProcedureCall(core, driver, path)
         }
@@ -133,8 +134,6 @@ class ProcedureActionCallSpec
   ) extends ProcedureActionCall {
     var functionalDslUsed: Boolean = false
 
-    override def action: Action = core.action
-    def accesses: Seq[ResourceAccess] = Nil
     def httpDriver: HttpDriver = driver
 
     def executeDirect(): OperationResponse = {

@@ -15,7 +15,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 
 /*
  * @since   Jan.  3, 2026
- * @version Jan. 11, 2026
+ * @version Jan. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -58,7 +58,7 @@ case class ComponentLogic(
     component.jobEngine.getResult(jobId)
 
   private def _execution_context(): ExecutionContext = {
-    val base0 = ExecutionContext.createWithSystem(system)
+    val base0 = ExecutionContext.createWithSystem(component.systemContext)
     val base1 = ExecutionContext.withSubsystemHttpDriver(
       base0,
       component.subsystem.flatMap(_.httpDriver)
@@ -141,7 +141,9 @@ case class ComponentLogic(
 }
 
 object ComponentLogic {
-  final case class PingAction() extends Query("ping") {
+  final case class PingAction() extends Query() {
+    def name = "ping"
+
     def createCall(core: ActionCall.Core): ActionCall =
       PingActionCall(core)
   }
@@ -150,8 +152,9 @@ object ComponentLogic {
     core: ActionCall.Core
   ) extends ActionCall {
     override def action: Action = core.action
-    def accesses: Seq[ResourceAccess] = Nil
-    def execute(): Consequence[OperationResponse] =
-      Consequence.success(OperationResponse.Scalar("ok"))
+    def execute(): Consequence[OperationResponse] = {
+      val info = PingRuntime.fromSystem(core.executionContext.system)
+      Consequence.success(OperationResponse.Scalar(PingRuntime.format(info)))
+    }
   }
 }

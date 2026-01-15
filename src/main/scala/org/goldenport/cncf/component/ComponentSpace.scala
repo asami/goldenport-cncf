@@ -2,7 +2,7 @@ package org.goldenport.cncf.component
 
 /*
  * @since   Jan.  8, 2026
- * @version Jan.  9, 2026
+ * @version Jan. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentSpace(
@@ -60,5 +60,4 @@ final class ComponentSpace(
 }
 
 object ComponentSpace {
-  val empty = ComponentSpace()
 }
