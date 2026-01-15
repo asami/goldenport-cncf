@@ -5,7 +5,7 @@ lazy val root = project
   .settings(
     organization := "org.goldenport",
     name := "goldenport-cncf",
-    version := "0.3.0-SNAPSHOT",
+    version := "0.3.0",
 
     scalaVersion := scala3Version,
 
@@ -32,7 +32,7 @@ lazy val root = project
 
       "org.slf4j" % "slf4j-simple" % "2.0.12",
 
-      "org.goldenport" %% "goldenport-core" % "0.2.0-SNAPSHOT",
+      "org.goldenport" %% "goldenport-core" % "0.2.0",
 
       // Testing
       "org.scalatest" %% "scalatest" % "3.2.18" % Test
