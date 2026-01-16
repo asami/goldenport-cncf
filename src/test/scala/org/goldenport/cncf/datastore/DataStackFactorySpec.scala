@@ -1,7 +1,7 @@
 package org.goldenport.cncf.datastore
 
 import cats.{Id, ~>}
-import org.goldenport.cncf.config.model.{Config, ConfigValue}
+import org.goldenport.configuration.{Configuration, ConfigurationValue}
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemContext}
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.scalatest.GivenWhenThen
@@ -21,8 +21,8 @@ class DataStackFactorySpec
   "DataStackFactory" should {
     "create a UnitOfWork with selectable datastore for memory backend" in {
       Given("a config that selects memory backend")
-      val config = Config(
-        Map("datastore.backend" -> ConfigValue.StringValue("memory"))
+      val config = Configuration(
+        Map("datastore.backend" -> ConfigurationValue.StringValue("memory"))
       )
 
       When("creating the data stack")

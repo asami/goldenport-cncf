@@ -12,13 +12,14 @@ import org.goldenport.protocol.service.{Service => ProtocolService}
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeContext, ScopeKind, SystemContext}
 import org.goldenport.cncf.action.{Action, ActionEngine}
 import org.goldenport.cncf.subsystem.Subsystem
-import org.goldenport.cncf.config.model.Config
+import org.goldenport.configuration.{Configuration, ResolvedConfiguration}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.datastore.DataStackFactory
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.service.{Service, ServiceGroup}
 import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
 import org.goldenport.cncf.unitofwork.UnitOfWork
+import org.goldenport.cncf.cli.RunMode
 import scala.util.control.NonFatal
 
 /*
@@ -32,7 +33,7 @@ abstract class Component() extends Component.Core.Holder {
   private var _origin: Option[ComponentOrigin] = None
   private var _application_config: Component.ApplicationConfig = Component.ApplicationConfig()
   private var _system_context: SystemContext = SystemContext.empty
-  private var _unit_of_work: UnitOfWork = DataStackFactory.create(Config.empty)
+  private var _unit_of_work: UnitOfWork = DataStackFactory.create(Configuration.empty)
   private var _scope_context: Option[ScopeContext] = None
   private var _services: Option[ServiceGroup] = None
   private var _subsystem: Option[Subsystem] = None
@@ -101,7 +102,7 @@ abstract class Component() extends Component.Core.Holder {
     this
   }
 
-  private def _init_data_stack(config: Config): Unit = {
+  private def _init_data_stack(config: Configuration): Unit = {
     _unit_of_work = DataStackFactory.create(config)
   }
 
@@ -164,7 +165,7 @@ object Component {
   final case class ApplicationConfig(
     applicationContext: Option[ApplicationContext] = None,
     httpDriver: Option[HttpDriver] = None,
-    config: Option[org.goldenport.cncf.config.model.Config] = None
+    config: Option[org.goldenport.configuration.Configuration] = None
   )
 
   type ApplicationContext =
@@ -322,7 +323,7 @@ object Component {
   ): Component = {
     val c = create(name, componentid, instanceid, protocol)
     c.withApplicationConfig(applicationConfig)
-    val conf = applicationConfig.config.getOrElse(org.goldenport.cncf.config.model.Config.empty)
+    val conf = applicationConfig.config.getOrElse(org.goldenport.configuration.Configuration.empty)
     c._init_data_stack(conf)
     c
   }
@@ -441,6 +442,26 @@ object Component {
   //   )
   //   Instance(core)
   // }
+  
+  final case class Config(
+    httpDriver: Option[String],
+    mode: Option[RunMode]
+  )
+
+  object Config {
+    def from(conf: ResolvedConfiguration): Consequence[Config] = {
+      import cats.syntax.all.*
+
+      val http =
+        conf.get[String]("cncf.component.http.driver")
+
+      val mode =
+        conf.get[String]("cncf.component.mode")
+          .flatMap(_.traverse(RunMode.parse))
+
+      (http, mode).mapN(Config.apply)
+    }
+  }
 }
 
 final case class ComponentId(

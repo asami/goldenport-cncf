@@ -8,6 +8,7 @@ import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentCreate, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.{Argument, Property, Request}
@@ -181,7 +182,7 @@ class ClientComponentSpec
     driver: FakeHttpDriver
   ): ClientComponent = {
     val params = ComponentCreate(
-      Subsystem("client-component-spec"),
+      TestComponentFactory.emptySubsystem("client-component-spec"),
       ComponentOrigin.Builtin
     )
     val component = ClientComponent.Factory.create(params).collectFirst {

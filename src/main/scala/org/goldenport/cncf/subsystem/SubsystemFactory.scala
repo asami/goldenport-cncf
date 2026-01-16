@@ -7,6 +7,7 @@ import org.goldenport.cncf.client.ClientComponent
 import org.goldenport.cncf.component.admin.AdminComponent
 import org.goldenport.cncf.component.specification.SpecificationComponent
 import org.goldenport.cncf.http.{FakeHttpDriver, UrlConnectionHttpDriver}
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.egress.EgressCollection
@@ -25,7 +26,9 @@ object DefaultSubsystemFactory {
   private val _spec = SpecificationComponent.Factory()
 
   def default(
-    mode: Option[String] = None
+    mode: Option[String] = None,
+    configuration: ResolvedConfiguration =
+      ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
   ): Subsystem = {
     val subsystemName = "goldenport-cncf"
     val modeLabel = mode.getOrElse("command")
@@ -36,7 +39,12 @@ object DefaultSubsystemFactory {
       subsystemVersion = None
     )
     val driver = _resolve_http_driver(mode, subsystemName)
-    val subsystem = Subsystem(name = subsystemName, httpdriver = Some(driver))
+    val subsystem =
+      Subsystem(
+        name = subsystemName,
+        httpdriver = Some(driver),
+        configuration = configuration
+      )
     val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
     val comps = Vector(_admin, _client, _spec)
       .flatMap(_.create(params))

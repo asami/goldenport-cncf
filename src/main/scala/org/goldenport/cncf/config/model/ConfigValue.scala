@@ -16,6 +16,10 @@ package org.goldenport.cncf.config.model
  * @version Dec. 18, 2025
  * @author  ASAMI, Tomoharu
  */
+@deprecated(
+  "Use org.goldenport.configuration.* (Phase 2.8)",
+  "Phase 2.8"
+)
 sealed trait ConfigValue
 
 object ConfigValue {

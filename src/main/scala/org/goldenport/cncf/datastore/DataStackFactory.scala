@@ -1,6 +1,6 @@
 package org.goldenport.cncf.datastore
 
-import org.goldenport.cncf.config.model.Config
+import org.goldenport.configuration.Configuration
 import org.goldenport.cncf.unitofwork.UnitOfWork
 
 /*
@@ -9,7 +9,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWork
  * @author  ASAMI, Tomoharu
  */
 object DataStackFactory {
-  def create(config: Config): UnitOfWork = {
+  def create(config: Configuration): UnitOfWork = {
     val backend = config.string("datastore.backend").getOrElse("memory")
 
     backend match {

@@ -2,9 +2,10 @@ package org.goldenport.cncf.cli
 
 import java.net.URL
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Paths}
+import java.nio.file.{Files, Path, Paths}
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
+import org.goldenport.configuration.{Configuration, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.client.{ClientComponent, GetQuery, PostCommand}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.component.{Component, ComponentInit, PingRuntime}
@@ -25,12 +26,39 @@ import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime {
+  object Config {
+    final case class Runtime(
+      environment: String,
+      observability: Map[String, String]
+    )
+
+    def from(conf: org.goldenport.configuration.ResolvedConfiguration)
+        : org.goldenport.Consequence[Runtime] = {
+      import cats.syntax.all.*
+
+      val env =
+        conf.get[String]("cncf.runtime.environment")
+          .map(_.getOrElse("default"))
+
+      val obs =
+        conf.get[String]("cncf.runtime.observability")
+          .map(_.map(v => Map("default" -> v)).getOrElse(Map.empty))
+
+      (env, obs).mapN(Runtime.apply)
+    }
+  }
+
   def buildSubsystem(
     extraComponents: Subsystem => Seq[Component] = _ => Nil,
     mode: Option[RunMode] = None
   ): Subsystem = {
+    val cwd = Paths.get("").toAbsolutePath.normalize
+    val configuration = _resolve_configuration(cwd)
     val modeLabel = mode.map(_.name)
-    val subsystem = DefaultSubsystemFactory.default(modeLabel)
+    val subsystem = DefaultSubsystemFactory.default(
+      modeLabel,
+      configuration = configuration
+    )
     val extras = extraComponents(subsystem)
     if (extras.nonEmpty) {
       subsystem.add(extras)
@@ -852,6 +880,18 @@ object CncfRuntime {
     val body = res.getString.getOrElse(res.show)
     Console.out.println(body)
   }
+
+  private def _resolve_configuration(
+    cwd: Path
+  ): ResolvedConfiguration = {
+    val sources = ConfigurationSources.standard(cwd)
+    ConfigurationResolver.default.resolve(sources) match {
+      case Consequence.Success(resolved) =>
+        resolved
+      case Consequence.Failure(_) =>
+        ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+    }
+  }
 }
 
 enum RunMode(val name: String) {
@@ -863,4 +903,10 @@ enum RunMode(val name: String) {
 }
 object RunMode {
   def from(p: String): Option[RunMode] = values.find(_.name == p)
+
+  def parse(p: String): org.goldenport.Consequence[RunMode] =
+    from(p) match {
+      case Some(runMode) => org.goldenport.Consequence.success(runMode)
+      case None => org.goldenport.Consequence.failure(s"invalid run mode: ${p}")
+    }
 }

@@ -19,19 +19,21 @@ import org.goldenport.cncf.component.{
 import org.goldenport.cncf.component.ComponentLocator.NameLocator
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind, SystemContext}
 import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.configuration.ResolvedConfiguration
 
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
   val name: String,
   val version: Option[String] = None,
   scopeContext: Option[ScopeContext] = None, // TODO
-  httpdriver: Option[HttpDriver] = None
+  httpdriver: Option[HttpDriver] = None,
+  val configuration: ResolvedConfiguration
 ) {
   private var _component_space: ComponentSpace = ComponentSpace()
   private var _resolver: OperationResolver = OperationResolver.empty
@@ -106,6 +108,12 @@ final class Subsystem(
   def resolver: OperationResolver = _resolver
 
   def operationResolver: OperationResolver = _resolver
+
+  def configurationValue(key: String): Option[org.goldenport.configuration.ConfigurationValue] =
+    configuration.configuration.values.get(key)
+
+  def configurationOrEmpty: org.goldenport.configuration.Configuration =
+    configuration.configuration
 
   private def _rebuildResolver(): Unit =
     _resolver = OperationResolver.build(_component_space.components)
@@ -351,4 +359,39 @@ final class Subsystem(
     id: ComponentId
   ): ComponentInstanceId =
     ComponentInstanceId.default(id)
+}
+
+object Subsystem {
+  import cats.syntax.all.*
+  import org.goldenport.Consequence
+  import org.goldenport.configuration.ResolvedConfiguration
+  import org.goldenport.cncf.cli.RunMode
+
+  final case class Config(
+    httpDriver: String,
+    mode: RunMode
+  )
+
+  object Config {
+    def from(conf: ResolvedConfiguration): Consequence[Config] = {
+      val httpDriver =
+        conf.get[String]("cncf.subsystem.http.driver").flatMap {
+          case Some(value) => Consequence.success(value)
+          case None        => Consequence.failure("cncf.subsystem.http.driver is required")
+        }
+
+      val mode =
+        conf
+          .get[String]("cncf.subsystem.mode")
+          .map(_.getOrElse("normal"))
+          .flatMap { value =>
+            RunMode.from(value) match {
+              case Some(runMode) => Consequence.success(runMode)
+              case None          => Consequence.failure(s"invalid run mode: ${value}")
+            }
+          }
+
+      (httpDriver, mode).mapN(Config.apply)
+    }
+  }
 }

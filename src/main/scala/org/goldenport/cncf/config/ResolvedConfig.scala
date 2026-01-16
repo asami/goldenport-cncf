@@ -25,6 +25,10 @@ import org.goldenport.cncf.config.trace.ConfigTrace
  * @version Dec. 18, 2025
  * @author  ASAMI, Tomoharu
  */
+@deprecated(
+  "Use org.goldenport.configuration.* (Phase 2.8)",
+  "Phase 2.8"
+)
 case class ResolvedConfig(
   config: Config,
   trace: ConfigTrace

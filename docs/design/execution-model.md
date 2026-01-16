@@ -196,6 +196,77 @@ Design Notes (Observability / Audit)
 
 
 ----------------------------------------------------------------------
+Runtime Pipeline (Post-Protocol Execution Path)
+----------------------------------------------------------------------
+
+This section records the CNCF runtime delivery pipeline from protocol
+inputs through ActionCall execution. It mirrors the current implementation
+so readers understand what happens in practice today.
+
+Entry points
+------------
+- CLI modes: `CncfRuntime.executeCommand`, `executeClient`, `executeServer`, and `executeServerEmulator`
+- Script execution: `ScriptRuntime`
+
+Each entry point builds a `Subsystem` from resolved configuration and
+walks into the shared execution path.
+
+Ingress → Subsystem
+--------------------
+- `CncfRuntime` resolves configuration via `ConfigurationResolver` and
+  passes the resulting `ResolvedConfiguration` into `DefaultSubsystemFactory`,
+  returning a configured `Subsystem`.
+- HTTP adapters (`HttpExecutionEngine`, `Http4sHttpServer`) and CLI/Script
+  handlers feed requests to `Subsystem.execute` or `executeHttp`.
+- The subsystem owns the resolved configuration snapshot and resolves
+  routes before delegating to its components.
+
+OperationRequest construction
+-----------------------------
+- `ComponentLogic.makeOperationRequest` converts DSL/protocol requests into
+  `OperationRequest` (`Action`) instances.
+- Protocol obligations end at `OperationRequest` creation; subsequent logic
+  operates on semantic builders and does not consult raw DSL fragments.
+
+Promotion to ActionCall
+-----------------------
+- `ComponentLogic.createActionCall` layers subsystem/component HTTP drivers,
+  runtime/application contexts, and observability into a fresh
+  `ExecutionContext`.
+- `ActionEngine.createActionCall` wraps the `Action`, `ExecutionContext`, and
+  optional correlation id inside `ActionCall.Core` and lets domain-specific
+  `Action` implementations produce the concrete `ActionCall`.
+- ActionCall creation is the last touchpoint before runtime execution semantics
+  begin.
+
+Execution
+---------
+- `ActionEngine.execute` is the single execution surface.
+- Authorization hooks run first; on success `observe_enter` is emitted and
+  execution proceeds.
+- `ExecutionContext.runtime` handles commit/abort/dispose around
+  `ActionCall.execute`.
+- `UnitOfWork` coordinates data stores and event engines during commit/abort.
+- Execution never depends on protocol artifacts beyond the bound `ActionCall`.
+
+Transport completion
+--------------------
+- CLI entry points translate `Consequence[OperationResponse]` into responses
+  and exit codes.
+- HTTP execution returns `HttpResponse`, which `Http4sHttpServer` adapts for
+  transport.
+- Script execution reuses the same ActionCall flow and returns control to
+  the calling harness (`ScriptRuntime`).
+
+References
+----------
+- ExecutionContext lifecycle: `execution-context.md`
+- ActionCall boundary: `domain-component.md`
+- Component responsibilities: `component-model.md`
+- Application/UnitOfWork lifecycle: `component-and-application-responsibilities.md`
+
+
+----------------------------------------------------------------------
 Error Handling
 ----------------------------------------------------------------------
 

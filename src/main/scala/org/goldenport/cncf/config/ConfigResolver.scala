@@ -27,6 +27,10 @@ import scala.util.boundary.break
  * @version Dec. 18, 2025
  * @author  ASAMI, Tomoharu
  */
+@deprecated(
+  "Use org.goldenport.configuration.* (Phase 2.8)",
+  "Phase 2.8"
+)
 trait ConfigResolver {
 
   def resolve(
@@ -45,6 +49,10 @@ object ConfigResolver {
     new DefaultConfigResolver
 }
 
+@deprecated(
+  "Use org.goldenport.configuration.* (Phase 2.8)",
+  "Phase 2.8"
+)
 final class DefaultConfigResolver
   extends ConfigResolver {
 

@@ -8,6 +8,9 @@ scope = infrastructure cleanup after Phase 2.6
 Clean up infrastructural inconsistencies discovered during Phase 2.6
 without introducing new features or semantic changes.
 
+- Clarify ownership and terminology for configuration vs core Config.
+- Record Phase 2.8 decisions for configuration migration (CNCF → core) without semantic change.
+
 ## Initial Scope
 
 - Path alias hard-coding → declarative / logical resolution
@@ -132,6 +135,26 @@ and implementation necessary to close these items.
 
 These items constitute the core scope of Phase 2.8.
 
+## Phase 2.6 → Phase 2.8 Deferred Item Tracking
+
+| Item | Source | Status | Rationale |
+| --- | --- | --- | --- |
+| Semantic configuration / propagation (Subsystem.Config, Component.Config, runtime helpers) | Phase 2.6 Stage 3/5 deferred list + canonical configuration model | **DONE** | Builders now exist beside their owners, and the `Configuration Propagation Model` section of `configuration-model.md` captures the propagation path, so the semantic layer is established. |
+| Configuration ownership realignment (core vs CNCF) | Phase 2.6 Stage 5 deferred list | **DONE** | CNCF now consumes `org.goldenport.configuration.*` and relies on core’s resolution artifacts, as documented in the Phase 2.8 Design Record and reiterated in `configuration-model.md#configuration-propagation-model`. |
+| Canonical documentation consolidation | Phase 2.6 Stage 6 deferred note | **DONE** | The propagation semantics are merged into `configuration-model.md` and linked from the consolidated/design notes, so a single canonical reference now exists. |
+| Config → initialize → runtime integration | Phase 2.6 Stage 5 deferred list | **PARTIAL** | Semantic builders and documentation exist, but the single end-to-end contract is still recorded as Phase 2.8 scope. |
+| Path / alias resolution hygiene | Phase 2.6 Stage 3 note + Stage 6 deferred steps | **OPEN** | Alias normalization requirements remain in Phase 2.8 docs and no implementation or decision update has been recorded. |
+| Component / service / operation canonical construction | Phase 2.6 Stage 6 deferred steps | **OPEN** | The script DSL alias/spec rules remain deferred (ScriptDslSpec is intentionally ignored) and no refinement is documented. |
+| ComponentDefinition / DSL formalization | Phase 2.6 Stage 5 deferred list | **OPEN** | Design note still marks the item as “must be revisited before Phase 2.8 completion.” |
+| Component repository priority rules | Phase 2.6 Stage 5 deferred list | **OPEN** | Deterministic repository ordering remains unsettled in Phase 2.8 scope. |
+| Bootstrap log persistence / ops integration | Phase 2.6 Stage 5 deferred list | **OPEN** | Persistence/operational integration is explicitly deferred with no recorded completion in Phase 2.8 doc. |
+| OpenAPI / representation expansion policy | Phase 2.6 Stage 6 deferred steps | **OPEN** | Advanced OpenAPI schema/representation work is marked as deferred to Phase 2.8+. |
+
+### Status Summary
+
+- Semantic Configuration / Propagation, Configuration ownership realignment, and Canonical documentation consolidation are DONE within Phase 2.8 and documented via `configuration-model.md#configuration-propagation-model`.
+- Phase 2.8 remains **OPEN** because the remaining hygiene items in the table are still marked PARTIAL or OPEN and have not been resolved or re-deferred.
+
 ## Reference: Script DSL operation resolution status
 
 ### Background
@@ -209,6 +232,58 @@ and are intended to prevent accidental semantic drift.
 This separation is consistent with:
 - `config-resolution.md` (resolution ≠ semantics)
 - `configuration-model.md` (no raw config exposure to domain logic)
+- `docs/design/configuration-model.md#configuration-propagation-model` (semantic propagation from system → subsystem → component)
+
+### Design Record: Core-owned Configuration Mechanism (Phase 2.8)
+
+#### Decision
+
+The generic configuration mechanism (`Config`, `ConfigValue`, `ResolvedConfig`,
+and deterministic resolution pipeline) is **owned by goldenport-core**, not CNCF.
+
+CNCF consumes configuration as a resolved, schema-free container and must not
+own or redefine the underlying resolution or merge semantics.
+
+#### Rationale
+
+- The configuration mechanism is:
+  - runtime-agnostic
+  - subsystem-agnostic
+  - CLI / server / embedded compatible
+- It carries **no domain or CNCF-specific semantics**.
+- Multiple systems (CNCF, SIE, CLI tools, future runtimes) rely on the same
+  deterministic resolution behavior.
+
+Therefore, the configuration mechanism belongs to the core infrastructure layer.
+
+#### Boundary Definition
+
+- **core** is responsible for:
+  - configuration discovery
+  - source ordering and merging
+  - traceability
+  - production of `ResolvedConfig`
+- **cncf** is responsible for:
+  - consuming `ResolvedConfig`
+  - building **semantic / normalized configuration models**
+  - applying configuration-derived metadata (e.g. aliases, deployment hints)
+
+This preserves the principle:
+> resolution ≠ semantics
+
+#### Implications
+
+- The current `org.goldenport.cncf.config` implementation is transitional.
+- The implementation will be migrated to **goldenport-core** without semantic change.
+- CNCF will depend on core’s configuration artifacts and must not fork or duplicate them.
+
+#### Non-Goals (Phase 2.8)
+
+- No semantic changes to configuration behavior
+- No DSL introduction
+- No resolver logic embedded in configuration
+
+This decision is **locked for Phase 2.8** to prevent later architectural drift.
 
 ### Prefix Matching (Resolver Core)
 
@@ -223,6 +298,42 @@ This separation is consistent with:
   - multiple matches → Ambiguous (explicit candidate list)
 - Prefix matching is part of the canonical resolver and is **always enabled**.
 - This mechanism replaces earlier notions of “incremental matching”.
+
+### Terminology Clarification: Config vs Configuration (Phase 2.8)
+
+To avoid semantic ambiguity, the term **Config** is reserved for
+**core-internal, concrete configuration** required for operating the core
+runtime itself (e.g. locale, timezone, logging, encoding).
+
+The generic, schema-free, property-based configuration mechanism used for
+applications, subsystems, and components is formally named
+**configuration**.
+
+#### Definitions
+
+- **Config**
+  - Owned by core
+  - Concrete and strongly typed
+  - Required for core runtime behavior
+  - Implemented under `org.goldenport.config`
+
+- **configuration**
+  - Generic and schema-free
+  - Resolution-focused (discovery, ordering, merging, traceability)
+  - Semantics applied only after resolution
+  - Implemented under `org.goldenport.configuration`
+
+#### Implications
+
+- The current `org.goldenport.cncf.config` implementation represents
+  **configuration**, not core `Config`.
+- This implementation will be migrated to core as
+  `org.goldenport.configuration` without semantic change.
+- CNCF must not own or fork configuration resolution logic.
+- CNCF is responsible only for building **semantic / normalized configuration
+  models** from resolved configuration.
+
+This terminology distinction is **mandatory** and **locked for Phase 2.8**.
 
 ### Single Operation Optimization (CLI / Script Only)
 

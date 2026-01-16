@@ -9,10 +9,10 @@ import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.component.ComponentInstanceId
 import org.goldenport.cncf.component.ComponentLogic
-import org.goldenport.cncf.config.ConfigResolver
-import org.goldenport.cncf.config.model.ConfigValue
-import org.goldenport.cncf.config.source.ConfigSources
-import org.goldenport.cncf.config.trace.ConfigOrigin
+import org.goldenport.configuration.ConfigurationResolver
+import org.goldenport.configuration.ConfigurationValue
+import org.goldenport.configuration.ConfigurationSources
+import org.goldenport.configuration.ConfigurationOrigin
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -327,12 +327,12 @@ object AdminComponent {
 
   private def _config_snapshot_(): Consequence[String] = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val sources = ConfigSources.standard(cwd)
-    ConfigResolver.default.resolve(sources).map { resolved =>
+    val sources = ConfigurationSources.standard(cwd)
+    ConfigurationResolver.default.resolve(sources).map { resolved =>
       val lines = Vector.newBuilder[String]
       lines += "Config Snapshot"
       lines += ""
-      resolved.config.values.toVector.sortBy(_._1).foreach {
+      resolved.configuration.values.toVector.sortBy(_._1).foreach {
         case (key, value) =>
           val source = resolved.trace.get(key).map(r => _origin_(r.origin)).getOrElse("unknown")
           lines += s"${key} = ${_value_(value)}"
@@ -384,26 +384,27 @@ object AdminComponent {
     lines.result().mkString("\n").trim
   }
 
-  private def _value_(value: ConfigValue): String = {
+  private def _value_(value: ConfigurationValue): String = {
     value match {
-      case ConfigValue.StringValue(v) => v
-      case ConfigValue.NumberValue(v) => v.toString
-      case ConfigValue.BooleanValue(v) => v.toString
-      case ConfigValue.ListValue(vs) => vs.map(_value_).mkString("[", ", ", "]")
-      case ConfigValue.ObjectValue(vs) =>
+      case ConfigurationValue.StringValue(v) => v
+      case ConfigurationValue.NumberValue(v) => v.toString
+      case ConfigurationValue.BooleanValue(v) => v.toString
+      case ConfigurationValue.ListValue(vs) => vs.map(_value_).mkString("[", ", ", "]")
+      case ConfigurationValue.ObjectValue(vs) =>
         vs.map { case (k, v) => s"${k}=${_value_(v)}" }.mkString("{", ", ", "}")
-      case ConfigValue.NullValue => "null"
+      case ConfigurationValue.NullValue => "null"
     }
   }
 
-  private def _origin_(origin: ConfigOrigin): String = {
+  private def _origin_(origin: ConfigurationOrigin): String = {
     origin match {
-      case ConfigOrigin.Arguments => "cli"
-      case ConfigOrigin.Environment => "env"
-      case ConfigOrigin.Default => "default"
-      case ConfigOrigin.Home => "file"
-      case ConfigOrigin.Project => "file"
-      case ConfigOrigin.Cwd => "file"
+      case ConfigurationOrigin.Arguments => "cli"
+      case ConfigurationOrigin.Environment => "env"
+      case ConfigurationOrigin.Default => "default"
+      case ConfigurationOrigin.Home => "file"
+      case ConfigurationOrigin.Project => "file"
+      case ConfigurationOrigin.Cwd => "file"
+      case ConfigurationOrigin.Resource => "resource"
     }
   }
 }

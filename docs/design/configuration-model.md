@@ -27,6 +27,235 @@ This document defines how CNCF:
 
 ---
 
+## 5. Configuration Propagation Model
+
+This section consolidates the **propagation story** for CNCF’s runtime layers.
+It defines how configuration is resolved, structured, and accessed within
+CNCF’s runtime layers.
+
+### Purpose
+
+This document defines how configuration is **resolved, structured, and propagated**
+within the CNCF runtime during Phase 2.x.
+
+The goal is to:
+
+- Keep configuration semantics **explicit and layered**
+- Avoid premature abstraction (e.g. `ApplicationConfig`)
+- Align configuration ownership with **deployment and execution boundaries**
+
+---
+
+### Core Principles
+
+#### 1. Deployment Unit First
+
+- The **primary deployment and execution unit is `Subsystem`**
+- Configuration resolution, lifecycle, observability, and scaling are all scoped to a Subsystem
+
+> Therefore, configuration modeling starts from **Subsystem**, not Application.
+
+---
+
+#### 2. No ApplicationConfig (for now)
+
+`ApplicationConfig` is **intentionally not defined** in Phase 2.x.
+
+Reasons:
+
+- “Application” is an abstract composition concept
+- No concrete lifecycle or deployment boundary exists for Application
+- Introducing it early blurs ownership and responsibility
+
+Application may later be defined as a **composition of Subsystems**,
+but it is **not a configuration root**.
+
+---
+
+### Configuration Layers
+
+Configuration is structured as **owner-centric nested models**.
+
+```
+System.Config
+   ↓
+Subsystem.Config
+   ↓
+Component.Config
+```
+
+Each layer:
+
+- Lives next to its owning runtime object
+- Reads from `ResolvedConfiguration`
+- Does **not** mutate or re-resolve configuration
+
+---
+
+#### System.Config
+
+**Scope**: Entire runtime / process  
+**Owner**: Runtime (e.g. `CncfRuntime`)
+
+Responsibilities:
+
+- Execution environment assumptions
+- Observability defaults
+- Global runtime behavior
+
+Examples:
+
+- environment name
+- observability flags
+- logging / tracing modes
+- clock / timezone / locale assumptions
+
+Characteristics:
+
+- Created once per runtime
+- Independent of Subsystem count
+- Passed *implicitly* to lower layers (via execution context, not as raw config)
+
+---
+
+#### Subsystem.Config
+
+**Scope**: Deployment unit  
+**Owner**: `Subsystem`
+
+Responsibilities:
+
+- How the subsystem is run
+- How it communicates
+- What role it plays
+
+Examples:
+
+- HTTP driver
+- Run mode
+- Datastore / event backend selection
+- Subsystem-level capabilities
+
+Characteristics:
+
+- Built from `ResolvedConfiguration`
+- Applicative style (error accumulation)
+- Lives as `Subsystem.Config`
+- Subsystem is the **root of semantic configuration**
+
+---
+
+#### Component.Config
+
+**Scope**: Behavioral unit  
+**Owner**: `Component`
+
+Responsibilities:
+
+- Component-specific behavior overrides
+- Fine-grained runtime tuning
+
+Examples:
+
+- Component HTTP driver override
+- Component run mode
+- Feature toggles
+
+Characteristics:
+
+- Optional values
+- Defaults inherited from Subsystem behaviorally (not structurally)
+- Built via `Component.Config.from(ResolvedConfiguration)`
+
+---
+
+### Configuration Resolution
+
+#### ResolvedConfiguration
+
+- Produced by `ConfigurationResolver`
+- Flat key/value store with trace
+- No semantics, no validation
+
+#### Semantic Builders
+
+Each config layer defines a **semantic builder**:
+
+```scala
+Subsystem.Config.from(conf: ResolvedConfiguration): Consequence[Subsystem.Config]
+Component.Config.from(conf: ResolvedConfiguration): Consequence[Component.Config]
+```
+
+Properties:
+
+- **Applicative style** (`mapN`)
+- Explicit defaults
+- Explicit required keys
+- No side effects
+- No cascading construction
+
+---
+
+### Temporal Values and Context
+
+Some configuration values (e.g. time) require execution assumptions.
+
+Rules:
+
+- Temporal parsing uses `TemporalValueReader[T]`
+- Requires `ExecutionContext` injection
+- Accessed via:
+
+```scala
+ResolvedConfiguration.getTemporal[T](key)
+```
+
+This ensures:
+
+- Timezone / clock / locale correctness
+- Deterministic behavior in tests
+- No hidden global state
+
+---
+
+### Tier Model (Non-Configuration)
+
+The following are **classification concepts**, not configuration scopes:
+
+- PresentationTier
+- ApplicationTier
+- DomainTier
+
+They:
+
+- Do **not** own configuration
+- Do **not** participate in resolution
+- Are implemented as **Component compositions**
+
+Configuration flows *through* them, not *from* them.
+
+---
+
+### Explicit Non-Goals (Phase 2.x)
+
+- No schema validation framework
+- No DSL for configuration
+- No dynamic config mutation
+- No ApplicationConfig
+- No cross-layer implicit propagation
+
+---
+
+### Summary
+
+- Configuration ownership follows **execution ownership**
+- Subsystem is the semantic root
+- Configuration remains explicit, layered, and composable
+- The model is intentionally conservative and evolvable
+
+This design is frozen for Phase 2.x and forms the basis for further refinement.
+
+
 ## 2. Design Principles
 
 ### 2.1 Configuration Is an Input Language
@@ -60,7 +289,43 @@ There is no reverse dependency.
 
 ---
 
-### 2.3 Subsystem as the Compilation Unit
+### 2.3 Core Config vs Configuration
+
+CNCF distinguishes between two fundamentally different concepts
+that are often conflated under the term “config”.
+
+#### Core Config
+
+Core Config represents **concrete runtime settings required for the core itself**,
+such as locale, timezone, logging, encoding, or randomness.
+
+These settings:
+- are tightly coupled to core runtime behavior,
+- are limited in scope and schema,
+- and exist to ensure correct execution of the framework.
+
+Core Config is not intended to describe system architecture.
+
+#### Configuration (Architectural Configuration)
+
+Configuration, in contrast, is a **general-purpose input language**
+used to describe and constrain system and subsystem architecture.
+
+It:
+- accepts structured DSLs (e.g. HOCON),
+- resolves multiple sources deterministically,
+- and produces a normalized structural representation.
+
+Configuration does **not** encode semantics by itself.
+All interpretation, validation, and platform decisions
+are performed in later stages (Configuration Model and Compilation).
+
+For clarity and correctness,
+CNCF treats these as separate concepts with separate responsibilities.
+
+--
+
+### 2.4 Subsystem as the Compilation Unit
 
 The **Subsystem** is the minimal unit for:
 - configuration,

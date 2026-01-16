@@ -11,6 +11,7 @@ import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, Com
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.context.SystemContext
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.http.{ContentType, HttpRequest, HttpResponse, HttpStatus, MimeType, StringResponse}
@@ -157,7 +158,7 @@ class ClientAdminSystemPingSpec
   }
 
   private def _client_component(): ClientComponent = {
-    val subsystem = Subsystem("cncf-client-test")
+    val subsystem = TestComponentFactory.emptySubsystem("cncf-client-test")
     val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
     val component = ClientComponent.Factory.create(params).collectFirst {
       case c: ClientComponent => c
@@ -337,7 +338,7 @@ class ClientAdminSystemPingSpec
   }
 
   private def _build_harness(driver: FakeHttpDriver): TestHarness = {
-    val subsystem = Subsystem("cncf-client-test")
+    val subsystem = TestComponentFactory.emptySubsystem("cncf-client-test")
     val component = _client_component()
     subsystem.add(Seq(component))
     val base = org.goldenport.cncf.context.ExecutionContext.create()

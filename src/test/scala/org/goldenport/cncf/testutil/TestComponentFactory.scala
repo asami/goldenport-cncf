@@ -1,5 +1,6 @@
 package org.goldenport.cncf.testutil
 
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.protocol.Protocol
 import org.goldenport.cncf.component.*
 import org.goldenport.cncf.subsystem.Subsystem
@@ -10,6 +11,22 @@ import org.goldenport.cncf.subsystem.Subsystem
  * @author  ASAMI, Tomoharu
  */
 object TestComponentFactory {
+  private val emptyConfiguration =
+    ResolvedConfiguration(
+      Configuration.empty,
+      ConfigurationTrace.empty
+    )
+
+  def emptySubsystem(
+    name: String = "test",
+    version: Option[String] = None
+  ): Subsystem =
+    Subsystem(
+      name = name,
+      version = version,
+      configuration = emptyConfiguration
+    )
+
   def create(
     name: String,
     protocol: Protocol,
@@ -23,7 +40,7 @@ object TestComponentFactory {
       case None =>
         Component.create(name, componentId, instanceId, protocol)
     }
-    val dummy = Subsystem("test")
+    val dummy = emptySubsystem("test")
     val params = ComponentInit(dummy, c.core, ComponentOrigin.Builtin)
     c.initialize(params)
   }

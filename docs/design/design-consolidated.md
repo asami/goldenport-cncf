@@ -96,6 +96,9 @@ Execution is explicitly phased (docs/execution-model.md):
    - Success: commit, observe_leave(Success).
    - Failure: abort, observe_leave(Failure(Conclusion)).
    - Exactly one observe_leave for any started operation.
+  - Runtime Pipeline (Post-Protocol Execution Path)
+    - Documents how `CncfRuntime` / `ScriptRuntime` entry points feed `Subsystem`, `ComponentLogic`, and `ActionEngine`.
+    - See: execution-model.md#runtime-pipeline-post-protocol-execution-path
 
 - Component execution and persistence models:
   - Component Internal Execution Model
@@ -118,6 +121,9 @@ Execution is explicitly phased (docs/execution-model.md):
   - Canonical reference for configuration, validation, and
     platform compilation architecture.
   - See: configuration-model.md
+  - Configuration propagation semantics (Phase 2.x)
+    - Describes how configuration flows from runtime → subsystem → component and how semantic builders consume `ResolvedConfiguration`.
+    - See: configuration-model.md#configuration-propagation-model
 - Event-Driven Job Management (Phase 1–2) — canonical overview
   - `docs/design/event-driven-job-management.md`
 - Client execution / demo specs
