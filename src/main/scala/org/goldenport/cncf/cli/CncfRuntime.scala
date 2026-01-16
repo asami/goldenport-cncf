@@ -11,9 +11,9 @@ import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.component.{Component, ComponentInit, PingRuntime}
 import org.goldenport.cncf.context.SystemContext
 import org.goldenport.http.{HttpRequest, HttpResponse}
-import org.goldenport.protocol.{Argument, Property, Request, Response}
-import org.goldenport.protocol.operation.OperationResponse
-import org.goldenport.protocol.spec.RequestDefinition
+import org.goldenport.protocol.{Argument, Property, Protocol, ProtocolEngine, Request, Response}
+import org.goldenport.protocol.operation.{OperationResponse, OperationRequest}
+import org.goldenport.protocol.spec.{RequestDefinition, ResponseDefinition}
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 import org.goldenport.cncf.http.{Http4sHttpServer, HttpExecutionEngine}
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
@@ -22,17 +22,32 @@ import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime {
+  private val _runtime_service_name = "runtime"
+
+  private val _runtime_protocol: Protocol =
+    Protocol.Builder()
+      .addOperation(_runtime_service_name, RunMode.Server.name, RequestDefinition(), ResponseDefinition())
+      .addOperation(_runtime_service_name, RunMode.Client.name, RequestDefinition(), ResponseDefinition())
+      .addOperation(_runtime_service_name, RunMode.Command.name, RequestDefinition(), ResponseDefinition())
+      .addOperation(_runtime_service_name, RunMode.ServerEmulator.name, RequestDefinition(), ResponseDefinition())
+      .addOperation(_runtime_service_name, RunMode.Script.name, RequestDefinition(), ResponseDefinition())
+      .build()
+
+  private val _runtime_protocol_engine = ProtocolEngine.create(_runtime_protocol)
+
   object Config {
+    // TODO Phase 2.9+: wire this runtime configuration into ExecutionContext / observability.
+    // It is intentionally unused during Phase 2.8 CLI normalization and MUST NOT be referenced yet.
     final case class Runtime(
       environment: String,
       observability: Map[String, String]
     )
 
-    def from(conf: org.goldenport.configuration.ResolvedConfiguration)
+    def from(conf: ResolvedConfiguration)
         : org.goldenport.Consequence[Runtime] = {
       import cats.syntax.all.*
 
@@ -243,15 +258,14 @@ object CncfRuntime {
       _print_usage()
       return 2
     }
-    val r: Consequence[Request] =
-      Request.parseArgs(RequestDefinition(), actualargs)
+    val r: Consequence[OperationRequest] =
+      _runtime_protocol_engine.makeOperationRequest(actualargs)
     r match {
       case Consequence.Success(req) =>
-        if (req.operation.isEmpty) {
-          _print_usage()
-          return 2
-        }
-        val mode = RunMode.from(req.operation)
+        // TODO Phase 2.9+: bind mode-specific runtime configuration.
+        // - Derive Config.Runtime from ResolvedConfiguration and bind into ExecutionContext / observability.
+        // - Consider per-mode defaults (server/client/command/server-emulator/script) while keeping CLI normalization execution-free.
+        val mode = RunMode.from(req.request.operation)
         mode match {
           case Some(RunMode.Server) =>
             _install_log_backend(_decide_backend(backendoption, RunMode.Server))
@@ -266,6 +280,9 @@ object CncfRuntime {
           case Some(RunMode.ServerEmulator) =>
             _install_log_backend(_decide_backend(backendoption, RunMode.ServerEmulator))
             executeServerEmulator(actualargs.drop(1), extraComponents)
+          case Some(RunMode.Script) =>
+            _install_log_backend(_decide_backend(backendoption, RunMode.Script))
+            _run_script(actualargs.drop(1), extraComponents)
           case _ =>
             _print_usage()
             2
@@ -277,21 +294,19 @@ object CncfRuntime {
   }
 
   def run(args: Array[String]): Int = {
-    // TODO use Request.parseArgs
     val (backendoption, actualargs) = _log_backend(args)
     if (actualargs.isEmpty) {
       _print_usage()
       return 2
     }
-    val r: Consequence[Request] =
-      Request.parseArgs(RequestDefinition(), actualargs)
+    val r: Consequence[OperationRequest] =
+      _runtime_protocol_engine.makeOperationRequest(actualargs)
     r match {
       case Consequence.Success(req) =>
-        if (req.operation.isEmpty) {
-          _print_usage()
-          return 2
-        }
-        val mode = RunMode.from(req.operation)
+        // TODO Phase 2.9+: bind mode-specific runtime configuration.
+        // - Derive Config.Runtime from ResolvedConfiguration and bind into ExecutionContext / observability.
+        // - Consider per-mode defaults (server/client/command/server-emulator/script) while keeping CLI normalization execution-free.
+        val mode = RunMode.from(req.request.operation)
         mode match {
           case Some(RunMode.Server) =>
             _install_log_backend(_decide_backend(backendoption, RunMode.Server))
@@ -306,8 +321,11 @@ object CncfRuntime {
           case Some(RunMode.ServerEmulator) =>
             _install_log_backend(_decide_backend(backendoption, RunMode.ServerEmulator))
             executeServerEmulator(actualargs.drop(1))
+          case Some(RunMode.Script) =>
+            _install_log_backend(_decide_backend(backendoption, RunMode.Script))
+            _run_script(actualargs.drop(1), _ => Nil)
           case None =>
-            _print_error(s"Unknown mode: ${req.operation}")
+            _print_error(s"Unknown mode: ${req.request.operation}")
             _print_usage()
             3
         }
@@ -384,6 +402,7 @@ object CncfRuntime {
           case RunMode.Command => LogBackend.NopLogBackend
           case RunMode.Client => LogBackend.NopLogBackend
           case RunMode.Server => LogBackend.Slf4jLogBackend
+          case RunMode.Script => LogBackend.NopLogBackend
           case RunMode.ServerEmulator => LogBackend.NopLogBackend
         }
     }
@@ -393,6 +412,20 @@ object CncfRuntime {
     backend: LogBackend
   ): Unit = {
     LogBackendHolder.install(backend)
+  }
+
+  private def _run_script(
+    args: Array[String],
+    extraComponents: Subsystem => Seq[Component]
+  ): Int = {
+    val result = executeScript(args, extraComponents)
+    result match {
+      case Consequence.Success(res) =>
+        _print_response(res)
+      case Consequence.Failure(conclusion) =>
+        _print_error(conclusion.message)
+    }
+    _exit_code(result)
   }
 
   private def _print_response(res: Response): Unit = {
@@ -478,7 +511,8 @@ object CncfRuntime {
           case "post" =>
             _client_body_from_request(req).map { body =>
               new PostCommand(
-                "system.ping", // TODO generic
+                req,
+                // "system.ping", // TODO generic
                 HttpRequest.fromUrl(
                   method = HttpRequest.POST,
                   url = new URL(url),
@@ -489,7 +523,8 @@ object CncfRuntime {
           case "get" =>
             Consequence.success(
               new GetQuery(
-                "system.ping",
+                req,
+                // "system.ping",
                 HttpRequest.fromUrl(
                   method = HttpRequest.GET,
                   url = new URL(url)
@@ -546,12 +581,14 @@ object CncfRuntime {
             case (bodyopt, rest1) =>
               _parse_client_command(rest1, bodyopt).map {
                 case (operation, path) =>
+                  val req = Request.ofOperation(operation) // TODO
                   val baseurl = baseurlopt.getOrElse("http://localhost:8080")
                   val url = _build_client_url(baseurl, path)
                   operation match {
                     case "post" =>
                       new PostCommand(
-                        "system.ping", // TODO generic
+                        req,
+                        // "system.ping", // TODO generic
                         HttpRequest.fromUrl(
                           method = HttpRequest.POST,
                           url = new URL(url),
@@ -560,7 +597,8 @@ object CncfRuntime {
                       )
                     case _ =>
                       new GetQuery(
-                        "system.ping",
+                        req,
+                        // "system.ping",
                         HttpRequest.fromUrl(
                           method = HttpRequest.GET,
                           url = new URL(url)
@@ -885,6 +923,9 @@ object CncfRuntime {
     cwd: Path
   ): ResolvedConfiguration = {
     val sources = ConfigurationSources.standard(cwd)
+    // TODO Phase 2.9+: define failure policy for configuration resolution.
+    // - Preserve/emit ConfigurationTrace and error details for observability.
+    // - Decide whether CLI should fail-fast vs fallback to empty configuration.
     ConfigurationResolver.default.resolve(sources) match {
       case Consequence.Success(resolved) =>
         resolved

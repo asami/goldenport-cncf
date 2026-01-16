@@ -26,7 +26,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 14, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientComponentSpec
@@ -115,7 +115,7 @@ class ClientComponentSpec
         val action = operation match {
           case "post" =>
             new PostCommand(
-              "system.ping",
+              Request.ofOperation("system.ping"),
               HttpRequest.fromUrl(
                 method = HttpRequest.POST,
                 url = new URL(expectedcall.url),
@@ -124,7 +124,7 @@ class ClientComponentSpec
             )
           case _ =>
             new GetQuery(
-              "system.ping",
+              Request.ofOperation("system.ping"),
               HttpRequest.fromUrl(
                 method = HttpRequest.GET,
                 url = new URL(expectedcall.url)

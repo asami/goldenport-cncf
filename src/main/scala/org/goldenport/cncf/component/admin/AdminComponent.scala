@@ -15,6 +15,7 @@ import org.goldenport.configuration.ConfigurationSources
 import org.goldenport.configuration.ConfigurationOrigin
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.Protocol
+import org.goldenport.protocol.Request
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.egress.{EgressCollection, RestEgress}
 import org.goldenport.protocol.handler.ingress.{IngressCollection, RestIngress}
@@ -24,7 +25,7 @@ import org.goldenport.protocol.spec as spec
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -135,10 +136,10 @@ object AdminComponent {
       )
 
     def createOperationRequest(
-      req: org.goldenport.protocol.Request
+      req: Request
     ): Consequence[OperationRequest] = {
       val _ = req
-      Consequence.success(ComponentLogic.PingAction())
+      Consequence.success(ComponentLogic.PingAction(req))
     }
   }
 
@@ -155,10 +156,9 @@ object AdminComponent {
       )
 
     def createOperationRequest(
-      req: org.goldenport.protocol.Request
+      req: Request
     ): Consequence[OperationRequest] = {
-      val _ = req
-      Consequence.success(ComponentListAction(subsystem))
+      Consequence.success(ComponentListAction(req, subsystem))
     }
   }
 
@@ -175,10 +175,10 @@ object AdminComponent {
       )
 
     def createOperationRequest(
-      req: org.goldenport.protocol.Request
+      req: Request
     ): Consequence[OperationRequest] = {
       val _ = req
-      Consequence.success(VariationListAction(subsystem))
+      Consequence.success(VariationListAction(req, subsystem))
     }
   }
 
@@ -195,10 +195,9 @@ object AdminComponent {
       )
 
     def createOperationRequest(
-      req: org.goldenport.protocol.Request
+      req: Request
     ): Consequence[OperationRequest] = {
-      val _ = req
-      Consequence.success(ExtensionListAction(subsystem))
+      Consequence.success(ExtensionListAction(req, subsystem))
     }
   }
 
@@ -215,17 +214,17 @@ object AdminComponent {
       )
 
     def createOperationRequest(
-      req: org.goldenport.protocol.Request
+      req: Request
     ): Consequence[OperationRequest] = {
-      val _ = req
-      Consequence.success(ConfigShowAction(subsystem))
+      Consequence.success(ConfigShowAction(req, subsystem))
     }
   }
 
   private final case class ComponentListAction(
+    request: Request,
     subsystem: Subsystem
   ) extends Query() {
-    val name = "component.list"
+//    val name = "component.list"
 
     def createCall(core: ActionCall.Core): ActionCall =
       ComponentListActionCall(core, subsystem)
@@ -243,9 +242,10 @@ object AdminComponent {
   }
 
   private final case class ConfigShowAction(
+    request: Request,
     subsystem: Subsystem
   ) extends Query() {
-    val name = "config.show"
+//    val name = "config.show"
 
     def createCall(core: ActionCall.Core): ActionCall =
       ConfigShowActionCall(core, subsystem)
@@ -263,9 +263,10 @@ object AdminComponent {
   }
 
   private final case class VariationListAction(
+    request: Request,
     subsystem: Subsystem
   ) extends Query() {
-    val name = "variation.list"
+//    val name = "variation.list"
 
     def createCall(core: ActionCall.Core): ActionCall =
       VariationListActionCall(core, subsystem)
@@ -283,9 +284,10 @@ object AdminComponent {
   }
 
   private final case class ExtensionListAction(
+    request: Request,
     subsystem: Subsystem
   ) extends Query() {
-    val name = "extension.list"
+//    val name = "extension.list"
 
     def createCall(core: ActionCall.Core): ActionCall =
       ExtensionListActionCall(core, subsystem)

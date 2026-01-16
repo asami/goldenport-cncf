@@ -11,6 +11,7 @@ import org.goldenport.cncf.component.ComponentInstanceId
 import org.goldenport.cncf.openapi.OpenApiProjector
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.Protocol
+import org.goldenport.protocol.Request
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.egress.{EgressCollection, RestEgress}
 import org.goldenport.protocol.handler.ingress.{IngressCollection, RestIngress}
@@ -20,7 +21,7 @@ import org.goldenport.protocol.spec as spec
 
 /*
  * @since   Jan.  8, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpecificationComponent() extends Component {
@@ -101,18 +102,19 @@ private final class ExportOperationDefinition(
     )
 
   def createOperationRequest(
-    req: org.goldenport.protocol.Request
+    req: Request
   ): Consequence[OperationRequest] = {
     val _ = req
-    Consequence.success(ExportSpecificationAction("openapi", exportService))
+    Consequence.success(ExportSpecificationAction(req, "openapi", exportService))
   }
 }
 
 private final case class ExportSpecificationAction(
+  request: Request,
   format: String,
   exportService: ExportSpecificationService
 ) extends Query() {
-  val name = "openapi"
+//  val name = "openapi"
 
   def createCall(core: ActionCall.Core): ActionCall =
     ExportSpecificationCall(core, format, exportService)

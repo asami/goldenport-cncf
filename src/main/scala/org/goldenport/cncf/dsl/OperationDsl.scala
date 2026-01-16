@@ -21,7 +21,7 @@ import org.goldenport.protocol.spec as spec
  */
 /*
  * @since   Jan. 11, 2026
- * @version Jan. 11, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 trait OperationDsl {
@@ -109,8 +109,7 @@ object OperationDsl {
     def createOperationRequest(
       req: Request
     ): Consequence[OperationRequest] = {
-      val _ = (domain, service)
-      Consequence.success(RequestCommand(opName, req, handler))
+      Consequence.success(RequestCommand(req, handler))
     }
   }
 }

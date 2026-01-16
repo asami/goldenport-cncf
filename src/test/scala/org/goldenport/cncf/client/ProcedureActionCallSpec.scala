@@ -9,6 +9,7 @@ import org.goldenport.bag.Bag
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.goldenport.http.{ContentType, HttpRequest, HttpResponse, HttpStatus, MimeType, StringResponse}
+import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -17,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 11, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class ProcedureActionCallSpec
@@ -40,7 +41,8 @@ class ProcedureActionCallSpec
         val runtime = new SpyRuntimeContext
         val ctx = _execution_context(runtime)
         val action = new Command() {
-          val name = "procedure-test"
+          // val name = "procedure-test"
+          val request = Request.ofOperation("procedure-test")
           def createCall(core: ActionCall.Core): ActionCall =
             TestProcedureCall(core, driver, path)
         }

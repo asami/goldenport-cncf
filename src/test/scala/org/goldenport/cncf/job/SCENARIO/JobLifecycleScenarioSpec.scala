@@ -33,7 +33,7 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 /*
  * @since   Jan.  4, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -217,7 +217,8 @@ private object TestCommandOperation extends spec.OperationDefinition {
       case Some(arg) =>
         Consequence.Success(
           new Command() {
-            val name = "command"
+            // val name = "command"
+            val request = Request.ofOperation("command")
             override def createCall(
               core: ActionCall.Core
             ): ActionCall = {
@@ -262,7 +263,8 @@ private object TestCommandFailOperation extends spec.OperationDefinition {
       case Some(arg) =>
         Consequence.Success(
           new Command() {
-            val name = "command-fail"
+            // val name = "command-fail"
+            val request = Request.ofOperation("command-fail")
             override def createCall(
               core: ActionCall.Core
             ): ActionCall = {
@@ -307,7 +309,8 @@ private object TestQueryOperation extends spec.OperationDefinition {
       case Some(arg) =>
         Consequence.Success(
           new Query() {
-            val name = "query"
+            // val name = "query"
+            val request = Request.ofOperation("query")
             override def createCall(
               core: ActionCall.Core
             ): ActionCall = {

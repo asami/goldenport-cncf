@@ -12,11 +12,11 @@ import org.goldenport.cncf.action.{Action, ActionCall, Command, ProcedureActionC
  */
 /*
  * @since   Jan. 11, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RequestCommand(
-  name: String,
+//  name: String,
   request: Request,
   handler: Request => Consequence[OperationResponse]
 ) extends Command() {

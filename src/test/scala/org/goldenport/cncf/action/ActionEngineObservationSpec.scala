@@ -7,6 +7,7 @@ import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.security.AuthorizationDecision
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkOp}
+import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -14,7 +15,7 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngineObservationSpec extends AnyWordSpec with Matchers with ConsequenceMatchers {
@@ -35,7 +36,8 @@ class ActionEngineObservationSpec extends AnyWordSpec with Matchers with Consequ
       val engine = new RecordingDenyActionEngine
 
       val action = new Query() {
-        val name = "test-action"
+        // val name = "test-action"
+        val request = Request.ofOperation("test-action")
         def createCall(core: ActionCall.Core): ActionCall =
           new TestActionCall(core, engine)
       }
@@ -62,7 +64,8 @@ class ActionEngineObservationSpec extends AnyWordSpec with Matchers with Consequ
 
       val engine = new RecordingAllowActionEngine
       val action = new Query() {
-        val name = "test-action"
+        // val name = "test-action"
+        val request = Request.ofOperation("test-action")
         def createCall(core: ActionCall.Core): ActionCall =
           new TestActionCall(core, engine)
       }

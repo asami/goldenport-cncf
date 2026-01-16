@@ -30,7 +30,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 14, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientAdminSystemPingSpec
@@ -48,7 +48,7 @@ class ClientAdminSystemPingSpec
 
       When("the client action is executed")
       val action = new GetQuery(
-        "system.ping",
+        Request.ofOperation("system.ping"),
         HttpRequest.fromPath(HttpRequest.GET, "/admin/system/ping")
       )
       val result = harness.executeAction(action)
@@ -198,7 +198,7 @@ class ClientAdminSystemPingSpec
           case "post" =>
             _client_body(req).map { body =>
               new PostCommand(
-                "system.ping",
+                Request.ofOperation("system.ping"),
                 HttpRequest.fromUrl(
                   method = HttpRequest.POST,
                   url = new java.net.URL(url),
@@ -209,7 +209,7 @@ class ClientAdminSystemPingSpec
           case _ =>
             Consequence.success(
               new GetQuery(
-                "system.ping",
+                Request.ofOperation("system.ping"),
                 HttpRequest.fromUrl(
                   method = HttpRequest.GET,
                   url = new java.net.URL(url)

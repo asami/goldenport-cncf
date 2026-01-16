@@ -1,6 +1,7 @@
 package org.goldenport.cncf.job
 
 import org.goldenport.Consequence
+import org.goldenport.protocol.Request
 import org.goldenport.protocol.Response
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, Command, ResourceAccess}
@@ -10,14 +11,15 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  4, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class InMemoryJobEngineSpec extends AnyWordSpec with Matchers {
   "InMemoryJobEngine" should {
     "execute a Command as a Job and store the result" in {
       val action = new Command() {
-        val name = "test"
+        // val name = "test"
+        val request = Request.ofOperation("test")
         override def createCall(core: ActionCall.Core): ActionCall = {
           val actionself = this
           val _core_ = core

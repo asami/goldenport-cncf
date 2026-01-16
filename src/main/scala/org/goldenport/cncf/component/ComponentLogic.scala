@@ -2,6 +2,7 @@ package org.goldenport.cncf.component
 
 import org.goldenport.Consequence
 import org.goldenport.http.{HttpRequest, HttpResponse}
+import org.goldenport.protocol.Request
 import org.goldenport.protocol.Response
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.cncf.action.{Action, ActionCall, Query, ResourceAccess}
@@ -15,7 +16,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 
 /*
  * @since   Jan.  3, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -30,7 +31,7 @@ case class ComponentLogic(
   def makeOperationRequest(args: Array[String]): Consequence[OperationRequest] =
     component.protocolLogic.makeOperationRequest(args)
 
-  def makeOperationRequest(request: org.goldenport.protocol.Request): Consequence[OperationRequest] =
+  def makeOperationRequest(request: Request): Consequence[OperationRequest] =
     _ping_action_(request).getOrElse(component.protocolLogic.makeOperationRequest(request))
 
   def makeStringOperationResponse(res: OperationResponse): Consequence[String] =
@@ -80,12 +81,12 @@ case class ComponentLogic(
   }
 
   private def _ping_action_(
-    request: org.goldenport.protocol.Request
+    request: Request
   ): Option[Consequence[OperationRequest]] = {
     val isping =
       request.service.contains("admin.system") && request.operation == "ping"
     if (isping) {
-      Some(Consequence.success(ComponentLogic.PingAction()))
+      Some(Consequence.success(ComponentLogic.PingAction(request)))
     } else {
       None
     }
@@ -141,8 +142,8 @@ case class ComponentLogic(
 }
 
 object ComponentLogic {
-  final case class PingAction() extends Query() {
-    def name = "ping"
+  final case class PingAction(request: Request) extends Query() {
+//    def name = "ping"
 
     def createCall(core: ActionCall.Core): ActionCall =
       PingActionCall(core)

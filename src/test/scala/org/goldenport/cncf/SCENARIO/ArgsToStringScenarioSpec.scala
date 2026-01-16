@@ -38,7 +38,7 @@ import org.scalatest.matchers.should.Matchers
  */
 /*
  * @since   Jan.  1, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -105,7 +105,8 @@ private object TestQueryOperation extends spec.OperationDefinition {
       case Some(arg) =>
         org.goldenport.Consequence.Success(
           new Query() {
-            val name = "query"
+            // val name = "query"
+            def request = req
             override def createCall(
               core: ActionCall.Core
             ): ActionCall = {

@@ -3,6 +3,7 @@ package org.goldenport.cncf.client
 import org.goldenport.cncf.action.{Action, ActionCall, Command, FunctionalActionCall, OperationCallHttpPart, Query, ResourceAccess}
 import org.goldenport.cncf.unitofwork.ExecUowM
 import org.goldenport.http.{HttpRequest, HttpResponse}
+import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import cats.syntax.functor.*
 import cats.Functor
@@ -10,7 +11,7 @@ import org.goldenport.bag.TextBag
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class HttpCommand(
@@ -20,26 +21,26 @@ abstract class HttpQuery(
 ) extends Query()
 
 final case class PostCommand(
-  name: String,
-  request: HttpRequest
+  request: Request,
+  httpRequest: HttpRequest
 ) extends HttpCommand() {
   override def createCall(core: ActionCall.Core): ActionCall =
-    ClientHttpPostCall(core, request)
+    ClientHttpPostCall(core, httpRequest)
 }
 
 final case class GetQuery(
-  name: String,
-  request: HttpRequest
+  request: Request,
+  httpRequest: HttpRequest
 ) extends HttpQuery() {
   override def createCall(core: ActionCall.Core): ActionCall =
-    ClientHttpGetCall(core, request)
+    ClientHttpGetCall(core, httpRequest)
 }
 
 sealed trait ClientHttpActionCall extends FunctionalActionCall with OperationCallHttpPart {
-  def request: HttpRequest
+  def httpRequest: HttpRequest
 
   protected final def build_Program: ExecUowM[OperationResponse] = {
-    Functor[ExecUowM].map(_uow(request))(OperationResponse.Http.apply)
+    Functor[ExecUowM].map(_uow(httpRequest))(OperationResponse.Http.apply)
   }
 
   private def _uow(req: HttpRequest): ExecUowM[HttpResponse] = {
@@ -62,10 +63,10 @@ sealed trait ClientHttpActionCall extends FunctionalActionCall with OperationCal
 
 final case class ClientHttpPostCall(
   core: ActionCall.Core,
-  request: HttpRequest
+  httpRequest: HttpRequest
 ) extends ClientHttpActionCall
 
 final case class ClientHttpGetCall(
   core: ActionCall.Core,
-  request: HttpRequest
+  httpRequest: HttpRequest
 ) extends ClientHttpActionCall

@@ -7,6 +7,7 @@ import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.{ActionEvent, ActionResult, EventEngine}
 import org.goldenport.cncf.security.AuthorizationDecision
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkOp}
+import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -14,7 +15,7 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngineAuthorizationFailureCommitSpec extends AnyWordSpec with Matchers with ConsequenceMatchers{
@@ -36,7 +37,8 @@ class ActionEngineAuthorizationFailureCommitSpec extends AnyWordSpec with Matche
       val engine = new DenyingActionEngine
 
       val action = new Query() {
-        val name = "test-action"
+        // val name = "test-action"
+        val request = Request.ofOperation("test-action")
         def createCall(core: ActionCall.Core): ActionCall =
           new TestActionCall(core)
       }

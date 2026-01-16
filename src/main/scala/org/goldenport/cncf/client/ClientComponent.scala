@@ -21,7 +21,7 @@ import java.nio.charset.StandardCharsets
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 14, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ClientComponent() extends Component {
@@ -84,13 +84,14 @@ object ClientComponent {
       )
 
     def createOperationRequest(
-      req: org.goldenport.protocol.Request
+      req: Request
     ): Consequence[OperationRequest] = {
       _path(req).map { path =>
         val baseurl = _baseurl(req)
         val url = _build_url(baseurl, path)
         new GetQuery(
-          "system.ping",
+          req,
+          // "system.ping",
           HttpRequest.fromUrl(HttpRequest.GET, new URL(url))
         )
       }
@@ -109,14 +110,15 @@ object ClientComponent {
       )
 
     def createOperationRequest(
-      req: org.goldenport.protocol.Request
+      req: Request
     ): Consequence[OperationRequest] = {
       _path(req).map { path =>
         val baseurl = _baseurl(req)
         val url = _build_url(baseurl, path)
         val body = _body(req)
         new PostCommand(
-          "system.ping",
+          req,
+          // "system.ping",
           HttpRequest.fromUrl(
             method = HttpRequest.POST,
             url = new URL(url),

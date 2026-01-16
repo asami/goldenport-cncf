@@ -6,6 +6,7 @@ import org.goldenport.cncf.action.{Action, ActionCall, Command, ResourceAccess}
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemContext}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.EventEngine
+import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
 import org.scalatest.matchers.should.Matchers
@@ -14,7 +15,7 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMatchers {
@@ -76,7 +77,8 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
     runtime.bind(uow)
 
     val action = new Command() {
-      val name = "test"
+      // val name = "test"
+      val request = Request.ofOperation("test")
       def createCall(core: ActionCall.Core): ActionCall =
         new TestActionCall(core)
     }

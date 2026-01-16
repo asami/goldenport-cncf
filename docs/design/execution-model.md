@@ -266,6 +266,58 @@ References
 - Application/UnitOfWork lifecycle: `component-and-application-responsibilities.md`
 
 
+
+----------------------------------------------------------------------
+CncfRuntime CLI Normalization (Protocol + Configuration)
+----------------------------------------------------------------------
+
+Phase 2.8 Status: **Normalized / Fixed** (no new semantics introduced).  
+This section captures how `CncfRuntime` resolves protocol and configuration
+inputs before handing control to the ActionCall execution model.
+
+CLI Responsibility Boundary
+--------------------------
+- `CncfRuntime` resolves the protocol surface (command/client/server/server-emulator),
+  `ResolvedConfiguration`, and the normalization chain (argv → `Request` → `OperationRequest`).
+- `CncfRuntime` does **not** interpret semantics, create ActionCalls, or manage
+  ExecutionContext/UnitOfWork.
+
+Canonical CLI Pipeline
+----------------------
+- argv flows into CLI adapters.
+- Protocol-defined operations are parsed into `Request` objects.
+- Configuration is resolved via `ConfigurationResolver` before execution.
+- The ProtocolEngine normalizes inputs (argv → `Request` → `OperationRequest`).
+- Runtime mode selection derives from the operation name.
+- Control enters the mode-specific path (command / client / server / server-emulator).
+
+Runtime Mode Dispatch Rule
+--------------------------
+- Runtime mode is derived from `OperationRequest.operation`.
+- Mode selection is a CNCF runtime concern; the Protocol stays execution-agnostic.
+
+Adapter Boundary
+----------------
+- CNCF may adapt `OperationRequest`s for subsystem/component routing without
+  introducing new semantics.
+- This adapter work is CNCF responsibility.
+
+Script Execution Note
+---------------------
+- `ScriptRuntime` bypasses CLI protocol normalization.
+- It still resolves configuration first, builds the `Subsystem`, and then
+  produces `OperationRequest`/`Action` instances directly for the runtime pipeline.
+
+Phase 2.8 Status Note
+---------------------
+- Marked as normalized/fixed for Phase 2.8; no new semantics are introduced here.
+
+References
+----------
+- `configuration-model.md#configuration-propagation-model`
+- `execution-context.md`
+- `domain-component.md`
+
 ----------------------------------------------------------------------
 Error Handling
 ----------------------------------------------------------------------

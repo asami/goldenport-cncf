@@ -7,6 +7,7 @@ import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemCont
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkOp}
+import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
@@ -17,7 +18,7 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionCallDataStoreRouteSpec
@@ -82,7 +83,8 @@ class ActionCallDataStoreRouteSpec
     ctx: ExecutionContext
   ): ActionCall = {
     val action = new Command() {
-      val name = "datastore-action"
+      // val name = "datastore-action"
+      def request = Request.ofOperation("datastore-action")
       def createCall(core: ActionCall.Core): ActionCall =
         new DataStoreActionCall(core, entityid, id, value)
     }
