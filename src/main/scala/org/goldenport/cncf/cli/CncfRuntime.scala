@@ -16,7 +16,7 @@ import org.goldenport.protocol.{Argument, Property, Protocol, ProtocolEngine, Re
 import org.goldenport.protocol.operation.{OperationResponse, OperationRequest}
 import org.goldenport.protocol.spec.{RequestDefinition, ResponseDefinition}
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
-import org.goldenport.cncf.http.{Http4sHttpServer, HttpExecutionEngine}
+import org.goldenport.cncf.http.{FakeHttpDriver, Http4sHttpServer, HttpDriver, HttpExecutionEngine, HttpDriverFactory}
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
@@ -45,11 +45,14 @@ object CncfRuntime {
   private def _reset_global_runtime_context(): Unit =
     _global_runtime_context = None
 
-  private def _create_global_runtime_context(): GlobalRuntimeContext = {
+  private def _create_global_runtime_context(
+    httpDriver: HttpDriver
+  ): GlobalRuntimeContext = {
     val execution = ExecutionContext.create()
     val context = GlobalRuntimeContext(
       name = "runtime",
-      observabilityContext = execution.observability
+      observabilityContext = execution.observability,
+      httpDriver = httpDriver
     )
     _global_runtime_context = Some(context)
     context
@@ -64,6 +67,18 @@ object CncfRuntime {
         observabilityContext = ExecutionContext.create().observability
       )
     }
+
+  private def _http_driver_from_configuration(
+    configuration: ResolvedConfiguration
+  ): HttpDriver = {
+    HttpDriverFactory.create(configuration) match {
+      case Consequence.Success(driver) =>
+        driver
+      case Consequence.Failure(conclusion) =>
+        Console.err.println(conclusion.message)
+        FakeHttpDriver.okText("nop")
+    }
+  }
 
   object Config {
     // TODO Phase 2.9+: wire this runtime configuration into ExecutionContext / observability.
@@ -288,9 +303,10 @@ object CncfRuntime {
     val cwd = Paths.get("").toAbsolutePath.normalize
     val configuration = _resolve_configuration(cwd)
     val logBackend = _decide_backend(backendoption, _logging_backend_from_configuration(configuration))
+    val httpDriver = _http_driver_from_configuration(configuration)
     _install_log_backend(logBackend)
     _reset_global_runtime_context()
-    _create_global_runtime_context()
+    _create_global_runtime_context(httpDriver)
     val r: Consequence[OperationRequest] =
       _runtime_protocol_engine.makeOperationRequest(actualargs)
     r match {
@@ -330,9 +346,10 @@ object CncfRuntime {
     val cwd = Paths.get("").toAbsolutePath.normalize
     val configuration = _resolve_configuration(cwd)
     val logBackend = _decide_backend(backendoption, _logging_backend_from_configuration(configuration))
+    val httpDriver = _http_driver_from_configuration(configuration)
     _install_log_backend(logBackend)
     _reset_global_runtime_context()
-    _create_global_runtime_context()
+    _create_global_runtime_context(httpDriver)
     val r: Consequence[OperationRequest] =
       _runtime_protocol_engine.makeOperationRequest(actualargs)
     r match {
@@ -540,7 +557,6 @@ object CncfRuntime {
     }
   }
 
-  // TODO duplicate parseClientAction
   private def _client_action_from_request(
     req: Request
   ): Consequence[org.goldenport.cncf.action.Action] = {
@@ -608,49 +624,6 @@ object CncfRuntime {
       case None =>
         Consequence.success(None)
     }
-
-  // TODO duplicate _client_action_from_request
-  def parseClientAction(
-    args: Array[String]
-  ): Consequence[org.goldenport.cncf.action.Action] = {
-    if (args.isEmpty) {
-      Consequence.failure("client command is required")
-    } else {
-      _extract_baseurl(args.toIndexedSeq).flatMap {
-        case (baseurlopt, rest0) =>
-          _extract_body(rest0).flatMap {
-            case (bodyopt, rest1) =>
-              _parse_client_command(rest1, bodyopt).map {
-                case (operation, path) =>
-                  val req = Request.ofOperation(operation) // TODO
-                  val baseurl = baseurlopt.getOrElse("http://localhost:8080")
-                  val url = _build_client_url(baseurl, path)
-                  operation match {
-                    case "post" =>
-                      new PostCommand(
-                        req,
-                        // "system.ping", // TODO generic
-                        HttpRequest.fromUrl(
-                          method = HttpRequest.POST,
-                          url = new URL(url),
-                          body = bodyopt
-                        )
-                      )
-                    case _ =>
-                      new GetQuery(
-                        req,
-                        // "system.ping",
-                        HttpRequest.fromUrl(
-                          method = HttpRequest.GET,
-                          url = new URL(url)
-                        )
-                      )
-                  }
-              }
-          }
-      }
-    }
-  }
 
   private[cli] def parseCommandArgs(
     subsystem: Subsystem,
