@@ -6,13 +6,14 @@ package org.goldenport.cncf.context
  * @author  ASAMI, Tomoharu
  */
 enum ScopeKind {
+  case Runtime
   case Subsystem
   case Component
   case Service
   case Action
 }
 
-final case class ScopeContext(
+open case class ScopeContext(
   kind: ScopeKind,
   name: String,
   parent: Option[ScopeContext],

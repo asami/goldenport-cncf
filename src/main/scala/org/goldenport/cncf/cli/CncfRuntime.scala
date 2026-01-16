@@ -10,6 +10,7 @@ import org.goldenport.cncf.client.{ClientComponent, GetQuery, PostCommand}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.component.{Component, ComponentInit, PingRuntime}
 import org.goldenport.cncf.context.SystemContext
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.{Argument, Property, Protocol, ProtocolEngine, Request, Response}
 import org.goldenport.protocol.operation.{OperationResponse, OperationRequest}
@@ -38,6 +39,31 @@ object CncfRuntime {
       .build()
 
   private val _runtime_protocol_engine = ProtocolEngine.create(_runtime_protocol)
+
+  private var _global_runtime_context: Option[GlobalRuntimeContext] = None
+
+  private def _reset_global_runtime_context(): Unit =
+    _global_runtime_context = None
+
+  private def _create_global_runtime_context(): GlobalRuntimeContext = {
+    val execution = ExecutionContext.create()
+    val context = GlobalRuntimeContext(
+      name = "runtime",
+      observabilityContext = execution.observability
+    )
+    _global_runtime_context = Some(context)
+    context
+  }
+
+  private def _runtime_scope_context(): ScopeContext =
+    _global_runtime_context.getOrElse {
+      ScopeContext(
+        kind = ScopeKind.Subsystem,
+        name = DefaultSubsystemFactory.subsystemName,
+        parent = None,
+        observabilityContext = ExecutionContext.create().observability
+      )
+    }
 
   object Config {
     // TODO Phase 2.9+: wire this runtime configuration into ExecutionContext / observability.
@@ -70,9 +96,10 @@ object CncfRuntime {
     val cwd = Paths.get("").toAbsolutePath.normalize
     val configuration = _resolve_configuration(cwd)
     val modeLabel = mode.map(_.name)
-    val subsystem = DefaultSubsystemFactory.default(
+    val subsystem = DefaultSubsystemFactory.defaultWithScope(
+      _runtime_scope_context(),
       modeLabel,
-      configuration = configuration
+      configuration
     )
     val extras = extraComponents(subsystem)
     if (extras.nonEmpty) {
@@ -258,6 +285,12 @@ object CncfRuntime {
       _print_usage()
       return 2
     }
+    val cwd = Paths.get("").toAbsolutePath.normalize
+    val configuration = _resolve_configuration(cwd)
+    val logBackend = _decide_backend(backendoption, _logging_backend_from_configuration(configuration))
+    _install_log_backend(logBackend)
+    _reset_global_runtime_context()
+    _create_global_runtime_context()
     val r: Consequence[OperationRequest] =
       _runtime_protocol_engine.makeOperationRequest(actualargs)
     r match {
@@ -268,20 +301,15 @@ object CncfRuntime {
         val mode = RunMode.from(req.request.operation)
         mode match {
           case Some(RunMode.Server) =>
-            _install_log_backend(_decide_backend(backendoption, RunMode.Server))
             startServer(actualargs.drop(1), extraComponents)
             0
           case Some(RunMode.Client) =>
-            _install_log_backend(_decide_backend(backendoption, RunMode.Client))
             executeClient(actualargs.drop(1), extraComponents)
           case Some(RunMode.Command) =>
-            _install_log_backend(_decide_backend(backendoption, RunMode.Command))
             executeCommand(actualargs.drop(1), extraComponents)
           case Some(RunMode.ServerEmulator) =>
-            _install_log_backend(_decide_backend(backendoption, RunMode.ServerEmulator))
             executeServerEmulator(actualargs.drop(1), extraComponents)
           case Some(RunMode.Script) =>
-            _install_log_backend(_decide_backend(backendoption, RunMode.Script))
             _run_script(actualargs.drop(1), extraComponents)
           case _ =>
             _print_usage()
@@ -299,6 +327,12 @@ object CncfRuntime {
       _print_usage()
       return 2
     }
+    val cwd = Paths.get("").toAbsolutePath.normalize
+    val configuration = _resolve_configuration(cwd)
+    val logBackend = _decide_backend(backendoption, _logging_backend_from_configuration(configuration))
+    _install_log_backend(logBackend)
+    _reset_global_runtime_context()
+    _create_global_runtime_context()
     val r: Consequence[OperationRequest] =
       _runtime_protocol_engine.makeOperationRequest(actualargs)
     r match {
@@ -309,20 +343,15 @@ object CncfRuntime {
         val mode = RunMode.from(req.request.operation)
         mode match {
           case Some(RunMode.Server) =>
-            _install_log_backend(_decide_backend(backendoption, RunMode.Server))
             startServer(actualargs.drop(1))
             0
           case Some(RunMode.Client) =>
-            _install_log_backend(_decide_backend(backendoption, RunMode.Client))
             executeClient(actualargs.drop(1))
           case Some(RunMode.Command) =>
-            _install_log_backend(_decide_backend(backendoption, RunMode.Command))
             executeCommand(actualargs.drop(1))
           case Some(RunMode.ServerEmulator) =>
-            _install_log_backend(_decide_backend(backendoption, RunMode.ServerEmulator))
             executeServerEmulator(actualargs.drop(1))
           case Some(RunMode.Script) =>
-            _install_log_backend(_decide_backend(backendoption, RunMode.Script))
             _run_script(actualargs.drop(1), _ => Nil)
           case None =>
             _print_error(s"Unknown mode: ${req.request.operation}")
@@ -387,25 +416,37 @@ object CncfRuntime {
   }
 
   private def _decide_backend(
-    backend: Option[String],
-    mode: RunMode
-  ): LogBackend = {
-    backend match {
-      case Some(p) =>
-        LogBackend.fromString(p).getOrElse {
-          _print_error(s"Unknown log backend: $p")
+    overrideBackend: Option[String],
+    configBackend: Option[String]
+  ): LogBackend =
+    _backend_from_string(overrideBackend, "flag")
+      .orElse(_backend_from_string(configBackend, "configuration"))
+      .getOrElse(LogBackend.NopLogBackend)
+
+  private def _backend_from_string(
+    value: Option[String],
+    source: String
+  ): Option[LogBackend] =
+    value.flatMap { v =>
+      LogBackend.fromString(v) match {
+        case Some(backend) => Some(backend)
+        case None =>
+          _print_error(s"Unknown log backend from ${source}: ${v}")
           _print_usage()
-          LogBackend.NopLogBackend
-        }
-      case None =>
-        mode match {
-          case RunMode.Command => LogBackend.NopLogBackend
-          case RunMode.Client => LogBackend.NopLogBackend
-          case RunMode.Server => LogBackend.Slf4jLogBackend
-          case RunMode.Script => LogBackend.NopLogBackend
-          case RunMode.ServerEmulator => LogBackend.NopLogBackend
-        }
+          None
+      }
     }
+
+  private def _logging_backend_from_configuration(
+    configuration: ResolvedConfiguration
+  ): Option[String] = {
+    def get(key: String): Option[String] =
+      configuration.get[String](key) match {
+        case Consequence.Success(value) => value
+        case Consequence.Failure(_) => None
+      }
+
+    get("cncf.runtime.logging.backend").orElse(get("cncf.logging.backend"))
   }
 
   private def _install_log_backend(

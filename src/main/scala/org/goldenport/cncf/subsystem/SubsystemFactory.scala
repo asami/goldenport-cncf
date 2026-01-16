@@ -6,6 +6,7 @@ import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.client.ClientComponent
 import org.goldenport.cncf.component.admin.AdminComponent
 import org.goldenport.cncf.component.specification.SpecificationComponent
+import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.{FakeHttpDriver, UrlConnectionHttpDriver}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.protocol.Protocol
@@ -24,33 +25,25 @@ object DefaultSubsystemFactory {
   private val _admin = AdminComponent.Factory
   private val _client = ClientComponent.Factory
   private val _spec = SpecificationComponent.Factory()
+  private val _subsystem_name = "goldenport-cncf"
+
+  def subsystemName: String = _subsystem_name
 
   def default(
     mode: Option[String] = None,
     configuration: ResolvedConfiguration =
       ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
-  ): Subsystem = {
-    val subsystemName = "goldenport-cncf"
-    val modeLabel = mode.getOrElse("command")
-    val system = PingRuntime.systemContext( // TODO PingRuntime
-      mode = modeLabel,
-      subsystem = subsystemName,
-      runtimeVersion = CncfVersion.current,
-      subsystemVersion = None
+  ): Subsystem =
+    defaultWithScope(
+      context = ScopeContext(
+        kind = ScopeKind.Subsystem,
+        name = _subsystem_name,
+        parent = None,
+        observabilityContext = ExecutionContext.create().observability
+      ),
+      mode = mode,
+      configuration = configuration
     )
-    val driver = _resolve_http_driver(mode, subsystemName)
-    val subsystem =
-      Subsystem(
-        name = subsystemName,
-        httpdriver = Some(driver),
-        configuration = configuration
-      )
-    val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
-    val comps = Vector(_admin, _client, _spec)
-      .flatMap(_.create(params))
-      .map(_.withSystemContext(system))
-    subsystem.add(comps)
-  }
 
   def default(
     extraComponents: Seq[Component],
@@ -69,6 +62,48 @@ object DefaultSubsystemFactory {
       subsystem.add(extras)
     }
     subsystem
+  }
+
+  def defaultWithScope(
+    context: ScopeContext,
+    mode: Option[String] = None,
+    configuration: ResolvedConfiguration =
+      ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+  ): Subsystem = {
+    val modeLabel = mode.getOrElse("command")
+    val system = PingRuntime.systemContext(
+      mode = modeLabel,
+      subsystem = _subsystem_name,
+      runtimeVersion = CncfVersion.current,
+      subsystemVersion = None
+    )
+    val driver = _resolve_http_driver(mode, _subsystem_name)
+    val subsystem =
+      Subsystem(
+        name = _subsystem_name,
+        scopeContext = Some(
+          context.kind match {
+            case ScopeKind.Runtime =>
+              context.createChildScope(ScopeKind.Subsystem, _subsystem_name)
+            case ScopeKind.Subsystem =>
+              context
+            case _ =>
+              ScopeContext(
+                kind = ScopeKind.Subsystem,
+                name = _subsystem_name,
+                parent = None,
+                observabilityContext = context.observabilityContext
+              )
+          }
+        ),
+        httpdriver = Some(driver),
+        configuration = configuration
+      )
+    val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
+    val comps = Vector(_admin, _client, _spec)
+      .flatMap(_.create(params))
+      .map(_.withSystemContext(system))
+    subsystem.add(comps)
   }
 
   private def _resolve_http_driver(

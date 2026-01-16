@@ -385,3 +385,37 @@ The following invariants MUST always hold:
 - EventEngine.prepare fixes pending events for the transaction; commit operates only on the prepared events
 
 These invariants are foundational to CNCF.
+
+----------------------------------------------------------------------
+Phase 2.8 Note: RuntimeScopeContext-Based Logging (Design Only)
+----------------------------------------------------------------------
+
+This note records a minimal design decision for Phase 2.8.
+It does NOT introduce new execution semantics.
+
+Design Intent
+-------------
+- Logging configuration is initialized once at runtime startup.
+- Logging settings are sourced from resolved Configuration.
+- Logging behavior propagates through the ScopeContext hierarchy.
+
+Context Structure
+-----------------
+- A runtime-level scope (RuntimeScopeContext) acts as the root.
+- Subsystem and Component scopes are children in the ScopeContext tree.
+- No additional fields or behaviors are introduced in Phase 2.8.
+
+Initialization Order
+--------------------
+1. Resolve Configuration.
+2. Initialize runtime logging backend from Configuration.
+3. Create the runtime root ScopeContext.
+4. Create Subsystem and Component scopes as children.
+5. Observability and logging consume scope information only.
+
+Phase 2.8 Constraints
+---------------------
+- No dynamic reconfiguration.
+- No multi-subsystem runtime assumptions.
+- No scope-specific backend switching.
+- This note exists to preserve a future extension point.

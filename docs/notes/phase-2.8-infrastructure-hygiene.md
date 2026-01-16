@@ -1,3 +1,84 @@
+## Pending Item: Runtime ScopeContext–Based Logging Configuration
+
+The introduction of a runtime `ScopeContext`–based logging configuration mechanism is an explicit **tracked task** for Phase 2.8.
+
+### Scope
+
+- Document and formalize how logging configuration is supplied, propagated, and overridden via the runtime `ScopeContext`.
+- Ensure that all logging configuration is context-aware and can be dynamically adjusted at runtime boundaries (e.g., per subsystem, per component, per request).
+- Replace or augment any ad-hoc or static logging configuration wiring with explicit handling via `ScopeContext`.
+- Provide clear documentation and examples of context-driven logging configuration in developer notes.
+
+### Rationale
+
+- Current logging configuration is not consistently bound to runtime context, leading to inflexible or global-only settings.
+- Infrastructure hygiene requires that logging configuration be as traceable and context-aware as other runtime configuration.
+- This enables improved observability, testability, and operational flexibility.
+
+### Status
+
+- **OPEN** — This item is newly tracked for Phase 2.8 and must be explicitly documented and closed before phase completion.
+- No implementation is required until the documentation is finalized and consensus is reached on the configuration model.
+
+
+## Design Record: RuntimeScopeContext–Based Logging Initialization (Phase 2.8)
+
+This section records the fixed design and responsibility split for logging initialization using `RuntimeScopeContext` in Phase 2.8. This is a blocker-resolution item and must be completed before the phase can close.
+
+### Purpose
+- Establish the minimal, fixed design for logging initialization in Phase 2.8.
+- Clarify responsibility boundaries between CncfRuntime, ScopeContext hierarchy, and Logger.
+
+### Responsibility Split
+- **CncfRuntime**: Acts as the single initialization entry point. Responsible for resolving the `Configuration` and creating the `RuntimeScopeContext`.
+- **RuntimeScopeContext**: Serves as the root logging scope, binding the logging configuration and the `LoggerFactory` for the entire runtime.
+- **SubsystemScopeContext**: Inherits from the runtime scope; may override the log level only (no independent logging configuration).
+- **ComponentScopeContext**: Inherits from the subsystem scope; does not have an independent logging policy.
+- **Logger/LoggerFactory**: Abstract and scope-bound; responsible for providing loggers within the current scope, but not for any backend, persistence, or external log sink.
+
+### Runtime Logging Configuration Keys (Phase 2.8 Step 1)
+
+- `cncf.runtime.logging.backend`
+  * Meaning: the default logging backend to use for the entire runtime.
+  * Scope: applies uniformly across CLI, server, emulator, and script execution modes.
+- `cncf.logging.backend`
+  * Meaning: a fallback backend that is consulted when the runtime-specific key is absent.
+- Allowed values: the `LogBackend.fromString` set (`stdout`, `stderr`, `slf4j`, `nop`, …), with unrecognized values reporting a configuration error before falling back to `nop`.
+
+Logging selection follows the fixed precedence order:
+1. CLI flag `--log-backend` overrides every other source.
+2. `cncf.runtime.logging.backend` provides the runtime default.
+3. `cncf.logging.backend` serves as a safe fallback.
+4. The survivor default is `nop` when no explicit value is usable.
+
+- RunMode-based defaults are **not** used.
+- Backend selection happens once during CncfRuntime startup and then remains fixed for the process lifetime.
+
+Phase Positioning: this note documents Phase 2.8 Step 1 completion; the same backend rules apply after Step 2 (RuntimeScopeContext) even though propagation mechanics will be revisited later.
+
+### Initialization Order (Normative)
+1. Configuration resolution
+2. CncfRuntime initialization
+3. RuntimeScopeContext creation (logging is initialized here and only here)
+4. Subsystem creation
+5. Component execution
+
+### Constraints (Phase 2.8 Locked)
+- Logging configuration **MUST** be sourced from `Configuration`.
+- Logging **MUST** propagate only via the `ScopeContext` hierarchy.
+- No mode-specific (CLI/server/script) logging branches are allowed.
+- Only a single subsystem and single runtime are supported.
+- No dynamic reconfiguration of logging is permitted.
+
+### Explicit Non-Goals
+- Log persistence (no log file or external sink)
+- External log backend integration
+- Dynamic log level or configuration changes at runtime
+- Multi-subsystem per virtual machine (VM)
+
+### Phase Positioning
+- This design record is a mandatory Phase 2.8 blocker-resolution task.
+- Completion of this item alone does **not** imply completion of Phase 2.8; it is necessary but not sufficient.
 # Phase 2.8 — Infrastructure Hygiene
 
 status = draft
@@ -149,6 +230,7 @@ These items constitute the core scope of Phase 2.8.
 | Component repository priority rules | Phase 2.6 Stage 5 deferred list | **OPEN** | Deterministic repository ordering remains unsettled in Phase 2.8 scope. |
 | Bootstrap log persistence / ops integration | Phase 2.6 Stage 5 deferred list | **OPEN** | Persistence/operational integration is explicitly deferred with no recorded completion in Phase 2.8 doc. |
 | OpenAPI / representation expansion policy | Phase 2.6 Stage 6 deferred steps | **OPEN** | Advanced OpenAPI schema/representation work is marked as deferred to Phase 2.8+. |
+| Runtime ScopeContext–based logging configuration | Phase 2.8 explicit tracked task | **OPEN** | Logging configuration must be documented and context-bound via ScopeContext; explicit documentation and model required before phase completion. |
 
 ### Status Summary
 
@@ -471,3 +553,136 @@ This reference item is considered resolved when:
 - Error classification (NotFound vs Rejection) is deterministic
 
 At that point, the ignored test can be safely converted into an active assertion.
+
+
+## Design Record: Configuration Ownership and Propagation (Phase 2.8)
+
+This section records the Phase 2.8 design record for configuration ownership and propagation,
+as clarified during infrastructure hygiene review. The intent is to **lock** these
+decisions for this phase, preventing accidental architectural drift.
+
+### Core-Ownership of Configuration Mechanism
+
+- The generic configuration mechanism (`Config`, `ConfigValue`, `ResolvedConfig`,
+  and the deterministic resolution pipeline) is **owned by goldenport-core**.
+- CNCF and other consumers must use configuration as resolved, schema-free containers,
+  and must **not** own, fork, or redefine the underlying resolution or merge semantics.
+
+#### Rationale
+
+- The configuration mechanism is runtime-agnostic and subsystem-agnostic.
+- It is compatible with CLI, server, and embedded runtimes.
+- It carries no domain- or CNCF-specific semantics.
+- Multiple runtimes (CNCF, SIE, CLI tools, future systems) depend on identical deterministic resolution.
+
+### Boundary and Responsibilities
+
+- **core** is responsible for:
+  - configuration discovery (HOME / PROJECT / CWD)
+  - source ordering and merging
+  - traceability
+  - producing `ResolvedConfig`
+- **cncf** is responsible for:
+  - consuming `ResolvedConfig`
+  - building semantic/normalized configuration models
+  - applying configuration-derived metadata (aliases, deployment hints)
+
+This enforces the principle: **resolution ≠ semantics**.
+
+### Implementation and Migration
+
+- The current `org.goldenport.cncf.config` implementation is transitional.
+- It will be migrated to `org.goldenport.configuration` under core, with **no semantic change**.
+- CNCF must not duplicate or fork configuration artifacts.
+
+### Terminology
+
+- **Config**: core-owned, concrete, strongly-typed configuration for core runtime (e.g. locale, timezone, encoding).
+- **configuration**: generic, schema-free, property-based mechanism for application/subsystem/component configuration.
+
+This distinction is **mandatory and locked for Phase 2.8**.
+
+### No Semantic Change Guarantee
+
+- No semantic changes to configuration behavior in Phase 2.8.
+- No new DSLs or resolver logic introduced in configuration.
+- All changes are infrastructural and clarify ownership, not semantics.
+
+# Implementation Checklist (Phase 2.8)
+
+This checklist summarizes the explicit implementation and documentation tasks required to complete Phase 2.8. Items must be resolved, documented, or explicitly re-deferred before the phase can be closed.
+
+### General Instructions
+- For each item, ensure the implementation matches the locked scope and design records.
+- Do not introduce new features or semantic changes unless explicitly called out.
+- Update documentation and design notes to reflect all completed work.
+
+### Checklist
+
+- [ ] **Path Alias Hard-Coding → Declarative / Logical Resolution**
+  - Remove any hard-coded path aliases.
+  - Implement declarative or logical alias resolution.
+  - Document the approach and update developer notes.
+
+- [ ] **Canonical Path Normalization**
+  - Ensure canonical normalization is applied consistently across all path usages.
+  - Update tests and documentation to reflect normalization logic.
+
+- [ ] **Purpose-Aware String Rendering**
+  - Document the `DisplayIntent` and `Printable` concepts.
+  - Ensure no ad-hoc `toString` usages remain in infrastructure code.
+  - No runtime semantics to be wired in this phase (documentation/design only).
+
+- [ ] **CLI Hygiene**
+  - Reorganize CLI structure (including HelloWorld CLI).
+  - Clean up file layout related to CLI.
+  - Normalize CLI options and meta-parameter handling.
+  - Implement CLI exit policy: only the adapter layer may call `sys.exit`, with a documented `--force-exit` option.
+
+- [ ] **Subsystem Hygiene**
+  - Reorganize HelloWorld subsystem structure.
+  - Clarify and document placement of built-in Components and AdminComponent.
+
+- [ ] **OpenAPI Projection Hygiene**
+  - Document OpenAPI projection scope and policy gaps.
+  - Defer unresolved items as described.
+
+- [ ] **curl-Compatible Client Parameter Specification**
+  - Normalize client CLI parameters to match curl conventions.
+  - Treat `-d @file` inputs as Bag at Request construction.
+  - Align Request property/argument structure with future RestIngress.
+  - Document current status and any deferred work.
+
+- [ ] **ComponentDefinition / DSL Definition Formalization**
+  - Clarify contract between DSL-based and class-based Components.
+  - Decide and document instantiation and lifecycle rules.
+
+- [ ] **Component Repository Priority and Override Rules**
+  - Define and document deterministic repository resolution order.
+  - Specify override/shadowing behavior.
+
+- [ ] **Bootstrap Log Persistence and Operational Integration**
+  - Define and document log persistence strategy.
+  - Integrate with runtime logging/observability pipeline as scoped.
+
+- [ ] **Config → Initialize → Runtime Integration**
+  - Define and document a single end-to-end initialization contract.
+  - Align configuration loading, Component.initialize, and runtime execution.
+
+- [ ] **Runtime ScopeContext–Based Logging Configuration**
+  - Document and formalize runtime ScopeContext-based logging configuration.
+  - Ensure all logging configuration is context-aware and dynamically adjustable at runtime boundaries.
+  - Replace/augment ad-hoc or static logging configuration with ScopeContext handling.
+  - Provide documentation and examples.
+
+- [ ] **Documentation and Design Records**
+  - Update all design records to reflect final implementation state.
+  - Ensure canonical documentation consolidation (e.g., `configuration-model.md`).
+
+- [ ] **Review Deferred and Open Items**
+  - Revisit all items marked OPEN or PARTIAL in the tracking table.
+  - Explicitly close, re-defer, or document rationale for any remaining gaps.
+
+---
+
+All items above must be reviewed and checked off before Phase 2.8 is considered complete. Any deviations or deferrals must be justified and recorded in the phase documentation.
