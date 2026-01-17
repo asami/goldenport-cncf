@@ -2,7 +2,7 @@ package org.goldenport.cncf.component.repository
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.bootstrap.BootstrapLog
-import org.goldenport.cncf.component.{Component, ComponentDefinition, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin, GeneratedComponent}
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.component.Component.Core
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.Protocol
@@ -19,32 +19,17 @@ import scala.util.control.NonFatal
  * @author  ASAMI, Tomoharu
  */
 object ComponentProvider {
-  import ComponentSource.{ClassDef, Definition}
+  import ComponentSource.ClassDef
 
   def provide(
     source: ComponentSource,
     subsystem: Subsystem,
     origin: ComponentOrigin
   ): Consequence[Component] = {
-    val log = BootstrapLog.stderr
     source match {
-      case Definition(defn, _) =>
-        _provide_definition(defn, subsystem, origin, log)
       case ClassDef(componentClass, _) =>
-        _provide_class(componentClass, subsystem, origin, log)
+        _provide_class(componentClass, subsystem, origin, BootstrapLog.stderr)
     }
-  }
-
-  private def _provide_definition(
-    definition: ComponentDefinition,
-    subsystem: Subsystem,
-    origin: ComponentOrigin,
-    log: BootstrapLog
-  ): Consequence[Component] = {
-    log.info(s"instantiate definition: ${definition.name}")
-    val core = _core_from_definition(definition)
-    val comp = new GeneratedComponent(core, definition)
-    _initialize_component(comp, subsystem, core, origin)
   }
 
   private def _provide_class(
@@ -90,15 +75,6 @@ object ComponentProvider {
     _catch_non_fatal {
       comp.initialize(ComponentInit(subsystem, core, origin))
     }
-  }
-
-  private def _core_from_definition(
-    definition: ComponentDefinition
-  ): Core = {
-    val name = definition.name
-    val componentId = ComponentId(name)
-    val instanceId = ComponentInstanceId.default(componentId)
-    Component.Core.create(name, componentId, instanceId, definition.protocol)
   }
 
   private def _core_from_component(

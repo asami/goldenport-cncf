@@ -96,6 +96,8 @@ Provider guidelines:
 - Else use zero-arg constructor if available.
 - Else fail with a clear diagnostic (DbC-style in internal code, Consequence at boundary).
 
+**Component generation scope**: For Phase 2.8 the Provider only handles concrete `Component` classes discovered on the classpath or from component repositories. The previous `ComponentDefinition` / `GeneratedComponent` path has been removed, so the runtime no longer interprets DSL-based definitions—every discovered artifact must resolve to an instantiable `Component` class (including script-generated classes or classes from `component.dir`). Future automated component generation is expected to emit such concrete classes so the Provider can apply the documented reflection/constructor logic without additional semantic layers.
+
 
 ### ComponentFactoryGroup
 

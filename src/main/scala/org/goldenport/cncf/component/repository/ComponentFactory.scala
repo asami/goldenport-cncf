@@ -1,7 +1,7 @@
 package org.goldenport.cncf.component.repository
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.component.{Component, ComponentDefinition}
+import org.goldenport.cncf.component.Component
 import scala.util.control.NonFatal
 
 /*
@@ -32,52 +32,24 @@ object ComponentFactory {
     className: String,
     loader: ClassLoader,
     origin: String
-  ): Consequence[Option[ComponentSource]] = {
-    _try_scala_object_definition(className, loader) match {
-      case Consequence.Success(Some(defn)) =>
-        Consequence.Success(Some(ComponentSource.Definition(defn, origin)))
-      case Consequence.Success(None) =>
-        _load_class(className, loader) match {
-          case Consequence.Success(cls) =>
-            if (_is_component_class(cls) && !_is_module_class(className)) {
-              Consequence.Success(
-                Some(
-                  ComponentSource.ClassDef(
-                    cls.asInstanceOf[Class[_ <: Component]],
-                    origin
-                  )
-                )
+  ): Consequence[Option[ComponentSource]] =
+    _load_class(className, loader) match {
+      case Consequence.Success(cls) =>
+        if (_is_component_class(cls) && !_is_module_class(className)) {
+          Consequence.Success(
+            Some(
+              ComponentSource.ClassDef(
+                cls.asInstanceOf[Class[_ <: Component]],
+                origin
               )
-            } else {
-              Consequence.Success(None)
-            }
-          case Consequence.Failure(conclusion) =>
-            Consequence.Failure(conclusion)
+            )
+          )
+        } else {
+          Consequence.Success(None)
         }
       case Consequence.Failure(conclusion) =>
         Consequence.Failure(conclusion)
     }
-  }
-
-  private def _try_scala_object_definition(
-    className: String,
-    loader: ClassLoader
-  ): Consequence[Option[ComponentDefinition]] = {
-    val objname = if (className.endsWith("$")) className else className + "$"
-    try {
-      val objcls = Class.forName(objname, true, loader)
-      val module = objcls.getField("MODULE$").get(null)
-      module match {
-        case defn: ComponentDefinition => Consequence.Success(Some(defn))
-        case _ => Consequence.Success(None)
-      }
-    } catch {
-      case _: ClassNotFoundException => Consequence.Success(None)
-      case e: NoClassDefFoundError => _failure(e)
-      case e: LinkageError => _failure(e)
-      case NonFatal(e) => _failure(e)
-    }
-  }
 
   private def _load_class(
     className: String,

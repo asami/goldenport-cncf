@@ -13,7 +13,7 @@ import org.goldenport.cncf.component.*
 
 /*
  * @since   Jan. 12, 2026
- * @version Jan. 14, 2026
+ * @version Jan. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -422,8 +422,6 @@ object ComponentRepository {
       ComponentFactory.build(Seq(className), loader, origin.label) match {
         case Consequence.Success(sources) =>
           sources.foreach {
-            case ComponentSource.Definition(_, _) =>
-              log.info(s"accepted definition class=${className}")
             case ComponentSource.ClassDef(_, _) =>
               log.info(s"accepted component class=${className}")
           }
@@ -455,4 +453,15 @@ object ComponentRepository {
     }
     Consequence.Success(acc)
   }
+}
+
+sealed trait ComponentSource {
+  def origin: String
+}
+
+object ComponentSource {
+  final case class ClassDef(
+    componentClass: Class[_ <: Component],
+    origin: String
+  ) extends ComponentSource
 }

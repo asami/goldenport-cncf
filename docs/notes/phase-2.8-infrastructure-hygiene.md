@@ -117,9 +117,10 @@ The following items were identified during Phase 2.6 demo completion and were
 explicitly deferred to Phase 2.8 for resolution. Phase 2.8 includes design work
 and implementation necessary to close these items.
 
-- ComponentDefinition / DSL definition formalization
-  - Clarify contract between DSL-based definitions and class-based Components.
-  - Decide instantiation and lifecycle rules.
+- ComponentDefinition / DSL definition formalization (completed—DSL path removed)
+  - Removed the unused `ComponentDefinition` / `GeneratedComponent` abstraction so no DSL-based artifact is interpreted at runtime.
+  - Discovery now emits only concrete `Component` classes (ClassDef-only) and ComponentProvider handles their instantiation.
+  - Future component generation must produce instantiable `Component` classes; runtime semantics and defaults remain unchanged.
 
 - Multiple Component Repository priority and override rules
   - Define deterministic resolution order across repositories.
@@ -223,7 +224,7 @@ The introduction of a runtime `ScopeContext`–based logging configuration mecha
 | Config → initialize → runtime integration | Phase 2.6 Stage 5 deferred list | **PARTIAL** | Semantic builders and documentation exist, but the single end-to-end contract is still recorded as Phase 2.8 scope. |
 | Path / alias resolution hygiene | Phase 2.6 Stage 3 note + Stage 6 deferred steps | **OPEN** | Alias normalization requirements remain in Phase 2.8 docs and no implementation or decision update has been recorded. |
 | Component / service / operation canonical construction | Phase 2.6 Stage 6 deferred steps | **OPEN** | The script DSL alias/spec rules remain deferred (ScriptDslSpec is intentionally ignored) and no refinement is documented. |
-| ComponentDefinition / DSL formalization | Phase 2.6 Stage 5 deferred list | **OPEN** | Design note still marks the item as “must be revisited before Phase 2.8 completion.” |
+| ComponentDefinition / DSL formalization | Phase 2.6 Stage 5 deferred list | **DONE** | Removed the unused `ComponentDefinition` / `GeneratedComponent` abstraction so the pipeline now resolves only concrete `Component` classes (ClassDef-only) with unchanged runtime semantics/defaults. |
 | Component repository priority rules | Phase 2.6 Stage 5 deferred list | **OPEN** | Deterministic repository ordering remains unsettled in Phase 2.8 scope. |
 | Bootstrap log persistence / ops integration | Phase 2.6 Stage 5 deferred list | **OPEN** | Persistence/operational integration is explicitly deferred with no recorded completion in Phase 2.8 doc. |
 | OpenAPI / representation expansion policy | Phase 2.6 Stage 6 deferred steps | **OPEN** | Advanced OpenAPI schema/representation work is marked as deferred to Phase 2.8+. |
@@ -233,6 +234,12 @@ The introduction of a runtime `ScopeContext`–based logging configuration mecha
 
 - Semantic Configuration / Propagation, Configuration ownership realignment, and Canonical documentation consolidation are DONE within Phase 2.8 and documented via `configuration-model.md#configuration-propagation-model`.
 - Phase 2.8 remains **OPEN** because the remaining hygiene items in the table are still marked PARTIAL or OPEN and have not been resolved or re-deferred.
+
+### Hygiene simplification: ComponentDefinition retirement
+
+- ComponentDefinition / GeneratedComponent removed as an unused speculative abstraction; no runtime artifacts now interpret DSL definitions.
+- The discovery pipeline is ClassDef-only, so ComponentProvider only instantiates concrete `Component` classes discovered via classpath, repositories, or script generation.
+- Runtime semantics and defaults remain unchanged because the removed path had no active behavior.
 
 ## Design Record: Operation Resolution vs Configuration (Phase 2.8)
 
@@ -853,9 +860,10 @@ This checklist summarizes the explicit implementation and documentation tasks re
   - Align Request property/argument structure with future RestIngress.
   - Document current status and any deferred work.
 
-- [ ] **ComponentDefinition / DSL Definition Formalization**
-  - Clarify contract between DSL-based and class-based Components.
-  - Decide and document instantiation and lifecycle rules.
+- [x] **ComponentDefinition / DSL Definition Formalization**
+  - Removed the unused DSL-based `ComponentDefinition` / `GeneratedComponent` pathway; runtime now understands only class-based components.
+  - Discovery is ClassDef-only, and ComponentProvider initializes concrete classes without introducing new semantics.
+  - Runtime defaults and behavior remain unchanged because only an unused abstraction was removed.
 
 - [ ] **Component Repository Priority and Override Rules**
   - Define and document deterministic repository resolution order.
@@ -1011,4 +1019,3 @@ The following operational concerns are explicitly deferred:
 - None are required for Phase 2.8 completion.
 - No item above may be partially implemented during Phase 2.8
   without revisiting phase scope and documentation.
-

@@ -31,6 +31,12 @@ and compatible with non-classpath repositories.
   instantiated Components or explicit failures.
 - Each Component is initialized via initialize(ComponentInitParams) to bind
   subsystem, core, and origin explicitly.
+- There is no runtime interpretation of a `ComponentDefinition` DSL anymore;
+  discovery resolves only concrete `Component` classes (including script- or
+  repository-generated classes). ComponentProvider therefore always receives an
+  instantiable class and expects the reflection/constructor path described
+  above, and future code generation must emit such classes rather than
+  supplying separate definition artifacts.
 
 ## Operational Implications
 
