@@ -13,8 +13,7 @@ import org.goldenport.cncf.component.{
   Component,
   ComponentId,
   ComponentInstanceId,
-  ComponentSpace,
-  PingRuntime
+  ComponentSpace
 }
 import org.goldenport.cncf.component.ComponentLocator.NameLocator
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind, SystemContext}

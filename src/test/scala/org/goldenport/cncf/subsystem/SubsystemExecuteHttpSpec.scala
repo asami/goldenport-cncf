@@ -1,7 +1,7 @@
 package org.goldenport.cncf.subsystem
 
 import org.goldenport.cncf.CncfVersion
-import org.goldenport.cncf.component.{PingRuntime, PingRuntimeInfo}
+import org.goldenport.cncf.component.{RuntimeMetadata, RuntimeMetadataInfo}
 import org.goldenport.http.HttpRequest
 import org.scalatest.OptionValues
 import org.scalatest.matchers.should.Matchers
@@ -20,8 +20,8 @@ class SubsystemExecuteHttpSpec extends AnyWordSpec with Matchers with OptionValu
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val req = HttpRequest.fromPath(HttpRequest.GET, "/admin/system/ping")
       val res = subsystem.executeHttp(req)
-      val expected = PingRuntime.format(
-        PingRuntimeInfo("server", "goldenport-cncf", CncfVersion.current, CncfVersion.current)
+      val expected = RuntimeMetadata.format(
+        RuntimeMetadataInfo("server", RuntimeMetadata.SubsystemName, CncfVersion.current, CncfVersion.current)
       )
 
       res.code shouldBe 200

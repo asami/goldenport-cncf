@@ -1,7 +1,8 @@
 package org.goldenport.cncf.subsystem
 
 import org.goldenport.cncf.CncfVersion
-import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin, PingRuntime, PingRuntimeInfo}
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin, RuntimeMetadata, RuntimeMetadataInfo}
+import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig}
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.client.ClientComponent
 import org.goldenport.cncf.component.admin.AdminComponent
@@ -25,7 +26,7 @@ object DefaultSubsystemFactory {
   private val _admin = AdminComponent.Factory
   private val _client = ClientComponent.Factory
   private val _spec = SpecificationComponent.Factory()
-  private val _subsystem_name = "goldenport-cncf"
+  private val _subsystem_name = RuntimeMetadata.SubsystemName
 
   def subsystemName: String = _subsystem_name
 
@@ -51,8 +52,8 @@ object DefaultSubsystemFactory {
   ): Subsystem = {
     val subsystem = default(mode)
     if (extraComponents.nonEmpty) {
-      val modeLabel = mode.getOrElse("command")
-      val system = PingRuntime.systemContext(
+      val modeLabel = mode.getOrElse(RuntimeConfig.default.mode.name)
+      val system = RuntimeMetadata.systemContext(
         mode = modeLabel,
         subsystem = subsystem.name,
         runtimeVersion = CncfVersion.current,
@@ -70,14 +71,15 @@ object DefaultSubsystemFactory {
     configuration: ResolvedConfiguration =
       ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
   ): Subsystem = {
-    val modeLabel = mode.getOrElse("command")
-    val system = PingRuntime.systemContext(
+    val runtimeConfig = RuntimeConfig.from(configuration)
+    val modeLabel = mode.getOrElse(runtimeConfig.mode.name)
+    val system = RuntimeMetadata.systemContext(
       mode = modeLabel,
       subsystem = _subsystem_name,
       runtimeVersion = CncfVersion.current,
       subsystemVersion = None
     )
-    val driver = _resolve_http_driver(mode, _subsystem_name)
+    val driver = _resolve_http_driver(runtimeConfig, _subsystem_name)
     val subsystem =
       Subsystem(
         name = _subsystem_name,
@@ -107,19 +109,19 @@ object DefaultSubsystemFactory {
   }
 
   private def _resolve_http_driver(
-    mode: Option[String],
+    runtimeConfig: RuntimeConfig,
     subsystemName: String
   ): org.goldenport.cncf.http.HttpDriver = {
-    val driver = sys.props.getOrElse("cncf.http.driver", "real")
-    val baseurl = sys.props.getOrElse("cncf.http.baseurl", "http://localhost:8080")
-    if (driver == "fake") {
-      val info = PingRuntimeInfo(
-        mode = mode.getOrElse("command"),
+    val driver = runtimeConfig.httpDriver
+    val baseurl = sys.props.getOrElse("cncf.http.baseurl", ClientConfig.DefaultBaseUrl)
+    if (driver == "fake" || driver == "nop") {
+      val info = RuntimeMetadataInfo(
+        mode = runtimeConfig.mode.name,
         subsystem = subsystemName,
         runtimeVersion = CncfVersion.current,
         subsystemVersion = CncfVersion.current
       )
-      FakeHttpDriver.okText(PingRuntime.format(info))
+      FakeHttpDriver.okText(RuntimeMetadata.format(info))
     } else {
       new UrlConnectionHttpDriver(baseurl)
     }

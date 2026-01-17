@@ -52,6 +52,7 @@ END.
 
 ### Execution Path
 - CLI -> ClientComponent -> HttpDriver -> Server Action
+Path resolution for CLI arguments (component/service/operation selection) is defined in `docs/spec/path-resolution.md`; this ensures the ClientComponent receives an already canonicalized request.
 
 ### HttpDriver Resolution (Effective Chain)
 - Subsystem default -> Component default -> ExecutionContext resolver -> UnitOfWork -> UnitOfWorkInterpreter

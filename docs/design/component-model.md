@@ -260,6 +260,8 @@ A typical execution flow is:
 
 Domain logic never observes steps 1–4 or 6–7 directly.
 
+Path resolution (CanonicalPath derivation) is defined in `docs/spec/path-resolution.md`; every incoming request must satisfy that specification before the flow above begins.
+
 
 ----------------------------------------------------------------------
 8. Configuration Binding

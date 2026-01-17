@@ -8,7 +8,8 @@ import org.goldenport.bag.Bag
 import org.goldenport.configuration.{Configuration, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.client.{ClientComponent, GetQuery, PostCommand}
 import org.goldenport.cncf.CncfVersion
-import org.goldenport.cncf.component.{Component, ComponentInit, PingRuntime}
+import org.goldenport.cncf.component.{Component, ComponentInit, RuntimeMetadata}
+import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig}
 import org.goldenport.cncf.context.SystemContext
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.http.{HttpRequest, HttpResponse}
@@ -68,10 +69,10 @@ object CncfRuntime {
       )
     }
 
-  private def _http_driver_from_configuration(
-    configuration: ResolvedConfiguration
+  private def _http_driver_from_runtime_config(
+    runtimeConfig: RuntimeConfig
   ): HttpDriver = {
-    HttpDriverFactory.create(configuration) match {
+    HttpDriverFactory.create(runtimeConfig.httpDriver) match {
       case Consequence.Success(driver) =>
         driver
       case Consequence.Failure(conclusion) =>
@@ -144,7 +145,7 @@ object CncfRuntime {
   def executeClient(args: Array[String]): Int = {
     val subsystem = buildSubsystem(mode = Some(RunMode.Client))
     val result = _client_component(subsystem).flatMap { component =>
-      parseClientArgs(args).flatMap { req =>
+      parseClientArgs(args, Some(subsystem.configuration)).flatMap { req =>
         _client_action_from_request(req).flatMap { action =>
           component.execute(action)
         }
@@ -165,7 +166,7 @@ object CncfRuntime {
   ): Int = {
     val subsystem = buildSubsystem(extraComponents, Some(RunMode.Client))
     val result = _client_component(subsystem).flatMap { component =>
-      parseClientArgs(args).flatMap { req =>
+      parseClientArgs(args, Some(subsystem.configuration)).flatMap { req =>
         _client_action_from_request(req).flatMap { action =>
           component.execute(action)
         }
@@ -212,8 +213,11 @@ object CncfRuntime {
   }
 
   def executeServerEmulator(args: Array[String]): Int = {
+    val cwd = Paths.get("").toAbsolutePath.normalize
+    val configuration = _resolve_configuration(cwd)
+    val runtimeConfig = _runtime_config(configuration)
     val (includeHeader, rest) = _include_header(args)
-    val result = normalizeServerEmulatorArgs(rest) match {
+    val result = normalizeServerEmulatorArgs(rest, runtimeConfig.serverEmulatorBaseUrl) match {
       case Consequence.Success(normalized) =>
         HttpRequest.fromCurlLike(normalized) match {
           case Consequence.Success(req) =>
@@ -240,8 +244,11 @@ object CncfRuntime {
     args: Array[String],
     extraComponents: Subsystem => Seq[Component]
   ): Int = {
+    val cwd = Paths.get("").toAbsolutePath.normalize
+    val configuration = _resolve_configuration(cwd)
+    val runtimeConfig = _runtime_config(configuration)
     val (includeHeader, rest) = _include_header(args)
-    val result = normalizeServerEmulatorArgs(rest) match {
+    val result = normalizeServerEmulatorArgs(rest, runtimeConfig.serverEmulatorBaseUrl) match {
       case Consequence.Success(normalized) =>
         HttpRequest.fromCurlLike(normalized) match {
           case Consequence.Success(req) =>
@@ -302,8 +309,9 @@ object CncfRuntime {
     }
     val cwd = Paths.get("").toAbsolutePath.normalize
     val configuration = _resolve_configuration(cwd)
+    val runtimeConfig = _runtime_config(configuration)
     val logBackend = _decide_backend(backendoption, _logging_backend_from_configuration(configuration))
-    val httpDriver = _http_driver_from_configuration(configuration)
+    val httpDriver = _http_driver_from_runtime_config(runtimeConfig)
     _install_log_backend(logBackend)
     _reset_global_runtime_context()
     _create_global_runtime_context(httpDriver)
@@ -345,8 +353,9 @@ object CncfRuntime {
     }
     val cwd = Paths.get("").toAbsolutePath.normalize
     val configuration = _resolve_configuration(cwd)
+    val runtimeConfig = _runtime_config(configuration)
     val logBackend = _decide_backend(backendoption, _logging_backend_from_configuration(configuration))
-    val httpDriver = _http_driver_from_configuration(configuration)
+    val httpDriver = _http_driver_from_runtime_config(runtimeConfig)
     _install_log_backend(logBackend)
     _reset_global_runtime_context()
     _create_global_runtime_context(httpDriver)
@@ -521,7 +530,7 @@ object CncfRuntime {
     subsystem: Subsystem,
     mode: String
   ): Unit = {
-    val system = PingRuntime.systemContext(
+    val system = RuntimeMetadata.systemContext(
       mode = mode,
       subsystem = subsystem.name,
       runtimeVersion = CncfVersion.current,
@@ -531,7 +540,8 @@ object CncfRuntime {
   }
 
   def parseClientArgs(
-    args: Array[String]
+    args: Array[String],
+    configuration: Option[ResolvedConfiguration] = None
   ): Consequence[Request] = {
     if (args.isEmpty) {
       Consequence.failure("client command is required")
@@ -542,7 +552,10 @@ object CncfRuntime {
             case (bodyopt, rest1) =>
               _parse_client_command(rest1, bodyopt).map {
                 case (operation, path) =>
-                  val baseurl = baseurlopt.getOrElse("http://localhost:8080")
+                  val baseUrlFromConfig = configuration.flatMap(ClientConfig.baseUrl)
+                  val baseurl = baseurlopt
+                    .orElse(baseUrlFromConfig)
+                    .getOrElse(ClientConfig.DefaultBaseUrl)
                   Request.of(
                     component = "client",
                     service = "http",
@@ -601,7 +614,7 @@ object CncfRuntime {
     req: Request
   ): String =
     req.properties.find(_.name == "baseurl").map(_.value.toString)
-      .getOrElse("http://localhost:8080")
+      .getOrElse(ClientConfig.DefaultBaseUrl)
 
   private def _client_path_from_request(
     req: Request
@@ -901,7 +914,8 @@ object CncfRuntime {
   }
 
   private[cli] def normalizeServerEmulatorArgs(
-    args: Seq[String]
+    args: Seq[String],
+    baseUrl: String
   ): Consequence[Seq[String]] = {
     if (args.isEmpty) {
       Consequence.failure("server-emulator requires a path or URL")
@@ -910,9 +924,19 @@ object CncfRuntime {
     } else {
       _parse_component_service_operation(args).map {
         case (component, service, operation) =>
-          Seq(s"http://localhost/${component}/${service}/${operation}")
+          Seq(_serverEmulatorUrl(baseUrl, component, service, operation))
       }
     }
+  }
+
+  private def _serverEmulatorUrl(
+    baseUrl: String,
+    component: String,
+    service: String,
+    operation: String
+  ): String = {
+    val trimmed = if (baseUrl.endsWith("/")) baseUrl.dropRight(1) else baseUrl
+    s"${trimmed}/${component}/${service}/${operation}"
   }
 
   private def _print_with_header(
@@ -947,6 +971,11 @@ object CncfRuntime {
         ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
     }
   }
+
+  private def _runtime_config(
+    configuration: ResolvedConfiguration
+  ): RuntimeConfig =
+    RuntimeConfig.from(configuration)
 }
 
 enum RunMode(val name: String) {

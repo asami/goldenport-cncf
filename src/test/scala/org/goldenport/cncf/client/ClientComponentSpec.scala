@@ -11,6 +11,7 @@ import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.Protocol
+import org.goldenport.cncf.config.ClientConfig
 import org.goldenport.protocol.{Argument, Property, Request}
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.egress.EgressCollection
@@ -40,7 +41,7 @@ class ClientComponentSpec
     "construct HTTP POST via ComponentLogic" in {
       val table = Table(
         ("path", "body", "expectedurl"),
-        ("/admin/system/ping", "pong", "http://localhost:8080/admin/system/ping")
+        ("/admin/system/ping", "pong", s"${ClientConfig.DefaultBaseUrl}/admin/system/ping")
       )
 
       forAll(table) { (path, body, expectedurl) =>
@@ -57,7 +58,7 @@ class ClientComponentSpec
           ),
           switches = Nil,
           properties = List(
-            Property("baseurl", "http://localhost:8080", None),
+            Property("baseurl", ClientConfig.DefaultBaseUrl, None),
             Property("-d", Bag.text(body, StandardCharsets.UTF_8), None)
           )
         )
@@ -78,13 +79,13 @@ class ClientComponentSpec
         ("operation", "path", "body", "expectedcall"),
         ("get", "/admin/system/ping", None, HttpCall(
           "GET",
-          "http://localhost:8080/admin/system/ping",
+          s"${ClientConfig.DefaultBaseUrl}/admin/system/ping",
           None,
           Map.empty
         )),
         ("post", "/admin/system/ping", Some("pong"), HttpCall(
           "POST",
-          "http://localhost:8080/admin/system/ping",
+          s"${ClientConfig.DefaultBaseUrl}/admin/system/ping",
           Some("pong"),
           Map.empty
         ))
@@ -106,7 +107,7 @@ class ClientComponentSpec
           ),
           switches = Nil,
           properties = List(
-            Property("baseurl", "http://localhost:8080", None)
+            Property("baseurl", ClientConfig.DefaultBaseUrl, None)
           ) ::: body.map { value =>
             Property("-d", Bag.text(value, StandardCharsets.UTF_8), None)
           }.toList

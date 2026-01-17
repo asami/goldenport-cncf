@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
 import org.goldenport.bag.{Bag, TextBag}
+import org.goldenport.cncf.config.ClientConfig
 import org.goldenport.protocol.{Argument, Property, Request}
 import org.goldenport.test.matchers.ConsequenceMatchers
 import org.scalatest.GivenWhenThen
@@ -56,7 +57,7 @@ class ClientRequestNormalizationSpec
             req.operation shouldBe operation
             req.arguments shouldBe List(Argument("path", path, None))
             _property(req, "baseurl") shouldBe Some(
-              Property("baseurl", "http://localhost:8080", None)
+              Property("baseurl", ClientConfig.DefaultBaseUrl, None)
             )
             body match {
               case Some(value) =>
@@ -93,7 +94,7 @@ class ClientRequestNormalizationSpec
             Argument("path", "/admin/system/ping", None)
           )
           _property(req, "baseurl") shouldBe Some(
-            Property("baseurl", "http://localhost:8080", None)
+            Property("baseurl", ClientConfig.DefaultBaseUrl, None)
           )
         case _ =>
           fail("expected successful normalization")

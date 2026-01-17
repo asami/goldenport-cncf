@@ -7,6 +7,7 @@ import org.goldenport.cncf.component.{Component, ComponentInit}
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.component.ComponentInstanceId
+import org.goldenport.cncf.config.ClientConfig
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.egress.{EgressCollection, RestEgress}
@@ -131,7 +132,7 @@ object ClientComponent {
 
   private def _baseurl(req: Request): String =
     req.properties.find(_.name == "baseurl").map(_.value.toString)
-      .getOrElse("http://localhost:8080")
+      .getOrElse(ClientConfig.DefaultBaseUrl)
 
   private def _path(req: Request): Consequence[String] =
     req.arguments.find(_.name == "path").map(_.value.toString) match {

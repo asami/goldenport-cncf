@@ -154,8 +154,8 @@ object ComponentLogic {
   ) extends ActionCall {
     override def action: Action = core.action
     def execute(): Consequence[OperationResponse] = {
-      val info = PingRuntime.fromSystem(core.executionContext.system)
-      Consequence.success(OperationResponse.Scalar(PingRuntime.format(info)))
+      val info = RuntimeMetadata.fromSystem(core.executionContext.system)
+      Consequence.success(OperationResponse.Scalar(RuntimeMetadata.format(info)))
     }
   }
 }

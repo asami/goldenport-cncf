@@ -22,6 +22,7 @@ args / http
   -> execute
 
 Scenario and program execution are driven by run.
+Path resolution and CanonicalPath construction are defined in the Path Resolution Specification (`docs/spec/path-resolution.md`), which this execution flow assumes before invoking ActionCall.
 
 
 ----------------------------------------------------------------------

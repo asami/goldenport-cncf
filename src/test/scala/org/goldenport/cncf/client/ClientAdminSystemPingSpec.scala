@@ -7,6 +7,7 @@ import org.goldenport.bag.Bag
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.cli.CncfRuntime
+import org.goldenport.cncf.config.ClientConfig
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.http.HttpDriver
@@ -88,7 +89,7 @@ class ClientAdminSystemPingSpec
       Then("the HTTP driver is invoked with the expected path")
       result should be_success
       driver.calls shouldBe Vector(
-        HttpCall("GET", "http://localhost:8080/admin/system/ping", None, Map.empty)
+          HttpCall("GET", s"${ClientConfig.DefaultBaseUrl}/admin/system/ping", None, Map.empty)
       )
       val _ = response
     }
@@ -110,7 +111,7 @@ class ClientAdminSystemPingSpec
       Then("the HTTP driver is invoked with the expected path and body")
       result should be_success
       driver.calls shouldBe Vector(
-        HttpCall("POST", "http://localhost:8080/admin/system/ping", Some("pong"), Map.empty)
+          HttpCall("POST", s"${ClientConfig.DefaultBaseUrl}/admin/system/ping", Some("pong"), Map.empty)
       )
     }
   }
@@ -190,7 +191,7 @@ class ClientAdminSystemPingSpec
     req: Request
   ): Consequence[org.goldenport.cncf.action.Action] = {
     val baseurl = req.properties.find(_.name == "baseurl")
-      .map(_.value.toString).getOrElse("http://localhost:8080")
+      .map(_.value.toString).getOrElse(ClientConfig.DefaultBaseUrl)
     req.arguments.find(_.name == "path").map(_.value.toString) match {
       case Some(path) =>
         val url = _build_client_url(baseurl, path)

@@ -5,15 +5,21 @@ status=published
 published_at=2025-12-26
 
 # PURPOSE
-This document defines the standard style for writing specifications
+This document defines the standard style for writing Executable Specifications
 in SimpleModeling.
 
-The goal is to ensure that specifications are:
+- This document defines the standard style for writing Executable Specifications
+- in SimpleModeling.
+
+The goal is to ensure that Executable Specifications are:
 - Readable as documents
 - Executable as tests
 - Authoritative as design artifacts
 
-These rules apply to **Working Specifications**.
+These rules apply to **Executable Specifications**.
+
+Given / When / Then is treated as a semantic description DSL
+for Executable Specifications and is independent of any BDD/TDD interpretation.
 
 ---
 
@@ -41,6 +47,81 @@ This combination provides:
 - Executable specification logging
 
 ---
+
+# EXECUTABLE SPECIFICATION MODEL
+
+Executable Specification is the integration of specification text and executable verification that defines semantic behavior for the project.
+It pairs normative rules with runnable tests so that documentation and automation stay synchronized.
+
+There are two kinds of Executable Specifications.
+
+- **Bottom-up (specification/structure-driven)** specifications focus on individual interfaces or components and describe their semantic responsibilities through hierarchical `should` / `when` / `should` blocks.
+- **Top-down Scenario Specifications** focus on higher-level flows or scenarios and coordinate multiple components to describe an end-to-end behavior.
+
+Scenario Specifications MUST be placed under the `SCENARIO` package to clearly distinguish their role in describing use cases rather than individual interfaces.
+
+Given / When / Then is the canonical semantic description style for Executable Specifications.
+It is a description DSL and not a classification of specification type; both bottom-up and scenario specifications share the same DSL.
+
+## Executable Specification Display and Tagging
+
+Executable Specifications MUST follow the display, Given/When/Then, DSL keyword, and tagging conventions defined in `docs/rules/executable-spec-display-and-tagging-rules.md`.
+That document defines the mandatory presentation and machine-readable metadata rules that ensure each Executable Specification remains identifiable and traceable.
+
+---
+
+## CANONICAL EXECUTABLE SPECIFICATION MODEL
+
+---
+### Completion Forms of Executable Specifications
+
+Executable Specifications may be completed in one of two valid forms.
+
+#### 1. Specification-Document–Backed Form
+
+- A written specification document exists (e.g., design or normative spec).
+- Executable Specifications serve as executable confirmation of that document.
+- Bidirectional references between the specification document and the Executable Specifications MAY exist.
+
+#### 2. Executable-Only Form
+
+- No separate written specification document exists.
+- Executable Specifications themselves constitute the complete and authoritative specification.
+- Given / When / Then clauses define the entire normative behavior.
+
+Both forms are equally valid.
+
+The absence of a written specification document does not reduce
+the normative status, authority, or contractual role of an Executable Specification.
+
+---
+
+### 1. Normativity
+
+Executable Specifications express normative behavior using `must`, `should`, and `can`.
+`must` marks mandatory rules, `should` marks expected behavior, and `can` marks permitted or optional behavior.
+Specification documents are authoritative; Executable Specifications serve as executable confirmation of those rules.
+
+### 2. Metadata Binding
+
+All specification metadata (spec name, example ID, rule IDs, phase) is encoded via `afterWord` annotations.
+`taggedAs` MUST NOT be used when binding metadata because `afterWord` statements are the canonical binding mechanism.
+The standard metadata format is:
+
+```
+in spec:<spec-name>, example:<example-id>, rules:<R1,R2,...>, phase:<phase>
+```
+
+### 3. Semantic Structure
+
+Given / When / Then is the semantic display DSL for Executable Specifications.
+Tests SHOULD use ScalaTest `GivenWhenThen` and describe each clause explicitly; they MAY be implemented through comments or descriptive text.
+No specification clause should return values or embed code blocks that hide the semantic narrative.
+
+### 4. Canonical Example
+
+`PathResolutionSpec`'s E1 example illustrates the canonical model: the example title surfaces the Example ID, the `afterWord` encodes the metadata, and the body presents clear Given / When / Then reasoning.
+All other examples MUST follow this form.
 
 # SPEC AS TABLE OF CONTENTS
 
@@ -439,13 +520,20 @@ Specifications placed in `*.spec` or parallel test-only packages are considered 
 
 # EXAMPLES
 
-Typical Working Specifications include:
+Typical Executable Specifications include:
 - `CliEngineSpec`
 - `CliLogicSpec`
 - `OperationDefinitionSpec`
 
 These specs define the authoritative behavior
 of the model interpretation layer.
+
+---
+
+## Related Operational Rules
+
+`docs/rules/specification-linking-and-rule-numbering-rules.md` defines the operational conventions that apply to Executable Specifications when they are paired with design documents and normative specifications.  
+It is the applied rule set that builds on the style defined in this document.
 
 ---
 
@@ -473,3 +561,28 @@ Front Matter is ignored by Markdown renderers and does not affect document seman
 This style intentionally differs from traditional BDD.
 While the structure is similar, the intent is semantic,
 not behavioral or execution-oriented.
+
+## Hardcoded Behavior Preservation (Normative)
+
+Executable Specifications MUST preserve the observable behavior of any previously
+hard-coded, implicit, or special-cased logic that is removed, generalized, or replaced
+by generic mechanisms.
+
+When such hard-coded behavior is eliminated from the implementation, there MUST exist
+at least one corresponding Executable Specification Example that captures the same
+semantic behavior using only the current generic logic.
+
+This rule is normative and defines the contractual role of Executable Specifications:
+
+- Code MAY change.
+- Implementation strategies MAY change.
+- Executable Specification Examples MUST remain as behavioral contracts.
+
+An Executable Specification Example corresponding to removed hard-coded behavior MUST:
+
+- Describe the original conditions using Given.
+- Exercise only the current generic mechanism using When.
+- Assert the preserved semantic outcome using Then.
+- Be uniquely identifiable by specification name, Example ID, and rule reference.
+
+An Executable Specification that violates this requirement is considered incomplete.
