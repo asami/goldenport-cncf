@@ -25,7 +25,7 @@ import scala.util.control.NonFatal
 /*
  * @since   Jan.  1, 2026
  *  version Jan.  3, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -118,13 +118,19 @@ abstract class Component() extends Component.Core.Holder {
     }
   }
 
-  private def _default_scope_context(): ScopeContext =
-    ScopeContext(
-      kind = ScopeKind.Component,
-      name = "component",
+  private def _default_scope_context(): ScopeContext = {
+    val parent = ScopeContext(
+      kind = ScopeKind.Runtime,
+      name = "runtime",
       parent = None,
       observabilityContext = ExecutionContext.create().observability
     )
+    Component.Context(
+      name = "component",
+      parent = parent,
+      componentOrigin = ComponentOrigin.Unknown
+    )
+  }
 }
 
 object Component {
@@ -137,7 +143,31 @@ object Component {
 
   // private def _create_script_component_name(): String =
   //   s"SCRIPT${_script_number()}"
-  
+
+  final case class Context(
+    core: ScopeContext.Core,
+    componentOrigin: ComponentOrigin
+  ) extends ScopeContext()
+
+  object Context {
+    def apply(
+      name: String,
+      parent: ScopeContext,
+      componentOrigin: ComponentOrigin
+    ): Context = {
+      val _core = ScopeContext.Core(
+        kind = ScopeKind.Component,
+        name = name,
+        parent = Some(parent),
+        observabilityContext = parent.observabilityContext.createChild(ScopeKind.Component, name)
+      )
+      Context(
+        core = _core,
+        componentOrigin = componentOrigin
+      )
+    }
+  }
+
   def createScriptCore(): org.goldenport.cncf.component.Component.Core =
     createScriptCore(Protocol.empty)
 

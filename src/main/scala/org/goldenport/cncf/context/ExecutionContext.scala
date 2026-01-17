@@ -7,7 +7,7 @@ import java.util.Locale
 import org.goldenport.context.{EnvironmentContext as CoreEnvironmentContext, ExecutionContext as CoreExecutionContext, I18nContext, RandomContext, VirtualMachineContext}
 import org.goldenport.id.{UniversalId as CoreUniversalId}
 import org.goldenport.log.Logger
-import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import cats.~>
@@ -55,9 +55,7 @@ object ExecutionContext {
     runtime: RuntimeContext,
     jobContext: org.goldenport.cncf.job.JobContext,
     application: Option[ApplicationContext] = None,
-    system: SystemContext = SystemContext.empty,
-    componentHttpDriver: Option[HttpDriver] = None,
-    subsystemHttpDriver: Option[HttpDriver] = None
+    system: SystemContext = SystemContext.empty
   )
   object CncfCore {
     trait Holder {
@@ -70,10 +68,6 @@ object ExecutionContext {
       def jobContext: org.goldenport.cncf.job.JobContext = cncfCore.jobContext
       def application: Option[ApplicationContext] = cncfCore.application
       def system: SystemContext = cncfCore.system
-      def componentHttpDriver: Option[HttpDriver] = cncfCore.componentHttpDriver
-      def subsystemHttpDriver: Option[HttpDriver] = cncfCore.subsystemHttpDriver
-      def resolve_http_driver: Option[HttpDriver] =
-        componentHttpDriver.orElse(subsystemHttpDriver)
     }
   }
 
@@ -178,34 +172,6 @@ object ExecutionContext {
       ctx
   }
 
-  def withComponentHttpDriver(
-    ctx: ExecutionContext,
-    httpDriver: Option[HttpDriver]
-  ): ExecutionContext = ctx match {
-    case i: Instance =>
-      i.copy(
-        cncfCore = i.cncfCore.copy(
-          componentHttpDriver = httpDriver
-        )
-      )
-    case _ =>
-      ctx
-  }
-
-  def withSubsystemHttpDriver(
-    ctx: ExecutionContext,
-    httpDriver: Option[HttpDriver]
-  ): ExecutionContext = ctx match {
-    case i: Instance =>
-      i.copy(
-        cncfCore = i.cncfCore.copy(
-          subsystemHttpDriver = httpDriver
-        )
-      )
-    case _ =>
-      ctx
-  }
-
   private def _core(): CoreExecutionContext.Core =
     CoreExecutionContext.Core(
       environment = CoreEnvironmentContext.local(),
@@ -287,6 +253,9 @@ object ExecutionContext {
       ()
     }
     def dispose(): Unit = {}
+
+    def httpDriver: HttpDriver =
+      FakeHttpDriver.okText("nop")
 
     def toToken: String = "execution-context-test"
   }

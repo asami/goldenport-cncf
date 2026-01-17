@@ -4,6 +4,7 @@ import cats.{Id, ~>}
 import org.goldenport.Consequence
 import org.goldenport.id.UniversalId
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemContext}
+import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkOp}
@@ -149,6 +150,9 @@ class ActionCallDataStoreRouteSpec
     def dispose(): Unit = {}
 
     def toToken: String = "datastore-route-runtime-context"
+
+    def httpDriver: HttpDriver =
+      FakeHttpDriver.okText("nop")
   }
 
   private final class InMemoryCommitRecorder extends CommitRecorder {

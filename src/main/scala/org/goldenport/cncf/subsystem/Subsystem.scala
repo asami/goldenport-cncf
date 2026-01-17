@@ -65,9 +65,10 @@ final class Subsystem(
     }
 
   private def _inject_context(name: String, comp: Component): Component = {
-    val sc = _subsystem_scope_context.createChildScope(
-      ScopeKind.Component,
-      name
+    val sc = Component.Context(
+      name = name,
+      parent = _subsystem_scope_context,
+      componentOrigin = comp.origin
     )
     comp.withScopeContext(sc)
   }

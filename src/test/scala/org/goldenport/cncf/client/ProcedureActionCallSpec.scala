@@ -6,7 +6,7 @@ import org.goldenport.cncf.action.{Action, ActionCall, Command, FunctionalAction
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemContext}
 import java.nio.charset.StandardCharsets
 import org.goldenport.bag.Bag
-import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.goldenport.http.{ContentType, HttpRequest, HttpResponse, HttpStatus, MimeType, StringResponse}
 import org.goldenport.protocol.Request
@@ -195,6 +195,9 @@ class ProcedureActionCallSpec
       disposeCount += 1
 
     def toToken: String = "procedure-action-call-spec-runtime-context"
+
+    def httpDriver: HttpDriver =
+      FakeHttpDriver.okText("nop")
   }
 
   private def _execution_context(

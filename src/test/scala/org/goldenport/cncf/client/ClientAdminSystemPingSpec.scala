@@ -31,7 +31,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 17, 2026
+ * @version Jan. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientAdminSystemPingSpec
@@ -273,6 +273,7 @@ class ClientAdminSystemPingSpec
   }
 
   private final class TestRuntimeContext(
+    override val httpDriver: HttpDriver,
     uow: UnitOfWork,
     interpreter: UnitOfWorkInterpreter
   ) extends org.goldenport.cncf.context.RuntimeContext {
@@ -311,8 +312,9 @@ class ClientAdminSystemPingSpec
     def toToken: String = "client-admin-system-ping-spec-runtime"
   }
 
-  private final class BootstrapRuntimeContext
-    extends org.goldenport.cncf.context.RuntimeContext {
+  private final class BootstrapRuntimeContext(
+    override val httpDriver: HttpDriver
+  ) extends org.goldenport.cncf.context.RuntimeContext {
     def unitOfWork: UnitOfWork =
       throw new UnsupportedOperationException("bootstrap runtime has no UnitOfWork")
 
@@ -343,7 +345,7 @@ class ClientAdminSystemPingSpec
     val component = _client_component()
     subsystem.add(Seq(component))
     val base = org.goldenport.cncf.context.ExecutionContext.create()
-    val bootstrap = new BootstrapRuntimeContext
+    val bootstrap = new BootstrapRuntimeContext(driver)
     val uowcontext = org.goldenport.cncf.context.ExecutionContext.Instance(
       base.core,
       base.cncfCore.copy(runtime = bootstrap, system = SystemContext.empty)
@@ -352,7 +354,7 @@ class ClientAdminSystemPingSpec
     val eventengine = org.goldenport.cncf.event.EventEngine.noop(datastore)
     val uow = new UnitOfWork(uowcontext, datastore, eventengine, CommitRecorder.noop)
     val interpreter = new UnitOfWorkInterpreter(uow, driver)
-    val runtime = new TestRuntimeContext(uow, interpreter)
+    val runtime = new TestRuntimeContext(driver, uow, interpreter)
     TestHarness(subsystem, component, runtime, interpreter)
   }
 

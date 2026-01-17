@@ -59,19 +59,13 @@ case class ComponentLogic(
     component.jobEngine.getResult(jobId)
 
   private def _execution_context(): ExecutionContext = {
-    val base0 = ExecutionContext.createWithSystem(component.systemContext)
-    val base1 = ExecutionContext.withSubsystemHttpDriver(
-      base0,
-      component.subsystem.flatMap(_.httpDriver)
-    )
-    val base2 = ExecutionContext.withComponentHttpDriver(
-      base1,
-      component.applicationConfig.httpDriver
-    )
-    val resolved = base2.resolve_http_driver
-    val uow = component.unitOfWork.withHttpDriver(resolved)
-    val runtime = new _ComponentRuntimeContext(uow)
-    val withruntime = ExecutionContext.withRuntimeContext(base2, runtime)
+    val base = ExecutionContext.createWithSystem(component.systemContext)
+    val driver = component.applicationConfig.httpDriver
+      .orElse(component.subsystem.flatMap(_.httpDriver))
+      .getOrElse(_fallback_http_driver_())
+    val uow = component.unitOfWork.withHttpDriver(Some(driver))
+    val runtime = new _ComponentRuntimeContext(uow, driver)
+    val withruntime = ExecutionContext.withRuntimeContext(base, runtime)
     component.applicationConfig.applicationContext match {
       case Some(app) =>
         ExecutionContext.withApplicationContext(withruntime, app)
@@ -93,7 +87,8 @@ case class ComponentLogic(
   }
 
   private final class _ComponentRuntimeContext(
-    uow: UnitOfWork
+    uow: UnitOfWork,
+    driver: HttpDriver
   ) extends RuntimeContext {
     def unitOfWork: UnitOfWork = uow
 
@@ -125,6 +120,9 @@ case class ComponentLogic(
     def dispose(): Unit = {}
 
     def toToken: String = "component-runtime-context"
+
+    def httpDriver: HttpDriver =
+      driver
   }
 
   private def _fallback_http_driver_(): HttpDriver =

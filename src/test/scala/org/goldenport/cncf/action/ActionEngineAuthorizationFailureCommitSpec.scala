@@ -3,6 +3,7 @@ package org.goldenport.cncf.action
 import cats.{Id, ~>}
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemContext}
+import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.{ActionEvent, ActionResult, EventEngine}
 import org.goldenport.cncf.security.AuthorizationDecision
@@ -118,6 +119,9 @@ class ActionEngineAuthorizationFailureCommitSpec extends AnyWordSpec with Matche
     def dispose(): Unit = {}
 
     def toToken: String = "test-runtime-context"
+
+    def httpDriver: HttpDriver =
+      FakeHttpDriver.okText("nop")
   }
 
   private final class InMemoryCommitRecorder extends CommitRecorder {

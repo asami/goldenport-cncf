@@ -3,6 +3,7 @@ package org.goldenport.cncf.context
 import scala.util.Try
 import cats.~>
 import cats.Id
+import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 
@@ -23,4 +24,6 @@ trait RuntimeContext {
   def dispose(): Unit
 
   def toToken: String
+
+  def httpDriver: HttpDriver
 }

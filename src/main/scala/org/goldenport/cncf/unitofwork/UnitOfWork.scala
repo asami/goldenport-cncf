@@ -46,7 +46,7 @@ class UnitOfWork(
     }
 
   def http_driver: Option[HttpDriver] =
-    _http_driver.orElse(context.resolve_http_driver)
+    _http_driver.orElse(Some(context.runtime.httpDriver))
 
   def withHttpDriver(driver: Option[HttpDriver]): UnitOfWork = {
     _http_driver = driver

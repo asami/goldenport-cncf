@@ -2,6 +2,7 @@ package org.goldenport.cncf.repository
 
 import cats.{Id, ~>}
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemContext}
+import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
 import org.goldenport.cncf.datastore.{DataStore, OrderDirection, Query, QueryDirective, QueryLimit, QueryOrder, QueryProjection, ResultRange}
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkOp}
@@ -156,6 +157,9 @@ class RepositorySelectSupportSpec
     def dispose(): Unit = {}
 
     def toToken: String = "repository-select-runtime-context"
+
+    def httpDriver: HttpDriver =
+      FakeHttpDriver.okText("nop")
   }
 
   private final class InMemoryCommitRecorder extends CommitRecorder {
