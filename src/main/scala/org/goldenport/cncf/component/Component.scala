@@ -194,13 +194,9 @@ object Component {
   }
 
   final case class ApplicationConfig(
-    applicationContext: Option[ApplicationContext] = None,
     httpDriver: Option[HttpDriver] = None,
     config: Option[org.goldenport.configuration.Configuration] = None
   )
-
-  type ApplicationContext =
-    org.goldenport.cncf.context.ExecutionContext.ApplicationContext
 
   case class Core(
     name: String,

@@ -1,14 +1,9 @@
 package org.goldenport.cncf.action
 
-import scala.reflect.ClassTag
 import org.goldenport.Consequence
-import org.goldenport.protocol.Request
-import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
-import org.goldenport.protocol.spec.OperationDefinition
+import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.util.StringUtils.objectToSnakeName
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
-import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
 import org.goldenport.cncf.unitofwork.ExecUowM
 import org.goldenport.cncf.unitofwork.UnitOfWork
 
@@ -35,33 +30,6 @@ abstract class ActionCall()
     uow.commit()
   }
 
-  /** Returns the ApplicationContext bound to the current ExecutionContext.
-    *
-    * This is a protected utility for Action implementations to access
-    * application-level services (e.g., SIE context) in a type-safe manner.
-    *
-    * The context is expected to be injected at bootstrap time via
-    * Component.ApplicationConfig and propagated into ExecutionContext
-    * at ActionCall creation time.
-    *
-    * Failure to find or match the expected ApplicationContext type
-    * indicates a configuration or wiring error and results in an exception.
-    */
-  protected def application_context[T <: Component.ApplicationContext](
-    using ct: ClassTag[T]
-  ): T =
-    executionContext.application match {
-      case Some(a) if ct.runtimeClass.isInstance(a) =>
-        a.asInstanceOf[T]
-      case Some(other) =>
-        throw new IllegalStateException(
-          s"Unexpected ApplicationContext: ${other.getClass.getName}, expected: ${ct.runtimeClass.getName}"
-        )
-      case None =>
-        throw new IllegalStateException(
-          s"ApplicationContext not found, expected: ${ct.runtimeClass.getName}"
-        )
-    }
 }
 
 abstract class FunctionalActionCall extends ActionCall {

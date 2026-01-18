@@ -65,13 +65,7 @@ case class ComponentLogic(
       .getOrElse(_fallback_http_driver_())
     val uow = component.unitOfWork.withHttpDriver(Some(driver))
     val runtime = _componentRuntimeContext(uow, driver)
-    val withruntime = ExecutionContext.withRuntimeContext(base, runtime)
-    component.applicationConfig.applicationContext match {
-      case Some(app) =>
-        ExecutionContext.withApplicationContext(withruntime, app)
-      case None =>
-        withruntime
-    }
+    ExecutionContext.withRuntimeContext(base, runtime)
   }
 
   private def _ping_action_(

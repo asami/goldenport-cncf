@@ -1,3 +1,6 @@
+status=closed
+closed_at=2026-01-18
+
     This document is authoritative for Phase 2.8 Context refactoring.
     Create a design-freeze memo for Context re-architecture (Phase 2.8), capturing invariants and responsibilities, without modifying code.
     
@@ -51,11 +54,25 @@
        - Temporary adapters are allowed only to bridge existing call sites.
        - Final state must have no references to SystemContext or RuntimeMetadata.
     
-    Constraints:
+Constraints:
        - Do NOT include implementation code.
        - Do NOT speculate beyond the above scope.
        - Language must be declarative and normative (“MUST / MUST NOT / OWNS”).
-    
-    Output:
+
+Output:
        - Emit the full memo content in a single ```text fenced block.
        - All lines inside the block must be indented by exactly 4 spaces.
+
+## Closed Items
+
+- ExecutionContext: runtime-only carrier for action/component execution (closed 2026-01-18)
+- RuntimeContext: concrete behavior owner with ScopeContext-driven HttpDriver resolution (closed 2026-01-18)
+- ScopeContext: driver chain now delegates up to GlobalRuntimeContext (closed 2026-01-18)
+- SystemContext: removed from runtime wiring (closed 2026-01-18)
+- ApplicationContext: removed, runtime/environment flows through RuntimeContext/ScopeContext (closed 2026-01-18)
+- RuntimeMetadata: removed in favor of GlobalRuntimeContext/ping via the runtime chain (closed 2026-01-18)
+
+## Open Items
+
+- Application / Domain Context の再定義（OPEN）
+- Subsystem 初期化フェーズの整理（OPEN）

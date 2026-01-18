@@ -79,3 +79,9 @@ It is **not** intended as user-facing documentation or formal reporting.
 - Nature: non-canonical, historical
 - Retention: keep, but compress when appropriate
 - Authority: informational only
+
+## Phase 2.8 Context Re-architecture
+
+- `runtime-context-consolidation.md` (Close Report 2026-01-18, CLOSED)
+- `context-rearchitecture-freeze.md` (closed 2026-01-18)
+- Follow-on work: System/Application/Domain context redefinition (OPEN)

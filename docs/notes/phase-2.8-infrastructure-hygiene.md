@@ -826,12 +826,12 @@ This checklist summarizes the explicit implementation and documentation tasks re
 
 ### Checklist
 
-- [ ] **Path Alias Hard-Coding → Declarative / Logical Resolution**
+- [ ] **Path Alias Hard-Coding → Declarative / Logical Resolution** — OPEN (alias semantics not yet introduced)
   - Remove any hard-coded path aliases.
   - Implement declarative or logical alias resolution.
   - Document the approach and update developer notes.
 
-- [ ] **Canonical Path Normalization**
+- [x] **Canonical Path Normalization** — DONE (canonical normalization complete)
   - Ensure canonical normalization is applied consistently across all path usages.
   - Update tests and documentation to reflect normalization logic.
 
@@ -865,9 +865,10 @@ This checklist summarizes the explicit implementation and documentation tasks re
   - Discovery is ClassDef-only, and ComponentProvider initializes concrete classes without introducing new semantics.
   - Runtime defaults and behavior remain unchanged because only an unused abstraction was removed.
 
-- [ ] **Component Repository Priority and Override Rules**
-  - Define and document deterministic repository resolution order.
-  - Specify override/shadowing behavior.
+ - [x] **Component Repository Priority and Override Rules** — CLOSED (Deferred to Phase 3.0+)
+   - _Intentionally closed for Phase 2.8._
+   - Rationale: insufficient real-world component/repository collision experience.
+   - Explicitly re-listed as a Phase 3.0+ development item.
 
 - [ ] **Bootstrap Log Persistence and Operational Integration**
   - Define and document log persistence strategy.
@@ -1019,3 +1020,10 @@ The following operational concerns are explicitly deferred:
 - None are required for Phase 2.8 completion.
 - No item above may be partially implemented during Phase 2.8
   without revisiting phase scope and documentation.
+
+### 8. Component Repository Priority / Override Rules
+
+To be designed based on accumulated real usage and conflicts:
+  - No speculative priority or override rules defined in Phase 2.8.
+  - Requires multiple repositories and concrete override scenarios.
+  - Implementation and policy deferred until Phase 3.0+ when sufficient real-world data is available.

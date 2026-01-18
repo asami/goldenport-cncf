@@ -1,8 +1,28 @@
 # Design Memo: RuntimeMetadata Removal and Runtime Responsibility Consolidation
-status=draft
+status=frozen
 date=2026-01
 scope=cncf-runtime-context
 phase=2.8+
+
+## Close Report (2026-01-18)
+status=closed
+closed_at=2026-01-18
+
+Sections:
+1. Purpose review
+2. Closed design/implementation items ✅
+   2.1 ExecutionContext responsibilities fixed【CLOSED】
+   2.2 RuntimeContext concretion and responsibility alignment【CLOSED】
+   2.3 ScopeContext cleanup and driver-resolution model【CLOSED】
+   2.4 SystemContext fully removed【CLOSED】
+   2.5 ApplicationContext removal【CLOSED】
+  2.6 Spec realignment【CLOSED】※Specs now build context via the public API chain and internal hacks have been eliminated.
+3. Closed documents 📕 (confirmed)
+4. Remaining open topics (unaddressed/OPEN)
+   4.1 Redefining Application / Domain Context (OPEN)
+   4.2 Subsystem initialization phase hygiene (OPEN)
+5. Conclusion
+
 
 ## Purpose
 
@@ -129,6 +149,21 @@ It will continue to act as:
 
 Any renaming or shrinking of `SystemContext` will occur *after*
 `RuntimeMetadata` has been eliminated.
+
+---
+
+## Implementation Status (Freeze)
+
+This design has been fully implemented and verified by the test suite.
+
+- RuntimeMetadata: removed
+- GlobalRuntimeContext: authoritative for runtime identity, mode, versions, httpDriver, and ping formatting
+- ScopeContext: hierarchical delegation for runtime facilities (e.g., httpDriver)
+- ExecutionContext: no longer depends on SystemContext for runtime identity
+- Specs: updated to rely on RuntimeContext/GlobalRuntimeContext APIs
+- ApplicationContext: removed, leaving RuntimeContext/ScopeContext as the only carriers for runtime environment data
+
+This memo is frozen to prevent semantic drift while subsequent refactors proceed.
 
 ---
 

@@ -181,9 +181,12 @@ Testability and determinism:
   clock, config, and runtime interpreters.
 - Domain logic remains deterministic given the same OperationCall inputs.
 
+### Context / Execution / Runtime Re-architecture
+- RuntimeContext / ScopeContext / ExecutionContext re-architecture (CLOSED, 2026-01-18) keeps RuntimeContext as the behavior owner and ScopeContext as the driver chain, referencing scheduled notes in `docs/journal/2026/01/runtime-context-consolidation.md` and `docs/journal/2026/01/context-rearchitecture-freeze.md`.
+
 Assumption: time_now, store_fetch, random_seed helper accessors are intended
-to be provided by ExecutionContext (via OperationCall helpers) but are not
-present in the current codebase.
+  to be provided by ExecutionContext (via OperationCall helpers) but are not
+  present in the current codebase.
 
 
 OperationCall Design

@@ -163,6 +163,11 @@ Core creation must be policy-driven and later configurable:
 The Factory must not instantiate Components with "fake" Core values that will be
 corrected later. Quick hacks are forbidden.
 
+Note: Providers instantiate concrete Component classes and assign a component
+ScopeContext that inherits driver/observability from the parent scope. Driver
+resolution traverses the ScopeContext parent chain up to GlobalRuntimeContext, and
+SystemContext/ApplicationContext injection no longer exists in the initialization path.
+
 
 Bootstrap Logging
 -----------------
