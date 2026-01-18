@@ -11,10 +11,10 @@ import org.goldenport.cncf.cli.CncfRuntime
 
 /*
  * @since   Jan. 14, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 19, 2026
  * @author  ASAMI, Tomoharu
  */
-type Script = ScriptExecutionComponent.ScriptActionCall => Any
+type Script = ScriptActionCall => Any
 
 object ScriptRuntime {
   def run(args: Seq[String])(script: Script): Consequence[Response] =
@@ -80,32 +80,6 @@ class ScriptExecutionComponent() extends Component {
 }
 
 object ScriptExecutionComponent {
-  case class ScriptAction(
-    override val name: String,
-    request: Request,
-    script: Script
-  ) extends Command() {
-    def createCall(core: ActionCall.Core): ActionCall =
-      ScriptActionCall(core, script)
-  }
-
-  case class ScriptActionCall(
-    core: ActionCall.Core,
-    script: Script
-  ) extends ActionCall {
-    def execute(): Consequence[OperationResponse] = Consequence run {
-      val r = script(this)
-      Consequence(OperationResponse.create(r))
-    }
-
-    val scriptAction: ScriptAction = action.asInstanceOf[ScriptAction]
-    def request: Request = scriptAction.request
-    def arguments: List[Argument] = request.arguments
-    def switches: List[Switch] = request.switches
-    def properties: List[Property] = request.properties
-    def args: List[String] = request.args
-  }
-
   case class ScriptOperationDefinition(
     specification: OperationDefinition.Specification,
     script: Script
@@ -158,4 +132,30 @@ object ScriptExecutionComponent {
       Component.createScriptCore(service)
     }
   }
+}
+
+case class ScriptAction(
+  override val name: String,
+  request: Request,
+  script: Script
+) extends Command() {
+  def createCall(core: ActionCall.Core): ActionCall =
+    ScriptActionCall(core, script)
+}
+
+case class ScriptActionCall(
+  core: ActionCall.Core,
+  script: Script
+) extends ActionCall {
+  def execute(): Consequence[OperationResponse] = Consequence run {
+    val r = script(this)
+    Consequence(OperationResponse.create(r))
+  }
+
+  val scriptAction: ScriptAction = action.asInstanceOf[ScriptAction]
+  def request: Request = scriptAction.request
+  def arguments: List[Argument] = request.arguments
+  def switches: List[Switch] = request.switches
+  def properties: List[Property] = request.properties
+  def args: List[String] = request.args
 }
