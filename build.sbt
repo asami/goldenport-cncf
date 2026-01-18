@@ -5,11 +5,11 @@ lazy val root = project
   .settings(
     organization := "org.goldenport",
     name := "goldenport-cncf",
-    version := "0.3.0",
+    version := "0.3.1",
 
     scalaVersion := scala3Version,
 
-    resolvers += "GitHub Packages" at "https://maven.pkg.github.com/asami/maven-repository",
+    resolvers += "SimpleModeling.org" at "https://www.simplemodeling.org/maven",
 
     libraryDependencies ++= Seq(
       // Functional core
@@ -32,17 +32,24 @@ lazy val root = project
 
       "org.slf4j" % "slf4j-simple" % "2.0.12",
 
-      "org.goldenport" %% "goldenport-core" % "0.2.0",
+      "org.goldenport" %% "goldenport-core" % "0.2.1",
 
       // Testing
       "org.scalatest" %% "scalatest" % "3.2.18" % Test
     ),
 
-    publishTo := Some(
-      "GitHub Packages" at "https://maven.pkg.github.com/asami/maven-repository"
-    ),
+    publishTo := {
+      val repo = sys.env.get("SIMPLEMODELING_MAVEN_LOCAL")
+        .map(file)
+        .getOrElse(baseDirectory.value / "maven-local")
 
-    credentials += Credentials(Path.userHome / ".sbt" / ".credentials"),
+      Some(
+        Resolver.file(
+          "local-simplemodeling-maven",
+          repo
+        )
+      )
+    },
 
     publishMavenStyle := true
   )

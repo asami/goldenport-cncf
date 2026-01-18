@@ -12,6 +12,8 @@ WARP.md
 .scala-build
 dist
 server.log
+.cache
+maven-local
 
 ### Metals (VS Code Scala extension) ###
 .metals/
