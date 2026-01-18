@@ -17,7 +17,7 @@ import org.goldenport.cncf.job.{ActionId, ActionTask, JobContext}
  * @since   Apr. 11, 2025
  *  version Dec. 31, 2025
  *  version Jan.  3, 2026
- * @version Jan.  7, 2026
+ * @version Jan. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Service extends ProtocolService with Service.CCore.Holder {
@@ -91,8 +91,9 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
   private def _execution_context_from_request(
     request: Request
   ): ExecutionContext = {
-    val _ = request
-    ExecutionContext.createWithSystem(logic.component.systemContext)
+    // val _ = request
+    // ExecutionContext.createWithSystem(logic.component.systemContext)
+    ExecutionContext.create()
   }
 
   private def _to_request(

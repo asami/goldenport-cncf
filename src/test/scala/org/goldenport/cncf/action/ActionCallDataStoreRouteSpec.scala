@@ -3,7 +3,7 @@ package org.goldenport.cncf.action
 import cats.{Id, ~>}
 import org.goldenport.Consequence
 import org.goldenport.id.UniversalId
-import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, SystemContext, TraceId}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, TraceId}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.EventEngine
@@ -45,10 +45,7 @@ class ActionCallDataStoreRouteSpec
         val eventengine = EventEngine.noop(datastore, recorder)
         val runtime = new TestRuntimeContext
         val base = ExecutionContext.create()
-        val ctx = ExecutionContext.Instance(
-          base.core,
-          base.cncfCore.copy(runtime = runtime.runtime, system = SystemContext.empty)
-        )
+        val ctx = ExecutionContext.withRuntimeContext(base, runtime.runtime)
         val uow = new UnitOfWork(ctx, datastore, eventengine, recorder)
         runtime.bind(uow)
 

@@ -155,6 +155,30 @@ SystemContext
 
 ---
 
+## RunMode Semantics Finalization
+
+RunMode is defined as the *execution semantics* of an ActionCall,
+not as a representation of the startup or transport environment
+(CLI / server / server-emulator).
+
+This definition ensures that execution meaning is preserved
+independently of access path or deployment topology.
+
+- Even when executed through a server-emulator HTTP path,
+  ActionCalls evaluated under CLI semantics must report `RunMode.Command`.
+- The value returned by `admin.system.ping` reflects
+  the semantic execution mode, not the access route.
+
+This clarification removes the implicit assumption that
+“server-emulator implies server execution” and aligns:
+
+- Context hierarchy (ScopeContext / RuntimeContext)
+- Execution semantics (ActionCall)
+- Specifications and tests
+
+As a result, runtime introspection now reports a stable,
+semantically meaningful `mode` across all execution paths.
+
 ## Non-Goals
 
 - No change to resolver or path semantics

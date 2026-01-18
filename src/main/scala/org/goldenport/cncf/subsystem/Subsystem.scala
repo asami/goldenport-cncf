@@ -16,7 +16,7 @@ import org.goldenport.cncf.component.{
   ComponentSpace
 }
 import org.goldenport.cncf.component.ComponentLocator.NameLocator
-import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind, SystemContext}
+import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.configuration.ResolvedConfiguration
 
@@ -24,7 +24,7 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 16, 2026
+ * @version Jan. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -287,7 +287,7 @@ final class Subsystem(
     operation: OperationDefinition,
     req: HttpRequest
   ): HttpResponse = {
-    _ensure_system_context(component)
+//    _ensure_system_context(component)
     val _ = service
     val r: Consequence[Response] = for {
       ingress <- Consequence.fromOption(
@@ -333,24 +333,24 @@ final class Subsystem(
   private def _internal_error(): HttpResponse =
     HttpResponse.internalServerError()
 
-  private def _ensure_system_context(
-    component: Component
-  ): Unit = {
-    val system = component.systemContext
-    val snapshot = system.configSnapshot
-    val mode = snapshot.get("cncf.mode")
-    if (!mode.contains("server")) {
-      val runtimeVersion = CncfVersion.current
-      val subsystemVersion = version.getOrElse(runtimeVersion)
-      val updated = snapshot ++ Map(
-        "cncf.mode" -> "server",
-        "cncf.subsystem" -> name,
-        "cncf.runtime.version" -> runtimeVersion,
-        "cncf.subsystem.version" -> subsystemVersion
-      )
-      component.withSystemContext(system.copy(configSnapshot = updated))
-    }
-  }
+  // private def _ensure_system_context(
+  //   component: Component
+  // ): Unit = {
+  //   val system = component.systemContext
+  //   val snapshot = system.configSnapshot
+  //   val mode = snapshot.get("cncf.mode")
+  //   if (!mode.contains("server")) {
+  //     val runtimeVersion = CncfVersion.current
+  //     val subsystemVersion = version.getOrElse(runtimeVersion)
+  //     val updated = snapshot ++ Map(
+  //       "cncf.mode" -> "server",
+  //       "cncf.subsystem" -> name,
+  //       "cncf.runtime.version" -> runtimeVersion,
+  //       "cncf.subsystem.version" -> subsystemVersion
+  //     )
+  //     component.withSystemContext(system.copy(configSnapshot = updated))
+  //   }
+  // }
 
   private def _component_id(name: String): ComponentId =
     ComponentId(name)

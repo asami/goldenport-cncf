@@ -6,7 +6,7 @@ import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.client.ClientComponent
 import org.goldenport.cncf.component.admin.AdminComponent
 import org.goldenport.cncf.component.specification.SpecificationComponent
-import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind, SystemContext}
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.{FakeHttpDriver, UrlConnectionHttpDriver}
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
@@ -19,7 +19,7 @@ import org.goldenport.protocol.spec as spec
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {
@@ -53,7 +53,7 @@ object DefaultSubsystemFactory {
     val subsystem = default(mode)
     if (extraComponents.nonEmpty) {
       val modeLabel = mode.getOrElse(RuntimeConfig.default.mode.name)
-      val extras = extraComponents.map(_.withSystemContext(SystemContext.empty))
+      val extras = extraComponents // extraComponents.map(_.withSystemContext(SystemContext.empty))
       subsystem.add(extras)
     }
     subsystem

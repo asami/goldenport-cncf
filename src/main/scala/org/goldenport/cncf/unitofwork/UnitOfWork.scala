@@ -4,7 +4,6 @@ import scala.util.{Try, Success, Failure}
 import java.io.File
 import org.goldenport.{Consequence, Conclusion}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.context.SystemContext
 import org.goldenport.cncf.datastore.{DataStore, QueryDirective, SelectResult, SelectableDataStore}
 import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.entity.EntityStore.*
@@ -15,7 +14,7 @@ import org.goldenport.cncf.http.HttpDriver
 /*
  * @since   Apr. 11, 2025
  *  version Dec. 21, 2025
- * @version Jan. 11, 2026
+ * @version Jan. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
@@ -119,7 +118,7 @@ object UnitOfWork {
   type Message = String
 
   def simple(datastore: DataStore): UnitOfWork = {
-    val base = ExecutionContext.createWithSystem(SystemContext.empty)
+    val base = ExecutionContext.create() // ExecutionContext.createWithSystem(SystemContext.empty)
     val eventengine = EventEngine.noop(datastore)
     new UnitOfWork(base, datastore, eventengine)
   }

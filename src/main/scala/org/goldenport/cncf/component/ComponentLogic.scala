@@ -7,7 +7,7 @@ import org.goldenport.protocol.Response
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.cncf.action.{Action, ActionCall, Query, ResourceAccess}
 import cats.{Id, ~>}
-import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeKind, SystemContext}
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeKind}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.job.{JobEngine, JobId, JobResult, JobStatus, JobTask}
 import org.goldenport.cncf.unitofwork.UnitOfWork
@@ -16,15 +16,15 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 
 /*
  * @since   Jan.  3, 2026
- * @version Jan. 17, 2026
+ * @version Jan. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
  * ComponentLogic owns the system-scoped context and produces action-scoped ExecutionContext.
  */
 case class ComponentLogic(
-  component: Component,
-  system: SystemContext = SystemContext.empty
+  component: Component
+  // system: SystemContext = SystemContext.empty
 ) {
   def jobEngine: JobEngine = component.jobEngine
 
@@ -59,7 +59,7 @@ case class ComponentLogic(
     component.jobEngine.getResult(jobId)
 
   private def _execution_context(): ExecutionContext = {
-    val base = ExecutionContext.createWithSystem(component.systemContext)
+    val base = ExecutionContext.create() // createWithSystem(component.systemContext)
     val driver = component.applicationConfig.httpDriver
       .orElse(component.subsystem.flatMap(_.httpDriver))
       .getOrElse(_fallback_http_driver_())

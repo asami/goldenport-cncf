@@ -3,7 +3,7 @@ package org.goldenport.cncf.client
 import cats.{Id, ~>}
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, Command, FunctionalActionCall, ResourceAccess}
-import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, SystemContext, TraceId}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, TraceId}
 import java.nio.charset.StandardCharsets
 import org.goldenport.bag.Bag
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
@@ -217,9 +217,6 @@ class ProcedureActionCallSpec
     runtime: RuntimeContext
   ): ExecutionContext = {
     val base = ExecutionContext.create()
-    ExecutionContext.Instance(
-      base.core,
-      base.cncfCore.copy(runtime = runtime, system = SystemContext.empty)
-    )
+    ExecutionContext.withRuntimeContext(base, runtime)
   }
 }

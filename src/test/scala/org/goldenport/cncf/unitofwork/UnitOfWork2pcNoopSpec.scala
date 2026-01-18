@@ -3,7 +3,7 @@ package org.goldenport.cncf.unitofwork
 import cats.{Id, ~>}
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, Command, ResourceAccess}
-import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, SystemContext, TraceId}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, TraceId}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.EventEngine
@@ -70,10 +70,7 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
   ): ActionCall = {
     val runtime = new TestRuntimeContext
     val base = ExecutionContext.create()
-    val ctx = ExecutionContext.Instance(
-      base.core,
-      base.cncfCore.copy(runtime = runtime.runtime, system = SystemContext.empty)
-    )
+    val ctx = ExecutionContext.withRuntimeContext(base, runtime.runtime)
     val uow = new UnitOfWork(ctx, dataStore, eventEngine, recorder)
     runtime.bind(uow)
 

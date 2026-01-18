@@ -9,7 +9,7 @@ import org.goldenport.protocol.spec.{OperationDefinition, ServiceDefinition}
 import org.goldenport.protocol.spec.ServiceDefinitionGroup
 import org.goldenport.protocol.service.{Service => ProtocolService}
 // import org.goldenport.cncf.action.ActionLogic
-import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeContext, ScopeKind, SystemContext}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.action.{Action, ActionEngine}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.configuration.{Configuration, ResolvedConfiguration}
@@ -32,7 +32,7 @@ abstract class Component() extends Component.Core.Holder {
   private var _core: Option[Component.Core] = None
   private var _origin: Option[ComponentOrigin] = None
   private var _application_config: Component.ApplicationConfig = Component.ApplicationConfig()
-  private var _system_context: SystemContext = SystemContext.empty
+//  private var _system_context: SystemContext = SystemContext.empty
   private var _unit_of_work: UnitOfWork = DataStackFactory.create(Configuration.empty)
   private var _scope_context: Option[ScopeContext] = None
   private var _services: Option[ServiceGroup] = None
@@ -50,7 +50,7 @@ abstract class Component() extends Component.Core.Holder {
 
   lazy val receptors: ReceptorGroup = ReceptorGroup.empty // TODO
 
-  lazy val logic: ComponentLogic = ComponentLogic(this, _system_context)
+  lazy val logic: ComponentLogic = ComponentLogic(this)
 
   def initialize(params: ComponentInit): Component = {
     _core = Some(params.core)
@@ -85,12 +85,12 @@ abstract class Component() extends Component.Core.Holder {
     this
   }
 
-  def systemContext: SystemContext = _system_context
+//  def systemContext: SystemContext = _system_context
 
-  def withSystemContext(sc: SystemContext): Component = {
-    _system_context = sc
-    this
-  }
+  // def withSystemContext(sc: SystemContext): Component = {
+  //   _system_context = sc
+  //   this
+  // }
 
   def unitOfWork: UnitOfWork = _unit_of_work
 

@@ -10,7 +10,6 @@ import org.goldenport.cncf.client.{ClientComponent, GetQuery, PostCommand}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.component.{Component, ComponentInit}
 import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig}
-import org.goldenport.cncf.context.SystemContext
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.{Argument, Property, Protocol, ProtocolEngine, Request, Response}
@@ -24,7 +23,7 @@ import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 17, 2026
+ * @version Jan. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime {
@@ -128,9 +127,9 @@ object CncfRuntime {
     if (extras.nonEmpty) {
       subsystem.add(extras)
     }
-    modeLabel.foreach { label =>
-      _apply_system_context(subsystem, label)
-    }
+    // modeLabel.foreach { label =>
+    //   _apply_system_context(subsystem, label)
+    // }
     subsystem
   }
 
@@ -539,13 +538,13 @@ object CncfRuntime {
   ): Consequence[Request] =
     parseCommandArgs(subsystem, args)
 
-  private def _apply_system_context(
-    subsystem: Subsystem,
-    mode: String
-  ): Unit = {
-    val system = SystemContext.empty
-    subsystem.components.foreach(_.withSystemContext(system))
-  }
+  // private def _apply_system_context(
+  //   subsystem: Subsystem,
+  //   mode: String
+  // ): Unit = {
+  //   val system = SystemContext.empty
+  //   subsystem.components.foreach(_.withSystemContext(system))
+  // }
 
   def parseClientArgs(
     args: Array[String],

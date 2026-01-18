@@ -14,7 +14,7 @@ import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
-import org.goldenport.cncf.context.{ExecutionContext, ObservabilityContext, RuntimeContext, ScopeContext, SystemContext}
+import org.goldenport.cncf.context.{ExecutionContext, ObservabilityContext, RuntimeContext, ScopeContext}
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.http.{ContentType, HttpRequest, HttpResponse, HttpStatus, MimeType, StringResponse}
 import org.goldenport.protocol.Protocol
@@ -279,9 +279,9 @@ class ClientAdminSystemPingSpec
     subsystem.add(Seq(component))
     val base = org.goldenport.cncf.context.ExecutionContext.create()
     val bootstrap = _bootstrapRuntimeContext(driver, base.cncfCore.observability)
-    val uowcontext = org.goldenport.cncf.context.ExecutionContext.Instance(
-      base.core,
-      base.cncfCore.copy(runtime = bootstrap, system = SystemContext.empty)
+    val uowcontext = org.goldenport.cncf.context.ExecutionContext.withRuntimeContext(
+      base,
+      bootstrap
     )
     val datastore = org.goldenport.cncf.datastore.DataStore.noop()
     val eventengine = org.goldenport.cncf.event.EventEngine.noop(datastore)
@@ -295,9 +295,9 @@ class ClientAdminSystemPingSpec
     runtime: RuntimeContext
   ): ExecutionContext = {
     val base = org.goldenport.cncf.context.ExecutionContext.create()
-    org.goldenport.cncf.context.ExecutionContext.Instance(
-      base.core,
-      base.cncfCore.copy(runtime = runtime, system = SystemContext.empty)
+    org.goldenport.cncf.context.ExecutionContext.withRuntimeContext(
+      base,
+      runtime
     )
   }
 

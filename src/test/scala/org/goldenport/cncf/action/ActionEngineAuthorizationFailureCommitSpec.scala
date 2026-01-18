@@ -2,7 +2,7 @@ package org.goldenport.cncf.action
 
 import cats.{Id, ~>}
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, SystemContext, TraceId}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, TraceId}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.{ActionEvent, ActionResult, EventEngine}
@@ -27,10 +27,7 @@ class ActionEngineAuthorizationFailureCommitSpec extends AnyWordSpec with Matche
       val eventEngine = EventEngine.noop(dataStore, recorder)
       val runtime = new TestRuntimeContext
       val base = ExecutionContext.create()
-      val ctx = ExecutionContext.Instance(
-        base.core,
-        base.cncfCore.copy(runtime = runtime.runtime, system = SystemContext.empty)
-      )
+      val ctx = ExecutionContext.withRuntimeContext(base, runtime.runtime)
       val uow = new UnitOfWork(ctx, dataStore, eventEngine, recorder)
       runtime.bind(uow)
 

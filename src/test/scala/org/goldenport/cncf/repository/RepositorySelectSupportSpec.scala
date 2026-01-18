@@ -1,7 +1,7 @@
 package org.goldenport.cncf.repository
 
 import cats.{Id, ~>}
-import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, SystemContext, TraceId}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, TraceId}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.datastore.{DataStore, OrderDirection, Query, QueryDirective, QueryLimit, QueryOrder, QueryProjection, ResultRange}
 import org.goldenport.cncf.event.EventEngine
@@ -102,10 +102,7 @@ class RepositorySelectSupportSpec
     val eventengine = EventEngine.noop(datastore, recorder)
     val runtime = new TestRuntimeContext
     val base = ExecutionContext.create()
-    val ctx = ExecutionContext.Instance(
-      base.core,
-      base.cncfCore.copy(runtime = runtime.runtime, system = SystemContext.empty)
-    )
+    val ctx = ExecutionContext.withRuntimeContext(base, runtime.runtime)
     val uow = new UnitOfWork(ctx, datastore, eventengine, recorder)
     runtime.bind(uow)
     (ctx, datastore)

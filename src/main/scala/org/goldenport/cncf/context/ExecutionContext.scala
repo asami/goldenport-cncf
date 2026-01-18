@@ -55,8 +55,7 @@ object ExecutionContext {
     observability: ObservabilityContext,
     runtime: RuntimeContext,
     jobContext: org.goldenport.cncf.job.JobContext,
-    application: Option[ApplicationContext] = None,
-    system: SystemContext = SystemContext.empty
+    application: Option[ApplicationContext] = None
   )
   object CncfCore {
     trait Holder {
@@ -68,7 +67,7 @@ object ExecutionContext {
       def unitOfWork: org.goldenport.cncf.unitofwork.UnitOfWork = runtime.unitOfWork
       def jobContext: org.goldenport.cncf.job.JobContext = cncfCore.jobContext
       def application: Option[ApplicationContext] = cncfCore.application
-      def system: SystemContext = cncfCore.system
+//      def _system: SystemContext = cncfCore._system
     }
   }
 
@@ -93,8 +92,8 @@ object ExecutionContext {
         security = security,
         observability = observability,
         runtime = runtime,
-        jobContext = org.goldenport.cncf.job.JobContext.empty,
-        system = SystemContext.empty
+        jobContext = org.goldenport.cncf.job.JobContext.empty
+//        _system = SystemContext.empty
       )
     )
     context
@@ -107,10 +106,10 @@ object ExecutionContext {
       .map(app => withApplicationContext(create(), app))
       .getOrElse(create())
 
-  def createWithSystem(
-    system: SystemContext
-  ): ExecutionContext =
-    withSystemContext(create(), system)
+  // def createWithSystem(
+  //   system: SystemContext
+  // ): ExecutionContext =
+  //   withSystemContext(create(), system)
 
   /**
    * Test and Executable Spec ExecutionContext.
@@ -160,19 +159,19 @@ object ExecutionContext {
       ctx
   }
 
-  def withSystemContext(
-    ctx: ExecutionContext,
-    system: SystemContext
-  ): ExecutionContext = ctx match {
-    case i: Instance =>
-      i.copy(
-        cncfCore = i.cncfCore.copy(
-          system = system
-        )
-      )
-    case _ =>
-      ctx
-  }
+  // def withSystemContext(
+  //   ctx: ExecutionContext,
+  //   system: SystemContext
+  // ): ExecutionContext = ctx match {
+  //   case i: Instance =>
+  //     i.copy(
+  //       cncfCore = i.cncfCore.copy(
+  //         _system = system
+  //       )
+  //     )
+  //   case _ =>
+  //     ctx
+  // }
 
   private def _core(): CoreExecutionContext.Core =
     CoreExecutionContext.Core(

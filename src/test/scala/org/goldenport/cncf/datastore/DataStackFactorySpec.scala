@@ -2,7 +2,6 @@ package org.goldenport.cncf.datastore
 
 import cats.{Id, ~>}
 import org.goldenport.configuration.{Configuration, ConfigurationValue}
-import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemContext}
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
