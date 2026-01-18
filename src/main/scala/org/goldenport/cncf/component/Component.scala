@@ -159,7 +159,8 @@ object Component {
         kind = ScopeKind.Component,
         name = name,
         parent = Some(parent),
-        observabilityContext = parent.observabilityContext.createChild(ScopeKind.Component, name)
+        observabilityContext = parent.observabilityContext.createChild(ScopeKind.Component, name),
+        httpDriverOption = None
       )
       Context(
         core = _core,

@@ -1,5 +1,7 @@
 package org.goldenport.cncf.context
 
+import org.goldenport.cncf.http.HttpDriver
+
 /*
  * @since   Jan.  7, 2026
  * @version Jan. 18, 2026
@@ -14,7 +16,26 @@ enum ScopeKind {
 }
 
 abstract class ScopeContext() extends ObservationDsl with ScopeContext.Core.Holder {
+
   def core: ScopeContext.Core
+
+  def httpDriver: HttpDriver = {
+    core.httpDriverOption match {
+      case Some(driver) =>
+        driver
+      case None =>
+        parent match {
+          case Some(p) => p.httpDriver
+          case None => throw new IllegalStateException("ScopeContext has no HttpDriver")
+        }
+    }
+  }
+
+  def formatPing: String =
+    parent match {
+      case Some(p) => p.formatPing
+      case None => GlobalRuntimeContext.defaultPing
+    }
 
   def createChildScope(kind: ScopeKind, name: String): ScopeContext =
     ScopeContext(
@@ -36,7 +57,8 @@ object ScopeContext {
     kind: ScopeKind,
     name: String,
     parent: Option[ScopeContext],
-    observabilityContext: ObservabilityContext
+    observabilityContext: ObservabilityContext,
+    httpDriverOption: Option[HttpDriver]
   )
   object Core {
     trait Holder {
@@ -56,14 +78,16 @@ object ScopeContext {
     kind: ScopeKind,
     name: String,
     parent: Option[ScopeContext],
-    observabilityContext: ObservabilityContext
+    observabilityContext: ObservabilityContext,
+    httpDriverOption: Option[HttpDriver] = None
   ): ScopeContext = {
-    new Instance(
+    Instance(
       ScopeContext.Core(
         kind = kind,
         name = name,
         parent = parent,
-        observabilityContext = observabilityContext
+        observabilityContext = observabilityContext,
+        httpDriverOption = httpDriverOption
       )
     )
   }

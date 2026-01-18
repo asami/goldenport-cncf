@@ -7,6 +7,7 @@ import java.util.Locale
 import org.goldenport.context.{EnvironmentContext as CoreEnvironmentContext, ExecutionContext as CoreExecutionContext, I18nContext, RandomContext, VirtualMachineContext}
 import org.goldenport.id.{UniversalId as CoreUniversalId}
 import org.goldenport.log.Logger
+import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
@@ -24,7 +25,7 @@ import cats.~>
 /*
  * @since   Dec. 21, 2025
  *  version Dec. 31, 2025
- * @version Jan. 11, 2026
+ * @version Jan. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -85,12 +86,13 @@ object ExecutionContext {
     val core = _core()
     val security = _security_context()
     val observability = _observability_context(core)
+    lazy val runtime: RuntimeContext = _testRuntimeContext(() => context, observability)
     lazy val context: ExecutionContext = Instance(
       core = core,
       cncfCore = CncfCore(
         security = security,
         observability = observability,
-        runtime = new _TestRuntimeContext(() => context),
+        runtime = runtime,
         jobContext = org.goldenport.cncf.job.JobContext.empty,
         system = SystemContext.empty
       )
@@ -223,41 +225,45 @@ object ExecutionContext {
     )
   }
 
-  private final class _TestRuntimeContext(
-    context: () => ExecutionContext
-  ) extends RuntimeContext {
-    lazy val unitOfWork: UnitOfWork = new UnitOfWork(context())
-
-    def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> cats.Id) =
-      new (UnitOfWorkOp ~> cats.Id) {
-        def apply[A](fa: UnitOfWorkOp[A]): cats.Id[A] =
-          throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in test context")
-      }
-
-    def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
-      new (UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
-          throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in test context")
-      }
-
-    def unitOfWorkEitherInterpreter[T](op: UnitOfWorkOp[T]): Either[Throwable, T] =
-      Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in test context"))
-
-    def commit(): Unit = {
-      unitOfWork.commit()
-      ()
+  private def _testRuntimeContext(
+    context: () => ExecutionContext,
+    observability: ObservabilityContext
+  ): RuntimeContext = {
+    val driver = FakeHttpDriver.okText("nop")
+    val idInterpreter = new (UnitOfWorkOp ~> cats.Id) {
+      def apply[A](fa: UnitOfWorkOp[A]): cats.Id[A] =
+        throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in test context")
     }
-
-    def abort(): Unit = {
-      unitOfWork.rollback()
-      ()
+    val tryInterpreter = new (UnitOfWorkOp ~> scala.util.Try) {
+      def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
+        throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in test context")
     }
-    def dispose(): Unit = {}
-
-    def httpDriver: HttpDriver =
-      FakeHttpDriver.okText("nop")
-
-    def toToken: String = "execution-context-test"
+    val eitherInterpreter = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
+      def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] =
+        Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in test context"))
+    }
+    new RuntimeContext(
+      core = RuntimeContext.core(
+        name = "execution-context-test",
+        parent = None,
+        observabilityContext = observability,
+        httpDriverOption = Some(driver)
+      ),
+      unitOfWorkSupplier = () => new UnitOfWork(context()),
+      unitOfWorkInterpreterFn = idInterpreter,
+      unitOfWorkTryInterpreterFn = tryInterpreter,
+      unitOfWorkEitherInterpreterFn = eitherInterpreter,
+      commitAction = uow => {
+        val _ = uow.commit()
+        ()
+      },
+      abortAction = uow => {
+        val _ = uow.rollback()
+        ()
+      },
+      disposeAction = _ => (),
+      token = "execution-context-test"
+    )
   }
 
   private final class _TestPrincipal extends Principal {

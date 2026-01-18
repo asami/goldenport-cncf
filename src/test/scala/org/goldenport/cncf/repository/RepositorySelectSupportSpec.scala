@@ -1,8 +1,8 @@
 package org.goldenport.cncf.repository
 
 import cats.{Id, ~>}
-import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemContext}
-import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, SystemContext, TraceId}
+import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.datastore.{DataStore, OrderDirection, Query, QueryDirective, QueryLimit, QueryOrder, QueryProjection, ResultRange}
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkOp}
@@ -104,7 +104,7 @@ class RepositorySelectSupportSpec
     val base = ExecutionContext.create()
     val ctx = ExecutionContext.Instance(
       base.core,
-      base.cncfCore.copy(runtime = runtime, system = SystemContext.empty)
+      base.cncfCore.copy(runtime = runtime.runtime, system = SystemContext.empty)
     )
     val uow = new UnitOfWork(ctx, datastore, eventengine, recorder)
     runtime.bind(uow)
@@ -120,46 +120,47 @@ class RepositorySelectSupportSpec
     datastore.create(c, Record.data("name" -> "c", "state" -> "s3"))
   }
 
-  private final class TestRuntimeContext extends RuntimeContext {
-    private var _unit_of_work: UnitOfWork = null
+  private final class TestRuntimeContext {
+    private var _unit_of_work: Option[UnitOfWork] = None
+    private val observability = _testObservabilityContext()
+    private val driver = FakeHttpDriver.okText("nop")
 
-    def bind(uow: UnitOfWork): Unit = {
-      _unit_of_work = uow
-    }
-
-    def unitOfWork: UnitOfWork = _unit_of_work
-
-    def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> Id) =
-      new (UnitOfWorkOp ~> Id) {
+    val runtime: RuntimeContext = new RuntimeContext(
+      core = RuntimeContext.core(
+        name = "repository-select-runtime",
+        parent = None,
+        observabilityContext = observability,
+        httpDriverOption = Some(driver)
+      ),
+      unitOfWorkSupplier = () => _unit_of_work.getOrElse {
+        throw new IllegalStateException("UnitOfWork has not been bound")
+      },
+      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Id) {
         def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in repository spec")
-      }
-
-    def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
-      new (UnitOfWorkOp ~> scala.util.Try) {
+      },
+      unitOfWorkTryInterpreterFn = new (UnitOfWorkOp ~> scala.util.Try) {
         def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
           throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in repository spec")
-      }
+      },
+      unitOfWorkEitherInterpreterFn = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
+        def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] =
+          Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in repository spec"))
+      },
+      commitAction = uow => {
+        val _ = uow.commit()
+        ()
+      },
+      abortAction = abortUow => {
+        val _ = abortUow.rollback()
+        ()
+      },
+      disposeAction = _ => (),
+      token = "repository-select-runtime-context"
+    )
 
-    def unitOfWorkEitherInterpreter[T](op: UnitOfWorkOp[T]): Either[Throwable, T] =
-      Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in repository spec"))
-
-    def commit(): Unit = {
-      unitOfWork.commit()
-      ()
-    }
-
-    def abort(): Unit = {
-      unitOfWork.rollback()
-      ()
-    }
-
-    def dispose(): Unit = {}
-
-    def toToken: String = "repository-select-runtime-context"
-
-    def httpDriver: HttpDriver =
-      FakeHttpDriver.okText("nop")
+    def bind(uow: UnitOfWork): Unit =
+      _unit_of_work = Some(uow)
   }
 
   private final class InMemoryCommitRecorder extends CommitRecorder {
@@ -167,5 +168,14 @@ class RepositorySelectSupportSpec
 
     def record(message: String): Unit =
       buffer += message
+  }
+
+  private def _testObservabilityContext(): ObservabilityContext = {
+    val id = ExecutionContextId.generate()
+    ObservabilityContext(
+      traceId = TraceId(id),
+      spanId = None,
+      correlationId = Some(CorrelationId(id))
+    )
   }
 }

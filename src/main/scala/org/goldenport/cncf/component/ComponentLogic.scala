@@ -7,7 +7,7 @@ import org.goldenport.protocol.Response
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.cncf.action.{Action, ActionCall, Query, ResourceAccess}
 import cats.{Id, ~>}
-import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeKind, SystemContext}
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeKind, SystemContext}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.job.{JobEngine, JobId, JobResult, JobStatus, JobTask}
 import org.goldenport.cncf.unitofwork.UnitOfWork
@@ -64,7 +64,7 @@ case class ComponentLogic(
       .orElse(component.subsystem.flatMap(_.httpDriver))
       .getOrElse(_fallback_http_driver_())
     val uow = component.unitOfWork.withHttpDriver(Some(driver))
-    val runtime = new _ComponentRuntimeContext(uow, driver)
+    val runtime = _componentRuntimeContext(uow, driver)
     val withruntime = ExecutionContext.withRuntimeContext(base, runtime)
     component.applicationConfig.applicationContext match {
       case Some(app) =>
@@ -86,43 +86,46 @@ case class ComponentLogic(
     }
   }
 
-  private final class _ComponentRuntimeContext(
+  private def _componentRuntimeContext(
     uow: UnitOfWork,
     driver: HttpDriver
-  ) extends RuntimeContext {
-    def unitOfWork: UnitOfWork = uow
-
-    def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> Id) =
-      new (UnitOfWorkOp ~> Id) {
-        def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
-          new UnitOfWorkInterpreter(uow).executeDirect(fa)
-      }
-
-    def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
-      new (UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
-          throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not available in component runtime")
-      }
-
-    def unitOfWorkEitherInterpreter[T](op: UnitOfWorkOp[T]): Either[Throwable, T] =
-      Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not available in component runtime"))
-
-    def commit(): Unit = {
-      unitOfWork.commit()
-      ()
+  ): RuntimeContext = {
+    val parent = component.scopeContext
+    val core = RuntimeContext.core(
+      name = "component-runtime",
+      parent = Some(parent),
+      observabilityContext = parent.observabilityContext,
+      httpDriverOption = Some(driver)
+    )
+    val idInterpreter = new (UnitOfWorkOp ~> Id) {
+      def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
+        new UnitOfWorkInterpreter(uow).executeDirect(fa)
     }
-
-    def abort(): Unit = {
-      unitOfWork.rollback()
-      ()
+    val tryInterpreter = new (UnitOfWorkOp ~> scala.util.Try) {
+      def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
+        throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not available in component runtime")
     }
-
-    def dispose(): Unit = {}
-
-    def toToken: String = "component-runtime-context"
-
-    def httpDriver: HttpDriver =
-      driver
+    val eitherInterpreter = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
+      def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] =
+        Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not available in component runtime"))
+    }
+    new RuntimeContext(
+      core = core,
+      unitOfWorkSupplier = () => uow,
+      unitOfWorkInterpreterFn = idInterpreter,
+      unitOfWorkTryInterpreterFn = tryInterpreter,
+      unitOfWorkEitherInterpreterFn = eitherInterpreter,
+      commitAction = commitUow => {
+        val _ = commitUow.commit()
+        ()
+      },
+      abortAction = abortUow => {
+        val _ = abortUow.rollback()
+        ()
+      },
+      disposeAction = _ => (),
+      token = "component-runtime-context"
+    )
   }
 
   private def _fallback_http_driver_(): HttpDriver =
@@ -152,8 +155,7 @@ object ComponentLogic {
   ) extends ActionCall {
     override def action: Action = core.action
     def execute(): Consequence[OperationResponse] = {
-      val info = RuntimeMetadata.fromSystem(core.executionContext.system)
-      Consequence.success(OperationResponse.Scalar(RuntimeMetadata.format(info)))
+      Consequence.success(OperationResponse.Scalar(core.executionContext.runtime.formatPing))
     }
   }
 }

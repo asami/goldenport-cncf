@@ -2,8 +2,8 @@ package org.goldenport.cncf.action
 
 import cats.{Id, ~>}
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.{ExecutionContext, ExecutionContextId, RuntimeContext, SystemContext}
-import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, SystemContext, TraceId}
+import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.{ActionEvent, ActionResult, EventEngine}
 import org.goldenport.cncf.security.AuthorizationDecision
@@ -33,7 +33,7 @@ class ActionEngineObservabilitySeparationSpec
       val base = ExecutionContext.create()
       val ctx = ExecutionContext.Instance(
         base.core,
-        base.cncfCore.copy(runtime = runtime, system = SystemContext.empty)
+        base.cncfCore.copy(runtime = runtime.runtime, system = SystemContext.empty)
       )
       val uow = new UnitOfWork(ctx, dataStore, eventEngine, recorder)
       runtime.bind(uow)
@@ -73,7 +73,7 @@ class ActionEngineObservabilitySeparationSpec
       val base = ExecutionContext.create()
       val ctx = ExecutionContext.Instance(
         base.core,
-        base.cncfCore.copy(runtime = runtime, system = SystemContext.empty)
+        base.cncfCore.copy(runtime = runtime.runtime, system = SystemContext.empty)
       )
       val uow = new UnitOfWork(ctx, dataStore, eventEngine, recorder)
       runtime.bind(uow)
@@ -185,44 +185,55 @@ class ActionEngineObservabilitySeparationSpec
       AuthorizationDecision.Deny
   }
 
-  private class TestRuntimeContext extends RuntimeContext {
-    private var _unit_of_work: UnitOfWork = null
+  private abstract class RuntimeTestSupport {
+    private var _unit_of_work: Option[UnitOfWork] = None
+    private val observability = _testObservabilityContext()
+    private val driver = FakeHttpDriver.okText("nop")
 
-    def bind(uow: UnitOfWork): Unit = {
-      _unit_of_work = uow
-    }
-
-    def unitOfWork: UnitOfWork = _unit_of_work
-
-    def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> Id) =
-      new (UnitOfWorkOp ~> Id) {
+    val runtime: RuntimeContext = new RuntimeContext(
+      core = RuntimeContext.core(
+        name = "test-runtime-context",
+        parent = None,
+        observabilityContext = observability,
+        httpDriverOption = Some(driver)
+      ),
+      unitOfWorkSupplier = () => _unit_of_work.getOrElse {
+        throw new IllegalStateException("UnitOfWork has not been bound")
+      },
+      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Id) {
         def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in observability spec")
-      }
-
-    def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
-      new (UnitOfWorkOp ~> scala.util.Try) {
+      },
+      unitOfWorkTryInterpreterFn = new (UnitOfWorkOp ~> scala.util.Try) {
         def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
           throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in observability spec")
-      }
+      },
+      unitOfWorkEitherInterpreterFn = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
+        def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] =
+          Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in observability spec"))
+      },
+      commitAction = commitAction,
+      abortAction = _ => (),
+      disposeAction = _ => (),
+      token = token
+    )
 
-    def unitOfWorkEitherInterpreter[T](op: UnitOfWorkOp[T]): Either[Throwable, T] =
-      Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in observability spec"))
+    def bind(uow: UnitOfWork): Unit =
+      _unit_of_work = Some(uow)
 
-    def commit(): Unit = {}
-    def abort(): Unit = {}
-    def dispose(): Unit = {}
+    protected def commitAction(unitOfWork: UnitOfWork): Unit
+    protected def token: String
+  }
 
-    def toToken: String = "test-runtime-context"
-
-    def httpDriver: HttpDriver =
-      FakeHttpDriver.okText("nop")
+  private final class TestRuntimeContext extends RuntimeTestSupport {
+    override protected def commitAction(unitOfWork: UnitOfWork): Unit = ()
+    override protected def token: String = "test-runtime-context"
   }
 
   private final class SuccessRuntimeContext(
     actionName: String
-  ) extends TestRuntimeContext {
-    override def commit(): Unit = {
+  ) extends RuntimeTestSupport {
+    override protected def commitAction(unitOfWork: UnitOfWork): Unit = {
       val event = ActionEvent(
         ExecutionContextId.generate(),
         actionName,
@@ -232,6 +243,17 @@ class ActionEngineObservabilitySeparationSpec
       )
       unitOfWork.commit(Seq(event))
     }
+
+    override protected def token: String = s"test-runtime-context-${actionName}"
+  }
+
+  private def _testObservabilityContext(): ObservabilityContext = {
+    val id = ExecutionContextId.generate()
+    ObservabilityContext(
+      traceId = TraceId(id),
+      spanId = None,
+      correlationId = Some(CorrelationId(id))
+    )
   }
 
   private final class InMemoryCommitRecorder extends CommitRecorder {

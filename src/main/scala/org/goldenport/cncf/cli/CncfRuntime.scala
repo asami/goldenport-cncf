@@ -8,7 +8,7 @@ import org.goldenport.bag.Bag
 import org.goldenport.configuration.{Configuration, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.client.{ClientComponent, GetQuery, PostCommand}
 import org.goldenport.cncf.CncfVersion
-import org.goldenport.cncf.component.{Component, ComponentInit, RuntimeMetadata}
+import org.goldenport.cncf.component.{Component, ComponentInit}
 import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig}
 import org.goldenport.cncf.context.SystemContext
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
@@ -47,15 +47,21 @@ object CncfRuntime {
     _global_runtime_context = None
 
   private def _create_global_runtime_context(
-    httpDriver: HttpDriver
+    httpDriver: HttpDriver,
+    mode: RunMode
   ): GlobalRuntimeContext = {
     val execution = ExecutionContext.create()
-    val context = GlobalRuntimeContext(
+    val context = new GlobalRuntimeContext(
       name = "runtime",
       observabilityContext = execution.observability,
-      httpDriver = httpDriver
+      httpDriver = httpDriver,
+      runtimeMode = mode,
+      runtimeVersion = CncfVersion.current,
+      subsystemName = GlobalRuntimeContext.SubsystemName,
+      subsystemVersion = CncfVersion.current
     )
     _global_runtime_context = Some(context)
+    GlobalRuntimeContext.current = Some(context)
     context
   }
 
@@ -117,6 +123,7 @@ object CncfRuntime {
       modeLabel,
       configuration
     )
+    GlobalRuntimeContext.current.foreach(_.updateSubsystemVersion(subsystem.version.getOrElse(CncfVersion.current)))
     val extras = extraComponents(subsystem)
     if (extras.nonEmpty) {
       subsystem.add(extras)
@@ -314,7 +321,7 @@ object CncfRuntime {
     val httpDriver = _http_driver_from_runtime_config(runtimeConfig)
     _install_log_backend(logBackend)
     _reset_global_runtime_context()
-    _create_global_runtime_context(httpDriver)
+    _create_global_runtime_context(httpDriver, runtimeConfig.mode)
     val r: Consequence[OperationRequest] =
       _runtime_protocol_engine.makeOperationRequest(actualargs)
     r match {
@@ -323,6 +330,12 @@ object CncfRuntime {
         // - Derive Config.Runtime from ResolvedConfiguration and bind into ExecutionContext / observability.
         // - Consider per-mode defaults (server/client/command/server-emulator/script) while keeping CLI normalization execution-free.
         val mode = RunMode.from(req.request.operation)
+        mode.foreach { m =>
+          GlobalRuntimeContext.current.foreach(_.updateRuntimeMode(m))
+        }
+        mode.foreach { m =>
+          GlobalRuntimeContext.current.foreach(_.updateRuntimeMode(m))
+        }
         mode match {
           case Some(RunMode.Server) =>
             startServer(actualargs.drop(1), extraComponents)
@@ -358,7 +371,7 @@ object CncfRuntime {
     val httpDriver = _http_driver_from_runtime_config(runtimeConfig)
     _install_log_backend(logBackend)
     _reset_global_runtime_context()
-    _create_global_runtime_context(httpDriver)
+    _create_global_runtime_context(httpDriver, runtimeConfig.mode)
     val r: Consequence[OperationRequest] =
       _runtime_protocol_engine.makeOperationRequest(actualargs)
     r match {
@@ -530,12 +543,7 @@ object CncfRuntime {
     subsystem: Subsystem,
     mode: String
   ): Unit = {
-    val system = RuntimeMetadata.systemContext(
-      mode = mode,
-      subsystem = subsystem.name,
-      runtimeVersion = CncfVersion.current,
-      subsystemVersion = subsystem.version
-    )
+    val system = SystemContext.empty
     subsystem.components.foreach(_.withSystemContext(system))
   }
 

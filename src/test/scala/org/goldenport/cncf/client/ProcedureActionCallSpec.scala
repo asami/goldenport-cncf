@@ -3,7 +3,7 @@ package org.goldenport.cncf.client
 import cats.{Id, ~>}
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, Command, FunctionalActionCall, ResourceAccess}
-import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemContext}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, SystemContext, TraceId}
 import java.nio.charset.StandardCharsets
 import org.goldenport.bag.Bag
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 11, 2026
- * @version Jan. 17, 2026
+ * @version Jan. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class ProcedureActionCallSpec
@@ -39,7 +39,7 @@ class ProcedureActionCallSpec
         Given("a ProcedureActionCall using http_post_direct")
         val driver = new FakeHttpDriver
         val runtime = new SpyRuntimeContext
-        val ctx = _execution_context(runtime)
+        val ctx = _execution_context(runtime.runtime)
         val action = new Command() {
           // val name = "procedure-test"
           val request = Request.ofOperation("procedure-test")
@@ -150,54 +150,67 @@ class ProcedureActionCallSpec
     }
   }
 
-  private final class SpyRuntimeContext extends RuntimeContext {
+  private final class SpyRuntimeContext {
     var unitOfWorkAccessCount: Int = 0
     var commitCount: Int = 0
     var abortCount: Int = 0
     var disposeCount: Int = 0
 
-    def unitOfWork: UnitOfWork = {
-      unitOfWorkAccessCount += 1
-      throw new UnsupportedOperationException("UnitOfWork must not be accessed")
-    }
+    private val observability = _testObservabilityContext()
+    private val driver = FakeHttpDriver.okText("nop")
 
-    def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> Id) =
-      new (UnitOfWorkOp ~> Id) {
+    lazy val runtime: RuntimeContext = new RuntimeContext(
+      core = RuntimeContext.core(
+        name = "procedure-action-call-spec-runtime",
+        parent = None,
+        observabilityContext = observability,
+        httpDriverOption = Some(driver)
+      ),
+      unitOfWorkSupplier = () => {
+        unitOfWorkAccessCount += 1
+        throw new UnsupportedOperationException("UnitOfWork must not be accessed")
+      },
+      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Id) {
         def apply[A](fa: UnitOfWorkOp[A]): Id[A] = {
           val _ = fa
           unitOfWorkAccessCount += 1
           throw new UnsupportedOperationException("UnitOfWorkInterpreter must not be used")
         }
-      }
-
-    def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
-      new (UnitOfWorkOp ~> scala.util.Try) {
+      },
+      unitOfWorkTryInterpreterFn = new (UnitOfWorkOp ~> scala.util.Try) {
         def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] = {
           val _ = fa
           unitOfWorkAccessCount += 1
           throw new UnsupportedOperationException("UnitOfWorkTryInterpreter must not be used")
         }
-      }
+      },
+      unitOfWorkEitherInterpreterFn = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
+        def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] = {
+          val _ = op
+          unitOfWorkAccessCount += 1
+          Left(new UnsupportedOperationException("UnitOfWorkEitherInterpreter must not be used"))
+        }
+      },
+      commitAction = _ => {
+        commitCount += 1
+      },
+      abortAction = _ => {
+        abortCount += 1
+      },
+      disposeAction = _ => {
+        disposeCount += 1
+      },
+      token = "procedure-action-call-spec-runtime-context"
+    )
+  }
 
-    def unitOfWorkEitherInterpreter[T](op: UnitOfWorkOp[T]): Either[Throwable, T] = {
-      val _ = op
-      unitOfWorkAccessCount += 1
-      Left(new UnsupportedOperationException("UnitOfWorkEitherInterpreter must not be used"))
-    }
-
-    def commit(): Unit =
-      commitCount += 1
-
-    def abort(): Unit =
-      abortCount += 1
-
-    def dispose(): Unit =
-      disposeCount += 1
-
-    def toToken: String = "procedure-action-call-spec-runtime-context"
-
-    def httpDriver: HttpDriver =
-      FakeHttpDriver.okText("nop")
+  private def _testObservabilityContext(): ObservabilityContext = {
+    val id = ExecutionContextId.generate()
+    ObservabilityContext(
+      traceId = TraceId(id),
+      spanId = None,
+      correlationId = Some(CorrelationId(id))
+    )
   }
 
   private def _execution_context(

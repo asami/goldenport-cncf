@@ -3,8 +3,8 @@ package org.goldenport.cncf.action
 import cats.{Id, ~>}
 import org.goldenport.Consequence
 import org.goldenport.id.UniversalId
-import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SystemContext}
-import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, SystemContext, TraceId}
+import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkOp}
@@ -47,7 +47,7 @@ class ActionCallDataStoreRouteSpec
         val base = ExecutionContext.create()
         val ctx = ExecutionContext.Instance(
           base.core,
-          base.cncfCore.copy(runtime = runtime, system = SystemContext.empty)
+          base.cncfCore.copy(runtime = runtime.runtime, system = SystemContext.empty)
         )
         val uow = new UnitOfWork(ctx, datastore, eventengine, recorder)
         runtime.bind(uow)
@@ -113,46 +113,56 @@ class ActionCallDataStoreRouteSpec
     }
   }
 
-  private final class TestRuntimeContext extends RuntimeContext {
-    private var _unit_of_work: UnitOfWork = null
+  private final class TestRuntimeContext {
+    private var _unit_of_work: Option[UnitOfWork] = None
+    private val observability = _testObservabilityContext()
+    private val driver = FakeHttpDriver.okText("nop")
 
-    def bind(uow: UnitOfWork): Unit = {
-      _unit_of_work = uow
-    }
-
-    def unitOfWork: UnitOfWork = _unit_of_work
-
-    def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> Id) =
-      new (UnitOfWorkOp ~> Id) {
+    val runtime: RuntimeContext = new RuntimeContext(
+      core = RuntimeContext.core(
+        name = "datastore-route-runtime-context",
+        parent = None,
+        observabilityContext = observability,
+        httpDriverOption = Some(driver)
+      ),
+      unitOfWorkSupplier = () => _unit_of_work.getOrElse {
+        throw new IllegalStateException("UnitOfWork has not been bound")
+      },
+      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Id) {
         def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in datastore route spec")
-      }
-
-    def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
-      new (UnitOfWorkOp ~> scala.util.Try) {
+      },
+      unitOfWorkTryInterpreterFn = new (UnitOfWorkOp ~> scala.util.Try) {
         def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
           throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in datastore route spec")
-      }
+      },
+      unitOfWorkEitherInterpreterFn = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
+        def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] =
+          Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in datastore route spec"))
+      },
+      commitAction = uow => {
+        val _ = uow.commit()
+        ()
+      },
+      abortAction = abortUow => {
+        val _ = abortUow.rollback()
+        ()
+      },
+      disposeAction = _ => (),
+      token = "datastore-route-runtime-context"
+    )
 
-    def unitOfWorkEitherInterpreter[T](op: UnitOfWorkOp[T]): Either[Throwable, T] =
-      Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in datastore route spec"))
+    def bind(uow: UnitOfWork): Unit =
+      _unit_of_work = Some(uow)
+  }
 
-    def commit(): Unit = {
-      unitOfWork.commit()
-      ()
-    }
-
-    def abort(): Unit = {
-      unitOfWork.rollback()
-      ()
-    }
-
-    def dispose(): Unit = {}
-
-    def toToken: String = "datastore-route-runtime-context"
-
-    def httpDriver: HttpDriver =
-      FakeHttpDriver.okText("nop")
+  private def _testObservabilityContext(): ObservabilityContext = {
+    val id = ExecutionContextId.generate()
+    ObservabilityContext(
+      traceId = TraceId(id),
+      spanId = None,
+      correlationId = Some(CorrelationId(id))
+    )
   }
 
   private final class InMemoryCommitRecorder extends CommitRecorder {

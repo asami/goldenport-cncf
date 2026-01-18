@@ -2,7 +2,8 @@ package org.goldenport.cncf.cli
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.CncfVersion
-import org.goldenport.cncf.component.{RuntimeMetadata, RuntimeMetadataInfo}
+import org.goldenport.cncf.cli.RunMode
+import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.http.HttpRequest
@@ -12,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  9, 2026
- * @version Jan. 16, 2026
+ * @version Jan. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
@@ -54,8 +55,11 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
       httpReq match {
         case Consequence.Success(req: HttpRequest) =>
           val res = subsystem.executeHttp(req)
-          val expected = RuntimeMetadata.format(
-            RuntimeMetadataInfo("server", RuntimeMetadata.SubsystemName, CncfVersion.current, CncfVersion.current)
+          val expected = GlobalRuntimeContext.formatPingValue(
+            mode = RunMode.Command,
+            subsystemName = GlobalRuntimeContext.SubsystemName,
+            subsystemVersion = CncfVersion.current,
+            runtimeVersion = CncfVersion.current
           )
           res.code.shouldBe(200)
           res.getString.getOrElse("").shouldBe(expected)
@@ -74,8 +78,11 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
       httpReq match {
         case Consequence.Success(req: HttpRequest) =>
           val res = subsystem.executeHttp(req)
-          val expected = RuntimeMetadata.format(
-            RuntimeMetadataInfo("server", RuntimeMetadata.SubsystemName, CncfVersion.current, CncfVersion.current)
+          val expected = GlobalRuntimeContext.formatPingValue(
+            mode = RunMode.Command,
+            subsystemName = GlobalRuntimeContext.SubsystemName,
+            subsystemVersion = CncfVersion.current,
+            runtimeVersion = CncfVersion.current
           )
           res.code.shouldBe(200)
           res.getString.getOrElse("").shouldBe(expected)

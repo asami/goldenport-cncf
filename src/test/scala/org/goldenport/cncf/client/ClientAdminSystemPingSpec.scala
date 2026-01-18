@@ -1,5 +1,6 @@
 package org.goldenport.cncf.client
 
+import cats.Id
 import cats.~>
 
 import java.nio.charset.StandardCharsets
@@ -13,7 +14,7 @@ import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
-import org.goldenport.cncf.context.SystemContext
+import org.goldenport.cncf.context.{ExecutionContext, ObservabilityContext, RuntimeContext, ScopeContext, SystemContext}
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.http.{ContentType, HttpRequest, HttpResponse, HttpStatus, MimeType, StringResponse}
 import org.goldenport.protocol.Protocol
@@ -249,7 +250,7 @@ class ClientAdminSystemPingSpec
   private final case class TestHarness(
     subsystem: Subsystem,
     component: ClientComponent,
-    runtime: TestRuntimeContext,
+    runtime: RuntimeContext,
     interpreter: UnitOfWorkInterpreter
   ) {
     def executeAction(action: org.goldenport.cncf.action.Action): Consequence[OperationResponse] = {
@@ -272,80 +273,12 @@ class ClientAdminSystemPingSpec
     }
   }
 
-  private final class TestRuntimeContext(
-    override val httpDriver: HttpDriver,
-    uow: UnitOfWork,
-    interpreter: UnitOfWorkInterpreter
-  ) extends org.goldenport.cncf.context.RuntimeContext {
-    def unitOfWork: UnitOfWork = uow
-
-    def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> cats.Id) =
-      new (UnitOfWorkOp ~> cats.Id) {
-        def apply[A](fa: UnitOfWorkOp[A]): cats.Id[A] =
-          interpreter.executeDirect(fa)
-      }
-
-    def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
-      new (UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
-          scala.util.Try(interpreter.executeDirect(fa))
-      }
-
-    def unitOfWorkEitherInterpreter[T](op: UnitOfWorkOp[T]): Either[Throwable, T] =
-      try Right(interpreter.executeDirect(op))
-      catch {
-        case e: Throwable => Left(e)
-      }
-
-    def commit(): Unit = {
-      unitOfWork.commit()
-      ()
-    }
-
-    def abort(): Unit = {
-      unitOfWork.rollback()
-      ()
-    }
-
-    def dispose(): Unit = {}
-
-    def toToken: String = "client-admin-system-ping-spec-runtime"
-  }
-
-  private final class BootstrapRuntimeContext(
-    override val httpDriver: HttpDriver
-  ) extends org.goldenport.cncf.context.RuntimeContext {
-    def unitOfWork: UnitOfWork =
-      throw new UnsupportedOperationException("bootstrap runtime has no UnitOfWork")
-
-    def unitOfWorkInterpreter[T]: (UnitOfWorkOp ~> cats.Id) =
-      new (UnitOfWorkOp ~> cats.Id) {
-        def apply[A](fa: UnitOfWorkOp[A]): cats.Id[A] =
-          throw new UnsupportedOperationException("bootstrap runtime has no interpreter")
-      }
-
-    def unitOfWorkTryInterpreter[T]: (UnitOfWorkOp ~> scala.util.Try) =
-      new (UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
-          throw new UnsupportedOperationException("bootstrap runtime has no interpreter")
-      }
-
-    def unitOfWorkEitherInterpreter[T](op: UnitOfWorkOp[T]): Either[Throwable, T] =
-      Left(new UnsupportedOperationException("bootstrap runtime has no interpreter"))
-
-    def commit(): Unit = {}
-    def abort(): Unit = {}
-    def dispose(): Unit = {}
-
-    def toToken: String = "client-admin-system-ping-spec-bootstrap-runtime"
-  }
-
   private def _build_harness(driver: FakeHttpDriver): TestHarness = {
     val subsystem = TestComponentFactory.emptySubsystem("cncf-client-test")
     val component = _client_component()
     subsystem.add(Seq(component))
     val base = org.goldenport.cncf.context.ExecutionContext.create()
-    val bootstrap = new BootstrapRuntimeContext(driver)
+    val bootstrap = _bootstrapRuntimeContext(driver, base.cncfCore.observability)
     val uowcontext = org.goldenport.cncf.context.ExecutionContext.Instance(
       base.core,
       base.cncfCore.copy(runtime = bootstrap, system = SystemContext.empty)
@@ -354,18 +287,99 @@ class ClientAdminSystemPingSpec
     val eventengine = org.goldenport.cncf.event.EventEngine.noop(datastore)
     val uow = new UnitOfWork(uowcontext, datastore, eventengine, CommitRecorder.noop)
     val interpreter = new UnitOfWorkInterpreter(uow, driver)
-    val runtime = new TestRuntimeContext(driver, uow, interpreter)
+    val runtime = _testRuntimeContext(driver, base.cncfCore.observability, uow, interpreter)
     TestHarness(subsystem, component, runtime, interpreter)
   }
 
   private def _execution_context(
-    runtime: org.goldenport.cncf.context.RuntimeContext
-  ): org.goldenport.cncf.context.ExecutionContext = {
+    runtime: RuntimeContext
+  ): ExecutionContext = {
     val base = org.goldenport.cncf.context.ExecutionContext.create()
     org.goldenport.cncf.context.ExecutionContext.Instance(
       base.core,
       base.cncfCore.copy(runtime = runtime, system = SystemContext.empty)
     )
   }
+
+  private def _testRuntimeContext(
+    driver: HttpDriver,
+    observability: ObservabilityContext,
+    uow: UnitOfWork,
+    interpreter: UnitOfWorkInterpreter
+  ): RuntimeContext = {
+    val idInterpreter = new (UnitOfWorkOp ~> Id) {
+      def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
+        interpreter.executeDirect(fa)
+    }
+    val tryInterpreter = new (UnitOfWorkOp ~> scala.util.Try) {
+      def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
+        scala.util.Try(interpreter.executeDirect(fa))
+    }
+    val eitherInterpreter = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
+      def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] =
+        try Right(interpreter.executeDirect(op))
+        catch {
+          case e: Throwable => Left(e)
+        }
+    }
+    new RuntimeContext(
+      core = _runtimeCore("client-admin-system-ping-spec-runtime", driver, observability),
+      unitOfWorkSupplier = () => uow,
+      unitOfWorkInterpreterFn = idInterpreter,
+      unitOfWorkTryInterpreterFn = tryInterpreter,
+      unitOfWorkEitherInterpreterFn = eitherInterpreter,
+      commitAction = uowArg => {
+        val _ = uowArg.commit()
+        ()
+      },
+      abortAction = uowArg => {
+        val _ = uowArg.rollback()
+        ()
+      },
+      disposeAction = _ => (),
+      token = "client-admin-system-ping-spec-runtime"
+    )
+  }
+
+  private def _bootstrapRuntimeContext(
+    driver: HttpDriver,
+    observability: ObservabilityContext
+  ): RuntimeContext = {
+    val idInterpreter = new (UnitOfWorkOp ~> Id) {
+      def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
+        throw new UnsupportedOperationException("bootstrap runtime has no interpreter")
+    }
+    val tryInterpreter = new (UnitOfWorkOp ~> scala.util.Try) {
+      def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
+        throw new UnsupportedOperationException("bootstrap runtime has no interpreter")
+    }
+    val eitherInterpreter = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
+      def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] =
+        Left(new UnsupportedOperationException("bootstrap runtime has no interpreter"))
+    }
+    new RuntimeContext(
+      core = _runtimeCore("client-admin-system-ping-spec-bootstrap-runtime", driver, observability),
+      unitOfWorkSupplier = () => throw new UnsupportedOperationException("bootstrap runtime has no UnitOfWork"),
+      unitOfWorkInterpreterFn = idInterpreter,
+      unitOfWorkTryInterpreterFn = tryInterpreter,
+      unitOfWorkEitherInterpreterFn = eitherInterpreter,
+      commitAction = _ => (),
+      abortAction = _ => (),
+      disposeAction = _ => (),
+      token = "client-admin-system-ping-spec-bootstrap-runtime"
+    )
+  }
+
+  private def _runtimeCore(
+    name: String,
+    driver: HttpDriver,
+    observability: ObservabilityContext
+  ): ScopeContext.Core =
+    RuntimeContext.core(
+      name = name,
+      parent = None,
+      observabilityContext = observability,
+      httpDriverOption = Some(driver)
+    )
 
 }
