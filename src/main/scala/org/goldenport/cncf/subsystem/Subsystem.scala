@@ -16,15 +16,17 @@ import org.goldenport.cncf.component.{
   ComponentSpace
 }
 import org.goldenport.cncf.component.ComponentLocator.NameLocator
-import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.configuration.ResolvedConfiguration
 
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
+import org.goldenport.cncf.cli.RunMode
+import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 18, 2026
+ * @version Jan. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -169,7 +171,9 @@ final class Subsystem(
     val segments = req.pathParts
     val spec = if (_is_spec_route(segments)) _resolve_spec_route(segments) else None
     spec.orElse {
-      segments match {
+      val normalizedSegments =
+        PathPreNormalizer.rewriteSegments(segments, _http_run_mode, _alias_resolver)
+      normalizedSegments match {
         case Vector(componentname, servicename, operationname) =>
           val locator = NameLocator(componentname)
           for {
@@ -332,6 +336,16 @@ final class Subsystem(
 
   private def _internal_error(): HttpResponse =
     HttpResponse.internalServerError()
+
+  private def _alias_resolver: AliasResolver =
+    GlobalRuntimeContext.current
+      .map(_.aliasResolver)
+      .getOrElse(AliasResolver.empty)
+
+  private def _http_run_mode: RunMode =
+    GlobalRuntimeContext.current
+      .map(_.runtimeMode)
+      .getOrElse(RunMode.Server)
 
   // private def _ensure_system_context(
   //   component: Component

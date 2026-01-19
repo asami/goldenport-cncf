@@ -17,6 +17,13 @@ without introducing new features or semantic changes.
 - Canonical path normalization
 - Purpose-aware string rendering (DisplayIntent / Printable)
 
+## Phase 2.8 Alias/Suffix Deliverables
+
+- `docs/design/canonical-alias-suffix-resolution.md`: authoritative design rules for alias/canonical resolution (Phase 2.8 design doc).
+- `docs/design/path-alias.md`: implementation-aligned alias reference that ties configuration, resolver use, and executable specs to the canonical rules.
+- `docs/journal/2026/01/canonical-alias-suffix-resolution-audit-and-proposal.md`: audit findings + resolver proposal that informed the Phase 2.8 design.
+- `docs/journal/2026/01/phase-2.8-suffix-egress-design.md`: finalized Suffix/Egress Design record for Phase 2.8.
+
 ## CLI Hygiene
 
 - Reorganize CLI structure (HelloWorld CLI positioning)
@@ -222,7 +229,7 @@ The introduction of a runtime `ScopeContext`–based logging configuration mecha
 | Configuration ownership realignment (core vs CNCF) | Phase 2.6 Stage 5 deferred list | **DONE** | CNCF now consumes `org.goldenport.configuration.*` and relies on core’s resolution artifacts, as documented in the Phase 2.8 Design Record and reiterated in `configuration-model.md#configuration-propagation-model`. |
 | Canonical documentation consolidation | Phase 2.6 Stage 6 deferred note | **DONE** | The propagation semantics are merged into `configuration-model.md` and linked from the consolidated/design notes, so a single canonical reference now exists. |
 | Config → initialize → runtime integration | Phase 2.6 Stage 5 deferred list | **PARTIAL** | Semantic builders and documentation exist, but the single end-to-end contract is still recorded as Phase 2.8 scope. |
-| Path / alias resolution hygiene | Phase 2.6 Stage 3 note + Stage 6 deferred steps | **OPEN** | Alias normalization requirements remain in Phase 2.8 docs and no implementation or decision update has been recorded. |
+| Path / alias resolution hygiene | Phase 2.6 Stage 3 note + Stage 6 deferred steps | **DONE** | Alias normalization and path alias behavior are implemented/documented in Phase 2.8 (`docs/design/path-alias.md`), so the hygiene item is satisfied. |
 | Component / service / operation canonical construction | Phase 2.6 Stage 6 deferred steps | **OPEN** | The script DSL alias/spec rules remain deferred (ScriptDslSpec is intentionally ignored) and no refinement is documented. |
 | ComponentDefinition / DSL formalization | Phase 2.6 Stage 5 deferred list | **DONE** | Removed the unused `ComponentDefinition` / `GeneratedComponent` abstraction so the pipeline now resolves only concrete `Component` classes (ClassDef-only) with unchanged runtime semantics/defaults. |
 | Component repository priority rules | Phase 2.6 Stage 5 deferred list | **OPEN** | Deterministic repository ordering remains unsettled in Phase 2.8 scope. |
@@ -826,7 +833,7 @@ This checklist summarizes the explicit implementation and documentation tasks re
 
 ### Checklist
 
-- [ ] **Path Alias Hard-Coding → Declarative / Logical Resolution** — OPEN (alias semantics not yet introduced)
+- [x] **Path Alias Hard-Coding → Declarative / Logical Resolution** — DONE (alias semantics now documented in `docs/design/path-alias.md`)
   - Remove any hard-coded path aliases.
   - Implement declarative or logical alias resolution.
   - Document the approach and update developer notes.

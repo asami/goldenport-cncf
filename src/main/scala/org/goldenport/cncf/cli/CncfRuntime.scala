@@ -20,10 +20,11 @@ import org.goldenport.cncf.http.{FakeHttpDriver, Http4sHttpServer, HttpDriver, H
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
+import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 18, 2026
+ * @version Jan. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime {
@@ -47,13 +48,15 @@ object CncfRuntime {
 
   private def _create_global_runtime_context(
     httpDriver: HttpDriver,
-    mode: RunMode
+    mode: RunMode,
+    aliasResolver: AliasResolver
   ): GlobalRuntimeContext = {
     val execution = ExecutionContext.create()
     val context = new GlobalRuntimeContext(
       name = "runtime",
       observabilityContext = execution.observability,
       httpDriver = httpDriver,
+      aliasResolver = aliasResolver,
       runtimeMode = mode,
       runtimeVersion = CncfVersion.current,
       subsystemName = GlobalRuntimeContext.SubsystemName,
@@ -73,6 +76,11 @@ object CncfRuntime {
         observabilityContext = ExecutionContext.create().observability
       )
     }
+
+  private def _alias_resolver(
+    configuration: ResolvedConfiguration
+  ): AliasResolver =
+    AliasLoader.load(configuration.configuration)
 
   private def _http_driver_from_runtime_config(
     runtimeConfig: RuntimeConfig
@@ -291,13 +299,17 @@ object CncfRuntime {
     subsystem: Subsystem,
     args: Array[String]
   ) = {
-    val in = args.toVector
-    (in.lift(0), in.lift(1), in.lift(2)) match {
-      case (Some("SCRIPT"), Some("DEFAULT"), Some("RUN")) =>
-        parseCommandArgs(subsystem, args)
+    parseCommandArgs(subsystem, args, RunMode.Script) match {
+      case success @ Consequence.Success(_) => success
       case _ =>
-        val xs = Vector("SCRIPT", "DEFAULT", "RUN") ++ in
-        parseCommandArgs(subsystem, xs.toArray)
+        val in = args.toVector
+        (in.lift(0), in.lift(1), in.lift(2)) match {
+          case (Some("SCRIPT"), Some("DEFAULT"), Some("RUN")) =>
+            _to_request(subsystem, args, RunMode.Script)
+          case _ =>
+            val xs = Vector("SCRIPT", "DEFAULT", "RUN") ++ in
+            _to_request(subsystem, xs.toArray, RunMode.Script)
+        }
     }
   }
 
@@ -318,9 +330,10 @@ object CncfRuntime {
     val runtimeConfig = _runtime_config(configuration)
     val logBackend = _decide_backend(backendoption, _logging_backend_from_configuration(configuration))
     val httpDriver = _http_driver_from_runtime_config(runtimeConfig)
+    val aliasResolver = _alias_resolver(configuration)
     _install_log_backend(logBackend)
     _reset_global_runtime_context()
-    _create_global_runtime_context(httpDriver, runtimeConfig.mode)
+    _create_global_runtime_context(httpDriver, runtimeConfig.mode, aliasResolver)
     val r: Consequence[OperationRequest] =
       _runtime_protocol_engine.makeOperationRequest(actualargs)
     r match {
@@ -368,9 +381,10 @@ object CncfRuntime {
     val runtimeConfig = _runtime_config(configuration)
     val logBackend = _decide_backend(backendoption, _logging_backend_from_configuration(configuration))
     val httpDriver = _http_driver_from_runtime_config(runtimeConfig)
+    val aliasResolver = _alias_resolver(configuration)
     _install_log_backend(logBackend)
     _reset_global_runtime_context()
-    _create_global_runtime_context(httpDriver, runtimeConfig.mode)
+    _create_global_runtime_context(httpDriver, runtimeConfig.mode, aliasResolver)
     val r: Consequence[OperationRequest] =
       _runtime_protocol_engine.makeOperationRequest(actualargs)
     r match {
@@ -534,9 +548,10 @@ object CncfRuntime {
 
   private def _to_request(
     subsystem: Subsystem,
-    args: Array[String]
+    args: Array[String],
+    mode: RunMode = RunMode.Command
   ): Consequence[Request] =
-    parseCommandArgs(subsystem, args)
+    parseCommandArgs(subsystem, args, mode)
 
   // private def _apply_system_context(
   //   subsystem: Subsystem,
@@ -647,10 +662,12 @@ object CncfRuntime {
 
   private[cli] def parseCommandArgs(
     subsystem: Subsystem,
-    args: Array[String]
+    args: Array[String],
+    mode: RunMode = RunMode.Command
   ): Consequence[Request] =
     _selectorAndArguments(args.toIndexedSeq).flatMap { case (selector, tail) =>
-      subsystem.resolver.resolve(selector, allowPrefix = false, allowImplicit = false) match {
+      val canonicalSelector = PathPreNormalizer.rewriteSelector(selector, mode, _alias_resolver)
+      subsystem.resolver.resolve(canonicalSelector, allowPrefix = false, allowImplicit = false) match {
         case ResolutionResult.Resolved(_, component, service, operation) =>
           val arguments = _build_request_arguments(tail)
           Consequence.success(
@@ -686,6 +703,12 @@ object CncfRuntime {
         Consequence.success((single, rest.toVector))
     }
   }
+
+  private def _alias_resolver: AliasResolver =
+    GlobalRuntimeContext.current
+      .map(_.aliasResolver)
+      .getOrElse(AliasResolver.empty)
+
 
   private def _selectorFromPath(
     value: String,

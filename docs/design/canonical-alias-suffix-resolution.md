@@ -24,6 +24,14 @@ This is a DESIGN document.
 The rules defined here are mutable during Phase 2.8 and MUST be
 reflected in implementation changes immediately.
 
+> NOTE: The Phase 2.8 alias behavior described below now has an
+> implementation-aligned reference in `docs/design/path-alias.md`; this
+> document serves as the historical and design-intent background.
+>
+> Any “deferred” wording elsewhere in this document refers to the
+> pre–Phase 2.8 state—the alias handling described here is now
+> implemented and captured in `path-alias.md`.
+
 
 Terminology
 ----------------------------------------------------------------------

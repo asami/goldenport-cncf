@@ -231,6 +231,10 @@ structural resolution rules.
 Any behavior not explainable by this document MUST NOT exist
 in Phase 2.8 implementation.
 
+> NOTE: Alias configuration and shortcut behaviors are described
+> in `docs/design/path-alias.md` and do not change the canonical rules
+> documented above.
+
 ## Executable Specification Reference
 
 This specification is accompanied by an Executable Specification.
