@@ -33,7 +33,7 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 /*
  * @since   Jan.  4, 2026
- * @version Jan. 17, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -232,7 +232,7 @@ private object TestCommandOperation extends spec.OperationDefinition {
               }
             }
 
-            override def toString: String = s"Command(${arg.value})"
+            override def show: String = s"Command(${arg.value})"
           }
         )
       case None =>
@@ -278,7 +278,7 @@ private object TestCommandFailOperation extends spec.OperationDefinition {
               }
             }
 
-            override def toString: String = s"CommandFail(${arg.value})"
+            override def show: String = s"CommandFail(${arg.value})"
           }
         )
       case None =>
@@ -324,7 +324,7 @@ private object TestQueryOperation extends spec.OperationDefinition {
               }
             }
 
-            override def toString: String = s"Query(${arg.value})"
+            override def show: String = s"Query(${arg.value})"
           }
         )
       case None =>
