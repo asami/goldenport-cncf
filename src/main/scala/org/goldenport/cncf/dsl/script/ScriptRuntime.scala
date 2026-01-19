@@ -24,7 +24,7 @@ object ScriptRuntime {
     val r = execute(args)(script)
     r match {
       case Consequence.Success(s) => Console.out.println(s.print)
-      case Consequence.Failure(c) => Console.err.println(c.message)
+      case Consequence.Failure(c) => Console.err.println(c.display)
     }
     r
   }

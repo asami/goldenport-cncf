@@ -84,6 +84,12 @@ This candidate introduces the following core concepts:
 This item is a documentation-level design anchor only.
 No runtime wiring or semantic changes are introduced in Phase 2.8.
 
+### A-2 CLI Output Normalization
+
+- CLI and runtime outputs now flow through Presentable `display`/`print` paths: script execution prints `Response.display`, `_print_response` uses `res.display`, and the HTTP visitor logs `HttpResponse.display` rather than raw `toString`, so user-facing code no longer relies on opaque stringification.
+- The rendering path keeps `Action`, `ActionCall`, and `Response` semantics aligned with the purpose-aware vocabulary, removing any lingering `toString` dependence in CLI output.
+- A focused inspection of CLI/runtime adapters surfaces only explicit metadata formatting (file paths, headers), confirming the A-2 normalization is in place.
+
 See also:
 - docs/notes/purpose-aware-string-rendering.md
 
@@ -240,6 +246,7 @@ The introduction of a runtime `ScopeContext`–based logging configuration mecha
 
 - Semantic Configuration / Propagation, Configuration ownership realignment, and Canonical documentation consolidation are DONE within Phase 2.8 and documented via `configuration-model.md#configuration-propagation-model`.
 - Purpose-Aware String Rendering is complete for Phase 2.8 and must not be extended within this phase; the Presentable-based rendering model is locked in.
+- CLI Exit Policy Hygiene is complete: `sys.exit` is restricted to the CLI adapter with `--force-exit`, all other layers return exit codes.
 - Phase 2.8 remains **OPEN** because the remaining hygiene items in the table are still marked PARTIAL or OPEN and have not been resolved or re-deferred.
 
 ### Hygiene simplification: ComponentDefinition retirement
@@ -845,11 +852,11 @@ This checklist summarizes the explicit implementation and documentation tasks re
 - [x] **Purpose-Aware String Rendering** — DONE
   - Implementation completed: Presentable-based rendering is now consistently used for Action, ActionCall, and Response; CLI output no longer relies on toString.
 
-- [ ] **CLI Hygiene**
+- [x] **CLI Hygiene** — DONE (CLI exit policy enforced)
   - Reorganize CLI structure (including HelloWorld CLI).
   - Clean up file layout related to CLI.
   - Normalize CLI options and meta-parameter handling.
-  - Implement CLI exit policy: only the adapter layer may call `sys.exit`, with a documented `--force-exit` option.
+  - Implementation completed: `sys.exit` is restricted to the CLI adapter with `--force-exit`; all other layers return values.
 
 - [ ] **Subsystem Hygiene**
   - Reorganize HelloWorld subsystem structure.

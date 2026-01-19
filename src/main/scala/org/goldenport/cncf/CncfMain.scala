@@ -30,7 +30,8 @@ object CncfMain {
     val (reposResult, args1) = _take_component_repository(args)
     val (discover, args2) = _take_discover_classes(args1)
     val (workspace, args3) = _take_workspace(args2)
-    val (noExit, rest) = _take_no_exit(args3)
+    val (forceExit, args4) = _take_force_exit(args3)
+    val (noExit, rest) = _take_no_exit(args4)
     val enabled = discover || _discover_env_enabled()
 
     val code: Int =
@@ -45,18 +46,19 @@ object CncfMain {
           case Right(_) if enabled =>
             val extras = _discover_components(workspace)
             CncfRuntime.runWithExtraComponents(rest, extras)
-          case Right(_) =>
-            CncfRuntime.runExitCode(rest)
+      case Right(_) =>
+        CncfRuntime.runExitCode(rest)
         }
       } catch {
         case e: CliFailed => e.code
       }
 
-    if (noExit) {
-      if (code != 0) throw new CliFailed(code)
-      ()
+    if (forceExit) {
+      sys.exit(code) // CLI adapter may exit only when --force-exit is requested.
+    } else if (noExit && code != 0) {
+      throw new CliFailed(code)
     } else {
-      sys.exit(code)
+      ()
     }
   }
 
@@ -64,6 +66,12 @@ object CncfMain {
     val noexit = args.contains("--no-exit")
     val rest = args.filterNot(_ == "--no-exit")
     (noexit, rest)
+  }
+
+  private def _take_force_exit(args: Array[String]): (Boolean, Array[String]) = {
+    val forceExit = args.contains("--force-exit")
+    val rest = args.filterNot(_ == "--force-exit")
+    (forceExit, rest)
   }
 
   private def _take_component_repository(

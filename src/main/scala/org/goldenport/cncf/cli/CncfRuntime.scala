@@ -522,12 +522,12 @@ object CncfRuntime {
   }
 
   private def _print_response(res: Response): Unit =
-    println(res.display)
+    println(res.print)
 
   private def _print_operation_response(res: OperationResponse): Unit = {
     res match {
       case OperationResponse.Http(http) =>
-        val body = http.getString.getOrElse(http.show)
+        val body = http.getString.getOrElse(http.print)
         Console.out.println(body)
       case _ =>
         _print_response(res.toResponse)
