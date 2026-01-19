@@ -8,7 +8,7 @@ import org.goldenport.cncf.log.LogBackendHolder
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan.  8, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class OperationContext(
@@ -111,10 +111,10 @@ object ObservabilityEngine {
     context: ObservabilityContext,
     name: String
   ): String = {
-    val traceid = Option(context.traceId.value).map(t => s"traceId=$t")
+    val traceid = s"traceId=${context.traceId.value}"
     val correlationid =
       context.correlationId.map(id => s"correlationId=${id.value}")
-    val parts = Vector(traceid, correlationid).flatten
+    val parts = traceid +: correlationid.toVector
     if (parts.isEmpty) name else s"$name ${parts.mkString("[", " ", "]")}"
   }
 }

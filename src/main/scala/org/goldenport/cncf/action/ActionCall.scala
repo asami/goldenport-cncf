@@ -6,6 +6,7 @@ import org.goldenport.util.StringUtils.objectToSnakeName
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
 import org.goldenport.cncf.unitofwork.ExecUowM
 import org.goldenport.cncf.unitofwork.UnitOfWork
+import org.goldenport.text.Presentable
 
 /*
  * @since   Apr. 11, 2025
@@ -13,12 +14,13 @@ import org.goldenport.cncf.unitofwork.UnitOfWork
  *  version Dec. 31, 2025
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
- * @version Jan. 15, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
   extends ActionCall.Core.Holder
-  with OperationCallDataStorePart {
+  with OperationCallDataStorePart
+  with Presentable {
   def name: String = objectToSnakeName("ActionCall", this)
   def accesses: Vector[ResourceAccess] = Vector.empty
 
@@ -30,6 +32,9 @@ abstract class ActionCall()
     uow.commit()
   }
 
+  override def print: String = s"ActionCall(${action.display})"
+  override def display: String = action.display
+  override def show: String = correlationId.fold(display)(cid => s"$display@${cid.show}")
 }
 
 abstract class FunctionalActionCall extends ActionCall {

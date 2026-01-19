@@ -3,17 +3,16 @@ package org.goldenport.cncf.observability
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 import org.goldenport.Conclusion
-import org.goldenport.id.UniversalId
 import org.goldenport.cncf.context.{ObservabilityContext, ScopeContext, ScopeKind, TraceId}
 
 /*
  * @since   Jan.  8, 2026
- * @version Jan.  8, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 class ObservabilityEngineSpec extends AnyWordSpec with Matchers {
   private def _trace_id_(): TraceId =
-    TraceId(new UniversalId("cncf", "test", "trace") {})
+    TraceId("cncf", "test")
 
   private def _scope_context_(): ScopeContext =
     ScopeContext(

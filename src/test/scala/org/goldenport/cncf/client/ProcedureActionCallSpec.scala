@@ -3,7 +3,7 @@ package org.goldenport.cncf.client
 import cats.{Id, ~>}
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, Command, FunctionalActionCall, ResourceAccess}
-import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, TraceId}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ObservabilityContext, RuntimeContext, TraceId}
 import java.nio.charset.StandardCharsets
 import org.goldenport.bag.Bag
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 11, 2026
- * @version Jan. 18, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 class ProcedureActionCallSpec
@@ -204,14 +204,12 @@ class ProcedureActionCallSpec
     )
   }
 
-  private def _testObservabilityContext(): ObservabilityContext = {
-    val id = ExecutionContextId.generate()
+  private def _testObservabilityContext(): ObservabilityContext =
     ObservabilityContext(
-      traceId = TraceId(id),
+      traceId = TraceId("procedure", "call"),
       spanId = None,
-      correlationId = Some(CorrelationId(id))
+      correlationId = Some(CorrelationId("procedure", "runtime"))
     )
-  }
 
   private def _execution_context(
     runtime: RuntimeContext

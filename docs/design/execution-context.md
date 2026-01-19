@@ -79,6 +79,8 @@ Design Notes (Security)
 - ExecutionContext does NOT contain CanonicalId.
 - CanonicalId is provided separately as a correlation identifier.
 - CanonicalId flows alongside ExecutionContext but is not part of it.
+- ExecutionContext no longer owns or wraps any UniversalId; TraceId/SpanId/CorrelationId normalization is performed inside the ScopeContext hierarchy as part of the GlobalRuntimeContext → ScopeContext → ObservabilityContext wiring before the identifiers reach ExecutionContext.
+- Observability identifiers live in `ExecutionContext.cncfCore.observability` and are described by the canonical event shape, so refer to `docs/design/event-shape.md` for TraceId/SpanId/CorrelationId field semantics and to `docs/design/id.md` for overall UniversalId policy.
 
 ## Relationship to core ExecutionContext
 CNCF ExecutionContext MUST satisfy the invariants defined by the

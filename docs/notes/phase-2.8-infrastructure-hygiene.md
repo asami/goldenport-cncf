@@ -218,8 +218,7 @@ The introduction of a runtime `ScopeContext`–based logging configuration mecha
 
 ### Status
 
-- **OPEN** — This item is newly tracked for Phase 2.8 and must be explicitly documented and closed before phase completion.
-- No implementation is required until the documentation is finalized and consensus is reached on the configuration model.
+- **DONE** — Logged configuration, driver selection, and observability identifier normalization are locked via the GlobalRuntimeContext → ScopeContext → ObservabilityContext wiring introduced in Phase 2.8. Runtime logging backend selection and TraceId/SpanId/CorrelationId normalization happen during the same initialization path, so there is no longer a separate ExecutionContext-local identifier wrapper to reconcile.
 
 ## Phase 2.6 → Phase 2.8 Deferred Item Tracking
 
@@ -235,11 +234,12 @@ The introduction of a runtime `ScopeContext`–based logging configuration mecha
 | Component repository priority rules | Phase 2.6 Stage 5 deferred list | **OPEN** | Deterministic repository ordering remains unsettled in Phase 2.8 scope. |
 | Bootstrap log persistence / ops integration | Phase 2.6 Stage 5 deferred list | **OPEN** | Persistence/operational integration is explicitly deferred with no recorded completion in Phase 2.8 doc. |
 | OpenAPI / representation expansion policy | Phase 2.6 Stage 6 deferred steps | **OPEN** | Advanced OpenAPI schema/representation work is marked as deferred to Phase 2.8+. |
-| Runtime ScopeContext–based logging configuration | Phase 2.8 explicit tracked task | **OPEN** | Logging configuration must be documented and context-bound via ScopeContext; explicit documentation and model required before phase completion. |
+| Runtime ScopeContext–based logging configuration | Phase 2.8 explicit tracked task | **DONE** | Logging backend selection and Observability ID normalization are locked via the GlobalRuntimeContext → ScopeContext → ObservabilityContext wiring, replacing the Phase 2.6 ExecutionContext wrapper with a deterministic scope-based model. |
 
 ### Status Summary
 
 - Semantic Configuration / Propagation, Configuration ownership realignment, and Canonical documentation consolidation are DONE within Phase 2.8 and documented via `configuration-model.md#configuration-propagation-model`.
+- Purpose-Aware String Rendering is complete for Phase 2.8 and must not be extended within this phase; the Presentable-based rendering model is locked in.
 - Phase 2.8 remains **OPEN** because the remaining hygiene items in the table are still marked PARTIAL or OPEN and have not been resolved or re-deferred.
 
 ### Hygiene simplification: ComponentDefinition retirement
@@ -842,10 +842,8 @@ This checklist summarizes the explicit implementation and documentation tasks re
   - Ensure canonical normalization is applied consistently across all path usages.
   - Update tests and documentation to reflect normalization logic.
 
-- [ ] **Purpose-Aware String Rendering**
-  - Document the `DisplayIntent` and `Printable` concepts.
-  - Ensure no ad-hoc `toString` usages remain in infrastructure code.
-  - No runtime semantics to be wired in this phase (documentation/design only).
+- [x] **Purpose-Aware String Rendering** — DONE
+  - Implementation completed: Presentable-based rendering is now consistently used for Action, ActionCall, and Response; CLI output no longer relies on toString.
 
 - [ ] **CLI Hygiene**
   - Reorganize CLI structure (including HelloWorld CLI).
@@ -916,6 +914,8 @@ This checklist summarizes the explicit implementation and documentation tasks re
 All items above must be reviewed and checked off before Phase 2.8 is considered complete. Any deviations or deferrals must be justified and recorded in the phase documentation.
 
 ## Next Phase Development Items (Post Phase 2.8)
+
+Purpose-Aware String Rendering implementation is complete in Phase 2.8; only optional future refinements (if any) may be considered in later phases.
 
 The following items are explicitly identified as **out of scope, deferred, or minimal-only**
 in Phase 2.8 and MUST be treated as tracked development items for the next phase.
@@ -1018,6 +1018,8 @@ The following operational concerns are explicitly deferred:
 - Bootstrap log persistence strategy.
 - Operational tooling integration (metrics, tracing, export).
 - Runtime diagnostics and health reporting beyond minimal endpoints.
+
+Note: identifier normalization (TraceId / SpanId / CorrelationId) and the ScopeContext → ObservabilityContext alignment were completed as part of Phase 2.8, so they no longer require separate tracking in this section.
 
 ---
 

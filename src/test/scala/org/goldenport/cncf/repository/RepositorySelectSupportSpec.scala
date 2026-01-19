@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan. 10, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 class RepositorySelectSupportSpec
@@ -167,12 +167,10 @@ class RepositorySelectSupportSpec
       buffer += message
   }
 
-  private def _testObservabilityContext(): ObservabilityContext = {
-    val id = ExecutionContextId.generate()
+  private def _testObservabilityContext(): ObservabilityContext =
     ObservabilityContext(
-      traceId = TraceId(id),
+      traceId = TraceId("repository", "select"),
       spanId = None,
-      correlationId = Some(CorrelationId(id))
+      correlationId = Some(CorrelationId("repository", "runtime"))
     )
-  }
 }

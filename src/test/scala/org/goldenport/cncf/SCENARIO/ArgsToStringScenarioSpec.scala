@@ -115,15 +115,16 @@ private object TestQueryOperation extends spec.OperationDefinition {
               new ActionCall {
                 override val core: ActionCall.Core = _core_
                 override def action: Action = actionself
-                override def execute(): org.goldenport.Consequence[OperationResponse] =
-                  org.goldenport.Consequence.Success(
-                    new OperationResponse {
-                      override def toResponse: Response = Response.Scalar[String](toString)
-                      override def show: String = s"Query(${arg.value})"
-                      override def print = show
-                    }
-                  )
-              }
+            override def execute(): org.goldenport.Consequence[OperationResponse] =
+              org.goldenport.Consequence.Success(
+                new OperationResponse {
+                  override def toResponse: Response = Response.Scalar[String](toString)
+                  override def show: String = s"Query(${arg.value})"
+                  def print = show
+//                  override def toString: String = show
+                }
+              )
+            }
             }
 
             override def show: String = s"Query(${arg.value})"

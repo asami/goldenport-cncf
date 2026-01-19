@@ -4,7 +4,7 @@ import org.goldenport.cncf.http.HttpDriver
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 18, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ScopeKind {
@@ -42,7 +42,7 @@ abstract class ScopeContext() extends ObservationDsl with ScopeContext.Core.Hold
       kind = kind,
       name = name,
       parent = Some(this),
-      observabilityContext = observabilityContext.createChild(kind, name)
+      observabilityContext = observabilityContext.createChild(this, kind, name)
     )
 
   protected def observability_Context: ObservabilityContext =

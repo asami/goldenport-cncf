@@ -16,7 +16,7 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan. 17, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngineAuthorizationFailureCommitSpec extends AnyWordSpec with Matchers with ConsequenceMatchers{
@@ -124,14 +124,12 @@ class ActionEngineAuthorizationFailureCommitSpec extends AnyWordSpec with Matche
       _unit_of_work = Some(uow)
   }
 
-  private def _testObservabilityContext(): ObservabilityContext = {
-    val id = ExecutionContextId.generate()
+  private def _testObservabilityContext(): ObservabilityContext =
     ObservabilityContext(
-      traceId = TraceId(id),
+      traceId = TraceId("action_engine", "authorization"),
       spanId = None,
-      correlationId = Some(CorrelationId(id))
+      correlationId = Some(CorrelationId("action_engine", "runtime"))
     )
-  }
 
   private final class InMemoryCommitRecorder extends CommitRecorder {
     private val buffer = scala.collection.mutable.ArrayBuffer.empty[String]

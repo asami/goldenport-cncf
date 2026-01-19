@@ -24,7 +24,7 @@ import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 19, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime {
@@ -521,12 +521,8 @@ object CncfRuntime {
     _exit_code(result)
   }
 
-  private def _print_response(res: Response): Unit = {
-    res match {
-      case Response.Scalar(value) => println(value.toString)
-      case other => println(other.toString)
-    }
-  }
+  private def _print_response(res: Response): Unit =
+    println(res.display)
 
   private def _print_operation_response(res: OperationResponse): Unit = {
     res match {

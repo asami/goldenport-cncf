@@ -25,7 +25,7 @@ import scala.util.control.NonFatal
 /*
  * @since   Jan.  1, 2026
  *  version Jan.  3, 2026
- * @version Jan. 18, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -159,7 +159,7 @@ object Component {
         kind = ScopeKind.Component,
         name = name,
         parent = Some(parent),
-        observabilityContext = parent.observabilityContext.createChild(ScopeKind.Component, name),
+        observabilityContext = parent.observabilityContext.createChild(parent, ScopeKind.Component, name),
         httpDriverOption = None
       )
       Context(

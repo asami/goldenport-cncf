@@ -182,6 +182,8 @@ Result / Event
 - CNCF relies on core UniversalId as the common identifier format across the execution and observability layers.
 - Observability uses CorrelationId (which extends UniversalId) to correlate requests, operations, messages, events, and jobs across a single causal flow.
 - CanonicalId is reserved for semantic/domain identity outside CNCF and MUST NOT be required by CNCF APIs.
+- Phase 2.8 removed the ExecutionContext-local UniversalId wrapper that existed as a Phase 2.6 bootstrap artifact; identifier correlation is now supplied solely via the ScopeContext → ObservabilityContext wiring, even before the action enters ExecutionContext.
+- Refer to `docs/design/id.md` for the canonical UniversalId policy, which remains the authoritative reference for EventId/EventType and all identifier semantics.
 
 ---
 

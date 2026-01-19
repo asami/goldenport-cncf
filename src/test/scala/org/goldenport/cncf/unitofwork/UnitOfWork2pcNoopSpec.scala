@@ -3,7 +3,7 @@ package org.goldenport.cncf.unitofwork
 import cats.{Id, ~>}
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, Command, ResourceAccess}
-import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, TraceId}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ObservabilityContext, RuntimeContext, TraceId}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.EventEngine
@@ -16,7 +16,7 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan. 17, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMatchers {
@@ -129,14 +129,12 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
       _unit_of_work = Some(uow)
   }
 
-  private def _testObservabilityContext(): ObservabilityContext = {
-    val id = ExecutionContextId.generate()
+  private def _testObservabilityContext(): ObservabilityContext =
     ObservabilityContext(
-      traceId = TraceId(id),
+      traceId = TraceId("unitofwork", "nop"),
       spanId = None,
-      correlationId = Some(CorrelationId(id))
+      correlationId = Some(CorrelationId("unitofwork", "runtime"))
     )
-  }
 
   private final class InMemoryCommitRecorder extends CommitRecorder {
     private val buffer = scala.collection.mutable.ArrayBuffer.empty[String]

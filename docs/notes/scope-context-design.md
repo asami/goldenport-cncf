@@ -50,8 +50,9 @@ enum ScopeKind {
 
 ### ObservabilityContext is attached, not owned
 
-ScopeContext carries ObservabilityContext, but does not interpret it.
-ObservabilityContext only provides correlation capability.
+ScopeContext carries an `ObservabilityContext` derived from its parent scope.
+Each scope owns the deterministic rules that sanitize labels, produce the next `TraceId`/`SpanId` pair, and promote a `CorrelationId` when a subsystem boundary is crossed.
+ObservabilityContext is therefore not an independently owned capability; it is a child of the scope and exists solely to expose correlation information.
 
 ```scala
 case class ScopeContext(
@@ -61,6 +62,8 @@ case class ScopeContext(
   observabilityContext: ObservabilityContext
 )
 ```
+
+This replaces the earlier Phase 2.6 ExecutionContext-local identifier wrapper (a quick-hack bootstrap artifact); Phase 2.8 introduces the permanent GlobalRuntimeContext → ScopeContext → ObservabilityContext wiring so identifiers live only in the scope hierarchy.
 
 ## Child Scopes
 
@@ -74,6 +77,15 @@ Convenience helpers such as `createActionScope` or `createServiceScope`
 are intentionally avoided.
 
 This preserves a single, uniform entry point and avoids policy creep.
+
+In Phase 2.8 the implementation ensures each child scope:
+
+- sanitizes subsystem/service/action names for observability labels,
+- derives the next `SpanId` (span kind is determined by `ScopeKind` plus the sanitized name),
+- propagates the parent `TraceId`,
+- and promotes a `CorrelationId` whenever a new subsystem scope is created.
+
+The `ScopeContext` hierarchy thus owns all identifier normalization logic instead of scattering it through ExecutionContext helpers.
 
 ## Attributes
 
