@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 11, 2026
+ * @version Jan. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientRequestNormalizationSpec
@@ -57,9 +57,7 @@ class ClientRequestNormalizationSpec
             req.service shouldBe Some("http")
             req.operation shouldBe operation
             req.arguments shouldBe List(Argument("path", path, None))
-            _property(req, "baseurl") shouldBe Some(
-              Property("baseurl", ClientConfig.DefaultBaseUrl, None)
-            )
+            _property(req, "baseurl") shouldBe None
             body match {
               case Some(value) =>
                 val property = _property(req, "data")
@@ -94,9 +92,7 @@ class ClientRequestNormalizationSpec
           req.arguments shouldBe List(
             Argument("path", "/admin/system/ping", None)
           )
-          _property(req, "baseurl") shouldBe Some(
-            Property("baseurl", ClientConfig.DefaultBaseUrl, None)
-          )
+          _property(req, "baseurl") shouldBe None
         case _ =>
           fail("expected successful normalization")
       }

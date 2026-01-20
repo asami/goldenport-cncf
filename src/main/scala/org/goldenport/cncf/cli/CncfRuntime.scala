@@ -17,6 +17,9 @@ import org.goldenport.protocol.{Argument, Property, Protocol, ProtocolEngine, Re
 import org.goldenport.datatype.{ContentType, MimeBody}
 import org.goldenport.protocol.operation.{OperationResponse, OperationRequest}
 import org.goldenport.protocol.spec.{RequestDefinition, ResponseDefinition}
+import org.goldenport.protocol.spec.ParameterDefinition
+import org.goldenport.schema.{Multiplicity, ValueDomain, XString}
+import org.goldenport.model.value.BaseContent
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 import org.goldenport.cncf.http.{FakeHttpDriver, Http4sHttpServer, HttpDriver, HttpExecutionEngine, HttpDriverFactory}
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
@@ -161,7 +164,7 @@ object CncfRuntime {
   def executeClient(args: Array[String]): Int = {
     val subsystem = buildSubsystem(mode = Some(RunMode.Client))
     val result = _client_component(subsystem).flatMap { component =>
-      parseClientArgs(args, Some(subsystem.configuration)).flatMap { req =>
+        parseClientArgs(args).flatMap { req =>
         _client_action_from_request(req).flatMap { action =>
           component.execute(action)
         }
@@ -182,7 +185,7 @@ object CncfRuntime {
   ): Int = {
     val subsystem = buildSubsystem(extraComponents, Some(RunMode.Client))
     val result = _client_component(subsystem).flatMap { component =>
-      parseClientArgs(args, Some(subsystem.configuration)).flatMap { req =>
+        parseClientArgs(args).flatMap { req =>
         _client_action_from_request(req).flatMap { action =>
           component.execute(action)
         }
@@ -560,30 +563,22 @@ object CncfRuntime {
   // }
 
   def parseClientArgs(
-    args: Array[String],
-    configuration: Option[ResolvedConfiguration] = None
+    args: Array[String]
   ): Consequence[Request] = {
     if (args.isEmpty) {
       Consequence.failure("client command is required")
     } else {
-      _extract_baseurl(args.toIndexedSeq).flatMap {
-        case (baseurlopt, rest0) =>
-          _parse_client_command(rest0).map {
-            case (operation, path, clientProperties) =>
-              val baseUrlFromConfig = configuration.flatMap(ClientConfig.baseUrl)
-              val baseurl = baseurlopt
-                .orElse(baseUrlFromConfig)
-                .getOrElse(ClientConfig.DefaultBaseUrl)
-              Request.of(
-                component = "client",
-                service = "http",
-                operation = operation,
-                arguments = _client_arguments(path),
-                switches = Nil,
-                properties = _client_properties(baseurl) ++ clientProperties
-              )
-          }
-        }
+      _parse_client_command(args.toIndexedSeq).map {
+        case (operation, path, clientProperties) =>
+          Request.of(
+            component = "client",
+            service = "http",
+            operation = operation,
+            arguments = _client_arguments(path),
+            switches = Nil,
+            properties = clientProperties
+          )
+      }
     }
   }
 
@@ -808,12 +803,22 @@ object CncfRuntime {
     }
   }
 
+  private val _client_http_request_definition: RequestDefinition = {
+    val base = RequestDefinition.curlLike
+    val baseurlParameter = ParameterDefinition(
+      content = BaseContent.simple("baseurl"),
+      kind = ParameterDefinition.Kind.Property,
+      domain = ValueDomain(datatype = XString, multiplicity = Multiplicity.ZeroOne)
+    )
+    RequestDefinition(base.parameters :+ baseurlParameter)
+  }
+
   private def _parse_client_http(
     operation: String,
     params: Seq[String]
   ): Consequence[(String, List[Property])] = {
     val args = Array(operation) ++ params.toArray
-    Request.parseArgs(RequestDefinition.curlLike, args).flatMap { parsed =>
+    Request.parseArgs(_client_http_request_definition, args).flatMap { parsed =>
       parsed.arguments.headOption match {
         case Some(pathArgument) =>
           Consequence.success((_normalize_path(pathArgument.value.toString), parsed.properties))
@@ -821,30 +826,6 @@ object CncfRuntime {
           Consequence.failure("client http path is required")
       }
     }
-  }
-
-  private def _extract_baseurl(
-    args: Seq[String]
-  ): Consequence[(Option[String], Seq[String])] = {
-    var baseurl: Option[String] = None
-    val buffer = Vector.newBuilder[String]
-    var i = 0
-    while (i < args.length) {
-      val arg = args(i)
-      if (arg.startsWith("--baseurl=")) {
-        baseurl = Some(arg.stripPrefix("--baseurl="))
-      } else if (arg == "--baseurl") {
-        if (i + 1 >= args.length) {
-          return Consequence.failure("client --baseurl requires a value")
-        }
-        baseurl = Some(args(i + 1))
-        i += 1
-      } else {
-        buffer += arg
-      }
-      i += 1
-    }
-    Consequence.success((baseurl, buffer.result()))
   }
 
   private def _normalize_path(path: String): String = {
@@ -893,11 +874,6 @@ object CncfRuntime {
       case _ => Consequence.failure("client http operation must be get or post")
     }
   }
-
-  private def _client_properties(
-    baseurl: String
-  ): List[Property] =
-    List(Property("baseurl", baseurl, None))
 
   private def _client_arguments(
     path: String
