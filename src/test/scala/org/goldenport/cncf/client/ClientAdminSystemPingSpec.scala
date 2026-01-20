@@ -14,6 +14,7 @@ import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.cncf.context.{ExecutionContext, ObservabilityContext, RuntimeContext, ScopeContext}
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.http.{ContentType, HttpRequest, HttpResponse, HttpStatus, MimeType, StringResponse}
@@ -32,7 +33,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 18, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientAdminSystemPingSpec

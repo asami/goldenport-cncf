@@ -6,7 +6,8 @@ import java.nio.file.{Files, Path, Paths}
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
 import org.goldenport.configuration.{Configuration, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
-import org.goldenport.cncf.client.{ClientComponent, GetQuery, PostCommand}
+import org.goldenport.cncf.component.builtin.client.ClientComponent
+import org.goldenport.cncf.client.{GetQuery, PostCommand}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.component.{Component, ComponentInit}
 import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig}

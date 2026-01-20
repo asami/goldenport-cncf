@@ -184,6 +184,7 @@ Result / Event
 - CanonicalId is reserved for semantic/domain identity outside CNCF and MUST NOT be required by CNCF APIs.
 - Phase 2.8 removed the ExecutionContext-local UniversalId wrapper that existed as a Phase 2.6 bootstrap artifact; identifier correlation is now supplied solely via the ScopeContext → ObservabilityContext wiring, even before the action enters ExecutionContext.
 - Refer to `docs/design/id.md` for the canonical UniversalId policy, which remains the authoritative reference for EventId/EventType and all identifier semantics.
+- Final OperationResponse emission now goes through the Presentable contract locked in `docs/notes/phase-2.8-infrastructure-hygiene.md` (see Purpose-Aware String Rendering and A-3); CLI stdout uses `Presentable.print` for user results while diagnostics remain on `display`/`show`.
 
 ---
 

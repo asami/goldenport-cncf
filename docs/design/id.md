@@ -24,6 +24,8 @@ IDs must support:
 - log correlation
 - AI-assisted inspection
 
+Observability identifiers that reach CLI adapters are rendered through the Presentable stdout/stderr contract locked in `docs/notes/phase-2.8-infrastructure-hygiene.md#purpose-aware-string-rendering-candidate` (see A-3 for the Phase 2.8 policy).
+
 while remaining **non-semantic for program logic**.
 
 ---

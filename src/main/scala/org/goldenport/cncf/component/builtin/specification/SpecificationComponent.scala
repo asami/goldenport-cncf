@@ -1,4 +1,4 @@
-package org.goldenport.cncf.component.specification
+package org.goldenport.cncf.component.builtin.specification
 
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
@@ -21,7 +21,7 @@ import org.goldenport.protocol.spec as spec
 
 /*
  * @since   Jan.  8, 2026
- * @version Jan. 17, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpecificationComponent() extends Component {

@@ -32,9 +32,13 @@ without introducing new features or semantic changes.
 
 ## Subsystem Hygiene
 
-- Reorganize HelloWorld subsystem structure
-- Clarify placement and role of built-in Components
-- Explicitly include AdminComponent placement as an infrastructure concern
+- [x] Reorganize HelloWorld subsystem structure
+  - Reorganize HelloWorld subsystem structure
+  - Clarify placement and role of built-in Components
+  - Explicitly include AdminComponent placement as an infrastructure concern
+- [x] Ping / HelloWorld special-casing audit completed; removal plan recorded in `docs/journal/2026/01/ping-specialcasing-removal-proposal.md`
+  - Spec-backed confirmation complete; canonical resolver guarantees admin.system.ping routing.
+  - Legacy `_ping_action_` shortcut removed.
 
 ## OpenAPI Projection Hygiene
 
@@ -70,6 +74,11 @@ without introducing new features or semantic changes.
 Phase 2.8 also considers introducing a structured vocabulary for
 purpose-aware string rendering.
 
+A new hygiene item (A-3) now locks the CLI policy that stdout uses
+`Presentable.print` for final results and stderr uses `Presentable.display`/`show`
+for diagnostics so that the execution surface matches the purposes provided
+by `Presentable`.
+
 The intent is to replace ad-hoc `toString` usage with an explicit,
 context-aware rendering model that distinguishes output purposes
 such as logging, interactive display, debugging, and embedding.
@@ -89,6 +98,11 @@ No runtime wiring or semantic changes are introduced in Phase 2.8.
 - CLI and runtime outputs now flow through Presentable `display`/`print` paths: script execution prints `Response.display`, `_print_response` uses `res.display`, and the HTTP visitor logs `HttpResponse.display` rather than raw `toString`, so user-facing code no longer relies on opaque stringification.
 - The rendering path keeps `Action`, `ActionCall`, and `Response` semantics aligned with the purpose-aware vocabulary, removing any lingering `toString` dependence in CLI output.
 - A focused inspection of CLI/runtime adapters surfaces only explicit metadata formatting (file paths, headers), confirming the A-2 normalization is in place.
+
+### A-3 CLI Output Policy (Phase 2.8)
+
+- Final CLI results now arrive on stdout via `Presentable.print`, and diagnostics/errors stay on stderr via `Presentable.display`/`show`; this policy is the canonical model for CLI adapters.
+- The CLI output policy is locked for Phase 2.8 and must not be extended; any future refinements belong in later phases and must reference this canonical implementation.
 
 See also:
 - docs/notes/purpose-aware-string-rendering.md
@@ -246,6 +260,7 @@ The introduction of a runtime `ScopeContext`–based logging configuration mecha
 
 - Semantic Configuration / Propagation, Configuration ownership realignment, and Canonical documentation consolidation are DONE within Phase 2.8 and documented via `configuration-model.md#configuration-propagation-model`.
 - Purpose-Aware String Rendering is complete for Phase 2.8 and must not be extended within this phase; the Presentable-based rendering model is locked in.
+- CLI Output Policy is complete and locked for Phase 2.8: stdout uses `Presentable.print`, stderr remains on `display`/`show`, and CLI adapters must reference this canonical section.
 - CLI Exit Policy Hygiene is complete: `sys.exit` is restricted to the CLI adapter with `--force-exit`, all other layers return exit codes.
 - Phase 2.8 remains **OPEN** because the remaining hygiene items in the table are still marked PARTIAL or OPEN and have not been resolved or re-deferred.
 
@@ -852,6 +867,9 @@ This checklist summarizes the explicit implementation and documentation tasks re
 - [x] **Purpose-Aware String Rendering** — DONE
   - Implementation completed: Presentable-based rendering is now consistently used for Action, ActionCall, and Response; CLI output no longer relies on toString.
 
+- [x] **CLI Output Policy** — DONE (Phase 2.8 locked)
+  - Final CLI results use `Presentable.print` via stdout; diagnostics/errors remain on stderr via `Presentable.display`/`show`, and the policy is locked for this phase.
+
 - [x] **CLI Hygiene** — DONE (CLI exit policy enforced)
   - Reorganize CLI structure (including HelloWorld CLI).
   - Clean up file layout related to CLI.
@@ -915,6 +933,58 @@ This checklist summarizes the explicit implementation and documentation tasks re
 - [ ] **Review Deferred and Open Items**
   - Revisit all items marked OPEN or PARTIAL in the tracking table.
   - Explicitly close, re-defer, or document rationale for any remaining gaps.
+
+### Component-related Pending Concerns (tracking list)
+
+The following items are tracked as **OPEN** concerns.
+Each item must be explicitly decided and then checked off.
+
+- [x] Built-in component namespace taxonomy (`component.builtin.*` scope boundary)
+  - Decision: Built-in = CNCF runtime infrastructure components only
+  - Notes: admin / specification / client are builtin; demo/helloworld are not
+  - Phase 2.8 Decision: Phase 2.8 makes no further changes; no implementation in this phase.
+  - Next Phase Development Item: See Next Phase Development Items §8
+    (Component Repository Priority / Override Rules).
+
+- [x] Component / Service / Operation visibility level
+      (public / internal / meta)
+  - Decision: Visibility and authorization are sourced from component metadata
+              (`META-INF/cncf/component.conf`) and interpreted by CNCF.
+  - Notes:
+    - Phase 2.8 fixes only the source-of-truth and ownership boundary.
+    - No enforcement, policy evaluation, or runtime behavior is implemented in this phase.
+  - Phase 2.8 Decision: Visibility / authorization semantics are explicitly out of scope
+    for this phase and are not partially implemented.
+  - Next Phase Development Item: See Next Phase Development Items §9
+    (Visibility and Authorization Semantics).
+
+- [x] Selector UX / exception handling
+      (e.g. `ping`, admin paths, alias / shortcut policy)
+  - Decision: Phase 2.8 does not implement additional selector UX or exception handling features.
+  - Notes: Identify any special-casing and decide whether it is allowed
+    and where such logic is permitted.
+  - Phase 2.8 Decision: Deferred; Phase 2.8 does not implement selector UX/exception handling changes.
+  - Next Phase Development Item: See Next Phase Development Items §6
+    (Resolver UX Extensions).
+
+- [x] Component discovery and repository boundary
+      (builtin vs user vs external; collision behavior)
+  - Decision: Phase 2.8 does not implement repository boundary or collision behavior changes.
+  - Notes: Ordering / shadowing / override behavior.
+    Closely related to repository priority rules.
+  - Phase 2.8 Decision: Deferred; no implementation in this phase.
+  - Next Phase Development Item: See Next Phase Development Items §8
+    (Component Repository Priority / Override Rules).
+
+- [x] Component lifecycle extension candidates
+      (beyond `initialize`; warm / cold; state)
+  - Decision: Explicit non-goal for Phase 2.8.
+  - Notes: Tracked as a future development candidate only.
+  - Phase 2.8 Decision: Not implemented in Phase 2.8.
+  - Next Phase Development Item: See Next Phase Development Items §10
+    (Component Lifecycle and State Model).
+
+- Reference: `docs/journal/2026/01/ping-specialcasing-removal-proposal.md` is the canonical record for resolving ping / HelloWorld special-casing and tracking the planned cleanup.
 
 ---
 
@@ -1043,3 +1113,41 @@ To be designed based on accumulated real usage and conflicts:
   - No speculative priority or override rules defined in Phase 2.8.
   - Requires multiple repositories and concrete override scenarios.
   - Implementation and policy deferred until Phase 3.0+ when sufficient real-world data is available.
+
+---
+
+### 9. Visibility and Authorization Semantics
+
+This item defines the formal semantics and enforcement model for
+component/service/operation visibility and authorization.
+
+Scope includes:
+- Formal meaning of `public / internal / meta` visibility levels.
+- Authorization responsibility split (metadata vs enforcement).
+- Runtime behavior on visibility or authorization violations
+  (e.g. NotFound vs Forbidden vs Rejected).
+- Application to CLI, HTTP, and other execution surfaces.
+
+Notes:
+- Phase 2.8 establishes metadata as the single source of truth only.
+- OpenAPI projection is a derivative concern and must follow
+  the finalized visibility/authorization semantics.
+
+---
+
+### 10. Component Lifecycle and State Model
+
+This item defines future extensions to the component execution lifecycle
+beyond the minimal Phase 2.8 contract.
+
+Scope includes:
+- Lifecycle phases beyond `initialize`
+  (warm-up / cold-start / shutdown)
+- Component state ownership and persistence boundaries
+- Interaction with RuntimeScopeContext and ScopeContext hierarchy
+- Impact on CLI, server, and embedded execution modes
+
+Notes:
+- Explicit non-goal for Phase 2.8
+- Requires semantic expansion of the execution model
+- Tracked as a standalone next-phase development item

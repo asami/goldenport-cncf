@@ -9,6 +9,7 @@ import org.goldenport.cncf.component.{Component, ComponentId, ComponentCreate, C
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.Protocol
 import org.goldenport.cncf.config.ClientConfig
@@ -27,7 +28,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 17, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientComponentSpec

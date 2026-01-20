@@ -3,9 +3,9 @@ package org.goldenport.cncf.subsystem
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig}
 import org.goldenport.cncf.component.ComponentCreate
-import org.goldenport.cncf.client.ClientComponent
-import org.goldenport.cncf.component.admin.AdminComponent
-import org.goldenport.cncf.component.specification.SpecificationComponent
+import org.goldenport.cncf.component.builtin.admin.AdminComponent
+import org.goldenport.cncf.component.builtin.client.ClientComponent
+import org.goldenport.cncf.component.builtin.specification.SpecificationComponent
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.{FakeHttpDriver, UrlConnectionHttpDriver}
 import org.goldenport.cncf.context.GlobalRuntimeContext
@@ -19,7 +19,7 @@ import org.goldenport.protocol.spec as spec
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 18, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {

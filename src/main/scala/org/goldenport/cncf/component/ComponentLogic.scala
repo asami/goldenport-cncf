@@ -16,7 +16,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 
 /*
  * @since   Jan.  3, 2026
- * @version Jan. 18, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -32,7 +32,8 @@ case class ComponentLogic(
     component.protocolLogic.makeOperationRequest(args)
 
   def makeOperationRequest(request: Request): Consequence[OperationRequest] =
-    _ping_action_(request).getOrElse(component.protocolLogic.makeOperationRequest(request))
+//    _ping_action_(request).getOrElse(component.protocolLogic.makeOperationRequest(request))
+    component.protocolLogic.makeOperationRequest(request)
 
   def makeStringOperationResponse(res: OperationResponse): Consequence[String] =
     component.protocolLogic.makeStringOperationResponse(res)
@@ -68,17 +69,17 @@ case class ComponentLogic(
     ExecutionContext.withRuntimeContext(base, runtime)
   }
 
-  private def _ping_action_(
-    request: Request
-  ): Option[Consequence[OperationRequest]] = {
-    val isping =
-      request.service.contains("admin.system") && request.operation == "ping"
-    if (isping) {
-      Some(Consequence.success(ComponentLogic.PingAction(request)))
-    } else {
-      None
-    }
-  }
+  // private def _ping_action_(
+  //   request: Request
+  // ): Option[Consequence[OperationRequest]] = {
+  //   val isping =
+  //     request.service.contains("admin.system") && request.operation == "ping"
+  //   if (isping) {
+  //     Some(Consequence.success(ComponentLogic.PingAction(request)))
+  //   } else {
+  //     None
+  //   }
+  // }
 
   private def _componentRuntimeContext(
     uow: UnitOfWork,

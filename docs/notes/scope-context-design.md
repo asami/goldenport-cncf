@@ -63,7 +63,7 @@ case class ScopeContext(
 )
 ```
 
-This replaces the earlier Phase 2.6 ExecutionContext-local identifier wrapper (a quick-hack bootstrap artifact); Phase 2.8 introduces the permanent GlobalRuntimeContext → ScopeContext → ObservabilityContext wiring so identifiers live only in the scope hierarchy.
+This replaces the earlier Phase 2.6 ExecutionContext-local identifier wrapper (a quick-hack bootstrap artifact); Phase 2.8 introduces the permanent GlobalRuntimeContext → ScopeContext → ObservabilityContext wiring so identifiers live only in the scope hierarchy. CLI adapters ultimately render these scope-derived values via the Presentable stdout/stderr policy captured in `docs/notes/phase-2.8-infrastructure-hygiene.md#purpose-aware-string-rendering-candidate`.
 
 ## Child Scopes
 

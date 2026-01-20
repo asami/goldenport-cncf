@@ -1,4 +1,4 @@
-package org.goldenport.cncf.component.admin
+package org.goldenport.cncf.component.builtin.admin
 
 import cats.data.NonEmptyVector
 import java.nio.file.Paths
@@ -25,7 +25,7 @@ import org.goldenport.protocol.spec as spec
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 17, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
