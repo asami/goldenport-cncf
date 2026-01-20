@@ -1,4 +1,4 @@
-package org.goldenport.cncf.client
+package org.goldenport.cncf.component.builtin.client
 
 import cats.{Id, ~>}
 import org.goldenport.Consequence
@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 11, 2026
- * @version Jan. 20, 2026
+ * @version Jan. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 class ProcedureActionCallSpec

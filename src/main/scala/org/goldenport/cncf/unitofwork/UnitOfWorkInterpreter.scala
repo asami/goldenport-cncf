@@ -4,7 +4,6 @@ import cats.free.Free
 import cats.~>
 import cats.Id
 import org.goldenport.{Consequence, Conclusion, ConsequenceT}
-import org.goldenport.cncf.client.{ClientHttpActionCall, ClientHttpGetCall, ClientHttpPostCall}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.http.HttpRequest
 import org.goldenport.protocol.operation.OperationResponse
@@ -17,7 +16,7 @@ import org.goldenport.protocol.operation.OperationResponse
  */
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 11, 2026
+ * @version Jan. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -47,18 +46,6 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   def executeDirect[A](op: UnitOfWorkOp[A]): A =
     execute(op)
 
-  def execute(call: ClientHttpActionCall): org.goldenport.http.HttpResponse = call match {
-    case ClientHttpGetCall(_, request) =>
-      execute(UnitOfWorkOp.HttpGet(_path_(request)))
-    case ClientHttpPostCall(_, request) =>
-      execute(UnitOfWorkOp.HttpPost(_path_(request), _body_(request), _headers_(request)))
-  }
-
-  def executeUowM(call: ClientHttpActionCall): ExecUowM[OperationResponse] = {
-    val response = execute(call)
-    ConsequenceT.liftF(Free.pure(OperationResponse.Http(response)))
-  }
-
   private def execute[A](op: UnitOfWorkOp[A]): A = op match {
     case UnitOfWorkOp.HttpGet(path) =>
       _http_driver_().get(path)
@@ -78,17 +65,6 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       // TODO: delegate to DataStore
       ()
   }
-
-  private def _path_(request: HttpRequest): String =
-    request.path.asString
-
-  private def _body_(request: HttpRequest): Option[String] = {
-    val _ = request
-    None
-  }
-
-  private def _headers_(request: HttpRequest): Map[String, String] =
-    request.header.asMap.map { case (k, v) => k -> v.toString }
 
   private def _http_driver_(): HttpDriver =
     uow.http_driver.getOrElse {

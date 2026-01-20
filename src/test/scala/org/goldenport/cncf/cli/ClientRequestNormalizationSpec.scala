@@ -5,6 +5,7 @@ import java.nio.file.Files
 
 import org.goldenport.bag.{Bag, TextBag}
 import org.goldenport.cncf.config.ClientConfig
+import org.goldenport.datatype.MimeBody
 import org.goldenport.protocol.{Argument, Property, Request}
 import org.goldenport.test.matchers.ConsequenceMatchers
 import org.scalatest.GivenWhenThen
@@ -61,13 +62,13 @@ class ClientRequestNormalizationSpec
             )
             body match {
               case Some(value) =>
-                val property = _property(req, "-d")
-                property.map(_.name) shouldBe Some("-d")
+                val property = _property(req, "data")
+                property.map(_.name) shouldBe Some("data")
                 property.foreach { p =>
                   _bag_text(p.value) shouldBe Some(value)
                 }
               case None =>
-                _property(req, "-d") shouldBe None
+                _property(req, "data") shouldBe None
             }
           case _ =>
             fail("expected successful normalization")
@@ -114,14 +115,14 @@ class ClientRequestNormalizationSpec
         When("the arguments are normalized into a Request")
         request should be_success
 
-        Then("the -d property is a Bag created from the file content")
+        Then("the data property is a Bag created from the file content")
         request match {
           case org.goldenport.Consequence.Success(req) =>
-            val property = _property(req, "-d")
-            property.map(_.name) shouldBe Some("-d")
-            property.foreach { p =>
-              _bag_text(p.value) shouldBe Some("pong")
-            }
+          val property = _property(req, "data")
+          property.map(_.name) shouldBe Some("data")
+          property.foreach { p =>
+            _bag_text(p.value) shouldBe Some("pong")
+          }
           case _ =>
             fail("expected successful normalization")
         }
@@ -163,6 +164,22 @@ class ClientRequestNormalizationSpec
     value match {
       case t: TextBag => Some(t.toText)
       case s: String => Some(s)
+      case MimeBody(_, bag) => _bag_to_text(bag)
+      case bag: Bag => _bag_to_text(bag)
       case _ => None
     }
+
+  private def _bag_to_text(
+    bag: Bag
+  ): Option[String] = {
+    val in = bag.openInputStream()
+    try {
+      val bytes = in.readAllBytes()
+      Some(new String(bytes, StandardCharsets.UTF_8))
+    } catch {
+      case _: Exception => None
+    } finally {
+      in.close()
+    }
+  }
 }

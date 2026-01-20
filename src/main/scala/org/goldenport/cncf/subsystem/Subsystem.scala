@@ -2,8 +2,6 @@ package org.goldenport.cncf.subsystem
 
 import org.goldenport.Consequence
 import org.goldenport.http.{HttpRequest, HttpResponse}
-import org.goldenport.protocol.Request
-import org.goldenport.protocol.Response
 import org.goldenport.protocol.handler.egress.Egress
 import org.goldenport.protocol.spec.{OperationDefinition, ServiceDefinition}
 import org.goldenport.record.Record
@@ -19,6 +17,8 @@ import org.goldenport.cncf.component.ComponentLocator.NameLocator
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.configuration.ResolvedConfiguration
+import org.goldenport.datatype.{ContentType, MimeBody}
+import org.goldenport.protocol.{Argument, Property, Request, Response}
 
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.cli.RunMode
@@ -26,7 +26,7 @@ import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 19, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -300,16 +300,17 @@ final class Subsystem(
         "HTTP ingress not configured"
       )
       request0 <- ingress.encode(operation, req)
-      request = request0.component match {
-        case Some(_) => request0
+      request1 = _request_with_body_argument(request0, req)
+      request = request1.component match {
+        case Some(_) => request1
         case None =>
           Request.of(
             component = component.name,
             service = service.name,
             operation = operation.name,
-            arguments = request0.arguments,
-            switches = request0.switches,
-            properties = request0.properties
+            arguments = request1.arguments,
+            switches = request1.switches,
+            properties = request1.properties
           )
       }
       response <- component.service.invokeRequest(request)
@@ -373,6 +374,57 @@ final class Subsystem(
     id: ComponentId
   ): ComponentInstanceId =
     ComponentInstanceId.default(id)
+
+  private def _request_with_body_argument(
+    request: Request,
+    req: HttpRequest
+  ): Request =
+    _multipart_properties(req.form) match {
+      case Some(properties) =>
+        _request_with_properties(request, properties)
+      case None =>
+        _body_argument(req) match {
+          case Some(argument) =>
+            request.copy(arguments = request.arguments :+ argument)
+          case None =>
+            request
+        }
+    }
+
+  private def _multipart_properties(form: Record): Option[List[Property]] = {
+    val properties = form.asMap.toList.collect {
+      case (name, body: MimeBody) => Property(name, body, None)
+    }
+    if (properties.isEmpty) None else Some(properties)
+  }
+
+  private def _request_with_properties(
+    request: Request,
+    properties: List[Property]
+  ): Request =
+    if (properties.isEmpty) request
+    else request.copy(properties = request.properties ++ properties)
+
+  private def _body_argument(req: HttpRequest): Option[Argument] =
+    req.body.map { bag =>
+      Argument(
+        name = "",
+        value = MimeBody(_content_type(req.header), bag)
+      )
+    }
+
+  private def _content_type(header: Record): ContentType =
+    _header_value(header, "content-type")
+      .map(ContentType.parse)
+      .getOrElse(ContentType.OCTET_STREAM)
+
+  private def _header_value(
+    header: Record,
+    key: String
+  ): Option[String] =
+    header.asMap.collectFirst {
+      case (name, value) if name.equalsIgnoreCase(key) => value.toString
+    }
 }
 
 object Subsystem {

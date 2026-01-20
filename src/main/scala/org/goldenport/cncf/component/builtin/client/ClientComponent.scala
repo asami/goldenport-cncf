@@ -3,7 +3,6 @@ package org.goldenport.cncf.component.builtin.client
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
-import org.goldenport.cncf.client.{GetQuery, PostCommand}
 import org.goldenport.cncf.component.{Component, ComponentInit}
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.ComponentId
@@ -23,7 +22,7 @@ import java.nio.charset.StandardCharsets
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 20, 2026
+ * @version Jan. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ClientComponent() extends Component {

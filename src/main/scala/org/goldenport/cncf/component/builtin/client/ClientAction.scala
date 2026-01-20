@@ -1,4 +1,4 @@
-package org.goldenport.cncf.client
+package org.goldenport.cncf.component.builtin.client
 
 import org.goldenport.cncf.action.{Action, ActionCall, Command, FunctionalActionCall, OperationCallHttpPart, Query, ResourceAccess}
 import org.goldenport.cncf.unitofwork.ExecUowM
@@ -11,7 +11,7 @@ import org.goldenport.bag.TextBag
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 17, 2026
+ * @version Jan. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class HttpCommand(

@@ -40,20 +40,66 @@ without introducing new features or semantic changes.
   - Spec-backed confirmation complete; canonical resolver guarantees admin.system.ping routing.
   - Legacy `_ping_action_` shortcut removed.
 
-## OpenAPI Projection Hygiene
+## OpenAPI Projection Hygiene (Phase 2.8 TODO)
 
-- In Phase 2.6, `/spec/current/openapi(.json)` is confirmed to execute correctly via the standard Component / Subsystem execution path.
-- The current OpenAPI output intentionally includes only minimal domain APIs (e.g., admin/system/ping).
-- The following items are known, accepted hygiene gaps and are explicitly deferred to Phase 2.8:
-  1. Definition of OpenAPI projection scope:
-     - domain APIs only
-     - inclusion/exclusion of admin APIs
-     - treatment of spec/meta APIs
-  2. Policy for including Spec APIs themselves in OpenAPI output (self-description / "OpenAPI of OpenAPI").
-  3. Handling of recursive or self-referential OpenAPI generation.
-  4. Relationship between API visibility (public / internal / meta) and OpenAPI output.
-- These are not bugs or regressions; they are unresolved policy decisions.
-- Phase 2.6 does not attempt to resolve these items.
+### Problem Context (Why This Is a Phase 2.8 Issue)
+
+The OpenAPI projection was flagged during Phase 2.6 review as **infrastructurally ambiguous**, not functionally broken.
+
+The following concerns were identified:
+
+- The OpenAPI output existed, but its **intended scope was undefined**:
+  it was unclear whether the projection represented:
+  - domain execution APIs,
+  - admin / infrastructure APIs, or
+  - meta / specification endpoints.
+
+- There was no explicit rule stating **which components or operations
+  are eligible** for OpenAPI exposure in the current phase.
+
+- The relationship between:
+  - Resolver visibility (domain vs admin),
+  - execution surface (CLI / HTTP),
+  - and OpenAPI projection
+  was undocumented and therefore non-reviewable.
+
+- As a result, reviewers could not determine whether the existing
+  OpenAPI output was:
+  - correct by design,
+  - incomplete but acceptable for the phase, or
+  - accidentally exposing unintended endpoints.
+
+This ambiguity is the sole reason OpenAPI Projection Hygiene is tracked
+in Phase 2.8.
+
+Phase 2.8 does **not** attempt to expand OpenAPI capabilities.
+Its goal is to make the **current projection explainable,
+reviewable, and non-accidental**.
+
+This section tracks concrete TODO items required to complete
+OpenAPI Projection Hygiene in Phase 2.8.
+
+- [x] ### TODO-1.1 Current OpenAPI Output Inventory
+  - Decision (Phase 2.8):
+    - This inventory task is **not executed in Phase 2.8**.
+    - Reason: OpenAPI visibility and eligibility depend on
+      Component visibility semantics, which are not defined in this phase.
+  - Disposition:
+    - Explicitly deferred.
+    - Tracked as a future development item.
+  - Next Phase Development Item:
+    - §5 OpenAPI Projection Expansion Policy
+
+- [x] ### TODO-1.2 Define "Minimal OpenAPI" for Phase 2.8
+- Explicitly document what is included in Phase 2.8 OpenAPI output.
+- Explicitly document what is excluded.
+- This definition must be explainable and reviewable as Phase 2.8 scope.
+
+- [x] ### TODO-1.3 Implementation Consistency Check
+- Verify that current OpenAPI output matches the Phase 2.8 definition.
+- If inconsistencies exist, either:
+  - fix the implementation, or
+  - record them as remaining TODOs.
 
 ## CLI Exit Policy Hygiene
 
@@ -112,31 +158,64 @@ See also:
 - No semantic changes
 - No new features
 
-## Pending Item: curl-Compatible Client Parameter Specification
+## CNCF-side ad-hoc code to DELETE
 
-The curl-compatible client parameter specification discussed during client feature development
-is formally deferred to **Phase 2.8 (Infrastructure Hygiene)**.
+This is a Phase 2.8 design-freeze list: the design is fixed, the implementation is still pending cleanup.
 
-### Scope
+1. ### CncfRuntime._extract_body
+   - **What it does**: Manually scans client CLI args for `-d` / `-d=` to build a `Bag`, peeks ahead for the value, and pushes everything else back into the remaining argument vector.
+   - **Why redundant**: `ArgsIngress` in core already parses `-d` / `--body` into `MimeBody` / `Bag` pairs and surfaces them via `Argument` / `Property`, so this duplication only makes the client parser brittle and bypasses the richer metadata that the core ingress maintains (e.g., content type).
 
-- Normalize client CLI parameters based on curl conventions (e.g. `-X`, `-d`, headers, baseurl).
-- Treat `-d @file` inputs as **Bag** at Request construction time.
-- Align Request property/argument structure with future RestIngress behavior.
-- Do NOT introduce ad-hoc shortcuts or emulator-only semantics.
+2. ### CncfRuntime._extract_baseurl
+   - **What it does**: Scans for `--baseurl` / `--baseurl=` to produce an override and strips it from the remainder tokens.
+   - **Why redundant**: Core `ArgsIngress` can already represent request-level metadata like base URLs as `Property` values, so CNCF’s helper only duplicates a single flag and prevents the canonical parser from owning that surface.
 
-### Rationale
+3. ### CncfRuntime._client_body_from_request / _client_properties
+   - **What it does**: Extracts the `"-d"` property, explicitly maps it to a `Bag` via `Bag.text` / `Bag.binary`, and then builds new `Property` entries before the HTTP action is launched.
+   - **Why redundant**: Core ingress already provides `MimeBody` instances through `Property` / `Argument`; reconstructing the bag here duplicates mime handling and bypasses the canonical semantics embedded in `MimeBody`.
 
-- The specification affects CLI ingress, Request construction, and ClientComponent contracts.
-- Premature fixation would risk inconsistency with RestIngress and HTTP semantics.
-- Deferring allows validation against real client/server round-trip behavior.
+4. ### CncfRuntime._parse_client_command / _parse_client_path
+   - **What it does**: Inspects the remaining args, infers `post` when a body is present and `get` otherwise, then manually builds the `Request` args and properties for HTTP execution.
+   - **Why redundant**: The core parser already determines the method/operation names via the service selector and the available HTTP bodies; CNCF’s heuristic duplicates that logic and short-circuits the ingress that should be authoritative.
 
-### Status
+5. ### Subsystem._request_with_body_argument and related helpers
+   - **What it does**: Converts multipart form data into `Property` entries and single-body bodies into synthetic `Argument`s whose values are `MimeBody` objects recreated by re-parsing `content-type` headers.
+   - **Why redundant**: Core ingress/Args already yields `MimeBody` instances when it constructs `Argument`s/`Property`s; re-parsing headers and recasting bags here duplicates that work and risks diverging metadata such as charset.
 
-- Identified
-- Deferred
-- Not implemented
+6. ### Client-side HttpRequest construction logic
+   - **What it does**: The client action builder manually calls `HttpRequest.fromUrl`, reconstructing headers and bodies instead of reusing the canonical argument/property flow produced by the core parser.
+   - **Why redundant**: Core `ArgsIngress` already transforms arguments and properties into `OperationRequest`s that represent HTTP semantics; rebuilding the `HttpRequest` in CNCF bypasses that canonical path and introduces duplicative logic.
 
-This item MUST be revisited before Phase 2.8 completion.
+### Checklist (no code changes yet)
+1. Remove `_extract_body` / `_extract_baseurl` in favor of core `ArgsIngress` properties.
+2. Drop `_client_body_from_request` / `_client_properties` so the parser consumes the `Property` values provided by core ingress.
+3. Eliminate the client parser’s body-based operation inference, letting the core selector dictate HTTP method.
+4. Remove Subsystem body/multipart injection helpers and rely on `ArgsIngress` / `MimeBody` propagation.
+5. Replace client-side `HttpRequest` builders with the core ingress flow so HttpRequest reaches the server via the canonical pipeline.
+
+## PUT / POST Protocol Connectivity (Phase 2.8 TODO)
+
+This item is not about full curl compatibility.
+It addresses missing or broken PUT / POST protocol connectivity.
+
+- [ ] ### TODO-2.1 Verify PUT / POST Reach ActionCall
+- Confirm that PUT and POST requests reach ActionCall:
+  - via HTTP
+  - via CLI client
+- Confirm that request bodies are non-empty when expected.
+
+- [ ] ### TODO-2.2 Verify Body Propagation
+- Ensure request body flows correctly through:
+  Request → ActionCall
+- Body content must not be lost or rewritten.
+
+- [ ] ### TODO-2.3 External File as Request Body
+- Enable supplying an external file as request body via CLI client.
+- Must work at demo and normal usage level.
+
+- [ ] ### TODO-2.4 Minimal Demo Confirmation
+- Confirm that a non-trivial POST/PUT demo actually works.
+- The demo must be visually verifiable.
 
 ## Deferred Development Items from Phase 2.6 / Stage 5
 
@@ -239,6 +318,23 @@ The introduction of a runtime `ScopeContext`–based logging configuration mecha
 ### Status
 
 - **DONE** — Logged configuration, driver selection, and observability identifier normalization are locked via the GlobalRuntimeContext → ScopeContext → ObservabilityContext wiring introduced in Phase 2.8. Runtime logging backend selection and TraceId/SpanId/CorrelationId normalization happen during the same initialization path, so there is no longer a separate ExecutionContext-local identifier wrapper to reconcile.
+
+## Bootstrap Log → Runtime Log Continuity (Phase 2.8 TODO)
+
+This item addresses log discontinuity during runtime bootstrap.
+
+- [ ] ### TODO-3.1 Identify Bootstrap Log Emission Points
+- Locate log emission points before runtime logging is fully initialized.
+
+- [ ] ### TODO-3.2 Define Log Handoff Boundary
+- Define when bootstrap logs should be attached to:
+  - RuntimeScopeContext
+  - ObservabilityContext
+
+- [ ] ### TODO-3.3 Verify No Log Loss
+- Confirm that logs emitted during startup:
+  - appear in normal runtime logging
+  - are not silently dropped.
 
 ## Phase 2.6 → Phase 2.8 Deferred Item Tracking
 
@@ -876,7 +972,7 @@ This checklist summarizes the explicit implementation and documentation tasks re
   - Normalize CLI options and meta-parameter handling.
   - Implementation completed: `sys.exit` is restricted to the CLI adapter with `--force-exit`; all other layers return values.
 
-- [ ] **Subsystem Hygiene**
+- [x] **Subsystem Hygiene**
   - Reorganize HelloWorld subsystem structure.
   - Clarify and document placement of built-in Components and AdminComponent.
 
@@ -933,6 +1029,32 @@ This checklist summarizes the explicit implementation and documentation tasks re
 - [ ] **Review Deferred and Open Items**
   - Revisit all items marked OPEN or PARTIAL in the tracking table.
   - Explicitly close, re-defer, or document rationale for any remaining gaps.
+
+## Documentation and Design Records (Phase 2.8 TODO)
+
+- [ ] ### TODO-4.1 Reflect Actual Phase 2.8 Work
+- OpenAPI minimal definition
+- PUT / POST protocol fixes
+- Bootstrap log continuity
+
+- [ ] ### TODO-4.2 Explicitly State Non-Goals
+- Full curl compatibility
+- OpenAPI expansion policies
+- Log persistence and external integration
+
+- [ ] ### TODO-4.3 Link Next Phase Development Items
+- Ensure deferred items are explicitly linked to next phase sections.
+
+## Review Deferred and Open Items (Phase 2.8 TODO)
+
+- [ ] ### TODO-5.1 Remaining Work Verification
+- Verify that all Phase 2.8 TODO items are either:
+  - completed, or
+  - explicitly deferred.
+
+- [ ] ### TODO-5.2 Checklist Status Update
+- Only after TODOs are completed:
+  - update checklist status accordingly.
 
 ### Component-related Pending Concerns (tracking list)
 

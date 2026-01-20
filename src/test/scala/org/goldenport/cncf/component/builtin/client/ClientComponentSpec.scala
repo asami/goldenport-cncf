@@ -1,4 +1,4 @@
-package org.goldenport.cncf.client
+package org.goldenport.cncf.component.builtin.client
 
 import java.net.URL
 import java.nio.charset.StandardCharsets
@@ -28,7 +28,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 20, 2026
+ * @version Jan. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientComponentSpec

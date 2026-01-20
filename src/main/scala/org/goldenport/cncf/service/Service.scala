@@ -93,7 +93,7 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
   ): ExecutionContext = {
     // val _ = request
     // ExecutionContext.createWithSystem(logic.component.systemContext)
-    ExecutionContext.create()
+    logic.executionContext()
   }
 
   private def _to_request(

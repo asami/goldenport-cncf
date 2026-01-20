@@ -2,20 +2,25 @@ package org.goldenport.cncf.http
 
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
+import cats.syntax.all.*
 import com.comcast.ip4s.Host
 import com.comcast.ip4s.Port
 import org.http4s.{HttpRoutes, MediaType, Response as HResponse, Status as HStatus}
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.headers.`Content-Type`
 import org.http4s.Charset
+import org.http4s.syntax.all.*
 import org.http4s.dsl.io.*
+import org.http4s.multipart.Multipart
 import org.goldenport.record.Record
 import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse}
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
+import org.goldenport.bag.Bag
+import org.goldenport.datatype.{ContentType, MimeBody}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 13, 2026
+ * @version Jan. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -88,17 +93,81 @@ final class Http4sHttpServer(
       authority = req.uri.authority.map(_.renderString),
       originalUri = Some(req.uri.renderString)
     )
-    IO.pure(
+    val contentTypeHeader = req.headers.get[`Content-Type`]
+
+    if (_is_multipart(contentTypeHeader))
+      _to_multipart_http_request(req, method, query, header, context)
+    else
+      _to_regular_http_request(req, method, query, header, context)
+  }
+
+  private def _is_multipart(contentType: Option[`Content-Type`]): Boolean =
+    contentType.exists { header =>
+      header.mediaType.mainType.equalsIgnoreCase("multipart") &&
+        header.mediaType.subType.equalsIgnoreCase("form-data")
+    }
+
+  private def _to_regular_http_request(
+    req: org.http4s.Request[IO],
+    method: HttpRequest.Method,
+    query: Record,
+    header: Record,
+    context: HttpContext
+  ): IO[HttpRequest] =
+    req.body.compile.to(Array).map { bytes =>
+      val bodyOption =
+        if (bytes.isEmpty) None
+        else Some(Bag.binary(bytes.toArray))
       HttpRequest.fromPath(
         method = method,
         path = req.uri.path.renderString,
         query = query,
         header = header,
+        body = bodyOption,
         context = context,
         form = Record.empty
       )
-    )
-  }
+    }
+
+  private def _to_multipart_http_request(
+    req: org.http4s.Request[IO],
+    method: HttpRequest.Method,
+    query: Record,
+    header: Record,
+    context: HttpContext
+  ): IO[HttpRequest] =
+    req.as[Multipart[IO]].flatMap { multipart =>
+      multipart.parts.toVector.traverse { part =>
+        part.name match {
+          case Some(name) if name.nonEmpty =>
+            part.body.compile.to(Array).map { bytes =>
+              val bag = Bag.binary(bytes.toArray)
+              val contentType =
+                part.headers
+                  .get[`Content-Type`]
+                  .map(_.value)
+                  .map(ContentType.parse)
+                  .getOrElse(ContentType.OCTET_STREAM)
+              Some(name -> MimeBody(contentType, bag))
+            }
+          case _ =>
+            IO.pure(None)
+        }
+      }.map { entries =>
+        val values = entries.flatten
+        val form =
+          if (values.isEmpty) Record.empty else Record.create(values)
+        HttpRequest.fromPath(
+          method = method,
+          path = req.uri.path.renderString,
+          query = query,
+          header = header,
+          body = None,
+          context = context,
+          form = form
+        )
+      }
+    }
 
   private def _to_http_response(
     res: HttpResponse

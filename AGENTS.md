@@ -8,9 +8,7 @@
 
 ## AI-Assisted Development Rules
 
-This repository follows the common AI-assisted development rules:
-
-- `docs/rules/ai-assisted-development-rules.md`
+Earlier Chappie-specific rules have been removed. Current agent-facing rules and conventions are located under `docs/ai/`. The `RULE.md` file and documents under `docs/rules/` remain authoritative for all agents.
 
 Agents must comply with these rules before performing any action,
 especially before editing files or generating implementation results.

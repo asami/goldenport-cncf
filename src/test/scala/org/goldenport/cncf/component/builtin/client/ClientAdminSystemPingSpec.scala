@@ -1,4 +1,4 @@
-package org.goldenport.cncf.client
+package org.goldenport.cncf.component.builtin.client
 
 import cats.Id
 import cats.~>
@@ -17,10 +17,11 @@ import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.cncf.context.{ExecutionContext, ObservabilityContext, RuntimeContext, ScopeContext}
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
+import org.goldenport.datatype.MimeBody
 import org.goldenport.http.{ContentType, HttpRequest, HttpResponse, HttpStatus, MimeType, StringResponse}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.operation.OperationResponse
-import org.goldenport.protocol.{Request, Response}
+import org.goldenport.protocol.{Property, Request, Response}
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.egress.EgressCollection
 import org.goldenport.protocol.handler.ingress.IngressCollection
@@ -33,7 +34,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 20, 2026
+ * @version Jan. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientAdminSystemPingSpec
@@ -228,16 +229,25 @@ class ClientAdminSystemPingSpec
   private def _client_body(
     req: Request
   ): Consequence[Option[Bag]] =
-    req.properties.find(_.name == "-d") match {
-      case Some(p) =>
-        p.value match {
+    _body_property(req) match {
+      case Some(property) =>
+        property.value match {
           case b: Bag => Consequence.success(Some(b))
+          case MimeBody(_, bag) => Consequence.success(Some(bag))
           case s: String => Consequence.success(Some(Bag.text(s, StandardCharsets.UTF_8)))
-          case _ => Consequence.failure("client -d must be a Bag or String")
+          case _ => Consequence.failure("client request body must be a MimeBody, Bag, or String")
         }
       case None =>
         Consequence.success(None)
     }
+
+  private def _body_property(
+    req: Request
+  ): Option[Property] =
+    List("body", "data", "-d").iterator
+      .flatMap(name => req.properties.find(_.name == name))
+      .toList
+      .headOption
 
   private def _build_client_url(
     baseurl: String,

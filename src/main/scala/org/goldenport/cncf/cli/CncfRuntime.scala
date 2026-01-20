@@ -2,18 +2,19 @@ package org.goldenport.cncf.cli
 
 import java.net.URL
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Path, Paths}
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
 import org.goldenport.configuration.{Configuration, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.component.builtin.client.ClientComponent
-import org.goldenport.cncf.client.{GetQuery, PostCommand}
+import org.goldenport.cncf.component.builtin.client.{GetQuery, PostCommand}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.component.{Component, ComponentInit}
 import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.{Argument, Property, Protocol, ProtocolEngine, Request, Response}
+import org.goldenport.datatype.{ContentType, MimeBody}
 import org.goldenport.protocol.operation.{OperationResponse, OperationRequest}
 import org.goldenport.protocol.spec.{RequestDefinition, ResponseDefinition}
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
@@ -25,7 +26,7 @@ import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 20, 2026
+ * @version Jan. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime {
@@ -567,25 +568,22 @@ object CncfRuntime {
     } else {
       _extract_baseurl(args.toIndexedSeq).flatMap {
         case (baseurlopt, rest0) =>
-          _extract_body(rest0).flatMap {
-            case (bodyopt, rest1) =>
-              _parse_client_command(rest1, bodyopt).map {
-                case (operation, path) =>
-                  val baseUrlFromConfig = configuration.flatMap(ClientConfig.baseUrl)
-                  val baseurl = baseurlopt
-                    .orElse(baseUrlFromConfig)
-                    .getOrElse(ClientConfig.DefaultBaseUrl)
-                  Request.of(
-                    component = "client",
-                    service = "http",
-                    operation = operation,
-                    arguments = _client_arguments(path),
-                    switches = Nil,
-                    properties = _client_properties(baseurl, bodyopt)
-                  )
-              }
+          _parse_client_command(rest0).map {
+            case (operation, path, clientProperties) =>
+              val baseUrlFromConfig = configuration.flatMap(ClientConfig.baseUrl)
+              val baseurl = baseurlopt
+                .orElse(baseUrlFromConfig)
+                .getOrElse(ClientConfig.DefaultBaseUrl)
+              Request.of(
+                component = "client",
+                service = "http",
+                operation = operation,
+                arguments = _client_arguments(path),
+                switches = Nil,
+                properties = _client_properties(baseurl) ++ clientProperties
+              )
           }
-      }
+        }
     }
   }
 
@@ -597,32 +595,37 @@ object CncfRuntime {
         val baseurl = _client_baseurl_from_request(req)
         val url = _build_client_url(baseurl, path)
         req.operation match {
-          case "post" =>
-            _client_body_from_request(req).map { body =>
-              new PostCommand(
-                req,
-                // "system.ping", // TODO generic
-                HttpRequest.fromUrl(
-                  method = HttpRequest.POST,
-                  url = new URL(url),
-                  body = body
-                )
-              )
-            }
-          case "get" =>
-            Consequence.success(
-              new GetQuery(
-                req,
-                // "system.ping",
-                HttpRequest.fromUrl(
-                  method = HttpRequest.GET,
-                  url = new URL(url)
-                )
+        case "post" =>
+          _client_mime_body_from_request(req).map { body =>
+            new PostCommand(
+              req,
+              // "system.ping", // TODO generic
+              HttpRequest.fromUrl(
+                method = HttpRequest.POST,
+                url = new URL(url),
+                body = body.map(_.value)
               )
             )
-          case other =>
-            Consequence.failure(s"client http operation not supported: ${other}")
-        }
+          }
+        case "get" =>
+          _client_mime_body_from_request(req).flatMap {
+            case Some(_) =>
+              Consequence.failure("client http get does not accept a body")
+            case None =>
+              Consequence.success(
+                new GetQuery(
+                  req,
+                  // "system.ping",
+                  HttpRequest.fromUrl(
+                    method = HttpRequest.GET,
+                    url = new URL(url)
+                  )
+                )
+              )
+          }
+        case other =>
+          Consequence.failure(s"client http operation not supported: ${other}")
+      }
       }
     } else {
       Consequence.failure("client http request is required")
@@ -643,19 +646,46 @@ object CncfRuntime {
       case None => Consequence.failure("client http path is required")
     }
 
-  private def _client_body_from_request(
+  private def _client_mime_body_from_request(
     req: Request
-  ): Consequence[Option[Bag]] =
-    req.properties.find(_.name == "-d") match {
-      case Some(p) =>
-        p.value match {
-          case b: Bag => Consequence.success(Some(b))
-          case s: String => Consequence.success(Some(Bag.text(s, StandardCharsets.UTF_8)))
-          case _ => Consequence.failure("client -d must be a Bag or String")
-        }
+  ): Consequence[Option[MimeBody]] =
+    _mime_body_from_property_names(req.properties, List("body", "data", "-d")).flatMap {
+      case Some(body) => Consequence.success(Some(body))
       case None =>
-        Consequence.success(None)
+        Consequence.success(_mime_body_from_arguments(req.arguments))
     }
+
+  private def _mime_body_from_property_names(
+    properties: List[Property],
+    names: List[String]
+  ): Consequence[Option[MimeBody]] =
+    names match {
+      case Nil => Consequence.success(None)
+      case head :: tail =>
+        properties.find(_.name == head) match {
+          case Some(property) => _mime_body_from_value(property.value).map(Some(_))
+          case None => _mime_body_from_property_names(properties, tail)
+        }
+    }
+
+  private def _mime_body_from_value(
+    value: Any
+  ): Consequence[MimeBody] =
+    value match {
+      case mime: MimeBody => Consequence.success(mime)
+      case bag: Bag => Consequence.success(MimeBody(ContentType.OCTET_STREAM, bag))
+      case text: String =>
+        Consequence.success(
+          MimeBody(ContentType.OCTET_STREAM, Bag.text(text, StandardCharsets.UTF_8))
+        )
+      case _ =>
+        Consequence.failure("client request body must be a MimeBody, Bag, or String")
+    }
+
+  private def _mime_body_from_arguments(
+    arguments: List[Argument]
+  ): Option[MimeBody] =
+    arguments.collectFirst { case Argument(_, body: MimeBody, _) => body }
 
   private[cli] def parseCommandArgs(
     subsystem: Subsystem,
@@ -778,34 +808,19 @@ object CncfRuntime {
     }
   }
 
-  private def _extract_body(
-    args: Seq[String]
-  ): Consequence[(Option[Bag], Seq[String])] = {
-    var body: Option[Bag] = None
-    val buffer = Vector.newBuilder[String]
-    var i = 0
-    while (i < args.length) {
-      val arg = args(i)
-      if (arg.startsWith("-d=")) {
-        _body_value_to_bag(arg.drop(3)) match {
-          case Consequence.Success(b) => body = Some(b)
-          case Consequence.Failure(c) => return Consequence.failure(c.message)
-        }
-      } else if (arg == "-d") {
-        if (i + 1 >= args.length) {
-          return Consequence.failure("client -d requires a value")
-        }
-        _body_value_to_bag(args(i + 1)) match {
-          case Consequence.Success(b) => body = Some(b)
-          case Consequence.Failure(c) => return Consequence.failure(c.message)
-        }
-        i += 1
-      } else {
-        buffer += arg
+  private def _parse_client_http(
+    operation: String,
+    params: Seq[String]
+  ): Consequence[(String, List[Property])] = {
+    val args = Array(operation) ++ params.toArray
+    Request.parseArgs(RequestDefinition.curlLike, args).flatMap { parsed =>
+      parsed.arguments.headOption match {
+        case Some(pathArgument) =>
+          Consequence.success((_normalize_path(pathArgument.value.toString), parsed.properties))
+        case None =>
+          Consequence.failure("client http path is required")
       }
-      i += 1
     }
-    Consequence.success((body, buffer.result()))
   }
 
   private def _extract_baseurl(
@@ -847,21 +862,16 @@ object CncfRuntime {
   }
 
   private def _parse_client_command(
-    args: Seq[String],
-    body: Option[Bag]
-  ): Consequence[(String, String)] = {
+    args: Seq[String]
+  ): Consequence[(String, String, List[Property])] = {
     args.toVector match {
       case Vector("http", operation, rest @ _*) =>
         _parse_http_operation(operation).flatMap { op =>
           if (rest.isEmpty) {
             Consequence.failure("client http path is required")
           } else {
-            _parse_client_path(rest).flatMap { path =>
-              if (op == "get" && body.isDefined) {
-                Consequence.failure("client http get does not accept -d")
-              } else {
-                Consequence.success((op, path))
-              }
+            _parse_client_http(op, rest).map { case (path, properties) =>
+              (op, path, properties)
             }
           }
         }
@@ -869,8 +879,7 @@ object CncfRuntime {
         Consequence.failure("client http requires operation and path")
       case _ =>
         _parse_client_path(args).map { path =>
-          val operation = body.map(_ => "post").getOrElse("get")
-          (operation, path)
+          ("get", path, Nil)
         }
     }
   }
@@ -885,40 +894,10 @@ object CncfRuntime {
     }
   }
 
-  private def _body_value_to_bag(
-    value: String
-  ): Consequence[Bag] = {
-    if (value.startsWith("@")) {
-      val path = value.drop(1)
-      if (path.isEmpty) {
-        Consequence.failure("client -d @ requires a file path")
-      } else {
-        _bag_from_file(path)
-      }
-    } else {
-      Consequence.success(Bag.text(value, StandardCharsets.UTF_8))
-    }
-  }
-
-  private def _bag_from_file(
-    path: String
-  ): Consequence[Bag] = {
-    try {
-      val bytes = Files.readAllBytes(Paths.get(path))
-      val text = new String(bytes, StandardCharsets.UTF_8)
-      Consequence.success(Bag.text(text, StandardCharsets.UTF_8))
-    } catch {
-      case e: Exception =>
-        Consequence.failure(s"client -d file read failed: ${e.getMessage}")
-    }
-  }
-
   private def _client_properties(
-    baseurl: String,
-    body: Option[Bag]
+    baseurl: String
   ): List[Property] =
-    Property("baseurl", baseurl, None) ::
-      body.map(v => Property("-d", v, None)).toList
+    List(Property("baseurl", baseurl, None))
 
   private def _client_arguments(
     path: String

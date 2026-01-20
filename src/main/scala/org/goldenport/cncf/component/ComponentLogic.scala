@@ -59,6 +59,9 @@ case class ComponentLogic(
   def getJobResult(jobId: JobId): Option[JobResult] =
     component.jobEngine.getResult(jobId)
 
+  def executionContext(): ExecutionContext =
+    _execution_context()
+
   private def _execution_context(): ExecutionContext = {
     val base = ExecutionContext.create() // createWithSystem(component.systemContext)
     val driver = component.applicationConfig.httpDriver
