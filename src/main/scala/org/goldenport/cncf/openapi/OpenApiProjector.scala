@@ -1,7 +1,7 @@
 package org.goldenport.cncf.openapi
 
 import org.goldenport.cncf.subsystem.Subsystem
-import org.goldenport.protocol.spec.{OperationDefinition, ServiceDefinition}
+import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, ServiceDefinition}
 
 /*
  * @since   Jan.  8, 2026
@@ -47,7 +47,7 @@ object OpenApiProjector {
           operationId = s"${componentName}.${service.name}.${op.name}",
           httpMethod = inferredMethod,
           parameters = Vector.empty,
-          hasRequestBody = inferredMethod == "POST" || inferredMethod == "PUT",
+          hasRequestBody = _has_request_body(op),
           responseSchemaKind = "object"
         )
       }
@@ -62,6 +62,9 @@ object OpenApiProjector {
     else
       "get"
   }
+
+  private def _has_request_body(op: OperationDefinition): Boolean =
+    op.specification.request.parameters.exists(_.kind == ParameterDefinition.Kind.Property)
 
   private def _openapi_json(paths: Vector[PathSpec]): String = {
     val pathsJson =

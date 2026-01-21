@@ -9,7 +9,7 @@ import org.goldenport.bag.Bag
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.goldenport.datatype.{ContentType, MimeType}
-import org.goldenport.http.{HttpRequest, HttpResponse, HttpStatus, StringResponse}
+import org.goldenport.http.{HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.GivenWhenThen
@@ -107,7 +107,7 @@ class ProcedureActionCallSpec
         MimeType("text/plain"),
         Some(StandardCharsets.UTF_8)
       )
-      StringResponse(
+      HttpResponse.Text(
         HttpStatus.Ok,
         contentType,
         Bag.text("ok", StandardCharsets.UTF_8)

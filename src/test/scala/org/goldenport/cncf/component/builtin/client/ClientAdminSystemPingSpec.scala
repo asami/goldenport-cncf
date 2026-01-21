@@ -19,7 +19,7 @@ import org.goldenport.cncf.context.{ExecutionContext, ObservabilityContext, Runt
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.datatype.MimeBody
 import org.goldenport.datatype.{ContentType, MimeType}
-import org.goldenport.http.{HttpRequest, HttpResponse, HttpStatus, StringResponse}
+import org.goldenport.http.{HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.{Property, Request, Response}
@@ -155,7 +155,7 @@ class ClientAdminSystemPingSpec
       MimeType("text/plain"),
       Some(StandardCharsets.UTF_8)
     )
-    StringResponse(
+    HttpResponse.Text(
       HttpStatus.Ok,
       contentType,
       Bag.text("pong", StandardCharsets.UTF_8)

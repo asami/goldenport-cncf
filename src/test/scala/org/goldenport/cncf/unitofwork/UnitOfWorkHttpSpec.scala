@@ -8,7 +8,7 @@ import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.datatype.{ContentType, MimeType}
-import org.goldenport.http.{HttpResponse, HttpStatus, StringResponse}
+import org.goldenport.http.{HttpResponse, HttpStatus}
 import org.goldenport.test.matchers.ConsequenceMatchers
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -46,7 +46,7 @@ class UnitOfWorkHttpSpec extends AnyWordSpec with Matchers with ConsequenceMatch
       MimeType("text/plain"),
       Some(StandardCharsets.UTF_8)
     )
-    StringResponse(
+    HttpResponse.Text(
       HttpStatus.Ok,
       contentType,
       Bag.text("ok", StandardCharsets.UTF_8)

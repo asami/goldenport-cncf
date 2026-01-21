@@ -44,16 +44,7 @@ final class OpenApiProjectorSpec extends AnyWordSpec with Matchers {
             .downField("application/json")
             .downField("schema")
             .get[String]("type") shouldBe Right("object")
-          if (method == "POST") {
-            methodCursor
-              .downField("requestBody")
-              .downField("content")
-              .downField("application/json")
-              .downField("schema")
-              .get[String]("type") shouldBe Right("object")
-          } else {
-            methodCursor.focus.flatMap(_.asObject).flatMap(_.apply("requestBody")) shouldBe None
-          }
+          methodCursor.focus.flatMap(_.asObject).flatMap(_.apply("requestBody")) shouldBe None
         }
       }
 
