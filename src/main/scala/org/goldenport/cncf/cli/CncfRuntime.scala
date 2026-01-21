@@ -347,6 +347,13 @@ object CncfRuntime {
         // - Derive Config.Runtime from ResolvedConfiguration and bind into ExecutionContext / observability.
         // - Consider per-mode defaults (server/client/command/server-emulator/script) while keeping CLI normalization execution-free.
         val mode = RunMode.from(req.request.operation)
+        if (mode.contains(RunMode.Server)) {
+          LogBackendHolder.backend match {
+            case Some(LogBackend.NopLogBackend) =>
+              LogBackendHolder.install(LogBackend.StdoutBackend)
+            case _ => ()
+          }
+        }
         mode.foreach { m =>
           GlobalRuntimeContext.current.foreach(_.updateRuntimeMode(m))
         }
@@ -398,6 +405,13 @@ object CncfRuntime {
         // - Derive Config.Runtime from ResolvedConfiguration and bind into ExecutionContext / observability.
         // - Consider per-mode defaults (server/client/command/server-emulator/script) while keeping CLI normalization execution-free.
         val mode = RunMode.from(req.request.operation)
+        if (mode.contains(RunMode.Server)) {
+          LogBackendHolder.backend match {
+            case Some(LogBackend.NopLogBackend) =>
+              LogBackendHolder.install(LogBackend.StdoutBackend)
+            case _ => ()
+          }
+        }
         mode match {
           case Some(RunMode.Server) =>
             startServer(actualargs.drop(1))
