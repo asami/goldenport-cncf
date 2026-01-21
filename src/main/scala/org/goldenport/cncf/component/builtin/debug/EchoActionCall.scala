@@ -24,20 +24,22 @@ final case class EchoActionCall(
   request: Request
 ) extends ActionCall {
   override def execute(): Consequence[OperationResponse] =
-    Consequence.success(OperationResponse.Http(buildHttpResponse()))
+    response_json(_build_json())
 
-  private def buildHttpResponse(): StringResponse = {
-    val json = buildJson()
-    val payload = Printer.spaces2.print(json)
-    val bag = Bag.text(payload, StandardCharsets.UTF_8)
-    StringResponse(
-      status = HttpStatus.Ok,
-      contentType = ContentType.APPLICATION_JSON_UTF8,
-      bag = bag
-    )
-  }
+  //   Consequence.success(OperationResponse.Http(buildHttpResponse()))
 
-  private def buildJson(): Json = {
+  // private def buildHttpResponse(): StringResponse = {
+  //   val json = buildJson()
+  //   val payload = Printer.spaces2.print(json)
+  //   val bag = Bag.text(payload, StandardCharsets.UTF_8)
+  //   StringResponse(
+  //     status = HttpStatus.Ok,
+  //     contentType = ContentType.APPLICATION_JSON_UTF8,
+  //     bag = bag
+  //   )
+  // }
+
+  private def _build_json(): Json = {
     Json.obj(
       "component" -> request.component.map(Json.fromString).getOrElse(Json.Null),
       "service" -> request.service.map(Json.fromString).getOrElse(Json.Null),

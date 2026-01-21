@@ -1,8 +1,11 @@
 package org.goldenport.cncf.action
 
 import cats.free.Free
+import io.circe.Json
+import org.goldenport.Consequence
 import org.goldenport.ConsequenceT
 import org.goldenport.id.UniversalId
+import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork}
@@ -11,15 +14,21 @@ import org.goldenport.http.HttpResponse
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan. 10, 2026
+ * @version Jan. 21, 2026
  * @author  ASAMI, Tomoharu
  */
-trait OperationCallFeaturePart { self: ActionCall.Core.Holder =>
+trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
   protected final def execution_context: ExecutionContext =
     executionContext
+
+  protected final def response_string(p: String): Consequence[OperationResponse] =
+    Consequence.success(OperationResponse.Scalar(p))
+
+  protected final def response_json(p: Json): Consequence[OperationResponse] =
+    Consequence.success(OperationResponse.Json(p))
 }
 
-trait OperationCallHttpPart extends OperationCallFeaturePart { self: ActionCall.Core.Holder =>
+trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
 
   // Declarative DSL (UoW / Free)
   protected final def http_get(path: String): ExecUowM[HttpResponse] = {
@@ -65,7 +74,7 @@ trait OperationCallHttpPart extends OperationCallFeaturePart { self: ActionCall.
     UnitOfWorkOp.HttpPost(path, body, headers)
 }
 
-trait OperationCallDataStorePart extends OperationCallFeaturePart { self: ActionCall.Core.Holder =>
+trait ActionCallDataStorePart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
   // // Legacy direct datastore access (pre-UoW DSL)
   // protected final def ds_get(id: UniversalId): Option[DataStore.Record] = {
   //   val datastore = execution_context.runtime.unitOfWork.datastore

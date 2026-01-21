@@ -14,12 +14,12 @@ import org.goldenport.text.Presentable
  *  version Dec. 31, 2025
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
- * @version Jan. 20, 2026
+ * @version Jan. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
   extends ActionCall.Core.Holder
-  with OperationCallDataStorePart
+  with ActionCallDataStorePart
   with Presentable {
   def name: String = objectToSnakeName("ActionCall", this)
   def accesses: Vector[ResourceAccess] = Vector.empty

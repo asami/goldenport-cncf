@@ -4,7 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.model.value.BaseContent
 import org.goldenport.protocol.spec.*
 import org.goldenport.protocol.Request
-import org.goldenport.cncf.action.{Command, ActionCall}
+import org.goldenport.cncf.action.{Query, ActionCall}
 
 /*
  * @since   Jan. 21, 2026
@@ -27,8 +27,8 @@ object DebugHttpService extends ServiceDefinition {
 
     override def createOperationRequest(
       req: Request
-    ): Consequence[EchoCommand] =
-      Consequence.success(EchoCommand(req))
+    ): Consequence[EchoQuery] =
+      Consequence.success(EchoQuery(req))
   }
 
   object GetOperation extends OperationDefinition {
@@ -37,8 +37,8 @@ object DebugHttpService extends ServiceDefinition {
 
     override def createOperationRequest(
       req: Request
-    ): Consequence[EchoCommand] =
-      Consequence.success(EchoCommand(req))
+    ): Consequence[EchoQuery] =
+      Consequence.success(EchoQuery(req))
   }
 
   object PostOperation extends OperationDefinition {
@@ -47,8 +47,8 @@ object DebugHttpService extends ServiceDefinition {
 
     override def createOperationRequest(
       req: Request
-    ): Consequence[EchoCommand] =
-      Consequence.success(EchoCommand(req))
+    ): Consequence[EchoQuery] =
+      Consequence.success(EchoQuery(req))
   }
 
   object PutOperation extends OperationDefinition {
@@ -57,8 +57,8 @@ object DebugHttpService extends ServiceDefinition {
 
     override def createOperationRequest(
       req: Request
-    ): Consequence[EchoCommand] =
-      Consequence.success(EchoCommand(req))
+    ): Consequence[EchoQuery] =
+      Consequence.success(EchoQuery(req))
   }
 
   object DeleteOperation extends OperationDefinition {
@@ -67,8 +67,8 @@ object DebugHttpService extends ServiceDefinition {
 
     override def createOperationRequest(
       req: Request
-    ): Consequence[EchoCommand] =
-      Consequence.success(EchoCommand(req))
+    ): Consequence[EchoQuery] =
+      Consequence.success(EchoQuery(req))
   }
 
   // final class DebugHttpEchoOperation(
@@ -89,9 +89,9 @@ object DebugHttpService extends ServiceDefinition {
   //     Consequence.success(EchoCommand(req))
   // }
 
-  final case class EchoCommand(
+  final case class EchoQuery(
     request: Request
-  ) extends Command() {
+  ) extends Query() {
     override def createCall(core: ActionCall.Core): ActionCall =
       EchoActionCall(core, request)
   }

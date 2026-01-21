@@ -1,6 +1,6 @@
 package org.goldenport.cncf.component.builtin.client
 
-import org.goldenport.cncf.action.{Action, ActionCall, Command, FunctionalActionCall, OperationCallHttpPart, Query, ResourceAccess}
+import org.goldenport.cncf.action.{Action, ActionCall, Command, FunctionalActionCall, ActionCallHttpPart, Query, ResourceAccess}
 import org.goldenport.cncf.unitofwork.ExecUowM
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.Request
@@ -36,7 +36,7 @@ final case class GetQuery(
     ClientHttpGetCall(core, httpRequest)
 }
 
-sealed trait ClientHttpActionCall extends FunctionalActionCall with OperationCallHttpPart {
+sealed trait ClientHttpActionCall extends FunctionalActionCall with ActionCallHttpPart {
   def httpRequest: HttpRequest
 
   protected final def build_Program: ExecUowM[OperationResponse] = {

@@ -313,16 +313,17 @@ final class Subsystem(
             properties = request0.properties
           )
       }
-      enrichedRequest = if (component.name == DebugComponent.name) {
-        val metadata = List(
-          Property("http.method", req.method.name, None),
-          Property("http.path", req.path.asString, None)
-        )
-        request.copy(properties = request.properties ++ metadata)
-      } else {
-        request
-      }
-      response <- component.service.invokeRequest(enrichedRequest)
+      // enrichedRequest = if (component.name == DebugComponent.name) {
+      //   val metadata = List(
+      //     Property("http.method", req.method.name, None),
+      //     Property("http.path", req.path.asString, None)
+      //   )
+      //   request.copy(properties = request.properties ++ metadata)
+      // } else {
+      //   request
+      // }
+      // response <- component.service.invokeRequest(enrichedRequest)
+      response <- component.service.invokeRequest(request)
     } yield response
     r match {
       case Consequence.Success(res) =>
