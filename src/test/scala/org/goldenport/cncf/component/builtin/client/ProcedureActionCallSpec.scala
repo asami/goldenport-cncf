@@ -8,7 +8,8 @@ import java.nio.charset.StandardCharsets
 import org.goldenport.bag.Bag
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
-import org.goldenport.http.{ContentType, HttpRequest, HttpResponse, HttpStatus, MimeType, StringResponse}
+import org.goldenport.datatype.{ContentType, MimeType}
+import org.goldenport.http.{HttpRequest, HttpResponse, HttpStatus, StringResponse}
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.GivenWhenThen

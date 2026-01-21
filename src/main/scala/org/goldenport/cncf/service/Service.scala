@@ -3,7 +3,8 @@ package org.goldenport.cncf.service
 import java.nio.charset.StandardCharsets
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
-import org.goldenport.http.{ContentType, HttpRequest, HttpResponse, HttpStatus, MimeType, StringResponse}
+import org.goldenport.datatype.{ContentType, MimeType}
+import org.goldenport.http.{HttpRequest, HttpResponse, HttpStatus, StringResponse}
 import org.goldenport.protocol.{Request, Response}
 import org.goldenport.protocol.service.{Service as ProtocolService}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
@@ -17,7 +18,7 @@ import org.goldenport.cncf.job.{ActionId, ActionTask, JobContext}
  * @since   Apr. 11, 2025
  *  version Dec. 31, 2025
  *  version Jan.  3, 2026
- * @version Jan. 18, 2026
+ * @version Jan. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Service extends ProtocolService with Service.CCore.Holder {

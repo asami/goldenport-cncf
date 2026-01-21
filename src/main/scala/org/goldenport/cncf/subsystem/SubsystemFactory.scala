@@ -5,6 +5,7 @@ import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig}
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.builtin.admin.AdminComponent
 import org.goldenport.cncf.component.builtin.client.ClientComponent
+import org.goldenport.cncf.component.builtin.debug.DebugComponent
 import org.goldenport.cncf.component.builtin.specification.SpecificationComponent
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.{FakeHttpDriver, UrlConnectionHttpDriver}
@@ -90,7 +91,7 @@ object DefaultSubsystemFactory {
         configuration = configuration
       )
     val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
-    val comps = Vector(_admin, _client, _spec)
+    val comps = Vector(_admin, _client, DebugComponent.Factory, _spec)
       .flatMap(_.create(params))
     subsystem.add(comps)
   }

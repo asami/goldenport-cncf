@@ -668,10 +668,10 @@ object CncfRuntime {
   ): Consequence[MimeBody] =
     value match {
       case mime: MimeBody => Consequence.success(mime)
-      case bag: Bag => Consequence.success(MimeBody(ContentType.OCTET_STREAM, bag))
+      case bag: Bag => Consequence.success(MimeBody(ContentType.APPLICATION_OCTET_STREAM, bag))
       case text: String =>
         Consequence.success(
-          MimeBody(ContentType.OCTET_STREAM, Bag.text(text, StandardCharsets.UTF_8))
+          MimeBody(ContentType.APPLICATION_OCTET_STREAM, Bag.text(text, StandardCharsets.UTF_8))
         )
       case _ =>
         Consequence.failure("client request body must be a MimeBody, Bag, or String")

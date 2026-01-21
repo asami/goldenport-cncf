@@ -11,7 +11,7 @@ import org.goldenport.cncf.cli.CncfRuntime
 
 /*
  * @since   Jan. 14, 2026
- * @version Jan. 19, 2026
+ * @version Jan. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 type Script = ScriptActionCall => Any
@@ -120,7 +120,7 @@ object ScriptExecutionComponent {
       //   ResponseDefinition.script
       // )
       val service = ServiceDefinitionGroup.
-        Builder().addOperation(
+        Builder().operation(
           "DEFAULT",
           ScriptOperationDefinition(
             "RUN",

@@ -4,11 +4,12 @@ import java.io.{ByteArrayOutputStream, InputStream}
 import java.net.{HttpURLConnection, URL}
 import java.nio.charset.{Charset, StandardCharsets}
 import org.goldenport.bag.Bag
-import org.goldenport.http.{ContentType, HttpResponse, HttpStatus, MimeType, StringResponse}
+import org.goldenport.datatype.{ContentType, MimeType}
+import org.goldenport.http.{HttpResponse, HttpStatus, StringResponse}
 
 /*
  * @since   Jan. 11, 2026
- * @version Jan. 11, 2026
+ * @version Jan. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 trait HttpDriver {

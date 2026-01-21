@@ -18,7 +18,8 @@ import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.cncf.context.{ExecutionContext, ObservabilityContext, RuntimeContext, ScopeContext}
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.datatype.MimeBody
-import org.goldenport.http.{ContentType, HttpRequest, HttpResponse, HttpStatus, MimeType, StringResponse}
+import org.goldenport.datatype.{ContentType, MimeType}
+import org.goldenport.http.{HttpRequest, HttpResponse, HttpStatus, StringResponse}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.{Property, Request, Response}

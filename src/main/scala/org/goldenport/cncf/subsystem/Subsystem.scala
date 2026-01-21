@@ -14,10 +14,11 @@ import org.goldenport.cncf.component.{
   ComponentSpace
 }
 import org.goldenport.cncf.component.ComponentLocator.NameLocator
+import org.goldenport.cncf.component.builtin.debug.DebugComponent
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.configuration.ResolvedConfiguration
-import org.goldenport.protocol.{Request, Response}
+import org.goldenport.protocol.{Property, Request, Response}
 
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.cli.RunMode
@@ -302,7 +303,8 @@ final class Subsystem(
       request = request0.component match {
         case Some(_) => request0
         case None =>
-          Request.of(
+          Request.ofHttpRequest(
+            req,
             component = component.name,
             service = service.name,
             operation = operation.name,
@@ -311,7 +313,16 @@ final class Subsystem(
             properties = request0.properties
           )
       }
-      response <- component.service.invokeRequest(request)
+      enrichedRequest = if (component.name == DebugComponent.name) {
+        val metadata = List(
+          Property("http.method", req.method.name, None),
+          Property("http.path", req.path.asString, None)
+        )
+        request.copy(properties = request.properties ++ metadata)
+      } else {
+        request
+      }
+      response <- component.service.invokeRequest(enrichedRequest)
     } yield response
     r match {
       case Consequence.Success(res) =>

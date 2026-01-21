@@ -20,7 +20,7 @@ import org.goldenport.datatype.{ContentType, MimeBody}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 20, 2026
+ * @version Jan. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -147,7 +147,7 @@ final class Http4sHttpServer(
                   .get[`Content-Type`]
                   .map(_.value)
                   .map(ContentType.parse)
-                  .getOrElse(ContentType.OCTET_STREAM)
+                  .getOrElse(ContentType.APPLICATION_OCTET_STREAM)
               Some(name -> MimeBody(contentType, bag))
             }
           case _ =>
