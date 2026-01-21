@@ -5,7 +5,7 @@ import java.net.{HttpURLConnection, URL}
 import java.nio.charset.{Charset, StandardCharsets}
 import org.goldenport.bag.Bag
 import org.goldenport.datatype.{ContentType, MimeType}
-import org.goldenport.http.{HttpResponse, HttpStatus, StringResponse}
+import org.goldenport.http.{HttpResponse, HttpStatus}
 
 /*
  * @since   Jan. 11, 2026
@@ -76,7 +76,7 @@ final class UrlConnectionHttpDriver(
     val text = _read_text_(stream, StandardCharsets.UTF_8)
     val contentType = _content_type_(conn.getContentType)
     val status = _status_(code)
-    StringResponse(status, contentType, Bag.text(text, StandardCharsets.UTF_8))
+    HttpResponse.Text(status, contentType, Bag.text(text, StandardCharsets.UTF_8))
   }
 
   private def _response_stream_(
@@ -156,7 +156,7 @@ object FakeHttpDriver {
   ): FakeHttpDriver = {
     val (mime, charset) = _parse_content_type_(contentType)
     val ct = ContentType(MimeType(mime), charset)
-    val res = StringResponse(HttpStatus.Ok, ct, Bag.text(body, charset.getOrElse(StandardCharsets.UTF_8)))
+    val res = HttpResponse.Text(HttpStatus.Ok, ct, Bag.text(body, charset.getOrElse(StandardCharsets.UTF_8)))
     new FakeHttpDriver(res)
   }
 

@@ -26,6 +26,9 @@ trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
 
   protected final def response_json(p: Json): Consequence[OperationResponse] =
     Consequence.success(OperationResponse.Json(p))
+
+  protected final def response_yaml(p: String): Consequence[OperationResponse] =
+    Consequence.success(OperationResponse.Yaml(p))
 }
 
 trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>

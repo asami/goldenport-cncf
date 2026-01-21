@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
 import org.goldenport.datatype.{ContentType, MimeType}
-import org.goldenport.http.{HttpRequest, HttpResponse, HttpStatus, StringResponse}
+import org.goldenport.http.{HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.protocol.{Request, Response}
 import org.goldenport.protocol.service.{Service as ProtocolService}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
@@ -147,7 +147,7 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
     body: String
   ): HttpResponse = {
     val bag = Bag.text(body, StandardCharsets.UTF_8)
-    StringResponse(status, contentType, bag)
+    HttpResponse.Text(status, contentType, bag)
   }
 
   private def _content_type_json(): ContentType =
