@@ -2,6 +2,7 @@ package org.goldenport.cncf.openapi
 
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, ServiceDefinition}
+import org.slf4j.LoggerFactory
 
 /*
  * @since   Jan.  8, 2026
@@ -9,6 +10,8 @@ import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, S
  * @author  ASAMI, Tomoharu
  */
 object OpenApiProjector {
+  private val log = LoggerFactory.getLogger("org.goldenport.cncf.openapi.OpenApiProjector")
+
   private final case class PathSpec(
     path: String,
     tag: String,
@@ -25,6 +28,9 @@ object OpenApiProjector {
   def forSubsystem(subsystem: Subsystem): String = {
     val paths =
       subsystem.components.flatMap { comp =>
+        log.trace(
+          s"[openapi:trace] component=${comp.name} services=${comp.protocol.services.services.map(_.name)}"
+        )
         _paths(comp.name, comp.protocol.services.services)
       }.distinct.sortBy(_.path)
     _openapi_json(paths)
@@ -35,9 +41,15 @@ object OpenApiProjector {
     services: Vector[ServiceDefinition]
   ): Vector[PathSpec] =
     services.flatMap { service =>
+      log.trace(
+        s"[openapi:trace] service=${service.name} operations=${service.operations.operations.map(_.name)}"
+      )
       service.operations.operations.toVector.map { op =>
         val serviceTag = s"${componentName}.${service.name}"
-        val inferredMethod = _infer_http_method(service.name, op.name).toUpperCase
+        val httpMethod = _infer_http_method(service.name, op.name).toUpperCase
+        log.trace(
+          s"[openapi:trace] path=/${componentName}/${service.name}/${op.name} method=$httpMethod"
+        )
         PathSpec(
           path = s"/${componentName}/${service.name}/${op.name}",
           tag = s"experimental:${serviceTag}",
@@ -45,7 +57,7 @@ object OpenApiProjector {
           service = service.name,
           operation = op.name,
           operationId = s"${componentName}.${service.name}.${op.name}",
-          httpMethod = inferredMethod,
+          httpMethod = httpMethod,
           parameters = Vector.empty,
           hasRequestBody = _has_request_body(op),
           responseSchemaKind = "object"

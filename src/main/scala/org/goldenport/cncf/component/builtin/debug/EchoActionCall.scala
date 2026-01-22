@@ -16,13 +16,11 @@ import org.goldenport.text.Presentable
 
 /*
  * @since   Jan. 21, 2026
- * @version Jan. 21, 2026
+ * @version Jan. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EchoActionCall(
-  core: ActionCall.Core,
-  request: Request,
-  methodOverride: Option[String] = None
+  core: ActionCall.Core
 ) extends ActionCall {
   override def execute(): Consequence[OperationResponse] =
     response_yaml(_build_yaml())
@@ -188,6 +186,5 @@ final case class EchoActionCall(
       .replace("\r", "\\r")
       .replace("\n", "\\n")
 
-  private def _resolve_method(http: HttpRequest): String =
-    methodOverride.map(_.toUpperCase).getOrElse(http.method.name)
+  private def _resolve_method(http: HttpRequest): String = http.method.name
 }

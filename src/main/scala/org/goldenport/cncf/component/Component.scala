@@ -9,6 +9,10 @@ import org.goldenport.protocol.spec.{OperationDefinition, ServiceDefinition}
 import org.goldenport.protocol.spec.ServiceDefinitionGroup
 import org.goldenport.protocol.service.{Service => ProtocolService}
 // import org.goldenport.cncf.action.ActionLogic
+import org.goldenport.protocol.handler.*
+import org.goldenport.protocol.handler.ingress.*
+import org.goldenport.protocol.handler.egress.*
+import org.goldenport.protocol.handler.projection.*
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.action.{Action, ActionEngine}
 import org.goldenport.cncf.subsystem.Subsystem
@@ -25,7 +29,7 @@ import scala.util.control.NonFatal
 /*
  * @since   Jan.  1, 2026
  *  version Jan.  3, 2026
- * @version Jan. 20, 2026
+ * @version Jan. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -302,6 +306,28 @@ object Component {
     //     case NonFatal(_) => params.core
     //   }
     // }
+
+    protected final def spec_create(
+      name: String,
+      componentid: ComponentId,
+      service: ServiceDefinition
+    ): Component.Core = {
+      val protocol = Protocol(
+        services = ServiceDefinitionGroup(service),
+        handler = ProtocolHandler(
+          ingresses = IngressCollection(Vector(RestIngress())),
+          egresses = EgressCollection(Vector(RestEgress())),
+          projections = ProjectionCollection()
+        )
+      )
+      val instanceid = ComponentInstanceId.default(componentid)
+      Component.Core.create(
+        name,
+        componentid,
+        instanceid,
+        protocol
+      )
+    }
   }
 
   abstract class ServiceFactory extends ServiceDefinition.Factory[Service] {

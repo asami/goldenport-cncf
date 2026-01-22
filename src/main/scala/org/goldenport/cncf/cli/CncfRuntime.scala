@@ -1,6 +1,6 @@
 package org.goldenport.cncf.cli
 
-import java.net.URL
+import java.net.{URL, URLEncoder}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths}
 import org.goldenport.Consequence
@@ -26,14 +26,18 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
 import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
+import org.goldenport.cncf.cli.RuntimeParameterParser
+import org.slf4j.LoggerFactory
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 21, 2026
+ * @version Jan. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime {
+  private val log = LoggerFactory.getLogger("org.goldenport.cncf.cli.CncfRuntime")
   private val _runtime_service_name = "runtime"
+  private val _runtime_parameter_parser = new RuntimeParameterParser()
 
   private val _runtime_protocol: Protocol =
     Protocol.Builder()
@@ -135,10 +139,21 @@ object CncfRuntime {
       modeLabel,
       configuration
     )
+    if (log.isTraceEnabled && mode.contains(RunMode.Client)) {
+      log.trace(
+        s"[client:trace] buildSubsystem start mode=${modeLabel.getOrElse("none")} componentCount=${subsystem.components.size}"
+      )
+    }
     GlobalRuntimeContext.current.foreach(_.updateSubsystemVersion(subsystem.version.getOrElse(CncfVersion.current)))
     val extras = extraComponents(subsystem)
     if (extras.nonEmpty) {
       subsystem.add(extras)
+    }
+    if (log.isTraceEnabled && mode.contains(RunMode.Client)) {
+      val operations = _component_operation_fqns(subsystem)
+      log.trace(
+        s"[client:trace] buildSubsystem complete components=${_component_names(subsystem)} operations=${_operation_sample(operations)}"
+      )
     }
     // modeLabel.foreach { label =>
     //   _apply_system_context(subsystem, label)
@@ -163,6 +178,12 @@ object CncfRuntime {
 
   def executeClient(args: Array[String]): Int = {
     val subsystem = buildSubsystem(mode = Some(RunMode.Client))
+    if (log.isTraceEnabled) {
+      val operations = _component_operation_fqns(subsystem)
+      log.trace(
+        s"[client:trace] executeClient start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
+      )
+    }
     val result = _client_component(subsystem).flatMap { component =>
         parseClientArgs(args).flatMap { req =>
         _client_action_from_request(req).flatMap { action =>
@@ -184,6 +205,12 @@ object CncfRuntime {
     extraComponents: Subsystem => Seq[Component]
   ): Int = {
     val subsystem = buildSubsystem(extraComponents, Some(RunMode.Client))
+    if (log.isTraceEnabled) {
+      val operations = _component_operation_fqns(subsystem)
+      log.trace(
+        s"[client:trace] executeClient(extra) start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
+      )
+    }
     val result = _client_component(subsystem).flatMap { component =>
         parseClientArgs(args).flatMap { req =>
         _client_action_from_request(req).flatMap { action =>
@@ -330,6 +357,8 @@ object CncfRuntime {
       _print_usage()
       return 2
     }
+    val runtimeParse = _runtime_parameter_parser.parse(actualargs.toIndexedSeq)
+    val domainArgs = runtimeParse.residual.toArray
     val cwd = Paths.get("").toAbsolutePath.normalize
     val configuration = _resolve_configuration(cwd)
     val runtimeConfig = _runtime_config(configuration)
@@ -340,7 +369,7 @@ object CncfRuntime {
     _reset_global_runtime_context()
     _create_global_runtime_context(httpDriver, runtimeConfig.mode, aliasResolver)
     val r: Consequence[OperationRequest] =
-      _runtime_protocol_engine.makeOperationRequest(actualargs)
+      _runtime_protocol_engine.makeOperationRequest(domainArgs)
     r match {
       case Consequence.Success(req) =>
         // TODO Phase 2.9+: bind mode-specific runtime configuration.
@@ -362,16 +391,19 @@ object CncfRuntime {
         }
         mode match {
           case Some(RunMode.Server) =>
-            startServer(actualargs.drop(1), extraComponents)
+            startServer(domainArgs.drop(1), extraComponents)
             0
           case Some(RunMode.Client) =>
-            executeClient(actualargs.drop(1), extraComponents)
+            log.trace(
+              s"[client:trace] runWithExtraComponents dispatching to client mode args=${domainArgs.drop(1).mkString(" ")}"
+            )
+            executeClient(domainArgs.drop(1), extraComponents)
           case Some(RunMode.Command) =>
-            executeCommand(actualargs.drop(1), extraComponents)
+            executeCommand(domainArgs.drop(1), extraComponents)
           case Some(RunMode.ServerEmulator) =>
-            executeServerEmulator(actualargs.drop(1), extraComponents)
+            executeServerEmulator(domainArgs.drop(1), extraComponents)
           case Some(RunMode.Script) =>
-            _run_script(actualargs.drop(1), extraComponents)
+            _run_script(domainArgs.drop(1), extraComponents)
           case _ =>
             _print_usage()
             2
@@ -388,6 +420,8 @@ object CncfRuntime {
       _print_usage()
       return 2
     }
+    val runtimeParse = _runtime_parameter_parser.parse(actualargs.toIndexedSeq)
+    val domainArgs = runtimeParse.residual.toArray
     val cwd = Paths.get("").toAbsolutePath.normalize
     val configuration = _resolve_configuration(cwd)
     val runtimeConfig = _runtime_config(configuration)
@@ -398,7 +432,7 @@ object CncfRuntime {
     _reset_global_runtime_context()
     _create_global_runtime_context(httpDriver, runtimeConfig.mode, aliasResolver)
     val r: Consequence[OperationRequest] =
-      _runtime_protocol_engine.makeOperationRequest(actualargs)
+      _runtime_protocol_engine.makeOperationRequest(domainArgs)
     r match {
       case Consequence.Success(req) =>
         // TODO Phase 2.9+: bind mode-specific runtime configuration.
@@ -414,16 +448,19 @@ object CncfRuntime {
         }
         mode match {
           case Some(RunMode.Server) =>
-            startServer(actualargs.drop(1))
+            startServer(domainArgs.drop(1))
             0
           case Some(RunMode.Client) =>
-            executeClient(actualargs.drop(1))
+            log.trace(
+              s"[client:trace] run dispatching to client mode args=${domainArgs.drop(1).mkString(" ")}"
+            )
+            executeClient(domainArgs.drop(1))
           case Some(RunMode.Command) =>
-            executeCommand(actualargs.drop(1))
+            executeCommand(domainArgs.drop(1))
           case Some(RunMode.ServerEmulator) =>
-            executeServerEmulator(actualargs.drop(1))
+            executeServerEmulator(domainArgs.drop(1))
           case Some(RunMode.Script) =>
-            _run_script(actualargs.drop(1), _ => Nil)
+            _run_script(domainArgs.drop(1), _ => Nil)
           case None =>
             _print_error(s"Unknown mode: ${req.request.operation}")
             _print_usage()
@@ -557,8 +594,19 @@ object CncfRuntime {
     subsystem: Subsystem
   ): Consequence[ClientComponent] =
     subsystem.components.collectFirst { case c: ClientComponent => c } match {
-      case Some(component) => Consequence.success(component)
-      case None => Consequence.failure("client component not available")
+      case Some(component) =>
+        if (log.isTraceEnabled) {
+          val operations = _component_operation_fqns(subsystem)
+          log.trace(
+            s"[client:trace] client component found=${component.name} operations=${_operation_sample(operations)}"
+          )
+        }
+        Consequence.success(component)
+      case None =>
+        if (log.isTraceEnabled) {
+          log.trace("[client:trace] client component not available")
+        }
+        Consequence.failure("client component not available")
     }
 
   private def _to_request(
@@ -583,12 +631,12 @@ object CncfRuntime {
       Consequence.failure("client command is required")
     } else {
       _parse_client_command(args.toIndexedSeq).map {
-        case (operation, path, clientProperties) =>
+        case (operation, path, extraArgs, clientProperties) =>
           Request.of(
             component = "client",
             service = "http",
             operation = operation,
-            arguments = _client_arguments(path),
+            arguments = _client_arguments(path, extraArgs),
             switches = Nil,
             properties = clientProperties
           )
@@ -599,11 +647,17 @@ object CncfRuntime {
   private def _client_action_from_request(
     req: Request
   ): Consequence[org.goldenport.cncf.action.Action] = {
-    if (req.component.contains("client") && req.service.contains("http")) {
-      _client_path_from_request(req).flatMap { path =>
-        val baseurl = _client_baseurl_from_request(req)
-        val url = _build_client_url(baseurl, path)
-        req.operation match {
+      if (req.component.contains("client") && req.service.contains("http")) {
+        _client_path_from_request(req).flatMap { path =>
+          val baseurl = _client_baseurl_from_request(req)
+          val rawUrl = _build_client_url(baseurl, path)
+          val url = _append_client_query(rawUrl, req)
+          if (log.isTraceEnabled) {
+            log.trace(
+              s"[client:trace] client action request operation=${req.operation} path=${path} url=${url}"
+            )
+          }
+          req.operation match {
         case "post" =>
           _client_mime_body_from_request(req).map { body =>
             new PostCommand(
@@ -769,6 +823,29 @@ object CncfRuntime {
       Argument(s"arg${index + 1}", value)
     }.toList
 
+  private def _component_operation_fqns(subsystem: Subsystem): Vector[String] =
+    subsystem.components.flatMap { comp =>
+      comp.protocol.services.services.flatMap { service =>
+        service.operations.operations.toVector.map(op => s"${comp.name}.${service.name}.${op.name}")
+      }
+    }.toVector
+
+  private def _component_names(subsystem: Subsystem): String =
+    subsystem.components.map(_.name).mkString(",")
+
+  private def _operation_sample(operations: Vector[String]): String = {
+    if (operations.isEmpty) {
+      "none"
+    } else {
+      val sample = operations.take(10).mkString(",")
+      if (operations.size > 10) {
+        s"$sample...(+${operations.size - 10})"
+      } else {
+        sample
+      }
+    }
+  }
+
   private def _parse_component_service_operation(
     args: Seq[String]
   ): Consequence[(String, String, String)] = {
@@ -804,15 +881,17 @@ object CncfRuntime {
 
   private def _parse_client_path(
     args: Seq[String]
-  ): Consequence[String] = {
+  ): Consequence[(String, Seq[String])] = {
     if (args.isEmpty) {
       Consequence.failure("client path is required")
     } else {
       args.toVector match {
-        case Vector(single) =>
-          Consequence.success(_normalize_path(single))
-        case multiple =>
-          Consequence.success(_normalize_path(multiple.mkString("/")))
+        case Vector(component, service, operation, rest @ _*) =>
+          Consequence.success((_normalize_path(s"/${component}/${service}/${operation}"), rest))
+        case Vector(single, rest @ _*) =>
+          _parse_component_service_operation_string(single).map { case (component, service, operation) =>
+            (_normalize_path(s"/${component}/${service}/${operation}"), rest)
+          }
       }
     }
   }
@@ -856,9 +935,31 @@ object CncfRuntime {
     s"${base}${suffix}"
   }
 
+  private def _append_client_query(
+    url: String,
+    req: Request
+  ): String =
+    _client_query_string(req) match {
+      case Some(query) => s"${url}?${query}"
+      case None => url
+    }
+
+  // TODO Phase 2.85: Replace this ad-hoc query parameter mapping with OperationDefinition-driven parameter handling.
+  private def _client_query_string(
+    req: Request
+  ): Option[String] = {
+    val params = req.arguments.collect {
+      case Argument(name, value, _) if name.startsWith("arg") =>
+        val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8)
+        val encodedValue = URLEncoder.encode(value.toString, StandardCharsets.UTF_8)
+        s"${encodedName}=${encodedValue}"
+    }
+    if (params.isEmpty) None else Some(params.mkString("&"))
+  }
+
   private def _parse_client_command(
     args: Seq[String]
-  ): Consequence[(String, String, List[Property])] = {
+  ): Consequence[(String, String, Seq[String], List[Property])] = {
     args.toVector match {
       case Vector("http", operation, rest @ _*) =>
         _parse_http_operation(operation).flatMap { op =>
@@ -866,15 +967,15 @@ object CncfRuntime {
             Consequence.failure("client http path is required")
           } else {
             _parse_client_http(op, rest).map { case (path, properties) =>
-              (op, path, properties)
+              (op, path, Seq.empty, properties)
             }
           }
         }
       case Vector("http") =>
         Consequence.failure("client http requires operation and path")
       case _ =>
-        _parse_client_path(args).map { path =>
-          ("get", path, Nil)
+        _parse_client_path(args).map { case (path, extra) =>
+          ("get", path, extra, Nil)
         }
     }
   }
@@ -890,9 +991,14 @@ object CncfRuntime {
   }
 
   private def _client_arguments(
-    path: String
-  ): List[Argument] =
-    List(Argument("path", path, None))
+    path: String,
+    extraArgs: Seq[String]
+  ): List[Argument] = {
+    val extras = extraArgs.zipWithIndex.map { case (value, index) =>
+      Argument(s"arg${index + 1}", value, None)
+    }
+    Argument("path", path, None) :: extras.toList
+  }
 
   private def _include_header(
     args: Array[String]

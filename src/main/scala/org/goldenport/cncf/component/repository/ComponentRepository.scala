@@ -2,10 +2,13 @@ package org.goldenport.cncf.component.repository
 
 import java.net.URLClassLoader
 import java.nio.file.{Files, Path, Paths}
+import java.lang.reflect.Modifier
 import java.util.ServiceLoader
+import java.util.jar.JarFile
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
+import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.cncf.bootstrap.BootstrapLog
@@ -172,23 +175,18 @@ object ComponentRepository {
     packagePrefixes: Seq[String]
   ) extends ComponentRepository {
     def discover(): Seq[Component] = {
-      val classesDir = baseDir.resolve("classes")
-      if (!Files.exists(classesDir)) {
+      if (!Files.exists(baseDir)) {
         Nil
       } else {
         val log = BootstrapLog.stderr
-        val classDirs = Vector(classesDir)
-        val loader = _class_loader(classDirs)
-        val service = _discover_service_loader(loader, params, ComponentOrigin.Repository("component-dir"))
-        if (service.nonEmpty) {
-          service
+        val origin = ComponentOrigin.Repository("component-dir")
+        // TEMPORARY: Demo-only JAR class scanning. TODO: Replace with META-INF/component.yaml-based discovery.
+        val components = _discover_from_jars(baseDir, params, origin, log)
+        if (components.nonEmpty) {
+          components
         } else {
-          _discover_by_scan(loader, params, classDirs, packagePrefixes, log) match {
-            case Consequence.Success(comps) => comps
-            case Consequence.Failure(conclusion) =>
-              log.warn(s"component discovery failed: ${conclusion.message}")
-              Nil
-          }
+          log.info("component-dir contains no valid demo JAR components")
+          Nil
         }
       }
     }
@@ -231,6 +229,156 @@ object ComponentRepository {
     val fromFactories = factories.flatMap(_.create(withOrigin))
     val direct = components.map(_initialize_component(withOrigin))
     direct ++ fromFactories
+  }
+
+  private def _discover_from_jars(
+    baseDir: Path,
+    params: ComponentCreate,
+    origin: ComponentOrigin,
+    log: BootstrapLog
+  ): Seq[Component] = {
+    val jarFiles = _list_jar_files(baseDir)
+    jarFiles.flatMap { jar =>
+      _discover_component_from_jar(jar, params, origin, log)
+    }
+  }
+
+  private def _list_jar_files(baseDir: Path): Vector[Path] = {
+    if (!Files.exists(baseDir)) {
+      Vector.empty
+    } else {
+      val stream = Files.list(baseDir)
+      try {
+        stream
+          .iterator()
+          .asScala
+          .filter(p => Files.isRegularFile(p) && p.getFileName.toString.endsWith(".jar"))
+          .toVector
+      } finally {
+        stream.close()
+      }
+    }
+  }
+
+  private def _discover_component_from_jar(
+    jarPath: Path,
+    params: ComponentCreate,
+    origin: ComponentOrigin,
+    log: BootstrapLog
+  ): Seq[Component] = {
+    val withOrigin = params.withOrigin(origin)
+    Using.resource(new URLClassLoader(Array(jarPath.toUri.toURL), getClass.getClassLoader)) { loader =>
+      val classNames = _jar_class_names(jarPath)
+      if (classNames.isEmpty) {
+        log.info(s"jar=${jarPath.getFileName} contains no class entries")
+        Vector.empty
+      } else {
+        val factoryComponents = _instantiate_factory_components(loader, classNames, params, log)
+        if (factoryComponents.nonEmpty) {
+          factoryComponents.foreach { comp =>
+            log.info(
+              s"[component-dir:trace] initialized component=${comp.core.name} class=${comp.getClass.getName}"
+            )
+          }
+          factoryComponents
+        } else {
+          _build_sources(classNames, loader, origin, log, tolerant = true) match {
+            case Consequence.Success(sources) =>
+              _provide_components(sources, withOrigin, log) match {
+                case Consequence.Success(components) =>
+                  components.headOption match {
+                    case Some(first) =>
+                      log.info(s"jar=${jarPath.getFileName} provides component=${first.core.name}")
+                      Vector(first)
+                    case None =>
+                      log.info(s"jar=${jarPath.getFileName} contains no valid components")
+                      Vector.empty
+                  }
+                case Consequence.Failure(conclusion) =>
+                  log.warn(s"component creation failed for jar=${jarPath.getFileName} cause=${conclusion.message}")
+                  Vector.empty
+              }
+            case Consequence.Failure(conclusion) =>
+              log.warn(s"component discovery failed for jar=${jarPath.getFileName} cause=${conclusion.message}")
+              Vector.empty
+          }
+        }
+      }
+    }
+  }
+
+  private def _jar_class_names(jarPath: Path): Vector[String] = {
+    Using.resource(new JarFile(jarPath.toFile)) { jar =>
+      jar
+        .entries()
+        .asScala
+        .filter(e => !e.isDirectory && e.getName.endsWith(".class"))
+        .map(e => _class_name_from_entry(e.getName))
+        .toVector
+    }
+  }
+
+  private def _class_name_from_entry(entryName: String): String = {
+    val withoutExtension = entryName.substring(0, entryName.length - ".class".length)
+    withoutExtension.replace('/', '.')
+  }
+
+  private def _instantiate_factory_components(
+    loader: URLClassLoader,
+    classNames: Seq[String],
+    params: ComponentCreate,
+    log: BootstrapLog
+  ): Seq[Component] = {
+    _find_factory_class(loader, classNames) match {
+      case Some(factoryClass) => _create_components_from_factory(factoryClass, params, log)
+      case None => Vector.empty
+    }
+  }
+
+  private def _find_factory_class(
+    loader: URLClassLoader,
+    classNames: Seq[String]
+  ): Option[Class[_ <: Component.Factory]] = {
+    classNames.view.flatMap { className =>
+      _load_class(className, loader).flatMap { cls =>
+        if (
+          classOf[Component.Factory].isAssignableFrom(cls) &&
+          !cls.isInterface &&
+          !Modifier.isAbstract(cls.getModifiers) &&
+          !cls.getName.endsWith("$")
+        ) {
+          Some(cls.asInstanceOf[Class[_ <: Component.Factory]])
+        } else {
+          None
+        }
+      }
+    }.headOption
+  }
+
+  private def _create_components_from_factory(
+    factoryClass: Class[_ <: Component.Factory],
+    params: ComponentCreate,
+    log: BootstrapLog
+  ): Seq[Component] = {
+    try {
+      val factory = factoryClass.getDeclaredConstructor().newInstance().asInstanceOf[Component.Factory]
+      factory.create(params)
+    } catch {
+      case NonFatal(e) =>
+        log.warn(s"component factory initialization failed for ${factoryClass.getName}: ${e.getMessage}")
+        Vector.empty
+    }
+  }
+
+  private def _load_class(
+    className: String,
+    loader: URLClassLoader
+  ): Option[Class[_]] = {
+    try {
+      Some(Class.forName(className, false, loader))
+    } catch {
+      case NonFatal(_) => None
+    }
   }
 
   private def _discover_by_scan(

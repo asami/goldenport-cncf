@@ -1,6 +1,7 @@
 package org.goldenport.cncf.action
 
 import org.goldenport.Consequence
+import org.goldenport.protocol.*
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.util.StringUtils.objectToSnakeName
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
@@ -14,7 +15,7 @@ import org.goldenport.text.Presentable
  *  version Dec. 31, 2025
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
- * @version Jan. 21, 2026
+ * @version Jan. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
@@ -35,6 +36,12 @@ abstract class ActionCall()
   override def print: String = s"ActionCall(${action.display})"
   override def display: String = action.display
   override def show: String = correlationId.fold(display)(cid => s"$display@${cid.show}")
+
+  def request = action.request
+  def arguments: List[Argument] = action.arguments
+  def switches: List[Switch] = action.switches
+  def properties: List[Property] = action.properties
+  def args: List[String] = action.args
 }
 
 abstract class FunctionalActionCall extends ActionCall {

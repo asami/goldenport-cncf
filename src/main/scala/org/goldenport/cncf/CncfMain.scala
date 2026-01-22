@@ -5,9 +5,10 @@ import java.nio.file.{Files, Path, Paths}
 import java.util.ServiceLoader
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
-import org.goldenport.cncf.cli.CncfRuntime
+import org.goldenport.cncf.cli.{CncfRuntime, RunMode}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentCreate, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.component.repository.{ComponentRepository}
+import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -27,7 +28,7 @@ object CncfMain {
       with scala.util.control.NoStackTrace
 
   def main(args: Array[String]): Unit = {
-    val (reposResult, args1) = _take_component_repository(args)
+    val (reposResult, args1, noDefaultComponents) = _take_component_repository(args)
     val (discover, args2) = _take_discover_classes(args1)
     val (workspace, args3) = _take_workspace(args2)
     val (forceExit, args4) = _take_force_exit(args3)
@@ -36,18 +37,17 @@ object CncfMain {
 
     val code: Int =
       try {
-        reposResult match {
+        val cwd = Paths.get("").toAbsolutePath.normalize
+        val reposWithDefault =
+          _append_default_component_repository(reposResult, cwd, noDefaultComponents)
+        reposWithDefault match {
           case Left(message) =>
             Console.err.println(message)
             2
-          case Right(specs) if specs.nonEmpty =>
-            val extras = _discover_from_repositories(specs)
+          case Right(specs) =>
+            val baseExtras = _component_extra_function(specs, enabled, workspace)
+            val extras = _trace_component_dir_extras(baseExtras)
             CncfRuntime.runWithExtraComponents(rest, extras)
-          case Right(_) if enabled =>
-            val extras = _discover_components(workspace)
-            CncfRuntime.runWithExtraComponents(rest, extras)
-      case Right(_) =>
-        CncfRuntime.runExitCode(rest)
         }
       } catch {
         case e: CliFailed => e.code
@@ -74,20 +74,26 @@ object CncfMain {
     (forceExit, rest)
   }
 
+  private val _no_default_components_flag = "--no-default-components"
+
   private def _take_component_repository(
     args: Array[String]
-  ): (Either[String, Vector[ComponentRepository.Specification]], Array[String]) = {
+  ): (Either[String, Vector[ComponentRepository.Specification]], Array[String], Boolean) = {
     val buffer = Vector.newBuilder[String]
     val specs = Vector.newBuilder[String]
+    var noDefault = false
     var i = 0
     while (i < args.length) {
       val arg = args(i)
-      if (arg.startsWith("--component-repository=")) {
+      if (arg == _no_default_components_flag) {
+        noDefault = true
+        i = i + 1
+      } else if (arg.startsWith("--component-repository=")) {
         specs += arg.stripPrefix("--component-repository=")
         i = i + 1
       } else if (arg == "--component-repository") {
         if (i + 1 >= args.length) {
-          return (Left("--component-repository requires a value"), args)
+          return (Left("--component-repository requires a value"), args, noDefault)
         }
         specs += args(i + 1)
         i = i + 2
@@ -98,7 +104,7 @@ object CncfMain {
     }
     val specValues = specs.result()
     if (specValues.isEmpty) {
-      (Right(Vector.empty), buffer.result().toArray)
+      (Right(Vector.empty), buffer.result().toArray, noDefault)
     } else {
       val cwd = Paths.get("").toAbsolutePath.normalize
       var error: Option[String] = None
@@ -116,11 +122,42 @@ object CncfMain {
         }
       }
       error match {
-        case Some(err) => (Left(err), buffer.result().toArray)
-        case None => (Right(parsed.result()), buffer.result().toArray)
+        case Some(err) => (Left(err), buffer.result().toArray, noDefault)
+        case None => (Right(parsed.result()), buffer.result().toArray, noDefault)
       }
     }
   }
+
+  private def _append_default_component_repository(
+    result: Either[String, Vector[ComponentRepository.Specification]],
+    cwd: Path,
+    noDefault: Boolean
+  ): Either[String, Vector[ComponentRepository.Specification]] =
+    result match {
+      case left @ Left(_) => left
+      case Right(specs) if noDefault => Right(specs)
+      case Right(specs) =>
+        _default_components_dir(cwd) match {
+          case Some(dir) if !_has_default_components_spec(specs, dir) =>
+            Right(specs :+ ComponentRepository.ComponentDirRepository.Specification(dir))
+          case _ => Right(specs)
+        }
+    }
+
+  private def _default_components_dir(cwd: Path): Option[Path] = {
+    val dir = cwd.resolve("components").normalize
+    if (Files.isDirectory(dir)) Some(dir) else None
+  }
+
+  private def _has_default_components_spec(
+    specs: Vector[ComponentRepository.Specification],
+    dir: Path
+  ): Boolean =
+    specs.exists {
+      case ComponentRepository.ComponentDirRepository.Specification(base) =>
+        base.normalize == dir.normalize
+      case _ => false
+    }
 
   private def _take_discover_classes(
     args: Array[String]
@@ -178,6 +215,37 @@ object CncfMain {
       }
     }
   }
+
+  private def _component_extra_function(
+    specs: Vector[ComponentRepository.Specification],
+    enabled: Boolean,
+    workspace: Option[Path]
+  ): Subsystem => Seq[Component] = {
+    if (specs.nonEmpty) {
+      _discover_from_repositories(specs)
+    } else if (enabled) {
+      _discover_components(workspace)
+    } else {
+      _ => Nil
+    }
+  }
+
+  private def _trace_component_dir_extras(
+    extras: Subsystem => Seq[Component]
+  ): Subsystem => Seq[Component] =
+    (subsystem: Subsystem) => {
+      val components = extras(subsystem)
+      if (components.nonEmpty) {
+        GlobalRuntimeContext.current.flatMap(ctx => Option(ctx.runtimeMode)) match {
+          case Some(mode) if mode == RunMode.Command || mode == RunMode.Client =>
+            Console.err.println(
+              s"[component-dir:trace] mode=${mode.name} loaded components=${components.map(_.core.name).mkString(",")}"
+            )
+          case _ => ()
+        }
+      }
+      components
+    }
 
   private def _class_dirs_(
     workspace: Option[Path]

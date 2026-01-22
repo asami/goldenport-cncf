@@ -6,6 +6,7 @@ import java.nio.charset.{Charset, StandardCharsets}
 import org.goldenport.bag.Bag
 import org.goldenport.datatype.{ContentType, MimeType}
 import org.goldenport.http.{HttpResponse, HttpStatus}
+import org.slf4j.LoggerFactory
 
 /*
  * @since   Jan. 11, 2026
@@ -21,7 +22,7 @@ final class UrlConnectionHttpDriver(
   baseurl: String
 ) extends HttpDriver {
   def get(path: String): HttpResponse = {
-    val conn = _open_connection_(path, "GET")
+    val conn = _open_connection_(_build_url_(path), "GET")
     _execute_(conn, None)
   }
 
@@ -30,16 +31,17 @@ final class UrlConnectionHttpDriver(
     body: Option[String],
     headers: Map[String, String]
   ): HttpResponse = {
-    val conn = _open_connection_(path, "POST")
+    val conn = _open_connection_(_build_url_(path), "POST")
     headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
     _execute_(conn, body)
   }
 
+  private val log = LoggerFactory.getLogger(classOf[UrlConnectionHttpDriver])
+
   private def _open_connection_(
-    path: String,
+    url: URL,
     method: String
   ): HttpURLConnection = {
-    val url = _build_url_(path)
     val conn = url.openConnection().asInstanceOf[HttpURLConnection]
     conn.setRequestMethod(method)
     conn.setDoInput(true)

@@ -8,7 +8,7 @@ import org.goldenport.cncf.action.{Query, ActionCall}
 
 /*
  * @since   Jan. 21, 2026
- * @version Jan. 21, 2026
+ * @version Jan. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 object DebugHttpService extends ServiceDefinition {
@@ -93,6 +93,6 @@ object DebugHttpService extends ServiceDefinition {
     request: Request
   ) extends Query() {
     override def createCall(core: ActionCall.Core): ActionCall =
-      EchoActionCall(core, request)
+      EchoActionCall(core)
   }
 }

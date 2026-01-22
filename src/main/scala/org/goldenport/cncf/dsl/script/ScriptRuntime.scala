@@ -11,7 +11,7 @@ import org.goldenport.cncf.cli.CncfRuntime
 
 /*
  * @since   Jan. 14, 2026
- * @version Jan. 21, 2026
+ * @version Jan. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 type Script = ScriptActionCall => Any
@@ -152,10 +152,10 @@ case class ScriptActionCall(
     Consequence(OperationResponse.create(r))
   }
 
-  val scriptAction: ScriptAction = action.asInstanceOf[ScriptAction]
-  def request: Request = scriptAction.request
-  def arguments: List[Argument] = request.arguments
-  def switches: List[Switch] = request.switches
-  def properties: List[Property] = request.properties
-  def args: List[String] = request.args
+  // val scriptAction: ScriptAction = action.asInstanceOf[ScriptAction]
+  // def request: Request = scriptAction.request
+  // def arguments: List[Argument] = request.arguments
+  // def switches: List[Switch] = request.switches
+  // def properties: List[Property] = request.properties
+  // def args: List[String] = request.args
 }

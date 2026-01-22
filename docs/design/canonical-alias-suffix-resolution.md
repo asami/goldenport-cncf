@@ -1,5 +1,3 @@
-canonical-alias-suffix-resolution.md
-
 status = draft
 owner = Phase 2.8
 scope = design / specification (mutable)
@@ -32,6 +30,10 @@ reflected in implementation changes immediately.
 > pre–Phase 2.8 state—the alias handling described here is now
 > implemented and captured in `path-alias.md`.
 
+This specification assumes that Runtime-level option parsing and configuration resolution are already completed.
+
+The definition of runtime-scoped parameters, precedence rules, and their materialization into runtime context is specified in:
+- docs/design/global-protocol.md
 
 Terminology
 ----------------------------------------------------------------------
@@ -43,7 +45,6 @@ Terminology
 - Canonical name: unique, fully resolved FQN
 - Suffix: representation selector (e.g. .json, .yaml) — defined later
 
-
 Basic Input Classification
 ----------------------------------------------------------------------
 The first non-option argument is interpreted as the operation selector.
@@ -54,6 +55,85 @@ The selector is classified by the number of dots ("."), NOT by position.
 - One dot       : "yyy.xxx"
 - Two dots      : "zzz.yyy.xxx"
 - Three or more : INVALID (error)
+
+
+Runtime Protocol (Pre-Resolution Stage)
+----------------------------------------------------------------------
+Overview
+----------------------------------------------------------------------
+CNCF command invocation is processed in two explicit protocol stages:
+
+1. Runtime Protocol (pre-resolution)
+2. Domain Protocol (resolution + execution)
+
+This document specifies only the Domain Protocol.
+However, correct interpretation of the selector requires that
+Runtime Protocol processing is completed first.
+
+Runtime Protocol Responsibilities
+----------------------------------------------------------------------
+The Runtime Protocol consumes and interprets runtime-level options
+and determines the execution mode before any component/service/operation
+resolution occurs.
+
+Examples of runtime-level options:
+- --log-level
+- --log-backend
+- --baseurl
+- --http-driver
+- --env
+
+The Runtime Protocol:
+- Determines RunMode (server / client / command / server-emulation / script)
+- Constructs GlobalRuntimeContext
+- Applies configuration overrides (CLI > config file > defaults)
+- Consumes runtime-only switches and properties
+
+Any runtime option successfully consumed at this stage MUST NOT be
+forwarded to the Domain Protocol.
+
+Two-Stage Argument Flow
+----------------------------------------------------------------------
+Given an invocation:
+
+    cncf command --log-level trace --baseurl http://localhost:8080 admin.system.ping param1
+
+Stage 1 (Runtime Protocol) consumes:
+
+    command
+    --log-level trace
+    --baseurl http://localhost:8080
+
+Result:
+- RunMode = command
+- GlobalRuntimeContext.logLevel = trace
+- GlobalRuntimeContext.baseUrl = http://localhost:8080
+
+Stage 2 (Domain Protocol) receives:
+
+    admin.system.ping param1
+
+Only these remaining arguments participate in
+canonical / alias / suffix resolution as defined below.
+
+Unconsumed Switch Propagation Rule
+----------------------------------------------------------------------
+If a switch or property is NOT recognized by the Runtime Protocol,
+it MUST be preserved and forwarded to the Domain Protocol unchanged.
+
+This rule ensures forward compatibility for domain-level options
+and prevents accidental loss of semantic arguments.
+
+Relation to Configuration
+----------------------------------------------------------------------
+Runtime Protocol resolution MAY incorporate configuration sources
+(e.g. .cncf/config.yaml).
+
+Configuration-derived runtime values are resolved BEFORE
+Domain Protocol processing and are materialized exclusively
+in GlobalRuntimeContext.
+
+Domain resolution MUST NOT read configuration directly.
 
 
 Resolution Model
