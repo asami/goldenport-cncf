@@ -1,5 +1,7 @@
 package org.goldenport.cncf.observability
 
+import java.util.Locale
+
 import org.goldenport.Conclusion
 import org.goldenport.http.HttpRequest
 import org.goldenport.record.Record
@@ -97,7 +99,7 @@ object ObservabilityEngine {
   ): Unit =
     _emit("error", context, scope, name, attributes, None)
 
-  private var _policy: VisibilityPolicy = VisibilityPolicy.AllowAll
+  private var _policy: VisibilityPolicy = VisibilityPolicy()
 
   // TODO Phase 2.85: configure visibility policy from --log-* CLI flags and runtime config.
   def visibilityPolicy: VisibilityPolicy = _policy
@@ -155,8 +157,32 @@ object ObservabilityEngine {
 /**
  * Placeholder for the future visibility policy that responds to --log-* CLI flags and config values.
  */
+enum LogLevel(val priority: Int) {
+  case Error extends LogLevel(50)
+  case Warn extends LogLevel(40)
+  case Info extends LogLevel(30)
+  case Debug extends LogLevel(20)
+  case Trace extends LogLevel(10)
+}
+
+object LogLevel {
+  private val _locale: Locale = Locale.ROOT
+
+  def from(value: String): Option[LogLevel] =
+    Option(value)
+      .map(_.trim.toLowerCase(_locale))
+      .flatMap {
+        case "error"  => Some(LogLevel.Error)
+        case "warn" | "warning" => Some(LogLevel.Warn)
+        case "info"   => Some(LogLevel.Info)
+        case "debug"  => Some(LogLevel.Debug)
+        case "trace"  => Some(LogLevel.Trace)
+        case _        => None
+      }
+}
+
 final case class VisibilityPolicy(
-  level: Option[String] = None,
+  minLevel: LogLevel = LogLevel.Info,
   scopes: Option[Set[String]] = None,
   packages: Option[Set[String]] = None,
   classes: Option[Set[String]] = None,
@@ -168,8 +194,10 @@ final case class VisibilityPolicy(
     packageName: String,
     className: String,
     backendValue: LogBackend
-  ): Boolean =
-    true
+  ): Boolean = {
+    val candidate = LogLevel.from(levelValue).getOrElse(LogLevel.Info)
+    candidate.priority >= minLevel.priority
+  }
 }
 
 object VisibilityPolicy {

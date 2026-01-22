@@ -16,13 +16,14 @@ import org.goldenport.protocol.handler.egress.EgressCollection
 import org.goldenport.protocol.handler.ingress.IngressCollection
 import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.spec as spec
+import org.goldenport.cncf.observability.global.GlobalObservable
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 14, 2026
+ * @version Jan. 23, 2026
  * @author  ASAMI, Tomoharu
  */
-object CncfMain {
+object CncfMain extends GlobalObservable {
   final class CliFailed(val code: Int)
       extends RuntimeException(s"Command failed (exit=$code)")
       with scala.util.control.NoStackTrace
@@ -238,7 +239,7 @@ object CncfMain {
       if (components.nonEmpty) {
         GlobalRuntimeContext.current.flatMap(ctx => Option(ctx.runtimeMode)) match {
           case Some(mode) if mode == RunMode.Command || mode == RunMode.Client =>
-            Console.err.println(
+            observe_trace(
               s"[component-dir:trace] mode=${mode.name} loaded components=${components.map(_.core.name).mkString(",")}"
             )
           case _ => ()

@@ -27,7 +27,7 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
 import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.cli.RuntimeParameterParser
-import org.goldenport.cncf.observability.ObservabilityEngine
+import org.goldenport.cncf.observability.{LogLevel, ObservabilityEngine, VisibilityPolicy}
 import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObservability, GlobalObservabilityGate, ObservabilityRoot}
 
 /*
@@ -364,7 +364,7 @@ object CncfRuntime extends GlobalObservable {
     args: Array[String],
     extraComponents: Subsystem => Seq[Component]
   ): Int = {
-    val (backendoption, actualargs) = _log_backend(args)
+    val (backendoption, logLevelOption, actualargs) = _extract_log_options(args)
     if (actualargs.isEmpty) {
       _print_usage()
       return 2
@@ -378,6 +378,7 @@ object CncfRuntime extends GlobalObservable {
     val httpDriver = _http_driver_from_runtime_config(runtimeConfig)
     val aliasResolver = _alias_resolver(configuration)
     _install_log_backend(logBackend)
+    _update_visibility_policy(logLevelOption, configuration)
     _reset_global_runtime_context()
     _create_global_runtime_context(httpDriver, runtimeConfig.mode, aliasResolver)
     val r: Consequence[OperationRequest] =
@@ -427,7 +428,7 @@ object CncfRuntime extends GlobalObservable {
   }
 
   def run(args: Array[String]): Int = {
-    val (backendoption, actualargs) = _log_backend(args)
+    val (backendoption, logLevelOption, actualargs) = _extract_log_options(args)
     if (actualargs.isEmpty) {
       _print_usage()
       return 2
@@ -441,6 +442,7 @@ object CncfRuntime extends GlobalObservable {
     val httpDriver = _http_driver_from_runtime_config(runtimeConfig)
     val aliasResolver = _alias_resolver(configuration)
     _install_log_backend(logBackend)
+    _update_visibility_policy(logLevelOption, configuration)
     _reset_global_runtime_context()
     _create_global_runtime_context(httpDriver, runtimeConfig.mode, aliasResolver)
     val r: Consequence[OperationRequest] =
@@ -519,20 +521,31 @@ object CncfRuntime extends GlobalObservable {
     Console.err.println(text)
   }
 
-  private def _log_backend(
+  private def _extract_log_options(
     args: Array[String]
-  ): (Option[String], Array[String]) = {
+  ): (Option[String], Option[String], Array[String]) = {
     var logBackendOption: Option[String] = None
-    val rest = args.filter { arg =>
-      if (arg.startsWith("--log-backend=")) {
-        val value = arg.stripPrefix("--log-backend=")
-        logBackendOption = Some(value)
-        false
+    var logLevelOption: Option[String] = None
+    val rest = Vector.newBuilder[String]
+    var i = 0
+    while (i < args.length) {
+      val current = args(i)
+      if (current.startsWith("--log-backend=")) {
+        logBackendOption = Some(current.stripPrefix("--log-backend="))
+      } else if (current == "--log-backend" && i + 1 < args.length) {
+        logBackendOption = Some(args(i + 1))
+        i = i + 1
+      } else if (current.startsWith("--log-level=")) {
+        logLevelOption = Some(current.stripPrefix("--log-level="))
+      } else if (current == "--log-level" && i + 1 < args.length) {
+        logLevelOption = Some(args(i + 1))
+        i = i + 1
       } else {
-        true
+        rest += current
       }
+      i = i + 1
     }
-    (logBackendOption, rest)
+    (logBackendOption, logLevelOption, rest.result().toArray)
   }
 
   private def _decide_backend(
@@ -567,6 +580,30 @@ object CncfRuntime extends GlobalObservable {
       }
 
     get("cncf.runtime.logging.backend").orElse(get("cncf.logging.backend"))
+  }
+
+  private def _log_level_from_configuration(
+    configuration: ResolvedConfiguration
+  ): Option[String] = {
+    def get(key: String): Option[String] =
+      configuration.get[String](key) match {
+        case Consequence.Success(value) => value
+        case Consequence.Failure(_) => None
+      }
+
+    get("cncf.runtime.logging.level").orElse(get("cncf.logging.level"))
+  }
+
+  private def _update_visibility_policy(
+    cliLogLevel: Option[String],
+    configuration: ResolvedConfiguration
+  ): Unit = {
+    val levelOpt =
+      cliLogLevel
+        .orElse(_log_level_from_configuration(configuration))
+        .flatMap(LogLevel.from)
+    val level = levelOpt.getOrElse(LogLevel.Info)
+    ObservabilityEngine.updateVisibilityPolicy(VisibilityPolicy(minLevel = level))
   }
 
   private def _install_log_backend(

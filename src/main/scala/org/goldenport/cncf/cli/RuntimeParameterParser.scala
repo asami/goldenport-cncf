@@ -51,14 +51,16 @@ final class RuntimeParameterParser {
         val residualVec = _residual(result)
         val consumedVec = _consumed(result)
         val baseUrlOpt = _base_url(result)
-        if (_log.isTraceEnabled) {
-          _log.trace(
-            s"[client:parse] runtime args consumed=${consumedVec.mkString(" ")} residual=${residualVec.mkString(" ")}"
-          )
-        }
+        _log.trace(
+          s"[client:parse] runtime args consumed=${consumedVec.mkString(" ")} residual=${residualVec.mkString(" ")}"
+        )
         RuntimeParameterParseResult(consumedVec, residualVec, baseUrlOpt)
       case Consequence.Failure(conclusion) =>
-        _log.error(s"[client:parse] runtime parameter parsing failed: ${conclusion.message}")
+        if (_log.isDebugEnabled) {
+          _log.debug(
+            s"[client:parse] runtime parameter parsing skipped (rejected by runtime protocol): ${conclusion.message}"
+          )
+        }
         RuntimeParameterParseResult(Vector.empty, args.toVector, None)
     }
   }
