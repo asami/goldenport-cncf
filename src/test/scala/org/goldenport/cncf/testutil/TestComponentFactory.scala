@@ -4,6 +4,8 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
 import org.goldenport.protocol.Protocol
 import org.goldenport.cncf.component.*
 import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.cncf.cli.RunMode
+import org.goldenport.cncf.path.AliasResolver
 
 /*
  * @since   Jan.  8, 2026
@@ -24,7 +26,9 @@ object TestComponentFactory {
     Subsystem(
       name = name,
       version = version,
-      configuration = emptyConfiguration
+      configuration = emptyConfiguration,
+      aliasResolver = AliasResolver.empty,
+      runMode = RunMode.Command
     )
 
   def create(

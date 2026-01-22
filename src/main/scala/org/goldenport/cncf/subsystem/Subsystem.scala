@@ -34,7 +34,9 @@ final class Subsystem(
   val version: Option[String] = None,
   scopeContext: Option[ScopeContext] = None, // TODO
   httpdriver: Option[HttpDriver] = None,
-  val configuration: ResolvedConfiguration
+  val configuration: ResolvedConfiguration,
+  aliasResolver: AliasResolver = GlobalRuntimeContext.current.map(_.aliasResolver).getOrElse(AliasResolver.empty),
+  runMode: RunMode = GlobalRuntimeContext.current.map(_.runtimeMode).getOrElse(RunMode.Server)
 ) {
   private var _component_space: ComponentSpace = ComponentSpace()
   private var _resolver: OperationResolver = OperationResolver.empty
@@ -348,15 +350,8 @@ final class Subsystem(
   private def _internal_error(): HttpResponse =
     HttpResponse.internalServerError()
 
-  private def _alias_resolver: AliasResolver =
-    GlobalRuntimeContext.current
-      .map(_.aliasResolver)
-      .getOrElse(AliasResolver.empty)
-
-  private def _http_run_mode: RunMode =
-    GlobalRuntimeContext.current
-      .map(_.runtimeMode)
-      .getOrElse(RunMode.Server)
+  private val _alias_resolver: AliasResolver = aliasResolver
+  private val _http_run_mode: RunMode = runMode
 
   // private def _ensure_system_context(
   //   component: Component

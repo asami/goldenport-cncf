@@ -8,8 +8,9 @@ import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.cncf.component.builtin.debug.DebugComponent
 import org.goldenport.cncf.component.builtin.specification.SpecificationComponent
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.http.{FakeHttpDriver, UrlConnectionHttpDriver}
-import org.goldenport.cncf.context.GlobalRuntimeContext
+import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -43,7 +44,7 @@ object DefaultSubsystemFactory {
         parent = None,
         observabilityContext = ExecutionContext.create().observability
       ),
-      mode = mode,
+      mode = mode.flatMap(RunMode.from),
       configuration = configuration
     )
 
@@ -53,7 +54,7 @@ object DefaultSubsystemFactory {
   ): Subsystem = {
     val subsystem = default(mode)
     if (extraComponents.nonEmpty) {
-      val modeLabel = mode.getOrElse(RuntimeConfig.default.mode.name)
+      val modeLabel = mode.flatMap(RunMode.from).getOrElse(RuntimeConfig.default.mode)
       val extras = extraComponents // extraComponents.map(_.withSystemContext(SystemContext.empty))
       subsystem.add(extras)
     }
@@ -62,12 +63,15 @@ object DefaultSubsystemFactory {
 
   def defaultWithScope(
     context: ScopeContext,
-    mode: Option[String] = None,
+    mode: Option[RunMode] = None,
     configuration: ResolvedConfiguration =
-      ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
+    aliasResolver: AliasResolver = GlobalRuntimeContext.current
+      .map(_.aliasResolver)
+      .getOrElse(AliasResolver.empty)
   ): Subsystem = {
     val runtimeConfig = RuntimeConfig.from(configuration)
-    val modeLabel = mode.getOrElse(runtimeConfig.mode.name)
+    val runMode = mode.getOrElse(runtimeConfig.mode)
     val driver = _resolve_http_driver(runtimeConfig, _subsystem_name)
     val subsystem =
       Subsystem(
@@ -88,7 +92,9 @@ object DefaultSubsystemFactory {
           }
         ),
         httpdriver = Some(driver),
-        configuration = configuration
+        configuration = configuration,
+        aliasResolver = aliasResolver,
+        runMode = runMode
       )
     val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
     val comps = Vector(_admin, _client, DebugComponent.Factory, _spec)

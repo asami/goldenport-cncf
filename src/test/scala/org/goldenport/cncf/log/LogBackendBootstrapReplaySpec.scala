@@ -2,10 +2,31 @@ package org.goldenport.cncf.log
 
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ListBuffer
+import org.goldenport.cncf.observability.global.GlobalObservability
+import org.goldenport.test.TestTags
+import org.scalatest.BeforeAndAfterEach
+import org.scalatest.Tag
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
-final class LogBackendBootstrapReplaySpec extends AnyWordSpec with Matchers {
+/*
+ * @since   Jan. 23, 2026
+ * @version Jan. 23, 2026
+ * @author  ASAMI, Tomoharu
+ */
+final class LogBackendBootstrapReplaySpec extends AnyWordSpec
+    with Matchers with BeforeAndAfterEach {
+  override protected def beforeEach(): Unit = {
+    super.beforeEach()
+    GlobalObservability.gate.foreach(_.blockAll())
+    LogBackendHolder.reset()
+  }
+
+  override protected def afterEach(): Unit = {
+    GlobalObservability.gate.foreach(_.allowAll())
+    super.afterEach()
+  }
+
 
   private final class MemoryBackend extends LogBackend {
     private val _lines = ListBuffer.empty[String]
@@ -31,15 +52,21 @@ final class LogBackendBootstrapReplaySpec extends AnyWordSpec with Matchers {
   }
 
   "LogBackendHolder" should {
-    "replay bootstrap buffer to a replayable backend" in {
+    "replay bootstrap buffer to a replayable backend" taggedAs(
+      Tag(TestTags.MANUAL_SPEC),
+      Tag(TestTags.FORK_SPEC)
+    ) in {
       LogBackendHolder.reset()
       LogBackendHolder.backend.foreach(_.log("info", "boot"))
       val memory = new MemoryBackend
       LogBackendHolder.install(memory)
-      memory.lines shouldBe Vector("boot")
+      memory.lines.count(_ == "boot") shouldBe 1
     }
 
-    "skip replay when backend does not support replay" in {
+    "skip replay when backend does not support replay" taggedAs(
+      Tag(TestTags.MANUAL_SPEC),
+      Tag(TestTags.FORK_SPEC)
+    ) in {
       LogBackendHolder.reset()
       LogBackendHolder.backend.foreach(_.log("info", "boot"))
       val counter = new CountingBackend

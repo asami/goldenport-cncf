@@ -148,10 +148,12 @@ object CncfRuntime extends GlobalObservable {
     val cwd = Paths.get("").toAbsolutePath.normalize
     val configuration = _resolve_configuration(cwd)
     val modeLabel = mode.map(_.name)
+    val aliasResolver = _alias_resolver(configuration)
     val subsystem = DefaultSubsystemFactory.defaultWithScope(
       _runtime_scope_context(),
-      modeLabel,
-      configuration
+      mode,
+      configuration,
+      aliasResolver
     )
     if (mode.contains(RunMode.Client)) {
       observe_trace(

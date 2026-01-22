@@ -1,5 +1,7 @@
 package org.goldenport.cncf.observability.global
 
+import java.util.concurrent.atomic.AtomicBoolean
+
 import org.goldenport.cncf.context.ScopeContext
 import org.goldenport.cncf.context.ScopeKind
 import org.goldenport.cncf.context.ObservabilityContext
@@ -27,6 +29,9 @@ object GlobalObservability {
 
   def isInitialized: Boolean =
     _root_opt.isDefined
+
+  def gate: Option[GlobalObservabilityGate] =
+    _root_opt.map(_.gate)
 
   def observeError(scope: ScopeContext, msg: String, clazz: Class[_]): Unit =
     _observe("error", scope, msg, clazz, (engine, context, s, name, attributes) =>
@@ -108,11 +113,28 @@ object ObservabilityScopeDefaults {
  * A JVM-global entry gate that currently performs no visibility decisions.
  * It exists to centralize future observability flow/volume control rules.
  */
-final case class GlobalObservabilityGate() {
-  def pass[T](scope: ScopeContext, packageName: String, className: String)(block: => T): T =
-    block
+final class GlobalObservabilityGate private (_open: AtomicBoolean) {
+  def this() = this(new AtomicBoolean(true))
+
+  def pass[T](scope: ScopeContext, packageName: String, className: String)(block: => T): Unit = {
+    if (_open.get()) {
+      block
+    } else {
+      ()
+    }
+  }
+
+  def blockAll(): Unit =
+    _open.set(false)
+
+  def allowAll(): Unit =
+    _open.set(true)
 }
 
 object GlobalObservabilityGate {
-  val allowAll: GlobalObservabilityGate = GlobalObservabilityGate()
+  def apply(): GlobalObservabilityGate =
+    new GlobalObservabilityGate(new AtomicBoolean(true))
+
+  def allowAll: GlobalObservabilityGate =
+    apply()
 }
