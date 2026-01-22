@@ -1,7 +1,12 @@
 package org.goldenport.cncf.cli
 
+import java.nio.file.{Path, Paths}
+
 import org.goldenport.cncf.protocol.GlobalParameterGroup
 import org.goldenport.Consequence
+import org.goldenport.configuration.ConfigurationResolver
+import org.goldenport.configuration.ConfigurationSources
+import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.ProtocolEngine
 import org.goldenport.protocol.Request
@@ -10,7 +15,7 @@ import org.slf4j.LoggerFactory
 
 /*
  * @since   Jan. 22, 2026
- * @version Jan. 22, 2026
+ * @version Jan. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeParameterParseResult(
@@ -36,8 +41,11 @@ final class RuntimeParameterParser {
   def parse(
     args: Seq[String]
   ): RuntimeParameterParseResult = {
+    val cwd = Paths.get("").toAbsolutePath.normalize
+    val resolved = _resolve_configuration(cwd)
+    val initialProperties = _initial_properties(resolved)
     val runtimeArgs = (_serviceName +: _operationName +: args).toArray
-    _runtimeProtocolEngine.makeOperationRequest(runtimeArgs) match {
+    _runtimeProtocolEngine.makeOperationRequest(runtimeArgs, initialProperties) match {
       case Consequence.Success(req) =>
         val result = req.request
         val residualVec = _residual(result)
@@ -76,4 +84,27 @@ final class RuntimeParameterParser {
         case prop if prop.name == baseName => Option(prop.value).map(_.toString).getOrElse("")
       }
     }
+
+  private def _resolve_configuration(cwd: Path): ResolvedConfiguration = {
+    ConfigurationResolver.default.resolve(ConfigurationSources.standard(cwd)) match {
+      case Consequence.Success(resolved) => resolved
+      case Consequence.Failure(_) =>
+        ResolvedConfiguration(
+          configuration = org.goldenport.configuration.Configuration.empty,
+          trace = org.goldenport.configuration.ConfigurationTrace.empty
+        )
+    }
+  }
+
+  private def _initial_properties(
+    resolved: ResolvedConfiguration
+  ): Map[String, String] =
+    GlobalParameterGroup.runtimeParameters.flatMap { param =>
+      resolved.get[String](param.name) match {
+        case Consequence.Success(Some(value)) if value.nonEmpty =>
+          Some(param.name -> value)
+        case _ =>
+          None
+      }
+    }.toMap
 }
