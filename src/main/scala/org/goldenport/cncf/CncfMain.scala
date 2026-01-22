@@ -145,7 +145,7 @@ object CncfMain {
     }
 
   private def _default_components_dir(cwd: Path): Option[Path] = {
-    val dir = cwd.resolve("components").normalize
+    val dir = cwd.resolve("component.d").normalize
     if (Files.isDirectory(dir)) Some(dir) else None
   }
 
