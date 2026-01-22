@@ -27,15 +27,15 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
 import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.cli.RuntimeParameterParser
-import org.slf4j.LoggerFactory
+import org.goldenport.cncf.observability.ObservabilityEngine
+import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObservability, GlobalObservabilityGate, ObservabilityRoot}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 22, 2026
+ * @version Jan. 23, 2026
  * @author  ASAMI, Tomoharu
  */
-object CncfRuntime {
-  private val log = LoggerFactory.getLogger("org.goldenport.cncf.cli.CncfRuntime")
+object CncfRuntime extends GlobalObservable {
   private val _runtime_service_name = "runtime"
   private val _runtime_parameter_parser = new RuntimeParameterParser()
 
@@ -73,6 +73,7 @@ object CncfRuntime {
     )
     _global_runtime_context = Some(context)
     GlobalRuntimeContext.current = Some(context)
+    _initialize_global_observability()
     context
   }
 
@@ -85,6 +86,19 @@ object CncfRuntime {
         observabilityContext = ExecutionContext.create().observability
       )
     }
+
+  private def _initialize_global_observability(): Unit = {
+    if (!GlobalObservability.isInitialized) {
+      val backend = LogBackendHolder.backend.getOrElse(LogBackend.StdoutBackend)
+      val root =
+        ObservabilityRoot(
+          engine = ObservabilityEngine,
+          gate = GlobalObservabilityGate.allowAll,
+          backend = backend
+        )
+      GlobalObservability.initialize(root)
+    }
+  }
 
   private def _alias_resolver(
     configuration: ResolvedConfiguration
@@ -139,8 +153,8 @@ object CncfRuntime {
       modeLabel,
       configuration
     )
-    if (log.isTraceEnabled && mode.contains(RunMode.Client)) {
-      log.trace(
+    if (mode.contains(RunMode.Client)) {
+      observe_trace(
         s"[client:trace] buildSubsystem start mode=${modeLabel.getOrElse("none")} componentCount=${subsystem.components.size}"
       )
     }
@@ -149,9 +163,9 @@ object CncfRuntime {
     if (extras.nonEmpty) {
       subsystem.add(extras)
     }
-    if (log.isTraceEnabled && mode.contains(RunMode.Client)) {
+    if (mode.contains(RunMode.Client)) {
       val operations = _component_operation_fqns(subsystem)
-      log.trace(
+      observe_trace(
         s"[client:trace] buildSubsystem complete components=${_component_names(subsystem)} operations=${_operation_sample(operations)}"
       )
     }
@@ -178,12 +192,10 @@ object CncfRuntime {
 
   def executeClient(args: Array[String]): Int = {
     val subsystem = buildSubsystem(mode = Some(RunMode.Client))
-    if (log.isTraceEnabled) {
-      val operations = _component_operation_fqns(subsystem)
-      log.trace(
-        s"[client:trace] executeClient start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
-      )
-    }
+    val operations = _component_operation_fqns(subsystem)
+    observe_trace(
+      s"[client:trace] executeClient start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
+    )
     val result = _client_component(subsystem).flatMap { component =>
         parseClientArgs(args).flatMap { req =>
         _client_action_from_request(req).flatMap { action =>
@@ -205,12 +217,10 @@ object CncfRuntime {
     extraComponents: Subsystem => Seq[Component]
   ): Int = {
     val subsystem = buildSubsystem(extraComponents, Some(RunMode.Client))
-    if (log.isTraceEnabled) {
-      val operations = _component_operation_fqns(subsystem)
-      log.trace(
-        s"[client:trace] executeClient(extra) start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
-      )
-    }
+    val operations = _component_operation_fqns(subsystem)
+    observe_trace(
+      s"[client:trace] executeClient(extra) start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
+    )
     val result = _client_component(subsystem).flatMap { component =>
         parseClientArgs(args).flatMap { req =>
         _client_action_from_request(req).flatMap { action =>
@@ -394,7 +404,7 @@ object CncfRuntime {
             startServer(domainArgs.drop(1), extraComponents)
             0
           case Some(RunMode.Client) =>
-            log.trace(
+            observe_trace(
               s"[client:trace] runWithExtraComponents dispatching to client mode args=${domainArgs.drop(1).mkString(" ")}"
             )
             executeClient(domainArgs.drop(1), extraComponents)
@@ -451,7 +461,7 @@ object CncfRuntime {
             startServer(domainArgs.drop(1))
             0
           case Some(RunMode.Client) =>
-            log.trace(
+            observe_trace(
               s"[client:trace] run dispatching to client mode args=${domainArgs.drop(1).mkString(" ")}"
             )
             executeClient(domainArgs.drop(1))
@@ -595,17 +605,13 @@ object CncfRuntime {
   ): Consequence[ClientComponent] =
     subsystem.components.collectFirst { case c: ClientComponent => c } match {
       case Some(component) =>
-        if (log.isTraceEnabled) {
-          val operations = _component_operation_fqns(subsystem)
-          log.trace(
-            s"[client:trace] client component found=${component.name} operations=${_operation_sample(operations)}"
-          )
-        }
+        val operations = _component_operation_fqns(subsystem)
+        observe_trace(
+          s"[client:trace] client component found=${component.name} operations=${_operation_sample(operations)}"
+        )
         Consequence.success(component)
       case None =>
-        if (log.isTraceEnabled) {
-          log.trace("[client:trace] client component not available")
-        }
+        observe_trace("[client:trace] client component not available")
         Consequence.failure("client component not available")
     }
 
@@ -652,11 +658,9 @@ object CncfRuntime {
           val baseurl = _client_baseurl_from_request(req)
           val rawUrl = _build_client_url(baseurl, path)
           val url = _append_client_query(rawUrl, req)
-          if (log.isTraceEnabled) {
-            log.trace(
-              s"[client:trace] client action request operation=${req.operation} path=${path} url=${url}"
-            )
-          }
+          observe_trace(
+            s"[client:trace] client action request operation=${req.operation} path=${path} url=${url}"
+          )
           req.operation match {
         case "post" =>
           _client_mime_body_from_request(req).map { body =>

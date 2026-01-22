@@ -4,11 +4,11 @@ import org.goldenport.Conclusion
 import org.goldenport.http.HttpRequest
 import org.goldenport.record.Record
 import org.goldenport.cncf.context.{ObservabilityContext, ScopeContext}
-import org.goldenport.cncf.log.LogBackendHolder
+import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 20, 2026
+ * @version Jan. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class OperationContext(
@@ -73,6 +73,22 @@ object ObservabilityEngine {
   ): Unit =
     _emit("warn", context, scope, name, attributes, None)
 
+  def emitDebug(
+    context: ObservabilityContext,
+    scope: ScopeContext,
+    name: String,
+    attributes: Record
+  ): Unit =
+    _emit("debug", context, scope, name, attributes, None)
+
+  def emitTrace(
+    context: ObservabilityContext,
+    scope: ScopeContext,
+    name: String,
+    attributes: Record
+  ): Unit =
+    _emit("trace", context, scope, name, attributes, None)
+
   def emitError(
     context: ObservabilityContext,
     scope: ScopeContext,
@@ -80,6 +96,23 @@ object ObservabilityEngine {
     attributes: Record
   ): Unit =
     _emit("error", context, scope, name, attributes, None)
+
+  private var _policy: VisibilityPolicy = VisibilityPolicy.AllowAll
+
+  // TODO Phase 2.85: configure visibility policy from --log-* CLI flags and runtime config.
+  def visibilityPolicy: VisibilityPolicy = _policy
+
+  def updateVisibilityPolicy(policy: VisibilityPolicy): Unit =
+    _policy = policy
+
+  def shouldEmit(
+    level: String,
+    scope: ScopeContext,
+    packageName: String,
+    className: String,
+    backend: LogBackend
+  ): Boolean =
+    _policy.allows(level, scope.name, packageName, className, backend)
 
   private def _emit(
     level: String,
@@ -117,4 +150,28 @@ object ObservabilityEngine {
     val parts = traceid +: correlationid.toVector
     if (parts.isEmpty) name else s"$name ${parts.mkString("[", " ", "]")}"
   }
+}
+
+/**
+ * Placeholder for the future visibility policy that responds to --log-* CLI flags and config values.
+ */
+final case class VisibilityPolicy(
+  level: Option[String] = None,
+  scopes: Option[Set[String]] = None,
+  packages: Option[Set[String]] = None,
+  classes: Option[Set[String]] = None,
+  backend: Option[String] = None
+) {
+  def allows(
+    levelValue: String,
+    scope: String,
+    packageName: String,
+    className: String,
+    backendValue: LogBackend
+  ): Boolean =
+    true
+}
+
+object VisibilityPolicy {
+  val AllowAll: VisibilityPolicy = VisibilityPolicy()
 }
