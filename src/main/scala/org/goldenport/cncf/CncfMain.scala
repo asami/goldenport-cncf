@@ -235,17 +235,17 @@ object CncfMain extends GlobalObservable {
     extras: Subsystem => Seq[Component]
   ): Subsystem => Seq[Component] =
     (subsystem: Subsystem) => {
-      val components = extras(subsystem)
-      if (components.nonEmpty) {
-        GlobalRuntimeContext.current.flatMap(ctx => Option(ctx.runtimeMode)) match {
-          case Some(mode) if mode == RunMode.Command || mode == RunMode.Client =>
-            observe_trace(
-              s"[component-dir:trace] mode=${mode.name} loaded components=${components.map(_.core.name).mkString(",")}"
-            )
-          case _ => ()
-        }
-      }
-      components
+    val components = extras(subsystem)
+    if (components.nonEmpty) {
+      val modeLabel = GlobalRuntimeContext.current
+        .flatMap(ctx => Option(ctx.runtimeMode))
+        .map(_.name)
+        .getOrElse("unknown")
+      observe_trace(
+        s"[component-dir] mode=${modeLabel} loaded components=${components.map(_.core.name).mkString(",")}"
+      )
+    }
+    components
     }
 
   private def _class_dirs_(

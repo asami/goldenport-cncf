@@ -2,6 +2,8 @@ package org.goldenport.cncf.observability.global
 
 import java.util.concurrent.atomic.AtomicBoolean
 
+import scala.collection.mutable
+
 import org.goldenport.cncf.context.ScopeContext
 import org.goldenport.cncf.context.ScopeKind
 import org.goldenport.cncf.context.ObservabilityContext
@@ -17,13 +19,37 @@ import org.goldenport.record.Record
  * @author  ASAMI, Tomoharu
  */
 object GlobalObservability {
+  private case class BufferedEvent(
+    level: String,
+    scope: ScopeContext,
+    msg: String,
+    clazz: Class[_],
+    emitter: (
+      ObservabilityEngine.type,
+      ObservabilityContext,
+      ScopeContext,
+      String,
+      Record
+    ) => Unit
+  )
+
+  private[observability] val BufferLimit = 256
+  private val _buffer = mutable.Queue.empty[BufferedEvent]
   private var _root_opt: Option[ObservabilityRoot] = None
+
+  private[observability] def resetForTests(): Unit =
+    this.synchronized {
+      _root_opt = None
+      _buffer.clear()
+    }
 
   def initialize(root: ObservabilityRoot): Unit =
     this.synchronized {
       if (_root_opt.isEmpty) {
         _root_opt = Some(root)
         LogBackendHolder.install(root.backend)
+        val events = _buffer.dequeueAll(_ => true)
+        events.foreach(event => _emitWithRoot(root, event))
       }
     }
 
@@ -70,24 +96,35 @@ object GlobalObservability {
       String,
       Record
     ) => Unit
-  ): Unit =
-    _root_opt.foreach { root =>
-      val packageName = Option(clazz.getPackage).map(_.getName).getOrElse("")
-      val className = clazz.getName
-      root.gate.pass(scope, packageName, className) {
-        if (root.engine.shouldEmit(level, scope, packageName, className, root.backend)) {
-          val context = ObservabilityContext(
-            traceId = TraceId(scope.name, scope.kind.toString),
-            spanId = None,
-            correlationId = None
-          )
-          emitter(root.engine, context, scope, msg, Record.empty)
-        }
+  ): Unit = {
+    val event = BufferedEvent(level, scope, msg, clazz, emitter)
+    this.synchronized {
+      _root_opt match {
+        case Some(root) => _emitWithRoot(root, event)
+        case None =>
+          if (_buffer.size >= BufferLimit) _buffer.dequeue()
+          _buffer.enqueue(event)
       }
     }
+  }
+
+  private def _emitWithRoot(root: ObservabilityRoot, event: BufferedEvent): Unit = {
+    val packageName = Option(event.clazz.getPackage).map(_.getName).getOrElse("")
+    val className = event.clazz.getName
+    root.gate.pass(event.scope, packageName, className) {
+      if (root.engine.shouldEmit(event.level, event.scope, packageName, className, root.backend)) {
+        val context = ObservabilityContext(
+          traceId = TraceId(event.scope.name, event.scope.kind.toString),
+          spanId = None,
+          correlationId = None
+        )
+        event.emitter(root.engine, context, event.scope, event.msg, Record.empty)
+      }
+    }
+  }
 }
 
-final case class ObservabilityRoot(
+  final case class ObservabilityRoot(
   engine: ObservabilityEngine.type,
   gate: GlobalObservabilityGate,
   backend: LogBackend
@@ -100,11 +137,25 @@ object ObservabilityScopeDefaults {
     correlationId = None
   )
 
+  private val _bootstrap_context = ObservabilityContext(
+    traceId = TraceId("bootstrap", "observability"),
+    spanId = None,
+    correlationId = None
+  )
+
   val Subsystem: ScopeContext = ScopeContext(
     kind = ScopeKind.Subsystem,
-    name = "global",
+    name = "Global",
     parent = None,
     observabilityContext = _context,
+    httpDriverOption = None
+  )
+
+  val Bootstrap: ScopeContext = ScopeContext(
+    kind = ScopeKind.Subsystem,
+    name = "Bootstrap",
+    parent = None,
+    observabilityContext = _bootstrap_context,
     httpDriverOption = None
   )
 }

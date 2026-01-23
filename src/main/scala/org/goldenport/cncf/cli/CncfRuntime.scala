@@ -89,6 +89,8 @@ object CncfRuntime extends GlobalObservable {
 
   private def _initialize_global_observability(): Unit = {
     if (!GlobalObservability.isInitialized) {
+      // Phase 2.85 TEMP: force an audible backend so component.d loading traces are visible.
+      LogBackendHolder.install(LogBackend.StdoutBackend)
       val backend = LogBackendHolder.backend.getOrElse(LogBackend.StdoutBackend)
       val root =
         ObservabilityRoot(
@@ -155,22 +157,18 @@ object CncfRuntime extends GlobalObservable {
       configuration,
       aliasResolver
     )
-    if (mode.contains(RunMode.Client)) {
-      observe_trace(
-        s"[client:trace] buildSubsystem start mode=${modeLabel.getOrElse("none")} componentCount=${subsystem.components.size}"
-      )
-    }
+    observe_trace(
+      s"[subsytem] buildSubsystem start mode=${modeLabel.getOrElse("none")} componentCount=${subsystem.components.size}"
+    )
     GlobalRuntimeContext.current.foreach(_.updateSubsystemVersion(subsystem.version.getOrElse(CncfVersion.current)))
     val extras = extraComponents(subsystem)
     if (extras.nonEmpty) {
       subsystem.add(extras)
     }
-    if (mode.contains(RunMode.Client)) {
-      val operations = _component_operation_fqns(subsystem)
-      observe_trace(
-        s"[client:trace] buildSubsystem complete components=${_component_names(subsystem)} operations=${_operation_sample(operations)}"
-      )
-    }
+    val operations = _component_operation_fqns(subsystem)
+    observe_trace(
+      s"[subsytem] buildSubsystem complete components=${_component_names(subsystem)} operations=${_operation_sample(operations)}"
+    )
     // modeLabel.foreach { label =>
     //   _apply_system_context(subsystem, label)
     // }
@@ -196,7 +194,7 @@ object CncfRuntime extends GlobalObservable {
     val subsystem = buildSubsystem(mode = Some(RunMode.Client))
     val operations = _component_operation_fqns(subsystem)
     observe_trace(
-      s"[client:trace] executeClient start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
+      s"executeClient start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
     )
     val result = _client_component(subsystem).flatMap { component =>
         parseClientArgs(args).flatMap { req =>
@@ -221,7 +219,7 @@ object CncfRuntime extends GlobalObservable {
     val subsystem = buildSubsystem(extraComponents, Some(RunMode.Client))
     val operations = _component_operation_fqns(subsystem)
     observe_trace(
-      s"[client:trace] executeClient(extra) start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
+      s"[client] executeClient(extra) start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
     )
     val result = _client_component(subsystem).flatMap { component =>
         parseClientArgs(args).flatMap { req =>
@@ -402,14 +400,14 @@ object CncfRuntime extends GlobalObservable {
         mode.foreach { m =>
           GlobalRuntimeContext.current.foreach(_.updateRuntimeMode(m))
         }
+        observe_trace(
+          s"[subsytem] runWithExtraComponents dispatching to client mode args=${domainArgs.drop(1).mkString(" ")}"
+        )
         mode match {
           case Some(RunMode.Server) =>
             startServer(domainArgs.drop(1), extraComponents)
             0
           case Some(RunMode.Client) =>
-            observe_trace(
-              s"[client:trace] runWithExtraComponents dispatching to client mode args=${domainArgs.drop(1).mkString(" ")}"
-            )
             executeClient(domainArgs.drop(1), extraComponents)
           case Some(RunMode.Command) =>
             executeCommand(domainArgs.drop(1), extraComponents)
@@ -602,7 +600,7 @@ object CncfRuntime extends GlobalObservable {
       cliLogLevel
         .orElse(_log_level_from_configuration(configuration))
         .flatMap(LogLevel.from)
-    val level = levelOpt.getOrElse(LogLevel.Info)
+    val level = levelOpt.getOrElse(LogLevel.Trace)
     ObservabilityEngine.updateVisibilityPolicy(VisibilityPolicy(minLevel = level))
   }
 

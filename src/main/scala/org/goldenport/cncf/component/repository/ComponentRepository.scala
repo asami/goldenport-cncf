@@ -12,18 +12,19 @@ import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.cncf.bootstrap.BootstrapLog
+import org.goldenport.cncf.observability.global.{GlobalObservable, ObservabilityScopeDefaults, PersistentBootstrapLog}
 import org.goldenport.cncf.component.*
 
 /*
  * @since   Jan. 12, 2026
- * @version Jan. 18, 2026
+ * @version Jan. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
   def discover(): Seq[Component]
 }
 
-object ComponentRepository {
+object ComponentRepository extends GlobalObservable {
   private val _scala_cli_type = "scala-cli"
   private val _component_dir_type = "component-dir"
   private val _scala_cli_default_dir = ".scala-build"
@@ -120,7 +121,7 @@ object ComponentRepository {
     packagePrefixes: Seq[String]
   ) extends ComponentRepository {
     def discover(): Seq[Component] = {
-      val log = BootstrapLog.stderr
+      val log = PersistentBootstrapLog.forClass(classOf[ScalaCliRepository], ObservabilityScopeDefaults.Bootstrap)
       log.info(s"scala-cli repository baseDir=${baseDir}")
       val classDirs = _resolve_class_dirs()
       log.info(s"classDirs=${classDirs.mkString(",")}")
@@ -178,9 +179,9 @@ object ComponentRepository {
       if (!Files.exists(baseDir)) {
         Nil
       } else {
-        val log = BootstrapLog.stderr
+        val log = PersistentBootstrapLog.forClass(classOf[ComponentDirRepository], ObservabilityScopeDefaults.Bootstrap)
         val origin = ComponentOrigin.Repository("component-dir")
-        // TEMPORARY: Demo-only JAR class scanning. TODO: Replace with META-INF/component.yaml-based discovery.
+        // TEMPORARY: Simple JAR class scanning. TODO: Add META-INF/component.yaml-based discovery.
         val components = _discover_from_jars(baseDir, params, origin, log)
         if (components.nonEmpty) {
           components
@@ -270,14 +271,14 @@ object ComponentRepository {
     Using.resource(new URLClassLoader(Array(jarPath.toUri.toURL), getClass.getClassLoader)) { loader =>
       val classNames = _jar_class_names(jarPath)
       if (classNames.isEmpty) {
-        log.info(s"jar=${jarPath.getFileName} contains no class entries")
+        log.warn(s"[component-dir] jar=${jarPath.getFileName} contains no class entries")
         Vector.empty
       } else {
         val factoryComponents = _instantiate_factory_components(loader, classNames, params, log)
         if (factoryComponents.nonEmpty) {
           factoryComponents.foreach { comp =>
             log.info(
-              s"[component-dir:trace] initialized component=${comp.core.name} class=${comp.getClass.getName}"
+              s"[component-dir] initialized component=${comp.core.name} class=${comp.getClass.getName}"
             )
           }
           factoryComponents
@@ -288,18 +289,18 @@ object ComponentRepository {
                 case Consequence.Success(components) =>
                   components.headOption match {
                     case Some(first) =>
-                      log.info(s"jar=${jarPath.getFileName} provides component=${first.core.name}")
+                      log.info(s"[componet-dir] jar=${jarPath.getFileName} provides component=${first.core.name}")
                       Vector(first)
                     case None =>
-                      log.info(s"jar=${jarPath.getFileName} contains no valid components")
+                      log.warn(s"[component-dir] jar=${jarPath.getFileName} contains no valid components")
                       Vector.empty
                   }
                 case Consequence.Failure(conclusion) =>
-                  log.warn(s"component creation failed for jar=${jarPath.getFileName} cause=${conclusion.message}")
+                  log.warn(s"[component-dir] component creation failed for jar=${jarPath.getFileName} cause=${conclusion.message}")
                   Vector.empty
               }
             case Consequence.Failure(conclusion) =>
-              log.warn(s"component discovery failed for jar=${jarPath.getFileName} cause=${conclusion.message}")
+              log.warn(s"[component-dir] component discovery failed for jar=${jarPath.getFileName} cause=${conclusion.message}")
               Vector.empty
           }
         }

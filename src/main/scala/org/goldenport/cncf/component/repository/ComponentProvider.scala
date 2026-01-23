@@ -2,6 +2,7 @@ package org.goldenport.cncf.component.repository
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.bootstrap.BootstrapLog
+import org.goldenport.cncf.observability.global.{ObservabilityScopeDefaults, PersistentBootstrapLog}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.component.Component.Core
 import org.goldenport.cncf.subsystem.Subsystem
@@ -15,7 +16,7 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Jan. 12, 2026
- * @version Jan. 14, 2026
+ * @version Jan. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentProvider {
@@ -28,7 +29,8 @@ object ComponentProvider {
   ): Consequence[Component] = {
     source match {
       case ClassDef(componentClass, _) =>
-        _provide_class(componentClass, subsystem, origin, BootstrapLog.stderr)
+        val log = PersistentBootstrapLog.forClass(classOf[ComponentProvider.type], ObservabilityScopeDefaults.Bootstrap)
+        _provide_class(componentClass, subsystem, origin, log)
     }
   }
 
