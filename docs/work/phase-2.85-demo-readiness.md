@@ -1,6 +1,6 @@
 # Phase 2.85 — Demo Readiness (HelloWorld Component)
 
-status = open
+status = closed
 
 ## Engineering Work Summary
 
@@ -112,7 +112,7 @@ This summary is intentionally duplicated here so that:
 
 ## Current Work Status (Stack)
 
-- A (ACTIVE): DI-01 — Minimal sbt project for a CNCF HelloWorld component
+- (none) — Phase 2.85 completed
 
 ---
 
@@ -131,9 +131,9 @@ Design generalization and feature expansion are explicitly out of scope.
 
 ## Development Items
 
-- [ ] DI-01: Minimal sbt project for a CNCF HelloWorld component
-- [ ] DI-02: Deploy and execute HelloWorld component using existing loader
-- [ ] DI-03: Document reproducible demo execution steps (article-ready)
+- [x] DI-01: Minimal sbt project for a CNCF HelloWorld component
+- [x] DI-02: Deploy and execute HelloWorld component using existing loader
+- [x] DI-03: Document reproducible demo execution steps (article-ready)
 
 Each development item is considered complete when it is
 completed, cancelled, or explicitly deferred to a next phase.

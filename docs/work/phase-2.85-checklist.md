@@ -119,7 +119,7 @@ This project will be used directly in the article demo.
 
 ## DI-02: Deploy and execute HelloWorld component using existing loader
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -137,10 +137,10 @@ priority rules) are introduced in this phase.
 
 ### Detailed Tasks
 
-- [ ] Prepare component descriptor
-- [ ] Confirm loader discovery
-- [ ] Execute component via CLI or server
-- [ ] Verify output correctness
+- [x] Prepare component descriptor
+- [x] Confirm loader discovery
+- [x] Execute component via CLI or server
+- [x] Verify output correctness
 
 ---
 
@@ -159,7 +159,7 @@ this item must be **deferred** and linked to a next-phase item.
 
 ## DI-03: Document reproducible demo execution steps
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -170,10 +170,10 @@ execution steps for the HelloWorld demo.
 
 ### Detailed Tasks
 
-- [ ] Decide execution path (CLI or HTTP)
-- [ ] Write minimal execution steps
-- [ ] Verify steps from a clean environment
-- [ ] Align steps with article narrative
+- [x] Decide execution path (CLI or HTTP)
+- [x] Write minimal execution steps
+- [x] Verify steps from a clean environment
+- [x] Align steps with article narrative
 
 ---
 
