@@ -1,3 +1,6 @@
+import sbt.TestFrameworks
+import sbt.Tests
+
 val scala3Version = "3.3.7"
 
 lazy val root = project
@@ -5,7 +8,7 @@ lazy val root = project
   .settings(
     organization := "org.goldenport",
     name := "goldenport-cncf",
-    version := "0.3.3",
+    version := "0.3.4",
 
     scalaVersion := scala3Version,
 
@@ -32,7 +35,7 @@ lazy val root = project
 
       "org.slf4j" % "slf4j-simple" % "2.0.12",
 
-      "org.goldenport" %% "goldenport-core" % "0.2.2",
+      "org.goldenport" %% "goldenport-core" % "0.2.3",
 
       // Testing
       "org.scalatest" %% "scalatest" % "3.2.18" % Test
@@ -51,9 +54,13 @@ lazy val root = project
       )
     },
 
-    publishMavenStyle := true
-  )
+    publishMavenStyle := true,
 
+    Test / fork := false,
+    (Test / test / testOptions) += Tests.Argument(TestFrameworks.ScalaTest, "-l", "org.goldenport.tags.ManualSpec"),
+    Test / testOnly / fork := true,
+    Test / testOnly / testOptions := Seq.empty
+  )
 ThisBuild / semanticdbEnabled := true
 ThisBuild / semanticdbVersion := scalafixSemanticdb.revision
 ThisBuild / scalafixOnCompile := false
@@ -67,16 +74,16 @@ assembly / assemblyJarName := "goldenport-cncf.jar"
 
 assembly / mainClass := Some("org.goldenport.cncf.CncfMain")
 
-assembly / test := {}
+    assembly / test := {}
 
-assembly / assemblyMergeStrategy := {
-  case PathList("META-INF", xs @ _*) =>
-    xs match {
-      case "MANIFEST.MF" :: Nil => MergeStrategy.discard
-      case _                    => MergeStrategy.first
+    assembly / assemblyMergeStrategy := {
+      case PathList("META-INF", xs @ _*) =>
+        xs match {
+          case "MANIFEST.MF" :: Nil => MergeStrategy.discard
+          case _                    => MergeStrategy.first
+        }
+      case _ => MergeStrategy.first
     }
-  case _ => MergeStrategy.first
-}
 
 // ---- Docker / Dist integration ----
 
