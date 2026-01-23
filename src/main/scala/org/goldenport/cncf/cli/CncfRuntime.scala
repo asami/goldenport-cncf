@@ -89,8 +89,7 @@ object CncfRuntime extends GlobalObservable {
 
   private def _initialize_global_observability(): Unit = {
     if (!GlobalObservability.isInitialized) {
-      // Phase 2.85 TEMP: force an audible backend so component.d loading traces are visible.
-      LogBackendHolder.install(LogBackend.StdoutBackend)
+      // Default behavior: rely on whatever backend (and bootstrap buffer) is already configured.
       val backend = LogBackendHolder.backend.getOrElse(LogBackend.StdoutBackend)
       val root =
         ObservabilityRoot(
@@ -600,7 +599,8 @@ object CncfRuntime extends GlobalObservable {
       cliLogLevel
         .orElse(_log_level_from_configuration(configuration))
         .flatMap(LogLevel.from)
-    val level = levelOpt.getOrElse(LogLevel.Trace)
+    // Default remains INFO so bootstrap/component.d traces stay hidden unless `--log-level trace` (or config) unsets it.
+    val level = levelOpt.getOrElse(LogLevel.Info)
     ObservabilityEngine.updateVisibilityPolicy(VisibilityPolicy(minLevel = level))
   }
 

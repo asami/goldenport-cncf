@@ -158,6 +158,9 @@ object ObservabilityScopeDefaults {
     observabilityContext = _bootstrap_context,
     httpDriverOption = None
   )
+
+  // This Bootstrap scope is permanent: bootstrap-phase logs remain buffered/replayed through GlobalObservability
+  // so initialization diagnostics are visible once the backend and policy are ready.
 }
 
 /*
