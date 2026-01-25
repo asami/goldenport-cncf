@@ -7,14 +7,13 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 import org.goldenport.cncf.log.LogBackend
-import org.goldenport.cncf.observability.ObservabilityEngine
-import org.goldenport.cncf.observability.ObservabilityEngine.{LogLevel, VisibilityPolicy}
+import org.goldenport.cncf.observability.{LogLevel, ObservabilityEngine, VisibilityPolicy}
 import org.goldenport.cncf.observability.global.{GlobalObservability, GlobalObservabilityGate, ObservabilityRoot, ObservabilityScopeDefaults}
 import org.goldenport.cncf.log.LogBackendHolder
 
 /*
  * @since   Jan. 23, 2026
- * @version Jan. 23, 2026
+ * @version Jan. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GlobalObservabilitySpec extends AnyWordSpec with Matchers with BeforeAndAfterEach {
@@ -35,7 +34,7 @@ final class GlobalObservabilitySpec extends AnyWordSpec with Matchers with Befor
       GlobalObservability.observeTrace(
         ObservabilityScopeDefaults.Subsystem,
         "pre-init replay",
-        classOf[GlobalObservability]
+        classOf[GlobalObservability.type]
       )
       val backend = new MemoryBackend
       GlobalObservability.initialize(
@@ -52,7 +51,7 @@ final class GlobalObservabilitySpec extends AnyWordSpec with Matchers with Befor
       GlobalObservability.observeTrace(
         ObservabilityScopeDefaults.Subsystem,
         "pre-init replay once",
-        classOf[GlobalObservability]
+        classOf[GlobalObservability.type]
       )
       val backend = new MemoryBackend
       GlobalObservability.initialize(
@@ -66,7 +65,7 @@ final class GlobalObservabilitySpec extends AnyWordSpec with Matchers with Befor
       GlobalObservability.observeTrace(
         ObservabilityScopeDefaults.Subsystem,
         "post-init emit",
-        classOf[GlobalObservability]
+        classOf[GlobalObservability.type]
       )
       backend.lines.size shouldBe initialSize + 1
     }
@@ -77,7 +76,7 @@ final class GlobalObservabilitySpec extends AnyWordSpec with Matchers with Befor
         GlobalObservability.observeTrace(
           ObservabilityScopeDefaults.Subsystem,
           s"buffered trace $i",
-          classOf[GlobalObservability]
+          classOf[GlobalObservability.type]
         )
       }
       val backend = new MemoryBackend

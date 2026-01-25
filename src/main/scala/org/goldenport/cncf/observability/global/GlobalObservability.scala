@@ -14,7 +14,7 @@ import org.goldenport.cncf.observability.global.GlobalObservabilityGate
 import org.goldenport.record.Record
 
 /*
- * @since   Jan. 24, 2026
+ * @since   Jan. 23, 2026
  * @version Jan. 23, 2026
  * @author  ASAMI, Tomoharu
  */
