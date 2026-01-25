@@ -1,11 +1,11 @@
-package conf.http
+package org.goldenport.cncf.http
 
 import org.goldenport.cncf.http.HttpExecutionEngine
 import org.goldenport.http.{HttpRequest, HttpResponse}
 
 /*
  * @since   Jan. 20, 2026
- * @version Jan. 20, 2026
+ * @version Jan. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class LoopbackHttpServer private (engine: HttpExecutionEngine) {

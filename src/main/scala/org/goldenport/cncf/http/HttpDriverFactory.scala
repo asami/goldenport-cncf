@@ -2,9 +2,13 @@ package org.goldenport.cncf.http
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.config.ClientConfig
-import conf.http.LoopbackHttpServer
 import org.goldenport.configuration.ResolvedConfiguration
 
+/*
+ * @since   Jan. 17, 2026
+ * @version Jan. 26, 2026
+ * @author  ASAMI, Tomoharu
+ */
 object HttpDriverFactory {
   def create(
     driverName: String

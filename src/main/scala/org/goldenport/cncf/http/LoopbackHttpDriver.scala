@@ -7,11 +7,10 @@ import org.goldenport.bag.Bag
 import org.goldenport.cncf.config.ClientConfig
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.http.{HttpRequest, HttpResponse}
-import conf.http.LoopbackHttpServer
 
 /*
  * @since   Jan. 20, 2026
- * @version Jan. 20, 2026
+ * @version Jan. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class LoopbackHttpDriver(
