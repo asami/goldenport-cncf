@@ -1,11 +1,6 @@
-Notes
------
-This directory contains non-normative documents such as:
+# Notes Directory
 
-- design explorations
-- rejected ideas
-- trial-and-error records
-- handover memos
-
-Documents in this directory are NOT authoritative.
-They must not override rules, specs, or design decisions.
+Purpose: capture exploratory ideas, diagnostics, or temporary observations that may lead to formal artifacts.
+Belongs: short-form write-ups of incidents, research thoughts, or trials that have not been promoted.
+Not allowed: binding decisions, finalized implementation requirements, or polished specs.
+Follow the lifecycle laid out in docs/rules/document-lifecycle.md before promoting any note.

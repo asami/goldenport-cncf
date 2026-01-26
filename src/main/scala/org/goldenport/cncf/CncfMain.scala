@@ -212,10 +212,23 @@ object CncfMain extends GlobalObservable {
     (subsystem: Subsystem) => {
       val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
       specs.flatMap { spec =>
-        spec.build(params).discover()
+        val origin = _origin_for_spec(spec)
+        spec.build(params.withOrigin(origin)).discover()
       }
     }
   }
+
+  private def _origin_for_spec(
+    spec: ComponentRepository.Specification
+  ): ComponentOrigin =
+    spec match {
+      case _: ComponentRepository.ComponentDirRepository.Specification =>
+        ComponentOrigin.Repository("component-dir")
+      case _: ComponentRepository.ScalaCliRepository.Specification =>
+        ComponentOrigin.Repository("scala-cli")
+      case _ =>
+        ComponentOrigin.Repository("component-repository")
+    }
 
   private def _component_extra_function(
     specs: Vector[ComponentRepository.Specification],

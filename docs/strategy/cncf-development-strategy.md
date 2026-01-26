@@ -149,10 +149,40 @@ Re-align error taxonomy and definitions before Phase 3 (CML).
 **Relationship**
 Phase 3.0 starts only after Phase 2.9 is complete.
 
-### Phase 3: CML → CRUD Domain Subsystem
-- Goal: domain modeling and runtime bootstrap.
-- Not driven by demo requirements.
-- Artifact (notes): `docs/notes/cml-crud-domain-subsystem-bootstrap.md`.
+### Phase 3: Model-Driven Execution and Orchestration Hub
+
+**Goal**
+Establish CNCF as a unified execution and orchestration hub capable of
+hosting generated domain components and coordinating heterogeneous
+execution forms, with exploratory support for AI agent integration.
+
+Phase 3 is not demo-driven; it focuses on foundational runtime and
+modeling capabilities that later phases will build upon.
+
+**Sub-phases**
+
+- **Phase 3.1: Execution Hub Foundation**
+  - Introduce Fat JAR Components (JVM-internal, classloader-isolated execution).
+  - Introduce Docker Components (external tool and environment execution).
+  - Introduce Microservice / SOA Components (remote execution via network APIs).
+  - Unify all execution forms under the Component / Service / Operation model.
+
+- **Phase 3.2: CML → Entity Component Generation**
+  - Generate executable Entity Components from CML models.
+  - Package generated components as self-contained execution units.
+  - Co-locate domain logic, documentation sources, and runtime metadata.
+
+- **Phase 3.3: AI Agent Hub (PoC)**
+  - Provide experimental projections of CNCF Operations to OpenAPI and MCP.
+  - Enable AI agents to invoke CNCF-managed operations indirectly.
+  - This sub-phase is exploratory and Proof-of-Concept only.
+
+**Artifacts (notes)**
+- `docs/work/phase-3.md`
+
+**Phase Ordering**
+Phase 3 begins only after Phase 2.9 completes; the documented flow remains Phase 1 → 1.5 → 2 → … → 2.9, then Phase 3 and beyond.  
+AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treated as production readiness until future phases explicitly reclassify it.
 
 ### Phase 4: State Machine Foundation
 - Goal: introduce a first-class state machine model usable by domain subsystems and components.
