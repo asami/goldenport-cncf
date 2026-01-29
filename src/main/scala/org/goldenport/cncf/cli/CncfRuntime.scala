@@ -4,6 +4,7 @@ import java.net.{URL, URLEncoder}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths}
 import org.goldenport.Consequence
+import org.goldenport.Conclusion
 import org.goldenport.bag.Bag
 import org.goldenport.configuration.{Configuration, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.component.builtin.client.ClientComponent
@@ -32,7 +33,7 @@ import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObserva
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 23, 2026
+ * @version Jan. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -113,7 +114,7 @@ object CncfRuntime extends GlobalObservable {
       case Consequence.Success(driver) =>
         driver
       case Consequence.Failure(conclusion) =>
-        Console.err.println(conclusion.message)
+        _print_error(conclusion)
         FakeHttpDriver.okText("nop")
     }
   }
@@ -206,7 +207,7 @@ object CncfRuntime extends GlobalObservable {
       case Consequence.Success(res) =>
         _print_operation_response(res)
       case Consequence.Failure(conclusion) =>
-        Console.err.println(conclusion.message)
+        _print_error(conclusion)
     }
     _exit_code(result)
   }
@@ -231,7 +232,7 @@ object CncfRuntime extends GlobalObservable {
       case Consequence.Success(res) =>
         _print_operation_response(res)
       case Consequence.Failure(conclusion) =>
-        Console.err.println(conclusion.message)
+        _print_error(conclusion)
     }
     _exit_code(result)
   }
@@ -245,7 +246,7 @@ object CncfRuntime extends GlobalObservable {
       case Consequence.Success(res) =>
         _print_response(res)
       case Consequence.Failure(conclusion) =>
-        Console.err.println(conclusion.message)
+        _print_error(conclusion)
     }
     _exit_code(result)
   }
@@ -262,7 +263,7 @@ object CncfRuntime extends GlobalObservable {
       case Consequence.Success(res) =>
         _print_response(res)
       case Consequence.Failure(conclusion) =>
-        Console.err.println(conclusion.message)
+        _print_error(conclusion)
     }
     _exit_code(result)
   }
@@ -285,11 +286,11 @@ object CncfRuntime extends GlobalObservable {
             }
             Consequence.success(res)
           case Consequence.Failure(conclusion) =>
-            Console.err.println(conclusion.message)
+            _print_error(conclusion)
             Consequence.Failure(conclusion)
         }
       case Consequence.Failure(conclusion) =>
-        Console.err.println(conclusion.message)
+        _print_error(conclusion)
         Consequence.Failure(conclusion)
     }
     _exit_code(result)
@@ -316,11 +317,11 @@ object CncfRuntime extends GlobalObservable {
             }
             Consequence.success(res)
           case Consequence.Failure(conclusion) =>
-            Console.err.println(conclusion.message)
+            _print_error(conclusion)
             Consequence.Failure(conclusion)
         }
       case Consequence.Failure(conclusion) =>
-        Console.err.println(conclusion.message)
+        _print_error(conclusion)
         Consequence.Failure(conclusion)
     }
     _exit_code(result)
@@ -419,7 +420,7 @@ object CncfRuntime extends GlobalObservable {
             2
         }
       case Consequence.Failure(conclusion) =>
-        Console.err.println(conclusion.message)
+        _print_error(conclusion)
         _exit_code(Consequence.Failure(conclusion))
     }
   }
@@ -478,7 +479,7 @@ object CncfRuntime extends GlobalObservable {
             3
         }
       case Consequence.Failure(conclusion) =>
-        _print_error(conclusion.message)
+        _print_error(conclusion)
         _print_usage()
         _exit_code(Consequence.Failure(conclusion))
     }
@@ -493,6 +494,10 @@ object CncfRuntime extends GlobalObservable {
         // map it here and return that value.
         1
     }
+
+  private def _print_error(c: Conclusion): Unit = {
+    Console.err.println(c.show)
+  }
 
   private def _print_error(message: String): Unit = {
     Console.err.println(message)
@@ -515,7 +520,7 @@ object CncfRuntime extends GlobalObservable {
         |  server           : SLF4J logging enabled
         |  --log-backend=stdout|stderr|nop|slf4j overrides defaults
         |""".stripMargin
-    Console.err.println(text)
+    _print_error(text)
   }
 
   private def _extract_log_options(
@@ -619,7 +624,7 @@ object CncfRuntime extends GlobalObservable {
       case Consequence.Success(res) =>
         _print_response(res)
       case Consequence.Failure(conclusion) =>
-        _print_error(conclusion.message)
+        _print_error(conclusion)
     }
     _exit_code(result)
   }

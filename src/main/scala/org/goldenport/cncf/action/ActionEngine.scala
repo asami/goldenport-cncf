@@ -19,7 +19,7 @@ import org.goldenport.cncf.context.{ScopeContext, ScopeKind}
  *  version Dec. 21, 2025
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
- * @version Jan.  8, 2026
+ * @version Jan. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -155,7 +155,7 @@ class ActionEngine(
         observe_info("Action completed successfully", call)
       case Consequence.Failure(conclusion) =>
         _log_backend_("error", Some(call.action.name), "", None)
-        val message = s"Action failed: ${conclusion.message}"
+        val message = s"Action failed: ${conclusion.show}"
         observe_error(message, conclusion.getException, call)
     }
   }

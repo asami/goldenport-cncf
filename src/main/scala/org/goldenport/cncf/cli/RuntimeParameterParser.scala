@@ -15,7 +15,7 @@ import org.slf4j.LoggerFactory
 
 /*
  * @since   Jan. 22, 2026
- * @version Jan. 23, 2026
+ * @version Jan. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeParameterParseResult(
@@ -58,7 +58,7 @@ final class RuntimeParameterParser {
       case Consequence.Failure(conclusion) =>
         if (_log.isDebugEnabled) {
           _log.debug(
-            s"[client:parse] runtime parameter parsing skipped (rejected by runtime protocol): ${conclusion.message}"
+            s"[client:parse] runtime parameter parsing skipped (rejected by runtime protocol): ${conclusion.show}"
           )
         }
         RuntimeParameterParseResult(Vector.empty, args.toVector, None)

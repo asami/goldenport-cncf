@@ -17,7 +17,7 @@ import org.goldenport.cncf.component.*
 
 /*
  * @since   Jan. 12, 2026
- * @version Jan. 23, 2026
+ * @version Jan. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -132,7 +132,7 @@ object ComponentRepository extends GlobalObservable {
         _discover_by_scan_ordered(loader, params, classDirs, packagePrefixes, log) match {
           case Consequence.Success(comps) => comps
           case Consequence.Failure(conclusion) =>
-            log.warn(s"component discovery failed: ${conclusion.message}")
+            log.warn(s"component discovery failed: ${conclusion.show}")
             Nil
         }
       }
@@ -296,11 +296,11 @@ object ComponentRepository extends GlobalObservable {
                       Vector.empty
                   }
                 case Consequence.Failure(conclusion) =>
-                  log.warn(s"[component-dir] component creation failed for jar=${jarPath.getFileName} cause=${conclusion.message}")
+                  log.warn(s"[component-dir] component creation failed for jar=${jarPath.getFileName} cause=${conclusion.show}")
                   Vector.empty
               }
             case Consequence.Failure(conclusion) =>
-              log.warn(s"[component-dir] component discovery failed for jar=${jarPath.getFileName} cause=${conclusion.message}")
+              log.warn(s"[component-dir] component discovery failed for jar=${jarPath.getFileName} cause=${conclusion.show}")
               Vector.empty
           }
         }
@@ -576,7 +576,7 @@ object ComponentRepository extends GlobalObservable {
           }
           acc = acc ++ sources
         case Consequence.Failure(conclusion) =>
-          log.warn(s"failed to build source: ${className} cause=${conclusion.message}")
+          log.warn(s"failed to build source: ${className} cause=${conclusion.show}")
           if (!tolerant) {
             return Consequence.Failure(conclusion)
           }
@@ -596,7 +596,7 @@ object ComponentRepository extends GlobalObservable {
         case Consequence.Success(component) =>
           acc = acc :+ component
         case Consequence.Failure(conclusion) =>
-          log.warn(s"failed to instantiate component cause=${conclusion.message}")
+          log.warn(s"failed to instantiate component cause=${conclusion.show}")
           return Consequence.Failure(conclusion)
       }
     }

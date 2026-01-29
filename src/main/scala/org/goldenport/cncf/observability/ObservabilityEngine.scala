@@ -10,7 +10,7 @@ import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 23, 2026
+ * @version Jan. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class OperationContext(
@@ -47,7 +47,7 @@ object ObservabilityEngine {
       case Left(conclusion) =>
         Record.data(
           "result.success" -> false,
-          "error.kind" -> conclusion.observation.causeKind.toString,
+          "error.kind" -> conclusion.observation.taxonomy.print,
           "error.code" -> conclusion.status.webCode.code
         )
     }

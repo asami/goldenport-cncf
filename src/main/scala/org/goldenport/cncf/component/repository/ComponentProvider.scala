@@ -17,7 +17,7 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Jan. 12, 2026
- * @version Jan. 26, 2026
+ * @version Jan. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentProvider {
@@ -48,7 +48,7 @@ object ComponentProvider {
         val core = _core_from_component(comp, componentClass)
         _initialize_component(comp, subsystem, core, origin)
       case Consequence.Failure(conclusion) =>
-        log.warn(s"failed to instantiate class=${componentClass.getName} cause=${conclusion.message}; trying companion factory")
+        log.warn(s"failed to instantiate class=${componentClass.getName} cause=${conclusion.show}; trying companion factory")
         _provide_via_companion_factory(componentClass, params, log, conclusion)
     }
   }
@@ -140,7 +140,7 @@ object ComponentProvider {
             Consequence.failure(new RuntimeException(message))
         }
       case _ =>
-        Consequence.failure(new RuntimeException(fallbackConclusion.message))
+        Consequence.Failure(fallbackConclusion)
     }
   }
 
