@@ -45,7 +45,25 @@ final class Subsystem(
   private var _resolver: OperationResolver = OperationResolver.empty
   private val _http_driver: Option[HttpDriver] = httpdriver
 
+  def globalRuntimeContext: GlobalRuntimeContext = {
+    val a = _find_global_runtime_context(scopeContext)
+    a orElse GlobalRuntimeContext.current getOrElse {
+      Consequence.RAISE.UnreachableReached
+    }
+  }
+
+  @annotation.tailrec
+  private def _find_global_runtime_context(p: Option[ScopeContext]): Option[GlobalRuntimeContext] =
+    p match {
+      case Some(s) => s match {
+        case m: GlobalRuntimeContext => Some(m)
+        case m => _find_global_runtime_context(m.parent)
+      }
+      case None => None
+    }
+
   def httpDriver: Option[HttpDriver] = _http_driver
+  def serverEmulatorBaseUrl: String = globalRuntimeContext.serverEmulatorBaseUrl
 
   def setup(cf: ComponentFactory): Subsystem = {
     _component_factory = cf
@@ -404,6 +422,7 @@ object Subsystem {
   import org.goldenport.configuration.ResolvedConfiguration
   import org.goldenport.cncf.cli.RunMode
 
+  // Unused
   final case class Config(
     httpDriver: String,
     mode: RunMode

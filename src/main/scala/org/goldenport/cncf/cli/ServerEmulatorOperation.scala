@@ -18,9 +18,8 @@ class ServerEmulatorOperation(val subsystem: Subsystem) extends CliOperation {
 
   def execute(req: Request): Int = {
     val args = make_component_args(req)
-    val runtimeConfig: RuntimeConfig = ???
     val (includeHeader, rest) = _include_header(args)
-    val result = _normalize_server_emulator_args(rest, runtimeConfig.serverEmulatorBaseUrl) match {
+    val result = _normalize_server_emulator_args(rest, server_emulator_base_url) match {
       case Consequence.Success(normalized) =>
         HttpRequest.fromCurlLike(normalized) match {
           case Consequence.Success(req) =>

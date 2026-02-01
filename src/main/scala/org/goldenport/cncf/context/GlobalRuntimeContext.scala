@@ -1,6 +1,7 @@
 package org.goldenport.cncf.context
 
 import org.goldenport.cncf.CncfVersion
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.http.HttpDriver
@@ -8,26 +9,30 @@ import org.goldenport.cncf.path.AliasResolver
 
 /*
  * @since   Jan. 17, 2026
- * @version Jan. 19, 2026
+ *  version Jan. 19, 2026
+ * @version Feb.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GlobalRuntimeContext(
-  name: String,
-  observabilityContext: ObservabilityContext,
+  val core: ScopeContext.Core,
+  val config: RuntimeConfig,
   override val httpDriver: HttpDriver,
   val aliasResolver: AliasResolver,
   var runtimeMode: RunMode,
   val runtimeVersion: String,
   val subsystemName: String,
-  var subsystemVersion: String
+  var subsystemVersion: String,
 ) extends ScopeContext() {
-  val core = ScopeContext.Core(
-    kind = ScopeKind.Runtime,
-    name = name,
-    parent = None,
-    observabilityContext = observabilityContext,
-    httpDriverOption = Some(httpDriver)
-  )
+//   val core = ScopeContext.Core(
+//     kind = ScopeKind.Runtime,
+//     name = name,
+//     parent = None,
+//     observabilityContext = observabilityContext,
+//     httpDriverOption = Some(httpDriver)
+//   )
+  private var _componentFactory: Option[ComponentFactory] = None
+
+  def serverEmulatorBaseUrl: String = config.serverEmulatorBaseUrl
 
   override def formatPing: String =
     GlobalRuntimeContext.formatPingValue(
@@ -42,8 +47,6 @@ final class GlobalRuntimeContext(
 
   def updateSubsystemVersion(version: String): Unit =
     subsystemVersion = version
-
-  private var _componentFactory: Option[ComponentFactory] = None
 
   def componentFactory: Option[ComponentFactory] = _componentFactory
 
@@ -78,4 +81,29 @@ object GlobalRuntimeContext {
       subsystemVersion = _defaultRuntimeVersion,
       runtimeVersion = _defaultRuntimeVersion
     )
+
+  def create(
+    name: String,
+    runconfig: RuntimeConfig,
+    observabilityContext: ObservabilityContext,
+    aliasresolver: AliasResolver
+  ): GlobalRuntimeContext = {
+    val core = ScopeContext.Core(
+      ScopeKind.Runtime, // Global
+      name,
+      None,
+      observabilityContext,
+      Some(runconfig.httpDriver)
+    )
+    GlobalRuntimeContext(
+      core,
+      runconfig,
+      runconfig.httpDriver,
+      aliasresolver,
+      runconfig.mode,
+      runtimeVersion = CncfVersion.current,
+      subsystemName = GlobalRuntimeContext.SubsystemName,
+      subsystemVersion = CncfVersion.current
+    )
+  }
 }

@@ -61,20 +61,21 @@ object CncfRuntime extends GlobalObservable {
     _global_runtime_context = None
 
   private def _create_global_runtime_context(
-    httpDriver: HttpDriver,
-    mode: RunMode,
+    runconfig: RuntimeConfig,
     aliasResolver: AliasResolver
   ): GlobalRuntimeContext = {
     val execution = ExecutionContext.create()
-    val context = new GlobalRuntimeContext(
+    val context = GlobalRuntimeContext.create(
       name = "runtime",
+      runconfig,
       observabilityContext = execution.observability,
-      httpDriver = httpDriver,
-      aliasResolver = aliasResolver,
-      runtimeMode = mode,
-      runtimeVersion = CncfVersion.current,
-      subsystemName = GlobalRuntimeContext.SubsystemName,
-      subsystemVersion = CncfVersion.current
+      aliasResolver
+      // httpDriver = runconfig.httpDriver,
+      // aliasResolver = aliasResolver,
+      // runtimeMode = runconfig.mode,
+      // runtimeVersion = CncfVersion.current,
+      // subsystemName = GlobalRuntimeContext.SubsystemName,
+      // subsystemVersion = CncfVersion.current
     )
     _global_runtime_context = Some(context)
     GlobalRuntimeContext.current = Some(context)
@@ -406,8 +407,9 @@ object CncfRuntime extends GlobalObservable {
         _update_visibility_policy(logLevelOption, configuration)
         _reset_global_runtime_context()
         val context = _create_global_runtime_context(
-          httpDriver,
-          runtimeConfig.mode,
+          runtimeConfig,
+          // httpDriver,
+          // runtimeConfig.mode,
           aliasResolver
         )
         val r: Consequence[OperationRequest] =
@@ -487,8 +489,9 @@ object CncfRuntime extends GlobalObservable {
         _update_visibility_policy(logLevelOption, configuration)
         _reset_global_runtime_context()
         val context = _create_global_runtime_context(
-          httpDriver,
-          runtimeConfig.mode,
+          runtimeConfig,
+          // httpDriver,
+          // runtimeConfig.mode,
           aliasResolver
         )
         val r: Consequence[OperationRequest] =
@@ -1212,20 +1215,23 @@ class CncfRuntime() extends GlobalObservable {
     _global_runtime_context = None
 
   private def _create_global_runtime_context(
-    httpDriver: HttpDriver,
-    mode: RunMode,
+    // httpDriver: HttpDriver,
+    // mode: RunMode,
+    runconfig: RuntimeConfig,
     aliasResolver: AliasResolver
   ): GlobalRuntimeContext = {
     val execution = ExecutionContext.create()
-    val context = new GlobalRuntimeContext(
+    val context = GlobalRuntimeContext.create(
       name = "runtime",
+      runconfig,
       observabilityContext = execution.observability,
-      httpDriver = httpDriver,
-      aliasResolver = aliasResolver,
-      runtimeMode = mode,
-      runtimeVersion = CncfVersion.current,
-      subsystemName = GlobalRuntimeContext.SubsystemName,
-      subsystemVersion = CncfVersion.current
+      aliasResolver
+      // httpDriver = httpDriver,
+      // aliasResolver = aliasResolver,
+      // runtimeMode = mode,
+      // runtimeVersion = CncfVersion.current,
+      // subsystemName = GlobalRuntimeContext.SubsystemName,
+      // subsystemVersion = CncfVersion.current
     )
     _global_runtime_context = Some(context)
     GlobalRuntimeContext.current = Some(context)
@@ -1267,8 +1273,9 @@ class CncfRuntime() extends GlobalObservable {
     ObservabilityEngine.updateVisibilityPolicy(VisibilityPolicy(minLevel = runconfig.logLevel))
     _reset_global_runtime_context() // TODO
     _create_global_runtime_context(
-      runconfig.httpDriver,
-      runconfig.mode,
+      // runconfig.httpDriver,
+      // runconfig.mode,
+      runconfig,
       aliasresolver
     )
     val mode = runconfig.mode

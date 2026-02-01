@@ -22,6 +22,8 @@ abstract class CliOperation extends GlobalObservable {
   def subsystem: Subsystem
   def mode: RunMode
 
+  final protected val server_emulator_base_url: String = subsystem.serverEmulatorBaseUrl
+
   private val _alias_resolver = subsystem.aliasResolver
 
   // final protected def make_args(req: OperationRequest): Array[String] =
