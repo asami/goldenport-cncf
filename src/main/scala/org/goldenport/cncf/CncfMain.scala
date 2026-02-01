@@ -20,7 +20,8 @@ import org.goldenport.cncf.observability.global.GlobalObservable
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 23, 2026
+ *  version Jan. 23, 2026
+ * @version Feb.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfMain extends GlobalObservable {
@@ -48,7 +49,10 @@ object CncfMain extends GlobalObservable {
           case Right(specs) =>
             val baseExtras = _component_extra_function(specs, enabled, workspace)
             val extras = _trace_component_dir_extras(baseExtras)
-            CncfRuntime.runWithExtraComponents(rest, extras)
+            if (false)
+              CncfRuntime.runWithExtraComponents(rest, extras)
+            else
+              CncfRuntime().run(rest)
         }
       } catch {
         case e: CliFailed => e.code

@@ -13,6 +13,7 @@ import org.goldenport.cncf.component.{
   ComponentInstanceId,
   ComponentSpace
 }
+import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.component.ComponentLocator.NameLocator
 import org.goldenport.cncf.component.builtin.debug.DebugComponent
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
@@ -26,7 +27,8 @@ import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 21, 2026
+ *  version Jan. 31, 2026
+ * @version Feb.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -35,14 +37,21 @@ final class Subsystem(
   scopeContext: Option[ScopeContext] = None, // TODO
   httpdriver: Option[HttpDriver] = None,
   val configuration: ResolvedConfiguration,
-  aliasResolver: AliasResolver = GlobalRuntimeContext.current.map(_.aliasResolver).getOrElse(AliasResolver.empty),
+  val aliasResolver: AliasResolver = GlobalRuntimeContext.current.map(_.aliasResolver).getOrElse(AliasResolver.empty),
   runMode: RunMode = GlobalRuntimeContext.current.map(_.runtimeMode).getOrElse(RunMode.Server)
 ) {
+  private var _component_factory: ComponentFactory = ComponentFactory()
   private var _component_space: ComponentSpace = ComponentSpace()
   private var _resolver: OperationResolver = OperationResolver.empty
   private val _http_driver: Option[HttpDriver] = httpdriver
 
   def httpDriver: Option[HttpDriver] = _http_driver
+
+  def setup(cf: ComponentFactory): Subsystem = {
+    _component_factory = cf
+    val comps = cf.discover()
+    add(comps)
+  }
 
   def add(comps: Seq[Component]): Subsystem = {
     val injected = comps.map(x => _inject_context(x.name, x))

@@ -1,0 +1,48 @@
+# Phase 3.1 Fact Reconstruction
+
+## Purpose
+- Record the factual history of Phase 3 and Phase 3.1 as reflected in repository documents so the next shift of work can resume without inference or speculation (docs/work/phase-3.1.md, Purpose/Position sections).
+- Surface only verifiable statements that cite the original source, including status markers, so anyone reading this handover note understands what has been decided, tracked, or deferred (docs/work/phase-3.1-checklist.md, Checklist Usage Rules section).
+
+## Source Documents
+- `docs/strategy/cncf-development-strategy.md` – Phase 3 is now framed as a model-driven execution/orchestration hub with explicit sub-phases, and Phase 3.3 remains a PoC-level AI Agent Hub (Phase 3 section).
+- `docs/work/phase-3.md` – Phase 3 work is driven by orchestration priorities; Phase 3.1 foundation (Execution Hub, Fat JAR, Docker, Microservice components) has a defined stack and referenced artifacts (Phase 3 — Execution and Orchestration Hub, Current Work Status sections).
+- `docs/work/phase-3.1.md` – The Phase 3.1 design document captures purpose, ActionCall/ActionEngine rules, Collaborator/CollaboratorFactory semantics, failure handling, ClassLoader isolation, Facade/Adapter resolution, and explicit out-of-scope items (Phase 3.1 — sections “Purpose”, “ActionCall as the Unified Execution Unit”, “Collaborators”, “Collaborator as an SPI Extension Point”, “CollaboratorFactory”, “Facade and Adapter Resolution Rules”, “Out of Scope”).
+- `docs/work/phase-3.1-checklist.md` – The checklist records EH-01 objectives, completed decisions, concurrency/construction checkpoints, ClassLoader/Observation requirements, and remaining OPEN tasks (EH-01 section, Checklist Usage Rules, Completion Check).
+- `docs/journal/2026/01/phase-3.1-fatjar-component.md` – The journal logs execution hub decomposition, ActionEngine/Execution Hub relationships, Collaborator classifications, policy clarifications, ClassLoader isolation strategy, and observation/failure principles (Purpose, Design Adjustment, Phase 3.1 Resolution, Collaborator, ClassLoader Isolation, Observation generation sections).
+
+## Chronological Fact Timeline
+1. `docs/work/phase-3.1.md` (Purpose; Position in Phase 3) records that Phase 3.1 is the foundation phase of Phase 3, explicitly defining the Execution/Orchestration Hub, confirming that later Phase 3 work depends on it, and stating that AI agent or model-driven generation is not assumed yet.
+2. `docs/work/phase-3.1.md` (Baseline Execution Form and ActionCall sections) establishes Fat JAR Component as the baseline execution form, describes ActionCall as the unified execution request, and defines the Component/ActionCall ownership rule that separates state from behavior.
+3. `docs/journal/2026/01/phase-3.1-fatjar-component.md` (Design Adjustment; Phase 3.1 Resolution) records the intentional decomposition of the original “Execution Hub” concept, renaming the infrastructure provider to IsolatedClassLoaderProvider and delegating control to ActionEngine while limiting the provider to ClassLoader isolation.
+4. `docs/journal/2026/01/phase-3.1-fatjar-component.md` (Collaborator sections) records that only JarCollaborator is in execution scope for Phase 3.1, that CollaboratorActionCall is treated identically to any ActionCall, and that ExternalCollaborators remain outside CNCF management.
+5. `docs/work/phase-3.1-checklist.md` (EH-01 Detailed Tasks) documents that the Fat JAR Component boundary, responsibilities, Facade/Adapter rules, ClassLoader isolation (parent = null), cncf-collaborator-api.jar crossing rule, concurrency policies, and failure/observation conversions have been defined and marked complete ([x]).
+6. `docs/work/phase-3.1-checklist.md` (ClassLoader Isolation — PoC Verification Checklist) enumerates outstanding verification tasks such as creating the isolated ClassLoader, hiding CNCF runtime packages, and converting runtime failures into Observations; these remain `[ ]` and thus remain open within Phase 3.1.
+7. `docs/strategy/cncf-development-strategy.md` (Phase 3 section) confirms that Phase 3 begins only after Phase 2.9 is complete and that Phase 3.3’s AI Agent Hub is exploratory/PoC-only, so it cannot be treated as production-ready yet.
+
+## Confirmed Design Decisions
+- Phase 3.1 is active and intends to make CNCF execution-shape–agnostic, with Fat JAR Components as the worst-case baseline so all other forms become easier once they work (docs/work/phase-3.1.md, Purpose/Baseline Execution Form sections).
+- ActionCall is the sole executable entity; Components hold state while ActionCall performs behavior under delegated authority (docs/work/phase-3.1.md, Component–ActionCall Relationship section).
+- ActionEngine is the primary execution controller for every trigger type, and it never interprets payloads or Collaborator details—execution control always flows through it (docs/work/phase-3.1.md, ActionEngine section; docs/journal/2026/01/phase-3.1-fatjar-component.md, ActionEngine as the Single Execution Gate section).
+- Fat JAR Component execution, succeeded by CollaboratorActionCalls, treats Collaborator as an SPI extension point; only JarCollaborator is in scope for Phase 3.1 and external collaborators remain unmanaged (docs/work/phase-3.1.md, Collaborators/Collaborator as an SPI Extension Point sections; docs/journal/2026/01/phase-3.1-fatjar-component.md, Collaborator sections).
+- CollaboratorFactory resolves artifacts (Fat JARs) and instantiates Facade/Adapter objects; it hides resolution mechanics from Components and never participates in execution control (docs/work/phase-3.1.md, CollaboratorFactory section).
+- Facade declaration always takes precedence, is wrapped with `FacadeCollaboratorAdapter`, and is fixed for Phase 3.1; Adapter declarations apply only when no Facade exists (docs/work/phase-3.1.md, Facade/Adapter Resolution Rules sections).
+- Only the shared `cncf-collaborator-api.jar` may cross the classloader boundary between CNCF and a Fat JAR, ensuring CNCF runtime packages remain invisible (docs/work/phase-3.1-checklist.md, EH-01 Detailed Tasks section).
+- ClassLoader isolation requires a dedicated ClassLoader with `parent = null`, exposing only bootstrap classes plus `cncf-collaborator-api.jar`, with CNCF runtime packages and Scala library hidden unless bundled (docs/journal/2026/01/phase-3.1-fatjar-component.md, ClassLoader Isolation section).
+- The framework enforces `serialize`, `concurrent`, and `queue` policies; serialization waits for completion, cancels/timeouts produce Observations, and concurrency control is a framework responsibility (docs/work/phase-3.1-checklist.md, EH-01 Concurrency Policy and serialize Policy Semantics sections).
+- Failures at any stage (load, dispatch, execution, timeout, cancellation, ClassLoader issues) are converted into Observations and returned without crashing the runtime (docs/work/phase-3.1.md, Failure Semantics section; docs/journal/2026/01/phase-3.1-fatjar-component.md, Failure Modes and Observation section).
+- Once Phase 3.1 is underway, Facade/Adapter rules, execution boundaries, and checklist structure are considered fixed and cannot be modified without revisiting the core execution model (docs/work/phase-3.1.md, Facade/Adapter Resolution Rules and Out of Scope sections; docs/work/phase-3.1-checklist.md, Completion Check section).
+
+## Confirmed Non-Decisions / Out-of-Scope
+- Phase 3.1 explicitly excludes Docker Component execution, Antora integration, CML → Component generation, AI Agent Hub integration, and performance optimization; they will be addressed in later Phase 3.x work (docs/work/phase-3.1.md, Out of Scope section; docs/work/phase-3.1-checklist.md, Deferred / Next Phase Candidates section).
+- Collaborator/SPIs are not required for every extension; internal APIs remain free to evolve without Collaborator constraints (docs/work/phase-3.1.md, Collaborator as an SPI Extension Point section).
+- The IsolatedClassLoaderProvider does not perform orchestration, execution control, or lifecycle coordination; those remain with ActionEngine and ActionCall (docs/journal/2026/01/phase-3.1-fatjar-component.md, Phase 3.1 Resolution section).
+- Observation generation points treat failures as data; at no point may a Fat JAR failure terminate CNCF, and the runtime must remain alive (docs/journal/2026/01/phase-3.1-fatjar-component.md, Q3 — Observation Generation Points section).
+- AI Agent work is exploratory and limited to projections (OpenAPI/MCP) per Phase 3.3, so any production-level AI orchestration belongs to later phases (docs/strategy/cncf-development-strategy.md, Phase 3 section).
+
+## Open Items
+- Instantiate a persistent component instance after loading the Fat JAR (EH-01 Detailed Tasks list, `[ ] Instantiate a persistent component instance`).
+- Invoke exactly one operation successfully through the baseline execution form (EH-01 Detailed Tasks list, `[ ] Invoke exactly one Operation successfully`).
+- Verify serialize wait behavior, Observation handling on failure, and runtime resilience after load/execute (EH-01 Detailed Tasks list, `[ ] Verify serialize wait behavior`; `[ ] Verify Observation returned on execution failure`).
+- Complete the ClassLoader isolation PoC checklist around explicit parent=null creation, strict visibility rules, Facade instantiation, and failure containment; the corresponding `[ ]` items remain undone (docs/work/phase-3.1-checklist.md, ClassLoader Isolation — PoC Verification Checklist section, all `[ ]` entries under Construction, Visibility Rules, Resolution & Instantiation, Failure Containment, Behavioral Guarantees, Evidence).
+

@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  9, 2026
- * @version Jan.  9, 2026
+ * @version Feb.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 class OpenApiProjectionScenarioSpec extends AnyWordSpec with Matchers {
@@ -32,7 +32,7 @@ class OpenApiProjectionScenarioSpec extends AnyWordSpec with Matchers {
           body should include ("\"paths\"")
           body should startWith ("{")
         case Consequence.Failure(conclusion) =>
-          fail(conclusion.message)
+          fail(conclusion.show)
       }
     }
 
@@ -57,7 +57,7 @@ class OpenApiProjectionScenarioSpec extends AnyWordSpec with Matchers {
               fail(s"unexpected response: ${other.toString}")
           }
         case Consequence.Failure(conclusion) =>
-          fail(conclusion.message)
+          fail(conclusion.show)
       }
     }
   }

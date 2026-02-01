@@ -21,7 +21,7 @@ import org.goldenport.protocol.spec as spec
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 20, 2026
+ * @version Jan. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {
@@ -107,15 +107,16 @@ object DefaultSubsystemFactory {
     subsystemName: String
   ): org.goldenport.cncf.http.HttpDriver = {
     val driver = runtimeConfig.httpDriver
-    val baseurl = sys.props.getOrElse("cncf.http.baseurl", ClientConfig.DefaultBaseUrl)
-    if (driver == "fake" || driver == "nop") {
-      val ping = GlobalRuntimeContext.current
-        .map(_.formatPing)
-        .getOrElse(GlobalRuntimeContext.defaultPing)
-      FakeHttpDriver.okText(ping)
-    } else {
-      new UrlConnectionHttpDriver(baseurl)
-    }
+    // val baseurl = sys.props.getOrElse("cncf.http.baseurl", ClientConfig.DefaultBaseUrl)
+    // if (driver == "fake" || driver == "nop") {
+    //   val ping = GlobalRuntimeContext.current
+    //     .map(_.formatPing)
+    //     .getOrElse(GlobalRuntimeContext.defaultPing)
+    //   FakeHttpDriver.okText(ping)
+    // } else {
+    //   new UrlConnectionHttpDriver(baseurl)
+    // }
+    driver
   }
 
   // private def _bootstrap_core(): Component.Core = {

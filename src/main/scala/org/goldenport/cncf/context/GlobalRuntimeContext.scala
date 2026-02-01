@@ -2,6 +2,7 @@ package org.goldenport.cncf.context
 
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.cli.RunMode
+import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.path.AliasResolver
 
@@ -41,6 +42,13 @@ final class GlobalRuntimeContext(
 
   def updateSubsystemVersion(version: String): Unit =
     subsystemVersion = version
+
+  private var _componentFactory: Option[ComponentFactory] = None
+
+  def componentFactory: Option[ComponentFactory] = _componentFactory
+
+  def updateComponentFactory(factory: ComponentFactory): Unit =
+    _componentFactory = Some(factory)
 }
 
 object GlobalRuntimeContext {

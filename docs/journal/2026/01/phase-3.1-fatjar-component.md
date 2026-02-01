@@ -42,6 +42,68 @@ an internal concern of the component and is not visible to CNCF.
 
 ---
 
+
+## Design Adjustment — Decomposition of Execution Hub
+
+Originally, the Phase 3.1 design assumed a central **Execution Hub**
+with broad orchestration responsibilities.
+
+During specification exploration, this concept was intentionally decomposed
+as responsibilities were clarified and separated.
+
+### Original Assumption
+
+The initial Execution Hub concept included:
+
+- Centralized orchestration of execution
+- Coordination between execution forms
+- Management of execution environments
+- Acting as a conceptual “hub” of runtime behavior
+
+This naming implied a level of authority and coordination
+that is no longer present in Phase 3.1.
+
+---
+
+### Phase 3.1 Resolution
+
+In Phase 3.1, execution control is fully concentrated in **ActionEngine**.
+
+What remains from the original Execution Hub concept is limited to
+pure execution infrastructure:
+
+- Providing isolated ClassLoader instances
+- Establishing JVM-level isolation boundaries
+- Acting as a technical failure containment boundary
+
+This reduced responsibility no longer justifies the term “Hub”.
+
+---
+
+### Renaming Decision
+
+To reflect its actual responsibility, the former Execution Hub concept
+is renamed to:
+
+- **IsolatedClassLoaderProvider**
+
+This component:
+
+- Provides isolated ClassLoader instances only
+- Performs no execution control or orchestration
+- Is used internally by CollaboratorFactory
+- Remains invisible to ActionCall and higher-level execution logic
+
+---
+
+### Status
+
+This renaming and responsibility decomposition is considered **fixed**
+for Phase 3.1.
+
+The term “Execution Hub” should be treated as deprecated
+within the Phase 3.1 design context.
+
 ## Execution Hub Responsibilities
 
 The Execution Hub is responsible for managing the lifecycle and execution
@@ -67,7 +129,174 @@ in Phase 3.1:
 - Managing Docker environments or external processes
 - Performing AI agent orchestration
 
+
+## ActionEngine as the Single Execution Gate
+
+In CNCF, all executions are governed by the ActionEngine.
+
+This includes not only explicit operation invocations,
+but also executions triggered by reception of events and messages.
+
 ---
+
+### Scope of Execution
+
+The following execution forms must pass through the ActionEngine:
+
+- Operation invocation
+- Event handling triggered from Reception
+- Message handling triggered from Reception
+
+Operation execution is considered one specialized form of execution
+within a unified execution control model.
+
+---
+
+### Role of Reception
+
+Reception components act solely as input triggers.
+
+Their responsibilities are limited to:
+
+- Receiving external inputs (command, API call, event, message)
+- Normalizing inputs into execution requests
+- Delegating execution control to the ActionEngine
+
+Reception components must never execute component logic directly.
+
+---
+
+### Relationship Between ActionEngine and Execution Hub
+
+ActionEngine is the primary execution controller.
+
+It determines *when*, *how*, and *under which concurrency policy*
+an execution is performed.
+
+Execution Hub provides execution infrastructure services
+such as ClassLoader management and component lifecycle handling.
+
+Execution control always flows from ActionEngine to Execution Hub,
+never the other way around.
+
+---
+
+## ActionCall — Unified Execution Unit
+
+## Collaborator and CollaboratorActionCall
+
+### Collaborator
+
+Collaborator represents a cooperative entity that participates in execution
+but is not itself an execution unit controlled by CNCF.
+
+Collaborators are used by CNCF-managed execution logic but are not managed,
+scheduled, or lifecycle-controlled by CNCF.
+
+This abstraction allows CNCF to interact with cooperative entities
+without expanding the execution control surface.
+
+---
+
+### ExternalCollaborator
+
+ExternalCollaborator extends Collaborator and represents collaborators
+that exist outside CNCF management boundaries.
+
+Typical examples include databases, external services, tools, or libraries.
+ExternalCollaborators are fully managed by the Fat JAR side and are outside
+CNCF execution control.
+
+---
+
+### Collaborator Classification
+
+ExternalCollaborator may be classified by interaction form, including:
+
+- JarCollaborator
+- RestCollaborator
+- SoaCollaborator
+- DockerCollaborator
+
+In Phase 3.1, only JarCollaborator is within execution scope.
+Other collaborator types are recognized conceptually but excluded
+from Phase 3.1 implementation.
+
+---
+
+### CollaboratorActionCall
+
+When execution targets a collaborator, the collaborator is explicitly
+bound to the ActionCall.
+
+Such ActionCalls are referred to as CollaboratorActionCall.
+
+CollaboratorActionCall does not introduce special execution semantics.
+It is treated identically to any other ActionCall by the ActionEngine.
+
+The ActionEngine applies execution control uniformly to all ActionCall instances,
+without interpreting the bound Collaborator.
+
+ActionCall represents the unified execution unit in CNCF.
+
+All executions governed by the ActionEngine are normalized into ActionCall,
+regardless of their original trigger.
+
+This includes:
+
+- Operation invocations
+- Event handling executions
+- Message handling executions
+
+---
+
+### Purpose of ActionCall
+
+The purpose of ActionCall is to:
+
+- Represent a single executable intent
+- Carry execution context and parameters
+- Serve as the sole object scheduled and controlled by the ActionEngine
+
+ActionCall does not perform execution control itself.
+It is interpreted and executed under the authority of the ActionEngine.
+
+---
+
+### Relationship to Components
+
+ActionCall is the only entity allowed to invoke component logic.
+
+Concretely, an ActionCall invokes a method on a
+`FatJarComponentInstance`.
+
+Components are never invoked directly by Reception,
+Execution Hub, or any other framework element.
+
+---
+
+### Concurrency and Scheduling
+
+All concurrency semantics, including:
+
+- serialization
+- parallel execution
+- queuing
+- waiting
+- cancellation
+- timeout
+
+are applied by the ActionEngine **to ActionCall instances**.
+
+Components remain unaware of these concerns.
+
+---
+
+### Provisional Conclusion
+
+By unifying all execution forms into ActionCall,
+CNCF maintains a single, consistent execution model
+across operation-driven, event-driven, and message-driven workflows.
 
 ## Concurrency Policy Model
 
@@ -139,6 +368,7 @@ and result collection.
 
 ---
 
+
 ## Failure Semantics
 
 Failures occurring at any stage of execution—including loading,
@@ -150,6 +380,106 @@ normal execution paths.
 
 At no point may a failure inside a Fat JAR Component cause the CNCF
 runtime itself to terminate.
+
+## ClassLoader Isolation — Minimal Strategy
+
+This section records the minimal ClassLoader isolation strategy
+for validating Phase 3.1 Fat JAR Component execution.
+This is a specification exploration log, not a finalized design.
+
+---
+
+### Purpose of Isolation
+
+The purpose of ClassLoader isolation in Phase 3.1 is:
+
+- to prevent dependency leakage between CNCF and Fat JAR Components
+- to allow heterogeneous dependency graphs (Scala versions, libraries)
+- to ensure that component failures do not destabilize the CNCF runtime
+
+Isolation is treated as an execution boundary, not as a security sandbox.
+
+---
+
+### Minimal Isolation Requirement
+
+Phase 3.1 adopts the following minimal requirement:
+
+- Each Fat JAR Component is loaded with a **dedicated ClassLoader**
+- The ClassLoader uses **parent = null**
+- No implicit delegation to CNCF’s application ClassLoader is allowed
+
+This forces all component dependencies to be resolved exclusively
+from within the Fat JAR itself.
+
+---
+
+### CNCF–Component Boundary Classes
+
+To allow interaction between CNCF and a Fat JAR Component,
+a **shared API surface** is required.
+
+Minimal assumptions:
+
+- Shared interfaces and value types must be:
+  - loaded by a common ClassLoader
+  - dependency-free or extremely stable
+- These classes form the only allowed crossing point
+  between CNCF and the isolated component ClassLoader
+
+All other classes must remain fully isolated.
+
+---
+
+### Component Instantiation Model
+
+The Execution Hub is responsible for:
+
+1. Creating the isolated ClassLoader
+2. Loading the Fat JAR entry-point class
+3. Instantiating the component object
+4. Retaining the instance for subsequent operation invocations
+
+The component instance must never escape its ClassLoader boundary.
+
+---
+
+### Failure Modes and Observation
+
+Typical isolation-related failures include:
+
+- Class not found due to missing dependency
+- Linkage errors caused by version mismatch
+- Static initialization failures
+
+All such failures must be:
+
+- caught within the Execution Hub
+- converted into Observations
+- returned through normal execution paths
+
+At no point may a ClassLoader-related failure crash the CNCF runtime.
+
+---
+
+### Non-goals (Phase 3.1)
+
+The following are explicitly out of scope for Phase 3.1:
+
+- Hierarchical or layered ClassLoader designs
+- Dynamic reloading or hot swapping
+- Security hardening or sandbox enforcement
+- Dependency shading or relocation strategies
+
+---
+
+### Provisional Conclusion
+
+A parent-null ClassLoader strategy provides the strongest and
+simplest isolation guarantee for Phase 3.1.
+
+If this strategy works for a realistic Fat JAR Component,
+all other execution forms become strictly easier to support.
 
 ## Q3 — Observation Generation Points
 
