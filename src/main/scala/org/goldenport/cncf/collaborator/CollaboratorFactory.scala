@@ -10,6 +10,14 @@ import org.goldenport.configuration.ResolvedConfiguration
 class CollaboratorFactory(
   private val _repository_space: CollaboratorRepositorySpace = CollaboratorRepositorySpace.empty
 ) {
+
+  private val _entries: Vector[CollaboratorRepository.CollaboratorEntry] =
+    _repository_space.discover().toVector
+
+  def entries: Vector[CollaboratorRepository.CollaboratorEntry] = _entries
+
+  def resolve(name: String): Option[CollaboratorRepository.CollaboratorEntry] =
+    _entries.find(_.name == name)
 }
 
 object CollaboratorFactory {

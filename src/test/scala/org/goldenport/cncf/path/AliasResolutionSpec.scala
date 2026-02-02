@@ -6,7 +6,8 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.cli.CncfRuntime
 import org.goldenport.cncf.cli.RunMode
-import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
+import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.path.AliasLoader
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
@@ -21,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 19, 2026
- * @version Jan. 19, 2026
+ * @version Feb.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AliasResolutionSpec
@@ -57,7 +58,7 @@ final class AliasResolutionSpec
   "Alias-enabled CLI parsing" should {
     "rewrite ping to admin.system.ping before CanonicalPath resolution" in {
       Given("a runtime with ping alias configured")
-      withAliasContext(RunMode.Command, canonicalAliasConfig) {
+      withAliasContext(RunMode.Command, canonicalAliasConfig) { (aliasResolver, _) =>
         val subsystem = DefaultSubsystemFactory.default(Some("command"))
         val result = parseCommandArgsMethod.invoke(
           CncfRuntime,
@@ -81,7 +82,7 @@ final class AliasResolutionSpec
   "Alias-enabled script invocation" should {
     "apply the same alias metdata and resolve ping to admin.system.ping" in {
       Given("a script runtime configured with the ping alias")
-      withAliasContext(RunMode.Script, canonicalAliasConfig) {
+      withAliasContext(RunMode.Script, canonicalAliasConfig) { (aliasResolver, _) =>
         val subsystem = DefaultSubsystemFactory.default(Some("script"))
         val result = toRequestScriptMethod.invoke(
           CncfRuntime,
@@ -104,7 +105,7 @@ final class AliasResolutionSpec
   "HTTP routing" should {
     "strip the alias selector and dispatch to admin.system.ping" in {
       Given("an alias table and a request for /ping")
-      withAliasContext(RunMode.Command, canonicalAliasConfig) {
+      withAliasContext(RunMode.Command, canonicalAliasConfig) { (aliasResolver, _) =>
         val subsystem = DefaultSubsystemFactory.default(Some("server"))
         val request = HttpRequest.fromPath(HttpRequest.GET, "/ping")
         val response = subsystem.executeHttp(request)
@@ -155,13 +156,25 @@ final class AliasResolutionSpec
   private def withAliasContext[T](
     mode: RunMode,
     configuration: Configuration
-  )(body: => T): T = {
+  )(body: (AliasResolver, GlobalRuntimeContext) => T): T = {
     val resolver = AliasLoader.load(configuration)
     val execution = ExecutionContext.create()
-    val context = new GlobalRuntimeContext(
+    val httpDriver = FakeHttpDriver.okText("noop")
+    val runtimeConfig = RuntimeConfig.default.copy(
+      httpDriver = httpDriver,
+      mode = mode
+    )
+    val core = ScopeContext(
+      kind = ScopeKind.Runtime,
       name = "alias-test",
+      parent = None,
       observabilityContext = execution.observability,
-      httpDriver = FakeHttpDriver.okText("noop"),
+      httpDriverOption = Some(httpDriver)
+    ).core
+    val context = new GlobalRuntimeContext(
+      core = core,
+      config = runtimeConfig,
+      httpDriver = httpDriver,
       aliasResolver = resolver,
       runtimeMode = mode,
       runtimeVersion = CncfVersion.current,
@@ -170,7 +183,7 @@ final class AliasResolutionSpec
     )
     val previous = GlobalRuntimeContext.current
     GlobalRuntimeContext.current = Some(context)
-    try body
+    try body(resolver, context)
     finally GlobalRuntimeContext.current = previous
   }
 

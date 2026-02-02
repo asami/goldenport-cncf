@@ -8,7 +8,7 @@ import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * @since   Jan. 30, 2026
- * @version Jan. 30, 2026
+ * @version Feb.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Collaborator() {
@@ -37,7 +37,7 @@ object Collaborator {
         val r = collaborator.invoke(ccall)
         fromCollaborator(r)
       } catch {
-        case NonFatal(e) => ???
+        case NonFatal(e) => Consequence.failure(e) // TODO
       }
     }
   }

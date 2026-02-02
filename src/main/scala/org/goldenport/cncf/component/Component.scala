@@ -29,7 +29,8 @@ import scala.util.control.NonFatal
 /*
  * @since   Jan.  1, 2026
  *  version Jan.  3, 2026
- * @version Jan. 22, 2026
+ *  version Jan. 22, 2026
+ * @version Feb.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {

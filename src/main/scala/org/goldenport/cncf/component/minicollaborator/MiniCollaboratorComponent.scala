@@ -5,6 +5,7 @@ import org.goldenport.protocol.Request
 import org.goldenport.protocol.spec.*
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.component.CollaboratorComponent
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.action.{Action, ActionCall, CollaboratorActionCall}
@@ -13,10 +14,10 @@ import org.goldenport.cncf.collaborator.api.Collaborator
 
 /*
  * @since   Jan. 30, 2026
- * @version Jan. 30, 2026
+ * @version Feb.  1, 2026
  * @author  ASAMI, Tomoharu
  */
-final class MiniCollaboratorComponent(collaborator: Collaborator) extends Component {
+final class MiniCollaboratorComponent() extends CollaboratorComponent {
   // private object MiniAction extends Action {
   //   override def createCall(core: ActionCall.Core): ActionCall =
   //     new CollaboratorActionCall("ping", Map.empty) {
@@ -34,7 +35,7 @@ object MiniCollaboratorComponent {
 
   class Factory extends Component.Factory {
     protected def create_Components(params: ComponentCreate): Vector[Component] =
-      Vector(MiniCollaboratorComponent(???))
+      Vector(MiniCollaboratorComponent())
 
     protected def create_Core(
       params: ComponentCreate,

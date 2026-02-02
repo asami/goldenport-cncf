@@ -2,7 +2,8 @@ package org.goldenport.cncf.resolver
 
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.cli.RunMode
-import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
+import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
@@ -13,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 20, 2026
- * @version Jan. 20, 2026
+ * @version Feb.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminSystemPingResolverSpec extends AnyWordSpec with Matchers {
@@ -47,10 +48,22 @@ final class AdminSystemPingResolverSpec extends AnyWordSpec with Matchers {
   )(body: (AliasResolver, GlobalRuntimeContext) => T): T = {
     val resolver = AliasLoader.load(configuration)
     val execution = ExecutionContext.create()
-    val context = new GlobalRuntimeContext(
+    val httpDriver = FakeHttpDriver.okText("noop")
+    val runtimeConfig = RuntimeConfig.default.copy(
+      httpDriver = httpDriver,
+      mode = mode
+    )
+    val core = ScopeContext(
+      kind = ScopeKind.Runtime,
       name = "ping-resolver-spec",
+      parent = None,
       observabilityContext = execution.observability,
-      httpDriver = FakeHttpDriver.okText("noop"),
+      httpDriverOption = Some(httpDriver)
+    ).core
+    val context = new GlobalRuntimeContext(
+      core = core,
+      config = runtimeConfig,
+      httpDriver = httpDriver,
       aliasResolver = resolver,
       runtimeMode = mode,
       runtimeVersion = CncfVersion.current,
