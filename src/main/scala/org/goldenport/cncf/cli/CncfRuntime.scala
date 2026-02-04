@@ -13,6 +13,7 @@ import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.component.{Component, ComponentInit}
 import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.{Argument, Property, Protocol, ProtocolEngine, Request, Response}
 import org.goldenport.datatype.{ContentType, MimeBody}
@@ -26,6 +27,7 @@ import org.goldenport.cncf.http.{FakeHttpDriver, Http4sHttpServer, HttpDriver, H
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
+import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.collaborator.CollaboratorFactory
 import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.component.repository.ComponentRepositorySpace
@@ -37,7 +39,7 @@ import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObserva
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
- * @version Feb.  1, 2026
+ * @version Feb.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -1209,6 +1211,13 @@ class CncfRuntime() extends GlobalObservable {
 
   private val _runtime_protocol_engine = ProtocolEngine.create(_runtime_protocol)
 
+  private def _create_global_context(config: RuntimeConfig): Unit =
+    GlobalContext.set(
+      GlobalContext(
+        WorkAreaSpace.create(config)
+      )
+    )
+
   private var _global_runtime_context: Option[GlobalRuntimeContext] = None
 
   private def _reset_global_runtime_context(): Unit =
@@ -1271,6 +1280,7 @@ class CncfRuntime() extends GlobalObservable {
     val aliasresolver = AliasLoader.load(configuration.configuration)
     LogBackendHolder.install(runconfig.logBackend)
     ObservabilityEngine.updateVisibilityPolicy(VisibilityPolicy(minLevel = runconfig.logLevel))
+    _create_global_context(runconfig)
     _reset_global_runtime_context() // TODO
     _create_global_runtime_context(
       // runconfig.httpDriver,
@@ -1345,6 +1355,7 @@ class CncfRuntime() extends GlobalObservable {
 
   private def _make_args(req: Request): Array[String] = req.toArgs
 
+  // legacy
   private def _run0(
     subsystem: Subsystem,
     p: OperationRequest

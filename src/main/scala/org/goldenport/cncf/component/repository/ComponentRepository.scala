@@ -12,12 +12,15 @@ import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.cncf.bootstrap.BootstrapLog
+import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.observability.global.{GlobalObservable, ObservabilityScopeDefaults, PersistentBootstrapLog}
 import org.goldenport.cncf.component.*
+import org.goldenport.cncf.collaborator.{CollaboratorClassLoader, CollaboratorFactory}
 
 /*
  * @since   Jan. 12, 2026
- * @version Jan. 29, 2026
+ *  version Jan. 29, 2026
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -128,7 +131,7 @@ object ComponentRepository extends GlobalObservable {
       if (classDirs.isEmpty) {
         Nil
       } else {
-        val loader = _class_loader(classDirs)
+        val loader = _class_loader_from_paths(classDirs, getClass.getClassLoader)
         _discover_by_scan_ordered(loader, params, classDirs, packagePrefixes, log) match {
           case Consequence.Success(comps) => comps
           case Consequence.Failure(conclusion) =>
@@ -182,7 +185,7 @@ object ComponentRepository extends GlobalObservable {
         val log = PersistentBootstrapLog.forClass(classOf[ComponentDirRepository], ObservabilityScopeDefaults.Bootstrap)
         val origin = ComponentOrigin.Repository("component-dir")
         // TEMPORARY: Simple JAR class scanning. TODO: Add META-INF/component.yaml-based discovery.
-        val components = _discover_from_jars(baseDir, params, origin, log)
+        val components = _discover_from_artifacts(basedir = baseDir, params = params, origin = origin, log = log)
         if (components.nonEmpty) {
           components
         } else {
@@ -206,11 +209,12 @@ object ComponentRepository extends GlobalObservable {
     }
   }
 
-  private def _class_loader(
-    classDirs: Seq[Path]
+  private def _class_loader_from_paths(
+    paths: Seq[Path],
+    parent: ClassLoader
   ): URLClassLoader = {
-    val urls = classDirs.map(_.toUri.toURL).toArray
-    new URLClassLoader(urls, getClass.getClassLoader)
+    val urls = paths.map(_.toUri.toURL).toArray
+    new URLClassLoader(urls, parent)
   }
 
   private def _discover_service_loader(
@@ -232,84 +236,195 @@ object ComponentRepository extends GlobalObservable {
     direct ++ fromFactories
   }
 
-  private def _discover_from_jars(
-    baseDir: Path,
+  private def _discover_from_artifacts(
+    basedir: Path,
     params: ComponentCreate,
     origin: ComponentOrigin,
     log: BootstrapLog
   ): Seq[Component] = {
-    val jarFiles = _list_jar_files(baseDir)
-    jarFiles.flatMap { jar =>
-      _discover_component_from_jar(jar, params, origin, log)
-    }
-  }
-
-  private def _list_jar_files(baseDir: Path): Vector[Path] = {
-    if (!Files.exists(baseDir)) {
-      Vector.empty
-    } else {
-      val stream = Files.list(baseDir)
-      try {
-        stream
-          .iterator()
-          .asScala
-          .filter(p => Files.isRegularFile(p) && p.getFileName.toString.endsWith(".jar"))
-          .toVector
-      } finally {
-        stream.close()
+    val artifacts = _list_artifacts(basedir)
+    artifacts.flatMap { artifact =>
+      artifact.kind match {
+        case ArtifactKind.Jar => _discover_component_from_jar(artifact.path, params, origin, log)
+        case ArtifactKind.Car => _discover_component_from_car(artifact.path, params, origin, log)
       }
     }
   }
 
+  private def _list_artifacts(basedir: Path): Vector[Artifact] = {
+    if (!Files.exists(basedir)) {
+      Vector.empty
+    } else {
+      val stream = Files.list(basedir)
+      try {
+        stream
+          .iterator()
+          .asScala
+          .filter(p => Files.isRegularFile(p))
+          .flatMap { p =>
+            val fileName = p.getFileName.toString
+            if (fileName.endsWith(".car")) {
+              Some(Artifact(p, ArtifactKind.Car))
+            } else if (fileName.endsWith(".jar")) {
+              Some(Artifact(p, ArtifactKind.Jar))
+            } else {
+              None
+            }
+          }
+          .toVector
+          .sortBy(_.path.toString)
+    } finally {
+      stream.close()
+    }
+  }
+  }
+
+  private enum ArtifactKind {
+    case Jar
+    case Car
+  }
+
+  private case class Artifact(
+    path: Path,
+    kind: ArtifactKind
+  )
+
   private def _discover_component_from_jar(
-    jarPath: Path,
+    jarpath: Path,
+    params: ComponentCreate,
+    origin: ComponentOrigin,
+    log: BootstrapLog
+  ): Seq[Component] =
+    _discover_component_from_artifact(
+    artifactname = jarpath.getFileName.toString,
+    loaderclasspath = Seq(jarpath),
+    scanclasspath = Seq(jarpath),
+      params = params,
+      origin = origin,
+      log = log
+    )
+
+  private def _discover_component_from_car(
+    carpath: Path,
+    params: ComponentCreate,
+    origin: ComponentOrigin,
+    log: BootstrapLog
+  ): Seq[Component] = {
+    val areas = GlobalContext.globalContext.workAreaSpace
+    CarExtractor.withExtracted(carpath, areas) { extracted =>
+      Using.resource(_class_loader_from_paths(extracted.componentClasspath, getClass.getClassLoader)) { componentLoader =>
+        val components =
+          _discover_component_from_artifact_with_loader(
+            artifactname = carpath.getFileName.toString,
+            loader = componentLoader,
+            scanclasspath = extracted.componentClasspath,
+            params = params,
+            origin = origin,
+            log = log
+          ).toVector
+        val collaboratorComponents = components.collect {
+          case comp: CollaboratorComponent => comp
+        }
+        if (collaboratorComponents.isEmpty) {
+          Consequence.success(components)
+        } else {
+          extracted.collaboratorClasspath match {
+            case Some(paths) if paths.nonEmpty =>
+              Using.resource(CollaboratorClassLoader(paths)) { collaboratorLoader =>
+                CollaboratorFactory.create(collaboratorLoader, paths) match {
+                  case Consequence.Success(collaborator) =>
+                    collaboratorComponents.foreach(_.setCollaborator(collaborator))
+                    Consequence.success(components)
+                  case Consequence.Failure(conclusion) =>
+                    log.warn(s"[component-dir] car=${carpath.getFileName} collaborator init failed cause=${conclusion.show}")
+                    Consequence.success(Vector.empty)
+                }
+              }
+            case _ =>
+              log.warn(s"[component-dir] car=${carpath.getFileName} collaborator classpath missing")
+              Consequence.success(Vector.empty)
+          }
+        }
+      }
+    } match {
+      case Consequence.Success(components) => components
+      case Consequence.Failure(conclusion) =>
+        log.warn(s"[component-dir] car=${carpath.getFileName} invalid car cause=${conclusion.show}")
+        Vector.empty
+    }
+  }
+
+  private def _discover_component_from_artifact(
+    artifactname: String,
+    loaderclasspath: Seq[Path],
+    scanclasspath: Seq[Path],
+    params: ComponentCreate,
+    origin: ComponentOrigin,
+    log: BootstrapLog
+  ): Seq[Component] =
+    Using.resource(_class_loader_from_paths(loaderclasspath, getClass.getClassLoader)) { loader =>
+      _discover_component_from_artifact_with_loader(
+        artifactname = artifactname,
+        loader = loader,
+        scanclasspath = scanclasspath,
+        params = params,
+        origin = origin,
+        log = log
+      )
+    }
+
+  private def _discover_component_from_artifact_with_loader(
+    artifactname: String,
+    loader: URLClassLoader,
+    scanclasspath: Seq[Path],
     params: ComponentCreate,
     origin: ComponentOrigin,
     log: BootstrapLog
   ): Seq[Component] = {
     val withOrigin = params.withOrigin(origin)
-    Using.resource(new URLClassLoader(Array(jarPath.toUri.toURL), getClass.getClassLoader)) { loader =>
-      val classNames = _jar_class_names(jarPath)
-      if (classNames.isEmpty) {
-        log.warn(s"[component-dir] jar=${jarPath.getFileName} contains no class entries")
-        Vector.empty
+    val classNames = _jar_class_names_from_paths(scanclasspath)
+    if (classNames.isEmpty) {
+      log.warn(s"[component-dir] artifact=${artifactname} contains no class entries")
+      Vector.empty
+    } else {
+      val factoryComponents = _instantiate_factory_components(loader, classNames, params, log)
+      if (factoryComponents.nonEmpty) {
+        factoryComponents.foreach { comp =>
+          log.info(
+            s"[component-dir] initialized component=${comp.core.name} class=${comp.getClass.getName}"
+          )
+        }
+        factoryComponents
       } else {
-        val factoryComponents = _instantiate_factory_components(loader, classNames, params, log)
-        if (factoryComponents.nonEmpty) {
-          factoryComponents.foreach { comp =>
-            log.info(
-              s"[component-dir] initialized component=${comp.core.name} class=${comp.getClass.getName}"
-            )
-          }
-          factoryComponents
-        } else {
-          _build_sources(classNames, loader, origin, log, tolerant = true) match {
-            case Consequence.Success(sources) =>
-              _provide_components(sources, withOrigin, log) match {
-                case Consequence.Success(components) =>
-                  components.headOption match {
-                    case Some(first) =>
-                      log.info(s"[componet-dir] jar=${jarPath.getFileName} provides component=${first.core.name}")
-                      Vector(first)
-                    case None =>
-                      log.warn(s"[component-dir] jar=${jarPath.getFileName} contains no valid components")
-                      Vector.empty
-                  }
-                case Consequence.Failure(conclusion) =>
-                  log.warn(s"[component-dir] component creation failed for jar=${jarPath.getFileName} cause=${conclusion.show}")
-                  Vector.empty
-              }
-            case Consequence.Failure(conclusion) =>
-              log.warn(s"[component-dir] component discovery failed for jar=${jarPath.getFileName} cause=${conclusion.show}")
-              Vector.empty
-          }
+        _build_sources(classNames, loader, origin, log, tolerant = true) match {
+          case Consequence.Success(sources) =>
+            _provide_components(sources, withOrigin, log) match {
+              case Consequence.Success(components) =>
+                components.headOption match {
+                  case Some(first) =>
+                    log.info(s"[component-dir] artifact=${artifactname} provides component=${first.core.name}")
+                    Vector(first)
+                  case None =>
+                    log.warn(s"[component-dir] artifact=${artifactname} contains no valid components")
+                    Vector.empty
+                }
+              case Consequence.Failure(conclusion) =>
+                log.warn(s"[component-dir] component creation failed for artifact=${artifactname} cause=${conclusion.show}")
+                Vector.empty
+            }
+          case Consequence.Failure(conclusion) =>
+            log.warn(s"[component-dir] component discovery failed for artifact=${artifactname} cause=${conclusion.show}")
+            Vector.empty
         }
       }
     }
   }
 
-  private def _jar_class_names(jarPath: Path): Vector[String] = {
-    Using.resource(new JarFile(jarPath.toFile)) { jar =>
+  private def _jar_class_names_from_paths(jars: Seq[Path]): Vector[String] =
+    jars.flatMap(_jar_class_names).toVector
+
+  private def _jar_class_names(jarpath: Path): Vector[String] = {
+    Using.resource(new JarFile(jarpath.toFile)) { jar =>
       jar
         .entries()
         .asScala
@@ -319,8 +434,8 @@ object ComponentRepository extends GlobalObservable {
     }
   }
 
-  private def _class_name_from_entry(entryName: String): String = {
-    val withoutExtension = entryName.substring(0, entryName.length - ".class".length)
+  private def _class_name_from_entry(entryname: String): String = {
+    val withoutExtension = entryname.substring(0, entryname.length - ".class".length)
     withoutExtension.replace('/', '.')
   }
 

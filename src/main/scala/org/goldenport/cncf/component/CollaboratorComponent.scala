@@ -1,11 +1,12 @@
 package org.goldenport.cncf.component
 
 import org.goldenport.Consequence
+import org.goldenport.Conclusion
 import org.goldenport.cncf.collaborator.Collaborator
 
 /*
  * @since   Feb.  1, 2026
- * @version Feb.  1, 2026
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class CollaboratorComponent() extends Component()
@@ -17,18 +18,30 @@ abstract class CollaboratorComponent() extends Component()
     _collaborator_core = Some(params.core)
     this
   }
+
+  // TODO: promote to a stable wiring API once Collaborator is driven by CNCF core.
+  def setCollaborator(collaborator: Collaborator): Unit = {
+    _collaborator_core = Some(CollaboratorComponent.Core(collaborator))
+  }
+
+  inline def collaborator: Collaborator = collaboratorSlot.fold(
+    Consequence.RAISE.UninitializedState(_),
+    identity
+  )
 }
 
 object CollaboratorComponent {
   case class Core(
-    collaborator: Collaborator
+    collaboratorSlot: Either[Conclusion, Collaborator]
   )
   object Core {
     trait Holder {
       def collaboratorCore: Core
 
-      def collaborator = collaboratorCore.collaborator
+      def collaboratorSlot = collaboratorCore.collaboratorSlot
     }
+
+    def apply(p: Collaborator): Core = Core(Right(p))
   }
 }
 

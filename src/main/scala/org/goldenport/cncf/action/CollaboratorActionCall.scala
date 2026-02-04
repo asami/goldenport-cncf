@@ -7,7 +7,12 @@ import org.goldenport.cncf.collaborator.Collaborator
 
 /*
  * @since   Jan. 30, 2026
- * @version Jan. 30, 2026
+
+
+ * @version Feb.  4, 2026
+
+
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class CollaboratorActionCall(
@@ -21,7 +26,8 @@ abstract class CollaboratorActionCall(
   protected def collaborator_request: Request =
     action.request.withOperation(operationName)
 
-  protected def to_Operation_Response(response: Response): Consequence[OperationResponse] = ???
+  protected def to_Operation_Response(response: Response): Consequence[OperationResponse] =
+    Consequence(OperationResponse.from(response))
 }
 
 object CollaboratorActionCall {

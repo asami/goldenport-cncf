@@ -13,6 +13,7 @@ import org.goldenport.protocol.handler.*
 import org.goldenport.protocol.handler.ingress.*
 import org.goldenport.protocol.handler.egress.*
 import org.goldenport.protocol.handler.projection.*
+import java.nio.file.Path
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.action.{Action, ActionEngine}
 import org.goldenport.cncf.subsystem.Subsystem
@@ -30,16 +31,18 @@ import scala.util.control.NonFatal
  * @since   Jan.  1, 2026
  *  version Jan.  3, 2026
  *  version Jan. 22, 2026
- * @version Feb.  1, 2026
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
   private var _core: Option[Component.Core] = None
   private var _origin: Option[ComponentOrigin] = None
   private var _application_config: Component.ApplicationConfig = Component.ApplicationConfig()
+  private var _collaborator_classpath: Option[Vector[Path]] = None
 //  private var _system_context: SystemContext = SystemContext.empty
   private var _unit_of_work: UnitOfWork = DataStackFactory.create(Configuration.empty)
-  private var _scope_context: Option[ScopeContext] = None
+  private var _parent_scope_context: Option[ScopeContext] = None
+  private var _component_context: Option[Component.Context] = None
   private var _services: Option[ServiceGroup] = None
   private var _subsystem: Option[Subsystem] = None
 
@@ -85,6 +88,13 @@ abstract class Component() extends Component.Core.Holder {
 
   def subsystem: Option[Subsystem] = _subsystem
 
+  def collaboratorClasspath: Option[Vector[Path]] = _collaborator_classpath
+
+  def withCollaboratorClasspath(paths: Option[Seq[Path]]): Component = {
+    _collaborator_classpath = paths.map(_.toVector)
+    this
+  }
+
   def withApplicationConfig(ac: Component.ApplicationConfig): Component = {
     _application_config = ac
     this
@@ -99,11 +109,18 @@ abstract class Component() extends Component.Core.Holder {
 
   def unitOfWork: UnitOfWork = _unit_of_work
 
-  def scopeContext: ScopeContext =
-    _scope_context.getOrElse(_default_scope_context())
+  def scopeContext: ScopeContext = {
+    val parent = _parent_scope_context getOrElse _default_scope_context()
+    _component_context getOrElse {
+      val cc = _component_context(parent)
+      _component_context = Some(cc)
+      cc
+    }
+  }
 
   def withScopeContext(sc: ScopeContext): Component = {
-    _scope_context = Some(sc)
+    _parent_scope_context = Some(sc)
+    _component_context = Some(_component_context(sc))
     this
   }
 
@@ -124,18 +141,21 @@ abstract class Component() extends Component.Core.Holder {
   }
 
   private def _default_scope_context(): ScopeContext = {
-    val parent = ScopeContext(
+    ScopeContext(
       kind = ScopeKind.Runtime,
       name = "runtime",
       parent = None,
       observabilityContext = ExecutionContext.create().observability
     )
+  }
+
+  private def _component_context(parent: ScopeContext): Component.Context =
     Component.Context(
       name = "component",
       parent = parent,
+      this,
       componentOrigin = ComponentOrigin.Unknown
     )
-  }
 }
 
 object Component {
@@ -151,13 +171,16 @@ object Component {
 
   final case class Context(
     core: ScopeContext.Core,
+    component: Component,
     componentOrigin: ComponentOrigin
-  ) extends ScopeContext()
+  ) extends ScopeContext() {
+  }
 
   object Context {
     def apply(
       name: String,
       parent: ScopeContext,
+      component: Component,
       componentOrigin: ComponentOrigin
     ): Context = {
       val _core = ScopeContext.Core(
@@ -169,6 +192,7 @@ object Component {
       )
       Context(
         core = _core,
+        component = component,
         componentOrigin = componentOrigin
       )
     }

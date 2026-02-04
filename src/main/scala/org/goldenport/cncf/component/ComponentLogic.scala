@@ -8,6 +8,7 @@ import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.cncf.action.{Action, ActionCall, Query, ResourceAccess}
 import cats.{Id, ~>}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeKind}
+import org.goldenport.cncf.collaborator.Collaborator
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.job.{JobEngine, JobId, JobResult, JobStatus, JobTask}
 import org.goldenport.cncf.unitofwork.UnitOfWork
@@ -16,7 +17,8 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 
 /*
  * @since   Jan.  3, 2026
- * @version Jan. 20, 2026
+ *  version Jan. 20, 2026
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -39,12 +41,23 @@ case class ComponentLogic(
     component.protocolLogic.makeStringOperationResponse(res)
 
   def createActionCall(action: Action): ActionCall = {
-    val ctx = _execution_context()
+    val ctx0 = _execution_context()
     // TODO: action scope should be derived from service scope once available.
     val actionscope = component.scopeContext.createChildScope(ScopeKind.Action, action.name)
-    val _ = actionscope
-    val core = ActionCall.Core(action, ctx, ctx.observability.correlationId)
+    val ctx = ctx0.withScope(actionscope)
+    val collaborator = _get_collaborator
+    val core = ActionCall.Core(
+      action,
+      ctx,
+      Some(component),
+      ctx.observability.correlationId
+    )
     action.createCall(core)
+  }
+
+  private def _get_collaborator: Option[Collaborator] = component match {
+    case m: CollaboratorComponent => Some(m.collaborator)
+    case _ => None
   }
 
   def execute(ac: ActionCall): Consequence[OperationResponse] = // ActionResponse
@@ -63,13 +76,12 @@ case class ComponentLogic(
     _execution_context()
 
   private def _execution_context(): ExecutionContext = {
-    val base = ExecutionContext.create() // createWithSystem(component.systemContext)
     val driver = component.applicationConfig.httpDriver
       .orElse(component.subsystem.flatMap(_.httpDriver))
       .getOrElse(_fallback_http_driver_())
     val uow = component.unitOfWork.withHttpDriver(Some(driver))
-    val runtime = _componentRuntimeContext(uow, driver)
-    ExecutionContext.withRuntimeContext(base, runtime)
+    val runtime = _component_runtime_context(uow, driver)
+    ExecutionContext.create(runtime)
   }
 
   // private def _ping_action_(
@@ -84,7 +96,7 @@ case class ComponentLogic(
   //   }
   // }
 
-  private def _componentRuntimeContext(
+  private def _component_runtime_context(
     uow: UnitOfWork,
     driver: HttpDriver
   ): RuntimeContext = {
@@ -141,6 +153,7 @@ case class ComponentLogic(
 }
 
 object ComponentLogic {
+  // TODO migrate to AdminComponent
   final case class PingAction(request: Request) extends Query() {
 //    def name = "ping"
 

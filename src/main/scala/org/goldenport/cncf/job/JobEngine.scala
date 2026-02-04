@@ -10,7 +10,8 @@ import org.goldenport.id.UniversalId
 
 /*
  * @since   Jan.  4, 2026
- * @version Jan.  4, 2026
+ *  version Jan.  4, 2026
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -97,7 +98,7 @@ final case class ActionTask(
 ) extends JobTask {
   def run(ctx: ExecutionContext): TaskOutcome = {
     val correlationid = ctx.observability.correlationId
-    val core = ActionCall.Core(action, ctx, correlationid)
+    val core = ActionCall.Core(action, ctx, None, correlationid)
     val call = action.createCall(core)
     actionEngine.execute(call) match {
       case Consequence.Success(res) =>

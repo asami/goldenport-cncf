@@ -1,10 +1,13 @@
 package org.goldenport.cncf.context
 
+import org.goldenport.cncf.context.GlobalContext
+import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.http.HttpDriver
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 20, 2026
+ *  version Jan. 20, 2026
+ * @version Feb.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ScopeKind {
@@ -18,6 +21,11 @@ enum ScopeKind {
 abstract class ScopeContext() extends ObservationDsl with ScopeContext.Core.Holder {
 
   def core: ScopeContext.Core
+
+  def workAreaSpace: WorkAreaSpace = parent match {
+    case Some(s) => s.workAreaSpace
+    case None => GlobalContext.globalContext.workAreaSpace
+  }
 
   def httpDriver: HttpDriver = {
     core.httpDriverOption match {

@@ -19,7 +19,8 @@ import org.goldenport.cncf.context.{ScopeContext, ScopeKind}
  *  version Dec. 21, 2025
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
- * @version Jan. 29, 2026
+ *  version Jan. 29, 2026
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -27,18 +28,18 @@ class ActionEngine(
   authorizationEngine: AuthorizationEngine
 ) {
 
-  def createActionCall(
-    action: Action
-  ): ActionCall = {
-    val ec = create_execution_context()
-    val correlationid = None
-    val core = ActionCall.Core(action, ec, correlationid)
-    action.createCall(core)
-  }
+  // private def createActionCall(
+  //   action: Action
+  // ): ActionCall = {
+  //   val ec = create_execution_context()
+  //   val correlationid = None
+  //   val core = ActionCall.Core(action, ec, correlationid)
+  //   action.createCall(core)
+  // }
 
-  protected final def create_execution_context(): ExecutionContext = {
-    ExecutionContext.create() // TODO
-  }
+  // protected final def create_execution_context(): ExecutionContext = {
+  //   ExecutionContext.create() // TODO
+  // }
 
   def run( // unused?
     call: ActionCall
@@ -70,7 +71,7 @@ class ActionEngine(
           val r = call.execute()
           ec.runtime.commit()
           observe_leave(call, r)
-          val _ = ObservabilityEngine.build(
+          val _ = ObservabilityEngine.build( // TODO
             scope = ScopeContext(
               kind = ScopeKind.Action,
               name = call.action.name,
@@ -90,7 +91,7 @@ class ActionEngine(
             ec.runtime.abort()
             val conclusion = org.goldenport.Conclusion.from(e)
             observe_leave(call, Consequence.Failure(conclusion))
-            val _ = ObservabilityEngine.build(
+            val _ = ObservabilityEngine.build( // TODO
               scope = ScopeContext(
                 kind = ScopeKind.Action,
                 name = call.action.name,
@@ -120,7 +121,7 @@ class ActionEngine(
         val call = buildCall
         execute(call)
       case AuthorizationDecision.Deny =>
-        val reason = "authorization denied"
+        val reason = "authorization denied" // TODO Observation or Conclusion
         val event = ActionEvent.authorizationFailed(
           ExecutionContextId.generate(),
           actionName,
@@ -132,9 +133,11 @@ class ActionEngine(
         }
     }
 
-  def toExecutionContext(p: String): Consequence[ExecutionContext] = ???
+  def toExecutionContext(p: String): Consequence[ExecutionContext] =
+    Consequence.RAISE.NotImplemented
 
-  def toExecutionContext(p: Array[Byte]): Consequence[ExecutionContext] = ???
+  def toExecutionContext(p: Array[Byte]): Consequence[ExecutionContext] =
+    Consequence.RAISE.NotImplemented
 
   protected def observe_enter(
     call: ActionCall
@@ -151,10 +154,10 @@ class ActionEngine(
     // Execution observation hook (not persisted).
     result match {
       case Consequence.Success(_) =>
-        _log_backend_("leave", Some(call.action.name), "", None)
+        _log_backend_("leave", Some(call.action.name), "", None) // TODO
         observe_info("Action completed successfully", call)
       case Consequence.Failure(conclusion) =>
-        _log_backend_("error", Some(call.action.name), "", None)
+        _log_backend_("error", Some(call.action.name), "", None) // TODO
         val message = s"Action failed: ${conclusion.show}"
         observe_error(message, conclusion.getException, call)
     }
@@ -237,7 +240,7 @@ class ActionEngine(
     val ctx = _observation_context(call)
     val text = if (ctx.isEmpty) message else s"$message $ctx"
     val actionname = call.map(_.action.name)
-    _log_backend_(level, actionname, text, cause)
+    _log_backend_(level, actionname, text, cause) // TODO
   }
 
   private def _observation_context(
@@ -257,7 +260,7 @@ class ActionEngine(
     if (parts.isEmpty) "" else parts.mkString("[", " ", "]")
   }
 
-  private def _log_backend_(
+  private def _log_backend_( // TODO
     level: String,
     actionname: Option[String],
     message: String,

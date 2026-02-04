@@ -113,6 +113,40 @@ protected val reservation_count: Int
 private val _reservation_count: Int
 ```
 
+## General Rule for Parameters and Local Variables
+
+All **method parameters** and **method-local variables** must use **lowercase flatcase only**.
+
+- Only lowercase letters (`a–z`) are allowed
+- **camelCase, snake_case, and SCREAMING_SNAKE_CASE are forbidden** in these scopes
+- This rule applies regardless of visibility or context
+
+### Allowed
+
+```
+def foo(bar: Int): Int = {
+  val result = bar + 1
+  result
+}
+```
+
+### Forbidden
+
+```
+def foo(barValue: Int): Int = {   // camelCase: forbidden
+  val result_value = barValue + 1 // snake_case: forbidden
+  val RESULT = barValue + 1       // SCREAMING_SNAKE_CASE: forbidden
+}
+```
+
+### Design Intent
+
+This rule enforces a **clear visual distinction** between:
+- structural / API-level names (which may use camelCase or snake_case), and
+- **ephemeral, local reasoning variables**, which should remain simple, neutral, and unobtrusive.
+
+Lowercase flatcase minimizes cognitive load, improves scanability, and avoids accidental semantic signaling in local scopes.
+
 ## Method Parameters
 
 - Start with a lowercase letter

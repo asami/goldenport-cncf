@@ -28,7 +28,7 @@ import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
- * @version Feb.  1, 2026
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -99,6 +99,7 @@ final class Subsystem(
     val sc = Component.Context(
       name = name,
       parent = _subsystem_scope_context,
+      comp,
       componentOrigin = comp.origin
     )
     comp.withScopeContext(sc)

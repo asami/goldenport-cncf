@@ -3,11 +3,14 @@ package org.goldenport.cncf.action
 import org.goldenport.Consequence
 import org.goldenport.protocol.*
 import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.text.Presentable
 import org.goldenport.util.StringUtils.objectToSnakeName
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext}
 import org.goldenport.cncf.unitofwork.ExecUowM
 import org.goldenport.cncf.unitofwork.UnitOfWork
-import org.goldenport.text.Presentable
+import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.component.CollaboratorComponent
+import org.goldenport.cncf.collaborator.Collaborator
 
 /*
  * @since   Apr. 11, 2025
@@ -15,7 +18,8 @@ import org.goldenport.text.Presentable
  *  version Dec. 31, 2025
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
- * @version Jan. 22, 2026
+ *  version Jan. 22, 2026
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
@@ -59,14 +63,28 @@ object ActionCall {
   final case class Core(
     action: Action,
     executionContext: ExecutionContext,
+    component: Option[Component],
     correlationId: Option[CorrelationId]
-  )
+  ) {
+    def getCollaborator: Option[Collaborator] = component.flatMap {
+      case m: CollaboratorComponent => Some(m.collaborator)
+      case _ => None
+    }
+
+    inline def collaborator: Collaborator = getCollaborator getOrElse {
+      Consequence.failUninitializedState.RAISE
+    }
+
+    inline def createCollaboratorActionCallCore(opname: String): CollaboratorActionCall.Core =
+      CollaboratorActionCall.Core(collaborator, opname)
+  }
   object Core {
     trait Holder {
       def core: Core
 
       def action: Action = core.action
       def executionContext: ExecutionContext = core.executionContext
+      def component: Option[Component] = core.component
       def correlationId: Option[CorrelationId] = core.correlationId
     }
   }
