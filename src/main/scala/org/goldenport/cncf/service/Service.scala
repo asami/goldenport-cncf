@@ -18,7 +18,8 @@ import org.goldenport.cncf.job.{ActionId, ActionTask, JobContext}
  * @since   Apr. 11, 2025
  *  version Dec. 31, 2025
  *  version Jan.  3, 2026
- * @version Jan. 21, 2026
+ *  version Jan. 21, 2026
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Service extends ProtocolService with Service.CCore.Holder {
@@ -32,14 +33,14 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
     logic.makeOperationRequest(request).flatMap {
       case action: Command =>
         val actionid = ActionId.generate()
-        val task = ActionTask(actionid, action, logic.component.actionEngine)
+        val task = ActionTask(actionid, action, logic.component.actionEngine, Some(logic.component))
         val jobid = logic.submitJob(List(task), executionContext)
         Consequence.success(OperationResponse.Scalar(jobid.value))
       case action: Query =>
         val actionid = ActionId.generate()
         val jobcontext = JobContext(None, None, Some(actionid))
         val ctx = ExecutionContext.withJobContext(executionContext, jobcontext)
-        val task = ActionTask(actionid, action, logic.component.actionEngine)
+        val task = ActionTask(actionid, action, logic.component.actionEngine, Some(logic.component))
         task.run(ctx).result
       case _ =>
         Consequence.failure("OperationRequest must be Action")

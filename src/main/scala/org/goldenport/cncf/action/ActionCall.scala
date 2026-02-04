@@ -75,7 +75,7 @@ object ActionCall {
       Consequence.failUninitializedState.RAISE
     }
 
-    inline def createCollaboratorActionCallCore(opname: String): CollaboratorActionCall.Core =
+    def createCollaboratorActionCallCore(opname: String): CollaboratorActionCall.Core =
       CollaboratorActionCall.Core(collaborator, opname)
   }
   object Core {

@@ -3,14 +3,14 @@ package org.goldenport.cncf.job
 import java.util.concurrent.ConcurrentHashMap
 import scala.concurrent.{ExecutionContext as ScalaExecutionContext, Future}
 import org.goldenport.{Conclusion, Consequence}
+import org.goldenport.id.UniversalId
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.id.UniversalId
+import org.goldenport.cncf.component.Component
 
 /*
  * @since   Jan.  4, 2026
- *  version Jan.  4, 2026
  * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -94,11 +94,12 @@ trait JobTask {
 final case class ActionTask(
   actionId: ActionId,
   action: Action,
-  actionEngine: ActionEngine
+  actionEngine: ActionEngine,
+  component: Option[Component]
 ) extends JobTask {
   def run(ctx: ExecutionContext): TaskOutcome = {
     val correlationid = ctx.observability.correlationId
-    val core = ActionCall.Core(action, ctx, None, correlationid)
+    val core = ActionCall.Core(action, ctx, component, correlationid)
     val call = action.createCall(core)
     actionEngine.execute(call) match {
       case Consequence.Success(res) =>
