@@ -17,8 +17,13 @@ import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.configuration.{Configuration, ResolvedConfiguration}
-import org.goldenport.configuration.trace.ConfigurationTrace
+import org.goldenport.configuration.ConfigurationTrace
 
+/*
+ * @since   Feb.  4, 2026
+ * @version Feb.  4, 2026
+ * @author  ASAMI, Tomoharu
+ */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
   override def beforeAll(): Unit = {
     val workArea = WorkAreaSpace.create(RuntimeConfig.default)
@@ -38,7 +43,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         assume(Files.exists(samplejar), "Missing sample component jar for the test")
         val carpath = componentdir.resolve("demo-component.car")
         _create_car(carpath, Seq("component/main.jar" -> samplejar))
-        val repository = new ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+        val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
         val components = repository.discover()
         components should not be empty
       }
@@ -55,7 +60,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         try {
           val carpath = componentdir.resolve("invalid.car")
           _create_car(carpath, Seq("component/lib/dummy.jar" -> dummyjar))
-          val repository = new ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+          val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
           val components = repository.discover()
           components shouldBe empty
         } finally {

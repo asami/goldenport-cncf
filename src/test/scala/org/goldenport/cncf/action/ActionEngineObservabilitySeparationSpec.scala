@@ -17,7 +17,7 @@ import java.time.Instant
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 20, 2026
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngineObservabilitySeparationSpec
@@ -46,7 +46,7 @@ class ActionEngineObservabilitySeparationSpec
 
       val result = engine.executeAuthorized("test-action", ctx) {
         buildCalled = true
-        action.createCall(ActionCall.Core(action, ctx, None))
+        action.createCall(ActionCall.Core(action, ctx, None, None))
       }
 
       buildCalled shouldBe false
@@ -81,7 +81,7 @@ class ActionEngineObservabilitySeparationSpec
       }
 
       val result = engine.executeAuthorized("test-action", ctx) {
-        action.createCall(ActionCall.Core(action, ctx, None))
+        action.createCall(ActionCall.Core(action, ctx, None, None))
       }
 
       result should be_success

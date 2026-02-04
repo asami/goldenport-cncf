@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 11, 2026
- * @version Jan. 21, 2026
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class ProcedureActionCallSpec
@@ -47,7 +47,7 @@ class ProcedureActionCallSpec
           def createCall(core: ActionCall.Core): ActionCall =
             TestProcedureCall(core, driver, path)
         }
-        val call = action.createCall(ActionCall.Core(action, ctx, None))
+        val call = action.createCall(ActionCall.Core(action, ctx, None, None))
 
         When("executeDirect is invoked")
         val result = call.asInstanceOf[TestProcedureCall].executeDirect()

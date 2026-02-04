@@ -16,7 +16,7 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan. 20, 2026
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngineObservationSpec extends AnyWordSpec with Matchers with ConsequenceMatchers {
@@ -40,7 +40,7 @@ class ActionEngineObservationSpec extends AnyWordSpec with Matchers with Consequ
           new TestActionCall(core, engine)
       }
       val result = engine.executeAuthorized("test-action", ctx) {
-        action.createCall(ActionCall.Core(action, ctx, None))
+        action.createCall(ActionCall.Core(action, ctx, None, None))
       }
 
       result should be_failure
@@ -66,7 +66,7 @@ class ActionEngineObservationSpec extends AnyWordSpec with Matchers with Consequ
       }
 
       val result = engine.executeAuthorized("test-action", ctx) {
-        action.createCall(ActionCall.Core(action, ctx, None))
+        action.createCall(ActionCall.Core(action, ctx, None, None))
       }
 
       result should be_success

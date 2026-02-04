@@ -19,7 +19,7 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan. 20, 2026
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionCallDataStoreRouteSpec
@@ -86,7 +86,7 @@ class ActionCallDataStoreRouteSpec
       def createCall(core: ActionCall.Core): ActionCall =
         new DataStoreActionCall(core, entityid, id, value)
     }
-    val core = ActionCall.Core(action, ctx, None)
+    val core = ActionCall.Core(action, ctx, None, None)
     action.createCall(core)
   }
 

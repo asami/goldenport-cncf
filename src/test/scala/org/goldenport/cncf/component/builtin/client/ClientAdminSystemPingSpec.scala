@@ -35,7 +35,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 21, 2026
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientAdminSystemPingSpec
@@ -267,7 +267,7 @@ class ClientAdminSystemPingSpec
   ) {
     def executeAction(action: org.goldenport.cncf.action.Action): Consequence[OperationResponse] = {
       val ctx = _execution_context(runtime)
-      val core = ActionCall.Core(action, ctx, None)
+      val core = ActionCall.Core(action, ctx, None, None)
       val call = action.createCall(core)
       component.logic.execute(call)
     }
@@ -276,7 +276,7 @@ class ClientAdminSystemPingSpec
       val ctx = _execution_context(runtime)
       component.logic.makeOperationRequest(request).flatMap {
         case action: org.goldenport.cncf.action.Action =>
-          val core = ActionCall.Core(action, ctx, None)
+          val core = ActionCall.Core(action, ctx, None, None)
           val call = action.createCall(core)
           component.logic.execute(call).map(_.toResponse)
         case _ =>

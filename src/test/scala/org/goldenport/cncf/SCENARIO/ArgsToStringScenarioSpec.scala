@@ -38,7 +38,7 @@ import org.scalatest.matchers.should.Matchers
  */
 /*
  * @since   Jan.  1, 2026
- * @version Jan. 20, 2026
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -115,16 +115,16 @@ private object TestQueryOperation extends spec.OperationDefinition {
               new ActionCall {
                 override val core: ActionCall.Core = _core_
                 override def action: Action = actionself
-            override def execute(): org.goldenport.Consequence[OperationResponse] =
-              org.goldenport.Consequence.Success(
-                new OperationResponse {
-                  override def toResponse: Response = Response.Scalar[String](toString)
-                  override def show: String = s"Query(${arg.value})"
-                  def print = show
-//                  override def toString: String = show
-                }
-              )
-            }
+                override def execute(): org.goldenport.Consequence[OperationResponse] =
+                  org.goldenport.Consequence.Success(
+                    new OperationResponse {
+                      override def toResponse: Response = Response.Scalar[String](toString)
+                      override def show: String = s"Query(${arg.value})"
+                      def print = show
+//                      override def toString: String = show
+                    }
+                  )
+              }
             }
 
             override def show: String = s"Query(${arg.value})"
@@ -200,7 +200,7 @@ object TestComponent {
           case action: Action =>
             val executioncontext = ExecutionContext.test()
             val correlationid = executioncontext.observability.correlationId
-            val core = ActionCall.Core(action, executioncontext, correlationid)
+            val core = ActionCall.Core(action, executioncontext, None, correlationid)
             val ac = action.createCall(core)
             val r = for {
               res <- component.logic.execute(ac)

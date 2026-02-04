@@ -16,7 +16,7 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan. 20, 2026
+ * @version Feb.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMatchers {
@@ -80,7 +80,7 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
       def createCall(core: ActionCall.Core): ActionCall =
         new TestActionCall(core)
     }
-    val core = ActionCall.Core(action, ctx, None)
+    val core = ActionCall.Core(action, ctx, None, None)
     action.createCall(core)
   }
 
