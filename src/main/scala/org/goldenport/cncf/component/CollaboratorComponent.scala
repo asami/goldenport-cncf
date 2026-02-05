@@ -2,11 +2,11 @@ package org.goldenport.cncf.component
 
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
-import org.goldenport.cncf.collaborator.Collaborator
+import org.goldenport.cncf.backend.collaborator.Collaborator
 
 /*
  * @since   Feb.  1, 2026
- * @version Feb.  4, 2026
+ * @version Feb.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class CollaboratorComponent() extends Component()

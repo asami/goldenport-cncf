@@ -28,7 +28,7 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
 import org.goldenport.cncf.workarea.WorkAreaSpace
-import org.goldenport.cncf.collaborator.CollaboratorFactory
+import org.goldenport.cncf.backend.collaborator.CollaboratorFactory
 import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.component.repository.ComponentRepositorySpace
 import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
@@ -39,7 +39,7 @@ import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObserva
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
- * @version Feb.  3, 2026
+ * @version Feb.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {

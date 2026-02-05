@@ -3,7 +3,7 @@ package org.goldenport.cncf.component
 import java.nio.file.{Path, Paths}
 import org.goldenport.Consequence
 import org.goldenport.configuration.ResolvedConfiguration
-import org.goldenport.cncf.collaborator.{Collaborator, CollaboratorFactory}
+import org.goldenport.cncf.backend.collaborator.{Collaborator, CollaboratorFactory}
 import org.goldenport.cncf.collaborator.api
 import org.goldenport.cncf.component.repository.{ComponentRepository, ComponentRepositorySpace}
 import org.goldenport.cncf.component.repository.ComponentSource
@@ -12,7 +12,7 @@ import org.goldenport.cncf.subsystem.Subsystem
 /*
  * @since   Jan. 30, 2026
  *  version Jan. 31, 2026
- * @version Feb.  1, 2026
+ * @version Feb.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(

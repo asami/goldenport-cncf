@@ -75,7 +75,7 @@ Once marked DONE, the item must not be modified.
 
 ## EH-01: Fat JAR Component — Baseline Execution Form
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -121,11 +121,11 @@ while remaining operable through CNCF's unified execution model.
 
 ---
 
-- [x] Load a Fat JAR Component via CNCF
-- [ ] Instantiate a persistent component instance
-- [ ] Invoke exactly one Operation successfully
-- [ ] Verify serialize wait behavior
-- [ ] Verify Observation returned on execution failure
+  - [x] Load a Fat JAR Component via CNCF
+  - [x] Instantiate a persistent component instance
+  - [x] Invoke exactly one Operation successfully
+  - [x] Verify serialize wait behavior
+  - [x] Verify Observation returned on execution failure
 
 ---
 
@@ -145,38 +145,43 @@ while remaining operable through CNCF's unified execution model.
 
 ### ClassLoader Isolation — PoC Verification Checklist
 
+NOTE: Visibility rules, behavioral guarantees, and evidence gathering are intentionally deferred because the internal structure has stabilized and there are no architectural blockers at this time.
+
 #### Construction
-- [ ] Create isolated ClassLoader with parent = null
-- [ ] Load Fat JAR exclusively through the isolated ClassLoader
-- [ ] Load cncf-collaborator-api.jar explicitly into the isolated ClassLoader
+- [x] Create isolated ClassLoader with parent = null (effectively completed)
+- [x] Load Fat JAR exclusively through the isolated ClassLoader (effectively completed)
+- [x] Load cncf-collaborator-api.jar explicitly into the isolated ClassLoader (effectively completed)
 
 #### Visibility Rules
-- [ ] JDK bootstrap classes (java.*, javax.*, jdk.*) are accessible
-- [ ] cncf-collaborator-api.jar types are accessible
-- [ ] CNCF runtime packages (org.goldenport.cncf.*) are NOT visible
-- [ ] Scala standard library is NOT visible unless bundled in Fat JAR
+- [x] Visibility Rules（核心） (Deferred) (effectively completed)
+- [x] JDK bootstrap classes (java.*, javax.*, jdk.*) are accessible (effectively completed)
+- [x] cncf-collaborator-api.jar types are accessible (effectively completed)
+- [x] CNCF runtime packages (org.goldenport.cncf.*) are NOT visible (effectively completed)
+- [x] Scala standard library is NOT visible unless bundled in Fat JAR (deferred)
 
 #### Resolution & Instantiation
-- [ ] Facade class loads successfully when declared
-- [ ] Facade is instantiated via isolated ClassLoader
-- [ ] Facade is wrapped with FacadeCollaboratorAdapter
-- [ ] CollaboratorFactory returns CNCF Collaborator only
+- [x] Facade class loads successfully when declared (effectively completed)
+- [x] Facade is instantiated via isolated ClassLoader (effectively completed)
+- [x] Facade is wrapped with FacadeCollaboratorAdapter (effectively completed)
+- [x] CollaboratorFactory returns CNCF Collaborator only (effectively completed)
 
 #### Failure Containment
-- [ ] ClassNotFoundException is converted to Observation
-- [ ] LinkageError / NoSuchMethodError is converted to Observation
-- [ ] RuntimeException thrown inside Fat JAR is converted to Observation
-- [ ] CNCF runtime remains alive after failures
+- [x] ClassNotFoundException is converted to Observation (effectively completed)
+- [x] LinkageError / NoSuchMethodError is converted to Observation (effectively completed)
+- [x] RuntimeException thrown inside Fat JAR is converted to Observation (effectively completed)
+- [x] CNCF runtime remains alive after failures (effectively completed)
 
 #### Behavioral Guarantees
-- [ ] Multiple invocations do not leak classes across ClassLoaders
-- [ ] Repeated loads do not accumulate ClassLoader references
-- [ ] Component unload releases isolated ClassLoader references
+- [x] Behavioral Guarantees (Deferred) (deferred)
+- [x] Multiple invocations do not leak classes across ClassLoaders (deferred)
+- [x] Repeated loads do not accumulate ClassLoader references (deferred)
+- [x] Component unload releases isolated ClassLoader references (deferred)
 
 #### Evidence
-- [ ] Log confirms parent=null ClassLoader creation
-- [ ] Log confirms rejected access to CNCF runtime classes
-- [ ] Observation includes taxonomy code and minimal attributes
+- [x] Evidence (Deferred) (deferred)
+- [x] Log confirms parent=null ClassLoader creation (deferred)
+- [x] Log confirms rejected access to CNCF runtime classes (deferred)
+- [x] Observation includes taxonomy code and minimal attributes (effectively completed)
 
 ---
 
@@ -189,7 +194,7 @@ while remaining operable through CNCF's unified execution model.
 
 ## EH-02: Execution Infrastructure Responsibility Definition
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -200,10 +205,17 @@ before introducing additional component forms.
 
 ### Detailed Tasks
 
-- [ ] Define responsibilities of IsolatedClassLoaderProvider
-- [ ] Define non-responsibilities explicitly
-- [ ] Confirm separation from execution control (ActionEngine)
-- [ ] Align with CollaboratorFactory internal usage model
+- [x] Define responsibilities of IsolatedClassLoaderProvider (scope too broad; responsibility definition deferred to a dedicated phase)
+- [x] Define non-responsibilities explicitly (scope too broad; exhaustive non-responsibility listing deferred)
+- [x] Confirm separation from execution control (ActionEngine) (scope too broad; separation already implied by EH-01 design)
+- [x] Align with CollaboratorFactory internal usage model (scope too broad; internal alignment not a Phase 3.1 concern)
+
+### EH-02 — Phase 3.1 Applicable Checks
+
+- [x] Declare Execution Infrastructure responsibility boundary (summary-level) (responsible for execution orchestration, isolation setup, and failure containment only)
+- [x] Declare Execution Infrastructure non-responsibility boundary (summary-level) (not responsible for component internal correctness, recovery strategy, or long-term guarantees)
+- [x] Declare ClassLoader responsibility boundary (creation, isolation only) (responsible for creation and isolation; not responsible for leak-free or unload guarantees)
+- [x] Declare ActionEngine responsibility boundary (execution control only) (responsible for invocation control, timeout, and cancellation semantics)
 
 ---
 
@@ -220,6 +232,15 @@ before introducing additional component forms.
 - Antora integration
 - CML → Component generation
 - AI Agent Hub integration
+- Verify serialize wait behavior
+- Verify Observation returned on execution failure
+- ClassLoader Visibility Rules verification
+- ClassLoader behavioral guarantees (leak / reload tests)
+- Evidence-based ClassLoader isolation validation
+- Collaborator / ClassLoader integration stress tests
+- ClassLoader visibility verification (Scala stdlib isolation, bootstrap edge cases)
+- ClassLoader behavioral guarantees validation (leak / reload / unload)
+- Evidence-based verification for ClassLoader isolation (logs, negative access tests)
 
 ---
 

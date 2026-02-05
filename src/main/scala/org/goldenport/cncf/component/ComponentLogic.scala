@@ -8,7 +8,7 @@ import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.cncf.action.{Action, ActionCall, Query, ResourceAccess}
 import cats.{Id, ~>}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeKind}
-import org.goldenport.cncf.collaborator.Collaborator
+import org.goldenport.cncf.backend.collaborator.Collaborator
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.job.{JobEngine, JobId, JobResult, JobStatus, JobTask}
 import org.goldenport.cncf.unitofwork.UnitOfWork
@@ -18,7 +18,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 /*
  * @since   Jan.  3, 2026
  *  version Jan. 20, 2026
- * @version Feb.  4, 2026
+ * @version Feb.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 /**

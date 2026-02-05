@@ -33,7 +33,7 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 /*
  * @since   Jan.  4, 2026
- * @version Jan. 20, 2026
+ * @version Feb.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -158,7 +158,7 @@ private case class RecordingService(
     logic.makeOperationRequest(request).flatMap {
       case action: Command =>
         val actionid = ActionId.generate()
-        val task = ActionTask(actionid, action, logic.component.actionEngine)
+        val task = ActionTask(actionid, action, logic.component.actionEngine, Some(logic.component))
         val jobid = logic.submitJob(List(task), executioncontext)
         _lastJobId = Some(jobid)
         Consequence.success(OperationResponse.Scalar(jobid.value).toResponse)
@@ -170,7 +170,7 @@ private case class RecordingService(
           executioncontext,
           jobcontext
         )
-        val task = ActionTask(actionid, action, logic.component.actionEngine)
+        val task = ActionTask(actionid, action, logic.component.actionEngine, Some(logic.component))
         task.run(ctx).result.map(_.toResponse)
       case _ =>
         Consequence.failure("OperationRequest must be Action")

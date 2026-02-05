@@ -3,16 +3,11 @@ package org.goldenport.cncf.action
 import org.goldenport.Consequence
 import org.goldenport.protocol.{Request, Response}
 import org.goldenport.protocol.operation.OperationResponse
-import org.goldenport.cncf.collaborator.Collaborator
+import org.goldenport.cncf.backend.collaborator.Collaborator
 
 /*
  * @since   Jan. 30, 2026
-
-
- * @version Feb.  4, 2026
-
-
- * @version Feb.  4, 2026
+ * @version Feb.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class CollaboratorActionCall(

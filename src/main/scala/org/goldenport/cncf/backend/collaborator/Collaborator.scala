@@ -1,4 +1,4 @@
-package org.goldenport.cncf.collaborator
+package org.goldenport.cncf.backend.collaborator
 
 import java.lang.{Boolean => JBoolean, Byte => JByte, Character => JCharacter, Double => JDouble, Float => JFloat, Integer => JInteger, Long => JLong, Short => JShort}
 
@@ -13,7 +13,7 @@ import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * @since   Jan. 30, 2026
- * @version Feb.  1, 2026
+ * @version Feb.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Collaborator() {

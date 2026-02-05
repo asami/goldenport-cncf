@@ -10,7 +10,7 @@ import org.goldenport.cncf.unitofwork.ExecUowM
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.CollaboratorComponent
-import org.goldenport.cncf.collaborator.Collaborator
+import org.goldenport.cncf.backend.collaborator.Collaborator
 
 /*
  * @since   Apr. 11, 2025
@@ -19,7 +19,7 @@ import org.goldenport.cncf.collaborator.Collaborator
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
  *  version Jan. 22, 2026
- * @version Feb.  4, 2026
+ * @version Feb.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()

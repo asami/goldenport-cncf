@@ -15,12 +15,12 @@ import org.goldenport.cncf.bootstrap.BootstrapLog
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.observability.global.{GlobalObservable, ObservabilityScopeDefaults, PersistentBootstrapLog}
 import org.goldenport.cncf.component.*
-import org.goldenport.cncf.collaborator.{CollaboratorClassLoader, CollaboratorFactory}
+import org.goldenport.cncf.backend.collaborator.{CollaboratorClassLoader, CollaboratorFactory}
 
 /*
  * @since   Jan. 12, 2026
  *  version Jan. 29, 2026
- * @version Feb.  4, 2026
+ * @version Feb.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {

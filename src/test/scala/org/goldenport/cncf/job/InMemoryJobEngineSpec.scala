@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  4, 2026
- * @version Jan. 17, 2026
+ * @version Feb.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 class InMemoryJobEngineSpec extends AnyWordSpec with Matchers {
@@ -35,7 +35,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers {
       val actionEngine = ActionEngine.create()
       val jobEngine = InMemoryJobEngine.create()
       val ctx = ExecutionContext.test()
-      val task = ActionTask(ActionId.generate(), action, actionEngine)
+      val task = ActionTask(ActionId.generate(), action, actionEngine, None)
 
       val jobid = jobEngine.submit(List(task), ctx)
       val result = _await_result_(jobEngine, jobid)

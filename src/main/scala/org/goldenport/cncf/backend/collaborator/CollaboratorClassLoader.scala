@@ -1,9 +1,14 @@
-package org.goldenport.cncf.collaborator
+package org.goldenport.cncf.backend.collaborator
 
 import java.net.URL
 import java.net.URLClassLoader
 import java.nio.file.Path
 
+/*
+ * @since   Feb.  4, 2026
+ * @version Feb.  5, 2026
+ * @author  ASAMI, Tomoharu
+ */
 final class CollaboratorClassLoader(
   urls: Array[URL],
   parent: ClassLoader

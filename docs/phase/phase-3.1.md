@@ -1,6 +1,6 @@
 # Phase 3.1 — Execution / Orchestration Foundation
 
-status = active
+status = done
 
 This document defines the **design intent, scope, and boundaries**
 of Phase 3.1 in the CNCF roadmap.

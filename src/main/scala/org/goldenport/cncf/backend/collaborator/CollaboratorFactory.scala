@@ -1,4 +1,4 @@
-package org.goldenport.cncf.collaborator
+package org.goldenport.cncf.backend.collaborator
 
 import java.lang.reflect.Modifier
 import java.util.ServiceLoader
@@ -12,12 +12,12 @@ import java.nio.charset.StandardCharsets
 
 import org.goldenport.Consequence
 import org.goldenport.configuration.ResolvedConfiguration
-import org.goldenport.cncf.collaborator.Collaborator
+import org.goldenport.cncf.backend.collaborator.Collaborator
 import org.goldenport.cncf.collaborator.api.Collaborator as ApiCollaborator
 
 /*
  * @since   Jan. 30, 2026
- * @version Feb.  4, 2026
+ * @version Feb.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 class CollaboratorFactory(

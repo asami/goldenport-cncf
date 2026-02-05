@@ -7,12 +7,12 @@ import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.ComponentOrigin
-import org.goldenport.cncf.collaborator.CollaboratorFactory
+import org.goldenport.cncf.backend.collaborator.CollaboratorFactory
 import org.goldenport.cncf.subsystem.Subsystem
 
 /*
  * @since   Jan. 30, 2026
- * @version Feb.  1, 2026
+ * @version Feb.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositorySpace(
