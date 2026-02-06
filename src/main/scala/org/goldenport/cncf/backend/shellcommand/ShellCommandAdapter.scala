@@ -4,18 +4,19 @@ import java.nio.file.Path
 
 import org.goldenport.Consequence
 import org.goldenport.process.{
-  ExternalCommand,
-  ExternalCommandExecutor,
-  LocalExternalCommandExecutor
+  ShellCommand,
+  ShellCommandResult,
+  ShellCommandExecutor,
+  LocalShellCommandExecutor
 }
 
 /*
  * @since   Feb.  5, 2026
- * @version Feb.  5, 2026
+ * @version Feb.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ShellCommandAdapter(
-  executor: ExternalCommandExecutor = new LocalExternalCommandExecutor
+  executor: ShellCommandExecutor = new LocalShellCommandExecutor
 ) {
 
   def execute(
@@ -23,23 +24,11 @@ final class ShellCommandAdapter(
     workDir: Option[Path] = None,
     env: Map[String, String] = Map.empty
   ): Consequence[ShellCommandResult] = {
-    val external = ExternalCommand(
+    val external = ShellCommand(
       command = command,
       workDir = workDir,
       env = env
     )
-    executor.execute(external).map(result =>
-      ShellCommandResult(
-        exitCode = result.exitCode,
-        stdout = result.stdout,
-        stderr = result.stderr
-      )
-    )
+    executor.execute(external)
   }
 }
-
-final case class ShellCommandResult(
-  exitCode: Int,
-  stdout: String,
-  stderr: String
-)

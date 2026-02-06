@@ -9,11 +9,11 @@ import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
 import org.goldenport.tree.{Tree, TreeDir, TreeEntry, TreeLeaf}
-import org.goldenport.process.{ExternalCommand, ExternalCommandExecutor, LocalExternalCommandExecutor}
+import org.goldenport.process.{ShellCommand, ShellCommandExecutor, LocalShellCommandExecutor}
 
 /*
  * @since   Feb.  5, 2026
- * @version Feb.  5, 2026
+ * @version Feb.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DockerAdapter {
@@ -28,14 +28,11 @@ final case class DockerInput(
 )
 
 final case class DockerOutput(
-  files: Tree[Bag],
-  exitCode: Int,
-  stdout: String,
-  stderr: String
+  result: org.goldenport.process.ShellCommandResult
 )
 
 final class CommandDockerAdapter(
-  private val executor: ExternalCommandExecutor = new LocalExternalCommandExecutor
+  private val executor: ShellCommandExecutor = new LocalShellCommandExecutor
 ) extends DockerAdapter {
 
   override def execute(input: DockerInput): Consequence[DockerOutput] =
@@ -44,21 +41,31 @@ final class CommandDockerAdapter(
         _ <- writeTree(input.files, workDir)
         result <- if (input.command.isEmpty) {
           // skip docker invocation
-          Consequence.success((0, "", ""))
+          Consequence.success(
+            org.goldenport.process.ShellCommandResult(
+              exitCode = 0,
+              stdout = Bag.empty,
+              stderr = Bag.empty,
+              files = Map.empty,
+              directories = Map.empty
+            )
+          )
         } else {
-          val cmd = ExternalCommand(
+          val cmd = ShellCommand(
             command = Vector("docker","run","--rm","-v", s"${workDir.toAbsolutePath}:/work","-w","/work", input.image) ++ input.command,
             workDir = None,
             env = input.env
           )
-          executor.execute(cmd).map(r => (r.exitCode, r.stdout, r.stderr))
+          executor.execute(cmd)
         }
-        output <- readTree(workDir)
+        // readTree(workDir) is kept but no longer used to populate ShellCommandResult.files
       } yield DockerOutput(
-        files = output,
-        exitCode = result._1,
-        stdout = result._2,
-        stderr = result._3
+        result = result.copy(
+          files = Map.empty,
+          directories = Map(
+            "work" -> org.goldenport.vfs.DirectoryFileSystemView(workDir)
+          )
+        )
       )
     }
 

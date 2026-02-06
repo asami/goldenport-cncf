@@ -11,7 +11,8 @@ import org.goldenport.bag.TextBag
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 21, 2026
+ *  version Jan. 21, 2026
+ * @version Feb.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class HttpCommand(
@@ -56,7 +57,7 @@ sealed trait ClientHttpActionCall extends FunctionalActionCall with ActionCallHt
 
   private def _body(req: HttpRequest): Option[String] =
     req.body match {
-      case Some(t: TextBag) => Some(t.toText)
+      case Some(t: TextBag) => Some(t.toTextUnsafe)
       case _ => None
     }
 }

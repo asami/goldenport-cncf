@@ -20,7 +20,7 @@ import org.goldenport.cncf.context.{ScopeContext, ScopeKind}
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
  *  version Jan. 29, 2026
- * @version Feb.  4, 2026
+ * @version Feb.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -41,16 +41,16 @@ class ActionEngine(
   //   ExecutionContext.create() // TODO
   // }
 
-  def run( // unused?
-    call: ActionCall
-  ): Consequence[OperationResponse] =
-    Consequence {
-      val ec = call.executionContext
-      observe_enter(call)
-      val r = call.execute().take
-      observe_leave(call, Consequence.Success(r))
-      r
-    }
+  // def run( // unused?
+  //   call: ActionCall
+  // ): Consequence[OperationResponse] =
+  //   Consequence {
+  //     val ec = call.executionContext
+  //     observe_enter(call)
+  //     val r = call.execute().take
+  //     observe_leave(call, Consequence.Success(r))
+  //     r
+  //   }
 
   def execute(
     call: ActionCall

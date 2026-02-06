@@ -3,6 +3,7 @@ package org.goldenport.cncf.protocol
 import org.goldenport.model.value.BaseContent
 import org.goldenport.protocol.spec.ParameterDefinition
 
+// TODO
 /**
  * Declarative catalog of runtime-scoped parameters defined by GlobalProtocol.
  *
@@ -11,7 +12,7 @@ import org.goldenport.protocol.spec.ParameterDefinition
  */
 /*
  * @since   Jan. 22, 2026
- * @version Jan. 22, 2026
+ * @version Feb.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 object GlobalParameterGroup {
