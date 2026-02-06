@@ -1,24 +1,27 @@
-package org.goldenport.cncf.protocol.spec
+package org.goldenport.cncf.component.protocol
 
-import java.nio.file.Paths
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Path, Paths}
 
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.GivenWhenThen
 
 import org.goldenport.Consequence
+import org.goldenport.bag.Bag
 import org.goldenport.model.value.BaseContent
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.protocol.spec.OperationDefinition
 import org.goldenport.protocol.spec.{RequestDefinition, ResponseDefinition, OperationDefinition => CoreOperationDefinition}
-import org.goldenport.process.{ExternalCommand, ExternalCommandExecutor, ExternalCommandResult}
+import org.goldenport.process.{ShellCommand, ShellCommandExecutor, ShellCommandResult}
 import org.goldenport.cncf.action.ActionCall
 import org.goldenport.cncf.component.{CommandParameterMappingRule, ShellCommandComponent}
 import org.goldenport.cncf.context.ExecutionContext
 
 /*
- * @since   Feb.  5, 2026
- * @version Feb.  5, 2026
+ * @since   Feb.  6, 2026
+ * @version Feb.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 class ShellCommandOperationDefinitionSpec
@@ -29,32 +32,41 @@ class ShellCommandOperationDefinitionSpec
   "ShellCommandCall" should {
     "assemble the expected command vector" in {
       Given("a shell specification where the mapping rule is deterministic")
-      val spec = ShellCommandSpecification(
-        baseCommand = Vector("bin", "shell"),
-        mappingRule = new TestMappingRule("runme", Vector("alpha", "beta"))
-      )
-      val (call, executor) = buildCall(spec, ExternalCommandResult(0, "out", "err"))
+      val spec =
+        shellSpec(Vector("bin", "shell"), new TestMappingRule("runme", Vector("alpha", "beta")))
+      val (call, executor) = buildCall(spec, ShellCommandResult(
+        exitCode = 0,
+        stdout = Bag.empty,
+        stderr = Bag.empty,
+        files = Map.empty,
+        directories = Map.empty
+      ))
 
       When("the action call executes")
       call.execute()
 
       Then("the executor receives the composed vector")
       executor.lastCommand shouldBe Some(
-        ExternalCommand(
+        ShellCommand(
           command = Vector("bin", "shell", "runme", "alpha", "beta"),
           workDir = spec.workDirHint,
-          env = spec.envHint
+          env = spec.envHint,
+          directive = ShellCommand.Directive.empty
         )
       )
     }
 
     "still return success for non-zero exit codes" in {
       Given("an executor that reports failure")
-      val spec = ShellCommandSpecification(
-        baseCommand = Vector("bin", "fail"),
-        mappingRule = new TestMappingRule("fail", Vector.empty)
+      val spec =
+        shellSpec(Vector("bin", "fail"), new TestMappingRule("fail", Vector.empty))
+      val result = ShellCommandResult(
+        exitCode = 13,
+        stdout = Bag.text("nonzero", StandardCharsets.UTF_8),
+        stderr = Bag.text("error", StandardCharsets.UTF_8),
+        files = Map.empty,
+        directories = Map.empty
       )
-      val result = ExternalCommandResult(13, "nonzero", "error")
       val (call, _) = buildCall(spec, result)
 
       When("execute is invoked")
@@ -71,11 +83,15 @@ class ShellCommandOperationDefinitionSpec
 
     "fail when no ShellCommandComponent is present" in {
       Given("a shell call without a component")
-      val spec = ShellCommandSpecification(
-        baseCommand = Vector("bin"),
-        mappingRule = new TestMappingRule("noop", Vector.empty)
-      )
-      val (call, _) = buildCall(spec, ExternalCommandResult(0, "", ""))
+      val spec =
+        shellSpec(Vector("bin"), new TestMappingRule("noop", Vector.empty))
+      val (call, _) = buildCall(spec, ShellCommandResult(
+        exitCode = 0,
+        stdout = Bag.empty,
+        stderr = Bag.empty,
+        files = Map.empty,
+        directories = Map.empty
+      ))
       val core = ActionCall.Core(
         call.core.action,
         ExecutionContext.test(),
@@ -93,23 +109,31 @@ class ShellCommandOperationDefinitionSpec
 
     "pass hints to the executor" in {
       Given("a specification with env and workDir hints")
-      val spec = ShellCommandSpecification(
-        baseCommand = Vector("bin", "hint"),
-        mappingRule = new TestMappingRule("hinted", Vector.empty),
-        workDirHint = Some(Paths.get("/tmp/hint")),
-        envHint = Map("LC" -> "value")
-      )
-      val (call, executor) = buildCall(spec, ExternalCommandResult(0, "", ""))
+      val spec =
+        shellSpec(
+          Vector("bin", "hint"),
+          new TestMappingRule("hinted", Vector.empty),
+          workDirHint = Some(Paths.get("/tmp/hint")),
+          envHint = Map("LC" -> "value")
+        )
+      val (call, executor) = buildCall(spec, ShellCommandResult(
+        exitCode = 0,
+        stdout = Bag.empty,
+        stderr = Bag.empty,
+        files = Map.empty,
+        directories = Map.empty
+      ))
 
       When("execute is invoked")
       call.execute()
 
-      Then("the hints are reflected in the ExternalCommand")
+      Then("the hints are reflected in the ShellCommand")
       executor.lastCommand shouldBe Some(
-        ExternalCommand(
+        ShellCommand(
           command = Vector("bin", "hint", "hinted"),
           workDir = spec.workDirHint,
-          env = spec.envHint
+          env = spec.envHint,
+          directive = ShellCommand.Directive.empty
         )
       )
     }
@@ -117,11 +141,11 @@ class ShellCommandOperationDefinitionSpec
 
   private def buildCall(
     spec: ShellCommandSpecification,
-    result: ExternalCommandResult
+    result: ShellCommandResult
   ): (ShellCommandCall, FakeCommandExecutor) = {
     val operation = new TestShellCommandOperationDefinition(spec)
     val request = Request.ofOperation("shell")
-    val action = operation.createOperationRequest(request).take
+    val action = operation.createOperationRequest(request).toOption.get
     val executor = new FakeCommandExecutor(result)
     val component = new FakeShellCommandComponent(executor)
     val core = ActionCall.Core(
@@ -136,11 +160,11 @@ class ShellCommandOperationDefinitionSpec
     }
   }
 
-  private class FakeCommandExecutor(result: ExternalCommandResult)
-      extends ExternalCommandExecutor {
-    var lastCommand: Option[ExternalCommand] = None
+  private class FakeCommandExecutor(result: ShellCommandResult)
+      extends ShellCommandExecutor {
+    var lastCommand: Option[ShellCommand] = None
 
-    override def execute(command: ExternalCommand): Consequence[ExternalCommandResult] = {
+    override def execute(command: ShellCommand): Consequence[ShellCommandResult] = {
       lastCommand = Some(command)
       Consequence.success(result)
     }
@@ -149,20 +173,23 @@ class ShellCommandOperationDefinitionSpec
   private class FakeShellCommandComponent(
     executorRef: FakeCommandExecutor
   ) extends ShellCommandComponent {
-    override protected def executor: ExternalCommandExecutor = executorRef
-    override def commandExecutor: ExternalCommandExecutor = executorRef
-    override protected def baseCommand(operation: CoreOperationDefinition): Vector[String] = Vector.empty
+    override protected def shell_Executor: ShellCommandExecutor = executorRef
+    override def commandExecutor: ShellCommandExecutor = executorRef
+    override protected def base_Command(operation: CoreOperationDefinition): Vector[String] = Vector.empty
   }
 
   private class TestShellCommandOperationDefinition(
     override val shellSpecification: ShellCommandSpecification
   ) extends ShellCommandOperationDefinition {
-    override val specification: OperationDefinition.Specification =
-      new OperationDefinition.Specification(
+    private val delegate =
+      OperationDefinition(
         BaseContent.simple("shell"),
         RequestDefinition(),
         ResponseDefinition()
       )
+
+    override def specification: OperationDefinition.Specification =
+      delegate.specification
   }
 
   private class TestMappingRule(
@@ -170,6 +197,26 @@ class ShellCommandOperationDefinitionSpec
     args: Vector[String]
   ) extends CommandParameterMappingRule {
     override def commandName(operation: CoreOperationDefinition): String = commandname
-    override def arguments(operation: CoreOperationDefinition): Vector[String] = args
+
+    override def parameters(
+      operation: CoreOperationDefinition,
+      request: Request
+    ): CommandParameterMappingRule.Parameters =
+      CommandParameterMappingRule.Parameters(args, ShellCommand.Directive.empty)
   }
+
+  private def shellSpec(
+    baseCommand: Vector[String],
+    mappingRule: CommandParameterMappingRule,
+    workDirHint: Option[Path] = None,
+    envHint: Map[String, String] = Map.empty
+  ): ShellCommandSpecification =
+    ShellCommandSpecification.Instance(
+      ShellCommandSpecification.Core(
+        baseCommand,
+        mappingRule,
+        workDirHint,
+        envHint
+      )
+    )
 }

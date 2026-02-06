@@ -38,7 +38,7 @@ import org.scalatest.matchers.should.Matchers
  */
 /*
  * @since   Jan.  1, 2026
- * @version Feb.  4, 2026
+ * @version Feb.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -202,11 +202,11 @@ object TestComponent {
             val correlationid = executioncontext.observability.correlationId
             val core = ActionCall.Core(action, executioncontext, None, correlationid)
             val ac = action.createCall(core)
-            val r = for {
+            val response = for {
               res <- component.logic.execute(ac)
-              r <- component.logic.makeStringOperationResponse(res)
-            } yield r
-            ScenarioResult(isSuccess = true, value = r.take)
+              text <- component.logic.makeStringOperationResponse(res)
+            } yield text
+            ScenarioResult(isSuccess = true, value = response.toOption.get)
         }
       case org.goldenport.Consequence.Failure(err) =>
         // println("MESSAGE      : " + err.message)

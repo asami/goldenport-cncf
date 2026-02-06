@@ -7,7 +7,6 @@ import org.goldenport.protocol.operation.*
 import org.goldenport.process.ShellCommand
 import org.goldenport.cncf.action.*
 import org.goldenport.cncf.component.{CommandParameterMappingRule, ShellCommandComponent}
-import org.goldenport.cncf.component.protocol.ShellCommandSpecification
 
 /*
  * @since   Feb.  5, 2026
@@ -26,15 +25,31 @@ abstract class ShellCommandOperationDefinition() extends ComponentOperationDefin
   }
 }
 
-final case class ShellCommandSpecification(
-  baseCommand: Vector[String],
-  mappingRule: CommandParameterMappingRule = CommandParameterMappingRule.Default,
-  workDirHint: Option[Path] = None,
-  envHint: Map[String, String] = Map.empty
-)
+abstract class ShellCommandSpecification()
+    extends ShellCommandSpecification.Core.Holder {
+}
 object ShellCommandSpecification {
+  case class Core(
+    baseCommand: Vector[String],
+    mappingRule: CommandParameterMappingRule = CommandParameterMappingRule.Default,
+    workDirHint: Option[Path] = None,
+    envHint: Map[String, String] = Map.empty
+  )
+  object Core {
+    trait Holder {
+      def core: Core
+
+      def baseCommand = core.baseCommand
+      def mappingRule = core.mappingRule
+      def workDirHint = core.workDirHint
+      def envHint = core.envHint
+    }
+  }
+
+  case class Instance(core: Core) extends ShellCommandSpecification
+
   def apply(name: String): ShellCommandSpecification =
-    ShellCommandSpecification(Vector(name))
+    Instance(Core(Vector(name)))
 }
 
 case class ShellCommandCommand(

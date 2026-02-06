@@ -33,7 +33,7 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 /*
  * @since   Jan.  4, 2026
- * @version Feb.  5, 2026
+ * @version Feb.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -52,7 +52,7 @@ class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
 
       Then("a JobId is returned immediately")
       result should be_success
-      val jobIdValue = result.take
+      val jobIdValue = result.toOption.get
       jobIdValue should not be empty
 
       val jobId = ScenarioAdapter.lastJobId
@@ -86,7 +86,7 @@ class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
 
       Then("a JobId is returned immediately")
       result should be_success
-      val jobIdValue = result.take
+      val jobIdValue = result.toOption.get
       jobIdValue should not be empty
 
       val jobId = ScenarioAdapter.lastJobId
@@ -117,7 +117,7 @@ class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
 
       Then("result is returned synchronously via protocol egress as a scalar")
       result should be_success("Query(hello)")
-      result.take should not be JobId.generate().value
+      result.toOption.get should not be JobId.generate().value
     }
   }
 }

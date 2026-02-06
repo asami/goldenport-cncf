@@ -18,11 +18,11 @@ abstract class ShellCommandComponent(
     CommandParameterMappingRule.Default
 ) extends Component {
 
-  protected def executor: ShellCommandExecutor
+  protected def shell_Executor: ShellCommandExecutor
 
-  protected def baseCommand(operation: OperationDefinition): Vector[String]
+  protected def base_Command(operation: OperationDefinition): Vector[String]
 
-  def commandExecutor: ShellCommandExecutor = executor
+  def commandExecutor: ShellCommandExecutor = shell_Executor
 
   // protected final def executeCommand(
   //   operation: OperationDefinition

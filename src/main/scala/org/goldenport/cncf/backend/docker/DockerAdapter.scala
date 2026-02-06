@@ -58,7 +58,6 @@ final class CommandDockerAdapter(
           )
           executor.execute(cmd)
         }
-        // readTree(workDir) is kept but no longer used to populate ShellCommandResult.files
       } yield DockerOutput(
         result = result.copy(
           files = Map.empty,

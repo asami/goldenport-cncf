@@ -7,12 +7,11 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.GivenWhenThen
 import org.scalatest.Assertions.fail
 
-import scala.util.Using
-
 import org.goldenport.Consequence
 import org.goldenport.tree.{Tree, TreeDir, TreeEntry, TreeLeaf}
 import org.goldenport.bag.Bag
-import org.goldenport.process.{ExternalCommand, ExternalCommandExecutor, ExternalCommandResult}
+import org.goldenport.process.{ShellCommand, ShellCommandExecutor, ShellCommandResult}
+import org.goldenport.vfs.DirectoryFileSystemView
 
 /*
  * Executable Specification for CommandDockerAdapter.
@@ -24,7 +23,7 @@ import org.goldenport.process.{ExternalCommand, ExternalCommandExecutor, Externa
  */
 /*
  * @since   Feb.  5, 2026
- * @version Feb.  5, 2026
+ * @version Feb.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandDockerAdapterSpec
@@ -68,9 +67,17 @@ class CommandDockerAdapterSpec
 
       And("a CommandDockerAdapter")
       // Define a minimal fake executor that does not run real docker
-      val fakeExecutor = new ExternalCommandExecutor {
-        override def execute(command: ExternalCommand): Consequence[ExternalCommandResult] =
-          Consequence.success(ExternalCommandResult(0, "", ""))
+      val fakeExecutor = new ShellCommandExecutor {
+        override def execute(command: ShellCommand): Consequence[ShellCommandResult] =
+          Consequence.success(
+            ShellCommandResult(
+              exitCode = 0,
+              stdout = Bag.empty,
+              stderr = Bag.empty,
+              files = Map.empty,
+              directories = Map.empty
+            )
+          )
       }
       val adapter = new CommandDockerAdapter(fakeExecutor)
 
@@ -78,48 +85,24 @@ class CommandDockerAdapterSpec
       val result = adapter.execute(input)
 
       Then("execution succeeds")
-      val output = result match {
+      val dockerOutput = result match {
         case Consequence.Success(value) => value
         case Consequence.Failure(conclusion) =>
           fail(conclusion.toString)
       }
 
+      val shellResult = dockerOutput.result
+
       And("exit code is zero")
-      output.exitCode shouldBe 0
+      shellResult.exitCode shouldBe 0
 
       And("stdout and stderr are empty")
-      output.stdout shouldBe ""
-      output.stderr shouldBe ""
+      shellResult.stdout.asStringUnsafe() shouldBe ""
+      shellResult.stderr.asStringUnsafe() shouldBe ""
 
-      And("the output tree preserves structure and content")
-      val outTree = output.files
-
-      val expectedPaths = Map(
-        "dir/file.txt" -> "hello",
-        "root.txt" -> "world"
-      )
-      val actualPaths = flattenFiles(outTree.root).map { case (path, bag) =>
-        path -> readBag(bag)
-      }
-
-      actualPaths shouldBe expectedPaths
+      And("the adapter reports the working directory view")
+      shellResult.directories.get("work") shouldBe defined
+      shellResult.directories("work") shouldBe a[DirectoryFileSystemView]
     }
   }
 }
-
-  private def flattenFiles(
-    dir: TreeDir[Bag],
-    prefix: String = ""
-  ): Map[String, Bag] =
-    dir.children.flatMap { entry =>
-      val path = if (prefix.isEmpty) entry.name else s"$prefix/${entry.name}"
-      entry.node match {
-        case childDir: TreeDir[Bag] => flattenFiles(childDir, path)
-        case TreeLeaf(bag, _) => Map(path -> bag)
-      }
-    }.toMap
-
-  private def readBag(bag: Bag): String =
-    Using.resource(bag.openInputStream()) { in =>
-      new String(in.readAllBytes(), StandardCharsets.UTF_8)
-    }

@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 21, 2026
+ * @version Feb.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientRequestNormalizationSpec
@@ -158,7 +158,7 @@ class ClientRequestNormalizationSpec
     value: Any
   ): Option[String] =
     value match {
-      case t: TextBag => Some(t.toText)
+      case t: TextBag => t.toText.toOption
       case s: String => Some(s)
       case MimeBody(_, bag) => _bag_to_text(bag)
       case bag: Bag => _bag_to_text(bag)
