@@ -1,6 +1,6 @@
 # Phase 3.1.1 — Execution Hub Foundation (Recovery Slice)
 
-status = active
+status = closed
 
 ## 1. Purpose
 
@@ -38,6 +38,20 @@ not to revise the Phase 3 structure or redefine later phases.
 - Transport- and protocol-specific logic must remain inside the adapter layer.
 - Failure semantics must match Fat JAR execution.
 
+### 3.3 ShellCommand UnitOfWork Integration
+
+- Expose ShellCommand execution as UnitOfWorkOp.
+- Provide ActionCall-level DSL (ShellCommandActionCallPart) analogous to ActionCallHttpPart.
+- Ensure ShellCommand execution participates in UnitOfWork lifecycle
+  (run / abort / commit) without embedding Consequence inside UnitOfWorkOp.
+
+### 3.4 CallTree Capture (Draft)
+
+- Introduce a core CallTree model for low-level execution tracing.
+- Capture ActionEngine-level and UnitOfWork-level execution events into CallTree.
+- Thread CallTreeContext through ObservabilityContext for shared capture.
+- Treat CallTree as draft infrastructure to be finalized in later phases.
+
 ## 4. Out of Scope
 
 The following items are explicitly excluded from Phase 3.1.1:
@@ -50,16 +64,29 @@ The following items are explicitly excluded from Phase 3.1.1:
 
 ## 5. Completion Criteria
 
-Phase 3.1.1 may be closed when all of the following conditions are met:
+Phase 3.1.1 is considered **closed** with the following status:
 
 - DockerComponent executes Operations successfully via CNCF.
 - RestComponent executes Operations successfully via CNCF.
+- ShellCommand execution is integrated into UnitOfWork.
+- CallTree draft model and capture plumbing exist in core.
 - ActionCall, ActionEngine, and Execution Infrastructure remain unchanged.
-- Failure semantics are identical across Fat JAR, Docker, and REST execution forms.
-- The Phase 3.1 scope defined in `phase-3.md` is fully satisfied.
+- Failure semantics across Fat JAR, Docker, and REST execution forms are
+  structurally aligned at the framework level.
+
+The following items are **explicitly deferred** to later phases and tracked
+in the Phase 3.1.1 checklist:
+
+- Detailed failure-to-Observation mapping
+- Runtime survival guarantees under failure conditions
+- CallTree formalization and externalization into Observability records
 
 ## 6. Notes
 
-- Detailed implementation tasks and verification steps should be tracked in
-  a dedicated checklist document (e.g., `phase-3.1.1-checklist.md`).
-- Phase 3.2 and Phase 3.3 definitions are not modified by this recovery slice.
+- Deferred items are recorded in the Phase 3.1.1 checklist under
+  “Deferred / Next Phase Candidates” and are not left implicit.
+- This recovery slice completes the originally declared Phase 3.1 scope.
+- Subsequent phases (e.g., observability refinement, resilience, survival)
+  will build on the execution forms stabilized here.
+
+closed_at = 2026-02-07
