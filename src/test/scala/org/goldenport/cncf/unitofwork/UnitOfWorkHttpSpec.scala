@@ -16,7 +16,8 @@ import cats.free.Free
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 21, 2026
+ *  version Jan. 21, 2026
+ * @version Feb.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWorkHttpSpec extends AnyWordSpec with Matchers with ConsequenceMatchers {
@@ -37,6 +38,15 @@ class UnitOfWorkHttpSpec extends AnyWordSpec with Matchers with ConsequenceMatch
       headers: Map[String, String]
     ): HttpResponse = {
       calls = calls :+ s"POST $path"
+      response
+    }
+
+    override def put(
+      path: String,
+      body: Option[String],
+      headers: Map[String, String]
+    ): HttpResponse = {
+      calls = calls :+ s"PUT $path"
       response
     }
   }

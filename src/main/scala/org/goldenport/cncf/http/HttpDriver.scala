@@ -10,20 +10,21 @@ import org.slf4j.LoggerFactory
 
 /*
  * @since   Jan. 11, 2026
- * @version Jan. 21, 2026
+ * @version Feb.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 trait HttpDriver {
   def get(path: String): HttpResponse
   def post(path: String, body: Option[String], headers: Map[String, String]): HttpResponse
+  def put(path: String, body: Option[String], headers: Map[String, String]): HttpResponse
 }
 
 final class UrlConnectionHttpDriver(
   baseurl: String
 ) extends HttpDriver {
   def get(path: String): HttpResponse = {
-    val conn = _open_connection_(_build_url_(path), "GET")
-    _execute_(conn, None)
+    val conn = _open_connection(_build_url(path), "GET")
+    _execute(conn, None)
   }
 
   def post(
@@ -31,27 +32,37 @@ final class UrlConnectionHttpDriver(
     body: Option[String],
     headers: Map[String, String]
   ): HttpResponse = {
-    val conn = _open_connection_(_build_url_(path), "POST")
+    val conn = _open_connection(_build_url(path), "POST")
     headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
-    _execute_(conn, body)
+    _execute(conn, body)
+  }
+
+  def put(
+    path: String,
+    body: Option[String],
+    headers: Map[String, String]
+  ): HttpResponse = {
+    val conn = _open_connection(_build_url(path), "PUT")
+    headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
+    _execute(conn, body)
   }
 
   private val log = LoggerFactory.getLogger(classOf[UrlConnectionHttpDriver])
 
-  private def _open_connection_(
+  private def _open_connection(
     url: URL,
     method: String
   ): HttpURLConnection = {
     val conn = url.openConnection().asInstanceOf[HttpURLConnection]
     conn.setRequestMethod(method)
-    conn.setDoInput(true)
-    if (method == "POST") {
+    if (method == "PUT" || method == "POST") {
       conn.setDoOutput(true)
     }
+    conn.setDoInput(true)
     conn
   }
 
-  private def _build_url_(
+  private def _build_url(
     path: String
   ): URL = {
     if (path.startsWith("http://") || path.startsWith("https://")) {
@@ -63,7 +74,7 @@ final class UrlConnectionHttpDriver(
     }
   }
 
-  private def _execute_(
+  private def _execute(
     conn: HttpURLConnection,
     body: Option[String]
   ): HttpResponse = {
@@ -74,19 +85,19 @@ final class UrlConnectionHttpDriver(
       conn.getOutputStream.close()
     }
     val code = conn.getResponseCode
-    val stream = _response_stream_(conn)
-    val text = _read_text_(stream, StandardCharsets.UTF_8)
-    val contentType = _content_type_(conn.getContentType)
-    val status = _status_(code)
+    val stream = _response_stream(conn)
+    val text = _read_text(stream, StandardCharsets.UTF_8)
+    val contentType = _content_type(conn.getContentType)
+    val status = _status(code)
     HttpResponse.Text(status, contentType, Bag.text(text, StandardCharsets.UTF_8))
   }
 
-  private def _response_stream_(
+  private def _response_stream(
     conn: HttpURLConnection
   ): InputStream =
     Option(conn.getErrorStream).getOrElse(conn.getInputStream)
 
-  private def _read_text_(
+  private def _read_text(
     stream: InputStream,
     charset: Charset
   ): String = {
@@ -101,14 +112,14 @@ final class UrlConnectionHttpDriver(
     new String(buffer.toByteArray, charset)
   }
 
-  private def _content_type_(
+  private def _content_type(
     value: String
   ): ContentType = {
-    val (mime, charset) = _parse_content_type_(value)
+    val (mime, charset) = _parse_content_type(value)
     ContentType(MimeType(mime), charset)
   }
 
-  private def _parse_content_type_(
+  private def _parse_content_type(
     value: String
   ): (String, Option[Charset]) = {
     if (value == null || value.isEmpty) {
@@ -124,7 +135,7 @@ final class UrlConnectionHttpDriver(
     }
   }
 
-  private def _status_(
+  private def _status(
     code: Int
   ): HttpStatus = code match {
     case 200 => HttpStatus.Ok
@@ -142,6 +153,15 @@ final class FakeHttpDriver(
   }
 
   def post(
+    path: String,
+    body: Option[String],
+    headers: Map[String, String]
+  ): HttpResponse = {
+    val _ = (path, body, headers)
+    response
+  }
+
+  def put(
     path: String,
     body: Option[String],
     headers: Map[String, String]

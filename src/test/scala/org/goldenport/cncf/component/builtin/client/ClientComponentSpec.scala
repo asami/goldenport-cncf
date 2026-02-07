@@ -28,7 +28,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 21, 2026
+ *  version Jan. 21, 2026
+ * @version Feb.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientComponentSpec
@@ -176,6 +177,15 @@ class ClientComponentSpec
       headers: Map[String, String]
     ): HttpResponse = {
       buffer += HttpCall("POST", path, body, headers)
+      HttpResponse.notFound()
+    }
+
+    def put(
+      path: String,
+      body: Option[String],
+      headers: Map[String, String]
+    ): HttpResponse = {
+      buffer += HttpCall("PUT", path, body, headers)
       HttpResponse.notFound()
     }
   }

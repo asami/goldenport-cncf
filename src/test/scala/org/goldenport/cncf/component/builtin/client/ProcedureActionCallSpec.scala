@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 11, 2026
- * @version Feb.  4, 2026
+ * @version Feb.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 class ProcedureActionCallSpec
@@ -99,6 +99,15 @@ class ProcedureActionCallSpec
       headers: Map[String, String]
     ): HttpResponse = {
       buffer += HttpCall("POST", path, body, headers)
+      _response()
+    }
+
+    def put(
+      path: String,
+      body: Option[String],
+      headers: Map[String, String]
+    ): HttpResponse = {
+      buffer += HttpCall("PUT", path, body, headers)
       _response()
     }
 

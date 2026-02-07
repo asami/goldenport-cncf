@@ -18,7 +18,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 /*
  * @since   Jan.  3, 2026
  *  version Jan. 20, 2026
- * @version Feb.  5, 2026
+ * @version Feb.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -149,6 +149,13 @@ case class ComponentLogic(
         headers: Map[String, String]
       ): HttpResponse =
         throw new UnsupportedOperationException(s"HttpDriver not configured: POST ${path}")
+
+      def put(
+        path: String,
+        body: Option[String],
+        headers: Map[String, String]
+      ): HttpResponse =
+        throw new UnsupportedOperationException(s"HttpDriver not configured: PUT ${path}")
     }
 }
 

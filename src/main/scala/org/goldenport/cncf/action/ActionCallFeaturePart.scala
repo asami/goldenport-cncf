@@ -6,20 +6,28 @@ import org.goldenport.Consequence
 import org.goldenport.ConsequenceT
 import org.goldenport.id.UniversalId
 import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.http.HttpResponse
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
-import org.goldenport.http.HttpResponse
+import org.goldenport.cncf.Program
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan. 21, 2026
+ *  version Jan. 21, 2026
+ * @version Feb.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
   protected final def execution_context: ExecutionContext =
     executionContext
+
+  protected final def exec_pure[A](value: A): ExecUowM[A] =
+    ConsequenceT.pure[[X] =>> Program[UnitOfWorkOp, X], A](value)
+
+  protected final def exec_from[A](c: Consequence[A]): ExecUowM[A] =
+    ConsequenceT.fromConsequence[[X] =>> Program[UnitOfWorkOp, X], A](c)
 
   protected final def response_string(p: String): Consequence[OperationResponse] =
     Consequence.success(OperationResponse.Scalar(p))
@@ -45,6 +53,15 @@ trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.H
     headers: Map[String, String] = Map.empty
   ): ExecUowM[HttpResponse] = {
     val op = _op_http_post(path, body, headers)
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  protected final def http_put(
+    path: String,
+    body: Option[String] = None,
+    headers: Map[String, String] = Map.empty
+  ): ExecUowM[HttpResponse] = {
+    val op = _op_http_put(path, body, headers)
     ConsequenceT.liftF(Free.liftF(op))
   }
 
@@ -75,6 +92,13 @@ trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.H
     headers: Map[String, String]
   ): UnitOfWorkOp[HttpResponse] =
     UnitOfWorkOp.HttpPost(path, body, headers)
+
+  private def _op_http_put(
+    path: String,
+    body: Option[String],
+    headers: Map[String, String]
+  ): UnitOfWorkOp[HttpResponse] =
+    UnitOfWorkOp.HttpPut(path, body, headers)
 }
 
 trait ActionCallDataStorePart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>

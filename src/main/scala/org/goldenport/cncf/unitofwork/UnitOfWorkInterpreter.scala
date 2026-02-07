@@ -16,7 +16,8 @@ import org.goldenport.protocol.operation.OperationResponse
  */
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 21, 2026
+ *  version Jan. 21, 2026
+ * @version Feb.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -52,6 +53,9 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case UnitOfWorkOp.HttpPost(path, body, headers) =>
       _http_driver_().post(path, body, headers)
+
+    case UnitOfWorkOp.HttpPut(path, body, headers) =>
+      _http_driver_().put(path, body, headers)
 
     case UnitOfWorkOp.DataStoreLoad(id) =>
       // TODO: delegate to DataStore

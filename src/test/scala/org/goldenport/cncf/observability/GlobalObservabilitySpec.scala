@@ -61,13 +61,14 @@ final class GlobalObservabilitySpec extends AnyWordSpec with Matchers with Befor
           backend = backend
         )
       )
-      val initialSize = backend.lines.size
+      val preInitCount = backend.lines.count(_.contains("pre-init replay once"))
       GlobalObservability.observeTrace(
         ObservabilityScopeDefaults.Subsystem,
         "post-init emit",
         classOf[GlobalObservability.type]
       )
-      backend.lines.size shouldBe initialSize + 1
+      backend.lines.count(_.contains("post-init emit")) shouldBe 1
+      backend.lines.count(_.contains("pre-init replay once")) shouldBe 1
     }
 
     "drop oldest buffered events when overflowing" in {

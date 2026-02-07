@@ -35,7 +35,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Feb.  4, 2026
+ * @version Feb.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientAdminSystemPingSpec
@@ -146,6 +146,15 @@ class ClientAdminSystemPingSpec
       headers: Map[String, String]
     ): HttpResponse = {
       buffer += HttpCall("POST", path, body, headers)
+      response
+    }
+
+    def put(
+      path: String,
+      body: Option[String],
+      headers: Map[String, String]
+    ): HttpResponse = {
+      buffer += HttpCall("PUT", path, body, headers)
       response
     }
   }

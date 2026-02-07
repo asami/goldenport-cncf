@@ -10,7 +10,7 @@ import org.goldenport.http.{HttpRequest, HttpResponse}
 
 /*
  * @since   Jan. 20, 2026
- * @version Jan. 26, 2026
+ * @version Feb.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class LoopbackHttpDriver(
@@ -29,6 +29,15 @@ final class LoopbackHttpDriver(
   ): HttpResponse = {
     val bag = body.map(b => Bag.text(b, charset))
     server.execute(_buildRequest(HttpRequest.POST, path, bag))
+  }
+
+  def put(
+    path: String,
+    body: Option[String],
+    headers: Map[String, String]
+  ): HttpResponse = {
+    val bag = body.map(b => Bag.text(b, charset))
+    server.execute(_buildRequest(HttpRequest.PUT, path, bag))
   }
 
   private def _buildRequest(

@@ -35,6 +35,12 @@ object UnitOfWorkOp {
     headers: Map[String, String]
   ) extends UnitOfWorkOp[HttpResponse]
 
+  final case class HttpPut(
+    path: String,
+    body: Option[String],
+    headers: Map[String, String]
+  ) extends UnitOfWorkOp[HttpResponse]
+
   // ------------------------------------------------------------
   // DataStore operations
   // ------------------------------------------------------------
