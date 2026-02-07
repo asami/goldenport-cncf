@@ -10,7 +10,7 @@ import org.goldenport.cncf.security.AuthorizationDecision
 import org.goldenport.cncf.security.AuthorizationEngine
 import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
 import org.goldenport.cncf.log.LogBackendHolder
-import org.goldenport.cncf.observability.{ObservabilityEngine, OperationContext}
+import org.goldenport.cncf.observability.{CallTreeContext, ObservabilityEngine, OperationContext}
 import org.goldenport.cncf.context.{ScopeContext, ScopeKind}
 
 /*
@@ -56,6 +56,10 @@ class ActionEngine(
     call: ActionCall
   ): Consequence[OperationResponse] = {
     val ec = call.executionContext
+    val calltree = ec.observability.callTreeContext
+    val label =
+      if (call.action.name.nonEmpty) s"action:${call.action.name}"
+      else "action"
 
     val authresult: Consequence[Unit] =
       Consequence {
@@ -65,32 +69,14 @@ class ActionEngine(
 
     authresult.flatMap { _ =>
       Consequence run {
-        // Observation hooks apply only to executed actions.
-        observe_enter(call)
+        calltree.enter(label)
         try {
-          val r = call.execute()
-          ec.runtime.commit()
-          observe_leave(call, r)
-          val _ = ObservabilityEngine.build( // TODO
-            scope = ScopeContext(
-              kind = ScopeKind.Action,
-              name = call.action.name,
-              parent = None,
-              observabilityContext = ec.observability
-            ),
-            http = None,
-            operation = Some(OperationContext(call.action.name)),
-            outcome = r match {
-              case Consequence.Success(_) => Right(())
-              case Consequence.Failure(c) => Left(c)
-            }
-          )
-          r
-        } catch {
-          case e: Throwable =>
-            ec.runtime.abort()
-            val conclusion = org.goldenport.Conclusion.from(e)
-            observe_leave(call, Consequence.Failure(conclusion))
+          // Observation hooks apply only to executed actions.
+          observe_enter(call)
+          try {
+            val r = call.execute()
+            ec.runtime.commit()
+            observe_leave(call, r)
             val _ = ObservabilityEngine.build( // TODO
               scope = ScopeContext(
                 kind = ScopeKind.Action,
@@ -100,11 +86,36 @@ class ActionEngine(
               ),
               http = None,
               operation = Some(OperationContext(call.action.name)),
-              outcome = Left(conclusion)
+              outcome = r match {
+                case Consequence.Success(_) => Right(())
+                case Consequence.Failure(c) => Left(c)
+              }
             )
-            throw e
+            r
+          } catch {
+            case e: Throwable =>
+              ec.runtime.abort()
+              val conclusion = org.goldenport.Conclusion.from(e)
+              observe_leave(call, Consequence.Failure(conclusion))
+              val _ = ObservabilityEngine.build( // TODO
+                scope = ScopeContext(
+                  kind = ScopeKind.Action,
+                  name = call.action.name,
+                  parent = None,
+                  observabilityContext = ec.observability
+                ),
+                http = None,
+                operation = Some(OperationContext(call.action.name)),
+                outcome = Left(conclusion)
+              )
+              throw e
+          }
         } finally {
-          ec.runtime.dispose()
+          try {
+            ec.runtime.dispose()
+          } finally {
+            calltree.leave()
+          }
         }
       }
     }

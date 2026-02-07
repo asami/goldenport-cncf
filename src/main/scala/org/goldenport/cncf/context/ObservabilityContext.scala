@@ -1,7 +1,7 @@
 package org.goldenport.cncf.context
 
 import org.goldenport.record.Record
-import org.goldenport.cncf.observability.ObservabilityEngine
+import org.goldenport.cncf.observability.{CallTreeContext, ObservabilityEngine}
 import org.goldenport.cncf.context.ScopeContext
 import org.goldenport.cncf.context.ScopeKind
 import java.util.Locale
@@ -45,7 +45,8 @@ final case class CorrelationId(
 final case class ObservabilityContext(
   traceId: TraceId,
   spanId: Option[SpanId],
-  correlationId: Option[CorrelationId]
+  correlationId: Option[CorrelationId],
+  callTreeContext: CallTreeContext = CallTreeContext.Disabled
 ) {
   def createChild(
     parent: ScopeContext,
@@ -69,7 +70,8 @@ final case class ObservabilityContext(
     ObservabilityContext(
       traceId = nextTraceId,
       spanId = nextSpanId,
-      correlationId = nextCorrelationId
+      correlationId = nextCorrelationId,
+      callTreeContext = callTreeContext
     )
   }
 

@@ -4,6 +4,7 @@ import cats.free.Free
 import cats.~>
 import org.goldenport.{Consequence, Conclusion, ConsequenceT}
 import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.observability.CallTreeContext
 import org.goldenport.process.ShellCommandExecutor
 
 /*
@@ -59,25 +60,39 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
   private def _execute[A](op: UnitOfWorkOp[A]): Consequence[A] = op match {
     case UnitOfWorkOp.HttpGet(path) =>
-      Consequence(_http_driver_().get(path))
+      withCallTree("uow:http:get") {
+        Consequence(_http_driver_().get(path))
+      }
 
     case UnitOfWorkOp.HttpPost(path, body, headers) =>
-      Consequence(_http_driver_().post(path, body, headers))
+      withCallTree("uow:http:post") {
+        Consequence(_http_driver_().post(path, body, headers))
+      }
 
     case UnitOfWorkOp.HttpPut(path, body, headers) =>
-      Consequence(_http_driver_().put(path, body, headers))
+      withCallTree("uow:http:put") {
+        Consequence(_http_driver_().put(path, body, headers))
+      }
 
     case UnitOfWorkOp.DataStoreLoad(id) =>
-      Consequence.failure("DataStore not wired: DataStoreLoad")
+      withCallTree("uow:datastore:load") {
+        Consequence.failure("DataStore not wired: DataStoreLoad")
+      }
 
     case UnitOfWorkOp.DataStoreSave(id, record) =>
-      Consequence.failure("DataStore not wired: DataStoreSave")
+      withCallTree("uow:datastore:save") {
+        Consequence.failure("DataStore not wired: DataStoreSave")
+      }
 
     case UnitOfWorkOp.DataStoreDelete(id) =>
-      Consequence.failure("DataStore not wired: DataStoreDelete")
+      withCallTree("uow:datastore:delete") {
+        Consequence.failure("DataStore not wired: DataStoreDelete")
+      }
 
     case UnitOfWorkOp.ShellCommandExec(command) =>
-      _shell_command_executor_().execute(command)
+      withCallTree("uow:shell:exec") {
+        _shell_command_executor_().execute(command)
+      }
   }
 
   private def _http_driver_(): HttpDriver =
@@ -87,4 +102,17 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
   private def _shell_command_executor_(): ShellCommandExecutor =
     uow.shellCommandExecutor
+
+  private def callTreeContext: CallTreeContext =
+    uow.executionContext.observability.callTreeContext
+
+  private def withCallTree[A](label: String)(body: => Consequence[A]): Consequence[A] = {
+    val ctx = callTreeContext
+    ctx.enter(label)
+    try {
+      body
+    } finally {
+      ctx.leave()
+    }
+  }
 }

@@ -125,6 +125,8 @@ class UnitOfWork(
 
   def record(message: String): Unit =
     recorder.record(message)
+
+  def executionContext: ExecutionContext = context
 }
 
 object UnitOfWork {
