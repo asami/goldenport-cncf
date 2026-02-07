@@ -1,12 +1,15 @@
 package org.goldenport.cncf.action
 
 import cats.free.Free
+import cats.Functor
 import io.circe.Json
 import org.goldenport.Consequence
 import org.goldenport.ConsequenceT
 import org.goldenport.id.UniversalId
+import org.goldenport.record.Record
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.http.HttpResponse
+import org.goldenport.process.{ShellCommand, ShellCommandResult}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork}
@@ -172,4 +175,25 @@ trait ActionCallDataStorePart extends ActionCallFeaturePart { self: ActionCall.C
     // TODO: Implement DataStoreDelete operation
     UnitOfWorkOp.DataStoreDelete(id)
   }
+}
+
+
+trait ActionCallShellCommandPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
+
+  protected final def shell_exec(
+    command: ShellCommand
+  ): ExecUowM[ShellCommandResult] = {
+    val op = _op_shell_command_exec(command)
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  protected final def shell_exec_c(
+    command: ShellCommand
+  ): ExecUowM[Consequence[ShellCommandResult]] =
+    Functor[ExecUowM].map(shell_exec(command))(result => Consequence.success(result))
+
+  private def _op_shell_command_exec(
+    command: ShellCommand
+  ): UnitOfWorkOp[ShellCommandResult] =
+    UnitOfWorkOp.ShellCommandExec(command)
 }

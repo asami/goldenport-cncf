@@ -19,13 +19,14 @@ import org.goldenport.cncf.backend.collaborator.Collaborator
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
  *  version Jan. 22, 2026
- * @version Feb.  6, 2026
+ * @version Feb.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
   extends ActionCall.Core.Holder
   with ActionCallDataStorePart
   with ActionCallHttpPart
+  with ActionCallShellCommandPart
   with Presentable {
   def name: String = objectToSnakeName("ActionCall", this)
   def accesses: Vector[ResourceAccess] = Vector.empty

@@ -12,10 +12,15 @@
 - [x] Confirm runtime survival on failure (deferred)
 
 ## RestComponent
-- [ ] Define RestComponent as a Component adapter
-- [ ] Execute Operation via HTTP/REST
-- [ ] Map HTTP/network failures to Observation
-- [ ] Confirm no ActionEngine branching
+- [x] Define RestComponent as a Component adapter
+- [x] Execute Operation via HTTP/REST
+- [x] (deferred) Map HTTP/network failures to Observation
+- [x] Confirm no ActionEngine branching
+
+## ShellCommand / UnitOfWork Integration
+- [x] Expose ShellCommand execution as UnitOfWork operation
+- [x] Ensure ShellCommand can be invoked via ActionCall / FunctionalActionCall
+- [x] Confirm ShellCommand execution participates in UnitOfWork lifecycle
 
 ## Non-Goals
 - [x] Explicitly exclude SOA (XML)
@@ -29,4 +34,8 @@
 
 ### Confirm runtime survival on failure
 - **Reason:** Deferred for future implementation due to prioritization in current phase.
+- **Planned phase:** Phase 3.2
+
+### Map HTTP/network failures to Observation (REST)
+- **Reason:** Observation mapping for REST/network errors postponed; basic execution path validated first.
 - **Planned phase:** Phase 3.2

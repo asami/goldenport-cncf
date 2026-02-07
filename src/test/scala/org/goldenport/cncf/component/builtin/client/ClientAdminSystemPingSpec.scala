@@ -330,15 +330,15 @@ class ClientAdminSystemPingSpec
   ): RuntimeContext = {
     val idInterpreter = new (UnitOfWorkOp ~> Id) {
       def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
-        interpreter.executeDirect(fa)
+        interpreter.execute(fa)
     }
     val tryInterpreter = new (UnitOfWorkOp ~> scala.util.Try) {
       def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
-        scala.util.Try(interpreter.executeDirect(fa))
+        scala.util.Try(interpreter.execute(fa))
     }
     val eitherInterpreter = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
       def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] =
-        try Right(interpreter.executeDirect(op))
+        try Right(interpreter.execute(op))
         catch {
           case e: Throwable => Left(e)
         }

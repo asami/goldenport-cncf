@@ -2,11 +2,9 @@ package org.goldenport.cncf.unitofwork
 
 import cats.free.Free
 import cats.~>
-import cats.Id
 import org.goldenport.{Consequence, Conclusion, ConsequenceT}
 import org.goldenport.cncf.http.HttpDriver
-import org.goldenport.http.HttpRequest
-import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.process.ShellCommandExecutor
 
 /*
  * Interpreter for UnitOfWorkOp.
@@ -22,56 +20,71 @@ import org.goldenport.protocol.operation.OperationResponse
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
-  private val step: UnitOfWorkOp ~> Id =
-    new (UnitOfWorkOp ~> Id) {
-      def apply[A](op: UnitOfWorkOp[A]): Id[A] =
-        execute(op)
+  private val step: UnitOfWorkOp ~> Consequence =
+    new (UnitOfWorkOp ~> Consequence) {
+      def apply[A](op: UnitOfWorkOp[A]): Consequence[A] =
+        _execute(op)
     }
 
-  def run[A](program: ExecUowM[A]): Consequence[A] =
-    try {
-      val result: Consequence[A] = program.value.foldMap(step)
-      result.flatMap { value =>
-        uow.commit().map(_ => value)
+  def run[R](program: ExecUowM[R]): Consequence[R] = {
+    val result =
+      try {
+        program.value.foldMap(step)
+      } catch {
+        case e: Throwable =>
+          uow.abort()
+          return Consequence.Failure(Conclusion.from(e))
       }
-    } catch {
-      case e: Throwable =>
+    result match {
+      case Consequence.Success(inner) =>
+        inner match {
+          case Consequence.Success(value) =>
+            uow.commit().map(_ => value)
+          case failure: Consequence.Failure[_] =>
+            uow.abort()
+            failure.asInstanceOf[Consequence[R]]
+        }
+      case failure: Consequence.Failure[_] =>
         uow.abort()
-        Consequence.Failure(Conclusion.from(e))
+        failure.asInstanceOf[Consequence[R]]
     }
+  }
 
   def this(uow: UnitOfWork, http: HttpDriver) = {
     this(uow.withHttpDriver(Some(http)))
   }
 
-  def executeDirect[A](op: UnitOfWorkOp[A]): A =
-    execute(op)
+  def execute[A](op: UnitOfWorkOp[A]): A =
+    run(ConsequenceT.liftF(Free.liftF(op))).TAKE
 
-  private def execute[A](op: UnitOfWorkOp[A]): A = op match {
+  private def _execute[A](op: UnitOfWorkOp[A]): Consequence[A] = op match {
     case UnitOfWorkOp.HttpGet(path) =>
-      _http_driver_().get(path)
+      Consequence(_http_driver_().get(path))
 
     case UnitOfWorkOp.HttpPost(path, body, headers) =>
-      _http_driver_().post(path, body, headers)
+      Consequence(_http_driver_().post(path, body, headers))
 
     case UnitOfWorkOp.HttpPut(path, body, headers) =>
-      _http_driver_().put(path, body, headers)
+      Consequence(_http_driver_().put(path, body, headers))
 
     case UnitOfWorkOp.DataStoreLoad(id) =>
-      // TODO: delegate to DataStore
-      throw new NotImplementedError("DataStore not wired: DataStoreLoad")
+      Consequence.failure("DataStore not wired: DataStoreLoad")
 
     case UnitOfWorkOp.DataStoreSave(id, record) =>
-      // TODO: delegate to DataStore
-      ()
+      Consequence.failure("DataStore not wired: DataStoreSave")
 
     case UnitOfWorkOp.DataStoreDelete(id) =>
-      // TODO: delegate to DataStore
-      ()
+      Consequence.failure("DataStore not wired: DataStoreDelete")
+
+    case UnitOfWorkOp.ShellCommandExec(command) =>
+      _shell_command_executor_().execute(command)
   }
 
   private def _http_driver_(): HttpDriver =
     uow.http_driver.getOrElse {
       throw new IllegalStateException("http driver not configured")
     }
+
+  private def _shell_command_executor_(): ShellCommandExecutor =
+    uow.shellCommandExecutor
 }

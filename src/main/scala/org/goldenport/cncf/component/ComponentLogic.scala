@@ -109,7 +109,7 @@ case class ComponentLogic(
     )
     val idInterpreter = new (UnitOfWorkOp ~> Id) {
       def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
-        new UnitOfWorkInterpreter(uow).executeDirect(fa)
+        new UnitOfWorkInterpreter(uow).execute(fa)
     }
     val tryInterpreter = new (UnitOfWorkOp ~> scala.util.Try) {
       def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =

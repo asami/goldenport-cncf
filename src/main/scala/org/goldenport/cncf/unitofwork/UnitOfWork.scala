@@ -10,6 +10,7 @@ import org.goldenport.cncf.entity.EntityStore.*
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.event.DomainEvent
 import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.process.{LocalShellCommandExecutor, ShellCommandExecutor}
 
 /*
  * @since   Apr. 11, 2025
@@ -26,6 +27,7 @@ class UnitOfWork(
 ) {
   import UnitOfWork.*
   private var _http_driver: Option[HttpDriver] = None
+  private var _shell_command_executor: Option[ShellCommandExecutor] = None
 
   def create[T](store: EntityStore[T], data: Record)(using instance: EntityInstance[T]): Try[CreateResult[T]] = ???
 
@@ -48,14 +50,26 @@ class UnitOfWork(
   def http_driver: Option[HttpDriver] =
     _http_driver.orElse(Some(context.runtime.httpDriver))
 
+  def shellCommandExecutor: ShellCommandExecutor =
+    _shell_command_executor.getOrElse {
+      val executor = new LocalShellCommandExecutor
+      _shell_command_executor = Some(executor)
+      executor
+    }
+
   def withHttpDriver(driver: Option[HttpDriver]): UnitOfWork = {
     _http_driver = driver
     this
   }
 
+  def withShellCommandExecutor(executor: ShellCommandExecutor): UnitOfWork = {
+    _shell_command_executor = Some(executor)
+    this
+  }
+
   def execute[A](op: UnitOfWorkOp[A])(using http: org.goldenport.cncf.http.HttpDriver): A =
     withHttpDriver(Some(http))
-    new UnitOfWorkInterpreter(this).executeDirect(op).asInstanceOf[A]
+    new UnitOfWorkInterpreter(this).execute(op).asInstanceOf[A]
 
   def createFile(file: File, data: String): Try[Unit] = ???
 

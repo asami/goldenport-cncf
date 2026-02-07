@@ -1,8 +1,9 @@
 package org.goldenport.cncf.unitofwork
 
-import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.http.HttpResponse
 import org.goldenport.id.UniversalId
+import org.goldenport.process.{ShellCommand, ShellCommandResult}
+import org.goldenport.record.Record
 
 /*
  * UnitOfWork operation algebra.
@@ -14,7 +15,7 @@ import org.goldenport.id.UniversalId
  * This is the single source of truth for executable intents.
  *
  * @since   Jan. 10, 2026
- * @version Jan. 10, 2026
+ * @version Feb.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -40,6 +41,10 @@ object UnitOfWorkOp {
     body: Option[String],
     headers: Map[String, String]
   ) extends UnitOfWorkOp[HttpResponse]
+
+  final case class ShellCommandExec(
+    command: ShellCommand
+  ) extends UnitOfWorkOp[ShellCommandResult]
 
   // ------------------------------------------------------------
   // DataStore operations
