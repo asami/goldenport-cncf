@@ -4,6 +4,9 @@ import org.goldenport.http.HttpResponse
 import org.goldenport.id.UniversalId
 import org.goldenport.process.{ShellCommand, ShellCommandResult}
 import org.goldenport.record.Record
+import org.goldenport.cncf.datatype.*
+import org.goldenport.cncf.entity.*
+import org.goldenport.cncf.directive.*
 
 /*
  * UnitOfWork operation algebra.
@@ -15,7 +18,7 @@ import org.goldenport.record.Record
  * This is the single source of truth for executable intents.
  *
  * @since   Jan. 10, 2026
- * @version Feb.  7, 2026
+ * @version Feb. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -49,7 +52,6 @@ object UnitOfWorkOp {
   // ------------------------------------------------------------
   // DataStore operations
   // ------------------------------------------------------------
-
   final case class DataStoreLoad(
     id: UniversalId
   ) extends UnitOfWorkOp[Option[Record]]
@@ -62,4 +64,36 @@ object UnitOfWorkOp {
   final case class DataStoreDelete(
     id: UniversalId
   ) extends UnitOfWorkOp[Unit]
+
+  // ------------------------------------------------------------
+  // EntityStore operations
+  // ------------------------------------------------------------
+  final case class EntityStoreCreate[T](
+    entity: T,
+    tc: EntityPersistentCreate[T]
+  ) extends UnitOfWorkOp[CreateResult[T]]
+
+  final case class EntityStoreLoad[T](
+    id: EntityId,
+    tc: EntityPersistent[T]
+  ) extends UnitOfWorkOp[Option[T]]
+
+  final case class EntityStoreSave[T](
+    entity: T,
+    tc: EntityPersistent[T]
+  ) extends UnitOfWorkOp[Unit]
+
+  final case class EntityStoreUpdate[T](
+    entity: T,
+    tc: EntityPersistent[T]
+  ) extends UnitOfWorkOp[Unit]
+
+  final case class EntityStoreDelete(
+    id: EntityId
+  ) extends UnitOfWorkOp[Unit]
+
+  final case class EntityStoreSearch[T](
+    query: EntityQuery[T],
+    tc: EntityPersistent[T]
+  ) extends UnitOfWorkOp[SearchResult[T]]
 }

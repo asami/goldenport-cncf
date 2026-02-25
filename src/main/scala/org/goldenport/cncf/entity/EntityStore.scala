@@ -1,61 +1,182 @@
 package org.goldenport.cncf.entity
 
+import cats._
+import cats.syntax.all.*
 import org.goldenport.Consequence
 import org.goldenport.id.UniversalId
 import org.goldenport.record.Record
-import org.goldenport.cncf.datastore.{DataStore, QueryDirective, SelectResult}
 import org.goldenport.cncf.*
+import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.cncf.datatype.EntityCollectionId
+import org.goldenport.cncf.directive.{Query, SearchResult}
+import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.datastore.DataStore.EntryId
+// import org.goldenport.cncf.datastore.{DataStore, QueryDirective, SearchResult}
 
 /*
  * @since   Apr. 11, 2025
  *  version Dec. 18, 2025
- * @version Jan. 10, 2026
+ *  version Jan. 10, 2026
+ * @version Feb. 25, 2026
  * @author  ASAMI, Tomoharu
  */
-trait EntityStore[E] {
+abstract class EntityStore {
   def name: String
-  def serialize(entity: E): Record
-  def deserialize(record: Record): E
-  def create(id: UniversalId, entity: E): Unit
-  def load(id: UniversalId): Option[E]
-  def store(id: UniversalId, entity: E): Unit
-  def update(id: UniversalId, changes: Record): Unit
-  def delete(id: UniversalId): Unit
-  def select(directive: QueryDirective): SelectResult
+//  def serialize(entity: E): Consequence[Record]
+//  def deserialize(record: Record): Consequence[E]
+  def isAccept(cid: EntityCollectionId): Boolean = true
+
+  def create[T](
+    entity: T
+  )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]]
+
+  def load[T](
+    id: EntityId
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[T]]
+  def save[T](
+    entity: T
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit]
+
+  def update[T](
+    changes: T
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit]
+
+  def delete(
+    id: EntityId
+  )(using ctx: ExecutionContext): Consequence[Unit]
+
+  def search[T](
+    query: EntityQuery[T]
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]]
 }
 
 object EntityStore {
-  trait EntityInstance[T] {
+  final val PROP_ID = "id"
+
+  def noop() = NoopEntityStore()
+
+  // final case class EntityId(
+  //   major: String,
+  //   minor: String,
+  //   collection: CollectionId
+  // ) extends UniversalId(major, minor, "entity", collection.name)
+
+  // trait EntityInstance[T] {
+  // }
+
+  // def create[T](store: EntityStore[T], data: Record)(using instance: EntityInstance[T]): Consequence[CreateResult[T]] = {
+  //   ???
+  // }
+
+  // def load[T](store: EntityStore[T])(using instance: EntityInstance[T]): Consequence[GetResult[T]] = {
+  //   ???
+  // }
+
+  // def search[T](store: EntityStore[T], directive: QueryDirective)(using instance: EntityInstance[T]): Consequence[SearchResult] = {
+  //   ???
+  // }
+
+  // def store[T](store: EntityStore[T], id: EntityId, data: Record)(using instance: EntityInstance[T]): Consequence[UpdateResult[T]] = {
+  //   ???
+  // }
+
+  // def update[T](store: EntityStore[T], id: EntityId, changes: Record)(using instance: EntityInstance[T]): Consequence[UpdateResult[T]] = {
+  //   ???
+  // }
+
+  // def delete[T](store: EntityStore[T], data: Record)(using instance: EntityInstance[T]): Consequence[DeleteResult[T]] = {
+  //   ???
+  // }
+}
+
+case class CreateResult[T](id: EntityId)
+case class GetResult[T]()
+case class UpdateResult[T]()
+case class DeleteResult[T]()
+
+class NoopEntityStore() extends EntityStore {
+  def name: String = "noop"
+  def create[T](entity: T)(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = ???
+  def load[T](id: EntityId)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[T]] = ???
+  def save[T](entity: T)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = ???
+  def update[T](changes: T)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = ???
+  def delete(id: EntityId)(using ctx: ExecutionContext): Consequence[Unit] = ???
+  def search[T](query: EntityQuery[T])(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] = ???
+}
+
+class StandardEntityStore(
+  private val _datastore: DataStore
+) extends EntityStore {
+  import EntityStore.*
+
+  def name: String = "standard"
+
+  def create[T](
+    entity: T
+  )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = {
+    val id = tc.id(entity) getOrElse {
+      ???
+    }
+    val rec = tc.toRecord(entity)
+    for {
+      cid <- ctx.entityStoreSpace.dataStoreCollection(id)
+      dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+      ds <- ctx.dataStoreSpace.dataStore(cid)
+      _ <- ds.create(cid, dsid, rec)
+    } yield CreateResult(id)
   }
 
-  final case class EntityId(value: UniversalId)
+  def load[T](
+    id: EntityId
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[T]] = {
+    for {
+      cid <- ctx.entityStoreSpace.dataStoreCollection(id)
+      dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+      ds <- ctx.dataStoreSpace.dataStore(cid)
+      o <- ds.load(cid, dsid)
+      r <- o.traverse(tc.fromRecord)
+    } yield r
+  }
 
-  def create[T](store: EntityStore[T], data: Record)(using instance: EntityInstance[T]): Consequence[CreateResult[T]] = {
+  def save[T](
+    entity: T
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = {
+    val id = tc.id(entity)
+    for {
+      cid <- ctx.entityStoreSpace.dataStoreCollection(id)
+      dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+      ds <- ctx.dataStoreSpace.dataStore(cid)
+      r <- ds.save(cid, dsid, tc.toRecord(entity))
+    } yield r
+  }
+
+  def update[T](
+    changes: T
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = {
+    val id = tc.id(changes)
+    for {
+      cid <- ctx.entityStoreSpace.dataStoreCollection(id)
+      dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+      ds <- ctx.dataStoreSpace.dataStore(cid)
+      r <- ds.update(cid, dsid, tc.toRecord(changes))
+    } yield r
+  }
+
+  def delete(
+    id: EntityId
+  )(using ctx: ExecutionContext): Consequence[Unit] = {
+    for {
+      cid <- ctx.entityStoreSpace.dataStoreCollection(id)
+      dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+      ds <- ctx.dataStoreSpace.dataStore(cid)
+      r <- ds.delete(cid, dsid)
+    } yield r
+  }
+
+  def search[T](
+    query: EntityQuery[T]
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] = {
     ???
   }
-
-  def load[T](store: EntityStore[T])(using instance: EntityInstance[T]): Consequence[GetResult[T]] = {
-    ???
-  }
-
-  def select[T](store: EntityStore[T], directive: QueryDirective)(using instance: EntityInstance[T]): Consequence[SelectResult] = {
-    ???
-  }
-
-  def store[T](store: EntityStore[T], id: EntityId, data: Record)(using instance: EntityInstance[T]): Consequence[UpdateResult[T]] = {
-    ???
-  }
-
-  def update[T](store: EntityStore[T], id: EntityId, changes: Record)(using instance: EntityInstance[T]): Consequence[UpdateResult[T]] = {
-    ???
-  }
-
-  def delete[T](store: EntityStore[T], data: Record)(using instance: EntityInstance[T]): Consequence[DeleteResult[T]] = {
-    ???
-  }
-
-  case class CreateResult[T]()
-  case class GetResult[T]()
-  case class UpdateResult[T]()
-  case class DeleteResult[T]()
 }

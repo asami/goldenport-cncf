@@ -21,7 +21,8 @@ import org.goldenport.protocol.spec as spec
  */
 /*
  * @since   Jan. 11, 2026
- * @version Jan. 17, 2026
+ *  version Jan. 17, 2026
+ * @version Feb. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 trait OperationDsl {
@@ -72,11 +73,7 @@ object OperationDsl {
     val services = spec.ServiceDefinitionGroup(services = Vector(service))
     Protocol(
       services = services,
-      handler = ProtocolHandler(
-        ingresses = IngressCollection(Vector.empty),
-        egresses = EgressCollection(Vector.empty),
-        projections = ProjectionCollection()
-      )
+      handler = ProtocolHandler.empty
     )
   }
 
@@ -85,11 +82,7 @@ object OperationDsl {
   ): Protocol = {
     Protocol(
       services = spec.ServiceDefinitionGroup(services = services),
-      handler = ProtocolHandler(
-        ingresses = IngressCollection(Vector.empty),
-        egresses = EgressCollection(Vector.empty),
-        projections = ProjectionCollection()
-      )
+      handler = ProtocolHandler.empty
     )
   }
 

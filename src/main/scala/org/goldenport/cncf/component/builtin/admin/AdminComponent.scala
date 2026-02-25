@@ -3,7 +3,7 @@ package org.goldenport.cncf.component.builtin.admin
 import cats.data.NonEmptyVector
 import java.nio.file.Paths
 import org.goldenport.Consequence
-import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall, Query, ResourceAccess}
+import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall, QueryAction, ResourceAccess}
 import org.goldenport.cncf.component.{Component, ComponentInit}
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.ComponentId
@@ -25,7 +25,8 @@ import org.goldenport.protocol.spec as spec
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 20, 2026
+ *  version Jan. 20, 2026
+ * @version Feb. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -108,11 +109,7 @@ object AdminComponent {
       )
       val protocol = Protocol(
         services = services,
-        handler = ProtocolHandler(
-          ingresses = IngressCollection(Vector(RestIngress())),
-          egresses = EgressCollection(Vector(RestEgress())),
-          projections = ProjectionCollection()
-        )
+        handler = ProtocolHandler.default
       )
       val instanceid = ComponentInstanceId.default(componentId)
       Component.Core.create(
@@ -223,7 +220,7 @@ object AdminComponent {
   private final case class ComponentListAction(
     request: Request,
     subsystem: Subsystem
-  ) extends Query() {
+  ) extends QueryAction() {
 //    val name = "component.list"
 
     def createCall(core: ActionCall.Core): ActionCall =
@@ -244,7 +241,7 @@ object AdminComponent {
   private final case class ConfigShowAction(
     request: Request,
     subsystem: Subsystem
-  ) extends Query() {
+  ) extends QueryAction() {
 //    val name = "config.show"
 
     def createCall(core: ActionCall.Core): ActionCall =
@@ -265,7 +262,7 @@ object AdminComponent {
   private final case class VariationListAction(
     request: Request,
     subsystem: Subsystem
-  ) extends Query() {
+  ) extends QueryAction() {
 //    val name = "variation.list"
 
     def createCall(core: ActionCall.Core): ActionCall =
@@ -286,7 +283,7 @@ object AdminComponent {
   private final case class ExtensionListAction(
     request: Request,
     subsystem: Subsystem
-  ) extends Query() {
+  ) extends QueryAction() {
 //    val name = "extension.list"
 
     def createCall(core: ActionCall.Core): ActionCall =

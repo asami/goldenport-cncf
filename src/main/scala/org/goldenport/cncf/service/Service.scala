@@ -8,7 +8,7 @@ import org.goldenport.http.{HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.protocol.{Request, Response}
 import org.goldenport.protocol.service.{Service as ProtocolService}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
-import org.goldenport.cncf.action.{Action, Command, Query}
+import org.goldenport.cncf.action.{Action, CommandAction, QueryAction}
 import org.goldenport.cncf.action.ActionEngine
 import org.goldenport.cncf.component.{Component, ComponentLogic}
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeKind}
@@ -19,7 +19,7 @@ import org.goldenport.cncf.job.{ActionId, ActionTask, JobContext}
  *  version Dec. 31, 2025
  *  version Jan.  3, 2026
  *  version Jan. 21, 2026
- * @version Feb.  4, 2026
+ * @version Feb. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Service extends ProtocolService with Service.CCore.Holder {
@@ -31,12 +31,12 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
   ): Consequence[OperationResponse] = {
     val _ = name
     logic.makeOperationRequest(request).flatMap {
-      case action: Command =>
+      case action: CommandAction =>
         val actionid = ActionId.generate()
         val task = ActionTask(actionid, action, logic.component.actionEngine, Some(logic.component))
         val jobid = logic.submitJob(List(task), executionContext)
         Consequence.success(OperationResponse.Scalar(jobid.value))
-      case action: Query =>
+      case action: QueryAction =>
         val actionid = ActionId.generate()
         val jobcontext = JobContext(None, None, Some(actionid))
         val ctx = ExecutionContext.withJobContext(executionContext, jobcontext)

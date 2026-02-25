@@ -2,7 +2,7 @@ package org.goldenport.cncf.component.builtin.specification
 
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
-import org.goldenport.cncf.action.{Action, ActionCall, Query, ResourceAccess}
+import org.goldenport.cncf.action.{Action, ActionCall, QueryAction, ResourceAccess}
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.ComponentInit
@@ -21,7 +21,8 @@ import org.goldenport.protocol.spec as spec
 
 /*
  * @since   Jan.  8, 2026
- * @version Jan. 20, 2026
+ *  version Jan. 20, 2026
+ * @version Feb. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpecificationComponent() extends Component {
@@ -56,11 +57,7 @@ object SpecificationComponent {
       )
       val protocol = Protocol(
         services = services,
-        handler = ProtocolHandler(
-          ingresses = IngressCollection(Vector(RestIngress())),
-          egresses = EgressCollection(Vector(RestEgress())),
-          projections = ProjectionCollection()
-        )
+        handler = ProtocolHandler.default
       )
       val instanceid = ComponentInstanceId.default(componentId)
       Component.Core.create(
@@ -113,7 +110,7 @@ private final case class ExportSpecificationAction(
   request: Request,
   format: String,
   exportService: ExportSpecificationService
-) extends Query() {
+) extends QueryAction() {
 //  val name = "openapi"
 
   def createCall(core: ActionCall.Core): ActionCall =

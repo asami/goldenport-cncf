@@ -17,7 +17,8 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Jan. 12, 2026
- * @version Jan. 29, 2026
+ *  version Jan. 29, 2026
+ * @version Feb. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentProvider {
@@ -41,15 +42,126 @@ object ComponentProvider {
     origin: ComponentOrigin,
     log: BootstrapLog
   ): Consequence[Component] = {
-    log.info(s"instantiate class: ${componentClass.getName} method=no-arg")
+    log.info(s"instantiate class: ${componentClass.getName} method=preferred-factory")
     val params = ComponentCreate(subsystem, origin)
-    _instantiate_noarg(componentClass) match {
-      case Consequence.Success(comp) =>
+    _provide_via_impl_factory(componentClass, params, log) match {
+      case Some(componentResult) =>
+        componentResult
+      case None =>
+        log.info(s"preferred factory unavailable for class=${componentClass.getName}; falling back to no-arg instantiation")
+        _instantiate_noarg(componentClass) match {
+          case Consequence.Success(comp) =>
+            val core = _core_from_component(comp, componentClass)
+            _initialize_component(comp, subsystem, core, origin)
+          case Consequence.Failure(conclusion) =>
+            log.warn(s"failed to instantiate class=${componentClass.getName} cause=${conclusion.show}; trying companion factory")
+            _provide_via_companion_factory(componentClass, params, log, conclusion)
+        }
+    }
+  }
+
+  private def _provide_via_impl_factory(
+    componentClass: Class[_ <: Component],
+    params: ComponentCreate,
+    log: BootstrapLog
+  ): Option[Consequence[Component]] = {
+    _find_impl_factories(componentClass).headOption.map { factory =>
+      log.info(s"instantiating ${componentClass.getName} via impl factory ${factory.getClass.getName}")
+      _instantiate_from_factory(factory, componentClass, params, log)
+    }
+  }
+
+  private def _find_impl_factories(
+    componentClass: Class[_ <: Component]
+  ): Vector[Component.Factory] = {
+    val loader = componentClass.getClassLoader
+    val packageName = Option(componentClass.getPackage).map(_.getName).filter(_.nonEmpty).getOrElse("")
+    val implPackage =
+      if (packageName.isEmpty) "impl"
+      else s"${packageName}.impl"
+    val simpleName = componentClass.getSimpleName.replace("$", "")
+    val candidates = Vector(
+      s"${implPackage}.${simpleName}Factory",
+      s"${implPackage}.${simpleName}Factory$$",
+      s"${implPackage}.${simpleName}ComponentFactory",
+      s"${implPackage}.${simpleName}ComponentFactory$$",
+      s"${implPackage}.ComponentFactory",
+      s"${implPackage}.ComponentFactory$$"
+    )
+    candidates.flatMap(name => _load_factory(name, loader))
+  }
+
+  private def _load_factory(
+    className: String,
+    loader: ClassLoader
+  ): Option[Component.Factory] =
+    _load_optional_class(className, loader).flatMap(_resolve_factory_instance)
+
+  private def _instantiate_from_factory(
+    factory: Component.Factory,
+    componentClass: Class[_ <: Component],
+    params: ComponentCreate,
+    log: BootstrapLog
+  ): Consequence[Component] = {
+    val components = factory.create(params)
+    components.headOption match {
+      case Some(comp) =>
         val core = _core_from_component(comp, componentClass)
-        _initialize_component(comp, subsystem, core, origin)
-      case Consequence.Failure(conclusion) =>
-        log.warn(s"failed to instantiate class=${componentClass.getName} cause=${conclusion.show}; trying companion factory")
-        _provide_via_companion_factory(componentClass, params, log, conclusion)
+        _initialize_component(comp, params.subsystem, core, params.origin)
+      case None =>
+        val message = s"factory ${factory.getClass.getName} produced no components"
+        log.warn(message)
+        Consequence.failure(new RuntimeException(message))
+    }
+  }
+
+  private def _load_optional_class(
+    className: String,
+    loader: ClassLoader
+  ): Option[Class[_]] = {
+    try {
+      Some(Class.forName(className, false, loader))
+    } catch {
+      case _: ClassNotFoundException => None
+      case _: NoClassDefFoundError => None
+      case _: LinkageError => None
+      case NonFatal(_) => None
+    }
+  }
+
+  private def _resolve_factory_instance(
+    cls: Class[_]
+  ): Option[Component.Factory] = {
+    if (!classOf[Component.Factory].isAssignableFrom(cls)) {
+      None
+    } else if (cls.getName.endsWith("$")) {
+      _module_instance(cls)
+    } else {
+      _instantiate_factory_class(cls)
+    }
+  }
+
+  private def _module_instance(
+    cls: Class[_]
+  ): Option[Component.Factory] = {
+    try {
+      val field = cls.getField("MODULE$")
+      val instance = field.get(null)
+      Some(instance.asInstanceOf[Component.Factory])
+    } catch {
+      case NonFatal(_) => None
+    }
+  }
+
+  private def _instantiate_factory_class(
+    cls: Class[_]
+  ): Option[Component.Factory] = {
+    try {
+      val ctor = cls.getDeclaredConstructor()
+      ctor.setAccessible(true)
+      Some(ctor.newInstance().asInstanceOf[Component.Factory])
+    } catch {
+      case NonFatal(_) => None
     }
   }
 
@@ -105,11 +217,7 @@ object ComponentProvider {
   private def _empty_protocol(): Protocol = {
     Protocol(
       services = spec.ServiceDefinitionGroup(services = Vector.empty),
-      handler = ProtocolHandler(
-        ingresses = IngressCollection(Vector.empty),
-        egresses = EgressCollection(Vector.empty),
-        projections = ProjectionCollection()
-      )
+      handler = ProtocolHandler.empty
     )
   }
 
@@ -173,39 +281,6 @@ object ComponentProvider {
       None
     } else {
       _instantiate_factory_class(cls)
-    }
-  }
-
-  private def _instantiate_factory_class(
-    cls: Class[_]
-  ): Option[Component.Factory] = {
-    try {
-      Some(cls.getDeclaredConstructor().newInstance().asInstanceOf[Component.Factory])
-    } catch {
-      case NonFatal(_) => None
-    }
-  }
-
-  private def _module_instance(
-    moduleClass: Class[_]
-  ): Option[AnyRef] = {
-    try {
-      val field = moduleClass.getField("MODULE$")
-      val instance = field.get(null)
-      Option(instance)
-    } catch {
-      case NonFatal(_) => None
-    }
-  }
-
-  private def _load_optional_class(
-    className: String,
-    loader: ClassLoader
-  ): Option[Class[_]] = {
-    try {
-      Some(Class.forName(className, false, loader))
-    } catch {
-      case NonFatal(_) => None
     }
   }
 }

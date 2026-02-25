@@ -22,7 +22,8 @@ import java.nio.charset.StandardCharsets
 
 /*
  * @since   Jan. 10, 2026
- * @version Jan. 21, 2026
+ *  version Jan. 21, 2026
+ * @version Feb. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ClientComponent() extends Component {
@@ -57,11 +58,7 @@ object ClientComponent {
       )
       val protocol = Protocol(
         services = services,
-        handler = ProtocolHandler(
-          ingresses = IngressCollection(Vector(RestIngress())),
-          egresses = EgressCollection(Vector(RestEgress())),
-          projections = ProjectionCollection()
-        )
+        handler = ProtocolHandler.default
       )
       val instanceid = ComponentInstanceId.default(componentId)
       Component.Core.create(

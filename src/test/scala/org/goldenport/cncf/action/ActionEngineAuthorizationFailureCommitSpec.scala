@@ -28,7 +28,7 @@ class ActionEngineAuthorizationFailureCommitSpec extends AnyWordSpec with Matche
       val runtime = new TestRuntimeContext
       val base = ExecutionContext.create()
       val ctx = ExecutionContext.withRuntimeContext(base, runtime.runtime)
-      val uow = new UnitOfWork(ctx, dataStore, eventEngine, recorder)
+      val uow = new UnitOfWork(ctx, dataStore, org.goldenport.cncf.entity.EntityStore.noop(), eventEngine, recorder)
       runtime.bind(uow)
 
       var buildCalled = false

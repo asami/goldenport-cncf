@@ -19,11 +19,12 @@ import org.goldenport.cncf.backend.collaborator.Collaborator
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
  *  version Jan. 22, 2026
- * @version Feb.  7, 2026
+ * @version Feb. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
   extends ActionCall.Core.Holder
+  with ActionCallEntityStorePart
   with ActionCallDataStorePart
   with ActionCallHttpPart
   with ActionCallShellCommandPart
@@ -68,6 +69,9 @@ object ActionCall {
     component: Option[Component],
     correlationId: Option[CorrelationId]
   ) {
+    def getFactory[A <: Component.Factory]: Option[A] =
+      component.flatMap(_.factory).map(_.asInstanceOf[A])
+
     def getCollaborator: Option[Collaborator] = component.flatMap {
       case m: CollaboratorComponent => Some(m.collaborator)
       case _ => None
@@ -88,6 +92,7 @@ object ActionCall {
       def executionContext: ExecutionContext = core.executionContext
       def component: Option[Component] = core.component
       def correlationId: Option[CorrelationId] = core.correlationId
+      def getFactory[A <: Component.Factory]: Option[A] = core.getFactory[A]
     }
   }
 }

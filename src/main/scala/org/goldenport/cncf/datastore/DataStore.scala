@@ -1,23 +1,69 @@
 package org.goldenport.cncf.datastore
 
+import scala.collection.immutable.VectorMap
+import org.goldenport.Consequence
+import org.goldenport.text.Presentable
 import org.goldenport.id.UniversalId
 import org.goldenport.record.Record
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.unitofwork.{CommitParticipant, CommitRecorder, PrepareResult, TransactionContext}
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan. 10, 2026
+ *  version Jan. 10, 2026
+ * @version Feb. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {
-  def create(id: UniversalId, record: Record): Unit
-  def load(id: UniversalId): Option[Record]
-  def store(id: UniversalId, record: Record): Unit
-  def update(id: UniversalId, changes: Record): Unit
-  def delete(id: UniversalId): Unit
+  import DataStore.*
+
+  def create(
+    collection: CollectionId,
+    id: EntryId,
+    record: Record
+  )(using ctx: ExecutionContext): Consequence[Unit]
+  def load(
+    collection: CollectionId,
+    id: EntryId
+  )(using ctx: ExecutionContext): Consequence[Option[Record]]
+  def save(
+    collection: CollectionId,
+    id: EntryId,
+    record: Record
+  )(using ctx: ExecutionContext): Consequence[Unit]
+  def update(
+    collection: CollectionId,
+    id: EntryId,
+    changes: Record
+  )(using ctx: ExecutionContext): Consequence[Unit]
+  def delete(
+    collection: CollectionId,
+    id: EntryId
+  )(using ctx: ExecutionContext): Consequence[Unit]
 }
 
 object DataStore {
+  case class CollectionId(name: String)
+
+
+  sealed trait EntryId extends Presentable
+  object EntryId {
+    def apply(uid: UniversalId): EntryId = UniversalEntryId(uid)
+
+    def parse(p: String): Consequence[EntryId] = ???
+  }
+  case class StringEntryId(id: String) extends EntryId {
+    def print = Presentable.print(id)
+  }
+  case class UniversalEntryId(id: UniversalId) extends EntryId {
+    def print = id.print
+  }
+  case class DataStoreEntryId(
+    major: String,
+    minor: String,
+    collection: String
+  ) extends UniversalId(major, minor, "datastore", collection) with EntryId
+
   def noop(
     recorder: CommitRecorder = CommitRecorder.noop
   ): DataStore =
@@ -28,24 +74,42 @@ object DataStore {
   ): DataStore =
     new InMemoryDataStore(recorder)
 
-  def inMemorySelectable(
+  def inMemorySearchable(
     recorder: CommitRecorder = CommitRecorder.noop
-  ): SelectableDataStore =
-    new InMemorySelectableDataStore(recorder)
+  ): SearchableDataStore =
+    new InMemorySearchableDataStore(recorder)
 
   private final class NoopDataStore(
     recorder: CommitRecorder
   ) extends DataStore {
-    def create(id: UniversalId, record: Record): Unit = {}
+    def create(
+      collection: CollectionId,
+      id: EntryId,
+      record: Record
+    )(using ctx: ExecutionContext): Consequence[Unit] = Consequence.unit
 
-    def load(id: UniversalId): Option[Record] =
-      None
+    def load(
+      collection: CollectionId,
+      id: EntryId
+    )(using ctx: ExecutionContext): Consequence[Option[Record]] =
+      Consequence(None)
 
-    def store(id: UniversalId, record: Record): Unit = {}
+    def save(
+      collection: CollectionId,
+      id: EntryId,
+      record: Record
+    )(using ctx: ExecutionContext): Consequence[Unit] = Consequence.unit
 
-    def update(id: UniversalId, changes: Record): Unit = {}
+    def update(
+      collection: CollectionId,
+      id: EntryId,
+      changes: Record
+    )(using ctx: ExecutionContext): Consequence[Unit] = Consequence.unit
 
-    def delete(id: UniversalId): Unit = {}
+    def delete(
+      collection: CollectionId,
+      id: EntryId
+    )(using ctx: ExecutionContext): Consequence[Unit] = Consequence.unit
 
     def prepare(tx: TransactionContext): PrepareResult = {
       recorder.record("DataStore.prepare")
@@ -59,37 +123,49 @@ object DataStore {
       recorder.record("DataStore.abort")
   }
 
-  private final class InMemoryDataStore(
+  class InMemoryDataStore(
     recorder: CommitRecorder
   ) extends DataStore {
-    private var _entries: Map[UniversalId, Record] = Map.empty
+    private var _collections: VectorMap[CollectionId, InMemoryDataStore.Collection] = VectorMap.empty
 
-    def create(id: UniversalId, record: Record): Unit = {
-      if (_entries.contains(id)) {
-        throw new IllegalStateException(s"record already exists: ${id}")
-      }
-      _entries = _entries.updated(id, record)
-    }
+    private def _ensure_collection(collection: CollectionId): Consequence[InMemoryDataStore.Collection] =
+      ???
 
-    def load(id: UniversalId): Option[Record] =
-      _entries.get(id)
+    protected def take_collection(collection: CollectionId): Consequence[InMemoryDataStore.Collection] =
+      ???
 
-    def store(id: UniversalId, record: Record): Unit = {
-      _entries = _entries.updated(id, record)
-    }
+    def create(
+      collection: CollectionId,
+      id: EntryId,
+      record: Record
+    )(using ctx: ExecutionContext): Consequence[Unit] =
+      _ensure_collection(collection).flatMap(_.create(record))
 
-    def update(id: UniversalId, changes: Record): Unit = {
-      _entries.get(id) match {
-        case Some(existing) =>
-          _entries = _entries.updated(id, existing ++ changes)
-        case None =>
-          throw new IllegalStateException(s"record not found: ${id}")
-      }
-    }
+    def load(
+      collection: CollectionId,
+      id: EntryId
+    )(using ctx: ExecutionContext): Consequence[Option[Record]] =
+      take_collection(collection).flatMap(_.load(id))
 
-    def delete(id: UniversalId): Unit = {
-      _entries = _entries - id
-    }
+    def save(
+      collection: CollectionId,
+      id: EntryId,
+      record: Record
+    )(using ctx: ExecutionContext): Consequence[Unit] =
+      take_collection(collection).flatMap(_.save(id, record))
+
+    def update(
+      collection: CollectionId,
+      id: EntryId,
+      changes: Record
+    )(using ctx: ExecutionContext): Consequence[Unit] =
+      take_collection(collection).flatMap(_.update(id, changes))
+
+    def delete(
+      collection: CollectionId,
+      id: EntryId
+    )(using ctx: ExecutionContext): Consequence[Unit] =
+      take_collection(collection).flatMap(_.delete(id))
 
     def prepare(tx: TransactionContext): PrepareResult = {
       recorder.record("DataStore.prepare")
@@ -102,86 +178,148 @@ object DataStore {
     def abort(tx: TransactionContext): Unit =
       recorder.record("DataStore.abort")
   }
+  object InMemoryDataStore {
+    class Collection(val id: CollectionId) {
+      private var _entries: VectorMap[EntryId, Record] = VectorMap.empty
 
-  private final class InMemorySelectableDataStore(
+      protected def to_entry_id(p: EntryId): Consequence[EntryId] = ???
+
+      def create(record: Record)(using ctx: ExecutionContext): Consequence[Unit] =
+        for {
+          _ <- _check_duplicate(record)
+          _ <- _create_entry(record)
+        } yield {}
+
+      private def _check_duplicate(rec: Record): Consequence[Unit] = {
+        val id = rec.getString("id")
+        id match {
+          case Some(s) => EntryId.parse(s).flatMap { eid =>
+            if (_entries.contains(eid))
+              Consequence.DataStoreDuplicate(s)
+            else
+              Consequence.unit
+          }
+          case None => Consequence.unit
+        }
+      }
+
+      private def _create_entry(rec: Record): Consequence[Unit] = {
+        ???
+      }
+
+      def load(id: EntryId): Consequence[Option[Record]] =
+        Consequence(None)
+
+      def save(id: EntryId, record: Record): Consequence[Unit] = Consequence.unit
+
+      def update(id: EntryId, changes: Record): Consequence[Unit] = {
+        for {
+          eid <- to_entry_id(id)
+          _ <- {
+            _entries.get(eid) match {
+              case Some(existing) => Consequence {
+                _entries = _entries.updated(eid, existing ++ changes)
+              }
+              case None =>
+                Consequence.DataStoreNotFound(eid.print)
+            }
+          }
+        } yield ()
+      }
+
+      def delete(id: EntryId): Consequence[Unit] = {
+        for {
+          eid <- to_entry_id(id)
+        } yield _entries = _entries - eid
+      }
+
+      def search(directive: QueryDirective): Consequence[SearchResult] = Consequence {
+        val ordered = _entries.values.toVector
+        val projected = directive.projection match {
+          case QueryProjection.All =>
+            ordered
+          case QueryProjection.Fields(names) =>
+            val keyset = names.toSet
+            ordered.map(_.filterKeys(keyset))
+        }
+        val sorted = directive.order match {
+          case QueryOrder.None =>
+            projected
+          case QueryOrder.By(field, OrderDirection.Asc) =>
+            projected.sortBy(_.getString(field).getOrElse(""))
+          case QueryOrder.By(field, OrderDirection.Desc) =>
+            projected.sortBy(_.getString(field).getOrElse(""))(Ordering[String].reverse)
+        }
+        directive.limit match {
+          case QueryLimit.Unbounded =>
+            SearchResult(sorted, ResultRange.Exact, None)
+          case QueryLimit.Limit(n) =>
+            SearchResult(sorted.take(n), ResultRange.Limited(n), None)
+        }
+      }
+    }
+  }
+
+  final class InMemorySearchableDataStore(
     recorder: CommitRecorder
-  ) extends SelectableDataStore {
-    private var _entries: Map[UniversalId, Record] = Map.empty
-    private var _order: Vector[UniversalId] = Vector.empty
+  ) extends InMemoryDataStore(recorder) with SearchableDataStore {
+    // private var _entries: Map[UniversalId, Record] = Map.empty
+    // private var _order: Vector[UniversalId] = Vector.empty
 
-    def create(id: UniversalId, record: Record): Unit = {
-      if (_entries.contains(id)) {
-        throw new IllegalStateException(s"record already exists: ${id}")
-      }
-      _entries = _entries.updated(id, record)
-      _order = _order :+ id
-    }
+    // def create(id: UniversalId, record: Record): Unit = {
+    //   if (_entries.contains(id)) {
+    //     throw new IllegalStateException(s"record already exists: ${id}")
+    //   }
+    //   _entries = _entries.updated(id, record)
+    //   _order = _order :+ id
+    // }
 
-    def load(id: UniversalId): Option[Record] =
-      _entries.get(id)
+    // def load(id: UniversalId): Option[Record] =
+    //   _entries.get(id)
 
-    def store(id: UniversalId, record: Record): Unit = {
-      val exists = _entries.contains(id)
-      _entries = _entries.updated(id, record)
-      if (!exists) {
-        _order = _order :+ id
-      }
-    }
+    // def store(id: UniversalId, record: Record): Unit = {
+    //   val exists = _entries.contains(id)
+    //   _entries = _entries.updated(id, record)
+    //   if (!exists) {
+    //     _order = _order :+ id
+    //   }
+    // }
 
-    def update(id: UniversalId, changes: Record): Unit = {
-      _entries.get(id) match {
-        case Some(existing) =>
-          _entries = _entries.updated(id, existing ++ changes)
-        case None =>
-          throw new IllegalStateException(s"record not found: ${id}")
-      }
-    }
+    // def update(id: UniversalId, changes: Record): Unit = {
+    //   _entries.get(id) match {
+    //     case Some(existing) =>
+    //       _entries = _entries.updated(id, existing ++ changes)
+    //     case None =>
+    //       throw new IllegalStateException(s"record not found: ${id}")
+    //   }
+    // }
 
-    def delete(id: UniversalId): Unit = {
-      _entries = _entries - id
-      _order = _order.filterNot(_ == id)
-    }
+    // def delete(id: UniversalId): Unit = {
+    //   _entries = _entries - id
+    //   _order = _order.filterNot(_ == id)
+    // }
 
-    def select(directive: QueryDirective): SelectResult = {
-      val ordered = _order.flatMap(_entries.get)
-      val projected = directive.projection match {
-        case QueryProjection.All =>
-          ordered
-        case QueryProjection.Fields(names) =>
-          val keyset = names.toSet
-          ordered.map(_.filterKeys(keyset))
-      }
-      val sorted = directive.order match {
-        case QueryOrder.None =>
-          projected
-        case QueryOrder.By(field, OrderDirection.Asc) =>
-          projected.sortBy(_.getString(field).getOrElse(""))
-        case QueryOrder.By(field, OrderDirection.Desc) =>
-          projected.sortBy(_.getString(field).getOrElse(""))(Ordering[String].reverse)
-      }
-      directive.limit match {
-        case QueryLimit.Unbounded =>
-          SelectResult(sorted, ResultRange.Exact, None)
-        case QueryLimit.Limit(n) =>
-          SelectResult(sorted.take(n), ResultRange.Limited(n), None)
-      }
-    }
+    def search(
+      collection: CollectionId,
+      directive: QueryDirective
+    ): Consequence[SearchResult] = 
+      take_collection(collection).flatMap(_.search(directive))
 
-    def prepare(tx: TransactionContext): PrepareResult = {
-      recorder.record("DataStore.prepare")
-      PrepareResult.Prepared
-    }
+  //   def prepare(tx: TransactionContext): PrepareResult = {
+  //     recorder.record("DataStore.prepare")
+  //     PrepareResult.Prepared
+  //   }
 
-    def commit(tx: TransactionContext): Unit =
-      recorder.record("DataStore.commit")
+  //   def commit(tx: TransactionContext): Unit =
+  //     recorder.record("DataStore.commit")
 
-    def abort(tx: TransactionContext): Unit =
-      recorder.record("DataStore.abort")
+  //   def abort(tx: TransactionContext): Unit =
+  //     recorder.record("DataStore.abort")
   }
 }
 
-trait SelectableDataStore extends DataStore {
-  def select(directive: QueryDirective): SelectResult
+trait SearchableDataStore extends DataStore {
+  def search(collection: DataStore.CollectionId, directive: QueryDirective): Consequence[SearchResult]
 }
 
 final case class QueryDirective(
@@ -220,7 +358,7 @@ object QueryLimit {
   final case class Limit(value: Int) extends QueryLimit
 }
 
-final case class SelectResult(
+final case class SearchResult(
   records: Vector[Record],
   range: ResultRange,
   cursor: Option[Cursor] = None

@@ -63,7 +63,7 @@ class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen
       val args = Array("query", "hello")
 
       When("executing the primary scenario")
-      val result = TestComponentUsingComponent.service.invokeCli(args)
+      val result = TestComponentUsingComponent().service.invokeCli(args)
 
       Then("execution succeeds and returns an OperationRequest string")
       result should be_success("Query(hello)")
@@ -74,7 +74,7 @@ class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen
       val args = Array("query", "hello")
 
       When("executing the primary scenario")
-      val result = TestComponentUsingComponentWithCustomService.service.invokeCli(args)
+      val result = TestComponentUsingComponentWithCustomService().service.invokeCli(args)
 
       Then("execution succeeds and returns an OperationRequest string")
       result should be_success("Query(hello)")
@@ -191,9 +191,8 @@ final case class ScenarioResult(
 )
 
 object TestComponent {
-  val component: Component = TestComponentUsingComponent
-
   def runCli(args: Array[String]): ScenarioResult = {
+    val component = TestComponentUsingComponent()
     component.logic.makeOperationRequest(args) match {
       case org.goldenport.Consequence.Success(opreq) =>
         opreq match {
@@ -218,10 +217,10 @@ object TestComponent {
   }
 }
 
-val TestComponentUsingComponent =
+def TestComponentUsingComponent(): Component =
   TestComponentFactory.create("test", TestProtocol.protocol)
 
-val TestComponentUsingComponentWithCustomService = {
+def TestComponentUsingComponentWithCustomService(): Component = {
   TestComponentFactory.create(
     "test",
     TestProtocol.protocol,

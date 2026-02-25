@@ -1,0 +1,60 @@
+package org.goldenport.cncf.entity
+
+import org.goldenport.Consequence
+import org.goldenport.id.Identified
+import org.goldenport.id.Identifiable
+import org.goldenport.record.Record
+import org.goldenport.record.RecordEncoder
+import org.goldenport.record.RecordCodex
+import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.cncf.datatype.EntityCollectionId
+
+/*
+ * @since   Feb. 22, 2026
+ * @version Feb. 23, 2026
+ * @author  ASAMI, Tomoharu
+ */
+trait EntityPersistent[E] extends RecordCodex[E]
+    with Identified[E, EntityId]
+
+object EntityPersistent {
+  def derived[E <: EntityPersistable](
+    from: Record => Consequence[E]
+  ): EntityPersistent[E] = new EntityPersistent[E] {
+    def id(e: E) = e.id
+    def toRecord(e: E) = e.toRecord
+    def fromRecord(r: Record) = from(r)
+  }
+}
+
+trait EntityPersistentCreate[E] extends RecordEncoder[E]
+    with Identifiable[E, EntityId] {
+  def collection(e: E): EntityCollectionId
+}
+
+object EntityPersistentCreate {
+  def derived[E <: EntityPersistableCreate](
+    collectionid: EntityCollectionId
+  ): EntityPersistentCreate[E] = new EntityPersistentCreate[E] {
+    def id(e: E): Option[EntityId] = e.id
+    def toRecord(e: E) = e.toRecord
+    def collection(e: E): EntityCollectionId = collectionid
+  }
+}
+
+trait EntityPersistable {
+  def id: EntityId
+  def toRecord: Record
+}
+
+trait EntityPersistableCreate {
+  def id: Option[EntityId]
+  def toRecord: Record
+}
+object EntityPersistableCreate {
+  // given entityPersistentCreate: EntityPersistentCreate[EntityPersistableCreate] = new EntityPersistentCreate[EntityPersistableCreate] {
+  //   def id(e: EntityPersistableCreate): Option[EntityId] = e.id
+  //   def collection(e: EntityPersistableCreate): CollectionId = e.collecionId
+  //   def toRecord(e: EntityPersistableCreate) = e.toRecord
+  // }
+}

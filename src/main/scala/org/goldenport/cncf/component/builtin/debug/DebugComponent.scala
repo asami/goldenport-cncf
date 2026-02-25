@@ -4,7 +4,6 @@ import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.component.ComponentOrigin
-import org.goldenport.cncf.action.{ActionCall, Command}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationRequest
@@ -16,7 +15,8 @@ import org.goldenport.protocol.spec as spec
 
 /*
  * @since   Jan. 20, 2026
- * @version Jan. 21, 2026
+ *  version Jan. 21, 2026
+ * @version Feb. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class DebugComponent() extends Component {
@@ -52,11 +52,7 @@ object DebugComponent {
       )
       val protocol = Protocol(
         services = services,
-        handler = ProtocolHandler(
-          ingresses = IngressCollection(Vector(RestIngress())),
-          egresses = EgressCollection(Vector(RestEgress())),
-          projections = ProjectionCollection()
-        )
+        handler = ProtocolHandler.default
       )
       val instanceId = ComponentInstanceId.default(componentId)
       Component.Core.create(

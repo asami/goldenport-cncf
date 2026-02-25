@@ -21,7 +21,8 @@ import org.goldenport.protocol.spec as spec
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan. 30, 2026
+ *  version Jan. 30, 2026
+ * @version Feb. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {
@@ -125,15 +126,4 @@ object DefaultSubsystemFactory {
   //   val instanceId = ComponentInstanceId.default(componentId)
   //   Component.Core.create(name, componentId, instanceId, _empty_protocol())
   // }
-
-  private def _empty_protocol(): Protocol = {
-    Protocol(
-      services = spec.ServiceDefinitionGroup(services = Vector.empty),
-      handler = ProtocolHandler(
-        ingresses = IngressCollection(Vector.empty),
-        egresses = EgressCollection(Vector.empty),
-        projections = ProjectionCollection()
-      )
-    )
-  }
 }

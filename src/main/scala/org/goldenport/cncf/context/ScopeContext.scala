@@ -1,13 +1,17 @@
 package org.goldenport.cncf.context
 
 import org.goldenport.cncf.context.GlobalContext
+import org.goldenport.cncf.context.DataStoreContext
+import org.goldenport.cncf.context.EntityStoreContext
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.datastore.DataStoreSpace
+import org.goldenport.cncf.entity.EntityStoreSpace
 
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
- * @version Feb.  3, 2026
+ * @version Feb. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ScopeKind {
@@ -66,7 +70,9 @@ object ScopeContext {
     name: String,
     parent: Option[ScopeContext],
     observabilityContext: ObservabilityContext,
-    httpDriverOption: Option[HttpDriver]
+    httpDriverOption: Option[HttpDriver],
+    datastore: Option[DataStoreContext] = None,
+    entitystore: Option[EntityStoreContext] = None
   )
   object Core {
     trait Holder {
@@ -76,6 +82,9 @@ object ScopeContext {
       def name: String = core.name
       def parent: Option[ScopeContext] = core.parent
       def observabilityContext: ObservabilityContext = core.observabilityContext
+
+      def dataStoreSpace: DataStoreSpace = ???
+      def entityStoreSpace: EntityStoreSpace = ???
     }
   }
 

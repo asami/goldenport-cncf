@@ -10,7 +10,7 @@ import org.goldenport.cncf.component.{CommandParameterMappingRule, ShellCommandC
 
 /*
  * @since   Feb.  5, 2026
- * @version Feb.  6, 2026
+ * @version Feb. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ShellCommandOperationDefinition() extends ComponentOperationDefinition() {
@@ -56,7 +56,7 @@ case class ShellCommandCommand(
   request: Request,
   operation: ShellCommandOperationDefinition,
   rule: CommandParameterMappingRule
-) extends Command() {
+) extends CommandAction() {
   def createCall(core: ActionCall.Core): ShellCommandCall = {
     ShellCommandCall(core, operation, rule)
   }

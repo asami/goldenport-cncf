@@ -11,15 +11,17 @@ import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.http.HttpResponse
 import org.goldenport.process.{ShellCommand, ShellCommandResult}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.Program
+import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.entity.EntityPersistent
 
 /*
  * @since   Jan.  6, 2026
  *  version Jan. 21, 2026
- * @version Feb.  7, 2026
+ * @version Feb. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -104,6 +106,49 @@ trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.H
     UnitOfWorkOp.HttpPut(path, body, headers)
 }
 
+trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
+  protected final def entity_load[T](
+    id: EntityId
+  )(using tc: EntityPersistent[T]): ExecUowM[Option[T]] = {
+    val op = UnitOfWorkOp.EntityStoreLoad(id, tc)
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  protected final def entity_save[T](
+    entity: T
+  )(using tc: EntityPersistent[T]): ExecUowM[Unit] = {
+    val op = UnitOfWorkOp.EntityStoreSave(entity, tc)
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  protected final def entity_delete(id: EntityId): ExecUowM[Unit] = {
+    val op = UnitOfWorkOp.EntityStoreDelete(id)
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  // Direct execution variants (immediate execution)
+  protected final def entity_load_direct[T](
+    id: EntityId
+  )(using uow: UnitOfWork, tc: EntityPersistent[T]): Option[T] = {
+    val op = UnitOfWorkOp.EntityStoreLoad(id, tc)
+    uow.execute(op)
+  }
+
+  protected final def entity_save_direct[T](
+    entity: T
+  )(using uow: UnitOfWork, tc: EntityPersistent[T]): Unit = {
+    val op = UnitOfWorkOp.EntityStoreSave(entity, tc)
+    uow.execute(op)
+  }
+
+  protected final def entity_delete_direct(
+    id: EntityId
+  )(using uow: UnitOfWork): Unit = {
+    val op = UnitOfWorkOp.EntityStoreDelete(id)
+    uow.execute(op)
+  }
+}
+
 trait ActionCallDataStorePart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
   // // Legacy direct datastore access (pre-UoW DSL)
   // protected final def ds_get(id: UniversalId): Option[DataStore.Record] = {
@@ -176,7 +221,6 @@ trait ActionCallDataStorePart extends ActionCallFeaturePart { self: ActionCall.C
     UnitOfWorkOp.DataStoreDelete(id)
   }
 }
-
 
 trait ActionCallShellCommandPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
 

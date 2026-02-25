@@ -9,12 +9,12 @@ import org.goldenport.cncf.component.CollaboratorComponent
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.action.{Action, ActionCall, CollaboratorActionCall}
-import org.goldenport.cncf.action.Query
+import org.goldenport.cncf.action.QueryAction
 import org.goldenport.cncf.collaborator.api.Collaborator
 
 /*
  * @since   Jan. 30, 2026
- * @version Feb.  1, 2026
+ * @version Feb. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MiniCollaboratorComponent() extends CollaboratorComponent {
@@ -67,7 +67,7 @@ object MainService extends ServiceDefinition {
 
 final case class PingQuery(
   request: Request
-) extends Query() {
+) extends QueryAction() {
   override def createCall(core: ActionCall.Core): ActionCall =
     PingActionCall(core, ???, this)
 }

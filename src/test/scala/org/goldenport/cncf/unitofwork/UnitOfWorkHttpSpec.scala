@@ -3,7 +3,7 @@ package org.goldenport.cncf.unitofwork
 import java.nio.charset.StandardCharsets
 import org.goldenport.ConsequenceT
 import org.goldenport.bag.Bag
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.http.HttpDriver
@@ -13,11 +13,12 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 import cats.free.Free
+import cats.{Id, ~>}
 
 /*
  * @since   Jan. 10, 2026
  *  version Jan. 21, 2026
- * @version Feb.  7, 2026
+ * @version Feb. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWorkHttpSpec extends AnyWordSpec with Matchers with ConsequenceMatchers {
@@ -65,32 +66,63 @@ class UnitOfWorkHttpSpec extends AnyWordSpec with Matchers with ConsequenceMatch
 
   "UnitOfWork HTTP wiring" should {
     "execute HTTP ops via Free/ConsequenceT path" in {
-      val ctx = ExecutionContext.create()
+      val driver = new FakeHttpDriver(_response_ok())
+      val context = _context_(driver)
       val datastore = DataStore.noop()
       val eventengine = EventEngine.noop(datastore)
-      val uow = new UnitOfWork(ctx, datastore, eventengine)
-      val driver = new FakeHttpDriver(_response_ok())
+      val uow = new UnitOfWork(context, datastore, org.goldenport.cncf.entity.EntityStore.noop(), eventengine)
 
       val program = ConsequenceT.liftF(
         Free.liftF[UnitOfWorkOp, HttpResponse](UnitOfWorkOp.HttpGet("/ping"))
       )
-      val result = new UnitOfWorkInterpreter(uow, driver).run(program)
+      val result = new UnitOfWorkInterpreter(uow).run(program)
 
       result should be_success
       driver.calls shouldBe Vector("GET /ping")
     }
 
     "execute HTTP ops via direct path" in {
-      val ctx = ExecutionContext.create()
+      val driver = new FakeHttpDriver(_response_ok())
+      val context = _context_(driver)
       val datastore = DataStore.noop()
       val eventengine = EventEngine.noop(datastore)
-      val uow = new UnitOfWork(ctx, datastore, eventengine)
-      val driver = new FakeHttpDriver(_response_ok())
+      val uow = new UnitOfWork(context, datastore, org.goldenport.cncf.entity.EntityStore.noop(), eventengine)
 
-      given HttpDriver = driver
       val _ = uow.execute[HttpResponse](UnitOfWorkOp.HttpPost("/submit", None, Map.empty))
 
       driver.calls shouldBe Vector("POST /submit")
     }
+  }
+
+  private def _context_(
+    driver: HttpDriver
+  ): ExecutionContext = {
+    val base = ExecutionContext.create()
+    val runtime = new RuntimeContext(
+      core = RuntimeContext.core(
+        name = "unit-of-work-http-spec",
+        parent = None,
+        observabilityContext = base.observability,
+        httpDriverOption = Some(driver)
+      ),
+      unitOfWorkSupplier = () => throw new UnsupportedOperationException("unitOfWork is not used in this spec runtime"),
+      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Id) {
+        def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
+          throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in this spec runtime")
+      },
+      unitOfWorkTryInterpreterFn = new (UnitOfWorkOp ~> scala.util.Try) {
+        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
+          throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in this spec runtime")
+      },
+      unitOfWorkEitherInterpreterFn = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
+        def apply[A](fa: UnitOfWorkOp[A]): Either[Throwable, A] =
+          Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in this spec runtime"))
+      },
+      commitAction = _ => (),
+      abortAction = _ => (),
+      disposeAction = _ => (),
+      token = "unit-of-work-http-spec-runtime"
+    )
+    ExecutionContext.withRuntimeContext(base, runtime)
   }
 }

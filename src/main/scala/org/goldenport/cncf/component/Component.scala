@@ -31,7 +31,7 @@ import scala.util.control.NonFatal
  * @since   Jan.  1, 2026
  *  version Jan.  3, 2026
  *  version Jan. 22, 2026
- * @version Feb.  4, 2026
+ * @version Feb. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -233,10 +233,12 @@ object Component {
     instanceId: ComponentInstanceId,
     protocol: Protocol,
     protocolLogic: ProtocolLogic,
+    factory: Option[Component.Factory],
     actionEngine: ActionEngine,
-    jobEngine: JobEngine,
-    serviceFactory: ServiceFactory
-  )
+    jobEngine: JobEngine
+  ) {
+    lazy val serviceFactory = factory.map(_.serviceFactory) getOrElse ServiceFactory.empty
+  }
   object Core {
     trait Holder {
       def core: Core
@@ -246,6 +248,7 @@ object Component {
       def instanceId = core.instanceId
       def protocol = core.protocol
       def protocolLogic = core.protocolLogic
+      def factory = core.factory
       def actionEngine = core.actionEngine
       def jobEngine = core.jobEngine
       def serviceFactory = core.serviceFactory
@@ -256,31 +259,33 @@ object Component {
       componentid: ComponentId,
       instanceid: ComponentInstanceId,
       protocol: Protocol
-    ): Core = {
-      val servicefactory = ServiceFactory()
-      create(name, componentid, instanceid, protocol, servicefactory)
-    }
+    ): Core = Core(
+      name,
+      componentid,
+      instanceid,
+      protocol,
+      ProtocolLogic(protocol),
+      None,
+      ActionEngine.create(),
+      InMemoryJobEngine.create(),
+    )
 
     def create(
       name: String,
       componentid: ComponentId,
       instanceid: ComponentInstanceId,
       protocol: Protocol,
-      serviceFactory: ServiceFactory
-    ): Core = {
-      val r = create(
-        name,
-        componentid,
-        instanceid,
-        protocol,
-        ProtocolLogic(protocol),
-        ActionEngine.create(),
-        InMemoryJobEngine.create(),
-        serviceFactory
-      )
-//      serviceFactory.setup(r)
-      r
-    }
+      factory: Component.Factory
+    ): Core = create(
+      name,
+      componentid,
+      instanceid,
+      protocol,
+      ProtocolLogic(protocol),
+      factory,
+      ActionEngine.create(),
+      InMemoryJobEngine.create(),
+    )
 
     def create(
       name: String,
@@ -288,9 +293,9 @@ object Component {
       instanceid: ComponentInstanceId,
       protocol: Protocol,
       protocolLogic: ProtocolLogic,
+      factory: Component.Factory,
       actionEngine: ActionEngine,
       jobEngine: JobEngine,
-      serviceFactory: ServiceFactory
     ): Core = {
       Core(
         name,
@@ -298,14 +303,16 @@ object Component {
         instanceid,
         protocol,
         protocolLogic,
+        Some(factory),
         actionEngine,
         jobEngine,
-        serviceFactory
       )
     }
   }
 
   abstract class Factory {
+    def serviceFactory: ServiceFactory = ServiceFactory.empty
+
     final def create(params: ComponentCreate): Vector[Component] = {
       val xs = create_Components(params)
       xs.map { comp =>
@@ -336,21 +343,25 @@ object Component {
       name: String,
       componentid: ComponentId,
       service: ServiceDefinition
+    ): Component.Core =
+      spec_create(name, componentid, Vector(service))
+
+    protected final def spec_create(
+      name: String,
+      componentid: ComponentId,
+      services: Seq[ServiceDefinition]
     ): Component.Core = {
       val protocol = Protocol(
-        services = ServiceDefinitionGroup(service),
-        handler = ProtocolHandler(
-          ingresses = IngressCollection(Vector(RestIngress())),
-          egresses = EgressCollection(Vector(RestEgress())),
-          projections = ProjectionCollection()
-        )
+        services = ServiceDefinitionGroup(services),
+        handler = ProtocolHandler.default
       )
       val instanceid = ComponentInstanceId.default(componentid)
       Component.Core.create(
         name,
         componentid,
         instanceid,
-        protocol
+        protocol,
+        this
       )
     }
   }
@@ -369,6 +380,8 @@ object Component {
     def create(core: ProtocolService.Core, ccore: Service.CCore): Service
   }
   object ServiceFactory {
+    val empty = apply()
+
     def apply(): ServiceFactory = Instance()
 
     case class Instance() extends ServiceFactory {
@@ -406,52 +419,52 @@ object Component {
     c
   }
 
-  def create(
-    name: String,
-    componentid: ComponentId,
-    instanceid: ComponentInstanceId,
-    protocol: Protocol,
-    serviceFactory: ServiceFactory
-  ): Component = {
-    val core = Core.create(
-      name,
-      componentid,
-      instanceid,
-      protocol,
-      ProtocolLogic(protocol),
-      ActionEngine.create(),
-      InMemoryJobEngine.create(),
-      serviceFactory
-    )
-    val r = Instance(core)
-    serviceFactory.setup(r)
-    r
-  }
+  // def create(
+  //   name: String,
+  //   componentid: ComponentId,
+  //   instanceid: ComponentInstanceId,
+  //   protocol: Protocol,
+  //   serviceFactory: ServiceFactory
+  // ): Component = {
+  //   val core = Core.create(
+  //     name,
+  //     componentid,
+  //     instanceid,
+  //     protocol,
+  //     ProtocolLogic(protocol),
+  //     ActionEngine.create(),
+  //     InMemoryJobEngine.create(),
+  //     serviceFactory
+  //   )
+  //   val r = Instance(core)
+  //   serviceFactory.setup(r)
+  //   r
+  // }
 
-  def create(
-    name: String,
-    componentid: ComponentId,
-    instanceid: ComponentInstanceId,
-    protocol: Protocol,
-    protocolLogic: ProtocolLogic,
-    actionEngine: ActionEngine,
-    jobEngine: JobEngine,
-    serviceFactory: ServiceFactory
-  ): Component = {
-    val core = Core.create(
-      name,
-      componentid,
-      instanceid,
-      protocol,
-      protocolLogic,
-      actionEngine,
-      jobEngine,
-      serviceFactory
-    )
-    val r = Instance(core)
-    serviceFactory.setup(r)
-    r
-  }
+  // def create(
+  //   name: String,
+  //   componentid: ComponentId,
+  //   instanceid: ComponentInstanceId,
+  //   protocol: Protocol,
+  //   protocolLogic: ProtocolLogic,
+  //   actionEngine: ActionEngine,
+  //   jobEngine: JobEngine,
+  //   serviceFactory: ServiceFactory
+  // ): Component = {
+  //   val core = Core.create(
+  //     name,
+  //     componentid,
+  //     instanceid,
+  //     protocol,
+  //     protocolLogic,
+  //     actionEngine,
+  //     jobEngine,
+  //     serviceFactory
+  //   )
+  //   val r = Instance(core)
+  //   serviceFactory.setup(r)
+  //   r
+  // }
 
   // def create(
   //   name: String,

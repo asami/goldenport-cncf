@@ -4,9 +4,14 @@ import scala.util.{Try, Success, Failure}
 import java.io.File
 import org.goldenport.{Consequence, Conclusion}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.datastore.{DataStore, QueryDirective, SelectResult, SelectableDataStore}
+import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.cncf.datastore.{DataStore, SearchableDataStore}
 import org.goldenport.cncf.entity.EntityStore
-import org.goldenport.cncf.entity.EntityStore.*
+import org.goldenport.cncf.entity.CreateResult
+import org.goldenport.cncf.entity.EntityPersistent
+import org.goldenport.cncf.entity.EntityPersistentCreate
+import org.goldenport.cncf.directive.Query
+import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.event.DomainEvent
 import org.goldenport.cncf.http.HttpDriver
@@ -16,64 +21,73 @@ import org.goldenport.process.{LocalShellCommandExecutor, ShellCommandExecutor}
  * @since   Apr. 11, 2025
  *  version Dec. 21, 2025
  *  version Jan. 18, 2026
- * @version Feb.  7, 2026
+ * @version Feb. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
   context: ExecutionContext,
   val datastore: DataStore = DataStore.noop(),
+  val entitystore: EntityStore = EntityStore.noop(),
   eventengine: EventEngine = EventEngine.noop(DataStore.noop()),
   recorder: CommitRecorder = CommitRecorder.noop
 ) {
   import UnitOfWork.*
-  private var _http_driver: Option[HttpDriver] = None
-  private var _shell_command_executor: Option[ShellCommandExecutor] = None
+//  private var _http_driver: Option[HttpDriver] = None
+//  private var _shell_command_executor: Option[ShellCommandExecutor] = None
 
-  def create[T](store: EntityStore[T], data: Record)(using instance: EntityInstance[T]): Try[CreateResult[T]] = ???
+  def create[T](entity: T)(using instance: EntityPersistentCreate[T]): Consequence[CreateResult[T]] = ???
 
-  def load[T](store: EntityStore[T])(using instance: EntityInstance[T]): Try[GetResult[T]] = ???
+  def load[T](id: EntityId)(using instance: EntityPersistent[T]): Consequence[T] = ???
 
-  def select[T](store: EntityStore[T], directive: QueryDirective)(using instance: EntityInstance[T]): Try[SelectResult] = ???
+  def search[T](directive: Query[T])(using instance: EntityPersistent[T]): Consequence[SearchResult[T]] = ???
 
-  def store[T](store: EntityStore[T], id: EntityId, data: Record)(using instance: EntityInstance[T]): Try[UpdateResult[T]] = ???
+  def save[T](id: EntityId, data: Record)(using instance: EntityPersistent[T]): Consequence[Unit] = ???
 
-  def update[T](store: EntityStore[T], id: EntityId, changes: Record)(using instance: EntityInstance[T]): Try[UpdateResult[T]] = ???
+  def update[T](id: EntityId, changes: Record)(using instance: EntityPersistent[T]): Consequence[Unit] = ???
 
-  def delete[T](store: EntityStore[T], data: Record)(using instance: EntityInstance[T]): Try[DeleteResult[T]] = ???
+  def delete[T](id: EntityId)(using instance: EntityPersistent[T]): Consequence[Unit] = ???
 
-  def selectableDatastore: Option[SelectableDataStore] =
+  def searchableDatastore: Option[SearchableDataStore] =
     datastore match {
-      case s: SelectableDataStore => Some(s)
+      case s: SearchableDataStore => Some(s)
       case _ => None
     }
 
-  def http_driver: Option[HttpDriver] =
-    _http_driver.orElse(Some(context.runtime.httpDriver))
+  def httpDriver: HttpDriver = context.runtime.httpDriver
 
-  def shellCommandExecutor: ShellCommandExecutor =
-    _shell_command_executor.getOrElse {
-      val executor = new LocalShellCommandExecutor
-      _shell_command_executor = Some(executor)
-      executor
-    }
+//  def http_driver: Option[HttpDriver] =
+//    _http_driver.orElse(Some(context.runtime.httpDriver))
 
-  def withHttpDriver(driver: Option[HttpDriver]): UnitOfWork = {
-    _http_driver = driver
-    this
-  }
+  lazy val shellCommandExecutor: ShellCommandExecutor =
+    new LocalShellCommandExecutor
 
-  def withShellCommandExecutor(executor: ShellCommandExecutor): UnitOfWork = {
-    _shell_command_executor = Some(executor)
-    this
-  }
+  // def shellCommandExecutor: ShellCommandExecutor =
+  //   _shell_command_executor.getOrElse {
+  //     val executor = new LocalShellCommandExecutor
+  //     _shell_command_executor = Some(executor)
+  //     executor
+  //   }
 
-  def execute[A](op: UnitOfWorkOp[A])(using http: org.goldenport.cncf.http.HttpDriver): A =
-    withHttpDriver(Some(http))
+  // def withHttpDriver(driver: Option[HttpDriver]): UnitOfWork = {
+  //   _http_driver = driver
+  //   this
+  // }
+
+  // def withShellCommandExecutor(executor: ShellCommandExecutor): UnitOfWork = {
+  //   _shell_command_executor = Some(executor)
+  //   this
+  // }
+
+  // def execute[A](op: UnitOfWorkOp[A])(using http: org.goldenport.cncf.http.HttpDriver): A =
+  //   withHttpDriver(Some(http))
+  //   new UnitOfWorkInterpreter(this).execute(op).asInstanceOf[A]
+
+  def execute[A](op: UnitOfWorkOp[A]): A =
     new UnitOfWorkInterpreter(this).execute(op).asInstanceOf[A]
 
-  def createFile(file: File, data: String): Try[Unit] = ???
+  def createFile(file: File, data: String): Consequence[Unit] = ???
 
-  def sendMessage(msg: Message): Try[Unit] = ???
+  def sendMessage(msg: Message): Consequence[Unit] = ???
 
   def commit(): Consequence[CommitResult] =
     commit(Nil)
@@ -134,9 +148,12 @@ object UnitOfWork {
   type AbortResult = Unit
   type Message = String
 
-  def simple(datastore: DataStore): UnitOfWork = {
+  def simple(
+    datastore: DataStore,
+    entitystore: EntityStore
+  ): UnitOfWork = {
     val base = ExecutionContext.create() // ExecutionContext.createWithSystem(SystemContext.empty)
     val eventengine = EventEngine.noop(datastore)
-    new UnitOfWork(base, datastore, eventengine)
+    new UnitOfWork(base, datastore, entitystore, eventengine)
   }
 }

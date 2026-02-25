@@ -9,6 +9,8 @@ import org.goldenport.id.{UniversalId as CoreUniversalId}
 import org.goldenport.log.Logger
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
+import org.goldenport.cncf.datastore.DataStoreSpace
+import org.goldenport.cncf.entity.EntityStoreSpace
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import cats.~>
@@ -34,7 +36,7 @@ import cats.~>
  * @since   Dec. 21, 2025
  *  version Dec. 31, 2025
  *  version Jan. 20, 2026
- * @version Feb.  4, 2026
+ * @version Feb. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -48,6 +50,10 @@ abstract class ExecutionContext
   def cncfCore: ExecutionContext.CncfCore
 
   def withScope(parent: ScopeContext): ExecutionContext
+
+  def dataStoreSpace: DataStoreSpace = runtime.dataStoreSpace
+
+  def entityStoreSpace: EntityStoreSpace = runtime.entityStoreSpace
 }
 
 object ExecutionContext {

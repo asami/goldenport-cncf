@@ -3,7 +3,7 @@ package org.goldenport.cncf.dsl
 import org.goldenport.Consequence
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
-import org.goldenport.cncf.action.{Action, ActionCall, Command, ProcedureActionCall, ResourceAccess}
+import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, ProcedureActionCall, ResourceAccess}
 
 /**
  * Minimal bridge command for DSL Level 1.
@@ -12,14 +12,15 @@ import org.goldenport.cncf.action.{Action, ActionCall, Command, ProcedureActionC
  */
 /*
  * @since   Jan. 11, 2026
- * @version Jan. 17, 2026
+ *  version Jan. 17, 2026
+ * @version Feb. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RequestCommand(
 //  name: String,
   request: Request,
   handler: Request => Consequence[OperationResponse]
-) extends Command() {
+) extends CommandAction() {
   override def createCall(core: ActionCall.Core): ActionCall = {
     RequestActionCall(core, this)
   }

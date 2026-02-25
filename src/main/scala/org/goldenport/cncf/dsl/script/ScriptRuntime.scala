@@ -11,7 +11,8 @@ import org.goldenport.cncf.cli.CncfRuntime
 
 /*
  * @since   Jan. 14, 2026
- * @version Jan. 22, 2026
+ *  version Jan. 22, 2026
+ * @version Feb. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 type Script = ScriptActionCall => Any
@@ -138,7 +139,7 @@ case class ScriptAction(
   override val name: String,
   request: Request,
   script: Script
-) extends Command() {
+) extends CommandAction() {
   def createCall(core: ActionCall.Core): ActionCall =
     ScriptActionCall(core, script)
 }

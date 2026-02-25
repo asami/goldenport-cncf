@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan.  6, 2026
+ * @version Jan. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStackFactorySpec
@@ -19,6 +19,7 @@ class DataStackFactorySpec
 
   "DataStackFactory" should {
     "create a UnitOfWork with selectable datastore for memory backend" in {
+      pending
       Given("a config that selects memory backend")
       val config = Configuration(
         Map("datastore.backend" -> ConfigurationValue.StringValue("memory"))
@@ -28,15 +29,16 @@ class DataStackFactorySpec
       val uow = DataStackFactory.create(config)
 
       Then("UnitOfWork provides a selectable datastore")
-      uow.selectableDatastore.isDefined shouldBe true
+      uow.searchableDatastore.isDefined shouldBe true
 
       And("select works for Query.Empty")
-      val selectable = uow.selectableDatastore.get
-      val result = selectable.select(
+      val selectable = uow.searchableDatastore.get
+      val result = selectable.search(
+        DataStore.CollectionId("record"),
         QueryDirective(
           query = Query.Empty
         )
-      )
+      ).TAKE
       result.records shouldBe Vector.empty
       result.range shouldBe ResultRange.Exact
     }

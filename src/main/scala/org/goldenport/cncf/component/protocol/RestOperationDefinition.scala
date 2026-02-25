@@ -21,7 +21,7 @@ import cats.syntax.all.*
 
 /*
  * @since   Feb.  6, 2026
- * @version Feb.  7, 2026
+ * @version Feb. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class RestOperationDefinition()
@@ -92,7 +92,7 @@ object RestParameterMappingRule {
 case class RestCommand(
   request: Request,
   operation: RestOperationDefinition
-) extends Command() {
+) extends CommandAction() {
   def createCall(core: ActionCall.Core): RestCall =
     RestCall(core, operation)
 }

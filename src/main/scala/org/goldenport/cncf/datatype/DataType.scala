@@ -1,15 +1,29 @@
 package org.goldenport.cncf.datatype
 
 import scala.util.*
+import org.goldenport.Consequence
+import org.goldenport.convert.ValueReader
+import org.goldenport.schema.XString
 
 /*
  * @since   Apr. 11, 2025
- * @version Apr. 11, 2025
+ * @version Feb. 22, 2026
  * @author  ASAMI, Tomoharu
  */
-trait EntityId {
-  def string: String
-}
+// abstract class EntityId {
+//   def string: String
+// }
+// object EntityId {
+//   def readC(v: Any): Consequence[EntityId] = v match {
+//     case s: String => Consequence.success(Instance(s))
+//     case _ => Consequence.failValueInvalid(v, XString) // TODO
+//   }
+
+//   given ValueReader[EntityId] with
+//     def readC(v: Any): Consequence[EntityId] = EntityId.readC(v)
+
+//   case class Instance(string: String) extends EntityId
+// }
 
 case class ResourceId(id: String) {
   require (ResourceId.validate(id), s"Bad id: $id")

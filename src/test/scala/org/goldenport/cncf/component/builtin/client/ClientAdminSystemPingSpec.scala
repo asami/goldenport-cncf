@@ -35,7 +35,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Feb.  7, 2026
+ * @version Feb. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientAdminSystemPingSpec
@@ -186,18 +186,7 @@ class ClientAdminSystemPingSpec
     val name = "bootstrap"
     val componentId = ComponentId(name)
     val instanceId = ComponentInstanceId.default(componentId)
-    Component.Core.create(name, componentId, instanceId, _empty_protocol())
-  }
-
-  private def _empty_protocol(): Protocol = {
-    Protocol(
-      services = spec.ServiceDefinitionGroup(services = Vector.empty),
-      handler = ProtocolHandler(
-        ingresses = IngressCollection(Vector.empty),
-        egresses = EgressCollection(Vector.empty),
-        projections = ProjectionCollection()
-      )
-    )
+    Component.Core.create(name, componentId, instanceId, Protocol.empty)
   }
 
   private def _client_action_from_request(
@@ -306,8 +295,8 @@ class ClientAdminSystemPingSpec
     )
     val datastore = org.goldenport.cncf.datastore.DataStore.noop()
     val eventengine = org.goldenport.cncf.event.EventEngine.noop(datastore)
-    val uow = new UnitOfWork(uowcontext, datastore, eventengine, CommitRecorder.noop)
-    val interpreter = new UnitOfWorkInterpreter(uow, driver)
+    val uow = new UnitOfWork(uowcontext, datastore, org.goldenport.cncf.entity.EntityStore.noop(), eventengine, CommitRecorder.noop)
+    val interpreter = new UnitOfWorkInterpreter(uow)
     val runtime = _testRuntimeContext(driver, base.cncfCore.observability, uow, interpreter)
     TestHarness(subsystem, component, runtime, interpreter)
   }

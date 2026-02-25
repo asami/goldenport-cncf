@@ -16,7 +16,7 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Feb.  4, 2026
+ * @version Feb. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMatchers {
@@ -71,7 +71,7 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
     val runtime = new TestRuntimeContext
     val base = ExecutionContext.create()
     val ctx = ExecutionContext.withRuntimeContext(base, runtime.runtime)
-    val uow = new UnitOfWork(ctx, dataStore, eventEngine, recorder)
+    val uow = new UnitOfWork(ctx, dataStore, org.goldenport.cncf.entity.EntityStore.noop(), eventEngine, recorder)
     runtime.bind(uow)
 
     val action = new Command() {
@@ -149,16 +149,38 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
   private final class RejectingDataStore(
     recorder: CommitRecorder
   ) extends DataStore {
-    def create(id: org.goldenport.id.UniversalId, record: Record): Unit = {}
+    def create(
+      collection: DataStore.CollectionId,
+      id: DataStore.EntryId,
+      record: Record
+    )(using ctx: ExecutionContext): Consequence[Unit] =
+      Consequence.unit
 
-    def load(id: org.goldenport.id.UniversalId): Option[Record] =
-      None
+    def load(
+      collection: DataStore.CollectionId,
+      id: DataStore.EntryId
+    )(using ctx: ExecutionContext): Consequence[Option[Record]] =
+      Consequence.success(None)
 
-    def store(id: org.goldenport.id.UniversalId, record: Record): Unit = {}
+    def save(
+      collection: DataStore.CollectionId,
+      id: DataStore.EntryId,
+      record: Record
+    )(using ctx: ExecutionContext): Consequence[Unit] =
+      Consequence.unit
 
-    def update(id: org.goldenport.id.UniversalId, changes: Record): Unit = {}
+    def update(
+      collection: DataStore.CollectionId,
+      id: DataStore.EntryId,
+      changes: Record
+    )(using ctx: ExecutionContext): Consequence[Unit] =
+      Consequence.unit
 
-    def delete(id: org.goldenport.id.UniversalId): Unit = {}
+    def delete(
+      collection: DataStore.CollectionId,
+      id: DataStore.EntryId
+    )(using ctx: ExecutionContext): Consequence[Unit] =
+      Consequence.unit
 
     def prepare(tx: TransactionContext): PrepareResult = {
       recorder.record("DataStore.prepare")
