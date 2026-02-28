@@ -12,7 +12,7 @@ import org.goldenport.protocol.handler.egress.{Egress, EgressCollection}
 import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.test.matchers.ConsequenceMatchers
-import org.goldenport.cncf.action.{Action, ActionCall, Command, Query, ResourceAccess}
+import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, QueryAction, ResourceAccess}
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobContext, JobId, JobResult, JobStatus}
 import org.goldenport.cncf.service.Service
@@ -33,7 +33,7 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 /*
  * @since   Jan.  4, 2026
- * @version Feb.  6, 2026
+ * @version Feb. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -156,13 +156,13 @@ private case class RecordingService(
   ): Consequence[Response] = {
     val executioncontext = org.goldenport.cncf.context.ExecutionContext.create()
     logic.makeOperationRequest(request).flatMap {
-      case action: Command =>
+      case action: CommandAction =>
         val actionid = ActionId.generate()
         val task = ActionTask(actionid, action, logic.component.actionEngine, Some(logic.component))
         val jobid = logic.submitJob(List(task), executioncontext)
         _lastJobId = Some(jobid)
         Consequence.success(OperationResponse.Scalar(jobid.value).toResponse)
-      case action: Query =>
+      case action: QueryAction =>
         _lastJobId = None
         val actionid = ActionId.generate()
         val jobcontext = JobContext(None, None, Some(actionid))
@@ -216,7 +216,7 @@ private object TestCommandOperation extends spec.OperationDefinition {
     req.arguments.headOption match {
       case Some(arg) =>
         Consequence.Success(
-          new Command() {
+          new CommandAction() {
             // val name = "command"
             val request = Request.ofOperation("command")
             override def createCall(
@@ -262,7 +262,7 @@ private object TestCommandFailOperation extends spec.OperationDefinition {
     req.arguments.headOption match {
       case Some(arg) =>
         Consequence.Success(
-          new Command() {
+          new CommandAction() {
             // val name = "command-fail"
             val request = Request.ofOperation("command-fail")
             override def createCall(
@@ -308,7 +308,7 @@ private object TestQueryOperation extends spec.OperationDefinition {
     req.arguments.headOption match {
       case Some(arg) =>
         Consequence.Success(
-          new Query() {
+          new QueryAction() {
             // val name = "query"
             val request = Request.ofOperation("query")
             override def createCall(

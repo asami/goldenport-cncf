@@ -8,7 +8,7 @@ import org.goldenport.text.Presentable
  * @since   Apr. 12, 2025
  *  version Jan.  1, 2026
  *  version Jan. 22, 2026
- * @version Feb. 25, 2026
+ * @version Feb. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Action extends OperationRequest with Presentable {
@@ -29,9 +29,9 @@ abstract class CommandAction(
 ) extends Action {
 }
 
-abstract class Command(
-) extends CommandAction {
-}
+// abstract class Command(
+// ) extends CommandAction {
+// }
 object CommandAction {
   // case class Instance(
   //   name: String,
@@ -45,6 +45,6 @@ abstract class QueryAction(
 ) extends Action {
 }
 
-abstract class Query(
-) extends QueryAction {
-}
+// abstract class Query(
+// ) extends QueryAction {
+// }

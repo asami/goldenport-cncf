@@ -2,7 +2,7 @@ package org.goldenport.cncf.unitofwork
 
 import cats.{Id, ~>}
 import org.goldenport.Consequence
-import org.goldenport.cncf.action.{Action, ActionCall, Command, ResourceAccess}
+import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, ResourceAccess}
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ObservabilityContext, RuntimeContext, TraceId}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.datastore.DataStore
@@ -16,7 +16,7 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Feb. 25, 2026
+ * @version Feb. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMatchers {
@@ -74,7 +74,7 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
     val uow = new UnitOfWork(ctx, dataStore, org.goldenport.cncf.entity.EntityStore.noop(), eventEngine, recorder)
     runtime.bind(uow)
 
-    val action = new Command() {
+    val action = new CommandAction() {
       // val name = "test"
       val request = Request.ofOperation("test")
       def createCall(core: ActionCall.Core): ActionCall =

@@ -11,7 +11,7 @@ import org.goldenport.cncf.datatype.EntityCollectionId
 
 /*
  * @since   Feb. 22, 2026
- * @version Feb. 23, 2026
+ * @version Feb. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityPersistent[E] extends RecordCodex[E]
@@ -22,7 +22,7 @@ object EntityPersistent {
     from: Record => Consequence[E]
   ): EntityPersistent[E] = new EntityPersistent[E] {
     def id(e: E) = e.id
-    def toRecord(e: E) = e.toRecord
+    def toRecord(e: E) = e.toRecord()
     def fromRecord(r: Record) = from(r)
   }
 }
@@ -37,19 +37,19 @@ object EntityPersistentCreate {
     collectionid: EntityCollectionId
   ): EntityPersistentCreate[E] = new EntityPersistentCreate[E] {
     def id(e: E): Option[EntityId] = e.id
-    def toRecord(e: E) = e.toRecord
+    def toRecord(e: E) = e.toRecord()
     def collection(e: E): EntityCollectionId = collectionid
   }
 }
 
 trait EntityPersistable {
   def id: EntityId
-  def toRecord: Record
+  def toRecord(): Record
 }
 
 trait EntityPersistableCreate {
   def id: Option[EntityId]
-  def toRecord: Record
+  def toRecord(): Record
 }
 object EntityPersistableCreate {
   // given entityPersistentCreate: EntityPersistentCreate[EntityPersistableCreate] = new EntityPersistentCreate[EntityPersistableCreate] {

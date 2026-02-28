@@ -1,8 +1,12 @@
 package org.goldenport.cncf.unitofwork
 
+import cats.Applicative
 import scala.util.{Try, Success, Failure}
 import java.io.File
 import org.goldenport.{Consequence, Conclusion}
+import org.goldenport.ConsequenceT
+import org.goldenport.cncf.UowM
+import org.goldenport.cncf.Program
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datatype.EntityId
 import org.goldenport.cncf.datastore.{DataStore, SearchableDataStore}
@@ -21,7 +25,7 @@ import org.goldenport.process.{LocalShellCommandExecutor, ShellCommandExecutor}
  * @since   Apr. 11, 2025
  *  version Dec. 21, 2025
  *  version Jan. 18, 2026
- * @version Feb. 25, 2026
+ * @version Feb. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
@@ -156,4 +160,10 @@ object UnitOfWork {
     val eventengine = EventEngine.noop(datastore)
     new UnitOfWork(base, datastore, entitystore, eventengine)
   }
+
+  def uowmNotImplemented[F[_], A]: UowM[F, A] =
+    ConsequenceT.fromConsequence[[X] =>> Program[F, X], A](Consequence.failNotImplemented)
+
+  def uowmNotImplemented[F[_], A](message: String): UowM[F, A] =
+    ConsequenceT.fromConsequence[[X] =>> Program[F, X], A](Consequence.failNotImplemented(message))
 }

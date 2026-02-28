@@ -17,6 +17,8 @@ import org.goldenport.cncf.Program
 import org.goldenport.cncf.datatype.EntityId
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.entity.EntityPersistent
+import org.goldenport.cncf.entity.EntityPersistentCreate
+import org.goldenport.cncf.entity.CreateResult
 
 /*
  * @since   Jan.  6, 2026
@@ -107,6 +109,14 @@ trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.H
 }
 
 trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
+  protected final def entity_create[T](
+    entity: T
+  )(using tc: EntityPersistentCreate[T]): ExecUowM[CreateResult[T]] = {
+    val op = UnitOfWorkOp.EntityStoreCreate(entity, tc)
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+
   protected final def entity_load[T](
     id: EntityId
   )(using tc: EntityPersistent[T]): ExecUowM[Option[T]] = {

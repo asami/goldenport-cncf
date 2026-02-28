@@ -17,7 +17,7 @@ import org.goldenport.protocol.service.{Service => ProtocolService}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.logic.ProtocolLogic
 import org.goldenport.test.matchers.ConsequenceMatchers
-import org.goldenport.cncf.action.{Action, ActionCall, Query, ResourceAccess}
+import org.goldenport.cncf.action.{Action, ActionCall, QueryAction, ResourceAccess}
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.service.Service
 import org.goldenport.cncf.context.ExecutionContext
@@ -38,7 +38,7 @@ import org.scalatest.matchers.should.Matchers
  */
 /*
  * @since   Jan.  1, 2026
- * @version Feb.  6, 2026
+ * @version Feb. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -104,7 +104,7 @@ private object TestQueryOperation extends spec.OperationDefinition {
     req.arguments.headOption match {
       case Some(arg) =>
         org.goldenport.Consequence.Success(
-          new Query() {
+          new QueryAction() {
             // val name = "query"
             def request = req
             override def createCall(

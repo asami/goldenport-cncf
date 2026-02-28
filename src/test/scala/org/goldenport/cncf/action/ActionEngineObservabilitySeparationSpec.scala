@@ -17,7 +17,7 @@ import java.time.Instant
 
 /*
  * @since   Jan.  7, 2026
- * @version Feb.  4, 2026
+ * @version Feb. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngineObservabilitySeparationSpec
@@ -37,7 +37,7 @@ class ActionEngineObservabilitySeparationSpec
 
       var buildCalled = false
       val engine = new RecordingDenyActionEngine
-      val action = new Query() {
+      val action = new QueryAction() {
         // val name = "test-action"
         val request = Request.ofOperation("test-action")
         def createCall(core: ActionCall.Core): ActionCall =
@@ -73,7 +73,7 @@ class ActionEngineObservabilitySeparationSpec
       runtime.bind(uow)
 
       val engine = new RecordingAllowActionEngine
-      val action = new Query() {
+      val action = new QueryAction() {
         // val name = "test-action"
         val request = Request.ofOperation("test-action")
         def createCall(core: ActionCall.Core): ActionCall =

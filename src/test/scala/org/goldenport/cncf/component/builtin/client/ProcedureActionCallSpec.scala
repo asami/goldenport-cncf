@@ -2,7 +2,7 @@ package org.goldenport.cncf.component.builtin.client
 
 import cats.{Id, ~>}
 import org.goldenport.Consequence
-import org.goldenport.cncf.action.{Action, ActionCall, Command, FunctionalActionCall, ResourceAccess}
+import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, FunctionalActionCall, ResourceAccess}
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ObservabilityContext, RuntimeContext, TraceId}
 import java.nio.charset.StandardCharsets
 import org.goldenport.bag.Bag
@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 11, 2026
- * @version Feb.  7, 2026
+ * @version Feb. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 class ProcedureActionCallSpec
@@ -41,7 +41,7 @@ class ProcedureActionCallSpec
         val driver = new FakeHttpDriver
         val runtime = new SpyRuntimeContext
         val ctx = _execution_context(runtime.runtime)
-        val action = new Command() {
+        val action = new CommandAction() {
           // val name = "procedure-test"
           val request = Request.ofOperation("procedure-test")
           def createCall(core: ActionCall.Core): ActionCall =

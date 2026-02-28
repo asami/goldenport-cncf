@@ -18,7 +18,7 @@ import org.goldenport.cncf.datastore.DataStore.EntryId
  * @since   Apr. 11, 2025
  *  version Dec. 18, 2025
  *  version Jan. 10, 2026
- * @version Feb. 25, 2026
+ * @version Feb. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -90,7 +90,11 @@ object EntityStore {
   // }
 }
 
-case class CreateResult[T](id: EntityId)
+case class CreateResult[T](id: EntityId) {
+  def toRecord: Record = Record.data(
+    "id" -> id.print
+  )
+}
 case class GetResult[T]()
 case class UpdateResult[T]()
 case class DeleteResult[T]()
