@@ -10,7 +10,9 @@ import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 import scala.util.Using
 import org.goldenport.Consequence
+import org.goldenport.observation.Descriptor
 import org.goldenport.protocol.Protocol
+import org.goldenport.provisional.observation.{Observation, ObservationRender, Taxonomy}
 import org.goldenport.cncf.bootstrap.BootstrapLog
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.observability.global.{GlobalObservable, ObservabilityScopeDefaults, PersistentBootstrapLog}
@@ -20,7 +22,8 @@ import org.goldenport.cncf.backend.collaborator.{CollaboratorClassLoader, Collab
 /*
  * @since   Jan. 12, 2026
  *  version Jan. 29, 2026
- * @version Feb.  5, 2026
+ *  version Feb.  5, 2026
+ * @version Mar.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -387,7 +390,14 @@ object ComponentRepository extends GlobalObservable {
       log.warn(s"[component-dir] artifact=${artifactname} contains no class entries")
       Vector.empty
     } else {
-      val factoryComponents = _instantiate_factory_components(loader, classNames, params, log)
+      val factoryComponents = _instantiate_factory_components(
+        loader = loader,
+        classNames = classNames,
+        params = params,
+        log = log,
+        artifactname = artifactname,
+        repositoryType = _component_dir_type
+      )
       if (factoryComponents.nonEmpty) {
         factoryComponents.foreach { comp =>
           log.info(
@@ -443,9 +453,16 @@ object ComponentRepository extends GlobalObservable {
     loader: URLClassLoader,
     classNames: Seq[String],
     params: ComponentCreate,
-    log: BootstrapLog
+    log: BootstrapLog,
+    artifactname: String,
+    repositoryType: String
   ): Seq[Component] = {
-    _find_factory_class(loader, classNames) match {
+    _find_factory_class(
+      loader = loader,
+      classNames = classNames,
+      artifactname = artifactname,
+      repositoryType = repositoryType
+    ) match {
       case Some(factoryClass) => _create_components_from_factory(factoryClass, params, log)
       case None => Vector.empty
     }
@@ -453,10 +470,17 @@ object ComponentRepository extends GlobalObservable {
 
   private def _find_factory_class(
     loader: URLClassLoader,
-    classNames: Seq[String]
+    classNames: Seq[String],
+    artifactname: String,
+    repositoryType: String
   ): Option[Class[_ <: Component.Factory]] = {
     classNames.view.flatMap { className =>
-      _load_class(className, loader).flatMap { cls =>
+      _load_class(
+        className = className,
+        loader = loader,
+        artifactname = artifactname,
+        repositoryType = repositoryType
+      ).flatMap { cls =>
         if (
           classOf[Component.Factory].isAssignableFrom(cls) &&
           !cls.isInterface &&
@@ -488,13 +512,49 @@ object ComponentRepository extends GlobalObservable {
 
   private def _load_class(
     className: String,
-    loader: URLClassLoader
+    loader: URLClassLoader,
+    artifactname: String,
+    repositoryType: String
   ): Option[Class[_]] = {
     try {
       Some(Class.forName(className, false, loader))
     } catch {
-      case NonFatal(_) => None
+      case e: ClassNotFoundException =>
+        _observe_component_load_error(className, e, artifactname, repositoryType)
+        None
+      case e: NoClassDefFoundError =>
+        _observe_component_load_error(className, e, artifactname, repositoryType)
+        None
+      case e: LinkageError =>
+        _observe_component_load_error(className, e, artifactname, repositoryType)
+        None
+      case NonFatal(e) =>
+        _observe_component_load_error(className, e, artifactname, repositoryType)
+        None
     }
+  }
+
+  private def _observe_component_load_error(
+    className: String,
+    e: Throwable,
+    artifactname: String,
+    repositoryType: String
+  ): Unit = {
+    val taxonomy = e match {
+      case _: ClassNotFoundException => Taxonomy.componentUnavailable
+      case _: NoClassDefFoundError => Taxonomy.componentUnavailable
+      case _: LinkageError => Taxonomy.componentInvalid
+      case _ => Taxonomy.componentCorrupted
+    }
+    val observation = Observation.failure(
+      taxonomy,
+      Descriptor.Facet.ClassName(className),
+      Descriptor.Facet.Artifact(artifactname),
+      Descriptor.Facet.RepositoryType(repositoryType),
+      Descriptor.Facet.Exception(e)
+    )
+    val message = ObservationRender.warnMessage(observation)
+    observe_warn(s"[component-dir] ignored class load error $message")
   }
 
   private def _discover_by_scan(

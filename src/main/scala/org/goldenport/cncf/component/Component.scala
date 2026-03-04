@@ -31,7 +31,8 @@ import scala.util.control.NonFatal
  * @since   Jan.  1, 2026
  *  version Jan.  3, 2026
  *  version Jan. 22, 2026
- * @version Feb. 17, 2026
+ *  version Feb. 17, 2026
+ * @version Mar.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -606,6 +607,9 @@ object ComponentOrigin {
   final case class Repository(label: String) extends ComponentOrigin
   case object Main extends ComponentOrigin {
     val label: String = "main"
+  }
+  case object Embed extends ComponentOrigin {
+    val label: String = "embed"
   }
   case object Unknown extends ComponentOrigin {
     val label: String = "unknown"

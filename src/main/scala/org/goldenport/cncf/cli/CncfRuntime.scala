@@ -5,6 +5,8 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Path, Paths}
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
+import org.goldenport.provisional.observation.Taxonomy
+import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.bag.Bag
 import org.goldenport.configuration.{Configuration, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.component.builtin.client.ClientComponent
@@ -39,7 +41,8 @@ import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObserva
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
- * @version Feb.  5, 2026
+ *  version Feb.  5, 2026
+ * @version Mar.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -550,7 +553,9 @@ object CncfRuntime extends GlobalObservable {
     }
 
   private def _print_error(c: Conclusion): Unit = {
-    Console.err.println(c.show)
+    val rec = c.toRecord
+    val s = rec.toYamlString
+    Console.err.print(s)
   }
 
   private def _print_error(message: String): Unit = {
@@ -871,7 +876,24 @@ object CncfRuntime extends GlobalObservable {
             )
           )
         case ResolutionResult.NotFound(stage, input) =>
-          Consequence.failure(s"${stage.toString.toLowerCase} not found: $input")
+          val symptom = Taxonomy.Symptom.NotFound
+          stage match {
+            case ResolutionStage.Component =>
+              Consequence.fail(
+                Taxonomy(Taxonomy.Category.Component, symptom),
+                Facet.Component(input)
+              )
+            case ResolutionStage.Service =>
+              Consequence.fail(
+                Taxonomy(Taxonomy.Category.Service, symptom),
+                Facet.Service(input)
+              )
+            case ResolutionStage.Operation =>
+              Consequence.fail(
+                Taxonomy(Taxonomy.Category.Operation, symptom),
+                Facet.Operation(input)
+              )
+          }
         case ResolutionResult.Ambiguous(input, candidates) =>
           Consequence.failure(s"ambiguous selector '$input': ${candidates.mkString(", ")}")
         case ResolutionResult.Invalid(reason) =>
