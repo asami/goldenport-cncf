@@ -2,9 +2,10 @@ package org.goldenport.cncf.component
 
 import org.goldenport.Consequence
 import org.goldenport.id.UniversalId
+import org.goldenport.record.Record
 import org.goldenport.protocol.{Protocol, Request}
 import org.goldenport.protocol.logic.ProtocolLogic
-import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec.{OperationDefinition, ServiceDefinition}
 import org.goldenport.protocol.spec.ServiceDefinitionGroup
 import org.goldenport.protocol.service.{Service => ProtocolService}
@@ -15,7 +16,7 @@ import org.goldenport.protocol.handler.egress.*
 import org.goldenport.protocol.handler.projection.*
 import java.nio.file.Path
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeContext, ScopeKind}
-import org.goldenport.cncf.action.{Action, ActionEngine}
+import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.configuration.{Configuration, ResolvedConfiguration}
 import org.goldenport.cncf.http.HttpDriver
@@ -25,6 +26,10 @@ import org.goldenport.cncf.service.{Service, ServiceGroup}
 import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.cli.RunMode
+import cats.data.NonEmptyVector
+import java.io.InputStream
+import java.nio.charset.StandardCharsets
+import java.util.Properties
 import scala.util.control.NonFatal
 
 /*
@@ -32,7 +37,7 @@ import scala.util.control.NonFatal
  *  version Jan.  3, 2026
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
- * @version Mar.  1, 2026
+ * @version Mar.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -46,6 +51,7 @@ abstract class Component() extends Component.Core.Holder {
   private var _component_context: Option[Component.Context] = None
   private var _services: Option[ServiceGroup] = None
   private var _subsystem: Option[Subsystem] = None
+  private var _health_contributors: Vector[Component.HealthContributor] = Vector.empty
 
   override def core: Component.Core =
     _core.getOrElse(throw new IllegalStateException("Component core is not initialized."))
@@ -109,6 +115,12 @@ abstract class Component() extends Component.Core.Holder {
   // }
 
   def unitOfWork: UnitOfWork = _unit_of_work
+  def healthContributors: Vector[Component.HealthContributor] = _health_contributors
+
+  def registerHealthContributor(contributor: Component.HealthContributor): Component = {
+    _health_contributors = _health_contributors :+ contributor
+    this
+  }
 
   def scopeContext: ScopeContext = {
     val parent = _parent_scope_context getOrElse _default_scope_context()
@@ -160,6 +172,11 @@ abstract class Component() extends Component.Core.Holder {
 }
 
 object Component {
+  private val _default_meta_service_name = "meta"
+  private val _default_system_service_name = "system"
+  private val _default_repository_type = "component"
+  private val _default_unknown_version = "unknown"
+
   // private var _script_count = 0
   // private def _script_number(): String = {
   //   val s = if (_script_count == 0) "" else _script_count.toString
@@ -260,16 +277,19 @@ object Component {
       componentid: ComponentId,
       instanceid: ComponentInstanceId,
       protocol: Protocol
-    ): Core = Core(
-      name,
-      componentid,
-      instanceid,
-      protocol,
-      ProtocolLogic(protocol),
-      None,
-      ActionEngine.create(),
-      InMemoryJobEngine.create(),
-    )
+    ): Core = {
+      val mergedProtocol = _with_default_services(protocol)
+      Core(
+        name,
+        componentid,
+        instanceid,
+        mergedProtocol,
+        ProtocolLogic(mergedProtocol),
+        None,
+        ActionEngine.create(),
+        InMemoryJobEngine.create(),
+      )
+    }
 
     def create(
       name: String,
@@ -298,12 +318,13 @@ object Component {
       actionEngine: ActionEngine,
       jobEngine: JobEngine,
     ): Core = {
+      val mergedProtocol = _with_default_services(protocol)
       Core(
         name,
         componentid,
         instanceid,
-        protocol,
-        protocolLogic,
+        mergedProtocol,
+        ProtocolLogic(mergedProtocol),
         Some(factory),
         actionEngine,
         jobEngine,
@@ -552,6 +573,345 @@ object Component {
           .flatMap(_.traverse(RunMode.parse))
 
       (http, mode).mapN(Config.apply)
+    }
+  }
+
+  trait HealthContributor {
+    def name: String
+    def check(component: Component): HealthCheck
+  }
+
+  final case class HealthCheck(
+    name: String,
+    status: String,
+    detail: Option[String] = None
+  ) {
+    def toRecord: Record = Record.data(
+      "name" -> name,
+      "status" -> status
+    ) ++ Record.dataOption(
+      "detail" -> detail
+    )
+  }
+
+  private def _with_default_services(protocol: Protocol): Protocol = {
+    val withMetaHelp = _ensure_operation(protocol, _default_meta_service_name, _DefaultMetaHelpOperation)
+    val withMetaVersion = _ensure_operation(withMetaHelp, _default_meta_service_name, _DefaultMetaVersionOperation)
+    val withSystemPing = _ensure_operation(withMetaVersion, _default_system_service_name, _DefaultSystemPingOperation)
+    _ensure_operation(withSystemPing, _default_system_service_name, _DefaultSystemHealthOperation)
+  }
+
+  private def _ensure_operation(
+    protocol: Protocol,
+    serviceName: String,
+    operation: OperationDefinition
+  ): Protocol = {
+    val exists = protocol.services.services.exists { service =>
+      service.name == serviceName &&
+      service.operations.operations.exists(_.name == operation.name)
+    }
+    if (exists) {
+      protocol
+    } else {
+      protocol.copy(
+        services = protocol.services.addOperation(serviceName, operation)
+      )
+    }
+  }
+
+  private object _DefaultMetaHelpOperation extends OperationDefinition {
+    override val specification: OperationDefinition.Specification =
+      OperationDefinition.Specification(
+        name = "help",
+        request = org.goldenport.protocol.spec.RequestDefinition(),
+        response = org.goldenport.protocol.spec.ResponseDefinition()
+      )
+
+    override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(_DefaultMetaHelpAction(req))
+  }
+
+  private object _DefaultMetaVersionOperation extends OperationDefinition {
+    override val specification: OperationDefinition.Specification =
+      OperationDefinition.Specification(
+        name = "version",
+        request = org.goldenport.protocol.spec.RequestDefinition(),
+        response = org.goldenport.protocol.spec.ResponseDefinition()
+      )
+
+    override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(_DefaultMetaVersionAction(req))
+  }
+
+  private object _DefaultSystemPingOperation extends OperationDefinition {
+    override val specification: OperationDefinition.Specification =
+      OperationDefinition.Specification(
+        name = "ping",
+        request = org.goldenport.protocol.spec.RequestDefinition(),
+        response = org.goldenport.protocol.spec.ResponseDefinition()
+      )
+
+    override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(_DefaultSystemPingAction(req))
+  }
+
+  private object _DefaultSystemHealthOperation extends OperationDefinition {
+    override val specification: OperationDefinition.Specification =
+      OperationDefinition.Specification(
+        name = "health",
+        request = org.goldenport.protocol.spec.RequestDefinition(),
+        response = org.goldenport.protocol.spec.ResponseDefinition()
+      )
+
+    override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(_DefaultSystemHealthAction(req))
+  }
+
+  private final case class _DefaultMetaHelpAction(
+    request: Request
+  ) extends QueryAction {
+    override def createCall(core: ActionCall.Core): ActionCall =
+      _DefaultMetaHelpActionCall(core)
+  }
+
+  private final case class _DefaultMetaHelpActionCall(
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    override def execute(): Consequence[OperationResponse] = {
+      val text = core.component match {
+        case Some(component) => _resolve_help_text(component)
+        case None => "Component help is unavailable."
+      }
+      Consequence.success(OperationResponse.Scalar(text))
+    }
+  }
+
+  private final case class _DefaultMetaVersionAction(
+    request: Request
+  ) extends QueryAction {
+    override def createCall(core: ActionCall.Core): ActionCall =
+      _DefaultMetaVersionActionCall(core)
+  }
+
+  private final case class _DefaultMetaVersionActionCall(
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    override def execute(): Consequence[OperationResponse] = {
+      val rec = core.component match {
+        case Some(component) => _resolve_version_record(component)
+        case None =>
+          Record.data(
+            "component" -> "unknown",
+            "version" -> _default_unknown_version,
+            "source" -> "unavailable"
+          )
+      }
+      Consequence.success(OperationResponse.RecordResponse(rec))
+    }
+  }
+
+  private final case class _DefaultSystemPingAction(
+    request: Request
+  ) extends QueryAction {
+    override def createCall(core: ActionCall.Core): ActionCall =
+      _DefaultSystemPingActionCall(core)
+  }
+
+  private final case class _DefaultSystemPingActionCall(
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    override def execute(): Consequence[OperationResponse] =
+      Consequence.success(OperationResponse.Scalar("ok"))
+  }
+
+  private final case class _DefaultSystemHealthAction(
+    request: Request
+  ) extends QueryAction {
+    override def createCall(core: ActionCall.Core): ActionCall =
+      _DefaultSystemHealthActionCall(core)
+  }
+
+  private final case class _DefaultSystemHealthActionCall(
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    override def execute(): Consequence[OperationResponse] = {
+      val rec = core.component match {
+        case Some(component) =>
+          val checks = _resolve_health_checks(component)
+          val overall = _overall_status(checks)
+          Record.data(
+            "status" -> overall,
+            "checks" -> checks.map(_.toRecord)
+          )
+        case None =>
+          Record.data(
+            "status" -> "error",
+            "checks" -> Vector(
+              HealthCheck("component.available", "error", Some("component context missing")).toRecord
+            )
+          )
+      }
+      Consequence.success(OperationResponse.RecordResponse(rec))
+    }
+  }
+
+  private def _resolve_help_text(component: Component): String = {
+    val fromRegistry = _help_from_registry(component)
+    val fromResource = _component_help_resource(component)
+    fromRegistry.orElse(fromResource).getOrElse("No operation metadata is available.")
+  }
+
+  private def _help_from_registry(component: Component): Option[String] = {
+    val services = component.protocol.services.services
+    if (services.isEmpty) {
+      None
+    } else {
+      val lines = Vector.newBuilder[String]
+      lines += s"Component: ${component.name}"
+      lines += ""
+      lines += "Services:"
+      services.sortBy(_.name).foreach { service =>
+        lines += s"- ${service.name}"
+        service.operations.operations.toVector.sortBy(_.name).foreach { op =>
+          lines += s"  - ${service.name}.${op.name}"
+        }
+      }
+      Some(lines.result().mkString("\n"))
+    }
+  }
+
+  private def _component_help_resource(component: Component): Option[String] =
+    _read_resource_text(component.getClass.getClassLoader, "META-INF/component-help.md")
+      .orElse(_read_resource_text(component.getClass.getClassLoader, "META-INF/component-help.txt"))
+
+  private def _read_resource_text(
+    loader: ClassLoader,
+    path: String
+  ): Option[String] =
+    Option(loader.getResourceAsStream(path)).flatMap { is =>
+      try {
+        val text = new String(is.readAllBytes(), StandardCharsets.UTF_8).trim
+        if (text.nonEmpty) Some(text) else None
+      } catch {
+        case NonFatal(_) => None
+      } finally {
+        is.close()
+      }
+    }
+
+  private def _resolve_version_record(component: Component): Record = {
+    val configVersion = _configuration_value(component, "component.version")
+    val properties = _component_properties(component)
+    val propertyVersion =
+      properties.get("component.version").orElse(properties.get("version"))
+    val manifestVersion = Option(component.getClass.getPackage)
+      .flatMap(p => Option(p.getImplementationVersion))
+      .map(_.trim)
+      .filter(_.nonEmpty)
+
+    val versionWithSource =
+      configVersion.map(_ -> "config")
+        .orElse(propertyVersion.map(_ -> "resource"))
+        .orElse(manifestVersion.map(_ -> "manifest"))
+        .getOrElse(_default_unknown_version -> "default")
+
+    val buildInfo =
+      _configuration_value(component, "component.build")
+        .orElse(_configuration_value(component, "component.build.info"))
+        .orElse(properties.get("build"))
+        .orElse(properties.get("build.info"))
+        .orElse(properties.get("build-time"))
+        .orElse(properties.get("build.revision"))
+
+    Record.data(
+      "component" -> component.name,
+      "version" -> versionWithSource._1,
+      "source" -> versionWithSource._2
+    ) ++ Record.dataOption(
+      "build" -> buildInfo
+    )
+  }
+
+  private def _component_properties(
+    component: Component
+  ): Map[String, String] =
+    _read_properties(component.getClass.getClassLoader, "META-INF/component.properties")
+
+  private def _read_properties(
+    loader: ClassLoader,
+    path: String
+  ): Map[String, String] =
+    Option(loader.getResourceAsStream(path)).map { is =>
+      try {
+        val p = Properties()
+        p.load(is)
+        p.stringPropertyNames().toArray.toVector.map(_.toString).map { key =>
+          key -> p.getProperty(key)
+        }.toMap
+      } catch {
+        case NonFatal(_) => Map.empty[String, String]
+      } finally {
+        is.close()
+      }
+    }.getOrElse(Map.empty)
+
+  private def _configuration_value(
+    component: Component,
+    key: String
+  ): Option[String] =
+    component.subsystem.flatMap { ss =>
+      ss.configuration.get[String](key) match {
+        case Consequence.Success(Some(value)) =>
+          val normalized = value.trim
+          if (normalized.isEmpty) None else Some(normalized)
+        case _ => None
+      }
+    }
+
+  private def _resolve_health_checks(component: Component): Vector[HealthCheck] = {
+    val base = Vector(
+      HealthCheck("component.reachable", "ok"),
+      HealthCheck("component.runtime", "ok")
+    )
+    val contributorChecks = component.healthContributors.map { contributor =>
+      try {
+        contributor.check(component)
+      } catch {
+        case NonFatal(e) =>
+          val detail = Option(e.getMessage).filter(_.nonEmpty).getOrElse(e.getClass.getName)
+          HealthCheck(contributor.name, "error", Some(detail))
+      }
+    }
+    val configuredChecks = _configured_health_check_names(component).filterNot { name =>
+      contributorChecks.exists(_.name == name)
+    }.map { name =>
+      HealthCheck(name, "warning", Some("configured check has no registered contributor"))
+    }
+    base ++ contributorChecks ++ configuredChecks
+  }
+
+  private def _configured_health_check_names(component: Component): Vector[String] = {
+    val fromConfig = _configuration_value(component, "component.health.checks")
+      .map(_comma_separated_values)
+      .getOrElse(Vector.empty)
+    val fromResource = _component_properties(component)
+      .get("component.health.checks")
+      .map(_comma_separated_values)
+      .getOrElse(Vector.empty)
+    (fromConfig ++ fromResource).distinct
+  }
+
+  private def _comma_separated_values(value: String): Vector[String] =
+    value.split(",").toVector.map(_.trim).filter(_.nonEmpty)
+
+  private def _overall_status(checks: Vector[HealthCheck]): String = {
+    val statuses = checks.map(_.status.toLowerCase)
+    if (statuses.contains("error")) {
+      "error"
+    } else if (statuses.contains("warning")) {
+      "warning"
+    } else {
+      "ok"
     }
   }
 }

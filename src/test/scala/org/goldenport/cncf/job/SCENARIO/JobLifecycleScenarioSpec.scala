@@ -33,7 +33,8 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 /*
  * @since   Jan.  4, 2026
- * @version Feb. 27, 2026
+ *  version Feb. 27, 2026
+ * @version Mar.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -180,16 +181,17 @@ private case class RecordingService(
 
 private object RecordingService {
   final class Factory extends Component.ServiceFactory() {
-    private var _service: Option[RecordingService] = None
+    private var _services: Vector[RecordingService] = Vector.empty
 
-    def lastJobId: Option[JobId] = _service.flatMap(_.lastJobId)
+    def lastJobId: Option[JobId] =
+      _services.reverseIterator.flatMap(_.lastJobId).toSeq.headOption
 
     override def create(
       core: ProtocolService.Core,
       ccore: Service.CCore
     ): Service = {
       val service = RecordingService(core, ccore)
-      _service = Some(service)
+      _services = _services :+ service
       service
     }
   }
