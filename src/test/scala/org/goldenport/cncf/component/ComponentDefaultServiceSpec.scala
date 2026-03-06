@@ -12,7 +12,7 @@ import org.scalatest.matchers.should.Matchers
 
 /*
  * @since   Mar.  4, 2026
- * @version Mar.  4, 2026
+ * @version Mar.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentDefaultServiceSpec extends AnyWordSpec with Matchers {
@@ -22,6 +22,13 @@ class ComponentDefaultServiceSpec extends AnyWordSpec with Matchers {
       val operations = _operations(component)
 
       operations.contains("meta.help") shouldBe true
+      operations.contains("meta.describe") shouldBe true
+      operations.contains("meta.components") shouldBe true
+      operations.contains("meta.services") shouldBe true
+      operations.contains("meta.operations") shouldBe true
+      operations.contains("meta.schema") shouldBe true
+      operations.contains("meta.openapi") shouldBe true
+      operations.contains("meta.tree") shouldBe true
       operations.contains("meta.version") shouldBe true
       operations.contains("system.ping") shouldBe true
       operations.contains("system.health") shouldBe true
@@ -42,6 +49,13 @@ class ComponentDefaultServiceSpec extends AnyWordSpec with Matchers {
       operations.contains("system.ping") shouldBe true
       operations.contains("system.health") shouldBe true
       operations.contains("meta.help") shouldBe true
+      operations.contains("meta.describe") shouldBe true
+      operations.contains("meta.components") shouldBe true
+      operations.contains("meta.services") shouldBe true
+      operations.contains("meta.operations") shouldBe true
+      operations.contains("meta.schema") shouldBe true
+      operations.contains("meta.openapi") shouldBe true
+      operations.contains("meta.tree") shouldBe true
       operations.contains("meta.version") shouldBe true
 
       _execute(component, Request.of(component = "custom_ping", service = "system", operation = "ping")) match {

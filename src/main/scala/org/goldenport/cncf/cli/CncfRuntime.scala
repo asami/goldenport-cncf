@@ -35,6 +35,7 @@ import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.component.repository.ComponentRepositorySpace
 import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.cli.RuntimeParameterParser
+import org.goldenport.cncf.cli.help.{CliHelpOperation, ClientCommandHelp, CommandProtocolHelp, HelpOperation, ServerCommandHelp}
 import org.goldenport.cncf.observability.{LogLevel, ObservabilityEngine, VisibilityPolicy}
 import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObservability, GlobalObservabilityGate, ObservabilityRoot}
 
@@ -42,10 +43,11 @@ import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObserva
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar.  4, 2026
+ * @version Mar.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
+  private val _help_flags = Set("--help", "-h")
   private val _runtime_service_name = "runtime"
   private val _runtime_parameter_parser = new RuntimeParameterParser()
 
@@ -258,8 +260,12 @@ object CncfRuntime extends GlobalObservable {
   }
 
   def executeCommand(args: Array[String]): Int = {
+    val normalizedArgs = CommandProtocolHelp.normalizeArgs(args) match {
+      case Left(code) => return code
+      case Right(xs) => xs
+    }
     val subsystem = buildSubsystem(mode = Some(RunMode.Command))
-    val result = _to_request(subsystem, args).flatMap { req =>
+    val result = _to_request(subsystem, normalizedArgs).flatMap { req =>
       subsystem.execute(req)
     }
     result match {
@@ -275,8 +281,12 @@ object CncfRuntime extends GlobalObservable {
     args: Array[String],
     extraComponents: Subsystem => Seq[Component]
   ): Int = {
+    val normalizedArgs = CommandProtocolHelp.normalizeArgs(args) match {
+      case Left(code) => return code
+      case Right(xs) => xs
+    }
     val subsystem = buildSubsystem(extraComponents, Some(RunMode.Command))
-    val result = _to_request(subsystem, args).flatMap { req =>
+    val result = _to_request(subsystem, normalizedArgs).flatMap { req =>
       subsystem.execute(req)
     }
     result match {
@@ -387,7 +397,12 @@ object CncfRuntime extends GlobalObservable {
     val configuration = _resolve_configuration(cwd)
     val (reposResult, argsAfterRepos, noDefaultComponents) =
       ComponentRepositorySpace.extractArgs(configuration, args)
-    val (backendoption, logLevelOption, actualargs) = _extract_log_options(argsAfterRepos)
+    val (backendoption, logLevelOption, actualargs0) = _extract_log_options(argsAfterRepos)
+    val actualargs = _normalize_help_aliases(actualargs0)
+    _execute_top_level_help(actualargs) match {
+      case Some(code) => return code
+      case None => ()
+    }
     if (actualargs.isEmpty) {
       _print_usage()
       return 2
@@ -469,7 +484,12 @@ object CncfRuntime extends GlobalObservable {
     val configuration = _resolve_configuration(cwd)
     val (reposResult, argsAfterRepos, noDefaultComponents) =
       ComponentRepositorySpace.extractArgs(configuration, args)
-    val (backendoption, logLevelOption, actualargs) = _extract_log_options(argsAfterRepos)
+    val (backendoption, logLevelOption, actualargs0) = _extract_log_options(argsAfterRepos)
+    val actualargs = _normalize_help_aliases(actualargs0)
+    _execute_top_level_help(actualargs) match {
+      case Some(code) => return code
+      case None => ()
+    }
     if (actualargs.isEmpty) {
       _print_usage()
       return 2
@@ -552,6 +572,24 @@ object CncfRuntime extends GlobalObservable {
         1
     }
 
+  private def _execute_top_level_help(args: Array[String]): Option[Int] =
+    args.toVector match {
+      case Vector("help") => Some(CliHelpOperation.execute())
+      case Vector("server", "help") => Some(ServerCommandHelp.execute())
+      case Vector("client", "help") => Some(ClientCommandHelp.execute())
+      case _ => None
+    }
+
+  private def _normalize_help_aliases(args: Array[String]): Array[String] =
+    args.toVector match {
+      case Vector(flag) if _help_flags.contains(flag) =>
+        Array("help")
+      case Vector(command, flag) if _help_flags.contains(flag) =>
+        Array(command, "help")
+      case _ =>
+        args
+    }
+
   private def _print_error(c: Conclusion): Unit = {
     val rec = c.toRecord
     val s = rec.toYamlString
@@ -571,13 +609,15 @@ object CncfRuntime extends GlobalObservable {
         |
         |Examples:
         |  cncf server
-        |  cncf client http get
+        |  cncf client admin.system.ping
         |  cncf command admin.system.ping
         |
         |Log backend behavior:
         |  command / client : no logs by default
         |  server           : SLF4J logging enabled
         |  --log-backend=stdout|stderr|nop|slf4j overrides defaults
+        |
+        |Run 'cncf help' for more information.
         |""".stripMargin
     _print_error(text)
   }
@@ -860,11 +900,14 @@ object CncfRuntime extends GlobalObservable {
     args: Array[String],
     mode: RunMode = RunMode.Command
   ): Consequence[Request] =
-    _selectorAndArguments(args.toIndexedSeq).flatMap { case (selector, tail) =>
-      val canonicalSelector = PathPreNormalizer.rewriteSelector(selector, mode, _alias_resolver)
+    _extract_runtime_options(args.toIndexedSeq) match { case (runtimeOptions, clean) =>
+    _selectorAndArguments(clean).flatMap { case (selector, tail) =>
+      val normalized = _normalize_meta_selector(subsystem, selector, tail.toVector)
+      val canonicalSelector = PathPreNormalizer.rewriteSelector(normalized._1, mode, _alias_resolver)
       subsystem.resolver.resolve(canonicalSelector, allowPrefix = false, allowImplicit = false) match {
         case ResolutionResult.Resolved(_, component, service, operation) =>
-          val arguments = _build_request_arguments(tail)
+          val arguments = _build_request_arguments(normalized._2)
+          val properties = _runtime_properties(runtimeOptions)
           Consequence.success(
             Request.of(
               component = component,
@@ -872,7 +915,7 @@ object CncfRuntime extends GlobalObservable {
               operation = operation,
               arguments = arguments,
               switches = Nil,
-              properties = Nil
+              properties = properties
             )
           )
         case ResolutionResult.NotFound(stage, input) =>
@@ -899,7 +942,78 @@ object CncfRuntime extends GlobalObservable {
         case ResolutionResult.Invalid(reason) =>
           Consequence.failure(s"invalid selector: $reason")
       }
+    }}
+
+  private def _normalize_meta_selector(
+    subsystem: Subsystem,
+    selector: String,
+    tail: Vector[String]
+  ): (String, Vector[String]) = {
+    val segments = selector.split("\\.").toVector.filter(_.nonEmpty)
+    segments match {
+      case Vector("help") =>
+        _normalize_meta_selector(subsystem, "meta.help", tail)
+      case head +: _ if head == "help" =>
+        (selector, tail)
+      case Vector("meta", operation) =>
+        _default_meta_component_name(subsystem) match {
+          case Some(componentName) =>
+            (s"$componentName.meta.$operation", tail)
+          case None =>
+            (selector, tail)
+        }
+      case Vector(component, "meta", operation) =>
+        if (operation == "help")
+          (s"$component.meta.help", component +: tail)
+        else
+          (s"$component.meta.$operation", tail)
+      case Vector(component, service, "meta", operation) =>
+        (s"$component.meta.$operation", s"$component.$service" +: tail)
+      case _ =>
+        (selector, tail)
     }
+  }
+
+  private def _default_meta_component_name(
+    subsystem: Subsystem
+  ): Option[String] =
+    subsystem.components.sortBy(_.name).headOption.map(_.name)
+
+  private def _extract_runtime_options(
+    args: Seq[String]
+  ): (_RuntimeOptionsI, Seq[String]) = {
+    val clean = Vector.newBuilder[String]
+    var options = _RuntimeOptionsI()
+    args.foreach {
+      case "--json" =>
+        options = options.copy(json = true)
+      case s if s.startsWith("--json=") =>
+        options = options.copy(json = true)
+      case "--debug" =>
+        options = options.copy(debug = true)
+      case s if s.startsWith("--debug=") =>
+        options = options.copy(debug = true)
+      case "--no-exit" =>
+        options = options.copy(noExit = true)
+      case other =>
+        clean += other
+    }
+    (options, clean.result())
+  }
+
+  private def _runtime_properties(options: _RuntimeOptionsI): List[Property] = {
+    val b = List.newBuilder[Property]
+    if (options.json) b += Property("format", "json", None)
+    if (options.debug) b += Property("debug", "true", None)
+    if (options.noExit) b += Property("no-exit", "true", None)
+    b.result()
+  }
+
+  private case class _RuntimeOptionsI(
+    json: Boolean = false,
+    debug: Boolean = false,
+    noExit: Boolean = false
+  )
 
   private def _selectorAndArguments(
     args: Seq[String]
@@ -1221,6 +1335,7 @@ object RunMode {
 
 class CncfRuntime() extends GlobalObservable {
   private val _runtime_service_name = "runtime"
+  private val _help_flags = Set("--help", "-h")
 
   private val _runtime_protocol: Protocol =
     Protocol.Builder()
@@ -1285,8 +1400,17 @@ class CncfRuntime() extends GlobalObservable {
   }
 
   def run(args: Array[String]): Int = {
-    val subsystem = _initialize(args)
-    _runtime_protocol_engine.makeOperationRequest(args) match {
+    val normalizedArgs = _normalize_help_aliases(args)
+    _execute_top_level_help(normalizedArgs) match {
+      case Some(code) => return code
+      case None => ()
+    }
+    if (normalizedArgs.isEmpty) {
+      _print_usage()
+      return 2
+    }
+    val subsystem = _initialize(normalizedArgs)
+    _runtime_protocol_engine.makeOperationRequest(normalizedArgs) match {
       case Consequence.Success(req) =>
         _run(subsystem, req)
       case Consequence.Failure(conclusion) =>
@@ -1363,7 +1487,7 @@ class CncfRuntime() extends GlobalObservable {
         req.operation match {
           case RunMode.Server.`name` => ServerOperation(subsystem).execute(req)
           case RunMode.Client.`name` => ClientOperation(subsystem).execute(req)
-          case RunMode.Command.`name` => CommandOperation(subsystem).execute(req)
+          case RunMode.Command.`name` => executeCommand(subsystem, req)
           case RunMode.ServerEmulator.`name` => ServerEmulatorOperation(subsystem).execute(req)
           case RunMode.Script.`name` => ScriptOperation(subsystem).execute(req)
           case "help" => HelpOperation(subsystem).execute(req)
@@ -1709,8 +1833,12 @@ class CncfRuntime() extends GlobalObservable {
     arguments.collectFirst { case Argument(_, body: MimeBody, _) => body }
 
   def executeCommand(subsystem: Subsystem, req: Request): Int = {
-    val args = _make_args(req)
-    val result = _to_request(subsystem, args).flatMap { req =>
+    val args = req.toSubCommand.toArgs
+    val normalizedArgs = CommandProtocolHelp.normalizeArgs(args) match {
+      case Left(code) => return code
+      case Right(xs) => xs
+    }
+    val result = _to_request(subsystem, normalizedArgs).flatMap { req =>
       subsystem.execute(req)
     }
     result match {
@@ -1734,11 +1862,14 @@ class CncfRuntime() extends GlobalObservable {
     args: Array[String],
     mode: RunMode = RunMode.Command
   ): Consequence[Request] =
-    _selectorAndArguments(args.toIndexedSeq).flatMap { case (selector, tail) =>
-      val canonicalSelector = PathPreNormalizer.rewriteSelector(selector, mode, _alias_resolver)
+    _extract_runtime_options(args.toIndexedSeq) match { case (runtimeOptions, clean) =>
+    _selectorAndArguments(clean).flatMap { case (selector, tail) =>
+      val normalized = _normalize_meta_selector(subsystem, selector, tail.toVector)
+      val canonicalSelector = PathPreNormalizer.rewriteSelector(normalized._1, mode, _alias_resolver)
       subsystem.resolver.resolve(canonicalSelector, allowPrefix = false, allowImplicit = false) match {
         case ResolutionResult.Resolved(_, component, service, operation) =>
-          val arguments = _build_request_arguments(tail)
+          val arguments = _build_request_arguments(normalized._2)
+          val properties = _runtime_properties(runtimeOptions)
           Consequence.success(
             Request.of(
               component = component,
@@ -1746,7 +1877,7 @@ class CncfRuntime() extends GlobalObservable {
               operation = operation,
               arguments = arguments,
               switches = Nil,
-              properties = Nil
+              properties = properties
             )
           )
         case ResolutionResult.NotFound(stage, input) =>
@@ -1756,7 +1887,78 @@ class CncfRuntime() extends GlobalObservable {
         case ResolutionResult.Invalid(reason) =>
           Consequence.failure(s"invalid selector: $reason")
       }
+    }}
+
+  private def _normalize_meta_selector(
+    subsystem: Subsystem,
+    selector: String,
+    tail: Vector[String]
+  ): (String, Vector[String]) = {
+    val segments = selector.split("\\.").toVector.filter(_.nonEmpty)
+    segments match {
+      case Vector("help") =>
+        _normalize_meta_selector(subsystem, "meta.help", tail)
+      case head +: _ if head == "help" =>
+        (selector, tail)
+      case Vector("meta", operation) =>
+        _default_meta_component_name(subsystem) match {
+          case Some(componentName) =>
+            (s"$componentName.meta.$operation", tail)
+          case None =>
+            (selector, tail)
+        }
+      case Vector(component, "meta", operation) =>
+        if (operation == "help")
+          (s"$component.meta.help", component +: tail)
+        else
+          (s"$component.meta.$operation", tail)
+      case Vector(component, service, "meta", operation) =>
+        (s"$component.meta.$operation", s"$component.$service" +: tail)
+      case _ =>
+        (selector, tail)
     }
+  }
+
+  private def _default_meta_component_name(
+    subsystem: Subsystem
+  ): Option[String] =
+    subsystem.components.sortBy(_.name).headOption.map(_.name)
+
+  private def _extract_runtime_options(
+    args: Seq[String]
+  ): (_RuntimeOptions, Seq[String]) = {
+    val clean = Vector.newBuilder[String]
+    var options = _RuntimeOptions()
+    args.foreach {
+      case "--json" =>
+        options = options.copy(json = true)
+      case s if s.startsWith("--json=") =>
+        options = options.copy(json = true)
+      case "--debug" =>
+        options = options.copy(debug = true)
+      case s if s.startsWith("--debug=") =>
+        options = options.copy(debug = true)
+      case "--no-exit" =>
+        options = options.copy(noExit = true)
+      case other =>
+        clean += other
+    }
+    (options, clean.result())
+  }
+
+  private def _runtime_properties(options: _RuntimeOptions): List[Property] = {
+    val b = List.newBuilder[Property]
+    if (options.json) b += Property("format", "json", None)
+    if (options.debug) b += Property("debug", "true", None)
+    if (options.noExit) b += Property("no-exit", "true", None)
+    b.result()
+  }
+
+  private case class _RuntimeOptions(
+    json: Boolean = false,
+    debug: Boolean = false,
+    noExit: Boolean = false
+  )
 
   private def _alias_resolver: AliasResolver =
     GlobalRuntimeContext.current
@@ -1959,6 +2161,24 @@ class CncfRuntime() extends GlobalObservable {
         1
     }
 
+  private def _execute_top_level_help(args: Array[String]): Option[Int] =
+    args.toVector match {
+      case Vector("help") => Some(CliHelpOperation.execute())
+      case Vector("server", "help") => Some(ServerCommandHelp.execute())
+      case Vector("client", "help") => Some(ClientCommandHelp.execute())
+      case _ => None
+    }
+
+  private def _normalize_help_aliases(args: Array[String]): Array[String] =
+    args.toVector match {
+      case Vector(flag) if _help_flags.contains(flag) =>
+        Array("help")
+      case Vector(command, flag) if _help_flags.contains(flag) =>
+        Array(command, "help")
+      case _ =>
+        args
+    }
+
   private def _print_usage(): Unit = {
     val text =
       """Usage:
@@ -1975,6 +2195,8 @@ class CncfRuntime() extends GlobalObservable {
         |  command / client : no logs by default
         |  server           : SLF4J logging enabled
         |  --log-backend=stdout|stderr|nop|slf4j overrides defaults
+        |
+        |Run 'cncf help' for more information.
         |""".stripMargin
     _print_error(text)
   }

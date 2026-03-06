@@ -26,6 +26,8 @@ import org.goldenport.cncf.service.{Service, ServiceGroup}
 import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.cli.RunMode
+import org.goldenport.cncf.cli.renderer.{CliHelpJsonRenderer, CliHelpYamlRenderer, CliTreeJsonRenderer, CliTreeYamlRenderer}
+import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, TreeProjection}
 import cats.data.NonEmptyVector
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
@@ -37,7 +39,7 @@ import scala.util.control.NonFatal
  *  version Jan.  3, 2026
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
- * @version Mar.  4, 2026
+ * @version Mar.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -596,7 +598,14 @@ object Component {
 
   private def _with_default_services(protocol: Protocol): Protocol = {
     val withMetaHelp = _ensure_operation(protocol, _default_meta_service_name, _DefaultMetaHelpOperation)
-    val withMetaVersion = _ensure_operation(withMetaHelp, _default_meta_service_name, _DefaultMetaVersionOperation)
+    val withMetaDescribe = _ensure_operation(withMetaHelp, _default_meta_service_name, _DefaultMetaDescribeOperation)
+    val withMetaComponents = _ensure_operation(withMetaDescribe, _default_meta_service_name, _DefaultMetaComponentsOperation)
+    val withMetaServices = _ensure_operation(withMetaComponents, _default_meta_service_name, _DefaultMetaServicesOperation)
+    val withMetaOperations = _ensure_operation(withMetaServices, _default_meta_service_name, _DefaultMetaOperationsOperation)
+    val withMetaSchema = _ensure_operation(withMetaOperations, _default_meta_service_name, _DefaultMetaSchemaOperation)
+    val withMetaOpenApi = _ensure_operation(withMetaSchema, _default_meta_service_name, _DefaultMetaOpenApiOperation)
+    val withMetaTree = _ensure_operation(withMetaOpenApi, _default_meta_service_name, _DefaultMetaTreeOperation)
+    val withMetaVersion = _ensure_operation(withMetaTree, _default_meta_service_name, _DefaultMetaVersionOperation)
     val withSystemPing = _ensure_operation(withMetaVersion, _default_system_service_name, _DefaultSystemPingOperation)
     _ensure_operation(withSystemPing, _default_system_service_name, _DefaultSystemHealthOperation)
   }
@@ -629,6 +638,90 @@ object Component {
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
       Consequence.success(_DefaultMetaHelpAction(req))
+  }
+
+  private object _DefaultMetaDescribeOperation extends OperationDefinition {
+    override val specification: OperationDefinition.Specification =
+      OperationDefinition.Specification(
+        name = "describe",
+        request = org.goldenport.protocol.spec.RequestDefinition(),
+        response = org.goldenport.protocol.spec.ResponseDefinition()
+      )
+
+    override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(_DefaultMetaDescribeAction(req))
+  }
+
+  private object _DefaultMetaComponentsOperation extends OperationDefinition {
+    override val specification: OperationDefinition.Specification =
+      OperationDefinition.Specification(
+        name = "components",
+        request = org.goldenport.protocol.spec.RequestDefinition(),
+        response = org.goldenport.protocol.spec.ResponseDefinition()
+      )
+
+    override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(_DefaultMetaComponentsAction(req))
+  }
+
+  private object _DefaultMetaServicesOperation extends OperationDefinition {
+    override val specification: OperationDefinition.Specification =
+      OperationDefinition.Specification(
+        name = "services",
+        request = org.goldenport.protocol.spec.RequestDefinition(),
+        response = org.goldenport.protocol.spec.ResponseDefinition()
+      )
+
+    override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(_DefaultMetaServicesAction(req))
+  }
+
+  private object _DefaultMetaOperationsOperation extends OperationDefinition {
+    override val specification: OperationDefinition.Specification =
+      OperationDefinition.Specification(
+        name = "operations",
+        request = org.goldenport.protocol.spec.RequestDefinition(),
+        response = org.goldenport.protocol.spec.ResponseDefinition()
+      )
+
+    override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(_DefaultMetaOperationsAction(req))
+  }
+
+  private object _DefaultMetaSchemaOperation extends OperationDefinition {
+    override val specification: OperationDefinition.Specification =
+      OperationDefinition.Specification(
+        name = "schema",
+        request = org.goldenport.protocol.spec.RequestDefinition(),
+        response = org.goldenport.protocol.spec.ResponseDefinition()
+      )
+
+    override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(_DefaultMetaSchemaAction(req))
+  }
+
+  private object _DefaultMetaOpenApiOperation extends OperationDefinition {
+    override val specification: OperationDefinition.Specification =
+      OperationDefinition.Specification(
+        name = "openapi",
+        request = org.goldenport.protocol.spec.RequestDefinition(),
+        response = org.goldenport.protocol.spec.ResponseDefinition()
+      )
+
+    override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(_DefaultMetaOpenApiAction(req))
+  }
+
+  private object _DefaultMetaTreeOperation extends OperationDefinition {
+    override val specification: OperationDefinition.Specification =
+      OperationDefinition.Specification(
+        name = "tree",
+        request = org.goldenport.protocol.spec.RequestDefinition(),
+        response = org.goldenport.protocol.spec.ResponseDefinition()
+      )
+
+    override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(_DefaultMetaTreeAction(req))
   }
 
   private object _DefaultMetaVersionOperation extends OperationDefinition {
@@ -671,16 +764,214 @@ object Component {
     request: Request
   ) extends QueryAction {
     override def createCall(core: ActionCall.Core): ActionCall =
-      _DefaultMetaHelpActionCall(core)
+      _DefaultMetaHelpActionCall(request, core)
   }
 
   private final case class _DefaultMetaHelpActionCall(
+    req: Request,
     core: ActionCall.Core
   ) extends ProcedureActionCall {
     override def execute(): Consequence[OperationResponse] = {
       val text = core.component match {
-        case Some(component) => _resolve_help_text(component)
-        case None => "Component help is unavailable."
+        case Some(component) =>
+          val model = HelpProjection.projectModel(
+            component,
+            _meta_help_selector(req)
+          )
+          if (_request_wants_json(req)) {
+            CliHelpJsonRenderer.render(model)
+          } else {
+            CliHelpYamlRenderer.render(model)
+          }
+        case None =>
+          "type: error\nsummary: component context missing"
+      }
+      Consequence.success(OperationResponse.Scalar(text))
+    }
+  }
+
+  private final case class _DefaultMetaDescribeAction(
+    request: Request
+  ) extends QueryAction {
+    override def createCall(core: ActionCall.Core): ActionCall =
+      _DefaultMetaDescribeActionCall(request, core)
+  }
+
+  private final case class _DefaultMetaDescribeActionCall(
+    req: Request,
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    override def execute(): Consequence[OperationResponse] = {
+      val rec = core.component match {
+        case Some(component) =>
+          DescribeProjection.project(
+            component,
+            _meta_describe_selector(req)
+          )
+        case None =>
+          Record.data(
+            "type" -> "error",
+            "summary" -> "component context missing"
+          )
+      }
+      Consequence.success(OperationResponse.RecordResponse(rec))
+    }
+  }
+
+  private final case class _DefaultMetaComponentsAction(
+    request: Request
+  ) extends QueryAction {
+    override def createCall(core: ActionCall.Core): ActionCall =
+      _DefaultMetaComponentsActionCall(request, core)
+  }
+
+  private final case class _DefaultMetaComponentsActionCall(
+    req: Request,
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    override def execute(): Consequence[OperationResponse] = {
+      val rec = core.component match {
+        case Some(component) =>
+          DescribeProjection.project(component, None)
+        case None =>
+          Record.data(
+            "type" -> "error",
+            "summary" -> "component context missing"
+          )
+      }
+      Consequence.success(OperationResponse.RecordResponse(rec))
+    }
+  }
+
+  private final case class _DefaultMetaServicesAction(
+    request: Request
+  ) extends QueryAction {
+    override def createCall(core: ActionCall.Core): ActionCall =
+      _DefaultMetaServicesActionCall(request, core)
+  }
+
+  private final case class _DefaultMetaServicesActionCall(
+    req: Request,
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    override def execute(): Consequence[OperationResponse] = {
+      val rec = core.component match {
+        case Some(component) =>
+          val selector = _meta_services_selector(req)
+          HelpProjection.project(component, selector)
+        case None =>
+          Record.data(
+            "type" -> "error",
+            "summary" -> "component context missing"
+          )
+      }
+      Consequence.success(OperationResponse.RecordResponse(rec))
+    }
+  }
+
+  private final case class _DefaultMetaOperationsAction(
+    request: Request
+  ) extends QueryAction {
+    override def createCall(core: ActionCall.Core): ActionCall =
+      _DefaultMetaOperationsActionCall(request, core)
+  }
+
+  private final case class _DefaultMetaOperationsActionCall(
+    req: Request,
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    override def execute(): Consequence[OperationResponse] = {
+      val rec = core.component match {
+        case Some(component) =>
+          val selector = _meta_operations_selector(req)
+          HelpProjection.project(component, selector)
+        case None =>
+          Record.data(
+            "type" -> "error",
+            "summary" -> "component context missing"
+          )
+      }
+      Consequence.success(OperationResponse.RecordResponse(rec))
+    }
+  }
+
+  private final case class _DefaultMetaSchemaAction(
+    request: Request
+  ) extends QueryAction {
+    override def createCall(core: ActionCall.Core): ActionCall =
+      _DefaultMetaSchemaActionCall(request, core)
+  }
+
+  private final case class _DefaultMetaSchemaActionCall(
+    req: Request,
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    override def execute(): Consequence[OperationResponse] = {
+      val rec = core.component match {
+        case Some(component) =>
+          SchemaProjection.project(component, _meta_schema_selector(req))
+        case None =>
+          Record.data(
+            "type" -> "error",
+            "summary" -> "component context missing"
+          )
+      }
+      Consequence.success(OperationResponse.RecordResponse(rec))
+    }
+  }
+
+  private final case class _DefaultMetaOpenApiAction(
+    request: Request
+  ) extends QueryAction {
+    override def createCall(core: ActionCall.Core): ActionCall =
+      _DefaultMetaOpenApiActionCall(request, core)
+  }
+
+  private final case class _DefaultMetaOpenApiActionCall(
+    req: Request,
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    override def execute(): Consequence[OperationResponse] = {
+      val text = core.component match {
+        case Some(component) =>
+          _meta_openapi_selector(req) match {
+            case Some(name) =>
+              component.subsystem
+                .flatMap(_.components.find(_.name == name))
+                .map(OpenApiProjection.projectComponent)
+                .getOrElse(OpenApiProjection.projectComponent(component))
+            case None =>
+              OpenApiProjection.projectComponent(component)
+          }
+        case None =>
+          """{"error":"component context missing"}"""
+      }
+      Consequence.success(OperationResponse.Scalar(text))
+    }
+  }
+
+  private final case class _DefaultMetaTreeAction(
+    request: Request
+  ) extends QueryAction {
+    override def createCall(core: ActionCall.Core): ActionCall =
+      _DefaultMetaTreeActionCall(request, core)
+  }
+
+  private final case class _DefaultMetaTreeActionCall(
+    req: Request,
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    override def execute(): Consequence[OperationResponse] = {
+      val text = core.component match {
+        case Some(component) =>
+          val model = TreeProjection.project(component)
+          if (_request_wants_json(req)) {
+            CliTreeJsonRenderer.render(model)
+          } else {
+            CliTreeYamlRenderer.render(model)
+          }
+        case None =>
+          "subsystem: unknown\ncomponents: {}"
       }
       Consequence.success(OperationResponse.Scalar(text))
     }
@@ -755,35 +1046,6 @@ object Component {
     }
   }
 
-  private def _resolve_help_text(component: Component): String = {
-    val fromRegistry = _help_from_registry(component)
-    val fromResource = _component_help_resource(component)
-    fromRegistry.orElse(fromResource).getOrElse("No operation metadata is available.")
-  }
-
-  private def _help_from_registry(component: Component): Option[String] = {
-    val services = component.protocol.services.services
-    if (services.isEmpty) {
-      None
-    } else {
-      val lines = Vector.newBuilder[String]
-      lines += s"Component: ${component.name}"
-      lines += ""
-      lines += "Services:"
-      services.sortBy(_.name).foreach { service =>
-        lines += s"- ${service.name}"
-        service.operations.operations.toVector.sortBy(_.name).foreach { op =>
-          lines += s"  - ${service.name}.${op.name}"
-        }
-      }
-      Some(lines.result().mkString("\n"))
-    }
-  }
-
-  private def _component_help_resource(component: Component): Option[String] =
-    _read_resource_text(component.getClass.getClassLoader, "META-INF/component-help.md")
-      .orElse(_read_resource_text(component.getClass.getClassLoader, "META-INF/component-help.txt"))
-
   private def _read_resource_text(
     loader: ClassLoader,
     path: String
@@ -854,6 +1116,84 @@ object Component {
         is.close()
       }
     }.getOrElse(Map.empty)
+
+  private def _request_argument_values(request: Request): Vector[String] =
+    request.arguments
+      .map(arg => Option(arg.value).map(_.toString).getOrElse("").trim)
+      .filter(_.nonEmpty)
+      .toVector
+
+  private def _meta_help_selector(request: Request): Option[String] =
+    _request_argument_values(request).headOption
+
+  private def _meta_describe_selector(request: Request): Option[String] = {
+    val args = _request_argument_values(request)
+    args match {
+      case Vector(service, operation) =>
+        request.component.map(c => s"$c.$service.$operation").orElse(Some(s"$service.$operation"))
+      case Vector(single) =>
+        if (single.contains(".")) {
+          single.split("\\.").toVector.filter(_.nonEmpty) match {
+            case Vector(_, _, _) => Some(single)
+            case Vector(_, _) =>
+              request.component.map(c => s"$c.$single").orElse(Some(single))
+            case Vector(_) =>
+              request.component.map(c => s"$c.$single").orElse(Some(single))
+            case _ => Some(single)
+          }
+        } else {
+          request.component.map(c => s"$c.$single").orElse(Some(single))
+        }
+      case _ =>
+        request.component
+    }
+  }
+
+  private def _meta_services_selector(request: Request): Option[String] = {
+    val args = _request_argument_values(request)
+    args.headOption match {
+      case Some(name) if name.contains(".") =>
+        Some(name)
+      case Some(componentName) =>
+        Some(componentName)
+      case None =>
+        request.component
+    }
+  }
+
+  private def _meta_operations_selector(request: Request): Option[String] = {
+    val args = _request_argument_values(request)
+    args match {
+      case Vector(serviceName, operationName) =>
+        request.component.map(c => s"$c.$serviceName.$operationName")
+      case Vector(serviceName) =>
+        if (serviceName.contains(".")) {
+          Some(serviceName)
+        } else {
+          request.component.map(c => s"$c.$serviceName")
+        }
+      case _ =>
+        None
+    }
+  }
+
+  private def _meta_schema_selector(request: Request): Option[String] = {
+    val args = _request_argument_values(request)
+    args.headOption match {
+      case Some(selector) => Some(selector)
+      case None => request.component
+    }
+  }
+
+  private def _meta_openapi_selector(request: Request): Option[String] = {
+    val args = _request_argument_values(request)
+    args.headOption
+  }
+
+  private def _request_wants_json(request: Request): Boolean =
+    request.properties.exists { p =>
+      p.name == "format" && Option(p.value).map(_.toString.toLowerCase).contains("json")
+    }
 
   private def _configuration_value(
     component: Component,

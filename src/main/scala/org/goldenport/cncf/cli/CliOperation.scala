@@ -5,6 +5,7 @@ import org.goldenport.Conclusion
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.Response
 import org.goldenport.protocol.Argument
+import org.goldenport.protocol.Property
 import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.subsystem.Subsystem
@@ -14,7 +15,8 @@ import org.goldenport.cncf.observability.global.GlobalObservable
 
 /*
  * @since   Jan. 31, 2026
- * @version Feb.  1, 2026
+ *  version Feb.  1, 2026
+ * @version Mar.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class CliOperation extends GlobalObservable {
@@ -35,11 +37,14 @@ abstract class CliOperation extends GlobalObservable {
   final protected def parse_command_args(
     args: Array[String]
   ): Consequence[Request] =
-    _selector_and_arguments(args.toIndexedSeq).flatMap { case (selector, tail) =>
-      val canonicalSelector = PathPreNormalizer.rewriteSelector(selector, mode, _alias_resolver)
+    _extract_runtime_options(args.toIndexedSeq) match { case (runtimeOptions, clean) =>
+      _selector_and_arguments(clean).flatMap { case (selector, tail) =>
+      val normalized = _normalize_meta_selector(selector, tail.toVector)
+      val canonicalSelector = PathPreNormalizer.rewriteSelector(normalized._1, mode, _alias_resolver)
       subsystem.resolver.resolve(canonicalSelector, allowPrefix = false, allowImplicit = false) match {
         case ResolutionResult.Resolved(_, component, service, operation) =>
-          val arguments = _build_request_arguments(tail)
+          val arguments = _build_request_arguments(normalized._2)
+          val properties = _runtime_properties(runtimeOptions)
           Consequence.success(
             Request.of(
               component = component,
@@ -47,7 +52,7 @@ abstract class CliOperation extends GlobalObservable {
               operation = operation,
               arguments = arguments,
               switches = Nil,
-              properties = Nil
+              properties = properties
             )
           )
         case ResolutionResult.NotFound(stage, input) =>
@@ -57,7 +62,77 @@ abstract class CliOperation extends GlobalObservable {
         case ResolutionResult.Invalid(reason) =>
           Consequence.failure(s"invalid selector: $reason")
       }
+    }}
+
+  private def _normalize_meta_selector(
+    selector: String,
+    tail: Vector[String]
+  ): (String, Vector[String]) = {
+    val segments = selector.split("\\.").toVector.filter(_.nonEmpty)
+    segments match {
+      case Vector("help") =>
+        _normalize_meta_selector("meta.help", tail)
+      case head +: _ if head == "help" =>
+        (selector, tail)
+      case Vector("meta", operation) =>
+        _default_meta_component_name() match {
+          case Some(componentName) =>
+            (s"$componentName.meta.$operation", tail)
+          case None =>
+            (selector, tail)
+        }
+      case Vector(component, "meta", operation) =>
+        if (operation == "help")
+          (s"$component.meta.help", component +: tail)
+        else
+          (s"$component.meta.$operation", tail)
+      case Vector(component, service, "meta", operation) =>
+        (s"$component.meta.$operation", s"$component.$service" +: tail)
+      case _ =>
+        (selector, tail)
     }
+  }
+
+  private def _default_meta_component_name(): Option[String] =
+    subsystem.components.sortBy(_.name).headOption.map(_.name)
+
+  private def _extract_runtime_options(
+    args: Seq[String]
+  ): (_RuntimeOptions, Seq[String]) = {
+    val clean = Vector.newBuilder[String]
+    var options = _RuntimeOptions()
+    args.foreach { token =>
+      token match {
+        case "--json" =>
+          options = options.copy(json = true)
+        case s if s.startsWith("--json=") =>
+          options = options.copy(json = true)
+        case "--debug" =>
+          options = options.copy(debug = true)
+        case s if s.startsWith("--debug=") =>
+          options = options.copy(debug = true)
+        case "--no-exit" =>
+          options = options.copy(noExit = true)
+        case _ =>
+          clean += token
+      }
+    }
+    (options, clean.result())
+  }
+
+  private def _runtime_properties(options: _RuntimeOptions): List[Property] = {
+    val b = List.newBuilder[Property]
+    if (options.json) b += Property("format", "json", None)
+    if (options.debug) b += Property("debug", "true", None)
+    if (options.noExit) b += Property("no-exit", "true", None)
+    b.result()
+  }
+
+  private case class _RuntimeOptions(
+    json: Boolean = false,
+    debug: Boolean = false,
+    noExit: Boolean = false
+  )
 
   private def _selector_and_arguments(
     args: Seq[String]

@@ -1,3 +1,13 @@
+Status: obsolete
+
+This document is retained for historical context.
+Canonical CNCF CLI/introspection specifications are in docs/design/:
+- docs/design/cncf-cli-spec.md
+- docs/design/cncf-selector-resolution-spec.md
+- docs/design/cncf-meta-api-spec.md
+- docs/design/cncf-introspection-spec.md
+- docs/design/cncf-architecture-overview.md
+
 # Notes: CNCF Documentation / Help Design
 
 ## Scope
