@@ -18,13 +18,11 @@ import java.nio.file.Path
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.subsystem.Subsystem
-import org.goldenport.configuration.{Configuration, ResolvedConfiguration}
+import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.http.HttpDriver
-import org.goldenport.cncf.datastore.DataStackFactory
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.service.{Service, ServiceGroup}
 import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
-import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.cli.renderer.{CliHelpJsonRenderer, CliHelpYamlRenderer, CliTreeJsonRenderer, CliTreeYamlRenderer}
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, TreeProjection}
@@ -39,7 +37,7 @@ import scala.util.control.NonFatal
  *  version Jan.  3, 2026
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
- * @version Mar.  5, 2026
+ * @version Mar. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -48,7 +46,6 @@ abstract class Component() extends Component.Core.Holder {
   private var _application_config: Component.ApplicationConfig = Component.ApplicationConfig()
   private var _collaborator_classpath: Option[Vector[Path]] = None
 //  private var _system_context: SystemContext = SystemContext.empty
-  private var _unit_of_work: UnitOfWork = DataStackFactory.create(Configuration.empty)
   private var _parent_scope_context: Option[ScopeContext] = None
   private var _component_context: Option[Component.Context] = None
   private var _services: Option[ServiceGroup] = None
@@ -116,7 +113,6 @@ abstract class Component() extends Component.Core.Holder {
   //   this
   // }
 
-  def unitOfWork: UnitOfWork = _unit_of_work
   def healthContributors: Vector[Component.HealthContributor] = _health_contributors
 
   def registerHealthContributor(contributor: Component.HealthContributor): Component = {
@@ -137,10 +133,6 @@ abstract class Component() extends Component.Core.Holder {
     _parent_scope_context = Some(sc)
     _component_context = Some(_component_context(sc))
     this
-  }
-
-  private def _init_data_stack(config: Configuration): Unit = {
-    _unit_of_work = DataStackFactory.create(config)
   }
 
   private def _inherit_http_driver_(
@@ -438,8 +430,6 @@ object Component {
   ): Component = {
     val c = create(name, componentid, instanceid, protocol)
     c.withApplicationConfig(applicationConfig)
-    val conf = applicationConfig.config.getOrElse(org.goldenport.configuration.Configuration.empty)
-    c._init_data_stack(conf)
     c
   }
 
@@ -510,7 +500,6 @@ object Component {
   //   val c = create(name, componentid, instanceid, protocol)
   //   c.withApplicationConfig(applicationConfig)
   //   val conf = applicationConfig.config.getOrElse(org.goldenport.cncf.config.model.Config.empty)
-  //   c._init_data_stack(conf)
   //   c
   // }
 
@@ -1263,7 +1252,7 @@ final case class ComponentId(
 final case class ComponentInstanceId(
   name: String,
   instance: String
-) extends UniversalId("cncf", name, "component_instance", Some(instance))
+) extends UniversalId("cncf", name, "component_instance", instance)
 
 object ComponentInstanceId {
   def default(componentId: ComponentId): ComponentInstanceId =

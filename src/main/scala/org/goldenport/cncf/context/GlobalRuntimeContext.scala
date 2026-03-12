@@ -10,13 +10,14 @@ import org.goldenport.cncf.path.AliasResolver
 /*
  * @since   Jan. 17, 2026
  *  version Jan. 19, 2026
- * @version Feb.  1, 2026
+ *  version Feb.  1, 2026
+ * @version Mar. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GlobalRuntimeContext(
   val core: ScopeContext.Core,
   val config: RuntimeConfig,
-  override val httpDriver: HttpDriver,
+//  override val httpDriver: HttpDriver,
   val aliasResolver: AliasResolver,
   var runtimeMode: RunMode,
   val runtimeVersion: String,
@@ -93,12 +94,14 @@ object GlobalRuntimeContext {
       name,
       None,
       observabilityContext,
-      Some(runconfig.httpDriver)
+      Some(runconfig.httpDriver),
+      Some(DataStoreContext(runconfig.dataStoreSpace)),
+      Some(EntityStoreContext(runconfig.entityStoreSpace))
     )
     GlobalRuntimeContext(
       core,
       runconfig,
-      runconfig.httpDriver,
+//      runconfig.httpDriver,
       aliasresolver,
       runconfig.mode,
       runtimeVersion = CncfVersion.current,

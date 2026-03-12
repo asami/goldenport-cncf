@@ -1,6 +1,7 @@
 package org.goldenport.cncf.unitofwork
 
 import java.nio.charset.StandardCharsets
+import org.goldenport.Consequence
 import org.goldenport.ConsequenceT
 import org.goldenport.bag.Bag
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext}
@@ -18,7 +19,8 @@ import cats.{Id, ~>}
 /*
  * @since   Jan. 10, 2026
  *  version Jan. 21, 2026
- * @version Feb. 25, 2026
+ *  version Feb. 25, 2026
+ * @version Mar. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWorkHttpSpec extends AnyWordSpec with Matchers with ConsequenceMatchers {
@@ -70,7 +72,7 @@ class UnitOfWorkHttpSpec extends AnyWordSpec with Matchers with ConsequenceMatch
       val context = _context_(driver)
       val datastore = DataStore.noop()
       val eventengine = EventEngine.noop(datastore)
-      val uow = new UnitOfWork(context, datastore, org.goldenport.cncf.entity.EntityStore.noop(), eventengine)
+      val uow = new UnitOfWork(context, eventengine)
 
       val program = ConsequenceT.liftF(
         Free.liftF[UnitOfWorkOp, HttpResponse](UnitOfWorkOp.HttpGet("/ping"))
@@ -86,7 +88,7 @@ class UnitOfWorkHttpSpec extends AnyWordSpec with Matchers with ConsequenceMatch
       val context = _context_(driver)
       val datastore = DataStore.noop()
       val eventengine = EventEngine.noop(datastore)
-      val uow = new UnitOfWork(context, datastore, org.goldenport.cncf.entity.EntityStore.noop(), eventengine)
+      val uow = new UnitOfWork(context, eventengine)
 
       val _ = uow.execute[HttpResponse](UnitOfWorkOp.HttpPost("/submit", None, Map.empty))
 
@@ -106,17 +108,9 @@ class UnitOfWorkHttpSpec extends AnyWordSpec with Matchers with ConsequenceMatch
         httpDriverOption = Some(driver)
       ),
       unitOfWorkSupplier = () => throw new UnsupportedOperationException("unitOfWork is not used in this spec runtime"),
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Id) {
-        def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
+      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+        def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in this spec runtime")
-      },
-      unitOfWorkTryInterpreterFn = new (UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
-          throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in this spec runtime")
-      },
-      unitOfWorkEitherInterpreterFn = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
-        def apply[A](fa: UnitOfWorkOp[A]): Either[Throwable, A] =
-          Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in this spec runtime"))
       },
       commitAction = _ => (),
       abortAction = _ => (),

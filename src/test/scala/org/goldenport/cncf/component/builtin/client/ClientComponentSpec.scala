@@ -13,28 +13,24 @@ import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.Protocol
 import org.goldenport.cncf.config.ClientConfig
-import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext}
-import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.cncf.event.EventEngine
 import org.goldenport.protocol.{Argument, Property, Request}
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.egress.EgressCollection
 import org.goldenport.protocol.handler.ingress.IngressCollection
 import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.operation.OperationResponse
-import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.test.matchers.ConsequenceMatchers
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.wordspec.AnyWordSpec
-import cats.{Id, ~>}
 
 /*
  * @since   Jan. 10, 2026
  *  version Jan. 21, 2026
- * @version Feb. 25, 2026
+ *  version Feb. 25, 2026
+ * @version Mar. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientComponentSpec
@@ -108,55 +104,7 @@ class ClientComponentSpec
     val _ = component.withApplicationConfig(
       Component.ApplicationConfig(httpDriver = Some(driver))
     )
-    _bind_uow_(component, driver)
     component
-  }
-
-  private def _bind_uow_(
-    component: ClientComponent,
-    driver: HttpDriver
-  ): Unit = {
-    val uow = _uow_(driver)
-    val field = classOf[Component].getDeclaredFields.find(_.getName.contains("_unit_of_work")).getOrElse {
-      fail("Component private field _unit_of_work was not found")
-    }
-    field.setAccessible(true)
-    field.set(component, uow)
-  }
-
-  private def _uow_(
-    driver: HttpDriver
-  ): UnitOfWork = {
-    val datastore = DataStore.noop()
-    val eventengine = EventEngine.noop(datastore)
-    val base = ExecutionContext.create()
-    val runtime = new RuntimeContext(
-      core = RuntimeContext.core(
-        name = "client-component-spec",
-        parent = None,
-        observabilityContext = base.observability,
-        httpDriverOption = Some(driver)
-      ),
-      unitOfWorkSupplier = () => throw new UnsupportedOperationException("unitOfWork supplier is not used in this spec runtime"),
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Id) {
-        def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
-          throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in this spec runtime")
-      },
-      unitOfWorkTryInterpreterFn = new (UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
-          throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in this spec runtime")
-      },
-      unitOfWorkEitherInterpreterFn = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
-        def apply[A](fa: UnitOfWorkOp[A]): Either[Throwable, A] =
-          Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in this spec runtime"))
-      },
-      commitAction = _ => (),
-      abortAction = _ => (),
-      disposeAction = _ => (),
-      token = "client-component-spec-runtime"
-    )
-    val context = ExecutionContext.withRuntimeContext(base, runtime)
-    new UnitOfWork(context, datastore, org.goldenport.cncf.entity.EntityStore.noop(), eventengine)
   }
 
   private def _bootstrap_core(): Component.Core = {

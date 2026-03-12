@@ -16,7 +16,7 @@ import org.goldenport.cncf.observability.global.GlobalObservable
 /*
  * @since   Jan. 31, 2026
  *  version Feb.  1, 2026
- * @version Mar.  6, 2026
+ * @version Mar.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class CliOperation extends GlobalObservable {
@@ -140,10 +140,12 @@ abstract class CliOperation extends GlobalObservable {
     args.toVector match {
       case Vector() =>
         Consequence.failure("command name is required")
-      case Vector(component, service, operation, rest @ _*) =>
-        Consequence.success((s"$component.$service.$operation", rest.toVector))
       case Vector(single, rest @ _*) if single.contains("/") =>
         _selector_from_path(single, "/").map(_ -> rest.toVector)
+      case Vector(single, rest @ _*) if single.contains(".") =>
+        Consequence.success((single, rest.toVector))
+      case Vector(component, service, operation, rest @ _*) =>
+        Consequence.success((s"$component.$service.$operation", rest.toVector))
       case Vector(single, rest @ _*) =>
         Consequence.success((single, rest.toVector))
     }
@@ -167,10 +169,35 @@ abstract class CliOperation extends GlobalObservable {
 
   private def _build_request_arguments(
     values: Seq[String]
-  ): List[Argument] =
-    values.zipWithIndex.map { case (value, index) =>
-      Argument(s"arg${index + 1}", value)
-    }.toList
+  ): List[Argument] = {
+    val b = List.newBuilder[Argument]
+    val in = values.toVector
+    var positional = 1
+    var i = 0
+    while (i < in.length) {
+      val current = in(i)
+      if (current.startsWith("--") && current.length > 2) {
+        val body = current.drop(2)
+        val eq = body.indexOf('=')
+        if (eq > 0) {
+          b += Argument(body.take(eq), body.drop(eq + 1))
+        } else if (body.nonEmpty && i + 1 < in.length && !in(i + 1).startsWith("--")) {
+          b += Argument(body, in(i + 1))
+          i = i + 1
+        } else if (body.nonEmpty) {
+          b += Argument(body, "true")
+        } else {
+          b += Argument(s"arg$positional", current)
+          positional = positional + 1
+        }
+      } else {
+        b += Argument(s"arg$positional", current)
+        positional = positional + 1
+      }
+      i = i + 1
+    }
+    b.result()
+  }
 
   final protected def parse_component_service_operation_string(
     s: String

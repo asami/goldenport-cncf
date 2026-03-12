@@ -17,7 +17,8 @@ import java.time.Instant
 
 /*
  * @since   Jan.  7, 2026
- * @version Feb. 27, 2026
+ *  version Feb. 27, 2026
+ * @version Mar. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngineObservabilitySeparationSpec
@@ -32,7 +33,7 @@ class ActionEngineObservabilitySeparationSpec
       val runtime = new TestRuntimeContext
       val base = ExecutionContext.create()
       val ctx = ExecutionContext.withRuntimeContext(base, runtime.runtime)
-      val uow = new UnitOfWork(ctx, dataStore, org.goldenport.cncf.entity.EntityStore.noop(), eventEngine, recorder)
+      val uow = new UnitOfWork(ctx, eventEngine, recorder)
       runtime.bind(uow)
 
       var buildCalled = false
@@ -69,7 +70,7 @@ class ActionEngineObservabilitySeparationSpec
       val runtime = new SuccessRuntimeContext("test-action")
       val base = ExecutionContext.create()
       val ctx = ExecutionContext.withRuntimeContext(base, runtime.runtime)
-      val uow = new UnitOfWork(ctx, dataStore, org.goldenport.cncf.entity.EntityStore.noop(), eventEngine, recorder)
+      val uow = new UnitOfWork(ctx, eventEngine, recorder)
       runtime.bind(uow)
 
       val engine = new RecordingAllowActionEngine
@@ -194,17 +195,9 @@ class ActionEngineObservabilitySeparationSpec
       unitOfWorkSupplier = () => _unit_of_work.getOrElse {
         throw new IllegalStateException("UnitOfWork has not been bound")
       },
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Id) {
-        def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
+      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+        def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in observability spec")
-      },
-      unitOfWorkTryInterpreterFn = new (UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
-          throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in observability spec")
-      },
-      unitOfWorkEitherInterpreterFn = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
-        def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] =
-          Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in observability spec"))
       },
       commitAction = commitAction,
       abortAction = _ => (),

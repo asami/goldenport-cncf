@@ -1,5 +1,6 @@
 package org.goldenport.cncf.context
 
+import org.goldenport.Consequence
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.context.DataStoreContext
 import org.goldenport.cncf.context.EntityStoreContext
@@ -11,7 +12,8 @@ import org.goldenport.cncf.entity.EntityStoreSpace
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
- * @version Feb. 25, 2026
+ *  version Feb. 25, 2026
+ * @version Mar. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ScopeKind {
@@ -83,8 +85,12 @@ object ScopeContext {
       def parent: Option[ScopeContext] = core.parent
       def observabilityContext: ObservabilityContext = core.observabilityContext
 
-      def dataStoreSpace: DataStoreSpace = ???
-      def entityStoreSpace: EntityStoreSpace = ???
+      def dataStoreSpace: DataStoreSpace = core.datastore.map(_.dataStoreSpace) orElse parent.map(_.dataStoreSpace) getOrElse {
+        Consequence.unreachableReached("DataStore").RAISE
+      }
+      def entityStoreSpace: EntityStoreSpace = core.entitystore.map(_.entityStoreSpace) orElse parent.map(_.entityStoreSpace) getOrElse {
+        Consequence.unreachableReached("EntityStore").RAISE
+      }
     }
   }
 

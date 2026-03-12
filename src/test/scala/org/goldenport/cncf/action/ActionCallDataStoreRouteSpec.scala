@@ -19,7 +19,8 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Feb. 27, 2026
+ *  version Feb. 27, 2026
+ * @version Mar. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionCallDataStoreRouteSpec
@@ -48,7 +49,7 @@ class ActionCallDataStoreRouteSpec
         val base = ExecutionContext.create()
         val ctx = ExecutionContext.withRuntimeContext(base, runtime.runtime)
         given ExecutionContext = ctx
-        val uow = new UnitOfWork(ctx, datastore, org.goldenport.cncf.entity.EntityStore.noop(), eventengine, recorder)
+        val uow = new UnitOfWork(ctx, eventengine, recorder)
         runtime.bind(uow)
 
         When("an ActionCall uses the protected datastore helpers")
@@ -101,8 +102,8 @@ class ActionCallDataStoreRouteSpec
     override def execute(): Consequence[OperationResponse] = {
       val record = Record.data("id" -> id, "value" -> value)
       // DataStore ops in UnitOfWorkOp are not wired yet; use direct DataStore API.
-      val datastore = executionContext.runtime.unitOfWork.datastore
       val collection = DataStore.CollectionId("record")
+      val datastore = executionContext.dataStoreSpace.dataStore(collection).getOrElse(DataStore.noop())
       val entryid = DataStore.EntryId(entityid)
       datastore.save(collection, entryid, record)(using executionContext)
       val v = datastore
@@ -129,17 +130,9 @@ class ActionCallDataStoreRouteSpec
       unitOfWorkSupplier = () => _unit_of_work.getOrElse {
         throw new IllegalStateException("UnitOfWork has not been bound")
       },
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Id) {
-        def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
+      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+        def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in datastore route spec")
-      },
-      unitOfWorkTryInterpreterFn = new (UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
-          throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in datastore route spec")
-      },
-      unitOfWorkEitherInterpreterFn = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
-        def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] =
-          Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in datastore route spec"))
       },
       commitAction = uow => {
         val _ = uow.commit()

@@ -1,13 +1,14 @@
 package org.goldenport.cncf.event
 
 import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.unitofwork.{CommitRecorder, TransactionContext}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan.  6, 2026
+ * @version Mar. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class EventEnginePrepareSemanticsSpec extends AnyWordSpec with Matchers {
@@ -16,7 +17,7 @@ class EventEnginePrepareSemanticsSpec extends AnyWordSpec with Matchers {
       val recorder = new InMemoryCommitRecorder
       val dataStore = DataStore.noop(recorder)
       val eventEngine = EventEngine.noop(dataStore, recorder)
-      val tx = TransactionContext.create()
+      val tx = TransactionContext.create(ExecutionContext.create().transactionContext)
 
       val e1 = TestEvent("e1")
       val e2 = TestEvent("e2")
@@ -35,7 +36,7 @@ class EventEnginePrepareSemanticsSpec extends AnyWordSpec with Matchers {
       val recorder = new InMemoryCommitRecorder
       val dataStore = DataStore.noop(recorder)
       val eventEngine = EventEngine.noop(dataStore, recorder)
-      val tx = TransactionContext.create()
+      val tx = TransactionContext.create(ExecutionContext.create().transactionContext)
 
       val e1 = TestEvent("e1")
       eventEngine.stage(Seq(e1))
@@ -50,7 +51,7 @@ class EventEnginePrepareSemanticsSpec extends AnyWordSpec with Matchers {
       val recorder = new InMemoryCommitRecorder
       val dataStore = DataStore.noop(recorder)
       val eventEngine = EventEngine.noop(dataStore, recorder)
-      val tx = TransactionContext.create()
+      val tx = TransactionContext.create(ExecutionContext.create().transactionContext)
 
       eventEngine.prepare(tx)
 

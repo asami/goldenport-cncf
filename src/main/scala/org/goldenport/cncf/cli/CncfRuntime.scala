@@ -43,7 +43,7 @@ import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObserva
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar.  6, 2026
+ * @version Mar. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -376,7 +376,10 @@ object CncfRuntime extends GlobalObservable {
       case _ =>
         val in = args.toVector
         (in.lift(0), in.lift(1), in.lift(2)) match {
-          case (Some("SCRIPT"), Some("DEFAULT"), Some("RUN")) =>
+          case (Some(a), Some(b), Some(c))
+              if a.equalsIgnoreCase("script") &&
+                b.equalsIgnoreCase("default") &&
+                c.equalsIgnoreCase("run") =>
             _to_request(subsystem, args, RunMode.Script)
           case _ =>
             val xs = Vector("SCRIPT", "DEFAULT", "RUN") ++ in
@@ -903,7 +906,10 @@ object CncfRuntime extends GlobalObservable {
     _extract_runtime_options(args.toIndexedSeq) match { case (runtimeOptions, clean) =>
     _selectorAndArguments(clean).flatMap { case (selector, tail) =>
       val normalized = _normalize_meta_selector(subsystem, selector, tail.toVector)
-      val canonicalSelector = PathPreNormalizer.rewriteSelector(normalized._1, mode, _alias_resolver)
+      val aliasresolver =
+        if (subsystem.aliasResolver ne AliasResolver.empty) subsystem.aliasResolver
+        else _alias_resolver
+      val canonicalSelector = PathPreNormalizer.rewriteSelector(normalized._1, mode, aliasresolver)
       subsystem.resolver.resolve(canonicalSelector, allowPrefix = false, allowImplicit = false) match {
         case ResolutionResult.Resolved(_, component, service, operation) =>
           val arguments = _build_request_arguments(normalized._2)
@@ -1021,10 +1027,12 @@ object CncfRuntime extends GlobalObservable {
     args.toVector match {
       case Vector() =>
         Consequence.failure("command name is required")
-      case Vector(component, service, operation, rest @ _*) =>
-        Consequence.success((s"$component.$service.$operation", rest.toVector))
       case Vector(single, rest @ _*) if single.contains("/") =>
         _selectorFromPath(single, "/").map(_ -> rest.toVector)
+      case Vector(single, rest @ _*) if single.contains(".") =>
+        Consequence.success((single, rest.toVector))
+      case Vector(component, service, operation, rest @ _*) =>
+        Consequence.success((s"$component.$service.$operation", rest.toVector))
       case Vector(single, rest @ _*) =>
         Consequence.success((single, rest.toVector))
     }
@@ -1054,10 +1062,35 @@ object CncfRuntime extends GlobalObservable {
 
   private def _build_request_arguments(
     values: Seq[String]
-  ): List[Argument] =
-    values.zipWithIndex.map { case (value, index) =>
-      Argument(s"arg${index + 1}", value)
-    }.toList
+  ): List[Argument] = {
+    val b = List.newBuilder[Argument]
+    val in = values.toVector
+    var positional = 1
+    var i = 0
+    while (i < in.length) {
+      val current = in(i)
+      if (current.startsWith("--") && current.length > 2) {
+        val body = current.drop(2)
+        val eq = body.indexOf('=')
+        if (eq > 0) {
+          b += Argument(body.take(eq), body.drop(eq + 1))
+        } else if (body.nonEmpty && i + 1 < in.length && !in(i + 1).startsWith("--")) {
+          b += Argument(body, in(i + 1))
+          i = i + 1
+        } else if (body.nonEmpty) {
+          b += Argument(body, "true")
+        } else {
+          b += Argument(s"arg$positional", current)
+          positional = positional + 1
+        }
+      } else {
+        b += Argument(s"arg$positional", current)
+        positional = positional + 1
+      }
+      i = i + 1
+    }
+    b.result()
+  }
 
   private def _component_operation_fqns(subsystem: Subsystem): Vector[String] =
     subsystem.components.flatMap { comp =>
@@ -1399,7 +1432,13 @@ class CncfRuntime() extends GlobalObservable {
     }
   }
 
-  def run(args: Array[String]): Int = {
+  def run(args: Array[String]): Int =
+    run(args, (_: Subsystem) => Nil)
+
+  def run(
+    args: Array[String],
+    extraComponents: Subsystem => Seq[Component]
+  ): Int = {
     val normalizedArgs = _normalize_help_aliases(args)
     _execute_top_level_help(normalizedArgs) match {
       case Some(code) => return code
@@ -1409,7 +1448,7 @@ class CncfRuntime() extends GlobalObservable {
       _print_usage()
       return 2
     }
-    val subsystem = _initialize(normalizedArgs)
+    val subsystem = _initialize(normalizedArgs, extraComponents)
     _runtime_protocol_engine.makeOperationRequest(normalizedArgs) match {
       case Consequence.Success(req) =>
         _run(subsystem, req)
@@ -1419,7 +1458,10 @@ class CncfRuntime() extends GlobalObservable {
     }
   }
 
-  private def _initialize(args: Array[String]): Subsystem = {
+  private def _initialize(
+    args: Array[String],
+    extraComponents: Subsystem => Seq[Component]
+  ): Subsystem = {
     val cwd = Paths.get("").toAbsolutePath.normalize
     val configuration = _resolve_configuration(cwd)
     val runconfig = RuntimeConfig.from(configuration)
@@ -1448,6 +1490,10 @@ class CncfRuntime() extends GlobalObservable {
     val colfactory = CollaboratorFactory.create(configuration)
     val compfactory = ComponentFactory.create(subsystem, colfactory, cwd, configuration)
     subsystem.setup(compfactory)
+    val extras = extraComponents(subsystem)
+    if (extras.nonEmpty) {
+      subsystem.add(extras)
+    }
     subsystem
   }
 
@@ -1865,7 +1911,10 @@ class CncfRuntime() extends GlobalObservable {
     _extract_runtime_options(args.toIndexedSeq) match { case (runtimeOptions, clean) =>
     _selectorAndArguments(clean).flatMap { case (selector, tail) =>
       val normalized = _normalize_meta_selector(subsystem, selector, tail.toVector)
-      val canonicalSelector = PathPreNormalizer.rewriteSelector(normalized._1, mode, _alias_resolver)
+      val aliasresolver =
+        if (subsystem.aliasResolver ne AliasResolver.empty) subsystem.aliasResolver
+        else _alias_resolver
+      val canonicalSelector = PathPreNormalizer.rewriteSelector(normalized._1, mode, aliasresolver)
       subsystem.resolver.resolve(canonicalSelector, allowPrefix = false, allowImplicit = false) match {
         case ResolutionResult.Resolved(_, component, service, operation) =>
           val arguments = _build_request_arguments(normalized._2)
@@ -1971,10 +2020,12 @@ class CncfRuntime() extends GlobalObservable {
     args.toVector match {
       case Vector() =>
         Consequence.failure("command name is required")
-      case Vector(component, service, operation, rest @ _*) =>
-        Consequence.success((s"$component.$service.$operation", rest.toVector))
       case Vector(single, rest @ _*) if single.contains("/") =>
         _selectorFromPath(single, "/").map(_ -> rest.toVector)
+      case Vector(single, rest @ _*) if single.contains(".") =>
+        Consequence.success((single, rest.toVector))
+      case Vector(component, service, operation, rest @ _*) =>
+        Consequence.success((s"$component.$service.$operation", rest.toVector))
       case Vector(single, rest @ _*) =>
         Consequence.success((single, rest.toVector))
     }
@@ -1998,10 +2049,35 @@ class CncfRuntime() extends GlobalObservable {
 
   private def _build_request_arguments(
     values: Seq[String]
-  ): List[Argument] =
-    values.zipWithIndex.map { case (value, index) =>
-      Argument(s"arg${index + 1}", value)
-    }.toList
+  ): List[Argument] = {
+    val b = List.newBuilder[Argument]
+    val in = values.toVector
+    var positional = 1
+    var i = 0
+    while (i < in.length) {
+      val current = in(i)
+      if (current.startsWith("--") && current.length > 2) {
+        val body = current.drop(2)
+        val eq = body.indexOf('=')
+        if (eq > 0) {
+          b += Argument(body.take(eq), body.drop(eq + 1))
+        } else if (body.nonEmpty && i + 1 < in.length && !in(i + 1).startsWith("--")) {
+          b += Argument(body, in(i + 1))
+          i = i + 1
+        } else if (body.nonEmpty) {
+          b += Argument(body, "true")
+        } else {
+          b += Argument(s"arg$positional", current)
+          positional = positional + 1
+        }
+      } else {
+        b += Argument(s"arg$positional", current)
+        positional = positional + 1
+      }
+      i = i + 1
+    }
+    b.result()
+  }
 
   def executeServerEmulator(subsystem: Subsystem, req: Request): Int = {
     val args = _make_args(req)
@@ -2142,7 +2218,10 @@ class CncfRuntime() extends GlobalObservable {
       case _ =>
         val in = args.toVector
         (in.lift(0), in.lift(1), in.lift(2)) match {
-          case (Some("SCRIPT"), Some("DEFAULT"), Some("RUN")) =>
+          case (Some(a), Some(b), Some(c))
+              if a.equalsIgnoreCase("script") &&
+                b.equalsIgnoreCase("default") &&
+                c.equalsIgnoreCase("run") =>
             _to_request(subsystem, args, RunMode.Script)
           case _ =>
             val xs = Vector("SCRIPT", "DEFAULT", "RUN") ++ in
@@ -2214,7 +2293,9 @@ class CncfRuntime() extends GlobalObservable {
   }
 
   private def _print_error(c: Conclusion): Unit = {
-    Console.err.println(c.show)
+    val rec = c.toRecord
+    val s = rec.toYamlString
+    Console.err.print(s)
   }
 
   private def _print_error(message: String): Unit = {

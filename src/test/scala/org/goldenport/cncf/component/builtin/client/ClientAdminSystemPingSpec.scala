@@ -1,6 +1,5 @@
 package org.goldenport.cncf.component.builtin.client
 
-import cats.Id
 import cats.~>
 
 import java.nio.charset.StandardCharsets
@@ -35,7 +34,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Feb. 15, 2026
+ *  version Feb. 15, 2026
+ * @version Mar. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientAdminSystemPingSpec
@@ -295,7 +295,7 @@ class ClientAdminSystemPingSpec
     )
     val datastore = org.goldenport.cncf.datastore.DataStore.noop()
     val eventengine = org.goldenport.cncf.event.EventEngine.noop(datastore)
-    val uow = new UnitOfWork(uowcontext, datastore, org.goldenport.cncf.entity.EntityStore.noop(), eventengine, CommitRecorder.noop)
+    val uow = new UnitOfWork(uowcontext, eventengine, CommitRecorder.noop)
     val interpreter = new UnitOfWorkInterpreter(uow)
     val runtime = _testRuntimeContext(driver, base.cncfCore.observability, uow, interpreter)
     TestHarness(subsystem, component, runtime, interpreter)
@@ -317,27 +317,14 @@ class ClientAdminSystemPingSpec
     uow: UnitOfWork,
     interpreter: UnitOfWorkInterpreter
   ): RuntimeContext = {
-    val idInterpreter = new (UnitOfWorkOp ~> Id) {
-      def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
-        interpreter.execute(fa)
-    }
-    val tryInterpreter = new (UnitOfWorkOp ~> scala.util.Try) {
-      def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
-        scala.util.Try(interpreter.execute(fa))
-    }
-    val eitherInterpreter = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
-      def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] =
-        try Right(interpreter.execute(op))
-        catch {
-          case e: Throwable => Left(e)
-        }
+    val idInterpreter = new (UnitOfWorkOp ~> Consequence) {
+      def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
+        Consequence(interpreter.execute(fa))
     }
     new RuntimeContext(
       core = _runtimeCore("client-admin-system-ping-spec-runtime", driver, observability),
       unitOfWorkSupplier = () => uow,
       unitOfWorkInterpreterFn = idInterpreter,
-      unitOfWorkTryInterpreterFn = tryInterpreter,
-      unitOfWorkEitherInterpreterFn = eitherInterpreter,
       commitAction = uowArg => {
         val _ = uowArg.commit()
         ()
@@ -355,24 +342,14 @@ class ClientAdminSystemPingSpec
     driver: HttpDriver,
     observability: ObservabilityContext
   ): RuntimeContext = {
-    val idInterpreter = new (UnitOfWorkOp ~> Id) {
-      def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
+    val idInterpreter = new (UnitOfWorkOp ~> Consequence) {
+      def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
         throw new UnsupportedOperationException("bootstrap runtime has no interpreter")
-    }
-    val tryInterpreter = new (UnitOfWorkOp ~> scala.util.Try) {
-      def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
-        throw new UnsupportedOperationException("bootstrap runtime has no interpreter")
-    }
-    val eitherInterpreter = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
-      def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] =
-        Left(new UnsupportedOperationException("bootstrap runtime has no interpreter"))
     }
     new RuntimeContext(
       core = _runtimeCore("client-admin-system-ping-spec-bootstrap-runtime", driver, observability),
       unitOfWorkSupplier = () => throw new UnsupportedOperationException("bootstrap runtime has no UnitOfWork"),
       unitOfWorkInterpreterFn = idInterpreter,
-      unitOfWorkTryInterpreterFn = tryInterpreter,
-      unitOfWorkEitherInterpreterFn = eitherInterpreter,
       commitAction = _ => (),
       abortAction = _ => (),
       disposeAction = _ => (),

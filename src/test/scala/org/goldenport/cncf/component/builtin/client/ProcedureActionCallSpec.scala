@@ -180,25 +180,11 @@ class ProcedureActionCallSpec
         unitOfWorkAccessCount += 1
         throw new UnsupportedOperationException("UnitOfWork must not be accessed")
       },
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Id) {
-        def apply[A](fa: UnitOfWorkOp[A]): Id[A] = {
+      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+        def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] = {
           val _ = fa
           unitOfWorkAccessCount += 1
           throw new UnsupportedOperationException("UnitOfWorkInterpreter must not be used")
-        }
-      },
-      unitOfWorkTryInterpreterFn = new (UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] = {
-          val _ = fa
-          unitOfWorkAccessCount += 1
-          throw new UnsupportedOperationException("UnitOfWorkTryInterpreter must not be used")
-        }
-      },
-      unitOfWorkEitherInterpreterFn = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
-        def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] = {
-          val _ = op
-          unitOfWorkAccessCount += 1
-          Left(new UnsupportedOperationException("UnitOfWorkEitherInterpreter must not be used"))
         }
       },
       commitAction = _ => {

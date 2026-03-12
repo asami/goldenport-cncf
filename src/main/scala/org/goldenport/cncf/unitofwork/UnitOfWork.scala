@@ -5,6 +5,8 @@ import scala.util.{Try, Success, Failure}
 import java.io.File
 import org.goldenport.{Consequence, Conclusion}
 import org.goldenport.ConsequenceT
+import org.goldenport.consequence.SourcePositionMacro
+import org.goldenport.process.{LocalShellCommandExecutor, ShellCommandExecutor}
 import org.goldenport.cncf.UowM
 import org.goldenport.cncf.Program
 import org.goldenport.cncf.context.ExecutionContext
@@ -19,25 +21,25 @@ import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.event.DomainEvent
 import org.goldenport.cncf.http.HttpDriver
-import org.goldenport.process.{LocalShellCommandExecutor, ShellCommandExecutor}
 
 /*
  * @since   Apr. 11, 2025
  *  version Dec. 21, 2025
  *  version Jan. 18, 2026
- * @version Feb. 27, 2026
+ *  version Feb. 27, 2026
+ * @version Mar. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
   context: ExecutionContext,
-  val datastore: DataStore = DataStore.noop(),
-  val entitystore: EntityStore = EntityStore.noop(),
   eventengine: EventEngine = EventEngine.noop(DataStore.noop()),
   recorder: CommitRecorder = CommitRecorder.noop
 ) {
   import UnitOfWork.*
 //  private var _http_driver: Option[HttpDriver] = None
 //  private var _shell_command_executor: Option[ShellCommandExecutor] = None
+
+  def transactionContext = context.transactionContext
 
   def create[T](entity: T)(using instance: EntityPersistentCreate[T]): Consequence[CreateResult[T]] = ???
 
@@ -51,11 +53,11 @@ class UnitOfWork(
 
   def delete[T](id: EntityId)(using instance: EntityPersistent[T]): Consequence[Unit] = ???
 
-  def searchableDatastore: Option[SearchableDataStore] =
-    datastore match {
-      case s: SearchableDataStore => Some(s)
-      case _ => None
-    }
+  // def searchableDatastore: Option[SearchableDataStore] =
+  //   datastore match {
+  //     case s: SearchableDataStore => Some(s)
+  //     case _ => None
+  //   }
 
   def httpDriver: HttpDriver = context.runtime.httpDriver
 
@@ -100,11 +102,11 @@ class UnitOfWork(
     events: Seq[DomainEvent]
   ): Consequence[CommitResult] =
     try {
-      val tx = TransactionContext.create()
+      val tx = TransactionContext.create(context.transactionContext)
       eventengine.stage(events)
       recorder.record("UnitOfWork.prepare")
       val prepares = List(
-        datastore.prepare(tx),
+        tx.prepare(),
         eventengine.prepare(tx)
       )
       prepares.collectFirst {
@@ -112,13 +114,13 @@ class UnitOfWork(
       } match {
         case Some(reason) =>
           recorder.record("UnitOfWork.abort")
-          eventengine.abort(tx)
-          datastore.abort(tx)
+          eventengine.abort(tx) // TODO
+          tx.abort()
           Consequence.failure(reason)
         case None =>
           recorder.record("UnitOfWork.commit")
-          datastore.commit(tx)
-          eventengine.commit(tx)
+          tx.commit()
+          eventengine.commit(tx) // TODO
           Consequence.success(())
       }
     } catch {
@@ -128,10 +130,10 @@ class UnitOfWork(
 
   def abort(): Consequence[AbortResult] =
     try {
-      val tx = TransactionContext.create()
+      val tx = TransactionContext.create(context.transactionContext)
       recorder.record("UnitOfWork.abort")
-      eventengine.abort(tx)
-      datastore.abort(tx)
+      eventengine.abort(tx) // TODO
+      tx.abort()
       Consequence.success(())
     } catch {
       case e: Throwable =>
@@ -158,12 +160,17 @@ object UnitOfWork {
   ): UnitOfWork = {
     val base = ExecutionContext.create() // ExecutionContext.createWithSystem(SystemContext.empty)
     val eventengine = EventEngine.noop(datastore)
-    new UnitOfWork(base, datastore, entitystore, eventengine)
+//    new UnitOfWork(base, datastore, entitystore, eventengine)
+    new UnitOfWork(base, eventengine)
   }
 
-  def uowmNotImplemented[F[_], A]: UowM[F, A] =
-    ConsequenceT.fromConsequence[[X] =>> Program[F, X], A](Consequence.failNotImplemented)
+  inline def uowmNotImplemented[F[_], A]: UowM[F, A] = {
+    val pos = SourcePositionMacro.position()
+    ConsequenceT.fromConsequence[[X] =>> Program[F, X], A](Consequence.notImplemented(pos))
+  }
 
-  def uowmNotImplemented[F[_], A](message: String): UowM[F, A] =
-    ConsequenceT.fromConsequence[[X] =>> Program[F, X], A](Consequence.failNotImplemented(message))
+  inline def uowmNnotImplemented[F[_], A](message: String): UowM[F, A] = {
+    val pos = SourcePositionMacro.position()
+    ConsequenceT.fromConsequence[[X] =>> Program[F, X], A](Consequence.notImplemented(pos, message))
+  }
 }

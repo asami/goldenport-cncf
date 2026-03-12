@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  9, 2026
  *  version Jan. 18, 2026
- * @version Mar.  6, 2026
+ * @version Mar.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
@@ -45,6 +45,34 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
           req.component.getOrElse(fail("missing component")).shouldBe("admin")
           req.service.getOrElse(fail("missing service")).shouldBe("system")
           req.operation.shouldBe("ping")
+        case Consequence.Failure(c) =>
+          fail(s"unexpected failure: ${c}")
+      }
+    }
+
+    "parse selector followed by option-like arguments" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      CncfRuntime.parseCommandArgs(subsystem, Array("admin.system.ping", "--name", "taro")) match {
+        case Consequence.Success(req: Request) =>
+          req.component.getOrElse(fail("missing component")).shouldBe("admin")
+          req.service.getOrElse(fail("missing service")).shouldBe("system")
+          req.operation.shouldBe("ping")
+          req.arguments.map(_.name) shouldBe List("name")
+          req.arguments.map(_.value.toString) shouldBe List("taro")
+        case Consequence.Failure(c) =>
+          fail(s"unexpected failure: ${c}")
+      }
+    }
+
+    "parse selector followed by option-like key=value arguments" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      CncfRuntime.parseCommandArgs(subsystem, Array("admin.system.ping", "--name=taro")) match {
+        case Consequence.Success(req: Request) =>
+          req.component.getOrElse(fail("missing component")).shouldBe("admin")
+          req.service.getOrElse(fail("missing service")).shouldBe("system")
+          req.operation.shouldBe("ping")
+          req.arguments.map(_.name) shouldBe List("name")
+          req.arguments.map(_.value.toString) shouldBe List("taro")
         case Consequence.Failure(c) =>
           fail(s"unexpected failure: ${c}")
       }

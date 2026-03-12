@@ -22,7 +22,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 19, 2026
- * @version Feb.  1, 2026
+ *  version Feb.  1, 2026
+ * @version Mar. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AliasResolutionSpec
@@ -37,16 +38,6 @@ final class AliasResolutionSpec
       classOf[Subsystem],
       classOf[Array[String]],
       classOf[RunMode]
-    )
-    method.setAccessible(true)
-    method
-  }
-
-  private lazy val toRequestScriptMethod: Method = {
-    val method = CncfRuntime.getClass.getDeclaredMethod(
-      "_to_request_script",
-      classOf[Subsystem],
-      classOf[Array[String]]
     )
     method.setAccessible(true)
     method
@@ -83,11 +74,12 @@ final class AliasResolutionSpec
     "apply the same alias metdata and resolve ping to admin.system.ping" in {
       Given("a script runtime configured with the ping alias")
       withAliasContext(RunMode.Script, canonicalAliasConfig) { (aliasResolver, _) =>
-        val subsystem = DefaultSubsystemFactory.default(Some("script"))
-        val result = toRequestScriptMethod.invoke(
+        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val result = parseCommandArgsMethod.invoke(
           CncfRuntime,
           subsystem,
-          Array("ping")
+          Array("ping"),
+          RunMode.Script
         ).asInstanceOf[Consequence[Request]]
 
         result match {
@@ -174,7 +166,6 @@ final class AliasResolutionSpec
     val context = new GlobalRuntimeContext(
       core = core,
       config = runtimeConfig,
-      httpDriver = httpDriver,
       aliasResolver = resolver,
       runtimeMode = mode,
       runtimeVersion = CncfVersion.current,

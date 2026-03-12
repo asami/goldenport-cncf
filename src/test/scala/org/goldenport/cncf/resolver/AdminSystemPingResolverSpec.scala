@@ -14,7 +14,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 20, 2026
- * @version Feb.  1, 2026
+ *  version Feb.  1, 2026
+ * @version Mar. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminSystemPingResolverSpec extends AnyWordSpec with Matchers {
@@ -63,7 +64,6 @@ final class AdminSystemPingResolverSpec extends AnyWordSpec with Matchers {
     val context = new GlobalRuntimeContext(
       core = core,
       config = runtimeConfig,
-      httpDriver = httpDriver,
       aliasResolver = resolver,
       runtimeMode = mode,
       runtimeVersion = CncfVersion.current,

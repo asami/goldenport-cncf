@@ -19,7 +19,8 @@ import org.goldenport.cncf.backend.collaborator.Collaborator
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
  *  version Jan. 22, 2026
- * @version Feb. 21, 2026
+ *  version Feb. 21, 2026
+ * @version Mar. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
@@ -55,7 +56,7 @@ abstract class FunctionalActionCall extends ActionCall {
   protected def build_Program: ExecUowM[OperationResponse]
 
   final override def execute(): Consequence[OperationResponse] =
-    build_Program.value.foldMap(executionContext.runtime.unitOfWorkInterpreter)
+    build_Program.value.foldMap(executionContext.runtime.unitOfWorkInterpreter).flatMap(identity)
 }
 
 abstract class ProcedureActionCall extends ActionCall {

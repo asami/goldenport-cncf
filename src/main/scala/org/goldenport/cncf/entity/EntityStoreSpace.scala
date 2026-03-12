@@ -2,6 +2,7 @@ package org.goldenport.cncf.entity
 
 import org.goldenport.Consequence
 import org.goldenport.provisional.observation.Observation
+import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datatype.EntityId
 import org.goldenport.cncf.datatype.EntityCollectionId
@@ -11,23 +12,31 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
 
 /*
  * @since   Feb. 24, 2026
- * @version Feb. 25, 2026
+ *  version Feb. 25, 2026
+ * @version Mar. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {
   private var _entity_stores: Vector[EntityStore] = Vector.empty
 
-  def dataStoreCollection(id: EntityId): Consequence[DataStore.CollectionId] = ???
+  def addEntityStore(es: EntityStore): EntityStoreSpace = {
+    _entity_stores = _entity_stores :+ es
+    this
+  }
 
-  def dataStoreCollection(id: EntityCollectionId): Consequence[DataStore.CollectionId] = ???
+  def dataStoreCollection(id: EntityId): Consequence[DataStore.CollectionId] =
+    dataStoreCollection(id.collection)
+
+  def dataStoreCollection(id: EntityCollectionId): Consequence[DataStore.CollectionId] =
+    Consequence.success(DataStore.CollectionId.EntityStore(id))
 
   def dataStoreEntryId(id: EntityId): Consequence[DataStore.EntryId] =
     Consequence(DataStore.EntryId(id))
 
   private def _by_collection(cid: EntityCollectionId): Consequence[EntityStore] =
-    Consequence.successOrFail(_entity_stores.find(_.isAccept(cid)))(
-      Observation.referenceNotFound(cid)
-    )
+    Consequence.successOrServiceProviderByKeyNotFound(
+      _entity_stores.find(_.isAccept(cid))
+    )("entitystore", cid.print)
 
   def create[T](op: EntityStoreCreate[T])(using ctx: ExecutionContext): Consequence[CreateResult[T]] = {
     given EntityPersistentCreate[T] = op.tc
@@ -74,5 +83,13 @@ class EntityStoreSpace {
       entitystore <- _by_collection(op.query.collection)
       r <- entitystore.search(op.query)
     } yield r
+  }
+}
+
+object EntityStoreSpace {
+  def create(conf: ResolvedConfiguration): EntityStoreSpace = {
+    val ess = new EntityStoreSpace()
+    val mes = EntityStore.standard()
+    ess.addEntityStore(mes)
   }
 }

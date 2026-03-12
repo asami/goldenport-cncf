@@ -12,13 +12,13 @@ import org.goldenport.cncf.datatype.EntityCollectionId
 import org.goldenport.cncf.directive.{Query, SearchResult}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.datastore.DataStore.EntryId
-// import org.goldenport.cncf.datastore.{DataStore, QueryDirective, SearchResult}
 
 /*
  * @since   Apr. 11, 2025
  *  version Dec. 18, 2025
  *  version Jan. 10, 2026
- * @version Feb. 26, 2026
+ *  version Feb. 26, 2026
+ * @version Mar. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -55,6 +55,8 @@ object EntityStore {
   final val PROP_ID = "id"
 
   def noop() = NoopEntityStore()
+
+  def standard(): EntityStore = StandardEntityStore()
 
   // final case class EntityId(
   //   major: String,
@@ -110,18 +112,18 @@ class NoopEntityStore() extends EntityStore {
 }
 
 class StandardEntityStore(
-  private val _datastore: DataStore
 ) extends EntityStore {
   import EntityStore.*
 
   def name: String = "standard"
 
+  def createId[T](entity: T)(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): EntityId =
+    EntityId(ctx.major, ctx.minor, tc.collection(entity))
+
   def create[T](
     entity: T
   )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = {
-    val id = tc.id(entity) getOrElse {
-      ???
-    }
+    val id = tc.id(entity) getOrElse createId(entity)
     val rec = tc.toRecord(entity)
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)

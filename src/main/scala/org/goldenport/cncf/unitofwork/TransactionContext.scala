@@ -1,15 +1,21 @@
 package org.goldenport.cncf.unitofwork
 
 import org.goldenport.id.UniversalId
+import org.goldenport.cncf.context.{TransactionContext => DataSourceTransactionContext}
 
 /*
  * @since   Jan.  6, 2026
- * @version Jan.  6, 2026
+ * @version Mar. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TransactionContext(
-  id: TransactionContext.TransactionContextId
-)
+  id: TransactionContext.TransactionContextId,
+  tx: DataSourceTransactionContext
+) {
+  def prepare(): Unit = {}
+  def commit(): Unit = {}
+  def abort(): Unit = {}
+}
 
 object TransactionContext {
   final case class TransactionContextId(
@@ -22,6 +28,6 @@ object TransactionContext {
       TransactionContextId("cncf", "transaction_context")
   }
 
-  def create(): TransactionContext =
-    TransactionContext(TransactionContextId.generate())
+  def create(tx: DataSourceTransactionContext): TransactionContext =
+    TransactionContext(TransactionContextId.generate(), tx)
 }

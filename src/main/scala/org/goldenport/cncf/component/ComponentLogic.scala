@@ -6,7 +6,7 @@ import org.goldenport.protocol.Request
 import org.goldenport.protocol.Response
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.cncf.action.{Action, ActionCall, QueryAction, ResourceAccess}
-import cats.{Id, ~>}
+import cats.~>
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeKind}
 import org.goldenport.cncf.backend.collaborator.Collaborator
 import org.goldenport.cncf.http.HttpDriver
@@ -18,7 +18,8 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 /*
  * @since   Jan.  3, 2026
  *  version Jan. 20, 2026
- * @version Feb. 25, 2026
+ *  version Feb. 25, 2026
+ * @version Mar. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -79,10 +80,13 @@ case class ComponentLogic(
     val driver = component.applicationConfig.httpDriver
       .orElse(component.subsystem.flatMap(_.httpDriver))
       .getOrElse(_fallback_http_driver_())
-//    val uow = component.unitOfWork.withHttpDriver(Some(driver))
-    val uow = component.unitOfWork
-    val runtime = _component_runtime_context(uow, driver)
-    ExecutionContext.create(runtime)
+    lazy val context: ExecutionContext = ExecutionContext.create(runtime)
+    // Bind UnitOfWork to the ActionCall execution context.
+    lazy val uow: UnitOfWork = new UnitOfWork(
+      context = context
+    )
+    lazy val runtime: RuntimeContext = _component_runtime_context(() => uow, driver)
+    context
   }
 
   // private def _ping_action_(
@@ -98,7 +102,7 @@ case class ComponentLogic(
   // }
 
   private def _component_runtime_context(
-    uow: UnitOfWork,
+    uowsupplier: () => UnitOfWork,
     driver: HttpDriver
   ): RuntimeContext = {
     val parent = component.scopeContext
@@ -108,24 +112,16 @@ case class ComponentLogic(
       observabilityContext = parent.observabilityContext,
       httpDriverOption = Some(driver)
     )
-    val idInterpreter = new (UnitOfWorkOp ~> Id) {
-      def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
-        new UnitOfWorkInterpreter(uow).execute(fa)
-    }
-    val tryInterpreter = new (UnitOfWorkOp ~> scala.util.Try) {
-      def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
-        throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not available in component runtime")
-    }
-    val eitherInterpreter = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
-      def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] =
-        Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not available in component runtime"))
+    val consequenceInterpreter = new (UnitOfWorkOp ~> Consequence) {
+      def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
+        new UnitOfWorkInterpreter(uowsupplier()).run(
+          org.goldenport.ConsequenceT.liftF(cats.free.Free.liftF(fa))
+        )
     }
     new RuntimeContext(
       core = core,
-      unitOfWorkSupplier = () => uow,
-      unitOfWorkInterpreterFn = idInterpreter,
-      unitOfWorkTryInterpreterFn = tryInterpreter,
-      unitOfWorkEitherInterpreterFn = eitherInterpreter,
+      unitOfWorkSupplier = uowsupplier,
+      unitOfWorkInterpreterFn = consequenceInterpreter,
       commitAction = commitUow => {
         val _ = commitUow.commit()
         ()

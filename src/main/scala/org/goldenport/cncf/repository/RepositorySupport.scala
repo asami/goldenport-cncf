@@ -4,11 +4,13 @@ import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.{Cursor, DataStore, QueryDirective, ResultRange, SearchResult, SearchableDataStore}
+import org.goldenport.cncf.datastore.DataStoreSpace
 
 /*
  * @since   Jan.  6, 2026
  *  version Jan. 10, 2026
- * @version Feb. 21, 2026
+ *  version Feb. 21, 2026
+ * @version Mar. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 trait RepositorySupport {
@@ -16,19 +18,18 @@ trait RepositorySupport {
 
   protected final def unitOfWork = executionContext.runtime.unitOfWork
 
-  protected final def datastore: DataStore =
-    unitOfWork.datastore
+  protected final def datastore: DataStoreSpace = executionContext.dataStoreSpace
 
-  protected final def searchableDatastore: SearchableDataStore =
-    unitOfWork.searchableDatastore.getOrElse(
-      throw new IllegalStateException("SearchableDataStore is required for search operations")
-    )
+  // protected final def searchableDatastore: SearchableDataStore =
+  //   unitOfWork.searchableDatastore.getOrElse(
+  //     throw new IllegalStateException("SearchableDataStore is required for search operations")
+  //   )
 
   protected final def searchRecords(
     collection: DataStore.CollectionId,
     directive: QueryDirective
   ): Consequence[SearchResult] =
-    searchableDatastore.search(collection, directive)
+    datastore.search(collection, directive)
 
   protected final def searchForView(
     collection: DataStore.CollectionId,

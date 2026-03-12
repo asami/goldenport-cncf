@@ -1,6 +1,7 @@
 package org.goldenport.cncf.repository
 
 import cats.{Id, ~>}
+import org.goldenport.Consequence
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ExecutionContextId, ObservabilityContext, RuntimeContext, TraceId}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.datastore.{DataStore, OrderDirection, Query, QueryDirective, QueryLimit, QueryOrder, QueryProjection, ResultRange}
@@ -13,7 +14,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  6, 2026
- * @version Feb. 25, 2026
+ *  version Feb. 25, 2026
+ * @version Mar. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class RepositorySelectSupportSpec
@@ -52,7 +54,7 @@ class RepositorySelectSupportSpec
     val runtime = new TestRuntimeContext
     val base = ExecutionContext.create()
     val ctx = ExecutionContext.withRuntimeContext(base, runtime.runtime)
-    val uow = new UnitOfWork(ctx, datastore, org.goldenport.cncf.entity.EntityStore.noop(), eventengine, recorder)
+    val uow = new UnitOfWork(ctx, eventengine, recorder)
     runtime.bind(uow)
     (ctx, datastore)
   }
@@ -79,17 +81,9 @@ class RepositorySelectSupportSpec
       unitOfWorkSupplier = () => _unit_of_work.getOrElse {
         throw new IllegalStateException("UnitOfWork has not been bound")
       },
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Id) {
-        def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
+      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+        def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in repository spec")
-      },
-      unitOfWorkTryInterpreterFn = new (UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
-          throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in repository spec")
-      },
-      unitOfWorkEitherInterpreterFn = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
-        def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] =
-          Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in repository spec"))
       },
       commitAction = uow => {
         val _ = uow.commit()
@@ -118,6 +112,7 @@ class RepositorySelectSupportSpec
     recorder: CommitRecorder
   ) extends org.goldenport.cncf.datastore.SearchableDataStore {
     private var entries: Map[DataStore.CollectionId, Map[DataStore.EntryId, Record]] = Map.empty
+    def isAccept(cid: DataStore.CollectionId): Boolean = true
 
     private def _collection(
       collection: DataStore.CollectionId

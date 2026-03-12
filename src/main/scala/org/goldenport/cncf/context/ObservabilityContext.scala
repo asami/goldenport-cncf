@@ -10,7 +10,8 @@ import org.goldenport.id.UniversalId
 /*
  * @since   Dec. 21, 2025
  *  version Dec. 31, 2025
- * @version Jan. 20, 2026
+ *  version Jan. 20, 2026
+ * @version Mar. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TraceId(
@@ -30,7 +31,7 @@ final case class SpanId(
   major   = subsystem,
   minor   = scope,
   kind    = "span",
-  subkind = Some(spanKind)
+  subkind = spanKind
 )
 
 final case class CorrelationId(

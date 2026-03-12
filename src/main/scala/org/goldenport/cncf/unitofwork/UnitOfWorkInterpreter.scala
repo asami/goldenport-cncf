@@ -19,7 +19,8 @@ import org.goldenport.process.ShellCommandExecutor
 /*
  * @since   Jan. 10, 2026
  *  version Jan. 21, 2026
- * @version Feb. 25, 2026
+ *  version Feb. 25, 2026
+ * @version Mar. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -136,9 +137,9 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
   private def _http_driver: HttpDriver = uow.httpDriver
 
-  private def _data_store_space: DataStoreSpace = ???
+  private def _data_store_space: DataStoreSpace = uow.executionContext.dataStoreSpace
 
-  private def _entity_store_space: EntityStoreSpace = ???
+  private def _entity_store_space: EntityStoreSpace = uow.executionContext.entityStoreSpace
 
   private def _shell_command_executor: ShellCommandExecutor =
     uow.shellCommandExecutor

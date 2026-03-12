@@ -7,6 +7,7 @@ import java.util.Locale
 import org.goldenport.context.{EnvironmentContext as CoreEnvironmentContext, ExecutionContext as CoreExecutionContext, I18nContext, RandomContext, VirtualMachineContext}
 import org.goldenport.id.{UniversalId as CoreUniversalId}
 import org.goldenport.log.Logger
+import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
 import org.goldenport.cncf.datastore.DataStoreSpace
@@ -36,7 +37,8 @@ import cats.~>
  * @since   Dec. 21, 2025
  *  version Dec. 31, 2025
  *  version Jan. 20, 2026
- * @version Feb. 25, 2026
+ *  version Feb. 25, 2026
+ * @version Mar. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -54,6 +56,8 @@ abstract class ExecutionContext
   def dataStoreSpace: DataStoreSpace = runtime.dataStoreSpace
 
   def entityStoreSpace: EntityStoreSpace = runtime.entityStoreSpace
+
+  lazy val transactionContext = TransactionContext(runtime)
 }
 
 object ExecutionContext {
@@ -67,6 +71,8 @@ object ExecutionContext {
     runtime: RuntimeContext,
     jobContext: org.goldenport.cncf.job.JobContext
   ) {
+    def major = "sys"
+    def minor = "sys"
     def withScope(p: ScopeContext): CncfCore = copy(scope = p)
   }
 
@@ -79,6 +85,8 @@ object ExecutionContext {
       def runtime: RuntimeContext = cncfCore.runtime
       def unitOfWork: org.goldenport.cncf.unitofwork.UnitOfWork = runtime.unitOfWork
       def jobContext: org.goldenport.cncf.job.JobContext = cncfCore.jobContext
+      def major = cncfCore.major
+      def minor = cncfCore.minor
     }
   }
 
@@ -223,17 +231,9 @@ object ExecutionContext {
     observability: ObservabilityContext
   ): RuntimeContext = {
     val driver = FakeHttpDriver.okText("nop")
-    val idInterpreter = new (UnitOfWorkOp ~> cats.Id) {
-      def apply[A](fa: UnitOfWorkOp[A]): cats.Id[A] =
+    val consequenceInterpreter = new (UnitOfWorkOp ~> Consequence) {
+      def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
         throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in test context")
-    }
-    val tryInterpreter = new (UnitOfWorkOp ~> scala.util.Try) {
-      def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
-        throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in test context")
-    }
-    val eitherInterpreter = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
-      def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] =
-        Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in test context"))
     }
     new RuntimeContext(
       core = RuntimeContext.core(
@@ -243,9 +243,7 @@ object ExecutionContext {
         httpDriverOption = Some(driver)
       ),
       unitOfWorkSupplier = () => new UnitOfWork(context()),
-      unitOfWorkInterpreterFn = idInterpreter,
-      unitOfWorkTryInterpreterFn = tryInterpreter,
-      unitOfWorkEitherInterpreterFn = eitherInterpreter,
+      unitOfWorkInterpreterFn = consequenceInterpreter,
       commitAction = uow => {
         val _ = uow.commit()
         ()

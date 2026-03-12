@@ -16,7 +16,8 @@ import org.goldenport.test.matchers.ConsequenceMatchers
 
 /*
  * @since   Jan.  6, 2026
- * @version Feb. 27, 2026
+ *  version Feb. 27, 2026
+ * @version Mar. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMatchers {
@@ -33,16 +34,14 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
       recorder.entries shouldBe Vector(
         "ActionCall.commit",
         "UnitOfWork.prepare",
-        "DataStore.prepare",
         "EventEngine.prepare",
         "UnitOfWork.commit",
-        "DataStore.commit",
         "EventEngine.commit",
         "DataStore.commit"
       )
     }
 
-    "abort in the expected order when a participant rejects prepare" in {
+    "commit in the expected order when datastore prepare would reject" in {
       val recorder = new InMemoryCommitRecorder
       val dataStore = new RejectingDataStore(recorder)
       val eventEngine = EventEngine.noop(dataStore, recorder)
@@ -50,15 +49,14 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
 
       val result = actionCall.commit()
 
-      result should be_failure
+      result should be_success
       recorder.entries shouldBe Vector(
         "ActionCall.commit",
         "UnitOfWork.prepare",
-        "DataStore.prepare",
         "EventEngine.prepare",
-        "UnitOfWork.abort",
-        "EventEngine.abort",
-        "DataStore.abort"
+        "UnitOfWork.commit",
+        "EventEngine.commit",
+        "DataStore.commit"
       )
     }
   }
@@ -71,7 +69,7 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
     val runtime = new TestRuntimeContext
     val base = ExecutionContext.create()
     val ctx = ExecutionContext.withRuntimeContext(base, runtime.runtime)
-    val uow = new UnitOfWork(ctx, dataStore, org.goldenport.cncf.entity.EntityStore.noop(), eventEngine, recorder)
+    val uow = new UnitOfWork(ctx, eventEngine, recorder)
     runtime.bind(uow)
 
     val action = new CommandAction() {
@@ -107,17 +105,9 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
       unitOfWorkSupplier = () => _unit_of_work.getOrElse {
         throw new IllegalStateException("UnitOfWork has not been bound")
       },
-      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Id) {
-        def apply[A](fa: UnitOfWorkOp[A]): Id[A] =
+      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+        def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
           throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in NOOP spec")
-      },
-      unitOfWorkTryInterpreterFn = new (UnitOfWorkOp ~> scala.util.Try) {
-        def apply[A](fa: UnitOfWorkOp[A]): scala.util.Try[A] =
-          throw new UnsupportedOperationException("unitOfWorkTryInterpreter is not used in NOOP spec")
-      },
-      unitOfWorkEitherInterpreterFn = new (UnitOfWorkOp ~> RuntimeContext.EitherThrowable) {
-        def apply[A](op: UnitOfWorkOp[A]): Either[Throwable, A] =
-          Left(new UnsupportedOperationException("unitOfWorkEitherInterpreter is not used in NOOP spec"))
       },
       commitAction = _ => (),
       abortAction = _ => (),
@@ -149,6 +139,8 @@ class UnitOfWork2pcNoopSpec extends AnyWordSpec with Matchers with ConsequenceMa
   private final class RejectingDataStore(
     recorder: CommitRecorder
   ) extends DataStore {
+    def isAccept(cid: DataStore.CollectionId): Boolean = true
+
     def create(
       collection: DataStore.CollectionId,
       id: DataStore.EntryId,

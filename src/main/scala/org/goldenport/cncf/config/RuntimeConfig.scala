@@ -6,11 +6,14 @@ import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.log.LogBackend
 import org.goldenport.cncf.observability.LogLevel
 import org.goldenport.cncf.http.{HttpDriver, FakeHttpDriver, HttpDriverFactory}
+import org.goldenport.cncf.datastore.DataStoreSpace
+import org.goldenport.cncf.entity.EntityStoreSpace
 
 /*
  * @since   Jan. 18, 2026
  *  version Jan. 30, 2026
- * @version Feb.  1, 2026
+ *  version Feb.  1, 2026
+ * @version Mar. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -18,6 +21,8 @@ final case class RuntimeConfig(
   logLevel: LogLevel,
   serverEmulatorBaseUrl: String,
   httpDriver: HttpDriver,
+  dataStoreSpace: DataStoreSpace,
+  entityStoreSpace: EntityStoreSpace,
   mode: RunMode
 )
 
@@ -36,6 +41,8 @@ object RuntimeConfig {
       LogLevel.Info,
       serverEmulatorBaseUrl = DefaultServerEmulatorBaseUrl,
       httpDriver = HttpDriverFactory.default,
+      dataStoreSpace = new DataStoreSpace(),
+      entityStoreSpace = new EntityStoreSpace(),
       mode = RunMode.Command
     )
 
@@ -78,11 +85,15 @@ object RuntimeConfig {
         case None => LogLevel.Info
       }
     }
+    val datastorespace = DataStoreSpace.create(configuration)
+    val entitystorespace = EntityStoreSpace.create(configuration)
     RuntimeConfig(
       logbackend,
       loglevel,
       serverEmulatorBaseUrl = baseurl,
       httpDriver = httpdriver,
+      dataStoreSpace = datastorespace,
+      entityStoreSpace = entitystorespace,
       mode = mode
     )
   }

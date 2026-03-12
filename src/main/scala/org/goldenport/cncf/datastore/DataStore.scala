@@ -1,21 +1,26 @@
 package org.goldenport.cncf.datastore
 
 import scala.collection.immutable.VectorMap
+import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.text.Presentable
 import org.goldenport.id.UniversalId
 import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.unitofwork.{CommitParticipant, CommitRecorder, PrepareResult, TransactionContext}
+import org.goldenport.cncf.datatype.EntityCollectionId
 
 /*
  * @since   Jan.  6, 2026
  *  version Jan. 10, 2026
- * @version Feb. 25, 2026
+ *  version Feb. 25, 2026
+ * @version Mar. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {
   import DataStore.*
+
+  def isAccept(cid: CollectionId): Boolean
 
   def create(
     collection: CollectionId,
@@ -43,8 +48,22 @@ trait DataStore extends CommitParticipant {
 }
 
 object DataStore {
-  case class CollectionId(name: String)
+  sealed trait CollectionId extends Presentable {
+    def collectionName: String
+  }
+  object CollectionId {
+    case class Instance(name: String) extends
+        UniversalId("sys", "sys", "datastore", name, Instant.EPOCH)
+        with CollectionId {
+      def collectionName = name
+    }
+    case class EntityStore(id: EntityCollectionId) extends CollectionId {
+      def collectionName = id.name
+      def print = id.print
+    }
 
+    def apply(name: String): CollectionId = Instance(name)
+  }
 
   sealed trait EntryId extends Presentable
   object EntryId {
@@ -82,6 +101,8 @@ object DataStore {
   private final class NoopDataStore(
     recorder: CommitRecorder
   ) extends DataStore {
+    def isAccept(cid: CollectionId): Boolean = true
+
     def create(
       collection: CollectionId,
       id: EntryId,
@@ -126,13 +147,27 @@ object DataStore {
   class InMemoryDataStore(
     recorder: CommitRecorder
   ) extends DataStore {
+    def isAccept(cid: CollectionId): Boolean = true
+
     private var _collections: VectorMap[CollectionId, InMemoryDataStore.Collection] = VectorMap.empty
 
     private def _ensure_collection(collection: CollectionId): Consequence[InMemoryDataStore.Collection] =
-      ???
+      _collections.get(collection) match {
+        case Some(c) =>
+          Consequence.success(c)
+        case None =>
+          val c = new InMemoryDataStore.Collection(collection)
+          _collections = _collections.updated(collection, c)
+          Consequence.success(c)
+      }
 
     protected def take_collection(collection: CollectionId): Consequence[InMemoryDataStore.Collection] =
-      ???
+      _collections.get(collection) match {
+        case Some(c) =>
+          Consequence.success(c)
+        case None =>
+          Consequence.DataStoreNotFound(collection.print)
+      }
 
     def create(
       collection: CollectionId,
@@ -180,32 +215,37 @@ object DataStore {
   }
   object InMemoryDataStore {
     class Collection(val id: CollectionId) {
+      def collectionName = id.collectionName
+
       private var _entries: VectorMap[EntryId, Record] = VectorMap.empty
 
       protected def to_entry_id(p: EntryId): Consequence[EntryId] = ???
 
+      private def _create_entry_id = DataStoreEntryId("sys", "sys", collectionName)
+
       def create(record: Record)(using ctx: ExecutionContext): Consequence[Unit] =
         for {
-          _ <- _check_duplicate(record)
-          _ <- _create_entry(record)
+          entryid <- _ensure_id(record)
+          _ <- _check_duplicate(entryid)
+          _ <- _create_entry(entryid, record)
         } yield {}
 
-      private def _check_duplicate(rec: Record): Consequence[Unit] = {
-        val id = rec.getString("id")
-        id match {
-          case Some(s) => EntryId.parse(s).flatMap { eid =>
-            if (_entries.contains(eid))
-              Consequence.DataStoreDuplicate(s)
-            else
-              Consequence.unit
-          }
-          case None => Consequence.unit
+      private def _ensure_id(rec: Record): Consequence[EntryId] =
+        rec.getString("id") match {
+          case Some(s) => EntryId.parse(s)
+          case None => Consequence(_create_entry_id)
         }
-      }
 
-      private def _create_entry(rec: Record): Consequence[Unit] = {
-        ???
-      }
+      private def _check_duplicate(entryid: EntryId): Consequence[Unit] =
+        if (_entries.contains(entryid))
+          Consequence.DataStoreDuplicate(entryid.print)
+        else
+          Consequence.unit
+
+      private def _create_entry(entryid: EntryId, rec: Record): Consequence[Unit] =
+        Consequence {
+          _entries = _entries.updated(entryid, rec)
+        }
 
       def load(id: EntryId): Consequence[Option[Record]] =
         Consequence(None)
