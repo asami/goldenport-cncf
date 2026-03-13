@@ -3,12 +3,13 @@ package org.goldenport.cncf.context
 import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.config.ResolvedParameters
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 
 /*
  * @since   Dec. 21, 2025
  *  version Jan. 18, 2026
- * @version Mar. 11, 2026
+ * @version Mar. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -20,6 +21,7 @@ final class RuntimeContext(
   disposeAction: UnitOfWork => Unit,
   token: String
 ) extends ScopeContext() {
+  private var _resolved_parameters: Option[ResolvedParameters] = None
 
   lazy val unitOfWork: UnitOfWork = unitOfWorkSupplier()
 
@@ -32,6 +34,19 @@ final class RuntimeContext(
   def dispose(): Unit = disposeAction(unitOfWork)
 
   def toToken: String = token
+
+  def resolvedParameters: ResolvedParameters =
+    _resolved_parameters.getOrElse(
+      ResolvedParameters.empty(GlobalRuntimeContext.current.map(_.resolvedParameters))
+    )
+
+  def setResolvedParameters(
+    params: ResolvedParameters
+  ): Unit =
+    _resolved_parameters = Some(params)
+
+  def clearResolvedParameters(): Unit =
+    _resolved_parameters = None
 }
 
 object RuntimeContext {

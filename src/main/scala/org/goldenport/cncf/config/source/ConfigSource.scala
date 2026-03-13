@@ -38,12 +38,12 @@ sealed trait ConfigSource {
 object ConfigSource {
 
   /**
-   * Home directory configuration source (~/.sie).
+   * Home directory configuration source (~/.cncf).
    */
   def home(): Option[ConfigSource] = {
     val home = sys.props.get("user.home").map(p => Path.of(p))
     home.map { base =>
-      val path = base.resolve(".sie").resolve("config.conf")
+      val path = base.resolve(".cncf").resolve("config.conf")
       File(
         origin = ConfigOrigin.Home,
         path   = path,
@@ -54,11 +54,11 @@ object ConfigSource {
   }
 
   /**
-   * Project-level configuration source (project root /.sie).
+   * Project-level configuration source (project root /.cncf).
    * Project root resolution is handled elsewhere.
    */
   def project(cwd: Path): Option[ConfigSource] = {
-    val path = cwd.resolve(".sie").resolve("config.conf")
+    val path = cwd.resolve(".cncf").resolve("config.conf")
     Some(
       File(
         origin = ConfigOrigin.Project,
@@ -70,10 +70,10 @@ object ConfigSource {
   }
 
   /**
-   * Current working directory configuration source (./.sie).
+   * Current working directory configuration source (./.cncf).
    */
   def cwd(cwd: Path): Option[ConfigSource] = {
-    val path = cwd.resolve(".sie").resolve("config.conf")
+    val path = cwd.resolve(".cncf").resolve("config.conf")
     Some(
       File(
         origin = ConfigOrigin.Cwd,

@@ -12,6 +12,8 @@ import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
 import org.goldenport.cncf.log.LogBackendHolder
 import org.goldenport.cncf.observability.{CallTreeContext, ObservabilityEngine, OperationContext}
 import org.goldenport.cncf.context.{ScopeContext, ScopeKind}
+import org.goldenport.cncf.context.GlobalRuntimeContext
+import org.goldenport.cncf.config.ResolvedParameters
 
 /*
  * @since   Apr. 11, 2025
@@ -20,7 +22,8 @@ import org.goldenport.cncf.context.{ScopeContext, ScopeKind}
  *  version Jan.  1, 2026
  *  version Jan.  2, 2026
  *  version Jan. 29, 2026
- * @version Feb.  6, 2026
+ *  version Feb.  6, 2026
+ * @version Mar. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -56,6 +59,7 @@ class ActionEngine(
     call: ActionCall
   ): Consequence[OperationResponse] = {
     val ec = call.executionContext
+    val runtime = ec.runtime
     val calltree = ec.observability.callTreeContext
     val label =
       if (call.action.name.nonEmpty) s"action:${call.action.name}"
@@ -69,34 +73,17 @@ class ActionEngine(
 
     authresult.flatMap { _ =>
       Consequence run {
-        calltree.enter(label)
+        val params = _build_resolved_parameters(call)
+        runtime.setResolvedParameters(params)
         try {
-          // Observation hooks apply only to executed actions.
-          observe_enter(call)
+          calltree.enter(label)
           try {
-            val r = call.execute()
-            ec.runtime.commit()
-            observe_leave(call, r)
-            val _ = ObservabilityEngine.build( // TODO
-              scope = ScopeContext(
-                kind = ScopeKind.Action,
-                name = call.action.name,
-                parent = None,
-                observabilityContext = ec.observability
-              ),
-              http = None,
-              operation = Some(OperationContext(call.action.name)),
-              outcome = r match {
-                case Consequence.Success(_) => Right(())
-                case Consequence.Failure(c) => Left(c)
-              }
-            )
-            r
-          } catch {
-            case e: Throwable =>
-              ec.runtime.abort()
-              val conclusion = org.goldenport.Conclusion.from(e)
-              observe_leave(call, Consequence.Failure(conclusion))
+            // Observation hooks apply only to executed actions.
+            observe_enter(call)
+            try {
+              val r = call.execute()
+              ec.runtime.commit()
+              observe_leave(call, r)
               val _ = ObservabilityEngine.build( // TODO
                 scope = ScopeContext(
                   kind = ScopeKind.Action,
@@ -106,16 +93,39 @@ class ActionEngine(
                 ),
                 http = None,
                 operation = Some(OperationContext(call.action.name)),
-                outcome = Left(conclusion)
+                outcome = r match {
+                  case Consequence.Success(_) => Right(())
+                  case Consequence.Failure(c) => Left(c)
+                }
               )
-              throw e
+              r
+            } catch {
+              case e: Throwable =>
+                ec.runtime.abort()
+                val conclusion = org.goldenport.Conclusion.from(e)
+                observe_leave(call, Consequence.Failure(conclusion))
+                val _ = ObservabilityEngine.build( // TODO
+                  scope = ScopeContext(
+                    kind = ScopeKind.Action,
+                    name = call.action.name,
+                    parent = None,
+                    observabilityContext = ec.observability
+                  ),
+                  http = None,
+                  operation = Some(OperationContext(call.action.name)),
+                  outcome = Left(conclusion)
+                )
+                throw e
+            }
+          } finally {
+            try {
+              ec.runtime.dispose()
+            } finally {
+              calltree.leave()
+            }
           }
         } finally {
-          try {
-            ec.runtime.dispose()
-          } finally {
-            calltree.leave()
-          }
+          runtime.clearResolvedParameters()
         }
       }
     }
@@ -154,7 +164,8 @@ class ActionEngine(
     call: ActionCall
   ): Unit = {
     // Execution observation hook (not persisted).
-    _log_backend_("enter", Some(call.action.name), "", None)
+    val params = _parameter_source_text(call).getOrElse("")
+    _log_backend_("enter", Some(call.action.name), params, None)
     observe_info("Action started", call)
   }
 
@@ -287,6 +298,23 @@ class ActionEngine(
       backend.log(level, s"$prefix$text")
     }
   }
+
+  private def _build_resolved_parameters(
+    call: ActionCall
+  ): ResolvedParameters = {
+    val parent = GlobalRuntimeContext.current.map(_.resolvedParameters)
+    ResolvedParameters.forOperation(
+      arguments = call.arguments,
+      switches = call.switches,
+      properties = call.properties,
+      parent = parent
+    )
+  }
+
+  private def _parameter_source_text(
+    call: ActionCall
+  ): Option[String] =
+    call.executionContext.runtime.resolvedParameters.usedText
 
   protected def authorize_pre(
     actionName: String,

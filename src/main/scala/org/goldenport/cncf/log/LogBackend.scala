@@ -1,11 +1,14 @@
 package org.goldenport.cncf.log
 
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Paths, StandardOpenOption}
+
 import org.slf4j.LoggerFactory
 import scala.collection.mutable.ListBuffer
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan.  7, 2026
+ * @version Mar. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 trait LogBackend {
@@ -66,6 +69,35 @@ object LogBackend {
     override def supportsBootstrapReplay: Boolean = true
   }
 
+  final case class FileLogBackend(path: String) extends LogBackend {
+    private val _path = Paths.get(path)
+    _path.getParent match {
+      case null => ()
+      case parent => Files.createDirectories(parent)
+    }
+    Files.writeString(
+      _path,
+      "",
+      StandardCharsets.UTF_8,
+      StandardOpenOption.CREATE,
+      StandardOpenOption.WRITE,
+      StandardOpenOption.APPEND
+    )
+
+    override def writeLine(line: String): Unit = this.synchronized {
+      Files.writeString(
+        _path,
+        line + System.lineSeparator(),
+        StandardCharsets.UTF_8,
+        StandardOpenOption.CREATE,
+        StandardOpenOption.WRITE,
+        StandardOpenOption.APPEND
+      )
+    }
+
+    override def supportsBootstrapReplay: Boolean = true
+  }
+
   final case class BootstrapLogBackend(delegate: LogBackend) extends LogBackend {
     private val _buffer = ListBuffer.empty[String]
 
@@ -95,6 +127,7 @@ object LogBackend {
     case "stderr" => Some(StderrBackend)
     case "nop" => Some(NopLogBackend)
     case "slf4j" => Some(Slf4jLogBackend)
+    case "file" => None
     case _ => None
   }
 

@@ -10,7 +10,7 @@ import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.http.HttpRequest
-import org.goldenport.protocol.{Request, Response}
+import org.goldenport.protocol.{Property, Request, Response}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.spec as spec
 import org.goldenport.cncf.testutil.TestComponentFactory
@@ -57,8 +57,8 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
           req.component.getOrElse(fail("missing component")).shouldBe("admin")
           req.service.getOrElse(fail("missing service")).shouldBe("system")
           req.operation.shouldBe("ping")
-          req.arguments.map(_.name) shouldBe List("name")
-          req.arguments.map(_.value.toString) shouldBe List("taro")
+          req.properties.exists(p => p.name == "name" && p.value == "taro") shouldBe true
+          req.properties.exists(p => p.name == "format" && p.value == "yaml") shouldBe true
         case Consequence.Failure(c) =>
           fail(s"unexpected failure: ${c}")
       }
@@ -71,8 +71,8 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
           req.component.getOrElse(fail("missing component")).shouldBe("admin")
           req.service.getOrElse(fail("missing service")).shouldBe("system")
           req.operation.shouldBe("ping")
-          req.arguments.map(_.name) shouldBe List("name")
-          req.arguments.map(_.value.toString) shouldBe List("taro")
+          req.properties.exists(p => p.name == "name" && p.value == "taro") shouldBe true
+          req.properties.exists(p => p.name == "format" && p.value == "yaml") shouldBe true
         case Consequence.Failure(c) =>
           fail(s"unexpected failure: ${c}")
       }
@@ -229,6 +229,50 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
           fail(s"unexpected response: $other")
       }
     }
+
+    "render RecordResponse as YAML by default for command mode" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val req = CncfRuntime.parseCommandArgs(subsystem, Array("meta.describe")).toOption.getOrElse(fail("parse failed"))
+      subsystem.execute(req) match {
+        case Consequence.Success(Response.Yaml(value)) =>
+          value.contains("type:") shouldBe true
+        case other =>
+          fail(s"expected yaml response but got: $other")
+      }
+    }
+
+    "render RecordResponse as JSON when --format json is specified" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val req = CncfRuntime.parseCommandArgs(subsystem, Array("meta.describe", "--format", "json")).toOption.getOrElse(fail("parse failed"))
+      subsystem.execute(req) match {
+        case Consequence.Success(Response.Json(value)) =>
+          value.startsWith("{") shouldBe true
+        case other =>
+          fail(s"expected json response but got: $other")
+      }
+    }
+
+    "render RecordResponse as text when --format text is specified" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val req = CncfRuntime.parseCommandArgs(subsystem, Array("meta.describe", "--format", "text")).toOption.getOrElse(fail("parse failed"))
+      subsystem.execute(req) match {
+        case Consequence.Success(Response.Scalar(value)) =>
+          value.toString.nonEmpty shouldBe true
+        case other =>
+          fail(s"expected scalar text response but got: $other")
+      }
+    }
+
+    "fallback to YAML when --format has invalid value" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val req = CncfRuntime.parseCommandArgs(subsystem, Array("meta.describe", "--format", "bogus")).toOption.getOrElse(fail("parse failed"))
+      subsystem.execute(req) match {
+        case Consequence.Success(Response.Yaml(value)) =>
+          value.contains("type:") shouldBe true
+        case other =>
+          fail(s"expected yaml fallback response but got: $other")
+      }
+    }
   }
 
   "CLI help system" should {
@@ -381,6 +425,31 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
       code shouldBe 0
       out.contains("type: service") shouldBe true
       out.contains("name: domain.entity") shouldBe true
+    }
+
+    "render command output as YAML for --format yaml" in {
+      val (code, out) = _capture_stdout {
+        CncfRuntime().run(Array("command", "meta.describe", "--format", "yaml"))
+      }
+      code shouldBe 0
+      out.contains("type:") shouldBe true
+    }
+
+    "render command output as JSON for --format json" in {
+      val (code, out) = _capture_stdout {
+        CncfRuntime().run(Array("command", "meta.describe", "--format", "json"))
+      }
+      code shouldBe 0
+      out.trim.startsWith("{") shouldBe true
+    }
+
+    "render command output as text for --format text" in {
+      val (code, out) = _capture_stdout {
+        CncfRuntime().run(Array("command", "meta.describe", "--format", "text"))
+      }
+      code shouldBe 0
+      out.trim.nonEmpty shouldBe true
+      out.trim.startsWith("{") shouldBe false
     }
   }
 

@@ -13,6 +13,9 @@ import org.goldenport.cncf.action.ActionEngine
 import org.goldenport.cncf.component.{Component, ComponentLogic}
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeKind}
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobContext}
+import org.goldenport.cncf.context.GlobalRuntimeContext
+import org.goldenport.cncf.cli.RunMode
+import org.goldenport.cncf.protocol.OperationResponseFormatter
 
 /*
  * @since   Apr. 11, 2025
@@ -74,14 +77,18 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
     val cid = ctx.observability.correlationId
     for {
       opres <- invoke(request.operation, request, ctx, cid)
-      res <- Consequence.success(_to_response(opres))
+      res <- Consequence.success(_to_response(request, opres))
     } yield res
   }
 
   private def _to_response(
+    request: Request,
     op: OperationResponse
   ): Response =
-    op.toResponse
+    OperationResponseFormatter.toResponse(request, op, _run_mode)
+
+  private def _run_mode: RunMode =
+    GlobalRuntimeContext.current.map(_.runtimeMode).getOrElse(RunMode.Command)
 
   private def _execute(p: OperationRequest) = p match {
     case action: Action =>

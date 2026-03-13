@@ -5,6 +5,7 @@ import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.handler.egress.Egress
 import org.goldenport.protocol.spec.{OperationDefinition, ServiceDefinition}
 import org.goldenport.record.Record
+import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.component.{
@@ -24,6 +25,7 @@ import org.goldenport.protocol.{Property, Request, Response}
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
+import org.goldenport.cncf.protocol.OperationResponseFormatter
 
 /*
  * @since   Jan.  7, 2026
@@ -173,7 +175,10 @@ final class Subsystem(
           r match {
             case action: Action =>
               val call = component.logic.createActionCall(action)
-              component.logic.execute(call).flatMap(opres => Consequence.success(opres.toResponse))
+              component.logic.execute(call).flatMap { opres =>
+                val rendered = _to_response(request, opres)
+                Consequence.success(rendered)
+              }
             case _ =>
               Consequence.failure("OperationRequest must be Action")
           }
@@ -194,6 +199,12 @@ final class Subsystem(
     }
     r
   }
+
+  private def _to_response(
+    request: Request,
+    response: OperationResponse
+  ): Response =
+    OperationResponseFormatter.toResponse(request, response, _http_run_mode)
 
   private def _resolve_route(
     req: HttpRequest

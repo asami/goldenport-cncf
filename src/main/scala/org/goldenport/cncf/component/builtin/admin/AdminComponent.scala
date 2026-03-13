@@ -326,7 +326,7 @@ object AdminComponent {
 
   private def _config_snapshot_(): Consequence[String] = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val sources = ConfigurationSources.standard(cwd)
+    val sources = ConfigurationSources.standard(cwd, applicationname = "cncf")
     ConfigurationResolver.default.resolve(sources).map { resolved =>
       val lines = Vector.newBuilder[String]
       lines += "Config Snapshot"

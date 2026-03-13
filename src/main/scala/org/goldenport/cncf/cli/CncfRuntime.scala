@@ -2,18 +2,20 @@ package org.goldenport.cncf.cli
 
 import java.net.{URL, URLEncoder}
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
 import org.goldenport.provisional.observation.Taxonomy
 import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.bag.Bag
+import org.goldenport.cli.parser.ArgsParser
 import org.goldenport.configuration.{Configuration, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.cncf.component.builtin.client.{GetQuery, PostCommand}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.component.{Component, ComponentInit}
-import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig}
+import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig, RuntimeDefaults}
+import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.http.{HttpRequest, HttpResponse}
@@ -43,13 +45,15 @@ import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObserva
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 12, 2026
+ * @version Mar. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
+  private val _configuration_application_name = "cncf"
   private val _help_flags = Set("--help", "-h")
   private val _runtime_service_name = "runtime"
   private val _runtime_parameter_parser = new RuntimeParameterParser()
+  private val _args_parser = new ArgsParser(ArgsParser.Config())
 
   private val _runtime_protocol: Protocol =
     Protocol.Builder()
@@ -69,12 +73,14 @@ object CncfRuntime extends GlobalObservable {
 
   private def _create_global_runtime_context(
     runconfig: RuntimeConfig,
+    configuration: ResolvedConfiguration,
     aliasResolver: AliasResolver
   ): GlobalRuntimeContext = {
     val execution = ExecutionContext.create()
     val context = GlobalRuntimeContext.create(
       name = "runtime",
       runconfig,
+      configuration,
       observabilityContext = execution.observability,
       aliasResolver
       // httpDriver = runconfig.httpDriver,
@@ -100,6 +106,24 @@ object CncfRuntime extends GlobalObservable {
       )
     }
 
+  private def _mark_used_parameters(
+    configuration: ResolvedConfiguration
+  ): Unit = {
+    val keys = Vector(
+      "cncf.runtime.logging.backend",
+      "cncf.logging.backend",
+      "cncf.runtime.logging.level",
+      "cncf.logging.level"
+    )
+    keys.foreach { key =>
+      configuration.get[String](key) match {
+        case Consequence.Success(Some(_)) =>
+          GlobalRuntimeContext.current.foreach(_.resolvedParameters.get(key))
+        case _ => ()
+      }
+    }
+  }
+
   private def _initialize_global_observability(): Unit = {
     if (!GlobalObservability.isInitialized) {
       // Default behavior: rely on whatever backend (and bootstrap buffer) is already configured.
@@ -118,6 +142,34 @@ object CncfRuntime extends GlobalObservable {
     configuration: ResolvedConfiguration
   ): AliasResolver =
     AliasLoader.load(configuration.configuration)
+
+  private[cli] def configure_slf4j_simple(
+    configuration: ResolvedConfiguration
+  ): Unit = {
+    def get(key: String): Option[String] =
+      ConfigurationAccess.getString(configuration, key)
+
+    val logfile = get("cncf.runtime.logging.slf4j.file.path")
+      .orElse(get("cncf.logging.slf4j.file.path"))
+      .orElse(get("cncf.logging.external.file.path"))
+      .getOrElse("target/cncf.d/external.log")
+    val level = get("cncf.runtime.logging.slf4j.level")
+      .orElse(get("cncf.logging.slf4j.level"))
+      .orElse(get("cncf.logging.level"))
+      .getOrElse("warn")
+    val hikarilevel = get("cncf.logging.slf4j.hikari.level").getOrElse("warn")
+    val sqlitelevel = get("cncf.logging.slf4j.sqlite.level").getOrElse("warn")
+
+    val p = Paths.get(logfile)
+    Option(p.getParent).foreach(Files.createDirectories(_))
+
+    System.setProperty("org.slf4j.simpleLogger.logFile", logfile)
+    System.setProperty("org.slf4j.simpleLogger.defaultLogLevel", level)
+    System.setProperty("org.slf4j.simpleLogger.showDateTime", "true")
+    System.setProperty("org.slf4j.simpleLogger.dateTimeFormat", "yyyy-MM-dd'T'HH:mm:ss.SSSXXX")
+    System.setProperty("org.slf4j.simpleLogger.log.com.zaxxer.hikari", hikarilevel)
+    System.setProperty("org.slf4j.simpleLogger.log.org.sqlite", sqlitelevel)
+  }
 
   // private def _http_driver_from_runtime_config(
   //   runtimeConfig: RuntimeConfig
@@ -300,7 +352,7 @@ object CncfRuntime extends GlobalObservable {
 
   def executeServerEmulator(args: Array[String]): Int = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val configuration = _resolve_configuration(cwd)
+    val configuration = _resolve_configuration(cwd, args)
     val runtimeConfig = _runtime_config(configuration)
     val (includeHeader, rest) = _include_header(args)
     val result = normalizeServerEmulatorArgs(rest, runtimeConfig.serverEmulatorBaseUrl) match {
@@ -331,7 +383,7 @@ object CncfRuntime extends GlobalObservable {
     extraComponents: Subsystem => Seq[Component]
   ): Int = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val configuration = _resolve_configuration(cwd)
+    val configuration = _resolve_configuration(cwd, args)
     val runtimeConfig = _runtime_config(configuration)
     val (includeHeader, rest) = _include_header(args)
     val result = normalizeServerEmulatorArgs(rest, runtimeConfig.serverEmulatorBaseUrl) match {
@@ -397,7 +449,8 @@ object CncfRuntime extends GlobalObservable {
     extraComponents: Subsystem => Seq[Component]
   ): Int = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val configuration = _resolve_configuration(cwd)
+    val configuration = _resolve_configuration(cwd, args)
+    configure_slf4j_simple(configuration)
     val (reposResult, argsAfterRepos, noDefaultComponents) =
       ComponentRepositorySpace.extractArgs(configuration, args)
     val (backendoption, logLevelOption, actualargs0) = _extract_log_options(argsAfterRepos)
@@ -421,20 +474,23 @@ object CncfRuntime extends GlobalObservable {
       case Right(specs) =>
         val runtimeParse = _runtime_parameter_parser.parse(actualargs.toIndexedSeq)
         val domainArgs = runtimeParse.residual.toArray
-        val configuration = _resolve_configuration(cwd)
+        val mode = _mode_from_args(domainArgs)
+        val configuration = _resolve_configuration(cwd, argsAfterRepos)
         val runtimeConfig = _runtime_config(configuration)
-        val logBackend = _decide_backend(backendoption, _logging_backend_from_configuration(configuration))
+        val logBackend = _decide_backend(backendoption, _logging_backend_from_configuration(configuration), mode)
         val httpDriver = runtimeConfig.httpDriver
         val aliasResolver = _alias_resolver(configuration)
         _install_log_backend(logBackend)
-        _update_visibility_policy(logLevelOption, configuration)
+        _update_visibility_policy(logLevelOption, configuration, mode)
         _reset_global_runtime_context()
         val context = _create_global_runtime_context(
           runtimeConfig,
+          configuration,
           // httpDriver,
           // runtimeConfig.mode,
           aliasResolver
         )
+        _mark_used_parameters(configuration)
         val r: Consequence[OperationRequest] =
           _runtime_protocol_engine.makeOperationRequest(domainArgs)
         r match {
@@ -442,24 +498,24 @@ object CncfRuntime extends GlobalObservable {
             // TODO Phase 2.9+: bind mode-specific runtime configuration.
             // - Derive Config.Runtime from ResolvedConfiguration and bind into ExecutionContext / observability.
             // - Consider per-mode defaults (server/client/command/server-emulator/script) while keeping CLI normalization execution-free.
-            val mode = RunMode.from(req.request.operation)
-            if (mode.contains(RunMode.Server)) {
+            val requestmode = RunMode.from(req.request.operation)
+            if (requestmode.contains(RunMode.Server)) {
               LogBackendHolder.backend match {
                 case Some(LogBackend.NopLogBackend) =>
                   LogBackendHolder.install(LogBackend.StdoutBackend)
                 case _ => ()
               }
             }
-            mode.foreach { m =>
+            requestmode.foreach { m =>
               GlobalRuntimeContext.current.foreach(_.updateRuntimeMode(m))
             }
-            mode.foreach { m =>
+            requestmode.foreach { m =>
               GlobalRuntimeContext.current.foreach(_.updateRuntimeMode(m))
             }
             observe_trace(
               s"[subsytem] runWithExtraComponents dispatching to client mode args=${domainArgs.drop(1).mkString(" ")}"
             )
-            mode match {
+            requestmode match {
               case Some(RunMode.Server) =>
                 startServer(domainArgs.drop(1), extraComponents)
                 0
@@ -484,7 +540,8 @@ object CncfRuntime extends GlobalObservable {
 
   def run(args: Array[String]): Int = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val configuration = _resolve_configuration(cwd)
+    val configuration = _resolve_configuration(cwd, args)
+    configure_slf4j_simple(configuration)
     val (reposResult, argsAfterRepos, noDefaultComponents) =
       ComponentRepositorySpace.extractArgs(configuration, args)
     val (backendoption, logLevelOption, actualargs0) = _extract_log_options(argsAfterRepos)
@@ -509,19 +566,22 @@ object CncfRuntime extends GlobalObservable {
       case Right(specs) =>
         val runtimeParse = _runtime_parameter_parser.parse(actualargs.toIndexedSeq)
         val domainArgs = runtimeParse.residual.toArray
+        val mode = _mode_from_args(domainArgs)
         val runtimeConfig = _runtime_config(configuration)
-        val logBackend = _decide_backend(backendoption, _logging_backend_from_configuration(configuration))
+        val logBackend = _decide_backend(backendoption, _logging_backend_from_configuration(configuration), mode)
         val httpDriver = runtimeConfig.httpDriver
         val aliasResolver = _alias_resolver(configuration)
         _install_log_backend(logBackend)
-        _update_visibility_policy(logLevelOption, configuration)
+        _update_visibility_policy(logLevelOption, configuration, mode)
         _reset_global_runtime_context()
         val context = _create_global_runtime_context(
           runtimeConfig,
+          configuration,
           // httpDriver,
           // runtimeConfig.mode,
           aliasResolver
         )
+        _mark_used_parameters(configuration)
         val r: Consequence[OperationRequest] =
           _runtime_protocol_engine.makeOperationRequest(domainArgs)
         r match {
@@ -628,20 +688,42 @@ object CncfRuntime extends GlobalObservable {
   private def _extract_log_options(
     args: Array[String]
   ): (Option[String], Option[String], Array[String]) = {
+    // Canonical CLI keys: --cncf.logging.backend / --cncf.logging.level
+    // Other forms are experimental and kept for transitional use.
     var logBackendOption: Option[String] = None
     var logLevelOption: Option[String] = None
     val rest = Vector.newBuilder[String]
     var i = 0
     while (i < args.length) {
       val current = args(i)
-      if (current.startsWith("--log-backend=")) {
+      if (current.startsWith("--log-backend=")) { // experimental
         logBackendOption = Some(current.stripPrefix("--log-backend="))
-      } else if (current == "--log-backend" && i + 1 < args.length) {
+      } else if (current == "--log-backend" && i + 1 < args.length) { // experimental
         logBackendOption = Some(args(i + 1))
         i = i + 1
-      } else if (current.startsWith("--log-level=")) {
+      } else if (current.startsWith("--cncf.runtime.logging.backend=")) { // experimental
+        logBackendOption = Some(current.stripPrefix("--cncf.runtime.logging.backend="))
+      } else if (current == "--cncf.runtime.logging.backend" && i + 1 < args.length) { // experimental
+        logBackendOption = Some(args(i + 1))
+        i = i + 1
+      } else if (current.startsWith("--cncf.logging.backend=")) {
+        logBackendOption = Some(current.stripPrefix("--cncf.logging.backend="))
+      } else if (current == "--cncf.logging.backend" && i + 1 < args.length) {
+        logBackendOption = Some(args(i + 1))
+        i = i + 1
+      } else if (current.startsWith("--log-level=")) { // experimental
         logLevelOption = Some(current.stripPrefix("--log-level="))
-      } else if (current == "--log-level" && i + 1 < args.length) {
+      } else if (current == "--log-level" && i + 1 < args.length) { // experimental
+        logLevelOption = Some(args(i + 1))
+        i = i + 1
+      } else if (current.startsWith("--cncf.runtime.logging.level=")) { // experimental
+        logLevelOption = Some(current.stripPrefix("--cncf.runtime.logging.level="))
+      } else if (current == "--cncf.runtime.logging.level" && i + 1 < args.length) { // experimental
+        logLevelOption = Some(args(i + 1))
+        i = i + 1
+      } else if (current.startsWith("--cncf.logging.level=")) {
+        logLevelOption = Some(current.stripPrefix("--cncf.logging.level="))
+      } else if (current == "--cncf.logging.level" && i + 1 < args.length) {
         logLevelOption = Some(args(i + 1))
         i = i + 1
       } else {
@@ -654,11 +736,12 @@ object CncfRuntime extends GlobalObservable {
 
   private def _decide_backend(
     overrideBackend: Option[String],
-    configBackend: Option[String]
+    configBackend: Option[String],
+    mode: RunMode
   ): LogBackend =
     _backend_from_string(overrideBackend, "flag")
       .orElse(_backend_from_string(configBackend, "configuration"))
-      .getOrElse(LogBackend.NopLogBackend)
+      .getOrElse(RuntimeDefaults.defaultLogBackend(mode))
 
   private def _backend_from_string(
     value: Option[String],
@@ -677,39 +760,34 @@ object CncfRuntime extends GlobalObservable {
   private def _logging_backend_from_configuration(
     configuration: ResolvedConfiguration
   ): Option[String] = {
-    def get(key: String): Option[String] =
-      configuration.get[String](key) match {
-        case Consequence.Success(value) => value
-        case Consequence.Failure(_) => None
-      }
-
-    get("cncf.runtime.logging.backend").orElse(get("cncf.logging.backend"))
+    ConfigurationAccess.getString(configuration, "cncf.runtime.logging.backend")
+      .orElse(ConfigurationAccess.getString(configuration, "cncf.logging.backend"))
   }
 
   private def _log_level_from_configuration(
     configuration: ResolvedConfiguration
   ): Option[String] = {
-    def get(key: String): Option[String] =
-      configuration.get[String](key) match {
-        case Consequence.Success(value) => value
-        case Consequence.Failure(_) => None
-      }
-
-    get("cncf.runtime.logging.level").orElse(get("cncf.logging.level"))
+    ConfigurationAccess.getString(configuration, "cncf.runtime.logging.level")
+      .orElse(ConfigurationAccess.getString(configuration, "cncf.logging.level"))
   }
 
   private def _update_visibility_policy(
     cliLogLevel: Option[String],
-    configuration: ResolvedConfiguration
+    configuration: ResolvedConfiguration,
+    mode: RunMode
   ): Unit = {
     val levelOpt =
       cliLogLevel
         .orElse(_log_level_from_configuration(configuration))
         .flatMap(LogLevel.from)
-    // Default remains INFO so bootstrap/component.d traces stay hidden unless `--log-level trace` (or config) unsets it.
-    val level = levelOpt.getOrElse(LogLevel.Info)
+    val level = levelOpt.getOrElse(RuntimeDefaults.defaultLogLevel(mode))
     ObservabilityEngine.updateVisibilityPolicy(VisibilityPolicy(minLevel = level))
   }
+
+  private def _mode_from_args(
+    args: Array[String]
+  ): RunMode =
+    args.headOption.flatMap(RunMode.from).getOrElse(RunMode.Command)
 
   private def _install_log_backend(
     backend: LogBackend
@@ -912,16 +990,28 @@ object CncfRuntime extends GlobalObservable {
       val canonicalSelector = PathPreNormalizer.rewriteSelector(normalized._1, mode, aliasresolver)
       subsystem.resolver.resolve(canonicalSelector, allowPrefix = false, allowImplicit = false) match {
         case ResolutionResult.Resolved(_, component, service, operation) =>
-          val arguments = _build_request_arguments(normalized._2)
-          val properties = _runtime_properties(runtimeOptions)
+          val parsed = for {
+            comp <- subsystem.components.find(_.name == component)
+            svc <- comp.protocol.services.services.find(_.name == service)
+            opdef <- svc.operations.operations.find(_.name == operation)
+          } yield _args_parser.parse(opdef, normalized._2.toList)
+          val (arguments, switches, properties) = parsed.map { req =>
+            (req.arguments, req.switches, req.properties)
+          }.getOrElse {
+            (normalized._2.zipWithIndex.map { case (value, index) =>
+              Argument(s"arg${index + 1}", value, None)
+            }.toList, Nil, Nil)
+          }
+          val runtimeproperties = _runtime_properties(runtimeOptions, mode)
+          val allproperties = properties ++ runtimeproperties
           Consequence.success(
             Request.of(
               component = component,
               service = service,
               operation = operation,
               arguments = arguments,
-              switches = Nil,
-              properties = properties
+              switches = switches,
+              properties = allproperties
             )
           )
         case ResolutionResult.NotFound(stage, input) =>
@@ -987,39 +1077,14 @@ object CncfRuntime extends GlobalObservable {
 
   private def _extract_runtime_options(
     args: Seq[String]
-  ): (_RuntimeOptionsI, Seq[String]) = {
-    val clean = Vector.newBuilder[String]
-    var options = _RuntimeOptionsI()
-    args.foreach {
-      case "--json" =>
-        options = options.copy(json = true)
-      case s if s.startsWith("--json=") =>
-        options = options.copy(json = true)
-      case "--debug" =>
-        options = options.copy(debug = true)
-      case s if s.startsWith("--debug=") =>
-        options = options.copy(debug = true)
-      case "--no-exit" =>
-        options = options.copy(noExit = true)
-      case other =>
-        clean += other
-    }
-    (options, clean.result())
-  }
+  ): (RuntimeOptionsParser.Options, Seq[String]) =
+    RuntimeOptionsParser.extract(args)
 
-  private def _runtime_properties(options: _RuntimeOptionsI): List[Property] = {
-    val b = List.newBuilder[Property]
-    if (options.json) b += Property("format", "json", None)
-    if (options.debug) b += Property("debug", "true", None)
-    if (options.noExit) b += Property("no-exit", "true", None)
-    b.result()
-  }
-
-  private case class _RuntimeOptionsI(
-    json: Boolean = false,
-    debug: Boolean = false,
-    noExit: Boolean = false
-  )
+  private def _runtime_properties(
+    options: RuntimeOptionsParser.Options,
+    mode: RunMode = RunMode.Command
+  ): List[Property] =
+    RuntimeOptionsParser.properties(options, mode)
 
   private def _selectorAndArguments(
     args: Seq[String]
@@ -1058,38 +1123,6 @@ object CncfRuntime extends GlobalObservable {
         case _ => Consequence.failure("command selector is invalid")
       }
     }
-  }
-
-  private def _build_request_arguments(
-    values: Seq[String]
-  ): List[Argument] = {
-    val b = List.newBuilder[Argument]
-    val in = values.toVector
-    var positional = 1
-    var i = 0
-    while (i < in.length) {
-      val current = in(i)
-      if (current.startsWith("--") && current.length > 2) {
-        val body = current.drop(2)
-        val eq = body.indexOf('=')
-        if (eq > 0) {
-          b += Argument(body.take(eq), body.drop(eq + 1))
-        } else if (body.nonEmpty && i + 1 < in.length && !in(i + 1).startsWith("--")) {
-          b += Argument(body, in(i + 1))
-          i = i + 1
-        } else if (body.nonEmpty) {
-          b += Argument(body, "true")
-        } else {
-          b += Argument(s"arg$positional", current)
-          positional = positional + 1
-        }
-      } else {
-        b += Argument(s"arg$positional", current)
-        positional = positional + 1
-      }
-      i = i + 1
-    }
-    b.result()
   }
 
   private def _component_operation_fqns(subsystem: Subsystem): Vector[String] =
@@ -1329,9 +1362,14 @@ object CncfRuntime extends GlobalObservable {
   }
 
   private def _resolve_configuration(
-    cwd: Path
+    cwd: Path,
+    args: Array[String] = Array.empty
   ): ResolvedConfiguration = {
-    val sources = ConfigurationSources.standard(cwd)
+    val sources = ConfigurationSources.standard(
+      cwd,
+      applicationname = _configuration_application_name,
+      args = _config_args(args)
+    )
     // TODO Phase 2.9+: define failure policy for configuration resolution.
     // - Preserve/emit ConfigurationTrace and error details for observability.
     // - Decide whether CLI should fail-fast vs fallback to empty configuration.
@@ -1341,6 +1379,58 @@ object CncfRuntime extends GlobalObservable {
       case Consequence.Failure(_) =>
         ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
     }
+  }
+
+  private def _config_args(
+    args: Array[String]
+  ): Map[String, String] = {
+    val entries = scala.collection.mutable.Map.empty[String, String]
+    val alias = Map(
+      "log-level" -> "cncf.logging.level",
+      "log-backend" -> "cncf.logging.backend",
+      "format" -> "cncf.output.format"
+    )
+    var i = 0
+    var stop = false
+    while (i < args.length && !stop) {
+      val current = args(i)
+      if (current == "--") {
+        stop = true
+      } else if (current.startsWith("--") && current.contains("=")) {
+        val raw = current.drop(2)
+        val parts = raw.split("=", 2)
+        if (parts.length == 2) {
+          val key = parts(0)
+          val value = parts(1)
+          if (key.startsWith("cncf.")) {
+            entries.update(key, value)
+          }
+        }
+      } else if (current.startsWith("--")) {
+        val key = current.drop(2)
+        if (key.startsWith("cncf.") && i + 1 < args.length && !args(i + 1).startsWith("-")) {
+          entries.update(key, args(i + 1))
+          i = i + 1
+        }
+      } else if (current.startsWith("-") && !current.startsWith("--")) {
+        val raw = current.drop(1)
+        if (raw.contains("=")) {
+          val parts = raw.split("=", 2)
+          val key = parts(0)
+          val value = if (parts.length > 1) parts(1) else ""
+          alias.get(key).foreach(entries.update(_, value))
+        } else {
+          alias.get(raw).foreach { key =>
+            if (i + 1 < args.length && !args(i + 1).startsWith("-")) {
+              entries.update(key, args(i + 1))
+              i = i + 1
+            }
+          }
+        }
+      }
+      i = i + 1
+    }
+    entries.toMap
   }
 
   private def _runtime_config(
@@ -1366,9 +1456,136 @@ object RunMode {
     }
 }
 
+private[cli] object RuntimeOptionsParser {
+  final case class Options(
+    json: Boolean = false,
+    debug: Boolean = false,
+    noExit: Boolean = false,
+    format: Option[String] = None
+  )
+
+  def extract(
+    args: Seq[String]
+  ): (Options, Seq[String]) = {
+    val clean = Vector.newBuilder[String]
+    var options = Options()
+    var i = 0
+    var stop = false
+    while (i < args.length && !stop) {
+      val current = args(i)
+      if (current == "--") {
+        clean ++= args.drop(i + 1)
+        stop = true
+      } else if (_is_property(current, "--json")) {
+        options = options.copy(json = true)
+      } else if (_is_property(current, "--debug")) {
+        options = options.copy(debug = true)
+      } else if (current == "--no-exit") {
+        options = options.copy(noExit = true)
+      } else if (_is_property(current, "--format") || _is_property(current, "-format")) {
+        _take_value(args, i).foreach { case (value, consumednext) =>
+          options = options.copy(format = Some(value))
+          if (consumednext) {
+            i = i + 1
+          }
+        }
+      } else if (_is_key_value(current)) {
+        _extract_key_value(current) match {
+          case Some((key, value)) if key == "cncf.output.format" =>
+            options = options.copy(format = Some(value))
+          case Some((key, value)) if _is_cncf_key(key) =>
+            ()
+          case Some((key, value)) if _is_cncf_alias(key) =>
+            ()
+          case _ =>
+            clean += current
+        }
+      } else if (_is_cncf_key(current.drop(2))) {
+        if (i + 1 < args.length && !args(i + 1).startsWith("-")) {
+          if (current.drop(2) == "cncf.output.format") {
+            options = options.copy(format = Some(args(i + 1)))
+          }
+          i = i + 1
+        }
+      } else if (_is_cncf_alias(current.drop(1))) {
+        if (i + 1 < args.length && !args(i + 1).startsWith("-")) {
+          i = i + 1
+        }
+      } else {
+        clean += current
+      }
+      i = i + 1
+    }
+    if (!stop && i >= args.length) {
+      ()
+    }
+    (options, clean.result())
+  }
+
+  def properties(
+    options: Options,
+    mode: RunMode = RunMode.Command
+  ): List[Property] = {
+    val b = List.newBuilder[Property]
+    val formatvalue = options.format
+      .orElse(if (options.json) Some("json") else None)
+      .orElse(Some(RuntimeDefaults.defaultFormat(mode)))
+    formatvalue.foreach { value =>
+      b += Property("format", value, None)
+    }
+    if (options.debug) b += Property("debug", "true", None)
+    if (options.noExit) b += Property("no-exit", "true", None)
+    b.result()
+  }
+
+  private def _is_property(
+    current: String,
+    key: String
+  ): Boolean =
+    current == key || current.startsWith(s"${key}=")
+
+  private def _is_key_value(
+    current: String
+  ): Boolean =
+    current.startsWith("--") && current.contains("=") ||
+      (current.startsWith("-") && !current.startsWith("--") && current.contains("="))
+
+  private def _extract_key_value(
+    current: String
+  ): Option[(String, String)] = {
+    val raw = if (current.startsWith("--")) current.drop(2) else current.drop(1)
+    val parts = raw.split("=", 2)
+    if (parts.length == 2) Some(parts(0) -> parts(1)) else None
+  }
+
+  private def _take_value(
+    args: Seq[String],
+    index: Int
+  ): Option[(String, Boolean)] =
+    if (args(index).contains("=")) {
+      _extract_key_value(args(index)).map(v => v._2 -> false)
+    } else if (index + 1 < args.length && !args(index + 1).startsWith("-")) {
+      Some(args(index + 1) -> true)
+    } else {
+      None
+    }
+
+  private def _is_cncf_key(
+    key: String
+  ): Boolean =
+    key.startsWith("cncf.")
+
+  private def _is_cncf_alias(
+    key: String
+  ): Boolean =
+    key == "log-level" || key == "log-backend" || key == "format"
+}
+
 class CncfRuntime() extends GlobalObservable {
+  private val _configuration_application_name = "cncf"
   private val _runtime_service_name = "runtime"
   private val _help_flags = Set("--help", "-h")
+  private val _args_parser = new ArgsParser(ArgsParser.Config())
 
   private val _runtime_protocol: Protocol =
     Protocol.Builder()
@@ -1397,12 +1614,14 @@ class CncfRuntime() extends GlobalObservable {
     // httpDriver: HttpDriver,
     // mode: RunMode,
     runconfig: RuntimeConfig,
+    configuration: ResolvedConfiguration,
     aliasResolver: AliasResolver
   ): GlobalRuntimeContext = {
     val execution = ExecutionContext.create()
     val context = GlobalRuntimeContext.create(
       name = "runtime",
       runconfig,
+      configuration,
       observabilityContext = execution.observability,
       aliasResolver
       // httpDriver = httpDriver,
@@ -1463,8 +1682,10 @@ class CncfRuntime() extends GlobalObservable {
     extraComponents: Subsystem => Seq[Component]
   ): Subsystem = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val configuration = _resolve_configuration(cwd)
-    val runconfig = RuntimeConfig.from(configuration)
+    val configuration = _resolve_configuration(cwd, args)
+    CncfRuntime.configure_slf4j_simple(configuration)
+    val modehint = args.headOption.flatMap(RunMode.from)
+    val runconfig = RuntimeConfig.from(configuration, modehint)
     val aliasresolver = AliasLoader.load(configuration.configuration)
     LogBackendHolder.install(runconfig.logBackend)
     ObservabilityEngine.updateVisibilityPolicy(VisibilityPolicy(minLevel = runconfig.logLevel))
@@ -1474,6 +1695,7 @@ class CncfRuntime() extends GlobalObservable {
       // runconfig.httpDriver,
       // runconfig.mode,
       runconfig,
+      configuration,
       aliasresolver
     )
     val mode = runconfig.mode
@@ -1498,9 +1720,14 @@ class CncfRuntime() extends GlobalObservable {
   }
 
   private def _resolve_configuration(
-    cwd: Path
+    cwd: Path,
+    args: Array[String] = Array.empty
   ): ResolvedConfiguration = {
-    val sources = ConfigurationSources.standard(cwd)
+    val sources = ConfigurationSources.standard(
+      cwd,
+      applicationname = _configuration_application_name,
+      args = _config_args(args)
+    )
     // TODO Phase 2.9+: define failure policy for configuration resolution.
     // - Preserve/emit ConfigurationTrace and error details for observability.
     // - Decide whether CLI should fail-fast vs fallback to empty configuration.
@@ -1510,6 +1737,58 @@ class CncfRuntime() extends GlobalObservable {
       case Consequence.Failure(_) =>
         ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
     }
+  }
+
+  private def _config_args(
+    args: Array[String]
+  ): Map[String, String] = {
+    val entries = scala.collection.mutable.Map.empty[String, String]
+    val alias = Map(
+      "log-level" -> "cncf.logging.level",
+      "log-backend" -> "cncf.logging.backend",
+      "format" -> "cncf.output.format"
+    )
+    var i = 0
+    var stop = false
+    while (i < args.length && !stop) {
+      val current = args(i)
+      if (current == "--") {
+        stop = true
+      } else if (current.startsWith("--") && current.contains("=")) {
+        val raw = current.drop(2)
+        val parts = raw.split("=", 2)
+        if (parts.length == 2) {
+          val key = parts(0)
+          val value = parts(1)
+          if (key.startsWith("cncf.")) {
+            entries.update(key, value)
+          }
+        }
+      } else if (current.startsWith("--")) {
+        val key = current.drop(2)
+        if (key.startsWith("cncf.") && i + 1 < args.length && !args(i + 1).startsWith("-")) {
+          entries.update(key, args(i + 1))
+          i = i + 1
+        }
+      } else if (current.startsWith("-") && !current.startsWith("--")) {
+        val raw = current.drop(1)
+        if (raw.contains("=")) {
+          val parts = raw.split("=", 2)
+          val key = parts(0)
+          val value = if (parts.length > 1) parts(1) else ""
+          alias.get(key).foreach(entries.update(_, value))
+        } else {
+          alias.get(raw).foreach { key =>
+            if (i + 1 < args.length && !args(i + 1).startsWith("-")) {
+              entries.update(key, args(i + 1))
+              i = i + 1
+            }
+          }
+        }
+      }
+      i = i + 1
+    }
+    entries.toMap
   }
 
   private def _runtime_scope_context(): ScopeContext =
@@ -1917,16 +2196,28 @@ class CncfRuntime() extends GlobalObservable {
       val canonicalSelector = PathPreNormalizer.rewriteSelector(normalized._1, mode, aliasresolver)
       subsystem.resolver.resolve(canonicalSelector, allowPrefix = false, allowImplicit = false) match {
         case ResolutionResult.Resolved(_, component, service, operation) =>
-          val arguments = _build_request_arguments(normalized._2)
-          val properties = _runtime_properties(runtimeOptions)
+          val parsed = for {
+            comp <- subsystem.components.find(_.name == component)
+            svc <- comp.protocol.services.services.find(_.name == service)
+            opdef <- svc.operations.operations.find(_.name == operation)
+          } yield _args_parser.parse(opdef, normalized._2.toList)
+          val (arguments, switches, properties) = parsed.map { req =>
+            (req.arguments, req.switches, req.properties)
+          }.getOrElse {
+            (normalized._2.zipWithIndex.map { case (value, index) =>
+              Argument(s"arg${index + 1}", value, None)
+            }.toList, Nil, Nil)
+          }
+          val runtimeproperties = _runtime_properties(runtimeOptions, mode)
+          val allproperties = properties ++ runtimeproperties
           Consequence.success(
             Request.of(
               component = component,
               service = service,
               operation = operation,
               arguments = arguments,
-              switches = Nil,
-              properties = properties
+              switches = switches,
+              properties = allproperties
             )
           )
         case ResolutionResult.NotFound(stage, input) =>
@@ -1975,39 +2266,14 @@ class CncfRuntime() extends GlobalObservable {
 
   private def _extract_runtime_options(
     args: Seq[String]
-  ): (_RuntimeOptions, Seq[String]) = {
-    val clean = Vector.newBuilder[String]
-    var options = _RuntimeOptions()
-    args.foreach {
-      case "--json" =>
-        options = options.copy(json = true)
-      case s if s.startsWith("--json=") =>
-        options = options.copy(json = true)
-      case "--debug" =>
-        options = options.copy(debug = true)
-      case s if s.startsWith("--debug=") =>
-        options = options.copy(debug = true)
-      case "--no-exit" =>
-        options = options.copy(noExit = true)
-      case other =>
-        clean += other
-    }
-    (options, clean.result())
-  }
+  ): (RuntimeOptionsParser.Options, Seq[String]) =
+    RuntimeOptionsParser.extract(args)
 
-  private def _runtime_properties(options: _RuntimeOptions): List[Property] = {
-    val b = List.newBuilder[Property]
-    if (options.json) b += Property("format", "json", None)
-    if (options.debug) b += Property("debug", "true", None)
-    if (options.noExit) b += Property("no-exit", "true", None)
-    b.result()
-  }
-
-  private case class _RuntimeOptions(
-    json: Boolean = false,
-    debug: Boolean = false,
-    noExit: Boolean = false
-  )
+  private def _runtime_properties(
+    options: RuntimeOptionsParser.Options,
+    mode: RunMode = RunMode.Command
+  ): List[Property] =
+    RuntimeOptionsParser.properties(options, mode)
 
   private def _alias_resolver: AliasResolver =
     GlobalRuntimeContext.current
@@ -2045,38 +2311,6 @@ class CncfRuntime() extends GlobalObservable {
         case _ => Consequence.failure("command selector is invalid")
       }
     }
-  }
-
-  private def _build_request_arguments(
-    values: Seq[String]
-  ): List[Argument] = {
-    val b = List.newBuilder[Argument]
-    val in = values.toVector
-    var positional = 1
-    var i = 0
-    while (i < in.length) {
-      val current = in(i)
-      if (current.startsWith("--") && current.length > 2) {
-        val body = current.drop(2)
-        val eq = body.indexOf('=')
-        if (eq > 0) {
-          b += Argument(body.take(eq), body.drop(eq + 1))
-        } else if (body.nonEmpty && i + 1 < in.length && !in(i + 1).startsWith("--")) {
-          b += Argument(body, in(i + 1))
-          i = i + 1
-        } else if (body.nonEmpty) {
-          b += Argument(body, "true")
-        } else {
-          b += Argument(s"arg$positional", current)
-          positional = positional + 1
-        }
-      } else {
-        b += Argument(s"arg$positional", current)
-        positional = positional + 1
-      }
-      i = i + 1
-    }
-    b.result()
   }
 
   def executeServerEmulator(subsystem: Subsystem, req: Request): Int = {

@@ -3,10 +3,12 @@ package org.goldenport.cncf.datastore
 import org.goldenport.Consequence
 import org.goldenport.observation.Descriptor
 import org.goldenport.configuration.ResolvedConfiguration
+import org.goldenport.cncf.datastore.sql.SqlDataStore
+import org.goldenport.cncf.config.ConfigurationAccess
 
 /*
  * @since   Feb. 25, 2026
- * @version Mar. 11, 2026
+ * @version Mar. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace {
@@ -31,7 +33,12 @@ class DataStoreSpace {
 object DataStoreSpace {
   def create(conf: ResolvedConfiguration): DataStoreSpace = {
     val dss = new DataStoreSpace()
-    val mds = DataStore.inMemorySearchable() // TODO
-    dss.addDataStore(mds)
+    val sqlitepath = ConfigurationAccess.getString(conf, "cncf.datastore.sqlite.path")
+    val ds = sqlitepath match {
+      case Some(path) => SqlDataStore.sqlite(path)
+      case None => DataStore.inMemorySearchable()
+    }
+    dss.addDataStore(ds)
+    dss
   }
 }

@@ -5,9 +5,11 @@ import java.nio.file.{Files, Path, Paths}
 import java.util.ServiceLoader
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
+import org.goldenport.Consequence
+import org.goldenport.configuration.{Configuration, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.cli.{CncfRuntime, RunMode}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentCreate, ComponentInit, ComponentInstanceId, ComponentOrigin}
-import org.goldenport.cncf.component.repository.{ComponentRepository}
+import org.goldenport.cncf.component.repository.{ComponentRepository, ComponentRepositorySpace}
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.Protocol
@@ -30,16 +32,18 @@ object CncfMain extends GlobalObservable {
       with scala.util.control.NoStackTrace
 
   def main(args: Array[String]): Unit = {
-    val (reposResult, args1, noDefaultComponents) = _take_component_repository(args)
-    val (discover, args2) = _take_discover_classes(args1)
-    val (workspace, args3) = _take_workspace(args2)
-    val (forceExit, args4) = _take_force_exit(args3)
-    val (noExit, rest) = _take_no_exit(args4)
-    val enabled = discover || _discover_env_enabled()
+    val cwd = Paths.get("").toAbsolutePath.normalize
+    val configuration = _resolve_configuration(cwd)
+    val (reposResult, args1, noDefaultComponents) =
+      _take_component_repository(configuration, args, cwd)
+    val (discover, args2) = _take_discover_classes(configuration, args1)
+    val (workspace, args3) = _take_workspace(configuration, args2)
+    val (forceExit, args4) = _take_force_exit(configuration, args3)
+    val (noExit, rest) = _take_no_exit(configuration, args4)
+    val enabled = discover
 
     val code: Int =
       try {
-        val cwd = Paths.get("").toAbsolutePath.normalize
         val reposWithDefault =
           _append_default_component_repository(reposResult, cwd, noDefaultComponents)
         reposWithDefault match {
@@ -67,69 +71,61 @@ object CncfMain extends GlobalObservable {
     }
   }
 
-  private def _take_no_exit(args: Array[String]): (Boolean, Array[String]) = {
-    val noexit = args.contains("--no-exit")
+  private def _take_no_exit(
+    configuration: ResolvedConfiguration,
+    args: Array[String]
+  ): (Boolean, Array[String]) = {
+    val noexit =
+      args.contains("--no-exit") ||
+        _config_truthy(configuration, "cncf.runtime.no-exit")
     val rest = args.filterNot(_ == "--no-exit")
     (noexit, rest)
   }
 
-  private def _take_force_exit(args: Array[String]): (Boolean, Array[String]) = {
-    val forceExit = args.contains("--force-exit")
+  private def _take_force_exit(
+    configuration: ResolvedConfiguration,
+    args: Array[String]
+  ): (Boolean, Array[String]) = {
+    val forceexit =
+      args.contains("--force-exit") ||
+        _config_truthy(configuration, "cncf.runtime.force-exit")
     val rest = args.filterNot(_ == "--force-exit")
-    (forceExit, rest)
+    (forceexit, rest)
   }
 
   private val _no_default_components_flag = "--no-default-components"
 
   private def _take_component_repository(
-    args: Array[String]
+    configuration: ResolvedConfiguration,
+    args: Array[String],
+    cwd: Path
   ): (Either[String, Vector[ComponentRepository.Specification]], Array[String], Boolean) = {
-    val buffer = Vector.newBuilder[String]
-    val specs = Vector.newBuilder[String]
-    var noDefault = false
-    var i = 0
-    while (i < args.length) {
-      val arg = args(i)
-      if (arg == _no_default_components_flag) {
-        noDefault = true
-        i = i + 1
-      } else if (arg.startsWith("--component-repository=")) {
-        specs += arg.stripPrefix("--component-repository=")
-        i = i + 1
-      } else if (arg == "--component-repository") {
-        if (i + 1 >= args.length) {
-          return (Left("--component-repository requires a value"), args, noDefault)
+    val (specsresult, rest, nodefault) =
+      ComponentRepositorySpace.extractArgs(configuration, args)
+    specsresult match {
+      case Left(message) =>
+        (Left(message), rest, nodefault)
+      case Right(values) if values.isEmpty =>
+        (Right(Vector.empty), rest, nodefault)
+      case Right(values) =>
+        var error: Option[String] = None
+        val parsed = Vector.newBuilder[ComponentRepository.Specification]
+        values.foreach { value =>
+          ComponentRepository.parseSpecs(value, cwd) match {
+            case Left(err) =>
+              if (error.isEmpty) {
+                error = Some(err)
+              }
+            case Right(xs) =>
+              if (error.isEmpty) {
+                parsed ++= xs
+              }
+          }
         }
-        specs += args(i + 1)
-        i = i + 2
-      } else {
-        buffer += arg
-        i = i + 1
-      }
-    }
-    val specValues = specs.result()
-    if (specValues.isEmpty) {
-      (Right(Vector.empty), buffer.result().toArray, noDefault)
-    } else {
-      val cwd = Paths.get("").toAbsolutePath.normalize
-      var error: Option[String] = None
-      val parsed = Vector.newBuilder[ComponentRepository.Specification]
-      specValues.foreach { value =>
-        ComponentRepository.parseSpecs(value, cwd) match {
-          case Left(err) =>
-            if (error.isEmpty) {
-              error = Some(err)
-            }
-          case Right(xs) =>
-            if (error.isEmpty) {
-              parsed ++= xs
-            }
+        error match {
+          case Some(err) => (Left(err), rest, nodefault)
+          case None => (Right(parsed.result()), rest, nodefault)
         }
-      }
-      error match {
-        case Some(err) => (Left(err), buffer.result().toArray, noDefault)
-        case None => (Right(parsed.result()), buffer.result().toArray, noDefault)
-      }
     }
   }
 
@@ -165,14 +161,19 @@ object CncfMain extends GlobalObservable {
     }
 
   private def _take_discover_classes(
+    configuration: ResolvedConfiguration,
     args: Array[String]
   ): (Boolean, Array[String]) = {
-    val enabled = args.contains("--discover=classes")
+    val enabled =
+      args.contains("--discover=classes") ||
+        _config_truthy(configuration, "cncf.runtime.discover.classes") ||
+        _discover_env_enabled()
     val rest = args.filterNot(_ == "--discover=classes")
     (enabled, rest)
   }
 
   private def _take_workspace(
+    configuration: ResolvedConfiguration,
     args: Array[String]
   ): (Option[Path], Array[String]) = {
     val buffer = Vector.newBuilder[String]
@@ -187,7 +188,9 @@ object CncfMain extends GlobalObservable {
         i = i + 1
       }
     }
-    (workspace, buffer.result().toArray)
+    val resolved =
+      workspace.orElse(_config_string(configuration, "cncf.runtime.workspace").map(Paths.get(_)))
+    (resolved, buffer.result().toArray)
   }
 
   private def _discover_env_enabled(): Boolean = {
@@ -514,5 +517,32 @@ object CncfMain extends GlobalObservable {
   private def _truthy_(value: String): Boolean = {
     val v = value.trim.toLowerCase
     v == "1" || v == "true" || v == "yes" || v == "on"
+  }
+
+  private def _config_string(
+    configuration: ResolvedConfiguration,
+    key: String
+  ): Option[String] =
+    configuration.get[String](key) match {
+      case Consequence.Success(value) => value
+      case Consequence.Failure(_) => None
+    }
+
+  private def _config_truthy(
+    configuration: ResolvedConfiguration,
+    key: String
+  ): Boolean =
+    _config_string(configuration, key).exists(_truthy_)
+
+  private def _resolve_configuration(
+    cwd: Path
+  ): ResolvedConfiguration = {
+    val sources = ConfigurationSources.standard(cwd, applicationname = "cncf")
+    ConfigurationResolver.default.resolve(sources) match {
+      case Consequence.Success(resolved) =>
+        resolved
+      case Consequence.Failure(_) =>
+        ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+    }
   }
 }

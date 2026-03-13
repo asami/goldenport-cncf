@@ -2,16 +2,18 @@ package org.goldenport.cncf.context
 
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.ResolvedParameters
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.path.AliasResolver
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 
 /*
  * @since   Jan. 17, 2026
  *  version Jan. 19, 2026
  *  version Feb.  1, 2026
- * @version Mar. 10, 2026
+ * @version Mar. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GlobalRuntimeContext(
@@ -23,6 +25,7 @@ final class GlobalRuntimeContext(
   val runtimeVersion: String,
   val subsystemName: String,
   var subsystemVersion: String,
+  val resolvedConfiguration: ResolvedConfiguration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
 ) extends ScopeContext() {
 //   val core = ScopeContext.Core(
 //     kind = ScopeKind.Runtime,
@@ -32,6 +35,9 @@ final class GlobalRuntimeContext(
 //     httpDriverOption = Some(httpDriver)
 //   )
   private var _componentFactory: Option[ComponentFactory] = None
+
+  lazy val resolvedParameters: ResolvedParameters =
+    ResolvedParameters.fromResolvedConfiguration(resolvedConfiguration)
 
   def serverEmulatorBaseUrl: String = config.serverEmulatorBaseUrl
 
@@ -86,6 +92,7 @@ object GlobalRuntimeContext {
   def create(
     name: String,
     runconfig: RuntimeConfig,
+    resolvedConfiguration: ResolvedConfiguration,
     observabilityContext: ObservabilityContext,
     aliasresolver: AliasResolver
   ): GlobalRuntimeContext = {
@@ -106,7 +113,8 @@ object GlobalRuntimeContext {
       runconfig.mode,
       runtimeVersion = CncfVersion.current,
       subsystemName = GlobalRuntimeContext.SubsystemName,
-      subsystemVersion = CncfVersion.current
+      subsystemVersion = CncfVersion.current,
+      resolvedConfiguration = resolvedConfiguration
     )
   }
 }

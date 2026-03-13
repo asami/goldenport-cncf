@@ -122,7 +122,7 @@ Location:
   ProjectRootResolver.resolve
 
 Trigger:
-  No ".sie/" or ".git/" directory found
+  No ".cncf/" or ".git/" directory found
 
 Observation:
   - Phenomenon: ProjectRootNotFound

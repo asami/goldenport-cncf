@@ -60,13 +60,13 @@ Configuration values are discovered from the following sources.
 3.1 Supported Sources
 
     - HOME configuration
-        $HOME/.sie/
+        $HOME/.cncf/
 
     - PROJECT configuration
-        ${PROJECT_ROOT}/.sie/
+        ${PROJECT_ROOT}/.cncf/
 
     - CWD configuration
-        ${CWD}/.sie/
+        ${CWD}/.cncf/
 
     - Environment variables
 
@@ -86,7 +86,7 @@ Project root resolution is part of this framework.
 
 Starting from the provided cwd, search upward for:
 
-    - a directory containing .sie/
+    - a directory containing .cncf/
     - OR a directory containing .git/
 
 The first directory that matches is considered the project root.

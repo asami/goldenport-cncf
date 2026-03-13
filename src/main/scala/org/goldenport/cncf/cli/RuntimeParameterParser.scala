@@ -25,6 +25,7 @@ final case class RuntimeParameterParseResult(
 )
 
 final class RuntimeParameterParser {
+  private val _configuration_application_name = "cncf"
   private val _log = LoggerFactory.getLogger(classOf[RuntimeParameterParser])
   private val _serviceName = "runtime-parameters"
   private val _operationName = "parse"
@@ -88,7 +89,12 @@ final class RuntimeParameterParser {
     }
 
   private def _resolve_configuration(cwd: Path): ResolvedConfiguration = {
-    ConfigurationResolver.default.resolve(ConfigurationSources.standard(cwd)) match {
+    ConfigurationResolver.default.resolve(
+      ConfigurationSources.standard(
+        cwd,
+        applicationname = _configuration_application_name
+      )
+    ) match {
       case Consequence.Success(resolved) => resolved
       case Consequence.Failure(_) =>
         ResolvedConfiguration(

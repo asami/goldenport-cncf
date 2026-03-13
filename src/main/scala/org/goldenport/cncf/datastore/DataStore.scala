@@ -45,6 +45,23 @@ trait DataStore extends CommitParticipant {
     collection: CollectionId,
     id: EntryId
   )(using ctx: ExecutionContext): Consequence[Unit]
+
+  protected final def record_prepare(
+    recorder: CommitRecorder
+  ): PrepareResult = {
+    recorder.record("DataStore.prepare")
+    PrepareResult.Prepared
+  }
+
+  protected final def record_commit(
+    recorder: CommitRecorder
+  ): Unit =
+    recorder.record("DataStore.commit")
+
+  protected final def record_abort(
+    recorder: CommitRecorder
+  ): Unit =
+    recorder.record("DataStore.abort")
 }
 
 object DataStore {
@@ -132,16 +149,14 @@ object DataStore {
       id: EntryId
     )(using ctx: ExecutionContext): Consequence[Unit] = Consequence.unit
 
-    def prepare(tx: TransactionContext): PrepareResult = {
-      recorder.record("DataStore.prepare")
-      PrepareResult.Prepared
-    }
+    def prepare(tx: TransactionContext): PrepareResult =
+      record_prepare(recorder)
 
     def commit(tx: TransactionContext): Unit =
-      recorder.record("DataStore.commit")
+      record_commit(recorder)
 
     def abort(tx: TransactionContext): Unit =
-      recorder.record("DataStore.abort")
+      record_abort(recorder)
   }
 
   class InMemoryDataStore(
@@ -202,16 +217,14 @@ object DataStore {
     )(using ctx: ExecutionContext): Consequence[Unit] =
       take_collection(collection).flatMap(_.delete(id))
 
-    def prepare(tx: TransactionContext): PrepareResult = {
-      recorder.record("DataStore.prepare")
-      PrepareResult.Prepared
-    }
+    def prepare(tx: TransactionContext): PrepareResult =
+      record_prepare(recorder)
 
     def commit(tx: TransactionContext): Unit =
-      recorder.record("DataStore.commit")
+      record_commit(recorder)
 
     def abort(tx: TransactionContext): Unit =
-      recorder.record("DataStore.abort")
+      record_abort(recorder)
   }
   object InMemoryDataStore {
     class Collection(val id: CollectionId) {

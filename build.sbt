@@ -24,6 +24,10 @@ lazy val root = project
       "org.http4s" %% "http4s-core"         % "0.23.27",
       "org.http4s" %% "http4s-dsl"          % "0.23.27",
 
+      // SQL
+      "com.zaxxer" % "HikariCP" % "5.1.0",
+      "org.xerial" % "sqlite-jdbc" % "3.45.2.0",
+
       // Actor system (Akka-compatible, Scala 3 supported)
       "org.apache.pekko" %% "pekko-actor"  % "1.0.2",
       "org.apache.pekko" %% "pekko-stream" % "1.0.2",

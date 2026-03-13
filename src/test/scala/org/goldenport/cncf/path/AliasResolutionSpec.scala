@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan. 19, 2026
  *  version Feb.  1, 2026
- * @version Mar. 12, 2026
+ * @version Mar. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AliasResolutionSpec
@@ -97,8 +97,12 @@ final class AliasResolutionSpec
   "HTTP routing" should {
     "strip the alias selector and dispatch to admin.system.ping" in {
       Given("an alias table and a request for /ping")
-      withAliasContext(RunMode.Command, canonicalAliasConfig) { (aliasResolver, _) =>
-        val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      withAliasContext(RunMode.Command, canonicalAliasConfig) { (aliasResolver, context) =>
+        val subsystem = DefaultSubsystemFactory.defaultWithScope(
+          context = context,
+          mode = Some(RunMode.Command),
+          aliasResolver = aliasResolver
+        )
         val request = HttpRequest.fromPath(HttpRequest.GET, "/ping")
         val response = subsystem.executeHttp(request)
         val expectedPing = GlobalRuntimeContext.formatPingValue(
