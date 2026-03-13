@@ -2,6 +2,7 @@ package org.goldenport.cncf.action
 
 import cats.free.Free
 import cats.Functor
+import cats.syntax.flatMap.*
 import io.circe.Json
 import org.goldenport.Consequence
 import org.goldenport.ConsequenceT
@@ -23,7 +24,8 @@ import org.goldenport.cncf.entity.CreateResult
 /*
  * @since   Jan.  6, 2026
  *  version Jan. 21, 2026
- * @version Feb. 25, 2026
+ *  version Feb. 25, 2026
+ * @version Mar. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -116,12 +118,20 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     ConsequenceT.liftF(Free.liftF(op))
   }
 
-
-  protected final def entity_load[T](
+  protected final def entity_load_option[T](
     id: EntityId
   )(using tc: EntityPersistent[T]): ExecUowM[Option[T]] = {
     val op = UnitOfWorkOp.EntityStoreLoad(id, tc)
     ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  protected final def entity_load[T](
+    id: EntityId
+  )(using tc: EntityPersistent[T]): ExecUowM[T] = {
+    entity_load_option(id).flatMap { x =>
+      val r = Consequence.successOrEntityNotFound(x)(id)
+      exec_from(r)
+    }
   }
 
   protected final def entity_save[T](
@@ -137,11 +147,20 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   }
 
   // Direct execution variants (immediate execution)
-  protected final def entity_load_direct[T](
+  protected final def entity_load_option_direct[T](
     id: EntityId
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): Option[T] = {
     val op = UnitOfWorkOp.EntityStoreLoad(id, tc)
     uow.execute(op)
+  }
+
+  protected final def entity_load_direct[T](
+    id: EntityId
+  )(using uow: UnitOfWork, tc: EntityPersistent[T]): T = {
+    val op = UnitOfWorkOp.EntityStoreLoad(id, tc)
+    uow.execute(op).getOrElse {
+      throw new IllegalStateException(s"entity not found: $id")
+    }
   }
 
   protected final def entity_save_direct[T](
