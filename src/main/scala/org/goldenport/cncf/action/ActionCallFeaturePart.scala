@@ -83,6 +83,25 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
       .map(_.aggregate[A](collectionname))
       .getOrElse(Consequence.failUninitializedState.RAISE)
       .resolve(id)
+
+  protected final def aggregate_search[A](
+    collectionname: String,
+    q: Query[?]
+  ): Consequence[SearchResult[A]] =
+    component
+      .map(_.aggregateSpace)
+      .getOrElse(Consequence.failUninitializedState.RAISE)
+      .query[A](collectionname, q)
+      .map { xs =>
+        SearchResult(
+          query = q,
+          data = xs,
+          totalCount = Some(xs.size),
+          offset = q.offset,
+          limit = q.limit,
+          fetchedCount = xs.size
+        )
+      }
 }
 
 trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>

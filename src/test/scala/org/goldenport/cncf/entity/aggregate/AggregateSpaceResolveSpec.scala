@@ -1,6 +1,7 @@
 package org.goldenport.cncf.entity.aggregate
 
 import org.goldenport.Consequence
+import org.goldenport.cncf.directive.Query
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -8,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 16, 2026
- * @version May. 16, 2026
+ * @version Mar. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateSpaceResolveSpec
@@ -67,6 +68,23 @@ final class AggregateSpaceResolveSpec
       intercept[IllegalStateException] {
         aggregatespace.resolve[Any](missingid)
       }
+    }
+
+    "support query when collection provides query function" in {
+      Given("an aggregate collection with query support")
+      val aggregatespace = new AggregateSpace
+      val expected = expected_user_aggregate(user_id())
+      val collection = new AggregateCollection(
+        new UserBuilder,
+        _ => Consequence.success(Vector(expected))
+      )
+      aggregatespace.register("user", collection)
+
+      When("querying by collection name")
+      val result = aggregatespace.query[Any]("user", Query("any"))
+
+      Then("the query result is returned")
+      result shouldBe Consequence.success(Vector(expected))
     }
   }
 }

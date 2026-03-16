@@ -4,11 +4,12 @@ import scala.collection.mutable
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
 import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.aggregate.Repository
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 16, 2026
+ * @version Mar. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateSpace {
@@ -34,6 +35,12 @@ final class AggregateSpace {
 
   def repositoryOption[A](name: String): Option[Repository[A]] =
     _repositories.get(name).map(_.asInstanceOf[Repository[A]])
+
+  def query[A](
+    collectionname: String,
+    q: Query[?]
+  ): Consequence[Vector[A]] =
+    repository[A](collectionname).query(q)
 
   def resolve[A](id: EntityId): Consequence[A] =
     collection[A](id.collection.name).resolve(id)

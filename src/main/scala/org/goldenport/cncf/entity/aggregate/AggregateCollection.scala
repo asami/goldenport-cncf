@@ -2,11 +2,12 @@ package org.goldenport.cncf.entity.aggregate
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.runtime.Collection
 
 /*
  * @since   Mar. 14, 2026
- * @version Mar. 16, 2026
+ * @version Mar. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 // NOTE:
@@ -19,8 +20,12 @@ trait AggregateBuilder[A] {
 }
 
 final class AggregateCollection[A](
-  builder: AggregateBuilder[A]
+  builder: AggregateBuilder[A],
+  queryfn: Query[?] => Consequence[Vector[A]] = _ => Consequence.failure("AggregateCollection.query is not supported")
 ) extends Collection[A] {
   def resolve(id: EntityId): Consequence[A] =
     builder.build(id)
+
+  def query(q: Query[?]): Consequence[Vector[A]] =
+    queryfn(q)
 }

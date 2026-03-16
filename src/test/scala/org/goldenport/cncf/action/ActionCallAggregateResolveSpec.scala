@@ -3,6 +3,7 @@ package org.goldenport.cncf.action
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpaceSpecHelper, ProductBuilder, SalesOrderBuilder, UserBuilder}
 import org.goldenport.cncf.entity.runtime.testdomain.{ProductAggregate, SalesOrder, SalesOrderAggregate, SalesOrderLine, UserAggregate}
 import org.goldenport.protocol.operation.OperationResponse
@@ -13,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 16, 2026
+ * @version Mar. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallAggregateResolveSpec
@@ -142,8 +143,50 @@ final class ActionCallAggregateResolveSpec
       typed.updated.map(_.line.sku) shouldBe Some("sku-updated")
       typed.storeUpdated shouldBe true
     }
+
+    "search aggregate through aggregate DSL" in {
+      Given("a component with query-enabled aggregate collection")
+      val component = new Component() {}
+      val expected = expected_user_aggregate(user_id())
+      component.aggregateSpace.register(
+        "user",
+        new AggregateCollection(
+          new UserBuilder,
+          _ => Consequence.success(Vector(expected))
+        )
+      )
+      val pair = ActionCallSupport.componentPair(component)
+
+      When("executing an action call that searches aggregate")
+      val call = action_call(
+        actionname = "search-user-aggregate",
+        pair
+      ) { core =>
+        SearchAggregateCall[UserAggregate](core, "user")
+      }
+      val result = call.execute()
+
+      Then("the call returns search result payload")
+      result shouldBe a[Consequence.Success[OperationResponse]]
+      call.asInstanceOf[SearchAggregateCall[UserAggregate]].searched.map(_.data) shouldBe Some(Vector(expected))
+    }
   }
 
+}
+
+private final case class SearchAggregateCall[A](
+  core: ActionCall.Core,
+  collectionname: String
+) extends ProcedureActionCall {
+  private var _searched: Option[org.goldenport.cncf.directive.SearchResult[A]] = None
+
+  def searched: Option[org.goldenport.cncf.directive.SearchResult[A]] = _searched
+
+  override def execute(): Consequence[OperationResponse] =
+    aggregate_search[A](collectionname, Query("any")).map { result =>
+      _searched = Some(result)
+      OperationResponse.create(result)
+    }
 }
 
 private final case class ResolveAggregateCall[A](
