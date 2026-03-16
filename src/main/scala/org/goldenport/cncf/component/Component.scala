@@ -40,7 +40,7 @@ import scala.util.control.NonFatal
  *  version Jan.  3, 2026
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
- * @version Mar. 16, 2026
+ * @version Mar. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -140,6 +140,9 @@ abstract class Component() extends Component.Core.Holder {
 
   def browser[V](name: String): Browser[V] =
     viewSpace.browser(name)
+
+  def browser[V](name: String, viewname: String): Browser[V] =
+    viewSpace.browser(name, viewname)
 
   def scopeContext: ScopeContext = {
     val parent = _parent_scope_context getOrElse _default_scope_context()

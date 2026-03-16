@@ -51,6 +51,17 @@ trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
 
   protected final def response_yaml(p: String): Consequence[OperationResponse] =
     Consequence.success(OperationResponse.Yaml(p))
+
+  protected final def action_property_string(name: String): Option[String] =
+    action.properties.reverseIterator.collectFirst {
+      case prop if prop.name.equalsIgnoreCase(name) =>
+        Option(prop.value).map(_.toString.trim).getOrElse("")
+    }.filter(_.nonEmpty)
+
+  protected final def action_required_property_string(name: String): Consequence[String] =
+    action_property_string(name)
+      .map(Consequence.success)
+      .getOrElse(Consequence.failure(s"Property not found: $name"))
 }
 
 trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -107,6 +118,45 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
 trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
   protected final def browser =
     component.map(_.viewSpace).getOrElse(Consequence.failUninitializedState.RAISE)
+
+  protected final def view_load[A](
+    collectionname: String,
+    id: EntityId
+  ): Consequence[A] =
+    browser.browser[A](collectionname).find(id)
+
+  protected final def view_load[A](
+    collectionname: String,
+    viewname: String,
+    id: EntityId
+  ): Consequence[A] =
+    browser.browser[A](collectionname, viewname).find(id)
+
+  protected final def view_search[A](
+    collectionname: String,
+    q: Query[?]
+  ): Consequence[SearchResult[A]] =
+    browser.browser[A](collectionname).query(q).map(_to_search_result(q, _))
+
+  protected final def view_search[A](
+    collectionname: String,
+    viewname: String,
+    q: Query[?]
+  ): Consequence[SearchResult[A]] =
+    browser.browser[A](collectionname, viewname).query(q).map(_to_search_result(q, _))
+
+  private def _to_search_result[A](
+    q: Query[?],
+    xs: Vector[A]
+  ): SearchResult[A] =
+    SearchResult(
+      query = q,
+      data = xs,
+      totalCount = Some(xs.size),
+      offset = q.offset,
+      limit = q.limit,
+      fetchedCount = xs.size
+    )
 }
 
 trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
