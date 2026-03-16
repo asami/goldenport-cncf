@@ -2,6 +2,7 @@ package org.goldenport.cncf.datastore
 
 import scala.collection.immutable.VectorMap
 import java.time.Instant
+import java.util.concurrent.atomic.AtomicLong
 import org.goldenport.Consequence
 import org.goldenport.text.Presentable
 import org.goldenport.id.UniversalId
@@ -9,6 +10,7 @@ import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.unitofwork.{CommitParticipant, CommitRecorder, PrepareResult, TransactionContext}
 import org.goldenport.cncf.datatype.EntityCollectionId
+import scala.util.control.NonFatal
 
 /*
  * @since   Jan.  6, 2026
@@ -86,7 +88,46 @@ object DataStore {
   object EntryId {
     def apply(uid: UniversalId): EntryId = UniversalEntryId(uid)
 
-    def parse(p: String): Consequence[EntryId] = ???
+    def parse(p: String): Consequence[EntryId] =
+      Consequence(_parse_universal_id(p).getOrElse(StringEntryId(p)))
+
+    private def _parse_universal_id(p: String): Option[UniversalEntryId] = {
+      val parts = p.split("-").toVector
+      val (major, minor, kind, subkindopt, timestampstr, entropy) = parts.length match {
+        case 5 =>
+          (parts(0), parts(1), parts(2), Option.empty[String], parts(3), parts(4))
+        case 6 =>
+          (parts(0), parts(1), parts(2), Some(parts(3)), parts(4), parts(5))
+        case _ =>
+          return None
+      }
+      try {
+        val timestamp = Instant.ofEpochMilli(timestampstr.toLong)
+        val parsedparts = UniversalId.Parts(
+          major,
+          minor,
+          kind,
+          subkindopt,
+          timestamp,
+          entropy
+        )
+        val uid = subkindopt match {
+          case Some(sk) =>
+            new UniversalId(major, minor, kind, sk) {
+              override def parts = parsedparts
+              override def value = parsedparts.value
+            }
+          case None =>
+            new UniversalId(major, minor, kind) {
+              override def parts = parsedparts
+              override def value = parsedparts.value
+            }
+        }
+        Some(UniversalEntryId(uid))
+      } catch {
+        case NonFatal(_) => None
+      }
+    }
   }
   case class StringEntryId(id: String) extends EntryId {
     def print = Presentable.print(id)
@@ -231,10 +272,14 @@ object DataStore {
       def collectionName = id.collectionName
 
       private var _entries: VectorMap[EntryId, Record] = VectorMap.empty
+      private val _sequence = new AtomicLong(0L)
 
       protected def to_entry_id(p: EntryId): Consequence[EntryId] = ???
 
-      private def _create_entry_id = DataStoreEntryId("sys", "sys", collectionName)
+      private def _create_entry_id = {
+        val seq = _sequence.incrementAndGet().toString
+        DataStoreEntryId("sys", seq, collectionName)
+      }
 
       def create(record: Record)(using ctx: ExecutionContext): Consequence[Unit] =
         for {

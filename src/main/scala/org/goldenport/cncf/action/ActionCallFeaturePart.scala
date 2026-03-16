@@ -25,7 +25,7 @@ import org.goldenport.cncf.entity.CreateResult
  * @since   Jan.  6, 2026
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
- * @version Mar. 13, 2026
+ * @version Mar. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -46,6 +46,43 @@ trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
 
   protected final def response_yaml(p: String): Consequence[OperationResponse] =
     Consequence.success(OperationResponse.Yaml(p))
+}
+
+trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
+  protected final def repo =
+    component.map(_.aggregateSpace).getOrElse(Consequence.failUninitializedState.RAISE)
+
+  // Aggregate-oriented access for application logic.
+  // This returns the domain value object directly.
+  protected final def aggregate_load[A](id: EntityId): Consequence[A] =
+    component
+      .map(_.aggregateSpace)
+      .getOrElse(Consequence.failUninitializedState.RAISE)
+      .resolve[A](id)
+
+  // Preserve transport/storage failures (e.g. I/O) as Failure.
+  // Only "not found" is converted to Success(None).
+  protected final def aggregate_load_option[A](
+    targetid: EntityId
+  ): Consequence[Option[A]] =
+    component
+      .map(_.aggregateSpace)
+      .getOrElse(Consequence.failUninitializedState.RAISE)
+      .resolveOption[A](targetid)
+
+  protected final def aggregate_load[A](
+    collectionname: String,
+    id: EntityId
+  ): Consequence[A] =
+    component
+      .map(_.aggregate[A](collectionname))
+      .getOrElse(Consequence.failUninitializedState.RAISE)
+      .resolve(id)
+}
+
+trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
+  protected final def browser =
+    component.map(_.viewSpace).getOrElse(Consequence.failUninitializedState.RAISE)
 }
 
 trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -141,6 +178,13 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     ConsequenceT.liftF(Free.liftF(op))
   }
 
+  protected final def entity_update[T](
+    changes: T
+  )(using tc: EntityPersistent[T]): ExecUowM[Unit] = {
+    val op = UnitOfWorkOp.EntityStoreUpdate(changes, tc)
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
   protected final def entity_delete(id: EntityId): ExecUowM[Unit] = {
     val op = UnitOfWorkOp.EntityStoreDelete(id)
     ConsequenceT.liftF(Free.liftF(op))
@@ -167,6 +211,13 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     entity: T
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): Unit = {
     val op = UnitOfWorkOp.EntityStoreSave(entity, tc)
+    uow.execute(op)
+  }
+
+  protected final def entity_update_direct[T](
+    changes: T
+  )(using uow: UnitOfWork, tc: EntityPersistent[T]): Unit = {
+    val op = UnitOfWorkOp.EntityStoreUpdate(changes, tc)
     uow.execute(op)
   }
 

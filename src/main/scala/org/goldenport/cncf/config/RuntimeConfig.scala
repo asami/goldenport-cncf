@@ -15,7 +15,7 @@ import org.goldenport.cncf.config.RuntimeDefaults
  * @since   Jan. 18, 2026
  *  version Jan. 30, 2026
  *  version Feb.  1, 2026
- * @version Mar. 13, 2026
+ * @version Mar. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -50,7 +50,7 @@ object RuntimeConfig {
       LogLevel.Info,
       serverEmulatorBaseUrl = DefaultServerEmulatorBaseUrl,
       httpDriver = HttpDriverFactory.default,
-      dataStoreSpace = new DataStoreSpace(),
+      dataStoreSpace = DataStoreSpace.default(),
       entityStoreSpace = new EntityStoreSpace(),
       mode = RunMode.Command
     )

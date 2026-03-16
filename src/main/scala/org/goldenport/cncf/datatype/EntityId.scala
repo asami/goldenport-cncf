@@ -48,3 +48,41 @@ object EntityCollectionId {
     }
   }
 }
+
+final case class AggregateCollectionId(
+  major: String,
+  minor: String,
+  name: String,
+) extends UniversalId(major, minor, "aggregate_collection", name)
+
+object AggregateCollectionId {
+  given ValueReader[AggregateCollectionId] with {
+    def readC(v: Any): Consequence[AggregateCollectionId] = Option(v) match {
+      case None => Consequence.failure("Invalid AggregateCollectionId value: null")
+      case Some(value) => value match {
+        case id: AggregateCollectionId => Consequence.success(id)
+        case s: String => ???
+        case other => ???
+      }
+    }
+  }
+}
+
+final case class ViewCollectionId(
+  major: String,
+  minor: String,
+  name: String,
+) extends UniversalId(major, minor, "view_collection", name)
+
+object ViewCollectionId {
+  given ValueReader[ViewCollectionId] with {
+    def readC(v: Any): Consequence[ViewCollectionId] = Option(v) match {
+      case None => Consequence.failure("Invalid ViewCollectionId value: null")
+      case Some(value) => value match {
+        case id: ViewCollectionId => Consequence.success(id)
+        case s: String => ???
+        case other => ???
+      }
+    }
+  }
+}

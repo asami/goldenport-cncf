@@ -25,6 +25,8 @@ import org.goldenport.cncf.backend.collaborator.Collaborator
  */
 abstract class ActionCall()
   extends ActionCall.Core.Holder
+  with ActionCallRepositoryPart
+  with ActionCallBrowserPart
   with ActionCallEntityStorePart
   with ActionCallDataStorePart
   with ActionCallHttpPart

@@ -25,6 +25,9 @@ import org.goldenport.cncf.service.{Service, ServiceGroup}
 import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.cli.renderer.{CliHelpJsonRenderer, CliHelpYamlRenderer, CliTreeJsonRenderer, CliTreeYamlRenderer}
+import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace, Repository}
+import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
+import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace}
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, TreeProjection}
 import cats.data.NonEmptyVector
 import java.io.InputStream
@@ -37,7 +40,7 @@ import scala.util.control.NonFatal
  *  version Jan.  3, 2026
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
- * @version Mar. 12, 2026
+ * @version Mar. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -51,6 +54,9 @@ abstract class Component() extends Component.Core.Holder {
   private var _services: Option[ServiceGroup] = None
   private var _subsystem: Option[Subsystem] = None
   private var _health_contributors: Vector[Component.HealthContributor] = Vector.empty
+  val entitySpace: EntitySpace = new EntitySpace()
+  val aggregateSpace: AggregateSpace = new AggregateSpace()
+  val viewSpace: ViewSpace = new ViewSpace()
 
   override def core: Component.Core =
     _core.getOrElse(throw new IllegalStateException("Component core is not initialized."))
@@ -119,6 +125,21 @@ abstract class Component() extends Component.Core.Holder {
     _health_contributors = _health_contributors :+ contributor
     this
   }
+
+  def entity[E](name: String): EntityCollection[E] =
+    entitySpace.entity(name)
+
+  def aggregate[A](name: String): AggregateCollection[A] =
+    aggregateSpace.collection(name)
+
+  def view[V](name: String): ViewCollection[V] =
+    viewSpace.collection(name)
+
+  def repository[E](name: String): Repository[E] =
+    aggregateSpace.repository(name)
+
+  def browser[V](name: String): Browser[V] =
+    viewSpace.browser(name)
 
   def scopeContext: ScopeContext = {
     val parent = _parent_scope_context getOrElse _default_scope_context()

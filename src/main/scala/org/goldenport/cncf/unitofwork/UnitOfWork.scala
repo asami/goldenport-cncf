@@ -1,6 +1,7 @@
 package org.goldenport.cncf.unitofwork
 
 import cats.Applicative
+import scala.collection.mutable
 import scala.util.{Try, Success, Failure}
 import java.io.File
 import org.goldenport.{Consequence, Conclusion}
@@ -16,6 +17,7 @@ import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.entity.CreateResult
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.EntityPersistentCreate
+import org.goldenport.cncf.entity.EntityPersistable
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.event.EventEngine
@@ -27,7 +29,7 @@ import org.goldenport.cncf.http.HttpDriver
  *  version Dec. 21, 2025
  *  version Jan. 18, 2026
  *  version Feb. 27, 2026
- * @version Mar. 11, 2026
+ * @version Mar. 1４, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
@@ -38,8 +40,18 @@ class UnitOfWork(
   import UnitOfWork.*
 //  private var _http_driver: Option[HttpDriver] = None
 //  private var _shell_command_executor: Option[ShellCommandExecutor] = None
+  private val _dirty_entities: mutable.Map[EntityId, Entity] = mutable.Map.empty
 
   def transactionContext = context.transactionContext
+
+  def markDirty(entity: Entity): Unit =
+    _dirty_entities.update(entity.id, entity)
+
+  def dirtyEntities: Vector[Entity] =
+    _dirty_entities.values.toVector
+
+  def clear(): Unit =
+    _dirty_entities.clear()
 
   def create[T](entity: T)(using instance: EntityPersistentCreate[T]): Consequence[CreateResult[T]] = ???
 
@@ -153,6 +165,7 @@ object UnitOfWork {
   type CommitResult = Unit
   type AbortResult = Unit
   type Message = String
+  type Entity = EntityPersistable
 
   def simple(
     datastore: DataStore,

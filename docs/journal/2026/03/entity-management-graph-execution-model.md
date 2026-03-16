@@ -510,3 +510,23 @@ View
 This architecture transforms the system from a
 traditional CRUD application into a **domain execution engine**
 capable of handling complex aggregates and queries efficiently.
+
+# Projection Model
+
+An entity may have multiple projections.
+
+Example:
+
+Entity Person
+ ├ aggregate profile
+ ├ aggregate employment
+ ├ aggregate account
+ ├ view summary
+ └ view detail
+
+Aggregates represent write boundaries.
+
+Views represent read projections.
+
+Both share the same structural definition mechanism in Cozy.
+

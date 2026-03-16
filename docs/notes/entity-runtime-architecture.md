@@ -139,6 +139,7 @@ Execution flow:
 
 Action
 → Repository
+→ Collection
 → EntitySpace
 → EntityRealm
 → WorkingSet lookup
@@ -152,11 +153,128 @@ and remain in the working set while active.
 
 ---
 
+# Collection Model
+
+The CNCF runtime provides three kinds of collections.
+
+- EntityCollection
+- AggregateCollection
+- ViewCollection
+
+EntityCollection represents canonical entity storage.
+
+AggregateCollection represents an aggregate projection
+and defines a write boundary.
+
+ViewCollection represents a read projection.
+
+All collections expose a common access interface.
+
+trait Collection[A] {
+  def resolve(id: EntityId): Consequence[A]
+}
+
+Collections serve as the runtime implementation
+of repositories in the CNCF architecture.
+
+resolve returns the domain object associated with the id,
+constructing aggregates or projections when necessary.
+
+---
+
+# Collection Types
+
+The CNCF runtime defines three concrete collection types.
+
+Collection
+ ├ EntityCollection
+ ├ AggregateCollection
+ └ ViewCollection
+
+EntityCollection
+
+- manages canonical entity state
+- backed by EntityRealm
+- responsible for entity activation and working-set management
+
+AggregateCollection
+
+- constructs aggregates from entities
+- defines a write boundary
+- typically used by domain actions during updates
+
+ViewCollection
+
+- constructs read projections
+- may join multiple entities
+- optimized for query and presentation
+
+All collection types implement the common `Collection[A]` interface.
+
+---
+
+# CollectionId
+
+Each collection is identified by a CollectionId derived from the UniversalId structure.
+
+CollectionId structure:
+
+major-minor-kind-name-timestamp-uuid
+
+Collection kinds:
+
+entity_collection
+aggregate_collection
+view_collection
+
+Examples:
+
+major-minor-"entity_collection"-person-20260315-uuid
+major-minor-"aggregate_collection"-person.profile-20260315-uuid
+major-minor-"view_collection"-person.summary-20260315-uuid
+
+Concrete identifier types used in the runtime:
+
+- EntityCollectionId
+- AggregateCollectionId
+- ViewCollectionId
+
+These identifiers allow the runtime to manage collections in a structured and type-safe way.
+
+---
+
+# Component Collection API
+
+Components expose collections through a simple API.
+
+Example usage:
+
+component.entity("person")
+component.aggregate("person.profile")
+component.view("person.summary")
+
+Responsibilities:
+
+entity(name)
+  returns an EntityCollection
+
+aggregate(name)
+  returns an AggregateCollection
+
+view(name)
+  returns a ViewCollection
+
+Internally the component resolves these names to the appropriate CollectionId and retrieves the corresponding collection instance.
+
+This API keeps the runtime interface simple while allowing the system to support multiple projections and aggregate structures per entity.
+---
+
 # Entity Runtime Architecture
 
 Entity access follows the structure below.
 
 Repository
+→ Collection
 → EntitySpace
 → EntityRealm
 → EntityStore
