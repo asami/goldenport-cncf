@@ -1,14 +1,14 @@
 # Configuration Resolution
-Local / Runtime Configuration Resolution
+Local / Runtime Configuration Resolution (Legacy CNCF ConfigResolver)
 
-This document defines the foundational configuration resolution mechanism
-provided by the Cloud-Native Component Framework.
+This document defines the legacy CNCF-local configuration resolution mechanism.
+Current production path is `org.goldenport.configuration.*`.
 
 This mechanism is intentionally generic, deterministic, and boring.
 Its purpose is to prevent accidental coupling between components,
 applications, and runtime environments.
 
-This document is normative.
+This document is normative for the legacy CNCF resolver only.
 
 
 ----------------------------------------------------------------------
@@ -19,10 +19,12 @@ This layer is responsible for configuration resolution only.
 
 It provides:
 
-    - discovery of configuration sources
-    - deterministic precedence handling
+    - deterministic precedence handling for provided sources
     - deterministic merge semantics
     - a single evaluated configuration result
+
+Source discovery belongs to source assembly (`ConfigSources.standard`)
+rather than resolver execution.
 
 It does NOT:
 
@@ -33,7 +35,12 @@ It does NOT:
 
 Important principle:
 
-    config resolution != config semantics
+config resolution != config semantics
+
+Status note:
+
+    - `org.goldenport.cncf.config.ConfigResolver` is deprecated (Phase 2.8).
+    - Runtime uses `org.goldenport.configuration.ConfigurationResolver`.
 
 
 ----------------------------------------------------------------------
@@ -57,7 +64,7 @@ This layer prioritizes predictability over convenience.
 
 Configuration values are discovered from the following sources.
 
-3.1 Supported Sources
+3.1 Supported Sources (legacy resolver)
 
     - HOME configuration
         $HOME/.cncf/
@@ -155,22 +162,32 @@ Schema validation belongs to higher layers.
 7. Public API Contract
 ----------------------------------------------------------------------
 
-Consumers interact with this mechanism through a single entry point.
+Consumers interact with this mechanism through source-based entry points.
 
-    object ConfigResolver {
-        def resolve(
-            cwd: Path,
-            args: Map[String, String] = Map.empty,
-            env: Map[String, String] = sys.env
-        ): Either[ConfigError, ResolvedConfig]
+    trait ConfigResolver {
+      def resolve(
+        sources: Seq[ConfigSource]
+      ): Consequence[ResolvedConfig]
+
+      def resolve(
+        sources: ConfigSources
+      ): Consequence[ResolvedConfig]
     }
+
+Typical source assembly:
+
+    ConfigSources.standard(
+      cwd = cwd,
+      args = args,
+      env = env
+    )
 
 API Principles:
 
-    - no global state
-    - caller explicitly supplies cwd and env
+    - no global mutable state in resolver
+    - caller supplies sources explicitly (or via `ConfigSources.standard`)
     - safe for Docker, CI, tests, and embedded usage
-    - errors are explicit and typed
+    - errors are explicit (`Consequence.Failure`)
 
 
 ----------------------------------------------------------------------
@@ -183,7 +200,7 @@ Configuration resolution may fail due to:
     - unreadable configuration files
     - ambiguous project root resolution
 
-Errors are returned as ConfigError.
+Errors are returned as `Consequence.Failure` with conclusion.
 
 This layer must not:
 
@@ -196,11 +213,10 @@ This layer must not:
 9. Relationship to Consumers (e.g. SIE)
 ----------------------------------------------------------------------
 
-Consumers (such as Semantic Integration Engine) must:
+Consumers must:
 
-    - call ConfigResolver
-    - receive ResolvedConfig
-    - interpret configuration via thin adapters
+    - call the current configuration API (`org.goldenport.configuration.*`)
+    - treat this legacy resolver as compatibility-only
 
 Consumers must not:
 
@@ -208,7 +224,7 @@ Consumers must not:
     - re-implement merge semantics
     - depend on internal classes of this layer
 
-This layer is not SIE-specific.
+This layer is not application-specific.
 
 
 ----------------------------------------------------------------------

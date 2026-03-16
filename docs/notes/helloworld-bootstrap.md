@@ -247,7 +247,7 @@ while sharing the same core logic, including:
 
 These additional execution modes are discussed in the following design note:
 
-- [Subsystem Execution Modes](subsystem-execution-modes.md)
+- [Subsystem Execution Modes](subsystem-execution-mode.md)
 
 The HelloWorld Bootstrap keeps these modes out of scope for simplicity,
 but its design assumes that Subsystem logic is transport-independent

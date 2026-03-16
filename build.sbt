@@ -43,7 +43,8 @@ lazy val root = project
       "org.goldenport" % "cncf-collaborator-api" % "0.1.0",
 
       // Testing
-      "org.scalatest" %% "scalatest" % "3.2.18" % Test
+      "org.scalatest" %% "scalatest" % "3.2.18" % Test,
+      "org.scalacheck" %% "scalacheck" % "1.17.1" % Test
     ),
 
     publishTo := {

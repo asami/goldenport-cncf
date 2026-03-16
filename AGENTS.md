@@ -30,7 +30,7 @@ unless explicitly instructed.
 3. `README.md` (human-oriented overview and entry point)
 4. `docs/rules/` (documentation rules and policies; see document-boundary.md first)
 5. `docs/spec/` (static specifications)
-6. `docs/design/` (design intent and boundaries; start with `docs/design/protocol-core.md`)
+6. `docs/design/` (design intent and boundaries; start with `docs/design/cncf-architecture-overview.md`)
 7. `docs/notes/` (non-normative notes; never overrides rules/spec/design)
 8. `docs/ai/` (agent/AI operational notes; never overrides rules/spec/design)
 9. `src/main/scala/` (implementation)
@@ -38,12 +38,12 @@ unless explicitly instructed.
 
 ## Canonical Design Documents
 
-- `docs/design/protocol-core.md`  
-  Primary design entry for protocol boundaries and invariants.  
-  MUST be read before modifying protocol-related code.
+- `docs/design/cncf-architecture-overview.md`  
+  Primary design entry for CNCF architecture boundaries and invariants.  
+  MUST be read before modifying protocol/runtime boundary code.
 
-- `docs/design/protocol-introspection.md`  
-  Projection / introspection design for CLI help, REST OpenAPI, MCP get_manifest.  
+- `docs/design/cncf-introspection-spec.md`  
+  Projection / introspection design for CLI help, REST OpenAPI, and manifest surfaces.  
   Read this when working on projection generation.
 
 

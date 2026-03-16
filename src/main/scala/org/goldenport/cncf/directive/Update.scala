@@ -1,8 +1,10 @@
 package org.goldenport.cncf.directive
 
+import io.circe.{Codec, Decoder, DecodingFailure, Encoder, Json, JsonObject}
+
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 16, 2026
+ * @version Mar. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait Update[+A] {
@@ -57,4 +59,38 @@ object Update {
       case u: Update[?] => !u.isNoop
       case _ => false
     }
+
+  private def _encoder[A](using ev: Encoder[A]): Encoder.AsObject[Update[A]] =
+    Encoder.AsObject.instance {
+      case Noop =>
+        JsonObject(
+          "op" -> Json.fromString("noop")
+        )
+      case SetValue(value: A @unchecked) =>
+        JsonObject(
+          "op" -> Json.fromString("set"),
+          "value" -> ev(value)
+        )
+      case SetNull =>
+        JsonObject(
+          "op" -> Json.fromString("setNull")
+        )
+    }
+
+  private def _decoder[A](using ev: Decoder[A]): Decoder[Update[A]] =
+    Decoder.instance { c =>
+      c.downField("op").as[String].flatMap {
+        case "noop" =>
+          Right(Update.noop[A])
+        case "set" =>
+          c.downField("value").as[A].map(Update.set)
+        case "setNull" =>
+          Right(Update.setNull[A])
+        case other =>
+          Left(DecodingFailure(s"unknown update op: $other", c.history))
+      }
+    }
+
+  given [A](using enc: Encoder[A], dec: Decoder[A]): Codec.AsObject[Update[A]] =
+    Codec.AsObject.from(_decoder(using dec), _encoder(using enc))
 }

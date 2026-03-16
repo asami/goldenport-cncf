@@ -11,7 +11,8 @@ import org.goldenport.cncf.datatype.EntityCollectionId
 
 /*
  * @since   Feb. 22, 2026
- * @version Feb. 27, 2026
+ *  version Feb. 27, 2026
+ * @version Mar. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityPersistent[E] extends RecordCodex[E]
@@ -42,6 +43,21 @@ object EntityPersistentCreate {
   }
 }
 
+trait EntityPersistentQuery[E] extends RecordCodex[E] {
+  def collection(e: E): EntityCollectionId
+}
+
+object EntityPersistentQuery {
+  def derived[E <: EntityPersistableQuery](
+    from: Record => Consequence[E],
+    collectionid: EntityCollectionId
+  ): EntityPersistentQuery[E] = new EntityPersistentQuery[E] {
+    def toRecord(e: E) = e.toRecord()
+    def fromRecord(r: Record) = from(r)
+    def collection(e: E): EntityCollectionId = collectionid
+  }
+}
+
 trait EntityPersistable {
   def id: EntityId
   def toRecord(): Record
@@ -57,4 +73,27 @@ object EntityPersistableCreate {
   //   def collection(e: EntityPersistableCreate): CollectionId = e.collecionId
   //   def toRecord(e: EntityPersistableCreate) = e.toRecord
   // }
+}
+
+trait EntityPersistableQuery {
+  def toRecord(): Record
+}
+
+trait EntityPersistentUpdate[E] extends RecordCodex[E] {
+  def collection(e: E): EntityCollectionId
+}
+
+object EntityPersistentUpdate {
+  def derived[E <: EntityPersistableUpdate](
+    from: Record => Consequence[E],
+    collectionid: EntityCollectionId
+  ): EntityPersistentUpdate[E] = new EntityPersistentUpdate[E] {
+    def toRecord(e: E) = e.toRecord()
+    def fromRecord(r: Record) = from(r)
+    def collection(e: E): EntityCollectionId = collectionid
+  }
+}
+
+trait EntityPersistableUpdate {
+  def toRecord(): Record
 }

@@ -3,17 +3,19 @@ package org.goldenport.cncf.datatype
 import org.goldenport.Consequence
 import org.goldenport.id.UniversalId
 import org.goldenport.convert.ValueReader
+import io.circe.Codec
 
 /*
  * @since   Apr. 11, 2025
- * @version Feb. 27, 2026
+ *  version Feb. 27, 2026
+ * @version Mar. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityId(
   major: String,
   minor: String,
   collection: EntityCollectionId
-) extends UniversalId(major, minor, "entity", collection.name)
+) extends UniversalId(major, minor, "entity", collection.name) derives Codec.AsObject
 
 object EntityId {
   given ValueReader[EntityId] with {
@@ -34,7 +36,7 @@ final case class EntityCollectionId(
   major: String,
   minor: String,
   name: String,
-) extends UniversalId(major, minor, "entity_collection", name)
+) extends UniversalId(major, minor, "entity_collection", name) derives Codec.AsObject
 
 object EntityCollectionId {
   given ValueReader[EntityCollectionId] with {
@@ -53,7 +55,7 @@ final case class AggregateCollectionId(
   major: String,
   minor: String,
   name: String,
-) extends UniversalId(major, minor, "aggregate_collection", name)
+) extends UniversalId(major, minor, "aggregate_collection", name) derives Codec.AsObject
 
 object AggregateCollectionId {
   given ValueReader[AggregateCollectionId] with {
@@ -72,7 +74,7 @@ final case class ViewCollectionId(
   major: String,
   minor: String,
   name: String,
-) extends UniversalId(major, minor, "view_collection", name)
+) extends UniversalId(major, minor, "view_collection", name) derives Codec.AsObject
 
 object ViewCollectionId {
   given ValueReader[ViewCollectionId] with {

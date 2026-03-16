@@ -21,18 +21,21 @@ import org.goldenport.cncf.entity.runtime.{
   WorkingSetDefinition
 }
 import org.goldenport.record.Record
+import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
+import org.scalatest.prop.TableDrivenPropertyChecks
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 16, 2026
+ * @version Mar. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryWorkingSetIterableOnceSpec
   extends AnyWordSpec
   with Matchers
+  with TableDrivenPropertyChecks
   with GivenWhenThen {
   "ComponentFactory working set initialization" should {
     "materialize IterableOnce and populate both store and memory paths" in {
@@ -103,6 +106,162 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
       storerealm.get(id) shouldBe Some(entity)
       memoryrealm.get(id) shouldBe Some(entity)
       snapshot.get(id) shouldBe Some(entity)
+    }
+
+    "populate store and memory from IterableOnce for multiple payload patterns" in {
+      val table = Table(
+        ("minor", "name"),
+        ("a", "alpha"),
+        ("b", "bravo"),
+        ("c", "charlie")
+      )
+
+      forAll(table) { (minor, name) =>
+        val factory = new ComponentFactory()
+        val entityspace = new EntitySpace
+        val snapshot = TrieMap.empty[EntityId, Any]
+        val cid = EntityCollectionId("test", "1", "sample")
+        val id = EntityId("m", minor, cid)
+        val entity = WorkingSetEntity(id, name)
+
+        given EntityPersistent[Any] = new EntityPersistent[Any] {
+          def id(e: Any): EntityId =
+            e match {
+              case m: WorkingSetEntity => m.id
+              case _ => throw new IllegalStateException("unsupported entity")
+            }
+          def toRecord(e: Any): Record =
+            e match {
+              case m: WorkingSetEntity => m.toRecord()
+              case _ => Record.empty
+            }
+          def fromRecord(r: Record): Consequence[Any] =
+            Consequence.failure("not used in this spec")
+        }
+
+        val storerealm = new EntityRealm[Any](
+          entityName = "sample",
+          loader = EntityLoader[Any](_ => None),
+          state = new IdRef2[EntityRealmState[Any]](EntityRealmState(Map.empty))
+        )
+        val memoryrealm = new PartitionedMemoryRealm[Any](
+          strategy = PartitionStrategy.byOrganizationMonthUTC,
+          idOf = _.asInstanceOf[WorkingSetEntity].id
+        )
+        val descriptor = EntityDescriptor[Any](
+          collectionId = cid,
+          plan = EntityRuntimePlan[Any](
+            entityName = "sample",
+            memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+            workingSet = None,
+            partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+            maxPartitions = 4,
+            maxEntitiesPerPartition = 16
+          ),
+          persistent = summon[EntityPersistent[Any]]
+        )
+        val collection = new EntityCollection[Any](
+          descriptor = descriptor,
+          storage = EntityStorage(storerealm, Some(memoryrealm))
+        )
+        entityspace.registerEntity("sample", collection)
+
+        val plan = EntityRuntimePlan[Any](
+          entityName = "sample",
+          memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+          workingSet = Some(WorkingSetDefinition[Any]("sample", Iterator.single(entity))),
+          partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+          maxPartitions = 4,
+          maxEntitiesPerPartition = 16
+        )
+
+        _initialize_working_sets_from_plan(factory, Vector(plan), entityspace, snapshot)
+
+        storerealm.get(id) shouldBe Some(entity)
+        memoryrealm.get(id) shouldBe Some(entity)
+        snapshot.get(id) shouldBe Some(entity)
+      }
+    }
+
+    "satisfy IterableOnce materialization safety as a ScalaCheck property" in {
+      val genMinor = Gen.nonEmptyListOf(Gen.alphaNumChar).map(_.mkString)
+      val genName = Gen.nonEmptyListOf(Gen.alphaChar).map(_.mkString)
+      val gencase = for {
+        minor <- genMinor
+        name <- genName
+      } yield (minor, name)
+
+      val property = Prop.forAll(gencase) { (minor, name) =>
+        val factory = new ComponentFactory()
+        val entityspace = new EntitySpace
+        val snapshot = TrieMap.empty[EntityId, Any]
+        val cid = EntityCollectionId("test", "1", "sample")
+        val id = EntityId("m", minor, cid)
+        val entity = WorkingSetEntity(id, name)
+
+        given EntityPersistent[Any] = new EntityPersistent[Any] {
+          def id(e: Any): EntityId =
+            e match {
+              case m: WorkingSetEntity => m.id
+              case _ => throw new IllegalStateException("unsupported entity")
+            }
+          def toRecord(e: Any): Record =
+            e match {
+              case m: WorkingSetEntity => m.toRecord()
+              case _ => Record.empty
+            }
+          def fromRecord(r: Record): Consequence[Any] =
+            Consequence.failure("not used in this spec")
+        }
+
+        val storerealm = new EntityRealm[Any](
+          entityName = "sample",
+          loader = EntityLoader[Any](_ => None),
+          state = new IdRef2[EntityRealmState[Any]](EntityRealmState(Map.empty))
+        )
+        val memoryrealm = new PartitionedMemoryRealm[Any](
+          strategy = PartitionStrategy.byOrganizationMonthUTC,
+          idOf = _.asInstanceOf[WorkingSetEntity].id
+        )
+        val descriptor = EntityDescriptor[Any](
+          collectionId = cid,
+          plan = EntityRuntimePlan[Any](
+            entityName = "sample",
+            memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+            workingSet = None,
+            partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+            maxPartitions = 4,
+            maxEntitiesPerPartition = 16
+          ),
+          persistent = summon[EntityPersistent[Any]]
+        )
+        val collection = new EntityCollection[Any](
+          descriptor = descriptor,
+          storage = EntityStorage(storerealm, Some(memoryrealm))
+        )
+        entityspace.registerEntity("sample", collection)
+
+        val plan = EntityRuntimePlan[Any](
+          entityName = "sample",
+          memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+          workingSet = Some(WorkingSetDefinition[Any]("sample", Iterator.single(entity))),
+          partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+          maxPartitions = 4,
+          maxEntitiesPerPartition = 16
+        )
+
+        _initialize_working_sets_from_plan(factory, Vector(plan), entityspace, snapshot)
+
+        storerealm.get(id) == Some(entity) &&
+        memoryrealm.get(id) == Some(entity) &&
+        snapshot.get(id) == Some(entity)
+      }
+
+      val result = Test.check(
+        Test.Parameters.default.withMinSuccessfulTests(20),
+        property
+      )
+      result.passed shouldBe true
     }
   }
 
