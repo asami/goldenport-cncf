@@ -1,6 +1,7 @@
 package org.goldenport.cncf.directive
 
 import io.circe.{Codec, Decoder, DecodingFailure, Encoder, Json, JsonObject}
+import org.goldenport.record.{Field, Record}
 
 /*
  * @since   Mar. 16, 2026
@@ -59,6 +60,26 @@ object Update {
       case u: Update[?] => !u.isNoop
       case _ => false
     }
+
+  // Converts a patch record (fields may contain Update[_]) into datastore changes.
+  // - Noop    => field removed from changes
+  // - Set     => field value
+  // - SetNull => null value
+  def toChangesRecord(patch: Record): Record = {
+    val fields = patch.fields.flatMap { field =>
+      field.value match {
+        case Field.Value.Single(u: Update[?]) =>
+          u match {
+            case Noop => None
+            case SetValue(value) => Some(field.key -> value)
+            case SetNull => Some(field.key -> null)
+          }
+        case Field.Value.Single(v) =>
+          Some(field.key -> v)
+      }
+    }
+    Record.createFull(fields)
+  }
 
   private def _encoder[A](using ev: Encoder[A]): Encoder.AsObject[Update[A]] =
     Encoder.AsObject.instance {

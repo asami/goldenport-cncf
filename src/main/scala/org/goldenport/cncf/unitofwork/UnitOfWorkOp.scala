@@ -18,7 +18,8 @@ import org.goldenport.cncf.directive.*
  * This is the single source of truth for executable intents.
  *
  * @since   Jan. 10, 2026
- * @version Feb. 25, 2026
+ *  version Feb. 25, 2026
+ * @version Mar. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -92,6 +93,13 @@ object UnitOfWorkOp {
   final case class EntityStoreUpdate[T](
     entity: T,
     tc: EntityPersistent[T]
+  ) extends UnitOfWorkOp[Unit]
+
+  // Patch-oriented update route for cozy-generated update shapes (no id field in patch).
+  final case class EntityStoreUpdateById[P](
+    id: EntityId,
+    patch: P,
+    tc: EntityPersistentUpdate[P]
   ) extends UnitOfWorkOp[Unit]
 
   final case class EntityStoreDelete(

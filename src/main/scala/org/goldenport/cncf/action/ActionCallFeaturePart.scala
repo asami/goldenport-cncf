@@ -16,16 +16,21 @@ import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.Program
 import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.cncf.datatype.EntityCollectionId
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.EntityPersistentCreate
+import org.goldenport.cncf.entity.EntityPersistentUpdate
+import org.goldenport.cncf.entity.EntityQuery
 import org.goldenport.cncf.entity.CreateResult
+import org.goldenport.cncf.directive.Query
+import org.goldenport.cncf.directive.SearchResult
 
 /*
  * @since   Jan.  6, 2026
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
- * @version Mar. 16, 2026
+ * @version Mar. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -185,10 +190,33 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     ConsequenceT.liftF(Free.liftF(op))
   }
 
+  // Patch update with explicit target id.
+  // This is intended for Update.PatchShape where id is excluded from patch object.
+  protected final def entity_update[T](
+    id: EntityId,
+    patch: T
+  )(using tc: EntityPersistentUpdate[T]): ExecUowM[Unit] = {
+    val op = UnitOfWorkOp.EntityStoreUpdateById(id, patch, tc)
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
   protected final def entity_delete(id: EntityId): ExecUowM[Unit] = {
     val op = UnitOfWorkOp.EntityStoreDelete(id)
     ConsequenceT.liftF(Free.liftF(op))
   }
+
+  protected final def entity_search[T](
+    query: EntityQuery[T]
+  )(using tc: EntityPersistent[T]): ExecUowM[SearchResult[T]] = {
+    val op = UnitOfWorkOp.EntityStoreSearch(query, tc)
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  protected final def entity_search[T](
+    collection: EntityCollectionId,
+    query: Query[?]
+  )(using tc: EntityPersistent[T]): ExecUowM[SearchResult[T]] =
+    entity_search[T](EntityQuery(collection, query))
 
   // Direct execution variants (immediate execution)
   protected final def entity_load_option_direct[T](
@@ -221,10 +249,25 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     uow.execute(op)
   }
 
+  protected final def entity_update_direct[T](
+    id: EntityId,
+    patch: T
+  )(using uow: UnitOfWork, tc: EntityPersistentUpdate[T]): Unit = {
+    val op = UnitOfWorkOp.EntityStoreUpdateById(id, patch, tc)
+    uow.execute(op)
+  }
+
   protected final def entity_delete_direct(
     id: EntityId
   )(using uow: UnitOfWork): Unit = {
     val op = UnitOfWorkOp.EntityStoreDelete(id)
+    uow.execute(op)
+  }
+
+  protected final def entity_search_direct[T](
+    query: EntityQuery[T]
+  )(using uow: UnitOfWork, tc: EntityPersistent[T]): SearchResult[T] = {
+    val op = UnitOfWorkOp.EntityStoreSearch(query, tc)
     uow.execute(op)
   }
 }

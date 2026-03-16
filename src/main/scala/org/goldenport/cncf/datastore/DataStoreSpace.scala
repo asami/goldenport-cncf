@@ -3,6 +3,7 @@ package org.goldenport.cncf.datastore
 import java.util.concurrent.atomic.AtomicLong
 import org.goldenport.Consequence
 import org.goldenport.observation.Descriptor
+import org.goldenport.id.UniversalId
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.datastore.sql.SqlDataStore
 import org.goldenport.cncf.config.ConfigurationAccess
@@ -11,7 +12,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Feb. 25, 2026
- * @version Mar. , 2026
+ * @version Mar. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace {
@@ -58,8 +59,10 @@ class DataStoreSpace {
     record: Record,
     cid: DataStore.CollectionId
   ): DataStore.EntryId =
-    record.getString("id") match {
-      case Some(s) => DataStore.StringEntryId(s)
+    record.asMap.get("id") match {
+      case Some(m: UniversalId) => DataStore.StringEntryId(m.print)
+      case Some(s: String) => DataStore.StringEntryId(s)
+      case Some(v) => DataStore.StringEntryId(v.toString)
       case None =>
         val seq = _inject_sequence.incrementAndGet().toString
         DataStore.DataStoreEntryId("sys", seq, cid.collectionName)

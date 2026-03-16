@@ -2,7 +2,6 @@ package org.goldenport.cncf.datastore
 
 import scala.collection.immutable.VectorMap
 import java.time.Instant
-import java.util.concurrent.atomic.AtomicLong
 import org.goldenport.Consequence
 import org.goldenport.text.Presentable
 import org.goldenport.id.UniversalId
@@ -16,7 +15,7 @@ import scala.util.control.NonFatal
  * @since   Jan.  6, 2026
  *  version Jan. 10, 2026
  *  version Feb. 25, 2026
- * @version Mar. 12, 2026
+ * @version Mar. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {
@@ -230,7 +229,7 @@ object DataStore {
       id: EntryId,
       record: Record
     )(using ctx: ExecutionContext): Consequence[Unit] =
-      _ensure_collection(collection).flatMap(_.create(record))
+      _ensure_collection(collection).flatMap(_.create(id, record))
 
     def load(
       collection: CollectionId,
@@ -271,55 +270,47 @@ object DataStore {
     class Collection(val id: CollectionId) {
       def collectionName = id.collectionName
 
-      private var _entries: VectorMap[EntryId, Record] = VectorMap.empty
-      private val _sequence = new AtomicLong(0L)
+      private var _entries: VectorMap[String, Record] = VectorMap.empty
 
-      protected def to_entry_id(p: EntryId): Consequence[EntryId] = ???
+      protected def to_entry_key(p: EntryId): Consequence[String] =
+        Consequence.success(p.print)
 
-      private def _create_entry_id = {
-        val seq = _sequence.incrementAndGet().toString
-        DataStoreEntryId("sys", seq, collectionName)
-      }
-
-      def create(record: Record)(using ctx: ExecutionContext): Consequence[Unit] =
+      def create(id: EntryId, record: Record)(using ctx: ExecutionContext): Consequence[Unit] =
         for {
-          entryid <- _ensure_id(record)
-          _ <- _check_duplicate(entryid)
-          _ <- _create_entry(entryid, record)
+          key <- to_entry_key(id)
+          _ <- _check_duplicate(key)
+          _ <- _create_entry(key, record)
         } yield {}
 
-      private def _ensure_id(rec: Record): Consequence[EntryId] =
-        rec.getString("id") match {
-          case Some(s) => EntryId.parse(s)
-          case None => Consequence(_create_entry_id)
-        }
-
-      private def _check_duplicate(entryid: EntryId): Consequence[Unit] =
-        if (_entries.contains(entryid))
-          Consequence.DataStoreDuplicate(entryid.print)
+      private def _check_duplicate(key: String): Consequence[Unit] =
+        if (_entries.contains(key))
+          Consequence.DataStoreDuplicate(key)
         else
           Consequence.unit
 
-      private def _create_entry(entryid: EntryId, rec: Record): Consequence[Unit] =
+      private def _create_entry(key: String, rec: Record): Consequence[Unit] =
         Consequence {
-          _entries = _entries.updated(entryid, rec)
+          _entries = _entries.updated(key, rec)
         }
 
       def load(id: EntryId): Consequence[Option[Record]] =
-        Consequence(None)
+        to_entry_key(id).map(_entries.get)
 
-      def save(id: EntryId, record: Record): Consequence[Unit] = Consequence.unit
+      def save(id: EntryId, record: Record): Consequence[Unit] =
+        to_entry_key(id).map { key =>
+          _entries = _entries.updated(key, record)
+        }
 
       def update(id: EntryId, changes: Record): Consequence[Unit] = {
         for {
-          eid <- to_entry_id(id)
+          key <- to_entry_key(id)
           _ <- {
-            _entries.get(eid) match {
+            _entries.get(key) match {
               case Some(existing) => Consequence {
-                _entries = _entries.updated(eid, existing ++ changes)
+                _entries = _entries.updated(key, existing ++ changes)
               }
               case None =>
-                Consequence.DataStoreNotFound(eid.print)
+                Consequence.DataStoreNotFound(key)
             }
           }
         } yield ()
@@ -327,8 +318,8 @@ object DataStore {
 
       def delete(id: EntryId): Consequence[Unit] = {
         for {
-          eid <- to_entry_id(id)
-        } yield _entries = _entries - eid
+          key <- to_entry_key(id)
+        } yield _entries = _entries - key
       }
 
       def search(directive: QueryDirective): Consequence[SearchResult] = Consequence {

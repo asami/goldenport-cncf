@@ -13,7 +13,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
 /*
  * @since   Feb. 24, 2026
  *  version Feb. 25, 2026
- * @version Mar. 11, 2026
+ * @version Mar. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {
@@ -69,6 +69,19 @@ class EntityStoreSpace {
       entitystore <- _by_collection(op.tc.id(op.entity).collection)
       r <- entitystore.update(op.entity)
     } yield r
+  }
+
+  def updateById[T](op: EntityStoreUpdateById[T])(using ctx: ExecutionContext): Consequence[Unit] = {
+    val changes = Update.toChangesRecord(op.tc.toRecord(op.patch))
+    if (changes.isEmpty)
+      Consequence.unit
+    else
+      for {
+        cid <- dataStoreCollection(op.id)
+        dsid <- dataStoreEntryId(op.id)
+        ds <- ctx.dataStoreSpace.dataStore(cid)
+        r <- ds.update(cid, dsid, changes)
+      } yield r
   }
 
   def delete(op: EntityStoreDelete)(using ctx: ExecutionContext): Consequence[Unit] =

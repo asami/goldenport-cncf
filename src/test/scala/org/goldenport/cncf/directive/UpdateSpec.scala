@@ -2,12 +2,13 @@ package org.goldenport.cncf.directive
 
 import org.goldenport.cncf.datatype.EntityId
 import org.goldenport.cncf.datatype.EntityCollectionId
+import org.goldenport.record.Record
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 16, 2026
+ * @version Mar. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UpdateSpec
@@ -44,6 +45,20 @@ final class UpdateSpec
       byid.id shouldBe id
       byquery.patch shouldBe directive
       Update.hasChange(directive) shouldBe true
+    }
+
+    "convert patch record to datastore changes" in {
+      val patch = Record.data(
+        "name" -> Update.set(Name("hanako")),
+        "age" -> Update.noop[Age],
+        "nickname" -> Update.setNull[String]
+      )
+
+      val changes = Update.toChangesRecord(patch)
+
+      changes.asMap.get("name") shouldBe Some(Name("hanako"))
+      changes.asMap.contains("age") shouldBe false
+      changes.asMap.get("nickname") shouldBe Some(null)
     }
   }
 }
