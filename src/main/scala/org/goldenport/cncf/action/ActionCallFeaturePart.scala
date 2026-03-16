@@ -194,14 +194,14 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_load_option_direct[T](
     id: EntityId
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): Option[T] = {
-    val op = UnitOfWorkOp.EntityStoreLoad(id, tc)
+    val op = UnitOfWorkOp.EntityStoreLoadDirect(id, tc)
     uow.execute(op)
   }
 
   protected final def entity_load_direct[T](
     id: EntityId
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): T = {
-    val op = UnitOfWorkOp.EntityStoreLoad(id, tc)
+    val op = UnitOfWorkOp.EntityStoreLoadDirect(id, tc)
     uow.execute(op).getOrElse {
       throw new IllegalStateException(s"entity not found: $id")
     }
@@ -257,6 +257,11 @@ trait ActionCallDataStorePart extends ActionCallFeaturePart { self: ActionCall.C
     ConsequenceT.liftF(Free.liftF(op))
   }
 
+  protected final def store_update(id: UniversalId, record: Record): ExecUowM[Unit] = {
+    val op = _op_store_update(id, record)
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
   protected final def store_delete(id: UniversalId): ExecUowM[Unit] = {
     val op = _op_store_delete(id)
     ConsequenceT.liftF(Free.liftF(op))
@@ -278,6 +283,14 @@ trait ActionCallDataStorePart extends ActionCallFeaturePart { self: ActionCall.C
     uow.execute(op)
   }
 
+  protected final def store_update_direct(
+    id: UniversalId,
+    record: Record
+  )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Unit = {
+    val op = _op_store_update(id, record)
+    uow.execute(op)
+  }
+
   protected final def store_delete_direct(
     id: UniversalId
   )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Unit = {
@@ -293,6 +306,11 @@ trait ActionCallDataStorePart extends ActionCallFeaturePart { self: ActionCall.C
 
   private def _op_store_save(id: UniversalId, record: Record): UnitOfWorkOp[Unit] = {
     // TODO: Implement DataStoreSave operation
+    UnitOfWorkOp.DataStoreSave(id, record)
+  }
+
+  private def _op_store_update(id: UniversalId, record: Record): UnitOfWorkOp[Unit] = {
+    // TODO: Implement DataStoreUpdate operation (currently routed to save op).
     UnitOfWorkOp.DataStoreSave(id, record)
   }
 

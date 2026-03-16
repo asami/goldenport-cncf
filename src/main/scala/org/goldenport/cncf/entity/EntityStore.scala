@@ -9,8 +9,8 @@ import org.goldenport.cncf.*
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datatype.EntityId
 import org.goldenport.cncf.datatype.EntityCollectionId
-import org.goldenport.cncf.directive.{Query, SearchResult}
-import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.directive.{Query as EntityDirectiveQuery, SearchResult}
+import org.goldenport.cncf.datastore.{DataStore, QueryDirective, QueryLimit, QueryOrder, OrderDirection}
 import org.goldenport.cncf.datastore.DataStore.EntryId
 
 /*
@@ -183,6 +183,39 @@ class StandardEntityStore(
   def search[T](
     query: EntityQuery[T]
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] = {
-    ???
+    for {
+      cid <- ctx.entityStoreSpace.dataStoreCollection(query.collection)
+      raw <- ctx.dataStoreSpace.search(
+        cid,
+        QueryDirective(
+          query = org.goldenport.cncf.datastore.Query.Empty,
+          order = _to_datastore_order(query.query.sort),
+          limit = QueryLimit.Unbounded
+        )
+      )
+      decoded <- raw.records.toVector.traverse(tc.fromRecord)
+      filtered = decoded.filter(x => EntityDirectiveQuery.matches(query.query, x))
+      sorted = EntityDirectiveQuery.sortValues(filtered, query.query.sort)
+      values = EntityDirectiveQuery.sliceValues(sorted, query.query.offset, query.query.limit)
+    } yield SearchResult(
+      query = query.query,
+      data = values,
+      totalCount = Some(filtered.size),
+      offset = query.query.offset,
+      limit = query.query.limit,
+      fetchedCount = values.size
+    )
   }
+
+  private def _to_datastore_order(
+    sort: Vector[EntityDirectiveQuery.SortKey]
+  ): QueryOrder =
+    sort.headOption match {
+      case Some(EntityDirectiveQuery.SortKey(path, EntityDirectiveQuery.SortDirection.Asc)) =>
+        QueryOrder.By(path, OrderDirection.Asc)
+      case Some(EntityDirectiveQuery.SortKey(path, EntityDirectiveQuery.SortDirection.Desc)) =>
+        QueryOrder.By(path, OrderDirection.Desc)
+      case None =>
+        QueryOrder.None
+    }
 }

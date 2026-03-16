@@ -4,9 +4,11 @@ import cats.free.Free
 import cats.~>
 import org.goldenport.{Consequence, Conclusion, ConsequenceT}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.datastore.*
 import org.goldenport.cncf.entity.*
+import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.observability.CallTreeContext
 import org.goldenport.process.ShellCommandExecutor
 
@@ -100,8 +102,13 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreLoad[t] @unchecked) =>
-      withCallTree("uow:entitystore:load") {
-        _entity_store_space.load(m)
+      withCallTree("uow:entityspace:load") {
+        _entity_space_load(m)
+      }
+
+    case m: (UnitOfWorkOp.EntityStoreLoadDirect[t] @unchecked) =>
+      withCallTree("uow:entitystore:load:direct") {
+        _entity_store_space.load(UnitOfWorkOp.EntityStoreLoad(m.id, m.tc))
       }
 
     case m: (UnitOfWorkOp.EntityStoreSave[t] @unchecked) =>
@@ -120,8 +127,13 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearch[t] @unchecked) =>
-      withCallTree("uow:entitystore:search") {
-        _entity_store_space.search(m)
+      withCallTree("uow:entityspace:search") {
+        _entity_space_search(m)
+      }
+
+    case m: (UnitOfWorkOp.EntityStoreSearchDirect[t] @unchecked) =>
+      withCallTree("uow:entitystore:search:direct") {
+        _entity_store_space.search(UnitOfWorkOp.EntityStoreSearch(m.query, m.tc))
       }
 
     case UnitOfWorkOp.ShellCommandExec(command) =>
@@ -140,6 +152,58 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   private def _data_store_space: DataStoreSpace = uow.executionContext.dataStoreSpace
 
   private def _entity_store_space: EntityStoreSpace = uow.executionContext.entityStoreSpace
+
+  private def _entity_space_load[T](
+    op: UnitOfWorkOp.EntityStoreLoad[T]
+  ): Consequence[Option[T]] = {
+    val name = op.id.collection.name
+    _component_option
+      .flatMap(_.entitySpace.entityOption[T](name)) match {
+      case Some(collection) =>
+        collection.resolve(op.id) match {
+          case Consequence.Success(entity) =>
+            Consequence.success(Some(entity))
+          case Consequence.Failure(conclusion) if _is_entity_not_found(conclusion) =>
+            Consequence.success(None)
+          case Consequence.Failure(conclusion) =>
+            Consequence.Failure(conclusion)
+        }
+      case None =>
+        _entity_store_space.load(op)
+    }
+  }
+
+  private def _entity_space_search[T](
+    op: UnitOfWorkOp.EntityStoreSearch[T]
+  ): Consequence[SearchResult[T]] = {
+    val name = op.query.collection.name
+    _component_option
+      .flatMap(_.entitySpace.entityOption[T](name)) match {
+      case Some(collection) =>
+        collection.search(op.query)
+      case None =>
+        _entity_store_space.search(op)
+    }
+  }
+
+  private def _component_option: Option[Component] = {
+    @annotation.tailrec
+    def go(scope: org.goldenport.cncf.context.ScopeContext): Option[Component] =
+      scope match {
+        case m: Component.Context => Some(m.component)
+        case _ =>
+          scope.parent match {
+            case Some(p) => go(p)
+            case None => None
+          }
+      }
+    go(uow.executionContext.cncfCore.scope)
+  }
+
+  private def _is_entity_not_found(
+    conclusion: org.goldenport.Conclusion
+  ): Boolean =
+    conclusion.show.toLowerCase.contains("not found")
 
   private def _shell_command_executor: ShellCommandExecutor =
     uow.shellCommandExecutor

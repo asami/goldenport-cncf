@@ -91,6 +91,11 @@ final class PartitionedMemoryRealm[E](
         Consequence.failure(s"entity not found in memory realm: $id")
     }
 
+  def values: Vector[E] =
+    _lock.synchronized {
+      _partitions.valuesIterator.flatMap(_.values).toVector
+    }
+
   def valuesInRange(
     major: String,
     minor: String,

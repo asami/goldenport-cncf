@@ -14,4 +14,4 @@ case class ListDirective(
 case class ListResult[T](
 )
 
-case class EntityQuery[T](collection: EntityCollectionId, query: Query[T])
+case class EntityQuery[T](collection: EntityCollectionId, query: Query[?])

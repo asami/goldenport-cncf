@@ -172,7 +172,7 @@ private final case class ResolveAndDiffUpdateAggregateCall(
   core: ActionCall.Core,
   targetid: EntityId,
   patch: SalesOrderAggregatePatch
-) extends ProcedureActionCall {
+) extends FunctionalActionCall {
   private var _before: Option[SalesOrderAggregate] = None
   private var _updated: Option[SalesOrderAggregate] = None
   private var _storeupdated: Boolean = false
@@ -181,34 +181,37 @@ private final case class ResolveAndDiffUpdateAggregateCall(
   def updated: Option[SalesOrderAggregate] = _updated
   def storeUpdated: Boolean = _storeupdated
 
-  override def execute(): Consequence[OperationResponse] =
-    aggregate_load[SalesOrderAggregate](targetid).flatMap { current =>
-      val updatedLine = current.line.copy(
-        sku = patch.sku.getOrElse(current.line.sku),
-        quantity = current.line.quantity + patch.quantityDelta.getOrElse(0)
-      )
-      val updated = current.copy(
-        order = current.order.copy(line = updatedLine),
-        line = updatedLine
-      )
-      _before = Some(current)
-      _updated = Some(updated)
-
-      _store_update(updated).map { _ =>
-        OperationResponse.RecordResponse(
-          Record.dataAuto(
-            "before" -> current,
-            "patch" -> patch,
-            "after" -> updated
-          )
+  protected def build_Program =
+    exec_from {
+      aggregate_load[SalesOrderAggregate](targetid).flatMap { current =>
+        val updatedLine = current.line.copy(
+          sku = patch.sku.getOrElse(current.line.sku),
+          quantity = current.line.quantity + patch.quantityDelta.getOrElse(0)
         )
+        val updated = current.copy(
+          order = current.order.copy(line = updatedLine),
+          line = updatedLine
+        )
+        _before = Some(current)
+        _updated = Some(updated)
+
+        store_update(updated).map { _ =>
+          OperationResponse.RecordResponse(
+            Record.dataAuto(
+              "before" -> current,
+              "patch" -> patch,
+              "after" -> updated
+            )
+          )
+        }
       }
     }
 
-  private def _store_update(
+  private def store_update(
     updated: SalesOrderAggregate
   ): Consequence[Unit] = {
-    val _ = updated
+    val _ = store_update(updated.order.id, updated.order.toRecord())
+    val _ = store_update(updated.line.id, updated.line.toRecord())
     _storeupdated = true
     Consequence.unit
   }

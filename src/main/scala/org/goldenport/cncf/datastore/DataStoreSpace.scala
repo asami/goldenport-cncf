@@ -31,7 +31,13 @@ class DataStoreSpace {
   def search(
     cid: DataStore.CollectionId,
     directive: QueryDirective
-  ): Consequence[SearchResult] = ???
+  ): Consequence[SearchResult] =
+    dataStore(cid).flatMap {
+      case m: SearchableDataStore =>
+        m.search(cid, directive)
+      case _ =>
+        Consequence.failure(s"datastore is not searchable: ${cid.print}")
+    }
 
   def inject(
     cid: DataStore.CollectionId,

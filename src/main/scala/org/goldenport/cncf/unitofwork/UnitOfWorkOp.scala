@@ -78,6 +78,12 @@ object UnitOfWorkOp {
     tc: EntityPersistent[T]
   ) extends UnitOfWorkOp[Option[T]]
 
+  // Special-use direct path to EntityStoreSpace (bypasses EntitySpace/MemoryRealm).
+  final case class EntityStoreLoadDirect[T](
+    id: EntityId,
+    tc: EntityPersistent[T]
+  ) extends UnitOfWorkOp[Option[T]]
+
   final case class EntityStoreSave[T](
     entity: T,
     tc: EntityPersistent[T]
@@ -93,6 +99,12 @@ object UnitOfWorkOp {
   ) extends UnitOfWorkOp[Unit]
 
   final case class EntityStoreSearch[T](
+    query: EntityQuery[T],
+    tc: EntityPersistent[T]
+  ) extends UnitOfWorkOp[SearchResult[T]]
+
+  // Special-use direct path to EntityStoreSpace (bypasses EntitySpace/MemoryRealm).
+  final case class EntityStoreSearchDirect[T](
     query: EntityQuery[T],
     tc: EntityPersistent[T]
   ) extends UnitOfWorkOp[SearchResult[T]]
