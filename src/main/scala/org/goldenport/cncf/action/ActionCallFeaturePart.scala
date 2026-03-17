@@ -1,7 +1,6 @@
 package org.goldenport.cncf.action
 
 import cats.free.Free
-import cats.Functor
 import cats.syntax.flatMap.*
 import io.circe.Json
 import org.goldenport.Consequence
@@ -13,6 +12,7 @@ import org.goldenport.http.HttpResponse
 import org.goldenport.process.{ShellCommand, ShellCommandResult}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork}
+import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.Program
 import org.goldenport.cncf.datatype.EntityId
@@ -43,6 +43,12 @@ trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
   protected final def exec_from[A](c: Consequence[A]): ExecUowM[A] =
     ConsequenceT.fromConsequence[[X] =>> Program[UnitOfWorkOp, X], A](c)
 
+  protected final def exec_c[A](op: UnitOfWorkOp[A])(using uow: UnitOfWork): Consequence[A] =
+    new UnitOfWorkInterpreter(uow).run(ConsequenceT.liftF(Free.liftF(op)))
+
+  protected final def exec_or_throw[A](op: UnitOfWorkOp[A])(using uow: UnitOfWork): A =
+    exec_c(op).TAKE
+
   protected final def response_string(p: String): Consequence[OperationResponse] =
     Consequence.success(OperationResponse.Scalar(p))
 
@@ -68,17 +74,26 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   protected final def repo =
     component.map(_.aggregateSpace).getOrElse(Consequence.failUninitializedState.RAISE)
 
+  protected final def aggregate_load[A](id: EntityId): ExecUowM[A] =
+    exec_from(aggregate_load_c[A](id))
+
   // Aggregate-oriented access for application logic.
   // This returns the domain value object directly.
-  protected final def aggregate_load[A](id: EntityId): Consequence[A] =
+  protected final def aggregate_load_c[A](id: EntityId): Consequence[A] =
     component
       .map(_.aggregateSpace)
       .getOrElse(Consequence.failUninitializedState.RAISE)
       .resolve[A](id)
 
+  protected final def aggregate_load_or_throw[A](id: EntityId): A =
+    aggregate_load_c[A](id).TAKE
+
+  protected final def aggregate_load_option[A](targetid: EntityId): ExecUowM[Option[A]] =
+    exec_from(aggregate_load_option_c[A](targetid))
+
   // Preserve transport/storage failures (e.g. I/O) as Failure.
   // Only "not found" is converted to Success(None).
-  protected final def aggregate_load_option[A](
+  protected final def aggregate_load_option_c[A](
     targetid: EntityId
   ): Consequence[Option[A]] =
     component
@@ -86,7 +101,16 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
       .getOrElse(Consequence.failUninitializedState.RAISE)
       .resolveOption[A](targetid)
 
+  protected final def aggregate_load_option_or_throw[A](targetid: EntityId): Option[A] =
+    aggregate_load_option_c[A](targetid).TAKE
+
   protected final def aggregate_load[A](
+    collectionname: String,
+    id: EntityId
+  ): ExecUowM[A] =
+    exec_from(aggregate_load_c[A](collectionname, id))
+
+  protected final def aggregate_load_c[A](
     collectionname: String,
     id: EntityId
   ): Consequence[A] =
@@ -95,7 +119,19 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
       .getOrElse(Consequence.failUninitializedState.RAISE)
       .resolve(id)
 
+  protected final def aggregate_load_or_throw[A](
+    collectionname: String,
+    id: EntityId
+  ): A =
+    aggregate_load_c[A](collectionname, id).TAKE
+
   protected final def aggregate_search[A](
+    collectionname: String,
+    q: Query[?]
+  ): ExecUowM[SearchResult[A]] =
+    exec_from(aggregate_search_c[A](collectionname, q))
+
+  protected final def aggregate_search_c[A](
     collectionname: String,
     q: Query[?]
   ): Consequence[SearchResult[A]] =
@@ -113,6 +149,12 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
           fetchedCount = xs.size
         )
       }
+
+  protected final def aggregate_search_or_throw[A](
+    collectionname: String,
+    q: Query[?]
+  ): SearchResult[A] =
+    aggregate_search_c[A](collectionname, q).TAKE
 }
 
 trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -122,28 +164,80 @@ trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Cor
   protected final def view_load[A](
     collectionname: String,
     id: EntityId
+  ): ExecUowM[A] =
+    exec_from(view_load_c[A](collectionname, id))
+
+  protected final def view_load_c[A](
+    collectionname: String,
+    id: EntityId
   ): Consequence[A] =
     browser.browser[A](collectionname).find(id)
 
+  protected final def view_load_or_throw[A](
+    collectionname: String,
+    id: EntityId
+  ): A =
+    view_load_c[A](collectionname, id).TAKE
+
   protected final def view_load[A](
+    collectionname: String,
+    viewname: String,
+    id: EntityId
+  ): ExecUowM[A] =
+    exec_from(view_load_c[A](collectionname, viewname, id))
+
+  protected final def view_load_c[A](
     collectionname: String,
     viewname: String,
     id: EntityId
   ): Consequence[A] =
     browser.browser[A](collectionname, viewname).find(id)
 
+  protected final def view_load_or_throw[A](
+    collectionname: String,
+    viewname: String,
+    id: EntityId
+  ): A =
+    view_load_c[A](collectionname, viewname, id).TAKE
+
   protected final def view_search[A](
+    collectionname: String,
+    q: Query[?]
+  ): ExecUowM[SearchResult[A]] =
+    exec_from(view_search_c[A](collectionname, q))
+
+  protected final def view_search_c[A](
     collectionname: String,
     q: Query[?]
   ): Consequence[SearchResult[A]] =
     browser.browser[A](collectionname).query(q).map(_to_search_result(q, _))
 
+  protected final def view_search_or_throw[A](
+    collectionname: String,
+    q: Query[?]
+  ): SearchResult[A] =
+    view_search_c[A](collectionname, q).TAKE
+
   protected final def view_search[A](
+    collectionname: String,
+    viewname: String,
+    q: Query[?]
+  ): ExecUowM[SearchResult[A]] =
+    exec_from(view_search_c[A](collectionname, viewname, q))
+
+  protected final def view_search_c[A](
     collectionname: String,
     viewname: String,
     q: Query[?]
   ): Consequence[SearchResult[A]] =
     browser.browser[A](collectionname, viewname).query(q).map(_to_search_result(q, _))
+
+  protected final def view_search_or_throw[A](
+    collectionname: String,
+    viewname: String,
+    q: Query[?]
+  ): SearchResult[A] =
+    view_search_c[A](collectionname, viewname, q).TAKE
 
   private def _to_search_result[A](
     q: Query[?],
@@ -185,21 +279,54 @@ trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.H
     ConsequenceT.liftF(Free.liftF(op))
   }
 
-  // Direct execution variants
-  protected final def http_get_direct(
+  protected final def http_get_c(
+    path: String
+  )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Consequence[HttpResponse] = {
+    val op = _op_http_get(path)
+    exec_c(op)
+  }
+
+  protected final def http_get_or_throw(
     path: String
   )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): HttpResponse = {
     val op = _op_http_get(path)
-    uow.execute(op)
+    exec_or_throw(op)
   }
 
-  protected final def http_post_direct(
+  protected final def http_post_c(
+    path: String,
+    body: Option[String] = None,
+    headers: Map[String, String] = Map.empty
+  )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Consequence[HttpResponse] = {
+    val op = _op_http_post(path, body, headers)
+    exec_c(op)
+  }
+
+  protected final def http_post_or_throw(
     path: String,
     body: Option[String] = None,
     headers: Map[String, String] = Map.empty
   )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): HttpResponse = {
     val op = _op_http_post(path, body, headers)
-    uow.execute(op)
+    exec_or_throw(op)
+  }
+
+  protected final def http_put_c(
+    path: String,
+    body: Option[String] = None,
+    headers: Map[String, String] = Map.empty
+  )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Consequence[HttpResponse] = {
+    val op = _op_http_put(path, body, headers)
+    exec_c(op)
+  }
+
+  protected final def http_put_or_throw(
+    path: String,
+    body: Option[String] = None,
+    headers: Map[String, String] = Map.empty
+  )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): HttpResponse = {
+    val op = _op_http_put(path, body, headers)
+    exec_or_throw(op)
   }
 
   // Private helpers to build UnitOfWorkOp
@@ -287,57 +414,101 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   )(using tc: EntityPersistent[T]): ExecUowM[SearchResult[T]] =
     entity_search[T](EntityQuery(collection, query))
 
-  // Direct execution variants (immediate execution)
-  protected final def entity_load_option_direct[T](
+  protected final def entity_load_option_c[T](
+    id: EntityId
+  )(using uow: UnitOfWork, tc: EntityPersistent[T]): Consequence[Option[T]] = {
+    val op = UnitOfWorkOp.EntityStoreLoadDirect(id, tc)
+    exec_c(op)
+  }
+
+  protected final def entity_load_option_or_throw[T](
     id: EntityId
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): Option[T] = {
     val op = UnitOfWorkOp.EntityStoreLoadDirect(id, tc)
-    uow.execute(op)
+    exec_or_throw(op)
   }
 
-  protected final def entity_load_direct[T](
+  protected final def entity_load_c[T](
+    id: EntityId
+  )(using uow: UnitOfWork, tc: EntityPersistent[T]): Consequence[T] =
+    entity_load_option_c(id).flatMap(x => Consequence.successOrEntityNotFound(x)(id))
+
+  protected final def entity_load_or_throw[T](
     id: EntityId
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): T = {
-    val op = UnitOfWorkOp.EntityStoreLoadDirect(id, tc)
-    uow.execute(op).getOrElse {
-      throw new IllegalStateException(s"entity not found: $id")
-    }
+    entity_load_c(id).TAKE
   }
 
-  protected final def entity_save_direct[T](
+  protected final def entity_save_c[T](
+    entity: T
+  )(using uow: UnitOfWork, tc: EntityPersistent[T]): Consequence[Unit] = {
+    val op = UnitOfWorkOp.EntityStoreSave(entity, tc)
+    exec_c(op)
+  }
+
+  protected final def entity_save_or_throw[T](
     entity: T
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): Unit = {
     val op = UnitOfWorkOp.EntityStoreSave(entity, tc)
-    uow.execute(op)
+    exec_or_throw(op)
   }
 
-  protected final def entity_update_direct[T](
+  protected final def entity_update_c[T](
+    changes: T
+  )(using uow: UnitOfWork, tc: EntityPersistent[T]): Consequence[Unit] = {
+    val op = UnitOfWorkOp.EntityStoreUpdate(changes, tc)
+    exec_c(op)
+  }
+
+  protected final def entity_update_or_throw[T](
     changes: T
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): Unit = {
     val op = UnitOfWorkOp.EntityStoreUpdate(changes, tc)
-    uow.execute(op)
+    exec_or_throw(op)
   }
 
-  protected final def entity_update_direct[T](
+  protected final def entity_update_c[T](
+    id: EntityId,
+    patch: T
+  )(using uow: UnitOfWork, tc: EntityPersistentUpdate[T]): Consequence[Unit] = {
+    val op = UnitOfWorkOp.EntityStoreUpdateById(id, patch, tc)
+    exec_c(op)
+  }
+
+  protected final def entity_update_or_throw[T](
     id: EntityId,
     patch: T
   )(using uow: UnitOfWork, tc: EntityPersistentUpdate[T]): Unit = {
     val op = UnitOfWorkOp.EntityStoreUpdateById(id, patch, tc)
-    uow.execute(op)
+    exec_or_throw(op)
   }
 
-  protected final def entity_delete_direct(
+  protected final def entity_delete_c(
+    id: EntityId
+  )(using uow: UnitOfWork): Consequence[Unit] = {
+    val op = UnitOfWorkOp.EntityStoreDelete(id)
+    exec_c(op)
+  }
+
+  protected final def entity_delete_or_throw(
     id: EntityId
   )(using uow: UnitOfWork): Unit = {
     val op = UnitOfWorkOp.EntityStoreDelete(id)
-    uow.execute(op)
+    exec_or_throw(op)
   }
 
-  protected final def entity_search_direct[T](
+  protected final def entity_search_c[T](
+    query: EntityQuery[T]
+  )(using uow: UnitOfWork, tc: EntityPersistent[T]): Consequence[SearchResult[T]] = {
+    val op = UnitOfWorkOp.EntityStoreSearch(query, tc)
+    exec_c(op)
+  }
+
+  protected final def entity_search_or_throw[T](
     query: EntityQuery[T]
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): SearchResult[T] = {
     val op = UnitOfWorkOp.EntityStoreSearch(query, tc)
-    uow.execute(op)
+    exec_or_throw(op)
   }
 }
 
@@ -379,35 +550,64 @@ trait ActionCallDataStorePart extends ActionCallFeaturePart { self: ActionCall.C
     ConsequenceT.liftF(Free.liftF(op))
   }
 
-  // Direct execution variants (immediate execution)
-  protected final def store_load_direct(
+  protected final def store_load_c(
+    id: UniversalId
+  )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Consequence[Option[Record]] = {
+    val op = _op_store_load(id)
+    exec_c(op)
+  }
+
+  protected final def store_load_or_throw(
     id: UniversalId
   )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Option[Record] = {
     val op = _op_store_load(id)
-    uow.execute(op)
+    exec_or_throw(op)
   }
 
-  protected final def store_save_direct(
+  protected final def store_save_c(
+    id: UniversalId,
+    record: Record
+  )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Consequence[Unit] = {
+    val op = _op_store_save(id, record)
+    exec_c(op)
+  }
+
+  protected final def store_save_or_throw(
     id: UniversalId,
     record: Record
   )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Unit = {
     val op = _op_store_save(id, record)
-    uow.execute(op)
+    exec_or_throw(op)
   }
 
-  protected final def store_update_direct(
+  protected final def store_update_c(
+    id: UniversalId,
+    record: Record
+  )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Consequence[Unit] = {
+    val op = _op_store_update(id, record)
+    exec_c(op)
+  }
+
+  protected final def store_update_or_throw(
     id: UniversalId,
     record: Record
   )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Unit = {
     val op = _op_store_update(id, record)
-    uow.execute(op)
+    exec_or_throw(op)
   }
 
-  protected final def store_delete_direct(
+  protected final def store_delete_c(
+    id: UniversalId
+  )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Consequence[Unit] = {
+    val op = _op_store_delete(id)
+    exec_c(op)
+  }
+
+  protected final def store_delete_or_throw(
     id: UniversalId
   )(using uow: UnitOfWork, http: org.goldenport.cncf.http.HttpDriver): Unit = {
     val op = _op_store_delete(id)
-    uow.execute(op)
+    exec_or_throw(op)
   }
 
   // Private helpers to build UnitOfWorkOp
@@ -443,8 +643,17 @@ trait ActionCallShellCommandPart extends ActionCallFeaturePart { self: ActionCal
 
   protected final def shell_exec_c(
     command: ShellCommand
-  ): ExecUowM[Consequence[ShellCommandResult]] =
-    Functor[ExecUowM].map(shell_exec(command))(result => Consequence.success(result))
+  )(using uow: UnitOfWork): Consequence[ShellCommandResult] = {
+    val op = _op_shell_command_exec(command)
+    exec_c(op)
+  }
+
+  protected final def shell_exec_or_throw(
+    command: ShellCommand
+  )(using uow: UnitOfWork): ShellCommandResult = {
+    val op = _op_shell_command_exec(command)
+    exec_or_throw(op)
+  }
 
   private def _op_shell_command_exec(
     command: ShellCommand
