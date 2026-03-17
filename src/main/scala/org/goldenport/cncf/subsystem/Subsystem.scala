@@ -30,7 +30,8 @@ import org.goldenport.cncf.protocol.OperationResponseFormatter
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
- * @version Feb.  4, 2026
+ *  version Feb.  4, 2026
+ * @version Mar. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -199,6 +200,14 @@ final class Subsystem(
     }
     r
   }
+
+  def executeAction(action: Action): Consequence[OperationResponse] =
+    _resolve_route(action.request) match {
+      case Some((component, _, _)) =>
+        component.execute(action)
+      case None =>
+        Consequence.failure("Operation route not found")
+    }
 
   private def _to_response(
     request: Request,

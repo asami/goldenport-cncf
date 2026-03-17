@@ -2214,6 +2214,12 @@ class CncfRuntime() extends GlobalObservable {
     }
   }
 
+  def executeActionResponse(
+    subsystem: Subsystem,
+    action: org.goldenport.cncf.action.Action
+  ): Consequence[OperationResponse] =
+    subsystem.executeAction(action)
+
   private def _to_request(
     subsystem: Subsystem,
     args: Array[String],

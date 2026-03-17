@@ -4,8 +4,10 @@ import java.nio.file.{Path, Paths}
 import org.goldenport.Consequence
 import org.goldenport.protocol.Response
 import org.goldenport.cncf.cli.{CncfRuntime, RunMode}
+import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.protocol.operation.OperationResponse
 
 /*
  * @since   Mar. 18, 2026
@@ -22,6 +24,7 @@ final case class BootstrapConfig(
 trait CncfHandle {
   def subsystem: Subsystem
   def executeCommand(args: Array[String]): Consequence[Response]
+  def executeAction(action: Action): Consequence[OperationResponse]
   def close(): Unit
 }
 
@@ -46,6 +49,12 @@ object CncfBootstrap {
             Consequence.failure("CncfHandle is already closed")
           else
             runtime.executeCommandResponse(initializedSubsystem, args)
+
+        def executeAction(action: Action): Consequence[OperationResponse] =
+          if (_is_closed)
+            Consequence.failure("CncfHandle is already closed")
+          else
+            runtime.executeActionResponse(initializedSubsystem, action)
 
         def close(): Unit =
           if (!_is_closed) {
