@@ -1,0 +1,38 @@
+package org.goldenport.cncf.datatype
+
+import org.goldenport.Consequence
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
+
+/*
+ * @since   Mar. 17, 2026
+ * @version Mar. 17, 2026
+ * @author  ASAMI, Tomoharu
+ */
+final class EntityIdParseSpec
+  extends AnyWordSpec
+  with Matchers {
+
+  "EntityId.parse" should {
+    "parse canonical entity id prefix" in {
+      val s = "tokyo-sales-entity-person-1742198400000-abcd1234"
+      val r = EntityId.parse(s)
+      r shouldBe Consequence.success(
+        EntityId(
+          "tokyo",
+          "sales",
+          EntityCollectionId("tokyo", "sales", "person")
+        )
+      )
+      r.map(_.print) shouldBe Consequence.success(s)
+    }
+
+    "reject non-entity kind" in {
+      val s = "tokyo-sales-aggregate-person-1742198400000-abcd1234"
+      EntityId.parse(s) match {
+        case Consequence.Failure(_) => succeed
+        case _ => fail("Expected failure for non-entity kind")
+      }
+    }
+  }
+}
