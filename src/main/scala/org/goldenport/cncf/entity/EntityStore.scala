@@ -4,6 +4,7 @@ import cats._
 import cats.syntax.all.*
 import org.goldenport.Consequence
 import org.goldenport.id.UniversalId
+import org.goldenport.datatype.Identifier
 import org.goldenport.record.Record
 import org.goldenport.cncf.*
 import org.goldenport.cncf.context.ExecutionContext
@@ -12,6 +13,7 @@ import org.goldenport.cncf.datatype.EntityCollectionId
 import org.goldenport.cncf.directive.{Query as EntityDirectiveQuery, SearchResult}
 import org.goldenport.cncf.datastore.{DataStore, QueryDirective, QueryLimit, QueryOrder, OrderDirection}
 import org.goldenport.cncf.datastore.DataStore.EntryId
+import org.goldenport.model.statemachine.{Aliveness, PostStatus}
 
 /*
  * @since   Apr. 11, 2025
@@ -124,7 +126,7 @@ class StandardEntityStore(
     entity: T
   )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = {
     val id = tc.id(entity) getOrElse createId(entity)
-    val rec = tc.toRecord(entity)
+    val rec = _complement_create_record(tc.toRecord(entity), id)
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
@@ -153,7 +155,9 @@ class StandardEntityStore(
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
-      r <- ds.save(cid, dsid, tc.toRecord(entity))
+      existing <- ds.load(cid, dsid)
+      rec = _complement_save_record(tc.toRecord(entity), id, existing)
+      r <- ds.save(cid, dsid, rec)
     } yield r
   }
 
@@ -161,11 +165,12 @@ class StandardEntityStore(
     changes: T
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = {
     val id = tc.id(changes)
+    val rec = _complement_update_record(tc.toRecord(changes), id)
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
-      r <- ds.update(cid, dsid, tc.toRecord(changes))
+      r <- ds.update(cid, dsid, rec)
     } yield r
   }
 
@@ -218,4 +223,81 @@ class StandardEntityStore(
       case None =>
         QueryOrder.None
     }
+
+  private def _complement_create_record(
+    record: Record,
+    id: EntityId
+  )(using ctx: ExecutionContext): Record =
+    _complement_record(
+      record = record,
+      id = id,
+      existing = None,
+      includesCreationDefaults = true,
+      includesStateDefaults = true
+    )
+
+  private def _complement_save_record(
+    record: Record,
+    id: EntityId,
+    existing: Option[Record]
+  )(using ctx: ExecutionContext): Record =
+    _complement_record(
+      record = record,
+      id = id,
+      existing = existing,
+      includesCreationDefaults = true,
+      includesStateDefaults = true
+    )
+
+  private def _complement_update_record(
+    record: Record,
+    id: EntityId
+  )(using ctx: ExecutionContext): Record =
+    _complement_record(
+      record = record,
+      id = id,
+      existing = None,
+      includesCreationDefaults = false,
+      includesStateDefaults = false
+    )
+
+  private def _complement_record(
+    record: Record,
+    id: EntityId,
+    existing: Option[Record],
+    includesCreationDefaults: Boolean,
+    includesStateDefaults: Boolean
+  )(using ctx: ExecutionContext): Record = {
+    val now = java.time.ZonedDateTime.now(ctx.clock.withZone(ctx.timezone))
+    val principalid = ctx.security.principal.id.value
+    val principal = Identifier(principalid)
+    val defaults = Vector.newBuilder[(String, Any)]
+    val existingmap = existing.map(_.asMap).getOrElse(Map.empty)
+
+    def add_if_missing(key: String, value: => Option[Any]): Unit = {
+      if (!record.keySet.contains(key))
+        value.foreach(v => defaults += (key -> v))
+    }
+
+    def existing_value(key: String): Option[Any] = existingmap.get(key)
+
+    if (includesCreationDefaults) {
+      add_if_missing("id", existing_value("id").orElse(Some(id.print)))
+      add_if_missing("name", existing_value("name").orElse(Some(principalid)))
+      add_if_missing("createdAt", existing_value("createdAt").orElse(Some(now)))
+      add_if_missing("createdBy", existing_value("createdBy").orElse(Some(principal)))
+    }
+
+    add_if_missing("updatedAt", Some(now))
+    add_if_missing("updatedBy", Some(principal))
+    if (includesStateDefaults) {
+      add_if_missing("postStatus", existing_value("postStatus").orElse(Some(PostStatus.default)))
+      add_if_missing("aliveness", existing_value("aliveness").orElse(Some(Aliveness.default)))
+    }
+    add_if_missing("traceId", Some(ctx.observability.traceId.value))
+    add_if_missing("correlationId", ctx.observability.correlationId.map(_.value))
+
+    val complement = Record.dataAuto(defaults.result()*)
+    record ++ complement
+  }
 }
