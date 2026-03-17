@@ -45,7 +45,7 @@ import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObserva
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 13, 2026
+ * @version Mar. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -1654,6 +1654,20 @@ class CncfRuntime() extends GlobalObservable {
   def run(args: Array[String]): Int =
     run(args, (_: Subsystem) => Nil)
 
+  def initializeForEmbedding(
+    cwd: Path = Paths.get("").toAbsolutePath.normalize,
+    args: Array[String] = Array.empty,
+    modeHint: Option[RunMode] = None,
+    extraComponents: Subsystem => Seq[Component] = (_: Subsystem) => Nil
+  ): Consequence[Subsystem] =
+    Consequence(_initialize(cwd, args, modeHint, extraComponents))
+
+  def closeEmbedding(): Unit = {
+    _reset_global_runtime_context()
+    GlobalRuntimeContext.current = None
+    LogBackendHolder.reset()
+  }
+
   def run(
     args: Array[String],
     extraComponents: Subsystem => Seq[Component]
@@ -1680,11 +1694,23 @@ class CncfRuntime() extends GlobalObservable {
   private def _initialize(
     args: Array[String],
     extraComponents: Subsystem => Seq[Component]
+  ): Subsystem =
+    _initialize(
+      Paths.get("").toAbsolutePath.normalize,
+      args,
+      modeHint = None,
+      extraComponents
+    )
+
+  private def _initialize(
+    cwd: Path,
+    args: Array[String],
+    modeHint: Option[RunMode],
+    extraComponents: Subsystem => Seq[Component]
   ): Subsystem = {
-    val cwd = Paths.get("").toAbsolutePath.normalize
     val configuration = _resolve_configuration(cwd, args)
     CncfRuntime.configure_slf4j_simple(configuration)
-    val modehint = args.headOption.flatMap(RunMode.from)
+    val modehint = modeHint.orElse(args.headOption.flatMap(RunMode.from))
     val runconfig = RuntimeConfig.from(configuration, modehint)
     val aliasresolver = AliasLoader.load(configuration.configuration)
     LogBackendHolder.install(runconfig.logBackend)
@@ -2173,6 +2199,19 @@ class CncfRuntime() extends GlobalObservable {
         _print_error(conclusion)
     }
     _exit_code(result)
+  }
+
+  def executeCommandResponse(
+    subsystem: Subsystem,
+    args: Array[String]
+  ): Consequence[Response] = {
+    val normalized = args.toVector match {
+      case Vector("command", tail @ _*) => tail.toArray
+      case _ => args
+    }
+    _to_request(subsystem, normalized).flatMap { req =>
+      subsystem.execute(req)
+    }
   }
 
   private def _to_request(
