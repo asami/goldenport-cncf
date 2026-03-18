@@ -8,7 +8,7 @@ import org.goldenport.cncf.datatype.EntityId
 
 /*
  * @since   Mar. 14, 2026
- * @version Mar. 16, 2026
+ * @version Mar. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class PartitionedMemoryRealm[E](
@@ -90,6 +90,25 @@ final class PartitionedMemoryRealm[E](
       case None =>
         Consequence.failure(s"entity not found in memory realm: $id")
     }
+
+  def remove(id: EntityId): Boolean = {
+    val key = _partitionKey(id)
+    _lock.synchronized {
+      _partitions.get(key) match {
+        case Some(realm) =>
+          val removed = realm.remove(id)
+          if (removed && realm.cachedEntityCount == 0) {
+            _partitions.remove(key)
+            _order.remove(key)
+          } else if (removed) {
+            _touch(key)
+          }
+          removed
+        case None =>
+          false
+      }
+    }
+  }
 
   def values: Vector[E] =
     _lock.synchronized {

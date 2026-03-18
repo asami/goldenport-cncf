@@ -17,13 +17,16 @@ final class EntityIdParseSpec
     "parse canonical entity id prefix" in {
       val s = "tokyo-sales-entity-person-1742198400000-abcd1234"
       val r = EntityId.parse(s)
-      r shouldBe Consequence.success(
-        EntityId(
-          "tokyo",
-          "sales",
-          EntityCollectionId("tokyo", "sales", "person")
-        )
-      )
+      r match {
+        case Consequence.Success(id) =>
+          id.major shouldBe "tokyo"
+          id.minor shouldBe "sales"
+          id.collection.major shouldBe "tokyo"
+          id.collection.minor shouldBe "sales"
+          id.collection.name shouldBe "person"
+        case m =>
+          fail(s"Expected success but got: $m")
+      }
       r.map(_.print) shouldBe Consequence.success(s)
     }
 

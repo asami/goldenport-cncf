@@ -38,7 +38,7 @@ import cats.~>
  *  version Dec. 31, 2025
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Mar. 11, 2026
+ * @version Mar. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -106,7 +106,27 @@ object ExecutionContext {
 
   def create(): ExecutionContext = {
     val core = _core()
-    val security = _security_context()
+    val security = _security_context(SecurityContext.Privilege.User)
+    val observability = _observability_context(core)
+    lazy val runtime: RuntimeContext = _testRuntimeContext(() => context, observability) // TODO
+    lazy val context: ExecutionContext = Instance(
+      core = core,
+      cncfCore = CncfCore(
+        runtime,
+        security = security,
+        observability = observability,
+        runtime = runtime,
+        jobContext = org.goldenport.cncf.job.JobContext.empty
+      )
+    )
+    context
+  }
+
+  def create(
+    privilege: SecurityContext.Privilege
+  ): ExecutionContext = {
+    val core = _core()
+    val security = _security_context(privilege)
     val observability = _observability_context(core)
     lazy val runtime: RuntimeContext = _testRuntimeContext(() => context, observability) // TODO
     lazy val context: ExecutionContext = Instance(
@@ -127,7 +147,7 @@ object ExecutionContext {
 
   def create(scope: ScopeContext, runtime: RuntimeContext): ExecutionContext = {
     val core = _core()
-    val security = _security_context()
+    val security = _security_context(SecurityContext.Privilege.User)
     val observability = _observability_context(core)
     lazy val context: ExecutionContext = Instance(
       core = core,
@@ -152,6 +172,11 @@ object ExecutionContext {
 //  def test(component: Component): ExecutionContext =
   def test(): ExecutionContext =
     create()
+
+  def test(
+    privilege: SecurityContext.Privilege
+  ): ExecutionContext =
+    create(privilege)
 
   def withJobContext(
     ctx: ExecutionContext,
@@ -210,11 +235,13 @@ object ExecutionContext {
       logger = _TestLogger
     )
 
-  private def _security_context(): SecurityContext =
+  private def _security_context(
+    privilege: SecurityContext.Privilege
+  ): SecurityContext =
     SecurityContext(
-      principal = new _TestPrincipal(),
-      capabilities = Set.empty,
-      level = SecurityLevel("test")
+      principal = new _TestPrincipal(privilege),
+      capabilities = privilege.capabilities,
+      level = privilege.level
     )
 
   private def _observability_context(
@@ -257,9 +284,11 @@ object ExecutionContext {
     )
   }
 
-  private final class _TestPrincipal extends Principal {
-    def id: PrincipalId = PrincipalId("test-principal")
-    def attributes: Map[String, String] = Map.empty
+  private final class _TestPrincipal(
+    privilege: SecurityContext.Privilege
+  ) extends Principal {
+    def id: PrincipalId = privilege.principalId
+    def attributes: Map[String, String] = privilege.attributes
   }
 
   private object _TestLogger extends Logger {

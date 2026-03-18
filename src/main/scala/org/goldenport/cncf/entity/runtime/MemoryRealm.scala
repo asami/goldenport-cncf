@@ -7,7 +7,7 @@ import org.goldenport.cncf.datatype.EntityId
 
 /*
  * @since   Mar. 14, 2026
- * @version Mar. 15, 2026
+ * @version Mar. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MemoryRealm[E](
@@ -56,6 +56,13 @@ final class MemoryRealm[E](
       case Some(e) => Consequence.success(e)
       case None => Consequence.failure(s"entity not found in memory realm: $id")
     }
+
+  def remove(id: EntityId): Boolean = synchronized {
+    val removed = _entities_map.remove(id).isDefined
+    if (removed)
+      _access_order.remove(id)
+    removed
+  }
 
   def values: Vector[E] = synchronized {
     _entities_map.values.toVector

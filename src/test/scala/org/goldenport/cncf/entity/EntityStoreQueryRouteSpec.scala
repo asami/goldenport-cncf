@@ -2,7 +2,7 @@ package org.goldenport.cncf.entity
 
 import cats.~>
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.{CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, RuntimeContext, ScopeContext, ScopeKind, TraceId}
+import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, TraceId}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.directive.{Condition, Query, Update}
@@ -83,6 +83,164 @@ final class EntityStoreQueryRouteSpec
       result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(p2.id))
       result.map(_.totalCount) shouldBe Consequence.success(Some(3))
       result.map(r => (r.offset, r.limit, r.fetchedCount)) shouldBe Consequence.success((Some(1), Some(1), 1))
+    }
+
+    "apply default visibility for general user (published + alive)" in {
+      Given("records with mixed postStatus/aliveness")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val p1 = PersonEntity(EntityId("test", "g1", _cid), "taro", 20)
+      val p2 = PersonEntity(EntityId("test", "g2", _cid), "hanako", 30)
+      val p3 = PersonEntity(EntityId("test", "g3", _cid), "jiro", 40)
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(_cid),
+              p1.toRecord() ++ Record.dataAuto("postStatus" -> "Published", "aliveness" -> "Alive")
+            ),
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(_cid),
+              p2.toRecord() ++ Record.dataAuto("postStatus" -> "Draft", "aliveness" -> "Alive")
+            ),
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(_cid),
+              p3.toRecord() ++ Record.dataAuto("postStatus" -> "Archived", "aliveness" -> "Dead")
+            )
+          )
+        )
+      )
+
+      When("searching without explicit lifecycle filters")
+      val query = Query(
+        PersonQuery(
+          id = Condition.any[EntityId],
+          name = Condition.any[String],
+          age = Condition.any[Int]
+        )
+      )
+      val result = entitystorespace.search(
+        UnitOfWorkOp.EntityStoreSearch(
+          query = EntityQuery(_cid, query),
+          tc = summon[EntityPersistent[PersonEntity]]
+        )
+      )
+
+      Then("only published + alive is visible")
+      result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(p1.id))
+      result.map(_.totalCount) shouldBe Consequence.success(Some(1))
+    }
+
+    "apply default visibility for content manager (published + draft)" in {
+      Given("content manager principal")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(
+        datastorespace,
+        entitystorespace,
+        principalAttributes = Map("role" -> "content_manager")
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val p1 = PersonEntity(EntityId("test", "m1", _cid), "taro", 20)
+      val p2 = PersonEntity(EntityId("test", "m2", _cid), "hanako", 30)
+      val p3 = PersonEntity(EntityId("test", "m3", _cid), "jiro", 40)
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(_cid),
+              p1.toRecord() ++ Record.dataAuto("postStatus" -> "Published", "aliveness" -> "Alive")
+            ),
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(_cid),
+              p2.toRecord() ++ Record.dataAuto("postStatus" -> "Draft", "aliveness" -> "Alive")
+            ),
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(_cid),
+              p3.toRecord() ++ Record.dataAuto("postStatus" -> "Archived", "aliveness" -> "Dead")
+            )
+          )
+        )
+      )
+
+      When("searching without explicit lifecycle filters")
+      val query = Query(
+        PersonQuery(
+          id = Condition.any[EntityId],
+          name = Condition.any[String],
+          age = Condition.any[Int]
+        )
+      )
+      val result = entitystorespace.search(
+        UnitOfWorkOp.EntityStoreSearch(
+          query = EntityQuery(_cid, query),
+          tc = summon[EntityPersistent[PersonEntity]]
+        )
+      )
+
+      Then("published + draft are visible by default")
+      result.map(_.data.map(_.id).toSet) shouldBe Consequence.success(Set(p1.id, p2.id))
+      result.map(_.totalCount) shouldBe Consequence.success(Some(2))
+    }
+
+    "exclude logically deleted records even for content manager default filters" in {
+      Given("content manager with configured lifecycle scope")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(
+        datastorespace,
+        entitystorespace,
+        principalAttributes = Map(
+          "role" -> "content_manager",
+          "search_poststatus" -> "published,draft,archived"
+        )
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val p1 = PersonEntity(EntityId("test", "a1", _cid), "taro", 20)
+      val p2 = PersonEntity(EntityId("test", "a2", _cid), "hanako", 30)
+      val p3 = PersonEntity(EntityId("test", "a3", _cid), "jiro", 40)
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(_cid),
+              p1.toRecord() ++ Record.dataAuto("postStatus" -> "Published", "aliveness" -> "Alive")
+            ),
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(_cid),
+              p2.toRecord() ++ Record.dataAuto("postStatus" -> "Draft", "aliveness" -> "Alive")
+            ),
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(_cid),
+              p3.toRecord() ++ Record.dataAuto("postStatus" -> "Archived", "aliveness" -> "Dead")
+            )
+          )
+        )
+      )
+
+      When("searching with expanded manager defaults")
+      val query = Query(
+        PersonQuery(
+          id = Condition.any[EntityId],
+          name = Condition.any[String],
+          age = Condition.any[Int]
+        )
+      )
+      val result = entitystorespace.search(
+        UnitOfWorkOp.EntityStoreSearch(
+          query = EntityQuery(_cid, query),
+          tc = summon[EntityPersistent[PersonEntity]]
+        )
+      )
+
+      Then("archived records are excluded in normal search path")
+      result.map(_.data.map(_.id).toSet) shouldBe Consequence.success(Set(p1.id, p2.id))
+      result.map(_.totalCount) shouldBe Consequence.success(Some(2))
     }
 
     "apply patch update by id on entity-store route" in {
@@ -390,7 +548,9 @@ final class EntityStoreQueryRouteSpec
 
   private def _execution_context(
     datastorespace: DataStoreSpace,
-    entitystorespace: EntityStoreSpace
+    entitystorespace: EntityStoreSpace,
+    principalAttributes: Map[String, String] = Map.empty,
+    capabilities: Set[Capability] = Set.empty
   ): ExecutionContext = {
     val observability = ObservabilityContext(
       traceId = TraceId("test", "entity_store_query_route"),
@@ -427,7 +587,24 @@ final class EntityStoreQueryRouteSpec
       disposeAction = _ => (),
       token = "entity-store-query-route-runtime-context"
     )
-    context
+    context match {
+      case i: ExecutionContext.Instance =>
+        val principal = new Principal {
+          def id: PrincipalId = PrincipalId("test-principal")
+          def attributes: Map[String, String] = principalAttributes
+        }
+        i.copy(
+          cncfCore = i.cncfCore.copy(
+            security = SecurityContext(
+              principal = principal,
+              capabilities = capabilities,
+              level = SecurityLevel("test")
+            )
+          )
+        )
+      case _ =>
+        context
+    }
   }
 }
 

@@ -3,6 +3,7 @@ package org.goldenport.cncf.entity.runtime
 import cats.data.State
 import cats.effect.Ref
 import org.goldenport.Consequence
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.directive.{Condition, Query}
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityQuery}
@@ -13,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 16, 2026
+ * @version Mar. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityCollectionSearchConditionSpec
@@ -24,6 +25,7 @@ final class EntityCollectionSearchConditionSpec
 
   "EntityCollection.search" should {
     "filter entities by generated condition object via directive.Query" in {
+      given ExecutionContext = ExecutionContext.test()
       Given("an entity collection with in-memory person entities")
       given EntityPersistent[PersonEntity] = new EntityPersistent[PersonEntity] {
         def id(e: PersonEntity): EntityId = e.id
@@ -76,6 +78,7 @@ final class EntityCollectionSearchConditionSpec
     }
 
     "apply sql-like where/sort/limit/offset via Query.plan" in {
+      given ExecutionContext = ExecutionContext.test()
       Given("an entity collection with in-memory person entities")
       given EntityPersistent[PersonEntity] = new EntityPersistent[PersonEntity] {
         def id(e: PersonEntity): EntityId = e.id

@@ -147,7 +147,8 @@ class StandardEntityStore(
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
       o <- ds.load(cid, dsid)
-      r <- o.traverse(tc.fromRecord)
+      visible = o.filterNot(_is_logically_deleted_record)
+      r <- visible.traverse(tc.fromRecord)
     } yield r
   }
 
@@ -222,7 +223,9 @@ class StandardEntityStore(
           limit = QueryLimit.Unbounded
         )
       )
-      decoded <- raw.records.toVector.traverse(tc.fromRecord)
+      notdeleted = raw.records.toVector.filterNot(_is_logically_deleted_record)
+      visible = _filter_visibility(notdeleted, query.query)
+      decoded <- visible.traverse(tc.fromRecord)
       filtered = decoded.filter(x => EntityDirectiveQuery.matches(query.query, x))
       sorted = EntityDirectiveQuery.sortValues(filtered, query.query.sort)
       values = EntityDirectiveQuery.sliceValues(sorted, query.query.offset, query.query.limit)
@@ -234,6 +237,211 @@ class StandardEntityStore(
       limit = query.query.limit,
       fetchedCount = values.size
     )
+  }
+
+  private final case class _VisibilityPolicy(
+    postStatuses: Option[Set[String]],
+    alivenesses: Option[Set[String]]
+  )
+
+  private def _filter_visibility(
+    records: Vector[Record],
+    query: EntityDirectiveQuery[?]
+  )(using ctx: ExecutionContext): Vector[Record] = {
+    val policy = _visibility_policy(query)
+    records.filter(_is_visible(_, policy))
+  }
+
+  private def _visibility_policy(
+    query: EntityDirectiveQuery[?]
+  )(using ctx: ExecutionContext): _VisibilityPolicy = {
+    val lifecycle = _lifecycle_constraint(query)
+    val ismanager = _is_content_manager()
+    val poststatuses = if (lifecycle.postStatusExplicit) {
+      None
+    } else if (ismanager) {
+      val p = _post_statuses_for_manager()
+      if (p.isEmpty) None else Some(p)
+    } else {
+      Some(Set("published"))
+    }
+    val alivenesses = if (lifecycle.alivenessExplicit) {
+      None
+    } else if (ismanager) {
+      val p = _alivenesses_for_manager(poststatuses.getOrElse(Set.empty))
+      if (p.isEmpty) None else Some(p)
+    } else {
+      Some(Set("alive"))
+    }
+    _VisibilityPolicy(
+      postStatuses = poststatuses,
+      alivenesses = alivenesses
+    )
+  }
+
+  private final case class _LifecycleConstraint(
+    postStatusExplicit: Boolean,
+    alivenessExplicit: Boolean
+  )
+
+  private def _lifecycle_constraint(
+    query: EntityDirectiveQuery[?]
+  ): _LifecycleConstraint = {
+    val expr = EntityDirectiveQuery.whereOf(query)
+    _LifecycleConstraint(
+      postStatusExplicit = _mentions_path(expr, Set("poststatus")),
+      alivenessExplicit = _mentions_path(expr, Set("aliveness"))
+    )
+  }
+
+  private def _mentions_path(
+    expr: EntityDirectiveQuery.Expr,
+    names: Set[String]
+  ): Boolean =
+    expr match {
+      case EntityDirectiveQuery.True => false
+      case EntityDirectiveQuery.False => false
+      case EntityDirectiveQuery.And(items) => items.exists(_mentions_path(_, names))
+      case EntityDirectiveQuery.Or(items) => items.exists(_mentions_path(_, names))
+      case EntityDirectiveQuery.Not(item) => _mentions_path(item, names)
+      case EntityDirectiveQuery.FieldCondition(path, _) => names.contains(_normalize_path(path))
+      case EntityDirectiveQuery.Eq(path, _) => names.contains(_normalize_path(path))
+      case EntityDirectiveQuery.Ne(path, _) => names.contains(_normalize_path(path))
+      case EntityDirectiveQuery.Gt(path, _) => names.contains(_normalize_path(path))
+      case EntityDirectiveQuery.Gte(path, _) => names.contains(_normalize_path(path))
+      case EntityDirectiveQuery.Lt(path, _) => names.contains(_normalize_path(path))
+      case EntityDirectiveQuery.Lte(path, _) => names.contains(_normalize_path(path))
+      case EntityDirectiveQuery.In(path, _) => names.contains(_normalize_path(path))
+      case EntityDirectiveQuery.NotIn(path, _) => names.contains(_normalize_path(path))
+      case EntityDirectiveQuery.IsNull(path) => names.contains(_normalize_path(path))
+      case EntityDirectiveQuery.IsNotNull(path) => names.contains(_normalize_path(path))
+      case EntityDirectiveQuery.Like(path, _, _) => names.contains(_normalize_path(path))
+      case EntityDirectiveQuery.StartsWith(path, _, _) => names.contains(_normalize_path(path))
+      case EntityDirectiveQuery.EndsWith(path, _, _) => names.contains(_normalize_path(path))
+      case EntityDirectiveQuery.Contains(path, _, _) => names.contains(_normalize_path(path))
+    }
+
+  private def _normalize_path(path: String): String = {
+    val segment = path.split("\\.").lastOption.getOrElse(path)
+    segment.toLowerCase.replace("_", "")
+  }
+
+  private def _is_visible(
+    record: Record,
+    policy: _VisibilityPolicy
+  ): Boolean = {
+    val postok = policy.postStatuses match {
+      case Some(allowed) =>
+        _record_value(record, Vector("postStatus", "post_status"))
+          .flatMap(_post_status_token)
+          .forall(allowed.contains)
+      case None =>
+        true
+    }
+    val aliveok = policy.alivenesses match {
+      case Some(allowed) =>
+        _record_value(record, Vector("aliveness"))
+          .flatMap(_aliveness_token)
+          .forall(allowed.contains)
+      case None =>
+        true
+    }
+    postok && aliveok
+  }
+
+  private def _record_value(
+    record: Record,
+    keys: Vector[String]
+  ): Option[Any] = {
+    val m = record.asMap
+    keys.collectFirst(Function.unlift(m.get))
+  }
+
+  private def _is_content_manager()(using ctx: ExecutionContext): Boolean = {
+    val aliases = Set(
+      "contentmanager",
+      "contentadmin",
+      "contentadministrator",
+      "contentowner"
+    )
+    val roles = _attribute_tokens("role", "roles", "authority", "authorities")
+    val capabilities = ctx.security.capabilities.map(_.name).flatMap(_split_tokens)
+    val level = _split_tokens(ctx.security.level.value)
+    (roles ++ capabilities ++ level).exists(x => aliases.contains(_normalize_alias(x)))
+  }
+
+  private def _post_statuses_for_manager()(using ctx: ExecutionContext): Set[String] = {
+    val configured = _attribute_tokens("search_poststatus", "search.poststatus", "poststatus", "post_status")
+      .flatMap(_post_status_token)
+    if (configured.nonEmpty)
+      configured
+    else {
+      val frompurpose = _attribute_tokens("purpose").flatMap(_post_status_token)
+      if (frompurpose.nonEmpty)
+        frompurpose
+      else
+        Set("published", "draft")
+    }
+  }
+
+  private def _alivenesses_for_manager(
+    poststatuses: Set[String]
+  )(using ctx: ExecutionContext): Set[String] = {
+    val configured = _attribute_tokens("search_aliveness", "search.aliveness", "aliveness")
+      .flatMap(_aliveness_token)
+    if (configured.nonEmpty)
+      configured
+    else {
+      val frompurpose = _attribute_tokens("purpose").flatMap(_aliveness_token)
+      if (frompurpose.nonEmpty)
+        frompurpose
+      else if (poststatuses.contains("archived"))
+        Set("alive", "dead")
+      else
+        Set("alive")
+    }
+  }
+
+  private def _attribute_tokens(
+    keys: String*
+  )(using ctx: ExecutionContext): Set[String] = {
+    val attrs = ctx.security.principal.attributes.map { case (k, v) =>
+      k.toLowerCase -> v
+    }
+    keys.toVector
+      .flatMap(k => attrs.get(k.toLowerCase))
+      .flatMap(_split_tokens)
+      .toSet
+  }
+
+  private def _split_tokens(p: String): Vector[String] =
+    p.split("[,\\s]+").toVector.map(_.trim).filter(_.nonEmpty)
+
+  private def _normalize_alias(p: String): String =
+    p.toLowerCase.replace("_", "").replace("-", "")
+
+  private def _post_status_token(p: Any): Option[String] = {
+    val s = p.toString.toLowerCase
+    if (s.contains("published"))
+      Some("published")
+    else if (s.contains("draft"))
+      Some("draft")
+    else if (s.contains("archived"))
+      Some("archived")
+    else
+      None
+  }
+
+  private def _aliveness_token(p: Any): Option[String] = {
+    val s = p.toString.toLowerCase
+    if (s.contains("alive"))
+      Some("alive")
+    else if (s.contains("suspended"))
+      Some("suspended")
+    else if (s.contains("dead"))
+      Some("dead")
+    else
+      None
   }
 
   private def _to_datastore_order(
@@ -358,5 +566,15 @@ class StandardEntityStore(
   private def _is_soft_delete_target(existing: Record): Boolean = {
     val keyset = existing.keySet
     keyset.contains("aliveness")
+  }
+
+  private def _is_logically_deleted_record(
+    record: Record
+  ): Boolean = {
+    val keyset = record.keySet
+    val hasdeletedat = keyset.contains("deletedAt") || keyset.contains("deleted_at")
+    val poststatus = _record_value(record, Vector("postStatus", "post_status")).flatMap(_post_status_token)
+    val aliveness = _record_value(record, Vector("aliveness")).flatMap(_aliveness_token)
+    hasdeletedat || poststatus.contains("archived") || aliveness.contains("dead")
   }
 }

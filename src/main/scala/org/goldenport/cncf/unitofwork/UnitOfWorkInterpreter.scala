@@ -8,6 +8,7 @@ import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.datastore.*
 import org.goldenport.cncf.entity.*
+import org.goldenport.cncf.datatype.EntityId
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.observability.CallTreeContext
 import org.goldenport.process.ShellCommandExecutor
@@ -128,12 +129,18 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: UnitOfWorkOp.EntityStoreDelete =>
       withCallTree("uow:entitystore:delete") {
-        _entity_store_space.delete(m)
+        _entity_store_space.delete(m).map { r =>
+          _entity_space_evict(m.id)
+          r
+        }
       }
 
     case m: UnitOfWorkOp.EntityStoreDeleteHard =>
       withCallTree("uow:entitystore:delete:hard") {
-        _entity_store_space.deleteHard(m)
+        _entity_store_space.deleteHard(m).map { r =>
+          _entity_space_evict(m.id)
+          r
+        }
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearch[t] @unchecked) =>
@@ -194,6 +201,15 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       case None =>
         _entity_store_space.search(op)
     }
+  }
+
+  private def _entity_space_evict(
+    id: EntityId
+  ): Unit = {
+    val name = id.collection.name
+    _component_option
+      .flatMap(_.entitySpace.entityOption[Any](name))
+      .foreach(_.evict(id))
   }
 
   private def _component_option: Option[Component] = {
