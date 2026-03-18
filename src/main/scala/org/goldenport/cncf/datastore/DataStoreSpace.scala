@@ -12,7 +12,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Feb. 25, 2026
- * @version Mar. 17, 2026
+ * @version Mar. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace {
@@ -85,8 +85,19 @@ object DataStoreSpace {
   def create(conf: ResolvedConfiguration): DataStoreSpace = {
     val dss = new DataStoreSpace()
     val sqlitepath = ConfigurationAccess.getString(conf, "cncf.datastore.sqlite.path")
+    val sqlnormalizecolumns =
+      ConfigurationAccess
+        .getString(conf, "cncf.datastore.sql.normalize-column-names")
+        .orElse(ConfigurationAccess.getString(conf, "cncf.datastore.sqlite.normalize-column-names"))
+        .exists(_.trim.equalsIgnoreCase("true"))
     val ds = sqlitepath match {
-      case Some(path) => SqlDataStore.sqlite(path)
+      case Some(path) =>
+        SqlDataStore.sqlite(
+          path,
+          config = SqlDataStore.Config(
+            normalizeColumnNames = sqlnormalizecolumns
+          )
+        )
       case None => DataStore.inMemorySearchable()
     }
     dss.addDataStore(ds)

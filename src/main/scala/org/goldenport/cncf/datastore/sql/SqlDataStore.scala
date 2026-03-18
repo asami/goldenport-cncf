@@ -12,13 +12,14 @@ import org.goldenport.cncf.unitofwork.{CommitRecorder, PrepareResult, Transactio
 
 /*
  * @since   Mar. 12, 2026
- * @version Mar. 12, 2026
+ * @version Mar. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
   dialect: SqlDialectDriver,
   datasource: DataSource,
-  recorder: CommitRecorder = CommitRecorder.noop
+  recorder: CommitRecorder = CommitRecorder.noop,
+  config: SqlDataStore.Config = SqlDataStore.Config()
 ) extends DataStore {
   import DataStore.*
 
@@ -117,8 +118,16 @@ class SqlDataStore(
     record: Record
   ): Vector[(String, String)] =
     record.asMap.toVector.collect {
-      case (k, v) if k != "id" => k -> Presentable.print(v)
+      case (k, v) if k != "id" =>
+        val key = if (config.normalizeColumnNames) _to_column_name(k) else k
+        key -> Presentable.print(v)
     }
+      .foldLeft(Vector.empty[(String, String)]) { case (z, (k, v)) =>
+        z.indexWhere(_._1 == k) match {
+          case -1 => z :+ (k -> v)
+          case i => z.updated(i, k -> v)
+        }
+      }
 
   private def _table_exists(
     conn: Connection,
@@ -306,7 +315,8 @@ class SqlDataStore(
             val md = rs.getMetaData
             val count = md.getColumnCount
             val values = (1 to count).toVector.map { i =>
-              val name = md.getColumnLabel(i)
+              val rawname = md.getColumnLabel(i)
+              val name = if (config.normalizeColumnNames) _to_property_name(rawname) else rawname
               val value = Option(rs.getString(i)).getOrElse("")
               name -> value
             }
@@ -321,23 +331,83 @@ class SqlDataStore(
         stmt.close()
       }
     }
+
+  private def _to_column_name(name: String): String = {
+    val b = new StringBuilder(name.length + 8)
+    var i = 0
+    var prevUnderscore = false
+    while (i < name.length) {
+      val c = name.charAt(i)
+      if (c == '-' || c == '.' || c == ' ') {
+        if (!prevUnderscore && b.nonEmpty) {
+          b.append('_')
+          prevUnderscore = true
+        }
+      } else if (c.isUpper) {
+        if (b.nonEmpty && !prevUnderscore)
+          b.append('_')
+        b.append(c.toLower)
+        prevUnderscore = false
+      } else if (c == '_') {
+        if (!prevUnderscore && b.nonEmpty) {
+          b.append('_')
+          prevUnderscore = true
+        }
+      } else {
+        b.append(c.toLower)
+        prevUnderscore = false
+      }
+      i += 1
+    }
+    val raw = b.result()
+    raw.dropWhile(_ == '_').reverse.dropWhile(_ == '_').reverse
+  }
+
+  private def _to_property_name(name: String): String = {
+    val lower = name.toLowerCase(java.util.Locale.ROOT)
+    if (!name.contains("_"))
+      name
+    else {
+      val b = new StringBuilder(lower.length)
+      var upper = false
+      var i = 0
+      while (i < lower.length) {
+        val c = lower.charAt(i)
+        if (c == '_') {
+          upper = true
+        } else if (upper) {
+          b.append(c.toUpper)
+          upper = false
+        } else {
+          b.append(c)
+        }
+        i += 1
+      }
+      b.result()
+    }
+  }
 }
 
 object SqlDataStore {
+  final case class Config(
+    normalizeColumnNames: Boolean = false
+  )
+
   def sqlite(
     path: String,
-    recorder: CommitRecorder = CommitRecorder.noop
+    recorder: CommitRecorder = CommitRecorder.noop,
+    config: Config = Config()
   ): SqlDataStore = {
-    val config = new HikariConfig()
+    val hikariconfig = new HikariConfig()
     val jdbcurl =
       if (path == ":memory:")
         "jdbc:sqlite::memory:"
       else
         s"jdbc:sqlite:$path"
-    config.setJdbcUrl(jdbcurl)
-    config.setDriverClassName("org.sqlite.JDBC")
-    config.setMaximumPoolSize(4)
-    val datasource = new HikariDataSource(config)
-    new SqlDataStore(SqliteDialectDriver, datasource, recorder)
+    hikariconfig.setJdbcUrl(jdbcurl)
+    hikariconfig.setDriverClassName("org.sqlite.JDBC")
+    hikariconfig.setMaximumPoolSize(4)
+    val datasource = new HikariDataSource(hikariconfig)
+    new SqlDataStore(SqliteDialectDriver, datasource, recorder, config)
   }
 }

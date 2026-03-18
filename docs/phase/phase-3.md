@@ -20,21 +20,21 @@ Phase 3 work proceeds in parallel with Phase 2.9. Although Phase 2.9 remains act
 
 - **Phase 3.1: Execution Hub Foundation** — establish the baseline execution model (Fat JAR) and core execution infrastructure.
 - **Phase 3.1.1: Execution Hub Foundation (Recovery Slice)** — complete remaining Phase 3.1 execution forms (DockerComponent, RestComponent); SOA (XML) and gRPC are explicitly deferred.
-- **Phase 3.2: CML → Entity Component Generation** — generate, package, and enrich Entity Components derived from CML with documentation and metadata.
+- **Phase 3.2: CML → Entity Component Generation** — generate, package, and enrich Entity Components derived from CML with documentation and metadata. (completed)
 - **Phase 3.3: AI Agent Hub (PoC)** — project CNCF operations to OpenAPI/MCP and enable experimental AI agents to invoke them; explicitly PoC-only.
 
 ## 4. Current Work Stack
 
-- A (ACTIVE): Phase 3.1.1 — implement DockerComponent and RestComponent as first-class Components, aligned with the Fat JAR baseline.
+- A (DONE): Phase 3.1.1 — DockerComponent and RestComponent implemented as first-class Components, aligned with the Fat JAR baseline (closed: 2026-02-07).
 - B (DONE): Phase 3.1 — Fat JAR execution baseline and execution infrastructure foundation.
-- C (SUSPENDED): CML Entity Generator — prototype CML-to-component code generation and bundling strategy.
+- C (DONE): CML Entity Generator — CML-to-component generation and integration path validated with cozy/modeler and CNCF embedding flow.
 - D (SUSPENDED): AI Agent Hub PoC — sample OpenAPI/MCP projections and an agent sketch that can call CNCF operations safely.
 
 ## 5. Development Items
 
 - [x] EH-01: Define runtime contracts for Fat JAR, Docker, and Microservice/SOA components. (Fat JAR completed; Docker/REST in Phase 3.1.1)
 - [x] EH-02: Verify component orchestration by wiring execution modes through the same Component -> Service -> Operation graph. (Fat JAR completed; Docker/REST in Phase 3.1.1)
-- [ ] CG-01: Generate Entity Components from CML models, including packaging metadata and docs.
+- [x] CG-01: Generate Entity Components from CML models, including packaging metadata and docs.
 - [ ] AI-01: Publish OpenAPI/MCP projections and capture the agent invocation flow as an experimental sketch.
 
 ## 6. Next Phase Candidates
