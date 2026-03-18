@@ -19,7 +19,7 @@ import org.goldenport.cncf.directive.*
  *
  * @since   Jan. 10, 2026
  *  version Feb. 25, 2026
- * @version Mar. 17, 2026
+ * @version Mar. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -103,6 +103,10 @@ object UnitOfWorkOp {
   ) extends UnitOfWorkOp[Unit]
 
   final case class EntityStoreDelete(
+    id: EntityId
+  ) extends UnitOfWorkOp[Unit]
+
+  final case class EntityStoreDeleteHard(
     id: EntityId
   ) extends UnitOfWorkOp[Unit]
 

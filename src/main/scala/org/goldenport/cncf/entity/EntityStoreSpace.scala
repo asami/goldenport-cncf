@@ -13,7 +13,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
 /*
  * @since   Feb. 24, 2026
  *  version Feb. 25, 2026
- * @version Mar. 17, 2026
+ * @version Mar. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {
@@ -88,6 +88,12 @@ class EntityStoreSpace {
     for {
       entitystore <- _by_collection(op.id.collection)
       r <- entitystore.delete(op.id)
+    } yield r
+
+  def deleteHard(op: EntityStoreDeleteHard)(using ctx: ExecutionContext): Consequence[Unit] =
+    for {
+      entitystore <- _by_collection(op.id.collection)
+      r <- entitystore.deleteHard(op.id)
     } yield r
 
   def search[T](op: EntityStoreSearch[T])(using ctx: ExecutionContext): Consequence[SearchResult[T]] = {

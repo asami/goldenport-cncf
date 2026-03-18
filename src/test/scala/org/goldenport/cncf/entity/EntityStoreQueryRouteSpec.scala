@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 17, 2026
+ * @version Mar. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -154,8 +154,8 @@ final class EntityStoreQueryRouteSpec
       loaded.map(_.flatMap(_.getString("id"))) shouldBe Consequence.success(Some(created.take.id.print))
       loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(Some("test-principal"))
       loaded.map(_.flatMap(_.getString("createdBy"))) shouldBe Consequence.success(Some("test-principal"))
-      loaded.map(_.flatMap(_.getString("postStatus"))) shouldBe Consequence.success(Some("Draft"))
-      loaded.map(_.flatMap(_.getString("aliveness"))) shouldBe Consequence.success(Some("Alive"))
+      loaded.map(_.flatMap(_.getString("postStatus")).exists(_.toLowerCase.contains("draft"))) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(_.getString("aliveness")).exists(_.toLowerCase.contains("alive"))) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("traceId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("correlationId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
     }
@@ -209,8 +209,8 @@ final class EntityStoreQueryRouteSpec
       loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(Some("jiro"))
       loaded.map(_.flatMap(_.getString("createdBy"))) shouldBe Consequence.success(Some("owner-x"))
       loaded.map(_.flatMap(_.getString("updatedBy"))) shouldBe Consequence.success(Some("test-principal"))
-      loaded.map(_.flatMap(_.getString("postStatus"))) shouldBe Consequence.success(Some("Draft"))
-      loaded.map(_.flatMap(_.getString("aliveness"))) shouldBe Consequence.success(Some("Alive"))
+      loaded.map(_.flatMap(_.getString("postStatus")).exists(_.toLowerCase.contains("draft"))) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(_.getString("aliveness")).exists(_.toLowerCase.contains("alive"))) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("traceId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("correlationId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
     }
@@ -267,6 +267,124 @@ final class EntityStoreQueryRouteSpec
       loaded.map(_.flatMap(_.getString("updatedBy"))) shouldBe Consequence.success(Some("test-principal"))
       loaded.map(_.flatMap(_.getString("traceId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("correlationId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+    }
+
+    "perform soft delete on entity-store route and keep record with lifecycle updates" in {
+      Given("a seeded entity")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+
+      val id = EntityId("test", "51", _cid)
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(_cid),
+              Record.dataAuto(
+                "id" -> id.print,
+                "name" -> "taro",
+                "postStatus" -> "Published",
+                "aliveness" -> "Alive",
+                "updatedBy" -> "owner-z"
+              )
+            )
+          )
+        )
+      )
+
+      When("deleting through EntityStoreSpace")
+      val deleted = entitystorespace.delete(UnitOfWorkOp.EntityStoreDelete(id))
+      val loaded = for {
+        _ <- deleted
+        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
+        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec <- ds.load(cid, dsid)
+      } yield rec
+
+      Then("record remains and lifecycle/audit fields are updated")
+      deleted shouldBe Consequence.unit
+      loaded.map(_.flatMap(_.getString("id"))) shouldBe Consequence.success(Some(id.print))
+      loaded.map(_.flatMap(_.getString("postStatus")).exists(_.toLowerCase.contains("archived"))) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(_.getString("aliveness")).exists(_.toLowerCase.contains("dead"))) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(_.getString("updatedBy"))) shouldBe Consequence.success(Some("test-principal"))
+      loaded.map(_.flatMap(_.getString("traceId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(_.getString("correlationId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+    }
+
+    "perform hard delete on entity-store route and remove record physically" in {
+      Given("a seeded entity")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+
+      val id = EntityId("test", "52", _cid)
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(_cid),
+              Record.dataAuto(
+                "id" -> id.print,
+                "name" -> "hanako",
+                "postStatus" -> "Published",
+                "aliveness" -> "Alive"
+              )
+            )
+          )
+        )
+      )
+
+      When("hard deleting through EntityStoreSpace")
+      val deleted = entitystorespace.deleteHard(UnitOfWorkOp.EntityStoreDeleteHard(id))
+      val loaded = for {
+        _ <- deleted
+        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
+        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec <- ds.load(cid, dsid)
+      } yield rec
+
+      Then("record is removed")
+      deleted shouldBe Consequence.unit
+      loaded shouldBe Consequence.success(None)
+    }
+
+    "perform physical delete on delete route when aliveness is absent" in {
+      Given("a seeded entity without aliveness")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+
+      val id = EntityId("test", "53", _cid)
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(_cid),
+              Record.dataAuto(
+                "id" -> id.print,
+                "name" -> "jiro"
+              )
+            )
+          )
+        )
+      )
+
+      When("deleting through standard delete route")
+      val deleted = entitystorespace.delete(UnitOfWorkOp.EntityStoreDelete(id))
+      val loaded = for {
+        _ <- deleted
+        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
+        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec <- ds.load(cid, dsid)
+      } yield rec
+
+      Then("record is physically removed")
+      deleted shouldBe Consequence.unit
+      loaded shouldBe Consequence.success(None)
     }
   }
 

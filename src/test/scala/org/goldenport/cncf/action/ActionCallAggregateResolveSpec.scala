@@ -1,5 +1,6 @@
 package org.goldenport.cncf.action
 
+import cats.syntax.flatMap.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.datatype.EntityId
@@ -14,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 17, 2026
+ * @version Mar. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallAggregateResolveSpec
@@ -183,7 +184,7 @@ private final case class SearchAggregateCall[A](
   def searched: Option[org.goldenport.cncf.directive.SearchResult[A]] = _searched
 
   override def execute(): Consequence[OperationResponse] =
-    aggregate_search[A](collectionname, Query("any")).map { result =>
+    aggregate_search_c[A](collectionname, Query("any")).map { result =>
       _searched = Some(result)
       OperationResponse.create(result)
     }
@@ -198,7 +199,7 @@ private final case class ResolveAggregateCall[A](
   def resolved: Option[A] = _resolved
 
   override def execute(): Consequence[OperationResponse] = {
-    aggregate_load[A](targetid)
+    aggregate_load_c[A](targetid)
       .map { value =>
       _resolved = Some(value)
       OperationResponse.RecordResponse(Record.dataAuto("aggregate" -> value))
@@ -226,7 +227,7 @@ private final case class ResolveAndDiffUpdateAggregateCall(
 
   protected def build_Program =
     exec_from {
-      aggregate_load[SalesOrderAggregate](targetid).flatMap { current =>
+      aggregate_load_c[SalesOrderAggregate](targetid).flatMap { current =>
         val updatedLine = current.line.copy(
           sku = patch.sku.getOrElse(current.line.sku),
           quantity = current.line.quantity + patch.quantityDelta.getOrElse(0)

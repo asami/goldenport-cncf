@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 17, 2026
- * @version Mar. 17, 2026
+ * @version Mar. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallViewResolveSpec
@@ -100,7 +100,7 @@ private final case class LoadDefaultViewCall(
   def loaded: Option[String] = _loaded
 
   override def execute(): Consequence[OperationResponse] =
-    view_load[String]("user", id).map { value =>
+    view_load_c[String]("user", id).map { value =>
       _loaded = Some(value)
       OperationResponse.void
     }
@@ -116,7 +116,7 @@ private final case class LoadNamedViewCall(
   def loaded: Option[String] = _loaded
 
   override def execute(): Consequence[OperationResponse] =
-    view_load[String]("user", viewname, id).map { value =>
+    view_load_c[String]("user", viewname, id).map { value =>
       _loaded = Some(value)
       OperationResponse.void
     }
@@ -131,7 +131,7 @@ private final case class SearchNamedViewCall(
   def searched: Option[org.goldenport.cncf.directive.SearchResult[String]] = _searched
 
   override def execute(): Consequence[OperationResponse] =
-    view_search[String]("user", viewname, Query("any")).map { result =>
+    view_search_c[String]("user", viewname, Query("any")).map { result =>
       _searched = Some(result)
       OperationResponse.create(result)
     }

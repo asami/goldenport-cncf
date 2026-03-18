@@ -30,7 +30,7 @@ import org.goldenport.cncf.directive.SearchResult
  * @since   Jan.  6, 2026
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
- * @version Mar. 17, 2026
+ * @version Mar. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -401,6 +401,11 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     ConsequenceT.liftF(Free.liftF(op))
   }
 
+  protected final def entity_delete_hard(id: EntityId): ExecUowM[Unit] = {
+    val op = UnitOfWorkOp.EntityStoreDeleteHard(id)
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
   protected final def entity_search[T](
     query: EntityQuery[T]
   )(using tc: EntityPersistent[T]): ExecUowM[SearchResult[T]] = {
@@ -494,6 +499,20 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     id: EntityId
   )(using uow: UnitOfWork): Unit = {
     val op = UnitOfWorkOp.EntityStoreDelete(id)
+    exec_or_throw(op)
+  }
+
+  protected final def entity_delete_hard_c(
+    id: EntityId
+  )(using uow: UnitOfWork): Consequence[Unit] = {
+    val op = UnitOfWorkOp.EntityStoreDeleteHard(id)
+    exec_c(op)
+  }
+
+  protected final def entity_delete_hard_or_throw(
+    id: EntityId
+  )(using uow: UnitOfWork): Unit = {
+    val op = UnitOfWorkOp.EntityStoreDeleteHard(id)
     exec_or_throw(op)
   }
 

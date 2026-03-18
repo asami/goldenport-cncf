@@ -22,7 +22,7 @@ import org.goldenport.process.ShellCommandExecutor
  * @since   Jan. 10, 2026
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
- * @version Mar. 17, 2026
+ * @version Mar. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -129,6 +129,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     case m: UnitOfWorkOp.EntityStoreDelete =>
       withCallTree("uow:entitystore:delete") {
         _entity_store_space.delete(m)
+      }
+
+    case m: UnitOfWorkOp.EntityStoreDeleteHard =>
+      withCallTree("uow:entitystore:delete:hard") {
+        _entity_store_space.deleteHard(m)
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearch[t] @unchecked) =>

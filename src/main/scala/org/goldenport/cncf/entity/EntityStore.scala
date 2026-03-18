@@ -4,7 +4,6 @@ import cats._
 import cats.syntax.all.*
 import org.goldenport.Consequence
 import org.goldenport.id.UniversalId
-import org.goldenport.datatype.Identifier
 import org.goldenport.record.Record
 import org.goldenport.cncf.*
 import org.goldenport.cncf.context.ExecutionContext
@@ -20,7 +19,7 @@ import org.goldenport.model.statemachine.{Aliveness, PostStatus}
  *  version Dec. 18, 2025
  *  version Jan. 10, 2026
  *  version Feb. 26, 2026
- * @version Mar. 11, 2026
+ * @version Mar. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -45,6 +44,10 @@ abstract class EntityStore {
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit]
 
   def delete(
+    id: EntityId
+  )(using ctx: ExecutionContext): Consequence[Unit]
+
+  def deleteHard(
     id: EntityId
   )(using ctx: ExecutionContext): Consequence[Unit]
 
@@ -110,6 +113,7 @@ class NoopEntityStore() extends EntityStore {
   def save[T](entity: T)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = ???
   def update[T](changes: T)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = ???
   def delete(id: EntityId)(using ctx: ExecutionContext): Consequence[Unit] = ???
+  def deleteHard(id: EntityId)(using ctx: ExecutionContext): Consequence[Unit] = ???
   def search[T](query: EntityQuery[T])(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] = ???
 }
 
@@ -175,6 +179,26 @@ class StandardEntityStore(
   }
 
   def delete(
+    id: EntityId
+  )(using ctx: ExecutionContext): Consequence[Unit] = {
+    for {
+      cid <- ctx.entityStoreSpace.dataStoreCollection(id)
+      dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+      ds <- ctx.dataStoreSpace.dataStore(cid)
+      current <- ds.load(cid, dsid)
+      r <- current match {
+        case Some(rec) =>
+          if (_is_soft_delete_target(rec))
+            ds.update(cid, dsid, _soft_delete_record(rec))
+          else
+            ds.delete(cid, dsid)
+        case None =>
+          Consequence.unit
+      }
+    } yield r
+  }
+
+  def deleteHard(
     id: EntityId
   )(using ctx: ExecutionContext): Consequence[Unit] = {
     for {
@@ -270,7 +294,7 @@ class StandardEntityStore(
   )(using ctx: ExecutionContext): Record = {
     val now = java.time.ZonedDateTime.now(ctx.clock.withZone(ctx.timezone))
     val principalid = ctx.security.principal.id.value
-    val principal = Identifier(principalid)
+    val principal = principalid
     val defaults = Vector.newBuilder[(String, Any)]
     val existingmap = existing.map(_.asMap).getOrElse(Map.empty)
 
@@ -299,5 +323,40 @@ class StandardEntityStore(
 
     val complement = Record.dataAuto(defaults.result()*)
     record ++ complement
+  }
+
+  private def _soft_delete_record(
+    existing: Record
+  )(using ctx: ExecutionContext): Record = {
+    val now = java.time.ZonedDateTime.now(ctx.clock.withZone(ctx.timezone))
+    val principalid = ctx.security.principal.id.value
+    val principal = principalid
+    val keyset = existing.keySet
+
+    def key(camel: String, snake: String): String = {
+      val hascamel = keyset.contains(camel)
+      val hassnake = keyset.contains(snake)
+      if (!hascamel && hassnake) snake else camel
+    }
+
+    val base = Vector.newBuilder[(String, Any)]
+    base += key("postStatus", "post_status") -> PostStatus.Archived
+    base += key("aliveness", "aliveness") -> Aliveness.Dead
+    base += key("updatedAt", "updated_at") -> now
+    base += key("updatedBy", "updated_by") -> principal
+    base += key("traceId", "trace_id") -> ctx.observability.traceId.value
+    ctx.observability.correlationId.foreach { x =>
+      base += key("correlationId", "correlation_id") -> x.value
+    }
+    if (keyset.contains("deletedAt") || keyset.contains("deleted_at"))
+      base += key("deletedAt", "deleted_at") -> now
+    if (keyset.contains("deletedBy") || keyset.contains("deleted_by"))
+      base += key("deletedBy", "deleted_by") -> principal
+    Record.dataAuto(base.result()*)
+  }
+
+  private def _is_soft_delete_target(existing: Record): Boolean = {
+    val keyset = existing.keySet
+    keyset.contains("aliveness")
   }
 }
