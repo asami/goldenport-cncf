@@ -1,8 +1,12 @@
 package org.goldenport.cncf.config
 
-import org.goldenport.Consequence
 import org.goldenport.configuration.ResolvedConfiguration
 
+/*
+ * @since   Jan. 18, 2025
+ * @version Mar. 20, 2026
+ * @author  ASAMI, Tomoharu
+ */
 object ClientConfig {
   val BaseUrlKey = "client.baseurl"
   val DefaultBaseUrl = "http://localhost:8080"
@@ -10,8 +14,5 @@ object ClientConfig {
   def baseUrl(
     configuration: ResolvedConfiguration
   ): Option[String] =
-    configuration.get[String](BaseUrlKey) match {
-      case Consequence.Success(value) => value
-      case Consequence.Failure(_) => None
-    }
+    configuration.get[String](BaseUrlKey).toOption.flatten
 }

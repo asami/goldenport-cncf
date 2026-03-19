@@ -9,7 +9,7 @@ import org.goldenport.cncf.directive.{Query, SearchResult}
 
 /*
  * @since   Mar. 14, 2026
- * @version Mar. 18, 2026
+ * @version Mar. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -33,7 +33,7 @@ final class EntityCollection[E](
         memory.foreach(_.remove(id))
         storage.storeRealm.resolve(id).flatMap { entity =>
           if (_is_logically_deleted(entity))
-            Consequence.failure(s"entity not found: $id")
+            Consequence.successOrEntityNotFound(Option.empty[E])(id)
           else {
             memory.foreach(_.put(entity))
             Consequence.success(entity)
@@ -42,7 +42,7 @@ final class EntityCollection[E](
       case None =>
         storage.storeRealm.resolve(id).flatMap { entity =>
           if (_is_logically_deleted(entity))
-            Consequence.failure(s"entity not found: $id")
+            Consequence.successOrEntityNotFound(Option.empty[E])(id)
           else {
             memory.foreach(_.put(entity))
             Consequence.success(entity)

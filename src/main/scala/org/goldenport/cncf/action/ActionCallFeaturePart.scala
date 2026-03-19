@@ -30,7 +30,7 @@ import org.goldenport.cncf.directive.SearchResult
  * @since   Jan.  6, 2026
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
- * @version Mar. 18, 2026
+ * @version Mar. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -65,9 +65,10 @@ trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
     }.filter(_.nonEmpty)
 
   protected final def action_required_property_string(name: String): Consequence[String] =
-    action_property_string(name)
-      .map(Consequence.success)
-      .getOrElse(Consequence.failure(s"Property not found: $name"))
+    Consequence.fromOption(
+      action_property_string(name),
+      s"Property not found: $name"
+    )
 }
 
 trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>

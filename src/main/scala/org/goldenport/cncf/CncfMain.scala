@@ -23,7 +23,8 @@ import org.goldenport.cncf.observability.global.GlobalObservable
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 23, 2026
- * @version Feb.  1, 2026
+ *  version Feb.  1, 2026
+ * @version Mar. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfMain extends GlobalObservable {
@@ -523,10 +524,7 @@ object CncfMain extends GlobalObservable {
     configuration: ResolvedConfiguration,
     key: String
   ): Option[String] =
-    configuration.get[String](key) match {
-      case Consequence.Success(value) => value
-      case Consequence.Failure(_) => None
-    }
+    configuration.get[String](key).toOption.flatten
 
   private def _config_truthy(
     configuration: ResolvedConfiguration,
