@@ -129,7 +129,7 @@ Add executable specifications for transition semantics and guard behavior.
 
 ## SM-05: Cozy/CNCF StateMachine Integration Gap Closure
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -138,11 +138,11 @@ and CNCF/core runtime consumption boundaries.
 
 ### Detailed Tasks
 
-- [ ] Complete Cozy-side state machine graph construction (`Modeler._statemachine`) beyond minimal placeholder behavior.
-- [ ] Validate complex guard coverage (composite guards, identifier guards, expression guards) against core model boundaries.
-- [ ] Validate multi-transition priority ordering scenarios, including same-priority deterministic declaration order.
-- [ ] Confirm generated transition rules map cleanly to core `org.goldenport.statemachine` structures without CNCF-side primitive redefinition.
-- [ ] Add cross-repo verification scenarios (cozy generation -> CNCF execution) for state machine transition paths.
+- [x] Complete Cozy-side state machine graph construction (`Modeler._statemachine`) beyond minimal placeholder behavior.
+- [x] Validate complex guard coverage (composite guards, identifier guards, expression guards) against core model boundaries.
+- [x] Validate multi-transition priority ordering scenarios, including same-priority deterministic declaration order.
+- [x] Confirm generated transition rules map cleanly to core `org.goldenport.statemachine` structures without CNCF-side primitive redefinition.
+- [x] Add cross-repo verification scenarios (cozy generation -> CNCF execution) for state machine transition paths.
 
 ### External Progress Reference
 

@@ -1,6 +1,6 @@
 # Phase 4 — State Machine Foundation
 
-status = active
+status = closed
 
 ## 1. Purpose of This Document
 
@@ -27,13 +27,13 @@ This document is a progress dashboard, not a design journal.
 ## 4. Current Work Stack
 
 - A (DONE): Define canonical state machine model and runtime boundary.
-- B (ACTIVE): Align Cozy-generated transition rules with core/CNCF state machine execution boundary.
+- B (DONE): Align Cozy-generated transition rules with core/CNCF state machine execution boundary.
 - C (DONE): Add state machine introspection projection surface.
 - D (DONE): Prepare executable specifications for transition semantics and guard behavior.
 
 Current note:
-- Cozy modeler integration work is in progress (`working-draft`) and already emits transition rule structures and guard mapping.
-- Known remaining gap on Cozy side: full state machine graph construction in `Modeler._statemachine`.
+- Cozy-side state machine graph construction (`Modeler._statemachine`) is completed and verified as a Phase 4 integration result.
+- Remaining follow-up concerns (for example richer datatype handling and explicit priority input in DSL) are treated as post-Phase-4 candidates.
 
 ## 5. Development Items
 
@@ -41,7 +41,7 @@ Current note:
 - [x] SM-02: Implement transition validation hook in runtime execution path.
 - [x] SM-03: Expose state machine introspection output for CLI/meta projection.
 - [x] SM-04: Add executable specifications for transition validity, guard checks, and failure behavior.
-- [ ] SM-05: Resolve Cozy/CNCF integration gap for full state machine graph construction and multi-transition guard/priority validation.
+- [x] SM-05: Resolve Cozy/CNCF integration gap for full state machine graph construction and multi-transition guard/priority validation.
 
 ## 6. Next Phase Candidates
 
@@ -56,3 +56,5 @@ Current note:
 - `docs/phase/phase-4-checklist.md`
 - `docs/journal/2026/03/statemachine-dsl-execution-design.md`
 - `docs/design/statemachine-boundary-contract.md`
+
+closed_at = 2026-03-20
