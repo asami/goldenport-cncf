@@ -89,7 +89,7 @@ Implement EventStore baseline (`append/load/query/replay`) with explicit transac
 
 ## EV-03: EventBus Publish/Dispatch/Subscription Path
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -97,12 +97,12 @@ Implement EventBus runtime flow aligned with ActionCall-centric execution.
 
 ### Detailed Tasks
 
-- [ ] Freeze `publish/register` contract and subscription model.
-- [ ] Implement subscription resolution and deterministic dispatch ordering.
-- [ ] Integrate dispatch path with ActionCall execution model.
-- [ ] Define sync dispatch default policy and async/job extension point boundary.
-- [ ] Ensure ephemeral events dispatch without persistence.
-- [ ] Map dispatch failures to consequence/observation taxonomy consistently.
+- [x] Freeze `publish/register` contract and subscription model.
+- [x] Implement subscription resolution and deterministic dispatch ordering.
+- [x] Integrate dispatch path with ActionCall execution model.
+- [x] Define sync dispatch default policy and async/job extension point boundary.
+- [x] Ensure ephemeral events dispatch without persistence.
+- [x] Map dispatch failures to consequence/observation taxonomy consistently.
 
 ### Inputs
 
@@ -112,7 +112,7 @@ Implement EventBus runtime flow aligned with ActionCall-centric execution.
 
 ## EV-04: Policy-Driven Visibility and Privilege Checks
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 
