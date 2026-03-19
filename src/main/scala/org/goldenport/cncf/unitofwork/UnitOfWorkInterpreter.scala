@@ -12,6 +12,7 @@ import org.goldenport.cncf.datatype.EntityId
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.observability.CallTreeContext
 import org.goldenport.process.ShellCommandExecutor
+import org.goldenport.cncf.statemachine.TransitionValidationHook
 
 /*
  * Interpreter for UnitOfWorkOp.
@@ -23,7 +24,7 @@ import org.goldenport.process.ShellCommandExecutor
  * @since   Jan. 10, 2026
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
- * @version Mar. 18, 2026
+ * @version Mar. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -114,17 +115,23 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreSave[t] @unchecked) =>
       withCallTree("uow:entitystore:save") {
-        _entity_store_space.save(m)
+        _transition_validation_hook
+          .beforeSave[t](m.entity, m.tc)
+          .flatMap(_ => _entity_store_space.save(m))
       }
 
     case m: (UnitOfWorkOp.EntityStoreUpdate[t] @unchecked) =>
       withCallTree("uow:entitystore:update") {
-        _entity_store_space.update(m)
+        _transition_validation_hook
+          .beforeUpdate[t](m.entity, m.tc)
+          .flatMap(_ => _entity_store_space.update(m))
       }
 
     case m: (UnitOfWorkOp.EntityStoreUpdateById[t] @unchecked) =>
       withCallTree("uow:entitystore:update:patch") {
-        _entity_store_space.updateById(m)
+        _transition_validation_hook
+          .beforeUpdateById[t](m.id, m.patch, m.tc)
+          .flatMap(_ => _entity_store_space.updateById(m))
       }
 
     case m: UnitOfWorkOp.EntityStoreDelete =>
@@ -165,6 +172,9 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   //   }
 
   private def _http_driver: HttpDriver = uow.httpDriver
+
+  private def _transition_validation_hook: TransitionValidationHook =
+    uow.executionContext.runtime.transitionValidationHook
 
   private def _data_store_space: DataStoreSpace = uow.executionContext.dataStoreSpace
 

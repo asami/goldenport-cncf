@@ -5,11 +5,12 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.config.ResolvedParameters
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
+import org.goldenport.cncf.statemachine.TransitionValidationHook
 
 /*
  * @since   Dec. 21, 2025
  *  version Jan. 18, 2026
- * @version Mar. 13, 2026
+ * @version Mar. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -19,7 +20,8 @@ final class RuntimeContext(
   commitAction: UnitOfWork => Unit,
   abortAction: UnitOfWork => Unit,
   disposeAction: UnitOfWork => Unit,
-  token: String
+  token: String,
+  val transitionValidationHook: TransitionValidationHook = TransitionValidationHook.noop
 ) extends ScopeContext() {
   private var _resolved_parameters: Option[ResolvedParameters] = None
 

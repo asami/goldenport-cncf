@@ -14,12 +14,13 @@ import org.goldenport.cncf.job.{JobEngine, JobId, JobResult, JobStatus, JobTask}
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
+import org.goldenport.cncf.statemachine.PlannedTransitionValidationHook
 
 /*
  * @since   Jan.  3, 2026
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Mar. 11, 2026
+ * @version Mar. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -131,7 +132,10 @@ case class ComponentLogic(
         ()
       },
       disposeAction = _ => (),
-      token = "component-runtime-context"
+      token = "component-runtime-context",
+      transitionValidationHook = new PlannedTransitionValidationHook(
+        component.stateMachinePlannerProvider
+      )
     )
   }
 

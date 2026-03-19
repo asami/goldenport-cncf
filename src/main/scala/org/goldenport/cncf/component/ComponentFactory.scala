@@ -16,12 +16,13 @@ import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.goldenport.cncf.entity.aggregate.AggregateSpace
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimePlan, EntitySpace, EntityStorage, PartitionedMemoryRealm, PartitionStrategy, WorkingSetDefinition, WorkingSetInitializer}
 import org.goldenport.cncf.entity.view.ViewSpace
+import org.goldenport.cncf.statemachine.{CollectionStateMachinePlanner, CollectionStateMachinePlannerProvider, CollectionTransitionRule, CollectionTransitionRuleProvider, TransitionTrigger, TransitionRule}
 
 /*
  * @since   Jan. 30, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 16, 2026
+ * @version Mar. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -74,8 +75,47 @@ final class ComponentFactory(
       _initialize_working_sets_from_plan(plans, entityspace, storesnapshot)
     else
       _initialize_working_sets(component, entityspace, storesnapshot)
+    _bootstrap_state_machine_planners(component, plans)
     component
   }
+
+  private def _bootstrap_state_machine_planners(
+    component: Component,
+    plans: Vector[EntityRuntimePlan[Any]]
+  ): Unit = {
+    val provider = new CollectionStateMachinePlannerProvider(component.stateMachinePlannerProvider)
+    val rules = _default_collection_transition_rules(component, plans)
+    val saveRulesByCollection = rules.collect {
+      case m if m.trigger == TransitionTrigger.Save => m
+    }.groupBy(_.collectionName)
+    val updateRulesByCollection = rules.collect {
+      case m if m.trigger == TransitionTrigger.Update => m
+    }.groupBy(_.collectionName)
+
+    saveRulesByCollection.foreach { case (name, groupedRules) =>
+      val planner = new CollectionStateMachinePlanner[Any](
+        groupedRules.toVector.map(_to_transition_rule_any)
+      )
+      provider.registerSave(name, planner)
+    }
+    updateRulesByCollection.foreach { case (name, groupedRules) =>
+      val planner = new CollectionStateMachinePlanner[Any](
+        groupedRules.toVector.map(_to_transition_rule_any)
+      )
+      provider.registerUpdate(name, planner)
+    }
+
+    val _ = component.withStateMachinePlannerProvider(provider)
+  }
+
+  private def _to_transition_rule_any(p: CollectionTransitionRule[Any]): TransitionRule[Any] =
+    TransitionRule[Any](
+      eventName = p.eventName,
+      priority = p.priority,
+      declarationOrder = p.declarationOrder,
+      guard = p.guard,
+      plan = p.plan
+    )
 
   private def _bootstrap_entities_with_plan(
     component: Component,
@@ -354,6 +394,21 @@ final class ComponentFactory(
     component: Component
   ): Vector[EntityRuntimePlan[Any]] =
     Vector.empty
+
+  // Transitional metadata hook:
+  // transition definitions are not yet bound from Cozy/simplemodeling state machine model.
+  // This method is the canonical bootstrap entry point once metadata binding is available.
+  private def _default_collection_transition_rules(
+    component: Component,
+    plans: Vector[EntityRuntimePlan[Any]]
+  ): Vector[CollectionTransitionRule[Any]] =
+    component match {
+      case m: CollectionTransitionRuleProvider =>
+        val _ = plans
+        m.stateMachineTransitionRules
+      case _ =>
+        Vector.empty
+    }
 }
 
 object ComponentFactory {

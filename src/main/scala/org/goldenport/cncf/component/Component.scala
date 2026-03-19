@@ -28,6 +28,7 @@ import org.goldenport.cncf.cli.renderer.{CliHelpJsonRenderer, CliHelpYamlRendere
 import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace, Repository}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
 import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace}
+import org.goldenport.cncf.statemachine.StateMachinePlannerProvider
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection}
 import cats.data.NonEmptyVector
 import java.io.InputStream
@@ -54,6 +55,8 @@ abstract class Component() extends Component.Core.Holder {
   private var _services: Option[ServiceGroup] = None
   private var _subsystem: Option[Subsystem] = None
   private var _health_contributors: Vector[Component.HealthContributor] = Vector.empty
+  private var _state_machine_planner_provider: StateMachinePlannerProvider =
+    StateMachinePlannerProvider.noop
   val entitySpace: EntitySpace = new EntitySpace()
   val aggregateSpace: AggregateSpace = new AggregateSpace()
   val viewSpace: ViewSpace = new ViewSpace()
@@ -123,6 +126,16 @@ abstract class Component() extends Component.Core.Holder {
 
   def registerHealthContributor(contributor: Component.HealthContributor): Component = {
     _health_contributors = _health_contributors :+ contributor
+    this
+  }
+
+  def stateMachinePlannerProvider: StateMachinePlannerProvider =
+    _state_machine_planner_provider
+
+  def withStateMachinePlannerProvider(
+    p: StateMachinePlannerProvider
+  ): Component = {
+    _state_machine_planner_provider = p
     this
   }
 
