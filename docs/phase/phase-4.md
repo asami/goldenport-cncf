@@ -29,7 +29,7 @@ This document is a progress dashboard, not a design journal.
 - A (DONE): Define canonical state machine model and runtime boundary.
 - B (ACTIVE): Align Cozy-generated transition rules with core/CNCF state machine execution boundary.
 - C (DONE): Add state machine introspection projection surface.
-- D (SUSPENDED): Prepare executable specifications for transition semantics and guard behavior.
+- D (DONE): Prepare executable specifications for transition semantics and guard behavior.
 
 Current note:
 - Cozy modeler integration work is in progress (`working-draft`) and already emits transition rule structures and guard mapping.
@@ -40,7 +40,7 @@ Current note:
 - [x] SM-01: Define state / transition / guard / effect model and boundary contracts.
 - [x] SM-02: Implement transition validation hook in runtime execution path.
 - [x] SM-03: Expose state machine introspection output for CLI/meta projection.
-- [ ] SM-04: Add executable specifications for transition validity, guard checks, and failure behavior.
+- [x] SM-04: Add executable specifications for transition validity, guard checks, and failure behavior.
 - [ ] SM-05: Resolve Cozy/CNCF integration gap for full state machine graph construction and multi-transition guard/priority validation.
 
 ## 6. Next Phase Candidates

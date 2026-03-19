@@ -110,7 +110,7 @@ separation.
 
 ## SM-04: Executable Specifications
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -118,12 +118,12 @@ Add executable specifications for transition semantics and guard behavior.
 
 ### Detailed Tasks
 
-- [ ] Add Given/When/Then specs for basic transition success path.
-- [ ] Add specs for no-match behavior (`guard=false`).
-- [ ] Add specs for guard evaluation failure (`Failure` path).
-- [ ] Add specs for priority and same-priority declaration-order determinism.
-- [ ] Add specs for action binding ambiguity and missing binding failures.
-- [ ] Add regression specs for lifecycle compatibility path (temporary PostStatus/Aliveness coexistence).
+- [x] Add Given/When/Then specs for basic transition success path.
+- [x] Add specs for no-match behavior (`guard=false`).
+- [x] Add specs for guard evaluation failure (`Failure` path).
+- [x] Add specs for priority and same-priority declaration-order determinism.
+- [x] Add specs for action binding ambiguity and missing binding failures.
+- [x] Add regression specs for lifecycle compatibility path (temporary PostStatus/Aliveness coexistence).
 
 ---
 
