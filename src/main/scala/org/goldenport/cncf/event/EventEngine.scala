@@ -1,5 +1,6 @@
 package org.goldenport.cncf.event
 
+import org.goldenport.Consequence
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.unitofwork.{CommitParticipant, CommitRecorder, PrepareResult, TransactionContext}
 
@@ -21,11 +22,13 @@ import org.goldenport.cncf.unitofwork.{CommitParticipant, CommitRecorder, Prepar
  */
 /*
  * @since   Jan.  6, 2026
- * @version Jan.  6, 2026
+ * @version Mar. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EventEngine extends CommitParticipant {
   def stage(events: Seq[DomainEvent]): Unit
+  def emit(events: Seq[DomainEvent]): Consequence[Vector[EventRecord]]
+  def eventStore: EventStore
   def stagedEvents: Seq[DomainEvent]
   private[event] def preparedEvents: Seq[DomainEvent]
   private[event] def committedEvents: Seq[DomainEvent]
@@ -34,13 +37,15 @@ trait EventEngine extends CommitParticipant {
 object EventEngine {
   def noop(
     dataStore: DataStore,
-    recorder: CommitRecorder = CommitRecorder.noop
+    recorder: CommitRecorder = CommitRecorder.noop,
+    eventstore: EventStore = EventStore.inMemory
   ): EventEngine =
-    new NoopEventEngine(dataStore, recorder)
+    new NoopEventEngine(dataStore, recorder, eventstore)
 
   private final class NoopEventEngine(
     dataStore: DataStore,
-    recorder: CommitRecorder
+    recorder: CommitRecorder,
+    val eventStore: EventStore
   ) extends EventEngine {
     private var _staged: Vector[DomainEvent] = Vector.empty
     private var _prepared: Option[Vector[DomainEvent]] = None
@@ -50,6 +55,13 @@ object EventEngine {
       if (_prepared.isEmpty) {
         _staged = events.toVector
       }
+
+    def emit(events: Seq[DomainEvent]): Consequence[Vector[EventRecord]] = {
+      val records = events.toVector.map(e =>
+        EventRecord.fromDomainEvent(e, EventLane.NonTransactional)
+      )
+      eventStore.append(records)
+    }
 
     def stagedEvents: Seq[DomainEvent] =
       _staged
@@ -69,6 +81,12 @@ object EventEngine {
     def commit(tx: TransactionContext): Unit = {
       recorder.record("EventEngine.commit")
       _committed = _prepared.getOrElse(_staged)
+      if (_committed.nonEmpty) {
+        val records = _committed.map(e =>
+          EventRecord.fromDomainEvent(e, EventLane.Transactional)
+        )
+        val _ = eventStore.append(records)
+      }
       dataStore.commit(tx)
     }
 

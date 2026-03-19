@@ -4,13 +4,14 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
+import org.goldenport.cncf.event.{TransitionLifecycleEvent, TransitionLifecycleKind}
 import org.goldenport.record.Record
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matchers {
@@ -29,6 +30,41 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       result shouldBe Consequence.unit
       provider.called shouldBe true
       provider.executionTrace shouldBe Vector("exit", "transition", "entry")
+      val lifecycle = summon[ExecutionContext].runtime.unitOfWork.pendingEvents.collect {
+        case e: TransitionLifecycleEvent => e
+      }
+      lifecycle.map(_.kind) shouldBe Vector(
+        TransitionLifecycleKind.BeforeTransition,
+        TransitionLifecycleKind.AfterTransition
+      )
+      lifecycle.foreach { e =>
+        e.name shouldBe "transition.lifecycle"
+        e.transition.collection shouldBe Some("person")
+        e.transition.event shouldBe "update"
+        e.failure shouldBe None
+      }
+    }
+
+    "emit transition-failed on action failure" in {
+      given ExecutionContext = ExecutionContext.create()
+      given EntityPersistent[_Person] = _person_persistent
+
+      val provider = new _ProviderWithFailingPlan
+      val hook = new PlannedTransitionValidationHook(provider)
+      val entity = _Person(EntityId("test", "hook_2", _cid), "hanako")
+      val result = hook.beforeUpdate(entity, summon[EntityPersistent[_Person]])
+
+      result shouldBe a[Consequence.Failure[_]]
+      val lifecycle = summon[ExecutionContext].runtime.unitOfWork.pendingEvents.collect {
+        case e: TransitionLifecycleEvent => e
+      }
+      lifecycle.map(_.kind) shouldBe Vector(
+        TransitionLifecycleKind.BeforeTransition,
+        TransitionLifecycleKind.TransitionFailed
+      )
+      val failed = lifecycle.last
+      failed.failure.isDefined shouldBe true
+      failed.failure.flatMap(_.message).getOrElse("") should include("transition")
     }
   }
 
@@ -106,5 +142,48 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
         }
       }
   }
-}
 
+  private final class _ProviderWithFailingPlan extends StateMachinePlannerProvider {
+    def planForSave[T](
+      entity: T,
+      tc: EntityPersistent[T],
+      event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[T, TransitionEvent]]] = {
+      val _ = (entity, tc, event)
+      Consequence.success(None)
+    }
+
+    def planForUpdate[T](
+      entity: T,
+      tc: EntityPersistent[T],
+      event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[T, TransitionEvent]]] = {
+      val _ = (entity, tc, event)
+      val failaction = new ResolvedAction[T, TransitionEvent] {
+        def run(state: T, event: TransitionEvent): Consequence[Unit] = {
+          val _ = (state, event)
+          Consequence.failure("transition failed in spec")
+        }
+      }
+      Consequence.success(
+        Some(
+          ExecutionPlan(
+            exitActions = Vector.empty,
+            transitionAction = Some(failaction),
+            entryActions = Vector.empty
+          )
+        )
+      )
+    }
+
+    def planForUpdateById[P](
+      id: EntityId,
+      patch: P,
+      tc: EntityPersistentUpdate[P],
+      event: TransitionEvent
+    )(using ExecutionContext): Consequence[Option[ExecutionPlan[(EntityId, P), TransitionEvent]]] = {
+      val _ = (id, patch, tc, event)
+      Consequence.success(None)
+    }
+  }
+}

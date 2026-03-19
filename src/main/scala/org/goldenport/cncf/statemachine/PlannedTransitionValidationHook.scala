@@ -4,10 +4,11 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datatype.EntityId
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
+import org.goldenport.cncf.event.TransitionLifecycleEvent
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TransitionEvent(
@@ -78,7 +79,14 @@ final class PlannedTransitionValidationHook(
     val event = TransitionEvent("save", Some(tc.id(entity)))
     for {
       plan <- plannerProvider.planForSave(entity, tc, event)
-      _ <- plan.fold(Consequence.unit)(ExecutionPlanExecutor.execute(_, entity, event))
+      _ <- plan.fold(Consequence.unit) { p =>
+        ExecutionPlanExecutor.execute(
+          p,
+          entity,
+          event,
+          _lifecycle_observer[T](event, Some(tc.id(entity).collection.name))
+        )
+      }
     } yield ()
   }
 
@@ -89,7 +97,14 @@ final class PlannedTransitionValidationHook(
     val event = TransitionEvent("update", Some(tc.id(entity)))
     for {
       plan <- plannerProvider.planForUpdate(entity, tc, event)
-      _ <- plan.fold(Consequence.unit)(ExecutionPlanExecutor.execute(_, entity, event))
+      _ <- plan.fold(Consequence.unit) { p =>
+        ExecutionPlanExecutor.execute(
+          p,
+          entity,
+          event,
+          _lifecycle_observer[T](event, Some(tc.id(entity).collection.name))
+        )
+      }
     } yield ()
   }
 
@@ -102,8 +117,51 @@ final class PlannedTransitionValidationHook(
     val state = (id, patch)
     for {
       plan <- plannerProvider.planForUpdateById(id, patch, tc, event)
-      _ <- plan.fold(Consequence.unit)(ExecutionPlanExecutor.execute(_, state, event))
+      _ <- plan.fold(Consequence.unit) { p =>
+        ExecutionPlanExecutor.execute(
+          p,
+          state,
+          event,
+          _lifecycle_observer[(EntityId, P)](event, Some(id.collection.name))
+        )
+      }
     } yield ()
   }
-}
 
+  private def _lifecycle_observer[S](
+    transitionevent: TransitionEvent,
+    collection: Option[String]
+  )(using ctx: ExecutionContext): TransitionLifecycleObserver[S, TransitionEvent] =
+    new TransitionLifecycleObserver[S, TransitionEvent] {
+      def before(
+        plan: ExecutionPlan[S, TransitionEvent],
+        state: S,
+        event: TransitionEvent
+      ): Unit = {
+        val _ = (plan, state, event)
+        _stage(TransitionLifecycleEvent.beforeTransition(transitionevent, collection))
+      }
+
+      def after(
+        plan: ExecutionPlan[S, TransitionEvent],
+        state: S,
+        event: TransitionEvent
+      ): Unit = {
+        val _ = (plan, state, event)
+        _stage(TransitionLifecycleEvent.afterTransition(transitionevent, collection))
+      }
+
+      def failed(
+        plan: ExecutionPlan[S, TransitionEvent],
+        state: S,
+        event: TransitionEvent,
+        failure: org.goldenport.Conclusion
+      ): Unit = {
+        val _ = (plan, state, event)
+        _stage(TransitionLifecycleEvent.transitionFailed(transitionevent, collection, failure))
+      }
+    }
+
+  private def _stage(event: org.goldenport.cncf.event.DomainEvent)(using ctx: ExecutionContext): Unit =
+    ctx.runtime.unitOfWork.stageEvent(event)
+}

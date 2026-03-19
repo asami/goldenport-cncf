@@ -29,7 +29,7 @@ import org.goldenport.cncf.http.HttpDriver
  *  version Dec. 21, 2025
  *  version Jan. 18, 2026
  *  version Feb. 27, 2026
- * @version Mar. 1４, 2026
+ * @version Mar. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
@@ -41,6 +41,7 @@ class UnitOfWork(
 //  private var _http_driver: Option[HttpDriver] = None
 //  private var _shell_command_executor: Option[ShellCommandExecutor] = None
   private val _dirty_entities: mutable.Map[EntityId, Entity] = mutable.Map.empty
+  private var _pending_events: Vector[DomainEvent] = Vector.empty
 
   def transactionContext = context.transactionContext
 
@@ -115,7 +116,8 @@ class UnitOfWork(
   ): Consequence[CommitResult] =
     try {
       val tx = TransactionContext.create(context.transactionContext)
-      eventengine.stage(events)
+      val all = _pending_events ++ events.toVector
+      eventengine.stage(all)
       recorder.record("UnitOfWork.prepare")
       val prepares = List(
         tx.prepare(),
@@ -128,11 +130,13 @@ class UnitOfWork(
           recorder.record("UnitOfWork.abort")
           eventengine.abort(tx) // TODO
           tx.abort()
+          _pending_events = Vector.empty
           Consequence.failure(reason)
         case None =>
           recorder.record("UnitOfWork.commit")
           tx.commit()
           eventengine.commit(tx) // TODO
+          _pending_events = Vector.empty
           Consequence.success(())
       }
     } catch {
@@ -146,6 +150,7 @@ class UnitOfWork(
       recorder.record("UnitOfWork.abort")
       eventengine.abort(tx) // TODO
       tx.abort()
+      _pending_events = Vector.empty
       Consequence.success(())
     } catch {
       case e: Throwable =>
@@ -157,6 +162,14 @@ class UnitOfWork(
 
   def record(message: String): Unit =
     recorder.record(message)
+
+  def stageEvent(event: DomainEvent): Unit =
+    stageEvents(Vector(event))
+
+  def stageEvents(events: Seq[DomainEvent]): Unit =
+    _pending_events = _pending_events ++ events.toVector
+
+  def pendingEvents: Vector[DomainEvent] = _pending_events
 
   def executionContext: ExecutionContext = context
 }
