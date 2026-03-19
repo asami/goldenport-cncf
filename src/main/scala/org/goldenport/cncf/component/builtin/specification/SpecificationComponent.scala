@@ -8,6 +8,7 @@ import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.ComponentInit
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.component.ComponentInstanceId
+import org.goldenport.cncf.mcp.McpProjector
 import org.goldenport.cncf.openapi.OpenApiProjector
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.Protocol
@@ -22,7 +23,8 @@ import org.goldenport.protocol.spec as spec
 /*
  * @since   Jan.  8, 2026
  *  version Jan. 20, 2026
- * @version Feb. 19, 2026
+ *  version Feb. 19, 2026
+ * @version Mar. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpecificationComponent() extends Component {
@@ -45,11 +47,12 @@ object SpecificationComponent {
       val exportService = new DefaultExportSpecificationService(subsystem)
       val request = spec.RequestDefinition()
       val response = spec.ResponseDefinition()
-      val op = new ExportOperationDefinition(exportService, request, response)
+      val openapiop = new ExportOperationDefinition("openapi", exportService, request, response)
+      val mcpop = new ExportOperationDefinition("mcp", exportService, request, response)
       val service = spec.ServiceDefinition(
         name = "export",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(op)
+          operations = NonEmptyVector.of(openapiop, mcpop)
         )
       )
       val services = spec.ServiceDefinitionGroup(
@@ -78,22 +81,25 @@ trait ExportSpecificationService {
 private final class DefaultExportSpecificationService(
   subsystem: Subsystem
 ) extends ExportSpecificationService {
-  def formats(): List[String] = List("openapi")
+  def formats(): List[String] = List("openapi", "mcp")
 
   def exportSpec(format: String): String =
     format match {
       case "openapi" => OpenApiProjector.forSubsystem(subsystem)
+      case "mcp" => McpProjector.forSubsystem(subsystem)
+      case other => throw new IllegalArgumentException(s"Unsupported export format: $other")
     }
 }
 
 private final class ExportOperationDefinition(
+  format: String,
   exportService: ExportSpecificationService,
   request: spec.RequestDefinition,
   response: spec.ResponseDefinition
 ) extends spec.OperationDefinition {
   val specification: spec.OperationDefinition.Specification =
     spec.OperationDefinition.Specification(
-      name = "openapi",
+      name = format,
       request = request,
       response = response
     )
@@ -102,7 +108,7 @@ private final class ExportOperationDefinition(
     req: Request
   ): Consequence[OperationRequest] = {
     val _ = req
-    Consequence.success(ExportSpecificationAction(req, "openapi", exportService))
+    Consequence.success(ExportSpecificationAction(req, format, exportService))
   }
 }
 

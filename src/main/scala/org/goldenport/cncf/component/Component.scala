@@ -28,7 +28,7 @@ import org.goldenport.cncf.cli.renderer.{CliHelpJsonRenderer, CliHelpYamlRendere
 import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace, Repository}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
 import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace}
-import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, TreeProjection}
+import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection}
 import cats.data.NonEmptyVector
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
@@ -40,7 +40,7 @@ import scala.util.control.NonFatal
  *  version Jan.  3, 2026
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
- * @version Mar. 17, 2026
+ * @version Mar. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -617,7 +617,8 @@ object Component {
     val withMetaOperations = _ensure_operation(withMetaServices, _default_meta_service_name, _DefaultMetaOperationsOperation)
     val withMetaSchema = _ensure_operation(withMetaOperations, _default_meta_service_name, _DefaultMetaSchemaOperation)
     val withMetaOpenApi = _ensure_operation(withMetaSchema, _default_meta_service_name, _DefaultMetaOpenApiOperation)
-    val withMetaTree = _ensure_operation(withMetaOpenApi, _default_meta_service_name, _DefaultMetaTreeOperation)
+    val withMetaMcp = _ensure_operation(withMetaOpenApi, _default_meta_service_name, _DefaultMetaMcpOperation)
+    val withMetaTree = _ensure_operation(withMetaMcp, _default_meta_service_name, _DefaultMetaTreeOperation)
     val withMetaVersion = _ensure_operation(withMetaTree, _default_meta_service_name, _DefaultMetaVersionOperation)
     val withSystemPing = _ensure_operation(withMetaVersion, _default_system_service_name, _DefaultSystemPingOperation)
     _ensure_operation(withSystemPing, _default_system_service_name, _DefaultSystemHealthOperation)
@@ -735,6 +736,18 @@ object Component {
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
       Consequence.success(_DefaultMetaTreeAction(req))
+  }
+
+  private object _DefaultMetaMcpOperation extends OperationDefinition {
+    override val specification: OperationDefinition.Specification =
+      OperationDefinition.Specification(
+        name = "mcp",
+        request = org.goldenport.protocol.spec.RequestDefinition(),
+        response = org.goldenport.protocol.spec.ResponseDefinition()
+      )
+
+    override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(_DefaultMetaMcpAction(req))
   }
 
   private object _DefaultMetaVersionOperation extends OperationDefinition {
@@ -970,6 +983,36 @@ object Component {
       _DefaultMetaTreeActionCall(request, core)
   }
 
+  private final case class _DefaultMetaMcpAction(
+    request: Request
+  ) extends QueryAction {
+    override def createCall(core: ActionCall.Core): ActionCall =
+      _DefaultMetaMcpActionCall(request, core)
+  }
+
+  private final case class _DefaultMetaMcpActionCall(
+    req: Request,
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    override def execute(): Consequence[OperationResponse] = {
+      val text = core.component match {
+        case Some(component) =>
+          _meta_mcp_selector(req) match {
+            case Some(name) =>
+              component.subsystem
+                .flatMap(_.components.find(_.name == name))
+                .map(McpProjection.projectComponent)
+                .getOrElse(McpProjection.projectComponent(component))
+            case None =>
+              McpProjection.projectComponent(component)
+          }
+        case None =>
+          """{"error":"component context missing"}"""
+      }
+      Consequence.success(OperationResponse.Scalar(text))
+    }
+  }
+
   private final case class _DefaultMetaTreeActionCall(
     req: Request,
     core: ActionCall.Core
@@ -1199,6 +1242,11 @@ object Component {
   }
 
   private def _meta_openapi_selector(request: Request): Option[String] = {
+    val args = _request_argument_values(request)
+    args.headOption
+  }
+
+  private def _meta_mcp_selector(request: Request): Option[String] = {
     val args = _request_argument_values(request)
     args.headOption
   }

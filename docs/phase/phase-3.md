@@ -1,6 +1,6 @@
 # Phase 3 — Execution and Orchestration Hub
 
-status = active
+status = closed
 
 ## 1. Purpose of This Document
 
@@ -21,21 +21,21 @@ Phase 3 work proceeds in parallel with Phase 2.9. Although Phase 2.9 remains act
 - **Phase 3.1: Execution Hub Foundation** — establish the baseline execution model (Fat JAR) and core execution infrastructure.
 - **Phase 3.1.1: Execution Hub Foundation (Recovery Slice)** — complete remaining Phase 3.1 execution forms (DockerComponent, RestComponent); SOA (XML) and gRPC are explicitly deferred.
 - **Phase 3.2: CML → Entity Component Generation** — generate, package, and enrich Entity Components derived from CML with documentation and metadata. (completed)
-- **Phase 3.3: AI Agent Hub (PoC)** — project CNCF operations to OpenAPI/MCP and enable experimental AI agents to invoke them; explicitly PoC-only.
+- **Phase 3.3: AI Agent Hub (PoC)** — project CNCF operations to OpenAPI/MCP and enable experimental AI agents to invoke them; explicitly PoC-only. (completed)
 
 ## 4. Current Work Stack
 
 - A (DONE): Phase 3.1.1 — DockerComponent and RestComponent implemented as first-class Components, aligned with the Fat JAR baseline (closed: 2026-02-07).
 - B (DONE): Phase 3.1 — Fat JAR execution baseline and execution infrastructure foundation.
 - C (DONE): CML Entity Generator — CML-to-component generation and integration path validated with cozy/modeler and CNCF embedding flow.
-- D (SUSPENDED): AI Agent Hub PoC — sample OpenAPI/MCP projections and an agent sketch that can call CNCF operations safely.
+- D (DONE): AI Agent Hub PoC — OpenAPI/MCP projections are available via meta/export surfaces, with `/mcp` JSON-RPC server behavior validated for PoC use.
 
 ## 5. Development Items
 
 - [x] EH-01: Define runtime contracts for Fat JAR, Docker, and Microservice/SOA components. (Fat JAR completed; Docker/REST in Phase 3.1.1)
 - [x] EH-02: Verify component orchestration by wiring execution modes through the same Component -> Service -> Operation graph. (Fat JAR completed; Docker/REST in Phase 3.1.1)
 - [x] CG-01: Generate Entity Components from CML models, including packaging metadata and docs.
-- [ ] AI-01: Publish OpenAPI/MCP projections and capture the agent invocation flow as an experimental sketch.
+- [x] AI-01: Publish OpenAPI/MCP projections and capture the agent invocation flow as an experimental sketch.
 
 ## 6. Next Phase Candidates
 
@@ -46,3 +46,5 @@ Phase 3 work proceeds in parallel with Phase 2.9. Although Phase 2.9 remains act
 
 - Detailed checklists and verification status belong in linked journal entries or phase-specific checklists (e.g., `phase-3-checklist.md` once created).
 - This document will be frozen once Phase 3 is closed; refer forward to Phase 4 materials afterward.
+
+closed_at = 2026-03-19

@@ -2,7 +2,7 @@ package org.goldenport.cncf.cli.help
 
 /*
  * @since   Mar.  6, 2026
- * @version Mar.  6, 2026
+ * @version Mar. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 object CommandProtocolHelp {
@@ -25,9 +25,16 @@ object CommandProtocolHelp {
       |  cncf command domain.meta.help
       |  cncf command domain.entity.meta.operations
       |  cncf command meta.tree
+      |  cncf command meta.mcp
+      |  cncf command spec.export.mcp
       |
       |Navigation
       |  cncf command help <selector>
+      |
+      |AI/MCP Navigation
+      |  1) cncf command help
+      |  2) cncf command meta.mcp
+      |  3) cncf command spec.export.mcp
       |""".stripMargin
 
   // Left(exitCode): handled as standalone help output

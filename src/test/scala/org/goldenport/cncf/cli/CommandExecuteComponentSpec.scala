@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  9, 2026
  *  version Jan. 18, 2026
- * @version Mar.  9, 2026
+ * @version Mar. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
@@ -310,6 +310,9 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
       code shouldBe 0
       out.contains("CNCF Command Help") shouldBe true
       out.contains("cncf command <selector> [args...]") shouldBe true
+      out.contains("cncf command meta.mcp") shouldBe true
+      out.contains("cncf command spec.export.mcp") shouldBe true
+      out.contains("AI/MCP Navigation") shouldBe true
     }
 
     "print command protocol help for run command --help" in {

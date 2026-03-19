@@ -1,11 +1,14 @@
 package org.goldenport.cncf.http
 
 import org.goldenport.http.{HttpRequest, HttpResponse}
+import org.goldenport.Consequence
+import org.goldenport.protocol.{Request, Response}
 import org.goldenport.cncf.subsystem.Subsystem
 
 /*
  * @since   Jan.  8, 2026
- * @version Jan.  9, 2026
+ *  version Jan.  9, 2026
+ * @version Mar. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class HttpExecutionEngine(
@@ -13,6 +16,11 @@ final class HttpExecutionEngine(
 ) {
   def execute(req: HttpRequest): HttpResponse =
     subsystem.executeHttp(req)
+
+  def execute(req: Request): Consequence[Response] =
+    subsystem.execute(req)
+
+  def runtimeSubsystem: Subsystem = subsystem
 }
 
 object HttpExecutionEngine {

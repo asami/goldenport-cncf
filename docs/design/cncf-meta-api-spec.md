@@ -17,6 +17,7 @@ meta.services
 meta.operations
 meta.schema
 meta.openapi
+meta.mcp
 meta.tree
 meta.version
 
@@ -72,6 +73,10 @@ Exports schema projection for component/service/operation targets.
 ## meta.openapi
 
 Exports component interface as OpenAPI JSON projection.
+
+## meta.mcp
+
+Exports component interface as MCP tool JSON projection.
 
 ## meta.tree
 

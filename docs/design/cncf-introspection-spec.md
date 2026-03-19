@@ -33,6 +33,7 @@ HelpProjection
 DescribeProjection
 SchemaProjection
 OpenApiProjection
+McpProjection
 TreeProjection
 
 Projection models currently used:
