@@ -12,7 +12,7 @@ import org.scalatest.matchers.should.Matchers
 
 /*
  * @since   Mar.  4, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentDefaultServiceSpec extends AnyWordSpec with Matchers {
@@ -30,6 +30,7 @@ class ComponentDefaultServiceSpec extends AnyWordSpec with Matchers {
       operations.contains("meta.openapi") shouldBe true
       operations.contains("meta.mcp") shouldBe true
       operations.contains("meta.tree") shouldBe true
+      operations.contains("meta.statemachine") shouldBe true
       operations.contains("meta.version") shouldBe true
       operations.contains("system.ping") shouldBe true
       operations.contains("system.health") shouldBe true
@@ -58,6 +59,7 @@ class ComponentDefaultServiceSpec extends AnyWordSpec with Matchers {
       operations.contains("meta.openapi") shouldBe true
       operations.contains("meta.mcp") shouldBe true
       operations.contains("meta.tree") shouldBe true
+      operations.contains("meta.statemachine") shouldBe true
       operations.contains("meta.version") shouldBe true
 
       _execute(component, Request.of(component = "custom_ping", service = "system", operation = "ping")) match {

@@ -40,7 +40,7 @@ This order minimizes churn in projection/output contracts.
 
 ## SM-01: Canonical State Machine Model and Boundary Contracts
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -58,19 +58,20 @@ Define canonical state machine model and strict boundaries:
 - [x] Freeze action binding resolution rules (FQ first, scope, global unique, ambiguity failure).
 - [x] Freeze determinism rules (priority asc, same-priority declaration order).
 - [x] Freeze error semantics (guard failure is Failure; guard false is non-match).
-- [ ] Define canonical core types in `simplemodeling-lib` (`StateMachine`, `State`, `Transition`, `Guard`, `Effect` boundary set).
-- [ ] Define CNCF-side resolver interfaces and adapter boundaries.
-- [ ] Publish normative design doc in `docs/design/` linked from this checklist.
+- [x] Define canonical core types in `simplemodeling-lib` core state machine boundary (`StateMachine`, `State`, `Transition`, `Guard`, `Effect` boundary set).
+- [x] Define CNCF-side resolver interfaces and adapter boundaries.
+- [x] Publish normative design doc in `docs/design/` linked from this checklist.
 
 ### Journal Link
 
 - `docs/journal/2026/03/statemachine-dsl-execution-design.md`
+- `docs/design/statemachine-boundary-contract.md`
 
 ---
 
 ## SM-02: Runtime Transition Validation Hook
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -79,18 +80,18 @@ current execution semantics.
 
 ### Detailed Tasks
 
-- [ ] Identify integration point in Action/UnitOfWork flow where transition pre-check is deterministic.
-- [ ] Add transition planner call (`plan(state, event)`) before state mutation.
-- [ ] Enforce execution order: `exit -> transition action -> entry`.
-- [ ] Persist resulting state through existing entity runtime path.
-- [ ] Map transition failures to `Consequence`/observation taxonomy consistently.
-- [ ] Ensure no transition check runs outside the canonical runtime path.
+- [x] Identify integration point in Action/UnitOfWork flow where transition pre-check is deterministic.
+- [x] Add transition planner call (`plan(state, event)`) before state mutation.
+- [x] Enforce execution order: `exit -> transition action -> entry`.
+- [x] Persist resulting state through existing entity runtime path.
+- [x] Map transition failures to `Consequence`/observation taxonomy consistently.
+- [x] Ensure no transition check runs outside the canonical runtime path.
 
 ---
 
 ## SM-03: Introspection Projection Surface
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -99,11 +100,11 @@ separation.
 
 ### Detailed Tasks
 
-- [ ] Define projection shape (states, events, transitions, guards, priorities).
-- [ ] Add component/meta operation surface for state machine introspection.
-- [ ] Provide machine-readable output (JSON/YAML) compatible with existing formatter flow.
-- [ ] Add deterministic ordering rules for projection output.
-- [ ] Confirm backward compatibility with existing meta/help behaviors.
+- [x] Define projection shape (states, events, transitions, guards, priorities).
+- [x] Add component/meta operation surface for state machine introspection.
+- [x] Provide machine-readable output (JSON/YAML) compatible with existing formatter flow.
+- [x] Add deterministic ordering rules for projection output.
+- [x] Confirm backward compatibility with existing meta/help behaviors.
 
 ---
 
@@ -126,6 +127,29 @@ Add executable specifications for transition semantics and guard behavior.
 
 ---
 
+## SM-05: Cozy/CNCF StateMachine Integration Gap Closure
+
+Status: PLANNED
+
+### Objective
+
+Close the remaining integration gap between Cozy-generated state machine artifacts
+and CNCF/core runtime consumption boundaries.
+
+### Detailed Tasks
+
+- [ ] Complete Cozy-side state machine graph construction (`Modeler._statemachine`) beyond minimal placeholder behavior.
+- [ ] Validate complex guard coverage (composite guards, identifier guards, expression guards) against core model boundaries.
+- [ ] Validate multi-transition priority ordering scenarios, including same-priority deterministic declaration order.
+- [ ] Confirm generated transition rules map cleanly to core `org.goldenport.statemachine` structures without CNCF-side primitive redefinition.
+- [ ] Add cross-repo verification scenarios (cozy generation -> CNCF execution) for state machine transition paths.
+
+### External Progress Reference
+
+- `/Users/asami/src/dev2025/cozy/docs/journal/2026/03/statemachine-feature-update-2026-03-20.md`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - Policy-driven transition visibility and privilege checks.
@@ -138,7 +162,6 @@ Add executable specifications for transition semantics and guard behavior.
 
 Phase 4 is complete when:
 
-- SM-01 through SM-04 are marked DONE.
+- SM-01 through SM-05 are marked DONE.
 - `phase-4.md` summary checkboxes are aligned.
 - No item remains ACTIVE or SUSPENDED.
-

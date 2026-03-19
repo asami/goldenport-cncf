@@ -29,7 +29,7 @@ import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
 import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace}
 import org.goldenport.cncf.statemachine.StateMachinePlannerProvider
-import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection}
+import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
 import cats.data.NonEmptyVector
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
@@ -41,7 +41,7 @@ import scala.util.control.NonFatal
  *  version Jan.  3, 2026
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -632,7 +632,8 @@ object Component {
     val withMetaOpenApi = _ensure_operation(withMetaSchema, _default_meta_service_name, _DefaultMetaOpenApiOperation)
     val withMetaMcp = _ensure_operation(withMetaOpenApi, _default_meta_service_name, _DefaultMetaMcpOperation)
     val withMetaTree = _ensure_operation(withMetaMcp, _default_meta_service_name, _DefaultMetaTreeOperation)
-    val withMetaVersion = _ensure_operation(withMetaTree, _default_meta_service_name, _DefaultMetaVersionOperation)
+    val withMetaStateMachine = _ensure_operation(withMetaTree, _default_meta_service_name, _DefaultMetaStateMachineOperation)
+    val withMetaVersion = _ensure_operation(withMetaStateMachine, _default_meta_service_name, _DefaultMetaVersionOperation)
     val withSystemPing = _ensure_operation(withMetaVersion, _default_system_service_name, _DefaultSystemPingOperation)
     _ensure_operation(withSystemPing, _default_system_service_name, _DefaultSystemHealthOperation)
   }
@@ -761,6 +762,18 @@ object Component {
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
       Consequence.success(_DefaultMetaMcpAction(req))
+  }
+
+  private object _DefaultMetaStateMachineOperation extends OperationDefinition {
+    override val specification: OperationDefinition.Specification =
+      OperationDefinition.Specification(
+        name = "statemachine",
+        request = org.goldenport.protocol.spec.RequestDefinition(),
+        response = org.goldenport.protocol.spec.ResponseDefinition()
+      )
+
+    override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(_DefaultMetaStateMachineAction(req))
   }
 
   private object _DefaultMetaVersionOperation extends OperationDefinition {
@@ -1003,6 +1016,13 @@ object Component {
       _DefaultMetaMcpActionCall(request, core)
   }
 
+  private final case class _DefaultMetaStateMachineAction(
+    request: Request
+  ) extends QueryAction {
+    override def createCall(core: ActionCall.Core): ActionCall =
+      _DefaultMetaStateMachineActionCall(request, core)
+  }
+
   private final case class _DefaultMetaMcpActionCall(
     req: Request,
     core: ActionCall.Core
@@ -1043,6 +1063,24 @@ object Component {
           "subsystem: unknown\ncomponents: {}"
       }
       Consequence.success(OperationResponse.Scalar(text))
+    }
+  }
+
+  private final case class _DefaultMetaStateMachineActionCall(
+    req: Request,
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    override def execute(): Consequence[OperationResponse] = {
+      val rec = core.component match {
+        case Some(component) =>
+          StateMachineProjection.project(component, _meta_statemachine_selector(req))
+        case None =>
+          Record.data(
+            "type" -> "error",
+            "summary" -> "component context missing"
+          )
+      }
+      Consequence.success(OperationResponse.RecordResponse(rec))
     }
   }
 
@@ -1262,6 +1300,14 @@ object Component {
   private def _meta_mcp_selector(request: Request): Option[String] = {
     val args = _request_argument_values(request)
     args.headOption
+  }
+
+  private def _meta_statemachine_selector(request: Request): Option[String] = {
+    val args = _request_argument_values(request)
+    args.headOption match {
+      case Some(selector) => Some(selector)
+      case None => request.component
+    }
   }
 
   private def _request_wants_json(request: Request): Boolean =

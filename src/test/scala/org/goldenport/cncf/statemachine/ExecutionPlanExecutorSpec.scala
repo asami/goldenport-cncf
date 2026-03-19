@@ -53,6 +53,52 @@ final class ExecutionPlanExecutorSpec extends AnyWordSpec with Matchers {
       result shouldBe a[Consequence.Failure[_]]
       trace.toVector shouldBe Vector("exit-1", "transition")
     }
+
+    "stop immediately when exit action fails" in {
+      val trace = ArrayBuffer.empty[String]
+      val exit1 = new ResolvedAction[String, String] {
+        def run(state: String, event: String): Consequence[Unit] = {
+          val _ = (state, event)
+          trace += "exit-1"
+          Consequence.failure("exit failed")
+        }
+      }
+      val transition = _action[String, String]("transition", trace)
+      val entry1 = _action[String, String]("entry-1", trace)
+      val plan = ExecutionPlan[String, String](
+        exitActions = Vector(exit1),
+        transitionAction = Some(transition),
+        entryActions = Vector(entry1)
+      )
+
+      val result = ExecutionPlanExecutor.execute(plan, "state", "event")
+
+      result shouldBe a[Consequence.Failure[_]]
+      trace.toVector shouldBe Vector("exit-1")
+    }
+
+    "propagate entry failure after exit and transition" in {
+      val trace = ArrayBuffer.empty[String]
+      val exit1 = _action[String, String]("exit-1", trace)
+      val transition = _action[String, String]("transition", trace)
+      val entry1 = new ResolvedAction[String, String] {
+        def run(state: String, event: String): Consequence[Unit] = {
+          val _ = (state, event)
+          trace += "entry-1"
+          Consequence.failure("entry failed")
+        }
+      }
+      val plan = ExecutionPlan[String, String](
+        exitActions = Vector(exit1),
+        transitionAction = Some(transition),
+        entryActions = Vector(entry1)
+      )
+
+      val result = ExecutionPlanExecutor.execute(plan, "state", "event")
+
+      result shouldBe a[Consequence.Failure[_]]
+      trace.toVector shouldBe Vector("exit-1", "transition", "entry-1")
+    }
   }
 
   private def _action[S, E](
@@ -67,4 +113,3 @@ final class ExecutionPlanExecutorSpec extends AnyWordSpec with Matchers {
       }
     }
 }
-

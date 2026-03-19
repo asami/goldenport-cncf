@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  9, 2026
  *  version Jan. 18, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
@@ -212,6 +212,19 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
           body.startsWith("{") shouldBe true
           body.contains("\"subsystem\"") shouldBe true
           body.contains("\"components\"") shouldBe true
+        case other =>
+          fail(s"unexpected response: $other")
+      }
+    }
+
+    "return statemachine projection for meta.statemachine" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val req = CncfRuntime.parseCommandArgs(subsystem, Array("meta.statemachine")).toOption.getOrElse(fail("parse failed"))
+      subsystem.execute(req) match {
+        case Consequence.Success(Response.Yaml(value)) =>
+          val body = value.toString
+          body.contains("type: statemachine") shouldBe true
+          body.contains("transitions:") shouldBe true
         case other =>
           fail(s"unexpected response: $other")
       }

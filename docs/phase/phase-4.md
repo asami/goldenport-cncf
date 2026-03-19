@@ -26,17 +26,22 @@ This document is a progress dashboard, not a design journal.
 
 ## 4. Current Work Stack
 
-- A (ACTIVE): Define canonical state machine model and runtime boundary.
-- B (SUSPENDED): Implement transition validation hook integration into existing execution path.
-- C (SUSPENDED): Add state machine introspection projection surface.
+- A (DONE): Define canonical state machine model and runtime boundary.
+- B (ACTIVE): Align Cozy-generated transition rules with core/CNCF state machine execution boundary.
+- C (DONE): Add state machine introspection projection surface.
 - D (SUSPENDED): Prepare executable specifications for transition semantics and guard behavior.
+
+Current note:
+- Cozy modeler integration work is in progress (`working-draft`) and already emits transition rule structures and guard mapping.
+- Known remaining gap on Cozy side: full state machine graph construction in `Modeler._statemachine`.
 
 ## 5. Development Items
 
-- [ ] SM-01: Define state / transition / guard / effect model and boundary contracts.
-- [ ] SM-02: Implement transition validation hook in runtime execution path.
-- [ ] SM-03: Expose state machine introspection output for CLI/meta projection.
+- [x] SM-01: Define state / transition / guard / effect model and boundary contracts.
+- [x] SM-02: Implement transition validation hook in runtime execution path.
+- [x] SM-03: Expose state machine introspection output for CLI/meta projection.
 - [ ] SM-04: Add executable specifications for transition validity, guard checks, and failure behavior.
+- [ ] SM-05: Resolve Cozy/CNCF integration gap for full state machine graph construction and multi-transition guard/priority validation.
 
 ## 6. Next Phase Candidates
 
@@ -47,5 +52,7 @@ This document is a progress dashboard, not a design journal.
 
 - `docs/strategy/cncf-development-strategy.md`
 - `docs/phase/phase-3.md`
+- `/Users/asami/src/dev2025/cozy/docs/journal/2026/03/statemachine-feature-update-2026-03-20.md`
 - `docs/phase/phase-4-checklist.md`
 - `docs/journal/2026/03/statemachine-dsl-execution-design.md`
+- `docs/design/statemachine-boundary-contract.md`
