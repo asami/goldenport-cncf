@@ -37,8 +37,8 @@ This document is a progress dashboard, not a design journal.
 - A (DONE): Define Job domain model and lifecycle transition contract.
 - B (DONE): Implement Job query read model and projection surface.
 - C (DONE): Implement Job control commands (cancel/retry/suspend/resume).
-- D (ACTIVE): Integrate Job lifecycle with event correlation and replay boundary.
-- E (SUSPENDED): Add executable specifications and regression coverage.
+- D (DONE): Integrate Job lifecycle with event correlation and replay boundary.
+- E (ACTIVE): Add executable specifications and regression coverage.
 
 Resume hint:
 - Fix lifecycle contract first; query/control behavior depends on stable lifecycle semantics.
@@ -48,7 +48,7 @@ Resume hint:
 - [x] JM-01: Define canonical Job model (`JobId`, state, timestamps, correlation) and lifecycle transitions.
 - [x] JM-02: Implement Job query read model (status/trace/timeline) and result retrieval API (sync-equivalent response shape).
 - [x] JM-03: Implement Job control command model (`cancel`, `retry`, `suspend`, `resume`) and command execution mode (`async default`, `sync option`) with policy checks.
-- [ ] JM-04: Integrate Job/event correlation and replay interaction rules.
+- [x] JM-04: Integrate Job/event correlation and replay interaction rules.
 - [ ] JM-05: Add executable specifications for lifecycle transitions, query consistency, control semantics, async/sync command behavior, and failure paths.
 
 ## 6. Inputs from Previous Phases

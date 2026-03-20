@@ -68,10 +68,16 @@ final case class CmlSubscriptionDefinition(
   selector: Option[String] = None,
   actionName: String,
   declaredTargetUpperBound: Int = 1,
-  activation: Option[EntityActivationMode] = None
+  activation: Option[EntityActivationMode] = None,
+  continuationMode: Option[EventContinuationMode] = None
 ) {
   def matches(event: ReceptionDomainEvent): Boolean =
     eventName == event.name
+}
+
+enum EventContinuationMode {
+  case SameJob
+  case NewJob
 }
 
 final case class ReceptionInput(
@@ -177,6 +183,12 @@ object EventReception {
     val EventName = "cncf.event.name"
     val EventKind = "cncf.event.kind"
     val EventOccurredAt = "cncf.event.occurredAt"
+    val EventPersistent = "cncf.event.persistent"
+    val ContinuationMode = "cncf.event.continuationMode"
+    val Replay = "cncf.event.replay"
+    val ReplayEventId = "cncf.event.replayEventId"
+    val ReplaySequence = "cncf.event.replaySequence"
+    val ReplayStream = "cncf.event.replayStream"
 
     val TraceId = "cncf.context.traceId"
     val SpanId = "cncf.context.spanId"
@@ -198,6 +210,10 @@ object EventReception {
     val LegacyActionId = "actionId"
     val LegacyParentJobId = "parentJobId"
     val LegacyCausationId = "causationId"
+    val LegacyReplay = "replay"
+    val LegacyReplayEventId = "replayEventId"
+    val LegacyReplaySequence = "replaySequence"
+    val LegacyReplayStream = "replayStream"
   }
 
   def default(
@@ -240,6 +256,8 @@ object EventReception {
     private val _listeners = ArrayBuffer.empty[StateMachineEventListener]
     private val _directlisteners = ArrayBuffer.empty[DirectEventListener]
     private val _entitysubscriptions = ArrayBuffer.empty[EntityEventSubscription]
+    private val _replay_seen_ids = scala.collection.mutable.HashSet.empty[String]
+    private val _replay_last_sequence = scala.collection.mutable.HashMap.empty[String, Long]
 
     def register(definition: CmlEventDefinition): Unit = synchronized {
       _definitions += definition
@@ -294,6 +312,12 @@ object EventReception {
       policy: EventPolicyEngine,
       ctx: Option[ExecutionContext]
     ): Consequence[ReceptionResult] = {
+      _replay_guard(input) match {
+        case Some(guarded) =>
+          return Consequence.success(guarded)
+        case None =>
+          ()
+      }
       val byname = definitions.filter(_.name == input.name)
       if (byname.isEmpty)
         _failure(s"unknown event: ${input.name}")
@@ -313,6 +337,9 @@ object EventReception {
             matched.exists(d => d.category == CmlEventCategory.ActionEvent && d.actionName.nonEmpty)
           val hasnonaction =
             matched.exists(_.category == CmlEventCategory.NonActionEvent)
+          if (_requires_explicit_error_boundary(input, matched) && !_has_explicit_boundary_listener(matched))
+            _failure(s"error/compensation boundary requires explicit subscription: ${input.name}/${input.kind}")
+          else
           if (!hasactionbinding && !hasnonaction)
             _failure(s"subscription mismatch: ${input.name}/${input.kind}")
           else {
@@ -398,10 +425,114 @@ object EventReception {
       val eventattrs = Map(
         StandardAttribute.EventName -> input.name,
         StandardAttribute.EventKind -> input.kind,
-        StandardAttribute.EventOccurredAt -> occurredat.toString
+        StandardAttribute.EventOccurredAt -> occurredat.toString,
+        StandardAttribute.EventPersistent -> input.persistent.toString
       )
       val contextattrs = ctx.map(_standard_context_attributes).getOrElse(Map.empty)
       input.attributes ++ eventattrs ++ contextattrs
+    }
+
+    private def _replay_guard(
+      input: ReceptionInput
+    ): Option[ReceptionResult] = {
+      if (!_is_replay(input.attributes))
+        None
+      else {
+        val replayid = _replay_event_id(input.attributes)
+        val replayseq = _replay_sequence(input.attributes)
+        val replaystream = _replay_stream(input.attributes)
+        synchronized {
+          replayid match {
+            case Some(id) if _replay_seen_ids.contains(id) =>
+              Some(
+                ReceptionResult(
+                  outcome = ReceptionOutcome.Dropped,
+                  dispatchedCount = 0,
+                  persisted = false,
+                  reason = Some("replay-duplicate")
+                )
+              )
+            case _ =>
+              val outoforder = replayseq.exists { seq =>
+                _replay_last_sequence.get(replaystream).exists(last => seq <= last)
+              }
+              if (outoforder)
+                Some(
+                  ReceptionResult(
+                    outcome = ReceptionOutcome.Dropped,
+                    dispatchedCount = 0,
+                    persisted = false,
+                    reason = Some("replay-out-of-order")
+                  )
+                )
+              else {
+                replayid.foreach(_replay_seen_ids.add)
+                replayseq.foreach(seq => _replay_last_sequence.update(replaystream, seq))
+                None
+              }
+          }
+        }
+      }
+    }
+
+    private def _is_replay(
+      attributes: Map[String, String]
+    ): Boolean =
+      _read_boolean(attributes, Vector(
+        StandardAttribute.Replay,
+        StandardAttribute.LegacyReplay
+      ))
+
+    private def _replay_event_id(
+      attributes: Map[String, String]
+    ): Option[String] =
+      _read_first(attributes, Vector(
+        StandardAttribute.ReplayEventId,
+        StandardAttribute.LegacyReplayEventId
+      ))
+
+    private def _replay_sequence(
+      attributes: Map[String, String]
+    ): Option[Long] =
+      _read_first(attributes, Vector(
+        StandardAttribute.ReplaySequence,
+        StandardAttribute.LegacyReplaySequence
+      )).flatMap(x => scala.util.Try(x.toLong).toOption)
+
+    private def _replay_stream(
+      attributes: Map[String, String]
+    ): String =
+      _read_first(attributes, Vector(
+        StandardAttribute.ReplayStream,
+        StandardAttribute.LegacyReplayStream
+      )).getOrElse("default")
+
+    private def _read_first(
+      attributes: Map[String, String],
+      keys: Vector[String]
+    ): Option[String] =
+      keys.iterator.flatMap(attributes.get).map(_.trim).find(_.nonEmpty)
+
+    private def _read_boolean(
+      attributes: Map[String, String],
+      keys: Vector[String]
+    ): Boolean =
+      _read_first(attributes, keys).exists { v =>
+        v.equalsIgnoreCase("true") || v == "1" || v.equalsIgnoreCase("yes")
+      }
+
+    private def _requires_explicit_error_boundary(
+      input: ReceptionInput,
+      matched: Vector[CmlEventDefinition]
+    ): Boolean = {
+      val kinds = (input.kind +: matched.flatMap(_.kind)).map(_.toLowerCase)
+      kinds.exists(k => k.contains("error") || k.contains("compensation"))
+    }
+
+    private def _has_explicit_boundary_listener(
+      matched: Vector[CmlEventDefinition]
+    ): Boolean = synchronized {
+      _subscriptions.nonEmpty || _listeners.nonEmpty || _directlisteners.nonEmpty || matched.exists(_.actionName.nonEmpty)
     }
 
     private def _standard_context_attributes(
@@ -657,16 +788,98 @@ object EventReception {
               case None =>
                 attrs0
             }
-            val evt = event.copy(attributes = attrs1)
-            dispatcher match {
-              case d: SecureActionCallDispatcher =>
-                d.dispatchActionAuthorized(s.actionName, evt).map(_ => count + 1)
-              case _ =>
-                dispatcher.dispatchAction(s.actionName, evt).map(_ => count + 1)
-            }
+            val mode = _resolve_continuation_mode(s, event)
+            val evt = event.copy(attributes = attrs1 + (StandardAttribute.ContinuationMode -> _continuation_mode_name(mode)))
+            _dispatch_event_action(s.actionName, evt, mode).map(_ => count + 1)
           }
         }
       }
+
+    private def _resolve_continuation_mode(
+      subscription: CmlSubscriptionDefinition,
+      event: ReceptionDomainEvent
+    ): EventContinuationMode =
+      subscription.continuationMode
+        .orElse(_continuation_mode_from_attributes(event.attributes))
+        .getOrElse(EventContinuationMode.SameJob)
+
+    private def _continuation_mode_from_attributes(
+      attributes: Map[String, String]
+    ): Option[EventContinuationMode] =
+      _read_first(attributes, Vector(StandardAttribute.ContinuationMode)).flatMap { raw =>
+        raw.trim.toLowerCase match {
+          case "same-job" | "samejob" => Some(EventContinuationMode.SameJob)
+          case "new-job" | "newjob" => Some(EventContinuationMode.NewJob)
+          case _ => None
+        }
+      }
+
+    private def _continuation_mode_name(
+      mode: EventContinuationMode
+    ): String =
+      mode match {
+        case EventContinuationMode.SameJob => "same-job"
+        case EventContinuationMode.NewJob => "new-job"
+      }
+
+    private def _dispatch_event_action(
+      actionname: String,
+      event: ReceptionDomainEvent,
+      mode: EventContinuationMode
+    )(using ctx: ExecutionContext): Consequence[Unit] =
+      mode match {
+        case EventContinuationMode.SameJob =>
+          dispatcher match {
+            case d: SecureActionCallDispatcher =>
+              d.dispatchActionAuthorized(actionname, event)
+            case _ =>
+              dispatcher.dispatchAction(actionname, event)
+          }
+        case EventContinuationMode.NewJob =>
+          jobEngine match {
+            case Some(engine) =>
+              val option = JobSubmitOption(
+                persistence =
+                  if (_read_boolean(event.attributes, Vector(StandardAttribute.EventPersistent)))
+                    JobPersistencePolicy.Persistent
+                  else
+                    JobPersistencePolicy.Ephemeral,
+                requestSummary = Some(s"event.continuation:${event.name}"),
+                parameters = event.attributes ++ Map(
+                  "event.name" -> event.name,
+                  "event.kind" -> event.kind,
+                  "continuation.mode" -> _continuation_mode_name(mode)
+                ),
+                executionNotes = Vector("event continuation via new-job")
+              )
+              val _ = engine.submit(List(_DispatchActionTask(actionname, event)), ctx, option)
+              Consequence.unit
+            case None =>
+              _failure("new-job continuation requires job engine")
+          }
+      }
+
+    private final case class _DispatchActionTask(
+      actionName: String,
+      event: ReceptionDomainEvent
+    ) extends JobTask {
+      val actionId: ActionId = ActionId.generate()
+      def run(ctx: ExecutionContext): TaskOutcome = {
+        given ExecutionContext = ctx
+        val dispatched = dispatcher match {
+          case d: SecureActionCallDispatcher =>
+            d.dispatchActionAuthorized(actionName, event)
+          case _ =>
+            dispatcher.dispatchAction(actionName, event)
+        }
+        dispatched match {
+          case Consequence.Success(_) =>
+            TaskSucceeded(OperationResponse.Scalar("event.dispatched"))
+          case Consequence.Failure(c) =>
+            org.goldenport.cncf.job.TaskFailed(c)
+        }
+      }
+    }
 
     private def _selector_matches(
       selector: Option[String],

@@ -536,6 +536,220 @@ final class EventReceptionSpec
       attrs.get(EventReception.StandardAttribute.EventName) shouldBe Some("context.bound.event")
       attrs.get(EventReception.StandardAttribute.EventKind) shouldBe Some("accepted")
     }
+
+    "route subscription in new-job continuation mode with parent job linkage" in {
+      Given("subscription with explicit new-job continuation")
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val jobengine = org.goldenport.cncf.job.InMemoryJobEngine.create()
+      val calls = ArrayBuffer.empty[String]
+      val parentjobs = ArrayBuffer.empty[Option[String]]
+      val levels = ArrayBuffer.empty[SecurityLevel]
+      val attrs = ArrayBuffer.empty[Map[String, String]]
+      val dispatcher = new _SecureRecordingDispatcher2(calls, levels, parentjobs, attrs)
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = dispatcher,
+        ingressSecurityResolver = IngressSecurityResolver.default,
+        jobEngine = Some(jobengine)
+      )
+      reception.register(
+        CmlEventDefinition(
+          name = "order.approved",
+          category = CmlEventCategory.NonActionEvent,
+          kind = Some("approved")
+        )
+      )
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "order-fulfill",
+          eventName = "order.approved",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "order.fulfill",
+          continuationMode = Some(EventContinuationMode.NewJob)
+        )
+      )
+      val base = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+      val parentjobid = JobId.generate()
+      val parentctx = ExecutionContext.withJobContext(
+        base,
+        JobContext(
+          jobId = Some(parentjobid),
+          taskId = Some(TaskId.generate()),
+          actionId = Some(ActionId.generate())
+        )
+      )
+      given ExecutionContext = parentctx
+
+      When("event is received via authorized entry")
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "order.approved",
+          kind = "approved",
+          attributes = Map("targetId" -> "o1")
+        )
+      )
+      _await(() => calls.nonEmpty)
+
+      Then("dispatch is executed through a new Job task with parent linkage")
+      result shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = false
+        )
+      )
+      calls.toVector shouldBe Vector("order.fulfill")
+      levels.nonEmpty shouldBe true
+      parentjobs.flatten should contain(parentjobid.print)
+      attrs.head.get(EventReception.StandardAttribute.ContinuationMode) shouldBe Some("new-job")
+      attrs.head.get(EventReception.StandardAttribute.CausationId).nonEmpty shouldBe true
+    }
+
+    "drop duplicated replay event deterministically" in {
+      Given("replay-tagged event with replayEventId")
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val calls = ArrayBuffer.empty[String]
+      val reception = EventReception.default(bus, new _RecordingDispatcher(calls))
+      reception.register(
+        CmlEventDefinition(
+          name = "inventory.replayed",
+          category = CmlEventCategory.NonActionEvent,
+          kind = Some("replayed")
+        )
+      )
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "inventory-sync",
+          eventName = "inventory.replayed",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "inventory.sync"
+        )
+      )
+
+      When("the same replay event id is received twice")
+      val first = reception.receive(
+        ReceptionInput(
+          name = "inventory.replayed",
+          kind = "replayed",
+          attributes = Map(
+            "targetId" -> "i1",
+            EventReception.StandardAttribute.Replay -> "true",
+            EventReception.StandardAttribute.ReplayEventId -> "evt-1",
+            EventReception.StandardAttribute.ReplaySequence -> "1"
+          )
+        )
+      )
+      val second = reception.receive(
+        ReceptionInput(
+          name = "inventory.replayed",
+          kind = "replayed",
+          attributes = Map(
+            "targetId" -> "i1",
+            EventReception.StandardAttribute.Replay -> "true",
+            EventReception.StandardAttribute.ReplayEventId -> "evt-1",
+            EventReception.StandardAttribute.ReplaySequence -> "2"
+          )
+        )
+      )
+
+      Then("the second event is dropped as replay-duplicate")
+      first shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = false
+        )
+      )
+      second shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Dropped,
+          dispatchedCount = 0,
+          persisted = false,
+          reason = Some("replay-duplicate")
+        )
+      )
+      calls.toVector shouldBe Vector("inventory.sync")
+    }
+
+    "drop out-of-order replay event deterministically" in {
+      Given("replay-tagged events in the same replay stream")
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val calls = ArrayBuffer.empty[String]
+      val reception = EventReception.default(bus, new _RecordingDispatcher(calls))
+      reception.register(
+        CmlEventDefinition(
+          name = "billing.replayed",
+          category = CmlEventCategory.NonActionEvent,
+          kind = Some("replayed")
+        )
+      )
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "billing-sync",
+          eventName = "billing.replayed",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "billing.sync"
+        )
+      )
+
+      When("lower sequence arrives after higher sequence")
+      val first = reception.receive(
+        ReceptionInput(
+          name = "billing.replayed",
+          kind = "replayed",
+          attributes = Map(
+            "targetId" -> "b1",
+            EventReception.StandardAttribute.Replay -> "true",
+            EventReception.StandardAttribute.ReplayEventId -> "evt-10",
+            EventReception.StandardAttribute.ReplayStream -> "stream-a",
+            EventReception.StandardAttribute.ReplaySequence -> "10"
+          )
+        )
+      )
+      val second = reception.receive(
+        ReceptionInput(
+          name = "billing.replayed",
+          kind = "replayed",
+          attributes = Map(
+            "targetId" -> "b1",
+            EventReception.StandardAttribute.Replay -> "true",
+            EventReception.StandardAttribute.ReplayEventId -> "evt-9",
+            EventReception.StandardAttribute.ReplayStream -> "stream-a",
+            EventReception.StandardAttribute.ReplaySequence -> "9"
+          )
+        )
+      )
+
+      Then("second event is dropped as replay-out-of-order")
+      first shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = false
+        )
+      )
+      second shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Dropped,
+          dispatchedCount = 0,
+          persisted = false,
+          reason = Some("replay-out-of-order")
+        )
+      )
+      calls.toVector shouldBe Vector("billing.sync")
+    }
   }
 
   private final class _RecordingDispatcher(
@@ -566,6 +780,49 @@ final class EventReceptionSpec
       calls += actionName
       levels += ctx.security.level
       Consequence.unit
+    }
+  }
+
+  private final class _SecureRecordingDispatcher2(
+    calls: ArrayBuffer[String],
+    levels: ArrayBuffer[SecurityLevel],
+    parentjobs: ArrayBuffer[Option[String]],
+    attrs: ArrayBuffer[Map[String, String]]
+  ) extends SecureActionCallDispatcher {
+    def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
+      calls += actionName
+      event match {
+        case e: ReceptionDomainEvent => attrs += e.attributes
+        case _ => ()
+      }
+      Consequence.unit
+    }
+
+    def dispatchActionAuthorized(
+      actionName: String,
+      event: DomainEvent
+    )(using ctx: ExecutionContext): Consequence[Unit] = {
+      calls += actionName
+      levels += ctx.security.level
+      parentjobs += ctx.jobContext.parentJobId.map(_.print)
+      event match {
+        case e: ReceptionDomainEvent => attrs += e.attributes
+        case _ => ()
+      }
+      Consequence.unit
+    }
+  }
+
+  private def _await(
+    ready: () => Boolean,
+    timeoutMillis: Long = 3000L
+  ): Unit = {
+    val deadline = System.currentTimeMillis() + timeoutMillis
+    while (!ready() && System.currentTimeMillis() < deadline) {
+      Thread.sleep(10L)
+    }
+    if (!ready()) {
+      fail("timeout waiting async event dispatch")
     }
   }
 

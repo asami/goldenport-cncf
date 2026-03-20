@@ -132,7 +132,7 @@ Implement control-side commands: cancel, retry, suspend, resume.
 
 ## JM-04: Job/Event Correlation and Replay Boundary
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -140,19 +140,19 @@ Define and implement Job correlation behavior with event and replay flows.
 
 ### Detailed Tasks
 
-- [ ] Define correlation keys and matching rules between Job and events.
-- [ ] Ensure event-triggered execution is also represented under Job management lifecycle.
-- [ ] Implement event continuation model:
+- [x] Define correlation keys and matching rules between Job and events.
+- [x] Ensure event-triggered execution is also represented under Job management lifecycle.
+- [x] Implement event continuation model:
   - same-job continuation (synchronous chain)
   - new-job continuation (asynchronous fork)
-- [ ] Define and persist/propagate event linkage metadata:
+- [x] Define and persist/propagate event linkage metadata:
   - correlationId
   - causationId
   - parentJobId (optional)
-- [ ] Define replay interaction policy for Job state reconstruction/update.
-- [ ] Define handling for error events and compensation trigger boundaries.
-- [ ] Ensure deterministic behavior under repeated/replayed events.
-- [ ] Align with EventStore/EventBus contracts from Phase 5.
+- [x] Define replay interaction policy for Job state reconstruction/update.
+- [x] Define handling for error events and compensation trigger boundaries.
+- [x] Ensure deterministic behavior under repeated/replayed events.
+- [x] Align with EventStore/EventBus contracts from Phase 5.
 
 ### Inputs
 
@@ -164,7 +164,7 @@ Define and implement Job correlation behavior with event and replay flows.
 
 ## JM-05: Executable Specifications (Job CQRS)
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 
