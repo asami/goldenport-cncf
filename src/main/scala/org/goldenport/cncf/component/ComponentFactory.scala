@@ -219,22 +219,18 @@ final class ComponentFactory(
     _entity_collection_names(component).distinct.foreach { name =>
       val storeRealm = _create_store_realm(name, storesnapshot)
       var storage = EntityStorage(storeRealm)
+      val legacymemoryplan = _legacy_memory_plan(name)
       val descriptor = EntityDescriptor(
         collectionId = org.goldenport.cncf.datatype.EntityCollectionId("sys", "sys", name),
-        plan = EntityRuntimePlan(
-          entityName = name,
-          memoryPolicy = EntityMemoryPolicy.LoadToMemory,
-          workingSet = None,
-          partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
-          maxPartitions = 1,
-          maxEntitiesPerPartition = 0
-        ),
+        plan = legacymemoryplan,
         persistent = _entity_persistent_any
       )
 
       val memoryRealm = new PartitionedMemoryRealm[Any](
-        strategy = PartitionStrategy.byOrganizationMonthUTC,
-        idOf = _entity_id_of_any
+        strategy = legacymemoryplan.partitionStrategy,
+        idOf = _entity_id_of_any,
+        maxPartitions = legacymemoryplan.maxPartitions,
+        maxEntitiesPerPartition = legacymemoryplan.maxEntitiesPerPartition
       )
       storage = storage.copy(memoryRealm = Some(memoryRealm))
 
@@ -446,7 +442,24 @@ final class ComponentFactory(
   private def _default_entity_runtime_plans(
     component: Component
   ): Vector[EntityRuntimePlan[Any]] =
-    Vector.empty
+    component match {
+      case m: EntityRuntimePlanProvider =>
+        m.entityRuntimePlans
+      case _ =>
+        Vector.empty
+    }
+
+  private def _legacy_memory_plan(
+    entityname: String
+  ): EntityRuntimePlan[Any] =
+    EntityRuntimePlan(
+      entityName = entityname,
+      memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+      workingSet = None,
+      partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+      maxPartitions = 64,
+      maxEntitiesPerPartition = 10000
+    )
 
   // Transitional metadata hook:
   // transition definitions are not yet bound from Cozy/simplemodeling state machine model.
