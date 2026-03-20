@@ -112,7 +112,7 @@ Implement EventBus runtime flow aligned with ActionCall-centric execution.
 
 ## EV-04: Policy-Driven Visibility and Privilege Checks
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -120,11 +120,11 @@ Apply policy/privilege checks to transition/event visibility and execution-facin
 
 ### Detailed Tasks
 
-- [ ] Define policy decision points for introspection projection surfaces.
-- [ ] Define policy decision points for execution entry points (publish/dispatch/replay).
-- [ ] Implement privilege checks using existing execution context boundaries.
-- [ ] Define default-deny/default-allow behavior per surface and document rationale.
-- [ ] Add deterministic error/observation mapping for policy denial.
+- [x] Define policy decision points for introspection projection surfaces.
+- [x] Define policy decision points for execution entry points (publish/dispatch/replay).
+- [x] Implement privilege checks using existing execution context boundaries.
+- [x] Define default-deny/default-allow behavior per surface and document rationale.
+- [x] Add deterministic error/observation mapping for policy denial.
 
 ### Inputs
 
@@ -134,7 +134,7 @@ Apply policy/privilege checks to transition/event visibility and execution-facin
 
 ## EV-05: Executable Specifications (Event Lifecycle / Replay / Policy)
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 

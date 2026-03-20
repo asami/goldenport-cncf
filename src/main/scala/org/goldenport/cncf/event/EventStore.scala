@@ -3,6 +3,7 @@ package org.goldenport.cncf.event
 import java.time.Instant
 import scala.collection.mutable
 import org.goldenport.Consequence
+import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * EventStore baseline for EV-02.
@@ -24,6 +25,18 @@ trait EventStore {
   def load(id: EventId): Consequence[Option[EventRecord]]
   def query(q: EventStore.Query): Consequence[Vector[EventRecord]]
   def replay(q: EventStore.Query): Consequence[Vector[EventRecord]]
+
+  final def queryVisible(
+    q: EventStore.Query,
+    policy: EventPolicyEngine = EventPolicyEngine.default
+  )(using ExecutionContext): Consequence[Vector[EventRecord]] =
+    policy.authorizeIntrospection.flatMap(_ => query(q))
+
+  final def replayAuthorized(
+    q: EventStore.Query,
+    policy: EventPolicyEngine = EventPolicyEngine.default
+  )(using ExecutionContext): Consequence[Vector[EventRecord]] =
+    policy.authorizeReplay.flatMap(_ => replay(q))
 }
 
 enum EventLane(val value: String) {

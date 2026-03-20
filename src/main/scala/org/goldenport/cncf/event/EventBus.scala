@@ -2,6 +2,7 @@ package org.goldenport.cncf.event
 
 import scala.collection.mutable
 import org.goldenport.Consequence
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.provisional.observation.Taxonomy
 
@@ -47,10 +48,18 @@ final case class EventPublishResult(
 trait EventBus {
   def register(subscription: EventSubscription): Unit
   def subscriptions: Vector[EventSubscription]
+  def subscriptionsVisible(
+    policy: EventPolicyEngine = EventPolicyEngine.default
+  )(using ExecutionContext): Consequence[Vector[EventSubscription]]
   def publish(
     event: DomainEvent,
     option: EventPublishOption = EventPublishOption()
   ): Consequence[EventPublishResult]
+  def publishAuthorized(
+    event: DomainEvent,
+    option: EventPublishOption = EventPublishOption(),
+    policy: EventPolicyEngine = EventPolicyEngine.default
+  )(using ExecutionContext): Consequence[EventPublishResult]
 }
 
 object EventBus {
@@ -87,9 +96,32 @@ final class DefaultEventBus(
     _subscriptions.toVector.map(_.subscription)
   }
 
+  def subscriptionsVisible(
+    policy: EventPolicyEngine = EventPolicyEngine.default
+  )(using ctx: ExecutionContext): Consequence[Vector[EventSubscription]] =
+    policy.authorizeIntrospection.map(_ => subscriptions)
+
   def publish(
     event: DomainEvent,
     option: EventPublishOption = EventPublishOption()
+  ): Consequence[EventPublishResult] = {
+    _publish(event, option)
+  }
+
+  def publishAuthorized(
+    event: DomainEvent,
+    option: EventPublishOption = EventPublishOption(),
+    policy: EventPolicyEngine = EventPolicyEngine.default
+  )(using ctx: ExecutionContext): Consequence[EventPublishResult] =
+    policy.authorizePublish.flatMap { _ =>
+      policy.authorizeDispatch.flatMap { _ =>
+        _publish(event, option)
+      }
+    }
+
+  private def _publish(
+    event: DomainEvent,
+    option: EventPublishOption
   ): Consequence[EventPublishResult] = {
     val name = _event_name(event)
     val kind = _event_kind(event)
