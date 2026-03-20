@@ -3,9 +3,11 @@ package org.goldenport.cncf.event
 import java.time.Instant
 import scala.collection.mutable.ArrayBuffer
 import org.goldenport.Consequence
+import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datatype.EntityId
 import org.goldenport.cncf.entity.runtime.EntitySpace
+import org.goldenport.cncf.job.{ActionId, JobEngine, JobPersistencePolicy, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded}
 import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.provisional.observation.Taxonomy
@@ -171,13 +173,46 @@ trait EventReception {
 }
 
 object EventReception {
+  object StandardAttribute {
+    val EventName = "cncf.event.name"
+    val EventKind = "cncf.event.kind"
+    val EventOccurredAt = "cncf.event.occurredAt"
+
+    val TraceId = "cncf.context.traceId"
+    val SpanId = "cncf.context.spanId"
+    val CorrelationId = "cncf.context.correlationId"
+
+    val JobId = "cncf.context.jobId"
+    val TaskId = "cncf.context.taskId"
+    val ActionId = "cncf.context.actionId"
+    val ParentJobId = "cncf.context.parentJobId"
+    val CausationId = "cncf.context.causationId"
+
+    val SecurityLevel = "cncf.context.securityLevel"
+    val PrincipalId = "cncf.context.principalId"
+
+    val LegacyTraceId = "traceId"
+    val LegacyCorrelationId = "correlationId"
+    val LegacyJobId = "jobId"
+    val LegacyTaskId = "taskId"
+    val LegacyActionId = "actionId"
+    val LegacyParentJobId = "parentJobId"
+    val LegacyCausationId = "causationId"
+  }
+
   def default(
     eventBus: EventBus,
     dispatcher: ActionCallDispatcher,
     ingressSecurityResolver: IngressSecurityResolver = IngressSecurityResolver.default,
     entitySpace: Option[EntitySpace] = None,
     entitySubscriptionLimit: EntitySubscriptionLimit = EntitySubscriptionLimit(),
-    workingSetEntities: Set[String] = Set.empty
+    workingSetEntities: Set[String] = Set.empty,
+    // NOTE:
+    // no-match Ephemeral Job materialization requires jobEngine.
+    // If jobEngine is None, no-match path remains "Dropped" only.
+    // Keep this explicit to support future direct EventReception.default(...) usage.
+    jobEngine: Option[JobEngine] = None,
+    onNoMatch: Option[(ReceptionInput, Option[ExecutionContext]) => Consequence[Unit]] = None
   ): EventReception =
     new DefaultEventReception(
       eventBus,
@@ -185,7 +220,9 @@ object EventReception {
       ingressSecurityResolver,
       entitySpace,
       entitySubscriptionLimit,
-      workingSetEntities
+      workingSetEntities,
+      jobEngine,
+      onNoMatch
     )
 
   private final class DefaultEventReception(
@@ -194,7 +231,9 @@ object EventReception {
     ingressSecurityResolver: IngressSecurityResolver,
     entitySpace: Option[EntitySpace],
     entitySubscriptionLimit: EntitySubscriptionLimit,
-    workingSetEntities: Set[String]
+    workingSetEntities: Set[String],
+    jobEngine: Option[JobEngine],
+    onNoMatch: Option[(ReceptionInput, Option[ExecutionContext]) => Consequence[Unit]]
   ) extends EventReception {
     private val _definitions = ArrayBuffer.empty[CmlEventDefinition]
     private val _subscriptions = ArrayBuffer.empty[CmlSubscriptionDefinition]
@@ -261,14 +300,14 @@ object EventReception {
       else {
         val matched = byname.filter(_.matches(input))
         if (matched.isEmpty)
-          Consequence.success(
+          _on_nomatch(input, ctx).map { _ =>
             ReceptionResult(
               outcome = ReceptionOutcome.Dropped,
               dispatchedCount = 0,
               persisted = false,
               reason = Some("non-target")
             )
-          )
+          }
         else {
           val hasactionbinding =
             matched.exists(d => d.category == CmlEventCategory.ActionEvent && d.actionName.nonEmpty)
@@ -277,11 +316,13 @@ object EventReception {
           if (!hasactionbinding && !hasnonaction)
             _failure(s"subscription mismatch: ${input.name}/${input.kind}")
           else {
+            val occurredat = Instant.now()
             val event = ReceptionDomainEvent(
               name = input.name,
               kind = input.kind,
               payload = input.payload,
-              attributes = input.attributes
+              attributes = _effective_attributes(input, ctx, occurredat),
+              occurredAt = occurredat
             )
             val option = EventPublishOption(persistent = input.persistent)
             val publish = ctx.map { x =>
@@ -293,20 +334,115 @@ object EventReception {
             publish.flatMap { r =>
               _dispatch_to_listeners(event, matched, ctx).flatMap { basecount =>
                 _dispatch_to_entity_subscriptions(event, ctx).flatMap { entitycount =>
-                  _dispatch_to_subscriptions(event, ctx).map { subscriptioncount =>
+                  _dispatch_to_subscriptions(event, ctx).flatMap { subscriptioncount =>
                     val count = basecount + entitycount + subscriptioncount
-                    ReceptionResult(
-                      outcome = if (count > 0) ReceptionOutcome.Routed else ReceptionOutcome.Dropped,
-                      dispatchedCount = count,
-                      persisted = r.persisted,
-                      reason = if (count > 0) None else Some("non-target")
-                    )
+                    if (count > 0) {
+                      Consequence.success(
+                        ReceptionResult(
+                          outcome = ReceptionOutcome.Routed,
+                          dispatchedCount = count,
+                          persisted = r.persisted,
+                          reason = None
+                        )
+                      )
+                    } else {
+                      _on_nomatch(input, ctx).map { _ =>
+                        ReceptionResult(
+                          outcome = ReceptionOutcome.Dropped,
+                          dispatchedCount = 0,
+                          persisted = r.persisted,
+                          reason = Some("non-target")
+                        )
+                      }
+                    }
                   }
                 }
               }
             }
           }
         }
+      }
+    }
+
+    private def _on_nomatch(
+      input: ReceptionInput,
+      ctx: Option[ExecutionContext]
+    ): Consequence[Unit] =
+      onNoMatch
+        .orElse(_default_nomatch_materializer)
+        .map(_(input, ctx))
+        .getOrElse(Consequence.unit)
+
+    private def _default_nomatch_materializer: Option[(ReceptionInput, Option[ExecutionContext]) => Consequence[Unit]] =
+      jobEngine.map { engine =>
+        (input, ctxopt) =>
+          val ctx = ctxopt.getOrElse(ExecutionContext.create())
+          val option = JobSubmitOption(
+            persistence = JobPersistencePolicy.Ephemeral,
+            requestSummary = Some(s"event.reception.nomatch:${input.name}"),
+            parameters = input.attributes ++ Map(
+              "event.name" -> input.name,
+              "event.kind" -> input.kind
+            ),
+            executionNotes = Vector("event no matched subscription")
+          )
+          val _ = engine.submit(List(_NoMatchEventTask(input)), ctx, option)
+          Consequence.unit
+      }
+
+    private def _effective_attributes(
+      input: ReceptionInput,
+      ctx: Option[ExecutionContext],
+      occurredat: Instant
+    ): Map[String, String] = {
+      val eventattrs = Map(
+        StandardAttribute.EventName -> input.name,
+        StandardAttribute.EventKind -> input.kind,
+        StandardAttribute.EventOccurredAt -> occurredat.toString
+      )
+      val contextattrs = ctx.map(_standard_context_attributes).getOrElse(Map.empty)
+      input.attributes ++ eventattrs ++ contextattrs
+    }
+
+    private def _standard_context_attributes(
+      ctx: ExecutionContext
+    ): Map[String, String] = {
+      val ob = ctx.observability
+      val job = ctx.jobContext
+      val causationid = job.causationId
+        .orElse(job.actionId.map(_.print))
+        .orElse(ob.correlationId.map(_.print))
+        .getOrElse("unknown")
+      val pairs = Vector(
+        Some(StandardAttribute.TraceId -> ob.traceId.print),
+        ob.spanId.map(x => StandardAttribute.SpanId -> x.print),
+        ob.correlationId.map(x => StandardAttribute.CorrelationId -> x.print),
+        job.jobId.map(x => StandardAttribute.JobId -> x.print),
+        job.taskId.map(x => StandardAttribute.TaskId -> x.print),
+        job.actionId.map(x => StandardAttribute.ActionId -> x.print),
+        job.parentJobId.map(x => StandardAttribute.ParentJobId -> x.print),
+        Some(StandardAttribute.CausationId -> causationid),
+        Some(StandardAttribute.SecurityLevel -> ctx.security.level.value),
+        Some(StandardAttribute.PrincipalId -> ctx.security.principal.id.value),
+        Some(StandardAttribute.LegacyTraceId -> ob.traceId.print),
+        ob.correlationId.map(x => StandardAttribute.LegacyCorrelationId -> x.print),
+        job.jobId.map(x => StandardAttribute.LegacyJobId -> x.print),
+        job.taskId.map(x => StandardAttribute.LegacyTaskId -> x.print),
+        job.actionId.map(x => StandardAttribute.LegacyActionId -> x.print),
+        job.parentJobId.map(x => StandardAttribute.LegacyParentJobId -> x.print),
+        Some(StandardAttribute.LegacyCausationId -> causationid)
+      )
+      pairs.collect { case Some((k, v)) if k.nonEmpty && v.nonEmpty => k -> v }.toMap
+    }
+
+    private final case class _NoMatchEventTask(
+      input: ReceptionInput
+    ) extends JobTask {
+      val actionId: ActionId = ActionId.generate()
+      def run(ctx: ExecutionContext): TaskOutcome = {
+        val _ = ctx
+        val _ = input
+        TaskSucceeded(OperationResponse.Scalar("event.no-match"))
       }
     }
 

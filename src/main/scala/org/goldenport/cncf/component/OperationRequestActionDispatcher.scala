@@ -34,15 +34,14 @@ final class OperationRequestActionDispatcher(
   def dispatchParsedAction(
     p: ParsedEventAction
   ): Consequence[Unit] = {
-    val call = logic.createActionCall(p.action)
-    logic.execute(call).map(_ => ())
+    val ec = logic.executionContext()
+    logic.executeAction(p.action, ec).map(_ => ())
   }
 
   def dispatchParsedActionAuthorized(
     p: ParsedEventAction
   )(using ctx: ExecutionContext): Consequence[Unit] = {
-    val call = logic.createActionCall(p.action, ctx)
-    logic.execute(call).map(_ => ())
+    logic.executeAction(p.action, ctx).map(_ => ())
   }
 
   private def _to_request(

@@ -14,7 +14,7 @@ import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.test.matchers.ConsequenceMatchers
 import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, QueryAction, ResourceAccess}
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.job.{ActionId, ActionTask, JobContext, JobId, JobResult, JobStatus}
+import org.goldenport.cncf.job.{ActionId, ActionTask, JobId, JobResult, JobStatus}
 import org.goldenport.cncf.service.Service
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.protocol.service.{Service as ProtocolService}
@@ -34,7 +34,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  4, 2026
  *  version Feb. 27, 2026
- * @version Mar.  4, 2026
+ * @version Mar. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -166,15 +166,26 @@ private case class RecordingService(
       case action: QueryAction =>
         _lastJobId = None
         val actionid = ActionId.generate()
-        val jobcontext = JobContext(None, None, Some(actionid))
-        val ctx = org.goldenport.cncf.context.ExecutionContext.withJobContext(
-          executioncontext,
-          jobcontext
-        )
         val task = ActionTask(actionid, action, logic.component.actionEngine, Some(logic.component))
-        task.run(ctx).result.map(_.toResponse)
+        val jobid = logic.submitJob(List(task), executioncontext)
+        _await_job_result(jobid).map(_.toResponse)
       case _ =>
         Consequence.failure("OperationRequest must be Action")
+    }
+  }
+
+  private def _await_job_result(jobid: JobId): Consequence[OperationResponse] = {
+    val deadline = System.currentTimeMillis() + 3000L
+    var result: Option[JobResult] = None
+    while (result.isEmpty && System.currentTimeMillis() < deadline) {
+      result = logic.getJobResult(jobid)
+      if (result.isEmpty)
+        Thread.sleep(10L)
+    }
+    result match {
+      case Some(JobResult.Success(response)) => Consequence.success(response)
+      case Some(JobResult.Failure(conclusion)) => Consequence.Failure(conclusion)
+      case None => Consequence.failure(s"query job timeout: ${jobid.value}")
     }
   }
 }

@@ -1,0 +1,183 @@
+package org.goldenport.cncf.job
+
+import org.goldenport.Consequence
+import org.goldenport.protocol.Request
+import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, CommandAction}
+import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
+import org.scalatest.GivenWhenThen
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
+
+/*
+ * @since   Mar. 21, 2026
+ * @version Mar. 21, 2026
+ * @author  ASAMI, Tomoharu
+ */
+final class JobQueryReadModelSpec
+  extends AnyWordSpec
+  with Matchers
+  with GivenWhenThen {
+  "Job query read model" should {
+    "return sync-equivalent result payload by JobId" in {
+      Given("a command task submitted as a persistent job")
+      val engine = InMemoryJobEngine.create()
+      val action = _success_action("createPerson", "ok-1")
+      val task = ActionTask(ActionId.generate(), action, ActionEngine.create(), None)
+      val ctx = ExecutionContext.test()
+
+      When("job completes")
+      val jobid = engine.submit(List(task), ctx)
+      val result = _await_result(engine, jobid)
+      val read = _await_query(engine, jobid)
+
+      Then("read model and getResponse expose the same OperationResponse shape")
+      result shouldBe a[Some[_]]
+      read shouldBe a[Some[_]]
+      val r1 = engine.getResponse(jobid)
+      val r2 = read.flatMap(_.result)
+      r1.map(_.toResponse) shouldBe r2.map(_.toResponse)
+    }
+
+    "project deterministic task/timeline order with pagination" in {
+      Given("a job with two sequential tasks")
+      val engine = InMemoryJobEngine.create()
+      val task1 = ActionTask(ActionId.generate(), _success_action("first", "1"), ActionEngine.create(), None)
+      val task2 = ActionTask(ActionId.generate(), _success_action("second", "2"), ActionEngine.create(), None)
+      val jobid = engine.submit(List(task1, task2), ExecutionContext.test())
+      val _ = _await_result(engine, jobid)
+
+      When("querying tasks/timeline with same pagination twice")
+      val p1a = engine.queryTasks(jobid, offset = 0, limit = 1).get
+      val p1b = engine.queryTasks(jobid, offset = 0, limit = 1).get
+      val t1a = engine.queryTimeline(jobid, offset = 1, limit = 2).get
+      val t1b = engine.queryTimeline(jobid, offset = 1, limit = 2).get
+
+      Then("output order and slice are deterministic")
+      p1a shouldBe p1b
+      t1a shouldBe t1b
+      p1a.fetchedCount shouldBe 1
+      t1a.events.map(_.sequence) shouldBe t1a.events.map(_.sequence).sorted
+    }
+
+    "expose persistent vs ephemeral origin explicitly" in {
+      Given("one persistent job and one ephemeral job")
+      val engine = InMemoryJobEngine.create()
+      val persistentId = engine.submit(
+        List(ActionTask(ActionId.generate(), _success_action("persist", "ok"), ActionEngine.create(), None)),
+        ExecutionContext.test()
+      )
+      val ephemeralId = engine.submit(
+        List(ActionTask(ActionId.generate(), _success_action("ephemeral", "ok"), ActionEngine.create(), None)),
+        ExecutionContext.test(),
+        JobSubmitOption(persistence = JobPersistencePolicy.Ephemeral)
+      )
+
+      val _ = _await_result(engine, persistentId)
+      val _ = _await_result(engine, ephemeralId)
+
+      When("querying read models")
+      val persistentRead = engine.query(persistentId).get
+      val ephemeralRead = engine.query(ephemeralId).get
+
+      Then("persistence policy and data origin are explicit")
+      persistentRead.persistence shouldBe JobPersistencePolicy.Persistent
+      persistentRead.origin shouldBe JobDataOrigin.Durable
+      ephemeralRead.persistence shouldBe JobPersistencePolicy.Ephemeral
+      ephemeralRead.origin shouldBe JobDataOrigin.Runtime
+    }
+
+    "include task structure and debug/trace baseline fields" in {
+      Given("a job with explicit submit debug metadata")
+      val engine = InMemoryJobEngine.create()
+      val action = _success_action("debugAction", "done")
+      val task = ActionTask(ActionId.generate(), action, ActionEngine.create(), None)
+      val option = JobSubmitOption(
+        persistence = JobPersistencePolicy.Persistent,
+        requestSummary = Some("request-summary"),
+        parameters = Map("p1" -> "v1"),
+        executionNotes = Vector("note-1")
+      )
+      val jobid = engine.submit(List(task), ExecutionContext.test(), option)
+      val _ = _await_result(engine, jobid)
+
+      When("querying read model")
+      val read = engine.query(jobid).get
+
+      Then("task fields and debug/trace fields are present")
+      read.tasks.totalCount should be >= 1
+      read.tasks.tasks.head.taskId should not be null
+      read.tasks.tasks.head.startedAt should not be null
+      read.tasks.tasks.head.finishedAt should not be empty
+      read.debug.requestSummary shouldBe Some("request-summary")
+      read.debug.parameters.get("p1") shouldBe Some("v1")
+      read.debug.executionNotes should contain("note-1")
+      read.traceTree.roots.nonEmpty shouldBe true
+    }
+
+    "enforce policy visibility on query surfaces" in {
+      Given("a completed job")
+      val engine = InMemoryJobEngine.create()
+      val task = ActionTask(ActionId.generate(), _success_action("visible", "ok"), ActionEngine.create(), None)
+      val jobid = engine.submit(List(task), ExecutionContext.test())
+      val _ = _await_result(engine, jobid)
+
+      When("queryVisible is called as user")
+      val denied = {
+        given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.User)
+        engine.queryVisible(jobid)
+      }
+
+      Then("user is denied")
+      denied shouldBe a[Consequence.Failure[_]]
+
+      When("queryVisible is called as content manager")
+      val allowed = {
+        given ExecutionContext =
+          ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+        engine.queryVisible(jobid)
+      }
+
+      Then("content manager can read query surface")
+      allowed shouldBe a[Consequence.Success[_]]
+      allowed.toOption.flatten.map(_.jobId) shouldBe Some(jobid)
+    }
+  }
+
+  private def _success_action(actionname: String, value: String): CommandAction =
+    new CommandAction() {
+      val request = Request.ofOperation(actionname)
+      override def createCall(core: ActionCall.Core): ActionCall = {
+        val actionself = this
+        val _core = core
+        new ActionCall {
+          override val core: ActionCall.Core = _core
+          override def action: Action = actionself
+          def execute(): Consequence[OperationResponse] =
+            Consequence.success(OperationResponse.Scalar(value))
+        }
+      }
+    }
+
+  private def _await_result(engine: JobEngine, jobid: JobId): Option[JobResult] = {
+    val deadline = System.currentTimeMillis() + 3000L
+    var result: Option[JobResult] = None
+    while (result.isEmpty && System.currentTimeMillis() < deadline) {
+      result = engine.getResult(jobid)
+      if (result.isEmpty)
+        Thread.sleep(10)
+    }
+    result
+  }
+
+  private def _await_query(engine: JobEngine, jobid: JobId): Option[JobQueryReadModel] = {
+    val deadline = System.currentTimeMillis() + 3000L
+    var result: Option[JobQueryReadModel] = None
+    while (result.isEmpty && System.currentTimeMillis() < deadline) {
+      result = engine.query(jobid)
+      if (result.isEmpty)
+        Thread.sleep(10)
+    }
+    result
+  }
+}

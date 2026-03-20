@@ -1,7 +1,9 @@
 package org.goldenport.cncf.security
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ObservabilityContext, SecurityContext, SpanId, TraceId}
+import org.goldenport.cncf.event.EventReception
+import org.goldenport.cncf.job.{ActionId, JobContext, JobId, TaskId}
 import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.provisional.observation.Taxonomy
 import org.goldenport.protocol.Request
@@ -13,7 +15,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Mar. 20, 2026
+ * @version Mar. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -41,7 +43,8 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   private val _privilege_keys = Vector(
     "cncf.security.privilege",
     "security.privilege",
-    "privilege"
+    "privilege",
+    EventReception.StandardAttribute.SecurityLevel
   )
 
   private val _capability_keys = Vector(
@@ -65,7 +68,8 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     val privilege = _resolve_privilege(attributes)
     val caps = _resolve_requested_capabilities(attributes)
     privilege.flatMap { p =>
-      val ctx = ExecutionContext.create(p)
+      val ctx0 = ExecutionContext.create(p)
+      val ctx = _bind_context(attributes, ctx0)
       if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
         Consequence.success(ResolvedIngressSecurity(ctx, p, caps))
       else
@@ -75,6 +79,79 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
           Facet.Message(s"required capability: ${caps.toVector.sorted.mkString("|")}")
         )
     }
+  }
+
+  private def _bind_context(
+    attributes: Map[String, String],
+    ctx: ExecutionContext
+  ): ExecutionContext = {
+    val withobservability = _restore_observability(attributes, ctx).getOrElse(ctx)
+    _restore_job_context(attributes, withobservability).getOrElse(withobservability)
+  }
+
+  private def _restore_observability(
+    attributes: Map[String, String],
+    ctx: ExecutionContext
+  ): Option[ExecutionContext] = {
+    val trace = _read_trace_id(attributes)
+    val span = _read_span_id(attributes)
+    val correlation = _read_correlation_id(attributes)
+    trace.map { traceid =>
+      val ob = ObservabilityContext(
+        traceId = traceid,
+        spanId = span,
+        correlationId = correlation.orElse(ctx.observability.correlationId),
+        callTreeContext = ctx.observability.callTreeContext
+      )
+      ExecutionContext.withObservabilityContext(ctx, ob)
+    }
+  }
+
+  private def _restore_job_context(
+    attributes: Map[String, String],
+    ctx: ExecutionContext
+  ): Option[ExecutionContext] = {
+    val jobid = _read_job_id(attributes)
+    val taskid = _read_task_id(attributes)
+    val actionid = _read_action_id(attributes)
+    val parentjobid = _read_parent_job_id(attributes)
+    val causationid = _read_causation_id(attributes)
+    if (jobid.isEmpty && taskid.isEmpty && actionid.isEmpty && parentjobid.isEmpty && causationid.isEmpty)
+      None
+    else
+      Some(
+        ExecutionContext.withJobContext(
+          ctx,
+          // Design update (2026-03-21):
+          // - Restorable from event attributes: jobId/taskId/actionId/parentJobId/causationId
+          // - Inferable: currentTask (from taskId), minimal traceMetadata (trace/span/correlation)
+          // - Not restorable at ingress: taskStack/full traceMetadata
+          // Future consideration:
+          // - If cross-subsystem continuity requires exact stack replay, add explicit taskStack envelope attributes.
+          JobContext(
+            jobId = jobid,
+            taskId = taskid,
+            actionId = actionid,
+            parentJobId = parentjobid,
+            currentTask = taskid,
+            taskStack = Vector.empty,
+            causationId = causationid,
+            traceMetadata = _minimal_trace_metadata(ctx)
+          )
+        )
+      )
+  }
+
+  private def _minimal_trace_metadata(
+    ctx: ExecutionContext
+  ): Map[String, String] = {
+    val ob = ctx.observability
+    val pairs = Vector(
+      Some("traceId" -> ob.traceId.print),
+      ob.spanId.map(x => "spanId" -> x.print),
+      ob.correlationId.map(x => "correlationId" -> x.print)
+    )
+    pairs.collect { case Some((k, v)) if k.nonEmpty && v.nonEmpty => k -> v }.toMap
   }
 
   private def _resolve_privilege(
@@ -120,6 +197,80 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   private def _split_tokens(p: String): Vector[String] =
     p.split("[,|\\s]+")
       .toVector
+
+  private def _read_trace_id(
+    attributes: Map[String, String]
+  ): Option[TraceId] =
+    _read_universal_id(attributes, Vector(
+      EventReception.StandardAttribute.TraceId,
+      EventReception.StandardAttribute.LegacyTraceId
+    ), "trace").map(parts => TraceId(parts.major, parts.minor))
+
+  private def _read_span_id(
+    attributes: Map[String, String]
+  ): Option[SpanId] =
+    _read_universal_id(attributes, Vector(
+      EventReception.StandardAttribute.SpanId
+    ), "span").flatMap { parts =>
+      parts.subkind.map(sk => SpanId(parts.major, parts.minor, sk))
+    }
+
+  private def _read_correlation_id(
+    attributes: Map[String, String]
+  ): Option[CorrelationId] =
+    _read_universal_id(attributes, Vector(
+      EventReception.StandardAttribute.CorrelationId,
+      EventReception.StandardAttribute.LegacyCorrelationId
+    ), "correlation").map(parts => CorrelationId(parts.major, parts.minor))
+
+  private def _read_job_id(
+    attributes: Map[String, String]
+  ): Option[JobId] =
+    _find_first(attributes, Vector(
+      EventReception.StandardAttribute.JobId,
+      EventReception.StandardAttribute.LegacyJobId
+    )).flatMap(v => JobId.parse(v).toOption)
+
+  private def _read_task_id(
+    attributes: Map[String, String]
+  ): Option[TaskId] =
+    _find_first(attributes, Vector(
+      EventReception.StandardAttribute.TaskId,
+      EventReception.StandardAttribute.LegacyTaskId
+    )).flatMap(v => TaskId.parse(v).toOption)
+
+  private def _read_action_id(
+    attributes: Map[String, String]
+  ): Option[ActionId] =
+    _find_first(attributes, Vector(
+      EventReception.StandardAttribute.ActionId,
+      EventReception.StandardAttribute.LegacyActionId
+    )).flatMap(v => ActionId.parse(v).toOption)
+
+  private def _read_parent_job_id(
+    attributes: Map[String, String]
+  ): Option[JobId] =
+    _find_first(attributes, Vector(
+      EventReception.StandardAttribute.ParentJobId,
+      EventReception.StandardAttribute.LegacyParentJobId
+    )).flatMap(v => JobId.parse(v).toOption)
+
+  private def _read_causation_id(
+    attributes: Map[String, String]
+  ): Option[String] =
+    _find_first(attributes, Vector(
+      EventReception.StandardAttribute.CausationId,
+      EventReception.StandardAttribute.LegacyCausationId
+    ))
+
+  private def _read_universal_id(
+    attributes: Map[String, String],
+    keys: Vector[String],
+    expectedKind: String
+  ): Option[org.goldenport.id.UniversalId.Parts] =
+    _find_first(attributes, keys).flatMap(v =>
+      org.goldenport.id.UniversalId.parseParts(v, expectedKind).toOption
+    )
 
   private def _normalize_token(p: String): String =
     p.trim.toLowerCase.replace("_", "").replace("-", "")

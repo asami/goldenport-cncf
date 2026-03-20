@@ -97,8 +97,7 @@ abstract class Component() extends Component.Core.Holder {
   def service: Service = services.services.head // TODO
 
   def execute(action: Action): Consequence[OperationResponse] = {
-    val call = logic.createActionCall(action)
-    logic.execute(call)
+    logic.executeAction(action)
   }
 
   def applicationConfig: Component.ApplicationConfig = _application_config

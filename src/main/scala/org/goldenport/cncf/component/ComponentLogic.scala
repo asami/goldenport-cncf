@@ -10,7 +10,7 @@ import cats.~>
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeKind}
 import org.goldenport.cncf.backend.collaborator.Collaborator
 import org.goldenport.cncf.http.HttpDriver
-import org.goldenport.cncf.job.{JobEngine, JobId, JobResult, JobStatus, JobTask}
+import org.goldenport.cncf.job.{ActionId, ActionTask, JobEngine, JobId, JobPersistencePolicy, JobResult, JobStatus, JobSubmitOption, JobTask}
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
@@ -20,7 +20,7 @@ import org.goldenport.cncf.statemachine.PlannedTransitionValidationHook
  * @since   Jan.  3, 2026
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -69,17 +69,61 @@ case class ComponentLogic(
     case _ => None
   }
 
-  def execute(ac: ActionCall): Consequence[OperationResponse] = // ActionResponse
+  private[cncf] def execute(ac: ActionCall): Consequence[OperationResponse] = // ActionResponse
     component.actionEngine.execute(ac)
 
+  def executeAction(action: Action): Consequence[OperationResponse] =
+    executeAction(action, _execution_context())
+
+  def executeAction(
+    action: Action,
+    ctx: ExecutionContext
+  ): Consequence[OperationResponse] = {
+    val task = ActionTask(ActionId.generate(), action, component.actionEngine, Some(component))
+    action match {
+      case _: QueryAction =>
+        val jobid = submitJob(List(task), ctx)
+        awaitJobResult(jobid)
+      case _ =>
+        val jobid = submitJob(List(task), ctx)
+        Consequence.success(OperationResponse.Scalar(jobid.value))
+    }
+  }
+
   def submitJob(tasks: List[JobTask], ctx: ExecutionContext): JobId =
-    component.jobEngine.submit(tasks, ctx)
+    component.jobEngine.submit(tasks, ctx, _default_submit_option(tasks))
+
+  def submitJob(
+    tasks: List[JobTask],
+    ctx: ExecutionContext,
+    option: JobSubmitOption
+  ): JobId =
+    component.jobEngine.submit(tasks, ctx, option)
 
   def getJobStatus(jobId: JobId): Option[JobStatus] =
     component.jobEngine.getStatus(jobId)
 
   def getJobResult(jobId: JobId): Option[JobResult] =
     component.jobEngine.getResult(jobId)
+
+  def awaitJobResult(
+    jobid: JobId,
+    timeoutMillis: Long = 3000L,
+    pollMillis: Long = 10L
+  ): Consequence[OperationResponse] = {
+    val deadline = System.currentTimeMillis() + timeoutMillis
+    var result: Option[JobResult] = None
+    while (result.isEmpty && System.currentTimeMillis() < deadline) {
+      result = getJobResult(jobid)
+      if (result.isEmpty)
+        Thread.sleep(pollMillis)
+    }
+    result match {
+      case Some(JobResult.Success(response)) => Consequence.success(response)
+      case Some(JobResult.Failure(conclusion)) => Consequence.Failure(conclusion)
+      case None => Consequence.failure(s"job timeout: ${jobid.value}")
+    }
+  }
 
   def executionContext(): ExecutionContext =
     _execution_context()
@@ -96,6 +140,14 @@ case class ComponentLogic(
     lazy val runtime: RuntimeContext = _component_runtime_context(() => uow, driver)
     context
   }
+
+  private def _default_submit_option(tasks: List[JobTask]): JobSubmitOption =
+    tasks.headOption match {
+      case Some(ActionTask(_, _: QueryAction, _, _)) =>
+        JobSubmitOption(persistence = JobPersistencePolicy.Ephemeral)
+      case _ =>
+        JobSubmitOption(persistence = JobPersistencePolicy.Persistent)
+    }
 
   // private def _ping_action_(
   //   request: Request

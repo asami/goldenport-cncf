@@ -32,7 +32,7 @@ import org.goldenport.cncf.security.IngressSecurityResolver
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
- * @version Mar. 18, 2026
+ * @version Mar. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -177,8 +177,7 @@ final class Subsystem(
           component.logic.makeOperationRequest(request).flatMap { r =>
           r match {
             case action: Action =>
-              val call = component.logic.createActionCall(action, security.executionContext)
-              component.logic.execute(call).flatMap { opres =>
+              component.logic.executeAction(action, security.executionContext).flatMap { opres =>
                 val rendered = _to_response(request, opres)
                 Consequence.success(rendered)
               }
@@ -208,8 +207,7 @@ final class Subsystem(
     _resolve_route(action.request) match {
       case Some((component, _, _)) =>
         IngressSecurityResolver.resolve(action.request).flatMap { security =>
-          val call = component.logic.createActionCall(action, security.executionContext)
-          component.logic.execute(call)
+          component.logic.executeAction(action, security.executionContext)
         }
       case None =>
         Consequence.failure("Operation route not found")

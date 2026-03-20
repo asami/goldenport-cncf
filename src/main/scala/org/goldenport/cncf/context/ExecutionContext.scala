@@ -38,7 +38,7 @@ import cats.~>
  *  version Dec. 31, 2025
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Mar. 18, 2026
+ * @version Mar. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -197,6 +197,18 @@ object ExecutionContext {
     case i: Instance =>
       i.copy(
         cncfCore = i.cncfCore.copy(runtime = runtime)
+      )
+    case _ =>
+      ctx
+  }
+
+  def withObservabilityContext(
+    ctx: ExecutionContext,
+    observability: ObservabilityContext
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(
+        cncfCore = i.cncfCore.copy(observability = observability)
       )
     case _ =>
       ctx

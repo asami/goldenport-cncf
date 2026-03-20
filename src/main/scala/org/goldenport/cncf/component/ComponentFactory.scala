@@ -110,7 +110,8 @@ final class ComponentFactory(
       ingressSecurityResolver = ingressSecurityResolver,
       entitySpace = Some(component.entitySpace),
       entitySubscriptionLimit = entitySubscriptionLimit,
-      workingSetEntities = component.workingSetEntityNames
+      workingSetEntities = component.workingSetEntityNames,
+      jobEngine = Some(component.jobEngine)
     )
     component.eventReceptionDefinitions.foreach(reception.register)
     component.eventSubscriptionDefinitions.foreach(reception.registerSubscription)
@@ -461,6 +462,7 @@ final class ComponentFactory(
       case _ =>
         Vector.empty
     }
+
 }
 
 object ComponentFactory {

@@ -228,3 +228,49 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - No CRUD before demo foundation.
 - No REST adapter explosion.
 - No demo-driven architecture distortion.
+
+## 7. Future Development Items
+
+This section lists planned development areas to be incorporated in future phases beyond Phase 5.
+These items are not yet fully assigned to specific phases and may be grouped or split as the architecture evolves.
+
+### 7.1 Job Management (CQRS)
+- Job query (read model)
+  - Trace information
+- Job control (command model)
+  - cancel
+  - retry
+  - suspend / resume
+
+### 7.2 Aggregate and View Completion
+- Finalize Aggregate model
+- Finalize View model (read side)
+- Establish clear CQRS separation
+
+### 7.3 Component Wiring and Subsystem Construction
+- Build subsystems via Component wiring
+- Define and stabilize Component ports
+
+### 7.4 Security
+- Authentication
+- Authorization
+- Audit logging
+
+### 7.5 Metrics and Observability
+- Metrics collection
+- Observability integration
+  - OpenTelemetry support
+
+### 7.6 Web Layer
+- Dashboard
+- Management Console
+- Documentation
+  - Manual
+
+### 7.7 Tagging and Knowledge Structure
+- Hierarchical tagging model
+- Classification and navigation support
+
+### 7.8 RDF Integration
+- RDF-based data representation
+- External knowledge graph integration

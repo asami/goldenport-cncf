@@ -9,10 +9,8 @@ import org.goldenport.protocol.{Request, Response}
 import org.goldenport.protocol.service.{Service as ProtocolService}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.cncf.action.{Action, CommandAction, QueryAction}
-import org.goldenport.cncf.action.ActionEngine
 import org.goldenport.cncf.component.{Component, ComponentLogic}
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeKind}
-import org.goldenport.cncf.job.{ActionId, ActionTask, JobContext}
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.protocol.OperationResponseFormatter
@@ -22,7 +20,8 @@ import org.goldenport.cncf.protocol.OperationResponseFormatter
  *  version Dec. 31, 2025
  *  version Jan.  3, 2026
  *  version Jan. 21, 2026
- * @version Feb. 19, 2026
+ *  version Feb. 19, 2026
+ * @version Mar. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Service extends ProtocolService with Service.CCore.Holder {
@@ -35,16 +34,11 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
     val _ = name
     logic.makeOperationRequest(request).flatMap {
       case action: CommandAction =>
-        val actionid = ActionId.generate()
-        val task = ActionTask(actionid, action, logic.component.actionEngine, Some(logic.component))
-        val jobid = logic.submitJob(List(task), executionContext)
-        Consequence.success(OperationResponse.Scalar(jobid.value))
+        logic.executeAction(action, executionContext)
       case action: QueryAction =>
-        val actionid = ActionId.generate()
-        val jobcontext = JobContext(None, None, Some(actionid))
-        val ctx = ExecutionContext.withJobContext(executionContext, jobcontext)
-        val task = ActionTask(actionid, action, logic.component.actionEngine, Some(logic.component))
-        task.run(ctx).result
+        logic.executeAction(action, executionContext)
+      case action: Action =>
+        logic.executeAction(action, executionContext)
       case _ =>
         Consequence.failure("OperationRequest must be Action")
     }
@@ -92,8 +86,7 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
 
   private def _execute(p: OperationRequest) = p match {
     case action: Action =>
-      val ac = logic.createActionCall(action)
-      logic.execute(ac)
+      logic.executeAction(action)
     case m => ???
   }
 

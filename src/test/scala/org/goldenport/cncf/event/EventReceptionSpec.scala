@@ -4,6 +4,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{ExecutionContext, SecurityContext, SecurityLevel}
 import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.job.{ActionId, JobContext, JobId, TaskId}
 import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.unitofwork.CommitRecorder
 import org.goldenport.provisional.observation.Taxonomy
@@ -466,6 +467,74 @@ final class EventReceptionSpec
       attrs.get("entity") shouldBe Some("person")
       attrs.get("entityName") shouldBe Some("person")
       attrs.get("entity_name") shouldBe Some("person")
+    }
+
+    "inject standard context attributes into event attributes for authorized reception" in {
+      Given("authorized reception with explicit job and observability context")
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val captured = ArrayBuffer.empty[Map[String, String]]
+      val dispatcher = new ActionCallDispatcher {
+        def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
+          val _ = actionName
+          event match {
+            case e: ReceptionDomainEvent =>
+              captured += e.attributes
+            case _ =>
+              ()
+          }
+          Consequence.unit
+        }
+      }
+      val reception = EventReception.default(bus, dispatcher)
+      reception.register(
+        CmlEventDefinition(
+          name = "context.bound.event",
+          category = CmlEventCategory.ActionEvent,
+          kind = Some("accepted"),
+          actionName = Some("context.bound.action")
+        )
+      )
+      val base = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+      val jobctx = JobContext(
+        jobId = Some(JobId.generate()),
+        taskId = Some(TaskId.generate()),
+        actionId = Some(ActionId.generate())
+      )
+      given ExecutionContext = ExecutionContext.withJobContext(base, jobctx)
+
+      When("receiving authorized event")
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "context.bound.event",
+          kind = "accepted",
+          attributes = Map("source" -> "cozy")
+        )
+      )
+
+      Then("standard context attributes are available to downstream dispatch")
+      result shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = false
+        )
+      )
+      captured.size shouldBe 1
+      val attrs = captured.head
+      attrs.get("source") shouldBe Some("cozy")
+      attrs.get(EventReception.StandardAttribute.TraceId) shouldBe Some(base.observability.traceId.print)
+      attrs.get(EventReception.StandardAttribute.CorrelationId) shouldBe base.observability.correlationId.map(_.print)
+      attrs.get(EventReception.StandardAttribute.JobId) shouldBe jobctx.jobId.map(_.print)
+      attrs.get(EventReception.StandardAttribute.TaskId) shouldBe jobctx.taskId.map(_.print)
+      attrs.get(EventReception.StandardAttribute.ActionId) shouldBe jobctx.actionId.map(_.print)
+      attrs.get(EventReception.StandardAttribute.CausationId).nonEmpty shouldBe true
+      attrs.get(EventReception.StandardAttribute.SecurityLevel) shouldBe Some(base.security.level.value)
+      attrs.get(EventReception.StandardAttribute.PrincipalId) shouldBe Some(base.security.principal.id.value)
+      attrs.get(EventReception.StandardAttribute.EventName) shouldBe Some("context.bound.event")
+      attrs.get(EventReception.StandardAttribute.EventKind) shouldBe Some("accepted")
     }
   }
 
