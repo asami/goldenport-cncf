@@ -37,6 +37,16 @@ trait EventStore {
     policy: EventPolicyEngine = EventPolicyEngine.default
   )(using ExecutionContext): Consequence[Vector[EventRecord]] =
     policy.authorizeReplay.flatMap(_ => replay(q))
+
+  final def replay(
+    q: EventStore.Query,
+    dispatch: EventRecord => Consequence[Unit]
+  ): Consequence[Unit] =
+    replay(q).flatMap { records =>
+      records.foldLeft(Consequence.unit) { (z, record) =>
+        z.flatMap(_ => dispatch(record))
+      }
+    }
 }
 
 enum EventLane(val value: String) {

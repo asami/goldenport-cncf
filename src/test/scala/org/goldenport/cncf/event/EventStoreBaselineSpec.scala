@@ -1,6 +1,7 @@
 package org.goldenport.cncf.event
 
 import java.time.Instant
+import scala.collection.mutable.ArrayBuffer
 import org.goldenport.Consequence
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -65,6 +66,48 @@ final class EventStoreBaselineSpec
       And("replay uses the same deterministic order")
       val replayed = store.replay(EventStore.Query(name = Some("person.transition")))
       replayed shouldBe queried
+    }
+
+    "replay-dispatch in deterministic order" in {
+      Given("an in-memory event store with ordered records")
+      val store = EventStore.inMemory
+      val trace = ArrayBuffer.empty[Long]
+      val r1 = EventRecord(
+        id = EventId.generate(),
+        name = "replay.target",
+        kind = "k1",
+        payload = Map.empty,
+        attributes = Map.empty,
+        createdAt = Instant.now().minusSeconds(20),
+        persistent = true,
+        status = EventRecord.Status.Stored,
+        lane = EventLane.Transactional
+      )
+      val r2 = EventRecord(
+        id = EventId.generate(),
+        name = "replay.target",
+        kind = "k2",
+        payload = Map.empty,
+        attributes = Map.empty,
+        createdAt = Instant.now().minusSeconds(10),
+        persistent = true,
+        status = EventRecord.Status.Stored,
+        lane = EventLane.Transactional
+      )
+      val _ = store.append(Vector(r1, r2))
+
+      When("replay-dispatch executes")
+      val dispatched = store.replay(
+        EventStore.Query(name = Some("replay.target")),
+        rec => {
+          trace += rec.sequence
+          Consequence.unit
+        }
+      )
+
+      Then("dispatch order follows deterministic sequence order")
+      dispatched shouldBe Consequence.unit
+      trace.toVector shouldBe Vector(1L, 2L)
     }
   }
 }

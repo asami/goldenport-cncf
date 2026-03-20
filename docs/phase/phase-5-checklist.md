@@ -134,7 +134,7 @@ Apply policy/privilege checks to transition/event visibility and execution-facin
 
 ## EV-05: Executable Specifications (Event Lifecycle / Replay / Policy)
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -142,12 +142,12 @@ Add executable specifications covering lifecycle emission, persistence modes, re
 
 ### Detailed Tasks
 
-- [ ] Add Given/When/Then specs for lifecycle emission sequence and metadata integrity.
-- [ ] Add specs for persistent vs ephemeral event handling.
-- [ ] Add specs for replay behavior and deterministic re-dispatch ordering.
-- [ ] Add specs for dispatch failure and transition failure emission paths.
-- [ ] Add specs for policy visibility/privilege acceptance and denial paths.
-- [ ] Add regression specs for state-machine transition -> event lifecycle linkage.
+- [x] Add Given/When/Then specs for lifecycle emission sequence and metadata integrity.
+- [x] Add specs for persistent vs ephemeral event handling.
+- [x] Add specs for replay behavior and deterministic re-dispatch ordering.
+- [x] Add specs for dispatch failure and transition failure emission paths.
+- [x] Add specs for policy visibility/privilege acceptance and denial paths.
+- [x] Add regression specs for state-machine transition -> event lifecycle linkage.
 
 ---
 

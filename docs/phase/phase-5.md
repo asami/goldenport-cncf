@@ -1,6 +1,6 @@
 # Phase 5 — Event Lifecycle and Policy Integration
 
-status = open
+status = closed
 
 ## 1. Purpose of This Document
 
@@ -33,7 +33,7 @@ This document is a progress dashboard, not a design journal.
 - B (DONE): Implement EventStore baseline (append/query/replay contract) with transaction consistency rule.
 - C (DONE): Implement EventBus dispatch/subscription path aligned with ActionCall-centric execution.
 - D (DONE): Add policy-driven visibility/privilege checks for transition/event surfaces.
-- E (ACTIVE): Prepare executable specifications for event lifecycle, replay behavior, and policy checks.
+- E (DONE): Prepare executable specifications for event lifecycle, replay behavior, and policy checks.
 
 Resume hint:
 - Start from lifecycle envelope definition first, because EventStore/EventBus contracts depend on emitted event shape and timing.
@@ -44,7 +44,7 @@ Resume hint:
 - [x] EV-02: Define and implement EventStore baseline contract (append/load/query/replay) with same-transaction persistence rule.
 - [x] EV-03: Define and implement EventBus publish/dispatch/subscription path with deterministic execution ordering.
 - [x] EV-04: Define policy-driven visibility and privilege checks for transition/event projection and execution entry points.
-- [ ] EV-05: Add executable specifications for lifecycle emission, persistence modes (`persistent/ephemeral`), replay, and policy enforcement.
+- [x] EV-05: Add executable specifications for lifecycle emission, persistence modes (`persistent/ephemeral`), replay, and policy enforcement.
 
 ## 6. Input from Previous Phase
 

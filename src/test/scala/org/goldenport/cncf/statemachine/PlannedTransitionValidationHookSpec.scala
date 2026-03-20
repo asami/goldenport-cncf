@@ -39,8 +39,15 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       )
       lifecycle.foreach { e =>
         e.name shouldBe "transition.lifecycle"
+        e.id.major should not be empty
+        e.id.minor should not be empty
+        e.occurredAt should not be null
+        e.correlation.traceId should not be empty
+        e.correlation.executionContextId.major should not be empty
+        e.correlation.executionContextId.minor should not be empty
         e.transition.collection shouldBe Some("person")
         e.transition.event shouldBe "update"
+        e.transition.targetId shouldBe Some(entity.id)
         e.failure shouldBe None
       }
     }
@@ -64,6 +71,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       )
       val failed = lifecycle.last
       failed.failure.isDefined shouldBe true
+      failed.failure.map(_.taxonomy).getOrElse("") should not be empty
       failed.failure.flatMap(_.message).getOrElse("") should include("transition")
     }
   }
