@@ -10,7 +10,7 @@ import cats.~>
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeKind}
 import org.goldenport.cncf.backend.collaborator.Collaborator
 import org.goldenport.cncf.http.HttpDriver
-import org.goldenport.cncf.job.{ActionId, ActionTask, JobEngine, JobId, JobPersistencePolicy, JobResult, JobStatus, JobSubmitOption, JobTask}
+import org.goldenport.cncf.job.{ActionId, ActionTask, JobControlPolicy, JobControlRequest, JobControlResponse, JobEngine, JobId, JobPersistencePolicy, JobResult, JobStatus, JobSubmitOption, JobTask}
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
@@ -105,6 +105,13 @@ case class ComponentLogic(
 
   def getJobResult(jobId: JobId): Option[JobResult] =
     component.jobEngine.getResult(jobId)
+
+  def controlJob(
+    jobId: JobId,
+    request: JobControlRequest,
+    policy: JobControlPolicy = JobControlPolicy.default
+  )(using ExecutionContext): Consequence[JobControlResponse] =
+    component.jobEngine.control(jobId, request, policy)
 
   def awaitJobResult(
     jobid: JobId,

@@ -75,8 +75,65 @@ sealed trait JobStatus
 object JobStatus {
   case object Submitted extends JobStatus
   case object Running extends JobStatus
+  case object Suspended extends JobStatus
+  case object Cancelled extends JobStatus
   case object Succeeded extends JobStatus
   case object Failed extends JobStatus
+}
+
+enum JobControlCommand {
+  case Cancel
+  case Retry
+  case Suspend
+  case Resume
+}
+
+enum JobCommandMode {
+  case Async
+  case Sync
+}
+
+final case class JobControlOption(
+  mode: JobCommandMode = JobCommandMode.Async,
+  timeoutMillis: Long = 3000L,
+  pollMillis: Long = 10L
+)
+
+final case class JobControlRequest(
+  command: JobControlCommand,
+  option: JobControlOption = JobControlOption()
+)
+
+final case class JobControlResponse(
+  jobId: JobId,
+  status: JobStatus,
+  response: Option[OperationResponse],
+  async: Boolean
+)
+
+trait JobControlPolicy {
+  def authorize(jobId: JobId, request: JobControlRequest)(using ExecutionContext): Consequence[Unit]
+}
+
+object JobControlPolicy {
+  val default: JobControlPolicy = new DefaultJobControlPolicy
+
+  private final class DefaultJobControlPolicy extends JobControlPolicy {
+    private val _control_caps = Set("job_control", "job_admin", "content_manager", "content_admin")
+
+    def authorize(jobId: JobId, request: JobControlRequest)(using ctx: ExecutionContext): Consequence[Unit] = {
+      val _ = jobId
+      val _ = request
+      if (ctx.security.hasAnyCapability(_control_caps))
+        Consequence.unit
+      else
+        Consequence.fail(
+          Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Illegal),
+          Facet.Operation("job.control"),
+          Facet.Message(s"required capability: ${_control_caps.toVector.sorted.mkString("|")}")
+        )
+    }
+  }
 }
 
 sealed trait JobResult
@@ -255,6 +312,11 @@ trait JobEngine {
   def submit(tasks: List[JobTask], ctx: ExecutionContext, option: JobSubmitOption): JobId
   def getStatus(jobId: JobId): Option[JobStatus]
   def getResult(jobId: JobId): Option[JobResult]
+  def control(
+    jobId: JobId,
+    request: JobControlRequest,
+    policy: JobControlPolicy = JobControlPolicy.default
+  )(using ExecutionContext): Consequence[JobControlResponse]
 
   def getResponse(jobId: JobId): Option[OperationResponse] =
     getResult(jobId) match {
@@ -297,6 +359,7 @@ final class InMemoryJobEngine(
     val record = JobRecord(
       id = jobid,
       tasks = tasks,
+      submittedContext = ctx,
       status = JobStatus.Submitted,
       result = None,
       persistence = option.persistence,
@@ -325,6 +388,15 @@ final class InMemoryJobEngine(
 
   def getResult(jobId: JobId): Option[JobResult] =
     _get_record(jobId).flatMap(_.result)
+
+  def control(
+    jobId: JobId,
+    request: JobControlRequest,
+    policy: JobControlPolicy = JobControlPolicy.default
+  )(using ctx: ExecutionContext): Consequence[JobControlResponse] =
+    policy.authorize(jobId, request).flatMap { _ =>
+      _control(jobId, request)
+    }
 
   def query(jobId: JobId): Option[JobQueryReadModel] =
     _get_record(jobId).map { record =>
@@ -369,7 +441,8 @@ final class InMemoryJobEngine(
           var failure: Option[Conclusion] = None
           var successResponse: Option[OperationResponse] = None
           tasks.foreach { task =>
-            if (failure.isEmpty) {
+            if (failure.isEmpty && _can_run_next_task(jobid)) {
+              if (_await_if_suspended(jobid)) {
               val taskid = TaskId.generate()
               val startedat = Instant.now()
               val jobcontext = JobContext(
@@ -409,24 +482,179 @@ final class InMemoryJobEngine(
                     Instant.now()
                   )
               }
+              }
             }
           }
-          failure match {
-            case Some(c) =>
-              _append_timeline_(jobid, "job.failed", None, None, c.observation.getEffectiveMessage)
-              _update_record_(jobid, JobStatus.Failed, Some(JobResult.Failure(c)))
-            case None =>
-              _append_timeline_(jobid, "job.succeeded", None, None, None)
-              _update_record_(
-                jobid,
-                JobStatus.Succeeded,
-                successResponse.map(JobResult.Success.apply)
-              )
+          _get_record(jobid).map(_.status) match {
+            case Some(JobStatus.Cancelled) =>
+              _append_timeline_(jobid, "job.cancelled", None, None, Some("cancelled"))
+              _update_record_(jobid, JobStatus.Cancelled, Some(JobResult.Failure(Conclusion.simple("job cancelled"))))
+            case _ =>
+              failure match {
+                case Some(c) =>
+                  _append_timeline_(jobid, "job.failed", None, None, c.observation.getEffectiveMessage)
+                  _update_record_(jobid, JobStatus.Failed, Some(JobResult.Failure(c)))
+                case None =>
+                  _append_timeline_(jobid, "job.succeeded", None, None, None)
+                  _update_record_(
+                    jobid,
+                    JobStatus.Succeeded,
+                    successResponse.map(JobResult.Success.apply)
+                  )
+              }
           }
       }
     }
     ()
   }
+
+  private def _control(
+    jobid: JobId,
+    request: JobControlRequest
+  ): Consequence[JobControlResponse] =
+    _get_record(jobid) match {
+      case None =>
+        _control_failure(s"job not found: ${jobid.value}")
+      case Some(record) =>
+        _transition_for(request.command, record.status).flatMap { target =>
+          request.command match {
+            case JobControlCommand.Retry =>
+              _retry_job_(jobid, record)
+            case _ =>
+              _update_record_(jobid, target, _control_result_for(target))
+          }
+          request.option.mode match {
+            case JobCommandMode.Async =>
+              Consequence.success(
+                JobControlResponse(
+                  jobId = jobid,
+                  status = target,
+                  response = None,
+                  async = true
+                )
+              )
+            case JobCommandMode.Sync =>
+              _await_control_sync(jobid, request, target)
+          }
+        }
+    }
+
+  private def _retry_job_(jobid: JobId, record: JobRecord): Unit = {
+    val now = Instant.now()
+    _put_record(
+      record.copy(
+        status = JobStatus.Submitted,
+        result = None,
+        updatedAt = now
+      )
+    )
+    _append_timeline_(jobid, "job.retry.submitted", None, None, None)
+    _run_job_(jobid, record.tasks, record.submittedContext)
+  }
+
+  private def _control_result_for(status: JobStatus): Option[JobResult] =
+    status match {
+      case JobStatus.Cancelled => Some(JobResult.Failure(Conclusion.simple("job cancelled")))
+      case _ => None
+    }
+
+  private def _await_control_sync(
+    jobid: JobId,
+    request: JobControlRequest,
+    target: JobStatus
+  ): Consequence[JobControlResponse] = {
+    val deadline = System.currentTimeMillis() + math.max(0L, request.option.timeoutMillis)
+    var status = getStatus(jobid).getOrElse(target)
+    while (
+      request.command == JobControlCommand.Retry &&
+      !_is_retry_settled(status) &&
+      System.currentTimeMillis() < deadline
+    ) {
+      Thread.sleep(math.max(1L, request.option.pollMillis))
+      status = getStatus(jobid).getOrElse(status)
+    }
+    val timedout =
+      request.command == JobControlCommand.Retry &&
+      !_is_retry_settled(status) &&
+      System.currentTimeMillis() >= deadline
+    if (timedout) {
+      _control_timeout(s"sync timeout for job control: ${jobid.value}")
+    } else {
+      val response = request.command match {
+        case JobControlCommand.Retry =>
+          getResponse(jobid)
+        case _ =>
+          Some(OperationResponse.Scalar(status.toString))
+      }
+      Consequence.success(
+        JobControlResponse(
+          jobId = jobid,
+          status = status,
+          response = response,
+          async = false
+        )
+      )
+    }
+  }
+
+  private def _is_retry_settled(status: JobStatus): Boolean =
+    status match {
+      case JobStatus.Succeeded | JobStatus.Failed | JobStatus.Cancelled => true
+      case _ => false
+    }
+
+  private def _transition_for(
+    command: JobControlCommand,
+    status: JobStatus
+  ): Consequence[JobStatus] =
+    (command, status) match {
+      case (JobControlCommand.Cancel, JobStatus.Submitted | JobStatus.Running | JobStatus.Suspended) =>
+        Consequence.success(JobStatus.Cancelled)
+      case (JobControlCommand.Suspend, JobStatus.Submitted | JobStatus.Running) =>
+        Consequence.success(JobStatus.Suspended)
+      case (JobControlCommand.Resume, JobStatus.Suspended) =>
+        Consequence.success(JobStatus.Running)
+      case (JobControlCommand.Retry, JobStatus.Failed | JobStatus.Cancelled) =>
+        Consequence.success(JobStatus.Submitted)
+      case _ =>
+        _control_invalid_transition(command, status)
+    }
+
+  private def _can_run_next_task(jobid: JobId): Boolean =
+    _get_record(jobid).exists(r => r.status != JobStatus.Cancelled)
+
+  private def _await_if_suspended(jobid: JobId): Boolean = {
+    var status = _get_record(jobid).map(_.status)
+    while (status.contains(JobStatus.Suspended)) {
+      Thread.sleep(10L)
+      status = _get_record(jobid).map(_.status)
+    }
+    status.forall(_ != JobStatus.Cancelled)
+  }
+
+  private def _control_invalid_transition[A](
+    command: JobControlCommand,
+    status: JobStatus
+  ): Consequence[A] =
+    Consequence.fail(
+      Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Invalid),
+      Facet.Operation(s"job.control.${command.toString.toLowerCase}"),
+      Facet.Message(s"invalid transition: status=${status.toString.toLowerCase}")
+    )
+
+  private def _control_failure[A](message: String): Consequence[A] =
+    Consequence.fail(
+      Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Invalid),
+      Facet.Operation("job.control"),
+      Facet.Message(message)
+    )
+
+  private def _control_timeout[A](message: String): Consequence[A] =
+    Consequence.fail(
+      Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Unavailable),
+      Facet.Operation("job.control"),
+      Facet.Message(message)
+    )
 
   private def _append_task_running_(
     jobid: JobId,
@@ -683,6 +911,7 @@ object InMemoryJobEngine {
 final case class JobRecord(
   id: JobId,
   tasks: List[JobTask],
+  submittedContext: ExecutionContext,
   status: JobStatus,
   result: Option[JobResult],
   persistence: JobPersistencePolicy,

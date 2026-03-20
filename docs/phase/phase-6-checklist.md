@@ -101,7 +101,7 @@ Implement query-side projection for Job status/trace/timeline.
 
 ## JM-03: Job Control Command Model
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -109,19 +109,19 @@ Implement control-side commands: cancel, retry, suspend, resume.
 
 ### Detailed Tasks
 
-- [ ] Define command contracts and preconditions for each control operation.
-- [ ] Implement state-guarded transition logic for control commands.
-- [ ] Implement command execution mode policy:
+- [x] Define command contracts and preconditions for each control operation.
+- [x] Implement state-guarded transition logic for control commands.
+- [x] Implement command execution mode policy:
   - asynchronous execution by default
   - return `JobId` on command submission
   - optional synchronous execution by explicit option
-- [ ] Define synchronous option behavior contract:
+- [x] Define synchronous option behavior contract:
   - response payload compatibility with existing synchronous query/command expectations
   - deterministic timeout/failure mapping when sync completion is not reached
-- [ ] Ensure command execution always materializes Task under Job (no direct ActionCall execution path).
-- [ ] Integrate policy/privilege checks for control entry points.
-- [ ] Define deterministic outcomes for invalid command/state combinations.
-- [ ] Map control failures to consequence/observation taxonomy consistently.
+- [x] Ensure command execution always materializes Task under Job (no direct ActionCall execution path).
+- [x] Integrate policy/privilege checks for control entry points.
+- [x] Define deterministic outcomes for invalid command/state combinations.
+- [x] Map control failures to consequence/observation taxonomy consistently.
 
 ### Inputs
 
@@ -132,7 +132,7 @@ Implement control-side commands: cancel, retry, suspend, resume.
 
 ## JM-04: Job/Event Correlation and Replay Boundary
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 
