@@ -29,6 +29,7 @@ import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
 import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace}
 import org.goldenport.cncf.statemachine.StateMachinePlannerProvider
+import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition}
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
 import cats.data.NonEmptyVector
 import java.io.InputStream
@@ -41,7 +42,7 @@ import scala.util.control.NonFatal
  *  version Jan.  3, 2026
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
- * @version Mar. 20, 2026
+ * @version Mar. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -57,6 +58,7 @@ abstract class Component() extends Component.Core.Holder {
   private var _health_contributors: Vector[Component.HealthContributor] = Vector.empty
   private var _state_machine_planner_provider: StateMachinePlannerProvider =
     StateMachinePlannerProvider.noop
+  private var _working_set_entity_names: Set[String] = Set.empty
   val entitySpace: EntitySpace = new EntitySpace()
   val aggregateSpace: AggregateSpace = new AggregateSpace()
   val viewSpace: ViewSpace = new ViewSpace()
@@ -138,6 +140,21 @@ abstract class Component() extends Component.Core.Holder {
     _state_machine_planner_provider = p
     this
   }
+
+  def workingSetEntityNames: Set[String] =
+    _working_set_entity_names
+
+  def withWorkingSetEntityNames(
+    names: Set[String]
+  ): Component = {
+    _working_set_entity_names = names
+    this
+  }
+
+  // Cozy-generated component metadata hooks (event/reception DSL).
+  def eventReceptionDefinitions: Vector[CmlEventDefinition] = Vector.empty
+  def eventRoutingDefinitions: Vector[CmlRoutingDefinition] = Vector.empty
+  def eventSubscriptionDefinitions: Vector[CmlSubscriptionDefinition] = Vector.empty
 
   def entity[E](name: String): EntityCollection[E] =
     entitySpace.entity(name)

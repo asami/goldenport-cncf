@@ -44,6 +44,13 @@ case class ComponentLogic(
 
   def createActionCall(action: Action): ActionCall = {
     val ctx0 = _execution_context()
+    createActionCall(action, ctx0)
+  }
+
+  def createActionCall(
+    action: Action,
+    ctx0: ExecutionContext
+  ): ActionCall = {
     // TODO: action scope should be derived from service scope once available.
     val actionscope = component.scopeContext.createChildScope(ScopeKind.Action, action.name)
     val ctx = ctx0.withScope(actionscope)

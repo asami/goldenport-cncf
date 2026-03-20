@@ -2,6 +2,7 @@ package org.goldenport.cncf.event
 
 import scala.collection.mutable
 import org.goldenport.Consequence
+import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.provisional.observation.Taxonomy
@@ -27,10 +28,53 @@ trait ActionCallDispatcher {
   def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit]
 }
 
+final case class ParsedEventAction(
+  actionName: String,
+  action: Action,
+  event: DomainEvent
+)
+
+trait ActionFactoryDispatcher extends ActionCallDispatcher {
+  def parseValidateAction(
+    actionName: String,
+    event: DomainEvent
+  ): Consequence[ParsedEventAction]
+
+  def dispatchParsedAction(
+    action: ParsedEventAction
+  ): Consequence[Unit]
+
+  final override def dispatchAction(
+    actionName: String,
+    event: DomainEvent
+  ): Consequence[Unit] =
+    parseValidateAction(actionName, event).flatMap(dispatchParsedAction)
+}
+
+trait SecureActionCallDispatcher extends ActionCallDispatcher {
+  def dispatchActionAuthorized(
+    actionName: String,
+    event: DomainEvent
+  )(using ExecutionContext): Consequence[Unit]
+}
+
+trait SecureActionFactoryDispatcher extends ActionFactoryDispatcher with SecureActionCallDispatcher {
+  def dispatchParsedActionAuthorized(
+    action: ParsedEventAction
+  )(using ExecutionContext): Consequence[Unit]
+
+  final override def dispatchActionAuthorized(
+    actionName: String,
+    event: DomainEvent
+  )(using ExecutionContext): Consequence[Unit] =
+    parseValidateAction(actionName, event).flatMap(dispatchParsedActionAuthorized)
+}
+
 final case class EventSubscription(
   name: String,
   eventName: Option[String] = None,
   kind: Option[String] = None,
+  selector: Option[DomainEvent => Boolean] = None,
   priority: Int = 0,
   persistentOnly: Option[Boolean] = None,
   handler: EventDispatchHandler
@@ -130,6 +174,7 @@ final class DefaultEventBus(
         .toVector
         .filter(e => e.subscription.eventName.forall(_ == name))
         .filter(e => e.subscription.kind.forall(_ == kind))
+        .filter(e => e.subscription.selector.forall(_(event)))
         .filter(e => e.subscription.persistentOnly.forall(_ == option.persistent))
         .sortBy(e => (e.subscription.priority, e.order))
     }
@@ -161,6 +206,7 @@ final class DefaultEventBus(
 
   private def _event_name(event: DomainEvent): String =
     event match {
+      case e: ReceptionDomainEvent => e.name
       case e: TransitionLifecycleEvent => e.name
       case e: ActionEvent => e.actionName
       case other => other.getClass.getSimpleName
@@ -168,6 +214,7 @@ final class DefaultEventBus(
 
   private def _event_kind(event: DomainEvent): String =
     event match {
+      case e: ReceptionDomainEvent => e.kind
       case e: TransitionLifecycleEvent => e.kind.value
       case e: ActionEvent => e.result.toString.toLowerCase
       case _ => "domain-event"

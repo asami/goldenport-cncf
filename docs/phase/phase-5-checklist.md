@@ -34,6 +34,7 @@ Phase 5 implementation proceeds in this order:
 3. EV-03 (EventBus dispatch path) is implemented after EventStore/event envelope contract stabilizes.
 4. EV-04 (policy visibility/privilege) is applied once projection/execution surfaces are explicit.
 5. EV-05 (executable specs) is expanded alongside EV-02 to EV-04 and finalized last.
+6. EV-06 (CML Event -> Reception -> ActionCall route) is finalized after EV-03 to EV-05 baselines.
 
 This order minimizes churn in runtime contracts and observation semantics.
 
@@ -151,6 +152,35 @@ Add executable specifications covering lifecycle emission, persistence modes, re
 
 ---
 
+## EV-06: CML Event Definition and Reception-to-ActionCall Route
+
+Status: DONE
+
+### Objective
+
+Implement the execution route where CML-defined Event is received via Reception and executed through ActionCall.
+Reception must route only relevant events and avoid routing irrelevant events.
+This is required for inter-component and external-system integration.
+
+### Detailed Tasks
+
+- [x] Define canonical mapping from CML Event definition to CNCF event/reception runtime model.
+- [x] Implement Reception input surface for event-triggered execution entry.
+- [x] Implement deterministic filtering at Reception so non-target events are dropped (not routed).
+- [x] Resolve Reception input to target Action deterministically.
+- [x] Integrate route with ActionCall creation/execution path (no direct component invocation).
+- [x] Align EventBus/EventStore interaction for this route (persistent/non-persistent behavior by policy).
+- [x] Add executable specs for end-to-end route: CML Event -> Reception -> ActionCall.
+- [x] Add failure-path specs for unknown event/subscription mismatch/policy denial/non-target-event drop behavior.
+
+### Inputs
+
+- `/Users/asami/src/dev2025/cloud-native-component-framework/docs/journal/2026/03/event-mechanism-design.md`
+- `/Users/asami/src/dev2025/cloud-native-component-framework/docs/phase/phase-5.md`
+- `/Users/asami/src/dev2025/cozy/src/main/scala/cozy/modeler/Modeler.scala`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - Distributed event bus transport and remote subscriber delivery guarantees.
@@ -163,6 +193,6 @@ Add executable specifications covering lifecycle emission, persistence modes, re
 
 Phase 5 is complete when:
 
-- EV-01 through EV-05 are marked DONE.
+- EV-01 through EV-06 are marked DONE.
 - `phase-5.md` summary checkboxes are aligned.
 - No item remains ACTIVE or SUSPENDED.

@@ -17,6 +17,10 @@ This document is a progress dashboard, not a design journal.
 - Define two persistence lanes for events:
   - transactional lane: events persisted atomically with domain data updates in the same transaction.
   - non-transactional lane: events (for example error/incident events) emitted and managed in EventStore independently from domain update transaction.
+- Implement CML Event-driven execution route:
+  - CML Event definition -> Reception input -> ActionCall execution path.
+  - Reception must route only relevant events and must not route irrelevant events.
+  - This routing/filtering behavior is required for inter-component and external-system integration.
 - Add policy-driven transition/event visibility checks for introspection and execution surfaces.
 - Keep core/CNCF boundary discipline from Phase 4 (core primitives remain authoritative).
 
@@ -34,6 +38,7 @@ This document is a progress dashboard, not a design journal.
 - C (DONE): Implement EventBus dispatch/subscription path aligned with ActionCall-centric execution.
 - D (DONE): Add policy-driven visibility/privilege checks for transition/event surfaces.
 - E (DONE): Prepare executable specifications for event lifecycle, replay behavior, and policy checks.
+- F (DONE): Implement CML Event definition to Reception -> ActionCall execution route with strict routing/filtering.
 
 Resume hint:
 - Start from lifecycle envelope definition first, because EventStore/EventBus contracts depend on emitted event shape and timing.
@@ -45,6 +50,7 @@ Resume hint:
 - [x] EV-03: Define and implement EventBus publish/dispatch/subscription path with deterministic execution ordering.
 - [x] EV-04: Define policy-driven visibility and privilege checks for transition/event projection and execution entry points.
 - [x] EV-05: Add executable specifications for lifecycle emission, persistence modes (`persistent/ephemeral`), replay, and policy enforcement.
+- [x] EV-06: Implement CML Event definition and Reception-based selective routing to ActionCall execution.
 
 ## 6. Input from Previous Phase
 

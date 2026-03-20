@@ -14,15 +14,17 @@ import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.datatype.EntityId
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.goldenport.cncf.entity.aggregate.AggregateSpace
+import org.goldenport.cncf.event.{ActionCallDispatcher, EventBus, EventReception, EntitySubscriptionLimit}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimePlan, EntitySpace, EntityStorage, PartitionedMemoryRealm, PartitionStrategy, WorkingSetDefinition, WorkingSetInitializer}
 import org.goldenport.cncf.entity.view.ViewSpace
+import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.statemachine.{CollectionStateMachinePlanner, CollectionStateMachinePlannerProvider, CollectionTransitionRule, CollectionTransitionRuleProvider, TransitionTrigger, TransitionRule}
 
 /*
  * @since   Jan. 30, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -65,6 +67,8 @@ final class ComponentFactory(
     val aggregatespace = component.aggregateSpace
     val viewspace = component.viewSpace
     val plans = _default_entity_runtime_plans(component)
+    val workingsetentities = _resolve_working_set_entity_names(component, plans)
+    val _ = component.withWorkingSetEntityNames(workingsetentities)
     if (plans.nonEmpty)
       _bootstrap_entities_with_plan(component, plans, entityspace, storesnapshot)
     else
@@ -78,6 +82,45 @@ final class ComponentFactory(
     _bootstrap_state_machine_planners(component, plans)
     component
   }
+
+  def createEventReceptionWithOperationDispatcher(
+    component: Component,
+    eventBus: EventBus,
+    ingressSecurityResolver: IngressSecurityResolver = IngressSecurityResolver.default,
+    entitySubscriptionLimit: EntitySubscriptionLimit = EntitySubscriptionLimit()
+  ): EventReception =
+    createEventReception(
+      component = component,
+      eventBus = eventBus,
+      dispatcher = createOperationActionDispatcher(component),
+      ingressSecurityResolver = ingressSecurityResolver,
+      entitySubscriptionLimit = entitySubscriptionLimit
+    )
+
+  def createEventReception(
+    component: Component,
+    eventBus: EventBus,
+    dispatcher: ActionCallDispatcher,
+    ingressSecurityResolver: IngressSecurityResolver = IngressSecurityResolver.default,
+    entitySubscriptionLimit: EntitySubscriptionLimit = EntitySubscriptionLimit()
+  ): EventReception = {
+    val reception = EventReception.default(
+      eventBus = eventBus,
+      dispatcher = dispatcher,
+      ingressSecurityResolver = ingressSecurityResolver,
+      entitySpace = Some(component.entitySpace),
+      entitySubscriptionLimit = entitySubscriptionLimit,
+      workingSetEntities = component.workingSetEntityNames
+    )
+    component.eventReceptionDefinitions.foreach(reception.register)
+    component.eventSubscriptionDefinitions.foreach(reception.registerSubscription)
+    reception
+  }
+
+  def createOperationActionDispatcher(
+    component: Component
+  ): ActionCallDispatcher =
+    new OperationRequestActionDispatcher(ComponentLogic(component))
 
   private def _bootstrap_state_machine_planners(
     component: Component,
@@ -384,6 +427,15 @@ final class ComponentFactory(
       }
     }
   }
+
+  private def _resolve_working_set_entity_names(
+    component: Component,
+    plans: Vector[EntityRuntimePlan[Any]]
+  ): Set[String] =
+    if (plans.nonEmpty)
+      plans.flatMap(_.workingSet.map(_.entityName)).toSet
+    else
+      _default_working_sets(component).map(_.entityName).toSet
 
   private def _default_working_sets(
     component: Component

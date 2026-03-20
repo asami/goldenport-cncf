@@ -26,6 +26,7 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.protocol.OperationResponseFormatter
+import org.goldenport.cncf.security.IngressSecurityResolver
 
 /*
  * @since   Jan.  7, 2026
@@ -172,10 +173,11 @@ final class Subsystem(
       }
       response <- {
         val (component, _, _) = route
-        component.logic.makeOperationRequest(request).flatMap { r =>
+        IngressSecurityResolver.resolve(request).flatMap { security =>
+          component.logic.makeOperationRequest(request).flatMap { r =>
           r match {
             case action: Action =>
-              val call = component.logic.createActionCall(action)
+              val call = component.logic.createActionCall(action, security.executionContext)
               component.logic.execute(call).flatMap { opres =>
                 val rendered = _to_response(request, opres)
                 Consequence.success(rendered)
@@ -183,6 +185,7 @@ final class Subsystem(
             case _ =>
               Consequence.failure("OperationRequest must be Action")
           }
+        }
         }
       }
     } yield response
@@ -204,7 +207,10 @@ final class Subsystem(
   def executeAction(action: Action): Consequence[OperationResponse] =
     _resolve_route(action.request) match {
       case Some((component, _, _)) =>
-        component.execute(action)
+        IngressSecurityResolver.resolve(action.request).flatMap { security =>
+          val call = component.logic.createActionCall(action, security.executionContext)
+          component.logic.execute(call)
+        }
       case None =>
         Consequence.failure("Operation route not found")
     }

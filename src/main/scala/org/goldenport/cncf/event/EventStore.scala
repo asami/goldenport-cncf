@@ -77,6 +77,18 @@ object EventRecord {
     lane: EventLane
   ): EventRecord =
     event match {
+      case e: ReceptionDomainEvent =>
+        EventRecord(
+          id = EventId.generate(),
+          name = e.name,
+          kind = e.kind,
+          payload = e.payload,
+          attributes = e.attributes,
+          createdAt = e.occurredAt,
+          persistent = true,
+          status = Status.Stored,
+          lane = lane
+        )
       case e: TransitionLifecycleEvent =>
         EventRecord(
           id = e.id,
