@@ -12,7 +12,8 @@ import org.goldenport.cncf.cli.CncfRuntime
 /*
  * @since   Jan. 14, 2026
  *  version Jan. 22, 2026
- * @version Feb. 19, 2026
+ *  version Feb. 19, 2026
+ * @version Mar. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 type Script = ScriptActionCall => Any
@@ -140,6 +141,9 @@ case class ScriptAction(
   request: Request,
   script: Script
 ) extends CommandAction() {
+  override def commandExecutionMode: CommandExecutionMode =
+    CommandExecutionMode.SyncJob
+
   def createCall(core: ActionCall.Core): ActionCall =
     ScriptActionCall(core, script)
 }

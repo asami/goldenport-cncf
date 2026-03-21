@@ -5,12 +5,12 @@ import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.Response
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
-import org.goldenport.cncf.action.{Action, ActionCall, QueryAction, ResourceAccess}
+import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, QueryAction, ResourceAccess}
 import cats.~>
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeKind}
 import org.goldenport.cncf.backend.collaborator.Collaborator
 import org.goldenport.cncf.http.HttpDriver
-import org.goldenport.cncf.job.{ActionId, ActionTask, JobControlPolicy, JobControlRequest, JobControlResponse, JobEngine, JobId, JobPersistencePolicy, JobResult, JobStatus, JobSubmitOption, JobTask}
+import org.goldenport.cncf.job.{ActionId, ActionTask, JobControlPolicy, JobControlRequest, JobControlResponse, JobEngine, JobId, JobPersistencePolicy, JobResult, JobRunMode, JobStatus, JobSubmitOption, JobTask}
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
@@ -84,10 +84,42 @@ case class ComponentLogic(
       case _: QueryAction =>
         val jobid = submitJob(List(task), ctx)
         awaitJobResult(jobid)
+      case command: CommandAction =>
+        _effective_command_execution_mode(action, command).match {
+          case CommandExecutionMode.AsyncJob =>
+            val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Async)
+            val jobid = submitJob(List(task), ctx, option)
+            Consequence.success(OperationResponse.Scalar(jobid.value))
+          case CommandExecutionMode.AsyncJobAndAwait =>
+            val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Async)
+            val jobid = submitJob(List(task), ctx, option)
+            awaitJobResult(jobid)
+          case CommandExecutionMode.SyncJob =>
+            val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Sync)
+            val jobid = submitJob(List(task), ctx, option)
+            awaitJobResult(jobid)
+          case CommandExecutionMode.SyncDirectNoJob =>
+            execute(createActionCall(action, ctx))
+        }
       case _ =>
         val jobid = submitJob(List(task), ctx)
         Consequence.success(OperationResponse.Scalar(jobid.value))
     }
+  }
+
+  private def _effective_command_execution_mode(
+    action: Action,
+    command: CommandAction
+  ): CommandExecutionMode =
+    if (_is_command_script_combo(action))
+      CommandExecutionMode.SyncDirectNoJob
+    else
+      command.commandExecutionMode
+
+  private def _is_command_script_combo(action: Action): Boolean = {
+    val isscriptcomponent = action.request.component.exists(_.equalsIgnoreCase("SCRIPT"))
+    val iscommandmode = GlobalRuntimeContext.current.exists(_.runtimeMode.name == "command")
+    isscriptcomponent && iscommandmode
   }
 
   def submitJob(tasks: List[JobTask], ctx: ExecutionContext): JobId =

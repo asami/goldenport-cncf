@@ -111,6 +111,13 @@ final case class JobControlResponse(
   async: Boolean
 )
 
+final case class JobMetrics(
+  running: Int,
+  queued: Int,
+  completed: Int,
+  failed: Int
+)
+
 trait JobControlPolicy {
   def authorize(jobId: JobId, request: JobControlRequest)(using ExecutionContext): Consequence[Unit]
 }
@@ -191,10 +198,16 @@ enum JobPersistencePolicy {
 
 final case class JobSubmitOption(
   persistence: JobPersistencePolicy = JobPersistencePolicy.Persistent,
+  runMode: JobRunMode = JobRunMode.Async,
   requestSummary: Option[String] = None,
   parameters: Map[String, String] = Map.empty,
   executionNotes: Vector[String] = Vector.empty
 )
+
+enum JobRunMode {
+  case Async
+  case Sync
+}
 
 enum JobDataOrigin {
   case Durable
@@ -327,6 +340,7 @@ trait JobEngine {
   def query(jobId: JobId): Option[JobQueryReadModel]
   def queryTasks(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTaskPage]
   def queryTimeline(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTimelinePage]
+  def metrics: Option[JobMetrics] = None
 
   def queryVisible(
     jobId: JobId,
@@ -379,7 +393,12 @@ final class InMemoryJobEngine(
       debug = initialdebug
     )
     _put_record(record)
-    _run_job_(jobid, tasks, ctx)
+    option.runMode match {
+      case JobRunMode.Async =>
+        _run_job_async_(jobid, tasks, ctx)
+      case JobRunMode.Sync =>
+        _run_job_sync_(jobid, tasks, ctx)
+    }
     jobid
   }
 
@@ -424,25 +443,50 @@ final class InMemoryJobEngine(
   def queryTimeline(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTimelinePage] =
     _get_record(jobId).map(_timeline_page(_, offset, limit))
 
-  private def _run_job_(
+  override def metrics: Option[JobMetrics] = {
+    val records = _durable_jobs.values().toArray(new Array[JobRecord](0)).toVector ++
+      _runtime_jobs.values().toArray(new Array[JobRecord](0)).toVector
+    val running = records.count(_.status == JobStatus.Running)
+    val queued = records.count(_.status == JobStatus.Submitted)
+    val completed = records.count(_.status == JobStatus.Succeeded)
+    val failed = records.count(_.status == JobStatus.Failed)
+    Some(JobMetrics(running = running, queued = queued, completed = completed, failed = failed))
+  }
+
+  private def _run_job_async_(
     jobid: JobId,
     tasks: List[JobTask],
     ctx: ExecutionContext
   ): Unit = {
-    Future {
-      _append_timeline_(jobid, "job.running", None, None, None)
-      _update_record_(jobid, JobStatus.Running, None)
-      tasks match {
-        case Nil =>
-          _append_timeline_(jobid, "job.succeeded", None, None, Some("no task"))
-          _update_record_(jobid, JobStatus.Succeeded, None)
-        case _ =>
-          var previous: Option[TaskId] = None
-          var failure: Option[Conclusion] = None
-          var successResponse: Option[OperationResponse] = None
-          tasks.foreach { task =>
-            if (failure.isEmpty && _can_run_next_task(jobid)) {
-              if (_await_if_suspended(jobid)) {
+    Future(_run_job_body_(jobid, tasks, ctx))
+    ()
+  }
+
+  private def _run_job_sync_(
+    jobid: JobId,
+    tasks: List[JobTask],
+    ctx: ExecutionContext
+  ): Unit =
+    _run_job_body_(jobid, tasks, ctx)
+
+  private def _run_job_body_(
+    jobid: JobId,
+    tasks: List[JobTask],
+    ctx: ExecutionContext
+  ): Unit = {
+    _append_timeline_(jobid, "job.running", None, None, None)
+    _update_record_(jobid, JobStatus.Running, None)
+    tasks match {
+      case Nil =>
+        _append_timeline_(jobid, "job.succeeded", None, None, Some("no task"))
+        _update_record_(jobid, JobStatus.Succeeded, None)
+      case _ =>
+        var previous: Option[TaskId] = None
+        var failure: Option[Conclusion] = None
+        var successResponse: Option[OperationResponse] = None
+        tasks.foreach { task =>
+          if (failure.isEmpty && _can_run_next_task(jobid)) {
+            if (_await_if_suspended(jobid)) {
               val taskid = TaskId.generate()
               val startedat = Instant.now()
               val jobcontext = JobContext(
@@ -482,30 +526,28 @@ final class InMemoryJobEngine(
                     Instant.now()
                   )
               }
-              }
             }
           }
-          _get_record(jobid).map(_.status) match {
-            case Some(JobStatus.Cancelled) =>
-              _append_timeline_(jobid, "job.cancelled", None, None, Some("cancelled"))
-              _update_record_(jobid, JobStatus.Cancelled, Some(JobResult.Failure(Conclusion.simple("job cancelled"))))
-            case _ =>
-              failure match {
-                case Some(c) =>
-                  _append_timeline_(jobid, "job.failed", None, None, c.observation.getEffectiveMessage)
-                  _update_record_(jobid, JobStatus.Failed, Some(JobResult.Failure(c)))
-                case None =>
-                  _append_timeline_(jobid, "job.succeeded", None, None, None)
-                  _update_record_(
-                    jobid,
-                    JobStatus.Succeeded,
-                    successResponse.map(JobResult.Success.apply)
-                  )
-              }
-          }
-      }
+        }
+        _get_record(jobid).map(_.status) match {
+          case Some(JobStatus.Cancelled) =>
+            _append_timeline_(jobid, "job.cancelled", None, None, Some("cancelled"))
+            _update_record_(jobid, JobStatus.Cancelled, Some(JobResult.Failure(Conclusion.simple("job cancelled"))))
+          case _ =>
+            failure match {
+              case Some(c) =>
+                _append_timeline_(jobid, "job.failed", None, None, c.observation.getEffectiveMessage)
+                _update_record_(jobid, JobStatus.Failed, Some(JobResult.Failure(c)))
+              case None =>
+                _append_timeline_(jobid, "job.succeeded", None, None, None)
+                _update_record_(
+                  jobid,
+                  JobStatus.Succeeded,
+                  successResponse.map(JobResult.Success.apply)
+                )
+            }
+        }
     }
-    ()
   }
 
   private def _control(
@@ -549,7 +591,7 @@ final class InMemoryJobEngine(
       )
     )
     _append_timeline_(jobid, "job.retry.submitted", None, None, None)
-    _run_job_(jobid, record.tasks, record.submittedContext)
+    _run_job_async_(jobid, record.tasks, record.submittedContext)
   }
 
   private def _control_result_for(status: JobStatus): Option[JobResult] =
