@@ -5,7 +5,7 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version Mar.  5, 2026
+ * @version Mar. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 object SchemaProjection {
@@ -23,13 +23,28 @@ object SchemaProjection {
         )
       case Target.ComponentTarget(component) =>
         val services = component.protocol.services.services.sortBy(_.name)
+        val aggregates = aggregateMetas(component).map { x =>
+          Record.data(
+            "name" -> x.name,
+            "entityName" -> x.entityName
+          )
+        }
+        val views = viewMetas(component).map { x =>
+          Record.data(
+            "name" -> x.name,
+            "entityName" -> x.entityName,
+            "viewNames" -> x.viewNames
+          )
+        }
         Record.data(
           "type" -> "schema",
           "targetType" -> "component",
           "name" -> component.name,
           "services" -> services.map { service =>
             project(base, Some(s"${component.name}.${service.name}"))
-          }
+          },
+          "aggregateCollections" -> aggregates,
+          "viewCollections" -> views
         )
       case Target.ServiceTarget(component, service) =>
         val operations = service.operations.operations.toVector.sortBy(_.name)

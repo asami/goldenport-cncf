@@ -6,7 +6,7 @@ import org.goldenport.cncf.projection.model.HelpModel
 
 /*
  * @since   Mar.  5, 2026
- * @version Mar.  5, 2026
+ * @version Mar. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 object HelpProjection {
@@ -25,12 +25,18 @@ object HelpProjection {
         )
       case Target.ComponentTarget(component) =>
         val services = component.protocol.services.services.sortBy(_.name)
+        val aggregates = aggregateMetas(component).map(_.name)
+        val views = viewMetas(component).map(_.name)
         HelpModel(
           `type` = "component",
           name = component.name,
           summary = s"Component: ${component.name}",
           children = services.map(_.name),
-          details = Map("services" -> services.map(_.name)),
+          details = Map(
+            "services" -> services.map(_.name),
+            "aggregates" -> aggregates,
+            "views" -> views
+          ),
           usage = services.headOption.map(s => Vector(s"command help ${component.name}.${s.name}")).getOrElse(Vector.empty)
         )
       case Target.ServiceTarget(component, service) =>

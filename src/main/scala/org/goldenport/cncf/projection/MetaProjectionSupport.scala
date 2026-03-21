@@ -6,10 +6,20 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version Mar.  5, 2026
+ * @version Mar. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
+  final case class AggregateMeta(
+    name: String,
+    entityName: String
+  )
+  final case class ViewMeta(
+    name: String,
+    entityName: String,
+    viewNames: Vector[String]
+  )
+
   sealed trait Target
   object Target {
     final case class Subsystem(components: Vector[Component], name: String) extends Target
@@ -90,6 +100,16 @@ private[projection] object MetaProjectionSupport {
       "returns" -> returns
     )
   }
+
+  def aggregateMetas(component: Component): Vector[AggregateMeta] =
+    component.aggregateDefinitions
+      .sortBy(_.name)
+      .map(x => AggregateMeta(x.name, x.entityName))
+
+  def viewMetas(component: Component): Vector[ViewMeta] =
+    component.viewDefinitions
+      .sortBy(_.name)
+      .map(x => ViewMeta(x.name, x.entityName, x.viewNames.distinct.sorted))
 
   private def _find_component(comps: Vector[Component], name: String): Option[Component] =
     comps.find(_.name == name)

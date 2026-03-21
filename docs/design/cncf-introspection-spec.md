@@ -41,6 +41,17 @@ Projection models currently used:
 HelpModel
 TreeModel
 
+Aggregate/View metadata exposure:
+
+- Component-level introspection (`meta.help`, `meta.describe`, `meta.schema`)
+  includes generated aggregate/view collection metadata.
+- OpenAPI projection includes CNCF vendor extensions:
+  - `x-cncf-aggregate-collections`
+  - `x-cncf-view-collections`
+- Projection output order must be deterministic:
+  - collections sorted by `name`
+  - named views sorted and deduplicated
+
 ## Output Channels
 
 The same projected structure is rendered for multiple channels:

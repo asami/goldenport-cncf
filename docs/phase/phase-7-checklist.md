@@ -137,7 +137,7 @@ Implement synchronization policy between aggregate updates and view/read model u
 
 ## AV-04: Projection/Meta Surface Alignment
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -145,17 +145,17 @@ Align introspection/projection surfaces with finalized aggregate/view model boun
 
 ### Detailed Tasks
 
-- [ ] Align `meta.*` aggregate/view exposure with runtime authoritative API set.
-- [ ] Align schema/help/openapi projections with finalized command/read contracts.
-- [ ] Reflect generated Aggregate/View structure in introspection output.
-- [ ] Remove ambiguous or duplicate projection entries after boundary freeze.
-- [ ] Ensure projection output is deterministic and testable.
+- [x] Align `meta.*` aggregate/view exposure with runtime authoritative API set.
+- [x] Align schema/help/openapi projections with finalized command/read contracts.
+- [x] Reflect generated Aggregate/View structure in introspection output.
+- [x] Remove ambiguous or duplicate projection entries after boundary freeze.
+- [x] Ensure projection output is deterministic and testable.
 
 ---
 
 ## AV-05: Executable Specifications (CQRS Completion Slice)
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 

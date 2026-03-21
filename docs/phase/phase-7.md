@@ -34,8 +34,8 @@ This document is a progress dashboard, not a design journal.
 - A (DONE): Finalize semantic contract and CML/AST boundary (Entity -> Aggregate/View).
 - B (DONE): Implement CML-based Aggregate/View generation.
 - C (DONE): Define aggregate-to-view runtime synchronization and consistency rules.
-- D (ACTIVE): Align projection/meta surfaces with generated model.
-- E (SUSPENDED): Add executable specifications and regression coverage.
+- D (DONE): Align projection/meta surfaces with generated model.
+- E (ACTIVE): Add executable specifications and regression coverage.
 
 Resume hint:
 - Finalize semantic and AST boundary first; generation/runtime contracts depend on stable model shape.
@@ -45,7 +45,7 @@ Resume hint:
 - [x] AV-01: Define and freeze semantic contract and CML/AST boundary (`EntityDef` + `AggregateDef` + `ViewDef`).
 - [x] AV-02: Implement CML-based generation of Aggregate/View models from Entity definition.
 - [x] AV-03: Implement aggregate-to-view synchronization policy (event bridge, timing, ordering, idempotency, failure behavior).
-- [ ] AV-04: Align introspection/projection surfaces (`meta.*`, schema/help surfaces) with generated aggregate/view model.
+- [x] AV-04: Align introspection/projection surfaces (`meta.*`, schema/help surfaces) with generated aggregate/view model.
 - [ ] AV-05: Add executable specifications for CQRS separation, generation correctness, deterministic behavior, and failure paths.
 
 ## 6. Inputs from Previous Phases
@@ -63,7 +63,8 @@ Resume hint:
   - cloud-native-component-framework: `16c7d46`
 - AV-02 is marked DONE in Phase 7 after migration-note closure.
 - AV-03 is marked DONE in Phase 7 after synchronization-policy closure.
-- Current active item is AV-04 (projection/meta surface alignment).
+- AV-04 is marked DONE after projection/meta surface alignment and deterministic regression coverage.
+- Current active item is AV-05 (executable specs closure).
 
 ## 8. References
 
