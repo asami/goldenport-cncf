@@ -56,13 +56,13 @@
 
 ## Acceptance Criteria
 
-- [ ] `ARCH-R3-P1-01`:
+- [x] `ARCH-R3-P1-01`:
   - `discover()` 経路で plan が供給された場合に plan 分岐が実行されること。
   - plan 由来の `maxPartitions` / `maxEntitiesPerPartition` / `workingSet` が実挙動に反映されること。
-- [ ] `ARCH-R3-P2-01`:
+- [x] `ARCH-R3-P2-01`:
   - legacy bootstrap で `descriptor.plan` と実メモリ設定が一致すること。
   - introspection で観測される plan 値と実際の eviction/partition 挙動が矛盾しないこと。
-- [ ] 追加/更新する Executable Specification は Given/When/Then + PBT 方針に従うこと。
+- [x] 追加/更新する Executable Specification は Given/When/Then + PBT 方針に従うこと。
 
 ## Suggested Spec Additions
 
