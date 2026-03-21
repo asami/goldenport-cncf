@@ -62,7 +62,8 @@ Resume hint:
   - cozy: `3421361`
   - cloud-native-component-framework: `16c7d46`
 - AV-02 is marked DONE in Phase 7 after migration-note closure.
-- Current active item is AV-03 (aggregate-to-view synchronization policy).
+- AV-03 is marked DONE in Phase 7 after synchronization-policy closure.
+- Current active item is AV-04 (projection/meta surface alignment).
 
 ## 8. References
 
