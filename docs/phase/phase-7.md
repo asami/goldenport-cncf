@@ -61,7 +61,8 @@ Resume hint:
   - simple-modeler: `fa84578`
   - cozy: `3421361`
   - cloud-native-component-framework: `16c7d46`
-- AV-02 remains ACTIVE in this phase document until remaining migration/closure tasks are completed.
+- AV-02 is marked DONE in Phase 7 after migration-note closure.
+- Current active item is AV-03 (aggregate-to-view synchronization policy).
 
 ## 8. References
 
