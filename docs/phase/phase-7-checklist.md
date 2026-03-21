@@ -155,7 +155,7 @@ Align introspection/projection surfaces with finalized aggregate/view model boun
 
 ## AV-05: Executable Specifications (CQRS Completion Slice)
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -163,13 +163,13 @@ Add executable specifications to close Phase 7 with behavior-level guarantees.
 
 ### Detailed Tasks
 
-- [ ] Add Given/When/Then specs for Aggregate contract (`handle -> state + events`) and invariants.
-- [ ] Add specs for View contract (`event -> projection`) and rebuildability.
-- [ ] Add generation specs for Entity -> Aggregate/View output correctness.
-- [ ] Add specs for synchronization ordering/eventual consistency/idempotent projection.
-- [ ] Add specs for synchronization failure and retry/idempotency behavior.
-- [ ] Add projection/meta alignment regression specs for aggregate/view surfaces.
-- [ ] Add integrated CQRS path regression specs across command->event->projection->query flow.
+- [x] Add Given/When/Then specs for Aggregate contract (`handle -> state + events`) and invariants.
+- [x] Add specs for View contract (`event -> projection`) and rebuildability.
+- [x] Add generation specs for Entity -> Aggregate/View output correctness.
+- [x] Add specs for synchronization ordering/eventual consistency/idempotent projection.
+- [x] Add specs for synchronization failure and retry/idempotency behavior.
+- [x] Add projection/meta alignment regression specs for aggregate/view surfaces.
+- [x] Add integrated CQRS path regression specs across command->event->projection->query flow.
 
 ---
 

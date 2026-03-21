@@ -1,6 +1,6 @@
 # Phase 7 — Aggregate and View Completion
 
-status = open
+status = done
 
 ## 1. Purpose of This Document
 
@@ -35,7 +35,7 @@ This document is a progress dashboard, not a design journal.
 - B (DONE): Implement CML-based Aggregate/View generation.
 - C (DONE): Define aggregate-to-view runtime synchronization and consistency rules.
 - D (DONE): Align projection/meta surfaces with generated model.
-- E (ACTIVE): Add executable specifications and regression coverage.
+- E (DONE): Add executable specifications and regression coverage.
 
 Resume hint:
 - Finalize semantic and AST boundary first; generation/runtime contracts depend on stable model shape.
@@ -46,7 +46,7 @@ Resume hint:
 - [x] AV-02: Implement CML-based generation of Aggregate/View models from Entity definition.
 - [x] AV-03: Implement aggregate-to-view synchronization policy (event bridge, timing, ordering, idempotency, failure behavior).
 - [x] AV-04: Align introspection/projection surfaces (`meta.*`, schema/help surfaces) with generated aggregate/view model.
-- [ ] AV-05: Add executable specifications for CQRS separation, generation correctness, deterministic behavior, and failure paths.
+- [x] AV-05: Add executable specifications for CQRS separation, generation correctness, deterministic behavior, and failure paths.
 
 ## 6. Inputs from Previous Phases
 
@@ -64,7 +64,8 @@ Resume hint:
 - AV-02 is marked DONE in Phase 7 after migration-note closure.
 - AV-03 is marked DONE in Phase 7 after synchronization-policy closure.
 - AV-04 is marked DONE after projection/meta surface alignment and deterministic regression coverage.
-- Current active item is AV-05 (executable specs closure).
+- AV-05 is marked DONE after executable-spec closure across aggregate/view CQRS paths.
+- Phase 7 completion check is satisfied (AV-01..AV-05 all DONE; no ACTIVE/SUSPENDED items).
 
 ## 8. References
 

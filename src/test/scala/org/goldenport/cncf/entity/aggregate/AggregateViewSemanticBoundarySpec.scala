@@ -77,6 +77,45 @@ final class AggregateViewSemanticBoundarySpec
       first shouldBe second
       first shouldBe Consequence.success(View(13))
     }
+
+    "enforce invariant failures as Consequence.Failure and stop state/event output" in {
+      case class State(balance: Int)
+      case class Command(withdraw: Int)
+      case class Event(kind: String, amount: Int)
+
+      trait AggregateContract[S, C, E] {
+        def handle(command: C, state: S): Consequence[(S, Vector[E])]
+      }
+
+      val aggregate = new AggregateContract[State, Command, Event] {
+        def handle(command: Command, state: State): Consequence[(State, Vector[Event])] =
+          if (command.withdraw <= 0)
+            Consequence.failure("withdraw amount must be positive")
+          else if (state.balance < command.withdraw)
+            Consequence.failure("insufficient balance")
+          else
+            Consequence.success(
+              (
+                State(state.balance - command.withdraw),
+                Vector(Event("withdrawn", command.withdraw))
+              )
+            )
+      }
+
+      Given("a command that violates aggregate invariant")
+      val state = State(balance = 20)
+      val invalid = Command(withdraw = 30)
+
+      When("aggregate handle is executed")
+      val result = aggregate.handle(invalid, state)
+
+      Then("the command is rejected with failure and no state/event success output")
+      result match {
+        case Consequence.Failure(_) =>
+          succeed
+        case other =>
+          fail(s"expected failure but got: $other")
+      }
+    }
   }
 }
-

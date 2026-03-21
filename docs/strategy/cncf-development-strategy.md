@@ -206,6 +206,19 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - No distributed saga/orchestration engine.
 - Artifact (notes): `docs/notes/event-foundation.md`.
 
+### Phase 7: Aggregate and View Completion
+- Goal: finalize aggregate/view runtime model and complete CQRS separation after Job CQRS baseline.
+- Scope:
+- Finalize Aggregate model boundaries and execution contract.
+- Finalize View model (read-side projection/query contract).
+- Define aggregate-to-view synchronization boundary and consistency rules.
+- Align runtime projection surfaces (`meta.*`, query/read API) with finalized model.
+- Non-goals:
+- No distributed workflow engine.
+- No multi-node read-model replication in this phase.
+- No security model redesign (handled by dedicated security phase).
+- Artifact (work): `docs/phase/phase-7.md`.
+
 ## 4. Relationship Between Phases
 - Later phases depend on earlier phases.
 - Phase 1.5 constrains Phase 2 and Phase 3.
@@ -231,46 +244,33 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 
 ## 7. Future Development Items
 
-This section lists planned development areas to be incorporated in future phases beyond Phase 5.
+This section lists planned development areas to be incorporated in future phases beyond Phase 7.
 These items are not yet fully assigned to specific phases and may be grouped or split as the architecture evolves.
 
-### 7.1 Job Management (CQRS)
-- Job query (read model)
-  - Trace information
-- Job control (command model)
-  - cancel
-  - retry
-  - suspend / resume
-
-### 7.2 Aggregate and View Completion
-- Finalize Aggregate model
-- Finalize View model (read side)
-- Establish clear CQRS separation
-
-### 7.3 Component Wiring and Subsystem Construction
+### 7.1 Component Wiring and Subsystem Construction
 - Build subsystems via Component wiring
 - Define and stabilize Component ports
 
-### 7.4 Security
+### 7.2 Security
 - Authentication
 - Authorization
 - Audit logging
 
-### 7.5 Metrics and Observability
+### 7.3 Metrics and Observability
 - Metrics collection
 - Observability integration
   - OpenTelemetry support
 
-### 7.6 Web Layer
+### 7.4 Web Layer
 - Dashboard
 - Management Console
 - Documentation
   - Manual
 
-### 7.7 Tagging and Knowledge Structure
+### 7.5 Tagging and Knowledge Structure
 - Hierarchical tagging model
 - Classification and navigation support
 
-### 7.8 RDF Integration
+### 7.6 RDF Integration
 - RDF-based data representation
 - External knowledge graph integration

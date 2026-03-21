@@ -66,3 +66,10 @@ Resume hint:
 - `/Users/asami/src/dev2025/cloud-native-component-framework/docs/design/job-state-transition.md`
 - `/Users/asami/src/dev2025/cloud-native-component-framework/docs/design/job-event-log.md`
 - `/Users/asami/src/dev2025/cloud-native-component-framework/docs/journal/2026/03/job-task-execution-persistence-design.md`
+
+## 8. Strategy Merge Note
+
+- `docs/strategy/cncf-development-strategy.md` previously listed
+  "7.1 Job Management (CQRS)" under Future Development Items.
+- That item is now absorbed into this Phase 6 document as completed work.
+- Phase 6 is the authoritative progress and closure source for Job Management CQRS.
