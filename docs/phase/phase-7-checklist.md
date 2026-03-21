@@ -116,7 +116,7 @@ Generate Aggregate and View from Entity definition and replace manual-only model
 
 ## AV-03: Aggregate-to-View Synchronization Policy
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -124,20 +124,20 @@ Implement synchronization policy between aggregate updates and view/read model u
 
 ### Detailed Tasks
 
-- [ ] Define command flow:
+- [x] Define command flow:
   - Command -> Aggregate -> new state + Event(s)
-- [ ] Define projection flow:
+- [x] Define projection flow:
   - Event -> Projection -> View update
-- [ ] Define eventual consistency level and delivery assumptions.
-- [ ] Define deterministic ordering and idempotent projection rules.
-- [ ] Define synchronization failure policy (retry, skip, dead-letter boundary if any).
-- [ ] Align execution with Job/Task model (`ActionCall -> Task -> Job`).
+- [x] Define eventual consistency level and delivery assumptions.
+- [x] Define deterministic ordering and idempotent projection rules.
+- [x] Define synchronization failure policy (retry, skip, dead-letter boundary if any).
+- [x] Align execution with Job/Task model (`ActionCall -> Task -> Job`).
 
 ---
 
 ## AV-04: Projection/Meta Surface Alignment
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 

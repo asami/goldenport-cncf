@@ -33,8 +33,8 @@ This document is a progress dashboard, not a design journal.
 
 - A (DONE): Finalize semantic contract and CML/AST boundary (Entity -> Aggregate/View).
 - B (DONE): Implement CML-based Aggregate/View generation.
-- C (ACTIVE): Define aggregate-to-view runtime synchronization and consistency rules.
-- D (SUSPENDED): Align projection/meta surfaces with generated model.
+- C (DONE): Define aggregate-to-view runtime synchronization and consistency rules.
+- D (ACTIVE): Align projection/meta surfaces with generated model.
 - E (SUSPENDED): Add executable specifications and regression coverage.
 
 Resume hint:
@@ -44,7 +44,7 @@ Resume hint:
 
 - [x] AV-01: Define and freeze semantic contract and CML/AST boundary (`EntityDef` + `AggregateDef` + `ViewDef`).
 - [x] AV-02: Implement CML-based generation of Aggregate/View models from Entity definition.
-- [ ] AV-03: Implement aggregate-to-view synchronization policy (event bridge, timing, ordering, idempotency, failure behavior).
+- [x] AV-03: Implement aggregate-to-view synchronization policy (event bridge, timing, ordering, idempotency, failure behavior).
 - [ ] AV-04: Align introspection/projection surfaces (`meta.*`, schema/help surfaces) with generated aggregate/view model.
 - [ ] AV-05: Add executable specifications for CQRS separation, generation correctness, deterministic behavior, and failure paths.
 
