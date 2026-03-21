@@ -28,6 +28,7 @@ import org.goldenport.cncf.cli.renderer.{CliHelpJsonRenderer, CliHelpYamlRendere
 import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace, Repository, CmlAggregateDefinition}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
 import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace, CmlViewDefinition}
+import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.statemachine.StateMachinePlannerProvider
 import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition}
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
@@ -43,7 +44,7 @@ import scala.util.control.NonFatal
  *  version Jan.  3, 2026
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -157,6 +158,7 @@ abstract class Component() extends Component.Core.Holder {
   def eventSubscriptionDefinitions: Vector[CmlSubscriptionDefinition] = Vector.empty
   def aggregateDefinitions: Vector[CmlAggregateDefinition] = Vector.empty
   def viewDefinitions: Vector[CmlViewDefinition] = Vector.empty
+  def operationDefinitions: Vector[CmlOperationDefinition] = Vector.empty
 
   def entity[E](name: String): EntityCollection[E] =
     entitySpace.entity(name)

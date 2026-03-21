@@ -9,6 +9,7 @@ import org.goldenport.record.Record
 import org.goldenport.cncf.component._
 import org.goldenport.cncf.entity.aggregate.CmlAggregateDefinition
 import org.goldenport.cncf.entity.view.CmlViewDefinition
+import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -16,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateViewProjectionAlignmentSpec
@@ -38,16 +39,20 @@ final class AggregateViewProjectionAlignmentSpec
       val describe2 = DescribeProjection.project(component, Some(component.name)).asMap
       val schema2 = SchemaProjection.project(component, Some(component.name)).asMap
 
-      Then("aggregate/view metadata is included with stable sorted output")
+      Then("aggregate/view/operation metadata is included with stable sorted output")
       _string_vector(_record(help("details")).asMap("aggregates")) shouldBe Vector("person_aggregate", "profile_aggregate")
       _string_vector(_record(help("details")).asMap("views")) shouldBe Vector("person_view", "summary_view")
+      _string_vector(_record(help("details")).asMap("operationDefinitions")) shouldBe Vector("getPerson", "savePerson")
 
       _records(describe("aggregates")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_aggregate", "profile_aggregate")
       _records(describe("views")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_view", "summary_view")
       _string_vector(_records(describe("views")).head.asMap("viewNames")) shouldBe Vector("detail", "summary")
+      _records(describe("operationDefinitions")).map(_.getString("name").getOrElse("")) shouldBe Vector("getPerson", "savePerson")
+      _records(describe("operationDefinitions")).head.getString("kind") shouldBe Some("QUERY")
 
       _records(schema("aggregateCollections")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_aggregate", "profile_aggregate")
       _records(schema("viewCollections")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_view", "summary_view")
+      _records(schema("operationDefinitions")).map(_.getString("name").getOrElse("")) shouldBe Vector("getPerson", "savePerson")
 
       help shouldBe help2
       describe shouldBe describe2
@@ -96,6 +101,31 @@ final class AggregateViewProjectionAlignmentSpec
         Vector(
           CmlViewDefinition(name = "summary_view", entityName = "person", viewNames = Vector("default")),
           CmlViewDefinition(name = "person_view", entityName = "person", viewNames = Vector("summary", "detail", "summary"))
+        )
+
+      override def operationDefinitions: Vector[CmlOperationDefinition] =
+        Vector(
+          CmlOperationDefinition(
+            name = "savePerson",
+            kind = "COMMAND",
+            inputType = "SavePersonInput",
+            outputType = "SavePersonResult",
+            inputValueKind = "COMMAND_VALUE",
+            parameters = Vector(
+              CmlOperationField("id", "EntityId", "1"),
+              CmlOperationField("name", "Name", "1")
+            )
+          ),
+          CmlOperationDefinition(
+            name = "getPerson",
+            kind = "QUERY",
+            inputType = "GetPerson",
+            outputType = "GetPersonResult",
+            inputValueKind = "QUERY_VALUE",
+            parameters = Vector(
+              CmlOperationField("id", "EntityId", "1")
+            )
+          )
         )
     }
 

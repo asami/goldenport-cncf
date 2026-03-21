@@ -6,7 +6,7 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -18,6 +18,14 @@ private[projection] object MetaProjectionSupport {
     name: String,
     entityName: String,
     viewNames: Vector[String]
+  )
+  final case class OperationMeta(
+    name: String,
+    kind: String,
+    inputType: String,
+    outputType: String,
+    inputValueKind: String,
+    parameters: Vector[Record]
   )
 
   sealed trait Target
@@ -110,6 +118,26 @@ private[projection] object MetaProjectionSupport {
     component.viewDefinitions
       .sortBy(_.name)
       .map(x => ViewMeta(x.name, x.entityName, x.viewNames.distinct.sorted))
+
+  def operationMetas(component: Component): Vector[OperationMeta] =
+    component.operationDefinitions
+      .sortBy(_.name)
+      .map { x =>
+        OperationMeta(
+          name = x.name,
+          kind = x.kind,
+          inputType = x.inputType,
+          outputType = x.outputType,
+          inputValueKind = x.inputValueKind,
+          parameters = x.parameters.map { p =>
+            Record.data(
+              "name" -> p.name,
+              "datatype" -> p.datatype,
+              "multiplicity" -> p.multiplicity
+            )
+          }
+        )
+      }
 
   private def _find_component(comps: Vector[Component], name: String): Option[Component] =
     comps.find(_.name == name)

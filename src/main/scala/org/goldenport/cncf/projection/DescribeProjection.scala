@@ -5,7 +5,7 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 object DescribeProjection {
@@ -34,13 +34,24 @@ object DescribeProjection {
             "viewNames" -> x.viewNames
           )
         }
+        val operationdefs = operationMetas(component).map { x =>
+          Record.data(
+            "name" -> x.name,
+            "kind" -> x.kind,
+            "inputType" -> x.inputType,
+            "outputType" -> x.outputType,
+            "inputValueKind" -> x.inputValueKind,
+            "parameters" -> x.parameters
+          )
+        }
         Record.data(
           "type" -> "component",
           "name" -> component.name,
           "summary" -> s"Component ${component.name}",
           "services" -> services.map(service_record),
           "aggregates" -> aggregates,
-          "views" -> views
+          "views" -> views,
+          "operationDefinitions" -> operationdefs
         )
       case Target.ServiceTarget(component, service) =>
         val operations = service.operations.operations.toVector.sortBy(_.name)
