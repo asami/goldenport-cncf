@@ -83,5 +83,27 @@ The following runtime flags are removed before selector resolution:
 --json
 --debug
 --no-exit
+--format <json|yaml|text>
+--path-resolution[=true|false]
 
 These flags are treated as runtime options, not operation arguments.
+
+Flag semantics:
+
+- `--json`:
+  - shorthand for `--format json`
+- `--format`:
+  - explicit output format override
+  - supported values: `json`, `yaml`, `text`
+- `--path-resolution`:
+  - command-mode selector resolution feature flag
+  - enables path-resolution route for command selector interpretation
+  - `component.service` form is supported (for example `admin.component`)
+  - slash form is interpreted as command path and must satisfy:
+    - `/component/service/operation`
+    - invalid path form (for example `admin/component`) is rejected by contract
+  - accepted forms:
+    - `--path-resolution`
+    - `--path-resolution=true|false`
+    - `--path-resolution true|false`
+  - non-command modes keep normal selector resolution behavior

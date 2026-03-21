@@ -53,6 +53,8 @@ meta.services
 meta.operations
 meta.schema
 meta.openapi
+meta.mcp
+meta.statemachine
 meta.tree
 meta.version
 

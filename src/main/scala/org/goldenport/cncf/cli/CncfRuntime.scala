@@ -1787,13 +1787,38 @@ class CncfRuntime() extends GlobalObservable {
       return 2
     }
     val subsystem = _initialize(normalizedArgs, extraComponents)
-    _runtime_protocol_engine.makeOperationRequest(normalizedArgs) match {
-      case Consequence.Success(req) =>
-        _run(subsystem, req)
+    normalizedArgs.headOption.flatMap(RunMode.from) match {
+      case Some(RunMode.Command) =>
+        _execute_command_args(subsystem, normalizedArgs.drop(1))
+      case _ =>
+        _runtime_protocol_engine.makeOperationRequest(normalizedArgs) match {
+          case Consequence.Success(req) =>
+            _run(subsystem, req)
+          case Consequence.Failure(conclusion) =>
+            _print_error(conclusion)
+            _exit_code(Consequence.Failure(conclusion))
+        }
+    }
+  }
+
+  private def _execute_command_args(
+    subsystem: Subsystem,
+    args: Array[String]
+  ): Int = {
+    val normalizedArgs = CommandProtocolHelp.normalizeArgs(args) match {
+      case Left(code) => return code
+      case Right(xs) => xs
+    }
+    val result = _to_request(subsystem, normalizedArgs).flatMap { req =>
+      subsystem.execute(req)
+    }
+    result match {
+      case Consequence.Success(res) =>
+        _print_response(res)
       case Consequence.Failure(conclusion) =>
         _print_error(conclusion)
-        _exit_code(Consequence.Failure(conclusion))
     }
+    _exit_code(result)
   }
 
   private def _initialize(
@@ -2289,7 +2314,10 @@ class CncfRuntime() extends GlobalObservable {
     arguments.collectFirst { case Argument(_, body: MimeBody, _) => body }
 
   def executeCommand(subsystem: Subsystem, req: Request): Int = {
-    val args = req.toSubCommand.toArgs
+    val primaryargs = _recover_command_args(req.toSubCommand.toArgs, req)
+    val args =
+      if (primaryargs.nonEmpty) primaryargs
+      else _recover_command_args(_command_args_from_request(req), req)
     val normalizedArgs = CommandProtocolHelp.normalizeArgs(args) match {
       case Left(code) => return code
       case Right(xs) => xs
@@ -2304,6 +2332,38 @@ class CncfRuntime() extends GlobalObservable {
         _print_error(conclusion)
     }
     _exit_code(result)
+  }
+
+  private def _command_args_from_request(req: Request): Array[String] = {
+    val raw = req.toArgs
+    raw.toVector match {
+      case Vector(head, tail @ _*) if head == RunMode.Command.name =>
+        tail.toArray
+      case Vector(_, command, tail @ _*) if command == RunMode.Command.name =>
+        tail.toArray
+      case _ =>
+        raw
+    }
+  }
+
+  private def _recover_command_args(
+    args: Array[String],
+    req: Request
+  ): Array[String] = {
+    val haspathresolutionflag = args.contains("--path-resolution")
+    val hasselector = args.exists(x => !x.startsWith("-"))
+    if (haspathresolutionflag && !hasselector) {
+      req.properties.find(_.name == "path-resolution")
+        .map(_.value.toString)
+        .filter { x =>
+          val lowered = x.trim.toLowerCase
+          x.nonEmpty && lowered != "true" && lowered != "yes" && lowered != "on" && lowered != "1"
+        }
+        .map(x => args :+ x)
+        .getOrElse(args)
+    } else {
+      args
+    }
   }
 
   def executeCommandResponse(
@@ -2337,47 +2397,7 @@ class CncfRuntime() extends GlobalObservable {
     args: Array[String],
     mode: RunMode = RunMode.Command
   ): Consequence[Request] =
-    _extract_runtime_options(args.toIndexedSeq) match { case (runtimeOptions, clean) =>
-    _selectorAndArguments(clean).flatMap { case (selector0, tail) =>
-      val normalized = _normalize_meta_selector(subsystem, selector0, tail.toVector)
-      val aliasresolver =
-        if (subsystem.aliasResolver ne AliasResolver.empty) subsystem.aliasResolver
-        else _alias_resolver
-      val rewritten = PathPreNormalizer.rewriteSelector(normalized._1, mode, aliasresolver)
-      val (selector, suffixformat) = _extract_selector_format(rewritten)
-      _resolve_selector(subsystem, selector, runtimeOptions, mode) match {
-        case Consequence.Success((component, service, operation)) =>
-          val parsed = for {
-            comp <- subsystem.components.find(_.name == component)
-            svc <- comp.protocol.services.services.find(_.name == service)
-            opdef <- svc.operations.operations.find(_.name == operation)
-          } yield _args_parser.parse(opdef, normalized._2.toList)
-          val (arguments, switches, properties) = parsed.map { req =>
-            (req.arguments, req.switches, req.properties)
-          }.getOrElse {
-            (normalized._2.zipWithIndex.map { case (value, index) =>
-              Argument(s"arg${index + 1}", value, None)
-            }.toList, Nil, Nil)
-          }
-          val runtimeproperties = _runtime_properties(runtimeOptions, mode).filterNot(_.name.equalsIgnoreCase("format"))
-          val allproperties = _with_format_property(
-            properties ++ runtimeproperties,
-            _resolve_format(runtimeOptions, suffixformat, mode)
-          )
-          Consequence.success(
-            Request.of(
-              component = component,
-              service = service,
-              operation = operation,
-              arguments = arguments,
-              switches = switches,
-              properties = allproperties
-            )
-          )
-        case Consequence.Failure(conclusion) =>
-          Consequence.Failure(conclusion)
-      }
-    }}
+    CncfRuntime.parseCommandArgs(subsystem, args, mode)
 
   private def _resolve_selector(
     subsystem: Subsystem,

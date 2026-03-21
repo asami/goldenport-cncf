@@ -69,8 +69,8 @@ Configuration values are discovered from the following sources.
     - HOME configuration
         $HOME/.cncf/
 
-    - PROJECT configuration
-        ${PROJECT_ROOT}/.cncf/
+    - PROJECT configuration (legacy fixed path)
+        ${CWD}/.cncf/
 
     - CWD configuration
         ${CWD}/.cncf/
@@ -84,30 +84,25 @@ Absence of configuration must be handled gracefully.
 
 
 ----------------------------------------------------------------------
-4. Project Root Resolution
+4. Project Root Resolution (Legacy Effective Behavior)
 ----------------------------------------------------------------------
 
-Project root resolution is part of this framework.
+Legacy CNCF resolver does not perform upward project-root detection.
 
-4.1 Detection Rules (v0)
+4.1 Effective Rule (as implemented)
 
-Starting from the provided cwd, search upward for:
+`ConfigSource.project(cwd)` and `ConfigSource.cwd(cwd)` both resolve to:
 
-    - a directory containing .cncf/
-    - OR a directory containing .git/
+    ${CWD}/.cncf/config.conf
 
-The first directory that matches is considered the project root.
-
-If no directory matches:
-
-    - project root is considered absent
-    - project-level configuration is skipped
+No `.git` or parent-directory probing is executed in this legacy path.
+Project source and CWD source are distinct origins with the same location.
 
 4.2 Design Rationale
 
-    - keep the rule simple and predictable
-    - avoid tool- or application-specific heuristics
-    - allow higher layers to override via explicit options
+    - keep legacy behavior deterministic and backward-compatible
+    - avoid introducing new root-discovery semantics in deprecated layer
+    - move richer discovery policy to current configuration package
 
 This mechanism must never guess.
 
@@ -233,7 +228,7 @@ This layer is not application-specific.
 
 Unit tests should cover:
 
-    - project root detection
+    - fixed-path project/cwd source behavior
     - precedence ordering
     - merge behavior
     - empty and missing configuration handling
@@ -245,6 +240,13 @@ Tests must avoid:
     - persistent filesystem coupling
 
 Temporary directories are acceptable.
+
+Legacy executable-check note (2026-03-21):
+
+    - `src/test/scala/org/goldenport/cncf/config/source/**` remains pending-only.
+    - Owner: cncf-runtime
+    - TODO: replace pending specs with concrete checks for fixed-path
+      `ConfigSource.project(cwd)` / `ConfigSource.cwd(cwd)` behavior.
 
 
 ----------------------------------------------------------------------

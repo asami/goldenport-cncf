@@ -505,6 +505,29 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
       out.trim.nonEmpty shouldBe true
       out.trim.startsWith("{") shouldBe false
     }
+
+    "execute run-path with --path-resolution and dot selector" in {
+      val (code, out) = _capture_stdout {
+        CncfRuntime().run(Array("command", "--path-resolution", "admin.component"))
+      }
+      code shouldBe 0
+      out.toLowerCase.contains("path-resolution failed") shouldBe false
+    }
+
+    "keep parse/run contract consistent for --path-resolution with slash selector" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val parsed = CncfRuntime.parseCommandArgs(subsystem, Array("--path-resolution", "admin/component"))
+      val (code, out) = _capture_stdout {
+        CncfRuntime().run(Array("command", "--path-resolution", "admin/component"))
+      }
+      parsed match {
+        case Consequence.Success(_) =>
+          code shouldBe 0
+          out.toLowerCase.contains("path-resolution failed") shouldBe false
+        case Consequence.Failure(_) =>
+          code should be > 0
+      }
+    }
   }
 
   "server-emulator normalization" should {
