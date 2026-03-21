@@ -25,9 +25,9 @@ import org.goldenport.cncf.service.{Service, ServiceGroup}
 import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.cli.renderer.{CliHelpJsonRenderer, CliHelpYamlRenderer, CliTreeJsonRenderer, CliTreeYamlRenderer}
-import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace, Repository}
+import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace, Repository, CmlAggregateDefinition}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
-import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace}
+import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace, CmlViewDefinition}
 import org.goldenport.cncf.statemachine.StateMachinePlannerProvider
 import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition}
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
@@ -155,6 +155,8 @@ abstract class Component() extends Component.Core.Holder {
   def eventReceptionDefinitions: Vector[CmlEventDefinition] = Vector.empty
   def eventRoutingDefinitions: Vector[CmlRoutingDefinition] = Vector.empty
   def eventSubscriptionDefinitions: Vector[CmlSubscriptionDefinition] = Vector.empty
+  def aggregateDefinitions: Vector[CmlAggregateDefinition] = Vector.empty
+  def viewDefinitions: Vector[CmlViewDefinition] = Vector.empty
 
   def entity[E](name: String): EntityCollection[E] =
     entitySpace.entity(name)

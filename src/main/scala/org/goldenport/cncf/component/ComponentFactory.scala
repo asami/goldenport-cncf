@@ -13,10 +13,10 @@ import org.goldenport.cncf.component.repository.ComponentSource
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.datatype.EntityId
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
-import org.goldenport.cncf.entity.aggregate.AggregateSpace
+import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateSpace, CmlAggregateDefinition}
 import org.goldenport.cncf.event.{ActionCallDispatcher, EventBus, EventReception, EntitySubscriptionLimit}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimePlan, EntitySpace, EntityStorage, PartitionedMemoryRealm, PartitionStrategy, WorkingSetDefinition, WorkingSetInitializer}
-import org.goldenport.cncf.entity.view.ViewSpace
+import org.goldenport.cncf.entity.view.{CmlViewDefinition, ViewBuilder, ViewCollection, ViewSpace}
 import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.statemachine.{CollectionStateMachinePlanner, CollectionStateMachinePlannerProvider, CollectionTransitionRule, CollectionTransitionRuleProvider, TransitionTrigger, TransitionRule}
 import scala.util.Try
@@ -368,10 +368,14 @@ final class ComponentFactory(
     aggregatespace: AggregateSpace,
     entityspace: EntitySpace
   ): Unit = {
-    // entityspace is provided so aggregate/view builders can access entity collections
-    // once metadata binding is implemented.
-    // TODO: bind aggregate definitions when component metadata wiring is available.
-    ()
+    val names = _aggregate_collection_names(component)
+    names.foreach { name =>
+      _resolve_aggregate_entity_name(component, name).foreach { entityname =>
+        val builder = _default_aggregate_builder(entityspace, entityname)
+        val collection = new AggregateCollection[Any](builder)
+        aggregatespace.register(name, collection)
+      }
+    }
   }
 
   private def _bootstrap_views(
@@ -379,11 +383,70 @@ final class ComponentFactory(
     viewspace: ViewSpace,
     entityspace: EntitySpace
   ): Unit = {
-    // entityspace is provided so aggregate/view builders can access entity collections
-    // once metadata binding is implemented.
-    // TODO: bind view definitions when component metadata wiring is available.
-    ()
+    val names = _view_collection_names(component)
+    names.foreach { name =>
+      _resolve_view_definition(component, name).foreach { d =>
+        val builder = _default_view_builder(entityspace, d.entityName)
+        val collection = new ViewCollection[Any](builder)
+        viewspace.register(name, collection)
+        d.viewNames.distinct.foreach { viewname =>
+          viewspace.registerView(name, viewname, viewspace.browser(name))
+        }
+      }
+    }
   }
+
+  private def _aggregate_collection_names(
+    component: Component
+  ): Vector[String] = {
+    val defs = component.aggregateDefinitions
+    if (defs.nonEmpty) defs.map(_.name).distinct
+    else _entity_collection_names(component)
+  }
+
+  private def _view_collection_names(
+    component: Component
+  ): Vector[String] = {
+    val defs = component.viewDefinitions
+    if (defs.nonEmpty) defs.map(_.name).distinct
+    else _entity_collection_names(component)
+  }
+
+  private def _resolve_aggregate_entity_name(
+    component: Component,
+    name: String
+  ): Option[String] = {
+    val entityname = component.aggregateDefinitions.find(_.name == name).map(_.entityName).getOrElse(name)
+    component.entitySpace.entityOption[Any](entityname).map(_ => entityname)
+  }
+
+  private def _resolve_view_definition(
+    component: Component,
+    name: String
+  ): Option[CmlViewDefinition] = {
+    val definition = component.viewDefinitions.find(_.name == name).getOrElse {
+      CmlViewDefinition(name = name, entityName = name)
+    }
+    component.entitySpace.entityOption[Any](definition.entityName).map(_ => definition)
+  }
+
+  private def _default_aggregate_builder(
+    entityspace: EntitySpace,
+    entityname: String
+  ): AggregateBuilder[Any] =
+    new AggregateBuilder[Any] {
+      def build(id: EntityId): Consequence[Any] =
+        entityspace.entity[Any](entityname).resolve(id)
+    }
+
+  private def _default_view_builder(
+    entityspace: EntitySpace,
+    entityname: String
+  ): ViewBuilder[Any] =
+    new ViewBuilder[Any] {
+      def build(id: EntityId): Consequence[Any] =
+        entityspace.entity[Any](entityname).resolve(id)
+    }
 
   private def _initialize_working_sets(
     component: Component,
