@@ -32,8 +32,8 @@ This document is a progress dashboard, not a design journal.
 ## 4. Current Work Stack
 
 - A (DONE): Finalize semantic contract and CML/AST boundary (Entity -> Aggregate/View).
-- B (ACTIVE): Implement CML-based Aggregate/View generation.
-- C (SUSPENDED): Define aggregate-to-view runtime synchronization and consistency rules.
+- B (DONE): Implement CML-based Aggregate/View generation.
+- C (ACTIVE): Define aggregate-to-view runtime synchronization and consistency rules.
 - D (SUSPENDED): Align projection/meta surfaces with generated model.
 - E (SUSPENDED): Add executable specifications and regression coverage.
 
@@ -43,7 +43,7 @@ Resume hint:
 ## 5. Development Items
 
 - [x] AV-01: Define and freeze semantic contract and CML/AST boundary (`EntityDef` + `AggregateDef` + `ViewDef`).
-- [ ] AV-02: Implement CML-based generation of Aggregate/View models from Entity definition.
+- [x] AV-02: Implement CML-based generation of Aggregate/View models from Entity definition.
 - [ ] AV-03: Implement aggregate-to-view synchronization policy (event bridge, timing, ordering, idempotency, failure behavior).
 - [ ] AV-04: Align introspection/projection surfaces (`meta.*`, schema/help surfaces) with generated aggregate/view model.
 - [ ] AV-05: Add executable specifications for CQRS separation, generation correctness, deterministic behavior, and failure paths.
@@ -53,7 +53,17 @@ Resume hint:
 - Phase 6 Job Management CQRS closure and contracts are prerequisites.
 - Phase 5 Event foundations are prerequisites for synchronization/event propagation rules.
 
-## 7. References
+## 7. Latest Update (2026-03-21)
+
+- AV-02 connection slice is reported as implemented across Cozy/SimpleModeler/CNCF.
+- CNCF runtime now accepts aggregate/view metadata from generated DomainComponent and auto-registers aggregate/view collections at bootstrap.
+- Reported cross-repo commits:
+  - simple-modeler: `fa84578`
+  - cozy: `3421361`
+  - cloud-native-component-framework: `16c7d46`
+- AV-02 remains ACTIVE in this phase document until remaining migration/closure tasks are completed.
+
+## 8. References
 
 - `/Users/asami/src/dev2025/cloud-native-component-framework/docs/strategy/cncf-development-strategy.md`
 - `/Users/asami/src/dev2025/cloud-native-component-framework/docs/phase/phase-6.md`
@@ -63,3 +73,4 @@ Resume hint:
 - `/Users/asami/src/dev2025/cloud-native-component-framework/docs/design/aggregate-view-semantic-boundary.md`
 - `/Users/asami/src/dev2025/cloud-native-component-framework/docs/journal/2026/03/aggregate-view-design-handoff.md`
 - `/Users/asami/src/dev2025/cloud-native-component-framework/docs/journal/2026/03/av-01-cozy-escalation-2026-03-21.md`
+- `/Users/asami/src/dev2025/cloud-native-component-framework/docs/journal/2026/03/aggregate-view-generation-migration-note-2026-03-21.md`

@@ -81,7 +81,7 @@ Define and freeze canonical semantic model and AST boundary:
 
 ## AV-02: CML-based Aggregate/View Generation
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -89,19 +89,34 @@ Generate Aggregate and View from Entity definition and replace manual-only model
 
 ### Detailed Tasks
 
-- [ ] Implement generation rule:
+- [x] Implement generation rule:
   - `Aggregate` defined -> generate `aggregate/*Aggregate.scala`
   - `View` defined -> generate `view/*View.scala`
-- [ ] Define generated naming contract (`Order -> OrderAggregate / OrderView`).
-- [ ] Define generated output package/layout policy.
-- [ ] Ensure generated code compiles without manual patching.
-- [ ] Add migration note from manual implementations to generated source of truth.
+- [x] Define generated naming contract (`Order -> OrderAggregate / OrderView`).
+- [x] Define generated output package/layout policy.
+- [x] Ensure generated code compiles without manual patching.
+- [x] Add migration note from manual implementations to generated source of truth.
+
+### Progress Note (2026-03-21)
+
+- AV-02 connection slice is reported as implemented across Cozy/SimpleModeler/CNCF:
+  - Cozy: aggregate/view metadata generation in `Modeler`
+  - SimpleModeler: metadata propagation to generated `DomainComponent`
+  - CNCF: component metadata hooks and bootstrap registration for aggregate/view
+- Reported verification:
+  - CNCF: `ComponentFactoryAggregateViewBootstrapSpec` pass
+  - Cozy: `ModelerGenerationSpec` pass
+  - SimpleModeler: `publishLocal` pass
+- Reported commits:
+  - simple-modeler: `fa84578`
+  - cozy: `3421361`
+  - cloud-native-component-framework: `16c7d46`
 
 ---
 
 ## AV-03: Aggregate-to-View Synchronization Policy
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 
