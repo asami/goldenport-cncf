@@ -49,10 +49,18 @@ final class AggregateViewProjectionAlignmentSpec
       _string_vector(_records(describe("views")).head.asMap("viewNames")) shouldBe Vector("detail", "summary")
       _records(describe("operationDefinitions")).map(_.getString("name").getOrElse("")) shouldBe Vector("getPerson", "savePerson")
       _records(describe("operationDefinitions")).head.getString("kind") shouldBe Some("QUERY")
+      _records(describe("operationDefinitions")).head.getString("inputType") shouldBe Some("GetPerson")
+      _records(describe("operationDefinitions")).head.getString("outputType") shouldBe Some("GetPersonResult")
+      _records(describe("operationDefinitions")).head.getString("inputValueKind") shouldBe Some("QUERY_VALUE")
+      _records(_records(describe("operationDefinitions")).head.asMap("parameters")).map(_.getString("name").getOrElse("")) shouldBe Vector("id")
 
       _records(schema("aggregateCollections")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_aggregate", "profile_aggregate")
       _records(schema("viewCollections")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_view", "summary_view")
       _records(schema("operationDefinitions")).map(_.getString("name").getOrElse("")) shouldBe Vector("getPerson", "savePerson")
+      _records(schema("operationDefinitions")).last.getString("kind") shouldBe Some("COMMAND")
+      _records(schema("operationDefinitions")).last.getString("inputType") shouldBe Some("SavePersonInput")
+      _records(schema("operationDefinitions")).last.getString("outputType") shouldBe Some("SavePersonResult")
+      _records(_records(schema("operationDefinitions")).last.asMap("parameters")).map(_.getString("name").getOrElse("")) shouldBe Vector("id", "name")
 
       help shouldBe help2
       describe shouldBe describe2
@@ -74,6 +82,13 @@ final class AggregateViewProjectionAlignmentSpec
       first should include("\"x-cncf-operation-definitions\":[")
       first should include("\"name\":\"getPerson\"")
       first should include("\"name\":\"savePerson\"")
+      first should include("\"kind\":\"QUERY\"")
+      first should include("\"kind\":\"COMMAND\"")
+      first should include("\"inputType\":\"GetPerson\"")
+      first should include("\"outputType\":\"SavePersonResult\"")
+      first should include("\"inputValueKind\":\"COMMAND_VALUE\"")
+      first should include("\"datatype\":\"EntityId\"")
+      first should include("\"datatype\":\"Name\"")
       first should include("\"name\":\"person_view\"")
       first should include("\"viewNames\":[\"detail\",\"summary\"]")
     }

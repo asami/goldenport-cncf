@@ -1,6 +1,6 @@
 # Phase 8 — CML Operation Grammar Introduction
 
-status = open
+status = close
 
 ## 1. Purpose of This Document
 
@@ -45,7 +45,7 @@ This document is a progress dashboard, not a design journal.
 - B (DONE): Implement AST/model extensions for operation definition.
 - C (DONE): Implement generator propagation (Cozy -> SimpleModeler -> CNCF).
 - D (DONE): Integrate runtime exposure and projection/meta visibility.
-- E (ACTIVE): Add executable specifications and regression coverage.
+- E (DONE): Add executable specifications and regression coverage.
 
 Resume hint:
 - Finalize runtime execution semantics and close executable specification gaps.
@@ -56,7 +56,7 @@ Resume hint:
 - [x] OP-02: Implement CML AST/model extension for operation definitions.
 - [x] OP-03: Implement generation propagation path across Cozy/SimpleModeler/CNCF.
 - [x] OP-04: Align runtime/meta/projection exposure with generated operation metadata.
-- [ ] OP-05: Add executable specifications for parse->AST->generation->runtime path.
+- [x] OP-05: Add executable specifications for parse->AST->generation->runtime path.
 
 ## 6.1 Latest Verification Snapshot (2026-03-22)
 
@@ -73,6 +73,33 @@ Resume hint:
   - result: passed (`42 succeeded, 0 failed`)
   - `sbt --batch "testOnly org.goldenport.cncf.job.SCENARIO.JobLifecycleScenarioSpec"`
   - result: passed (`3 succeeded, 0 failed`)
+  - `sbt --batch "testOnly org.goldenport.cncf.component.ComponentLogicOperationDefinitionSemanticsSpec org.goldenport.cncf.projection.AggregateViewProjectionAlignmentSpec org.goldenport.cncf.cli.CommandExecuteComponentSpec"`
+  - result: passed (`46 succeeded, 0 failed`)
+  - `sbt --batch compile`
+  - result: passed
+
+## 6.2 OP-05 Coverage Matrix
+
+- Grammar parse specs for valid/invalid operation declarations:
+  - Cozy `ModelerGenerationSpec` (OP-01/OP-02 baseline verification commits)
+- AST/model mapping specs for operation definitions:
+  - Cozy `ModelerGenerationSpec` + SimpleModeler operation propagation tests (OP-02/OP-03 baseline commits)
+- Normalization specs (canonical/parameter/dual consistency):
+  - Cozy operation normalization and validation specs from OP-01 to OP-03 execution cycle
+- Type-validation specs (`Operation.Type` vs `Command/Query Value`):
+  - Cozy validation specs from OP-01 to OP-03 execution cycle
+- Generation propagation specs across Cozy/SimpleModeler/CNCF:
+  - Cozy commit `94da76c`
+  - SimpleModeler commit `8faf81c`
+  - CNCF projection/runtime specs:
+    - `org.goldenport.cncf.projection.AggregateViewProjectionAlignmentSpec`
+    - `org.goldenport.cncf.component.ComponentLogicOperationDefinitionSemanticsSpec`
+- Runtime/projection visibility specs for generated operations:
+  - `org.goldenport.cncf.projection.AggregateViewProjectionAlignmentSpec`
+  - `org.goldenport.cncf.cli.CommandExecuteComponentSpec`
+- Regression specs for command/query operation semantics:
+  - `org.goldenport.cncf.component.ComponentLogicOperationDefinitionSemanticsSpec`
+  - `org.goldenport.cncf.job.SCENARIO.JobLifecycleScenarioSpec`
 
 ## 6. Inputs from Previous Phases
 

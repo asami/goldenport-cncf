@@ -125,7 +125,7 @@ Align runtime and projection/meta surfaces with generated operation metadata.
 
 ## OP-05: Executable Specifications (Operation Grammar Path)
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -133,16 +133,16 @@ Add executable specifications to close Phase 8 with behavior-level guarantees.
 
 ### Detailed Tasks
 
-- [ ] Add grammar parse specs for valid/invalid operation declarations.
-- [ ] Add AST/model mapping specs for operation definitions.
-- [ ] Add normalization specs for:
+- [x] Add grammar parse specs for valid/invalid operation declarations.
+- [x] Add AST/model mapping specs for operation definitions.
+- [x] Add normalization specs for:
   - canonical form
   - parameter convenience form
   - dual-definition consistency
-- [ ] Add type-validation specs (`Operation.Type` vs `Command/Query Value`).
-- [ ] Add generation propagation specs across Cozy/SimpleModeler/CNCF path.
-- [ ] Add runtime/projection visibility specs for generated operations.
-- [ ] Add regression specs for command/query operation semantics.
+- [x] Add type-validation specs (`Operation.Type` vs `Command/Query Value`).
+- [x] Add generation propagation specs across Cozy/SimpleModeler/CNCF path.
+- [x] Add runtime/projection visibility specs for generated operations.
+- [x] Add regression specs for command/query operation semantics.
 
 ---
 
