@@ -14,6 +14,13 @@
 - This rule applies to design, notes, spec, and rules documents.
 - Historical or exploratory content must also follow this rule.
 
+### I18N Exception Rule
+
+- Non-English text is allowed only for explicit internationalization purpose.
+- Such documents MUST declare `i18n-exception: true` near the top.
+- Such documents MUST include an English summary section.
+- In the absence of explicit declaration, English-only remains mandatory.
+
 
 ## Overview
 

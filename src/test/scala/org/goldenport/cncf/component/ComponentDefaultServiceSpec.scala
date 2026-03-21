@@ -34,6 +34,7 @@ class ComponentDefaultServiceSpec extends AnyWordSpec with Matchers {
       operations.contains("meta.version") shouldBe true
       operations.contains("system.ping") shouldBe true
       operations.contains("system.health") shouldBe true
+      operations.contains("system.status") shouldBe true
     }
 
     "not override user-defined operations and only add missing defaults" in {
@@ -50,6 +51,7 @@ class ComponentDefaultServiceSpec extends AnyWordSpec with Matchers {
       val operations = _operations(component)
       operations.contains("system.ping") shouldBe true
       operations.contains("system.health") shouldBe true
+      operations.contains("system.status") shouldBe true
       operations.contains("meta.help") shouldBe true
       operations.contains("meta.describe") shouldBe true
       operations.contains("meta.components") shouldBe true
@@ -67,6 +69,18 @@ class ComponentDefaultServiceSpec extends AnyWordSpec with Matchers {
           value shouldBe "custom-ping-ok"
         case other =>
           fail(s"expected custom scalar ping response but got: ${other.show}")
+      }
+    }
+
+    "execute system.status with minimum runtime schema" in {
+      val component = TestComponentFactory.create("system_status_target", Protocol.empty)
+      _execute(component, Request.of(component = "system_status_target", service = "system", operation = "status")) match {
+        case Consequence.Success(OperationResponse.RecordResponse(record)) =>
+          record.getString("status") shouldBe Some("UP")
+          record.getString("timestamp").exists(_.nonEmpty) shouldBe true
+          record.getString("uptime").exists(_.nonEmpty) shouldBe true
+        case other =>
+          fail(s"expected status record response but got: ${other.show}")
       }
     }
   }

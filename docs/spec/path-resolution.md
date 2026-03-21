@@ -4,9 +4,14 @@ phase=2.8
 
 ## 1. Purpose and Scope
 
-This specification defines the general path resolution rules used by the system
-to derive a CanonicalPath from user-facing inputs such as CLI arguments,
-HTTP paths, and script invocations.
+This specification defines the path resolution rules used to derive a CanonicalPath.
+
+Current staged adoption scope:
+
+- CLI command path only (feature-flag gated)
+
+HTTP and script surfaces remain on the legacy runtime routing path until
+staged rollout is completed.
 
 The purpose of this specification is to:
 
@@ -168,26 +173,26 @@ Result:
 ### E3. OpenAPI Path with Omitted Operation
 
 Input:
-  spec/openapi
+  openapi/api
 
 Applied Rules:
   R5 → R2 → R1
 
 Result:
-  CanonicalPath(spec, openapi, export)
+  CanonicalPath(openapi, api, get)
 
 ---
 
 ### E4. OpenAPI JSON Representation
 
 Input:
-  spec/openapi.json
+  openapi/api/openapi.json
 
 Applied Rules:
   R5 → R2 → R4 → R1
 
 Result:
-  CanonicalPath(spec, openapi, export)
+  CanonicalPath(openapi, api, get)
 
 Notes:
   Suffix affects representation only.
@@ -234,6 +239,11 @@ in Phase 2.8 implementation.
 > NOTE: Alias configuration and shortcut behaviors are described
 > in `docs/design/path-alias.md` and do not change the canonical rules
 > documented above.
+
+Runtime boundary note:
+
+- `PathResolution` performs canonical selector resolution.
+- `OperationResolver` performs post-resolution lookup against runtime protocol entries.
 
 ## Executable Specification Reference
 

@@ -18,6 +18,7 @@ meta.operations
 meta.schema
 meta.openapi
 meta.mcp
+meta.statemachine
 meta.tree
 meta.version
 
@@ -77,6 +78,20 @@ Exports component interface as OpenAPI JSON projection.
 ## meta.mcp
 
 Exports component interface as MCP tool JSON projection.
+
+## meta.statemachine
+
+Returns state-machine projection for subsystem/component selectors.
+
+Current selector scope:
+
+- subsystem (default)
+- component
+
+Output:
+
+- default: YAML
+- with `--json`: JSON
 
 ## meta.tree
 

@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan. 20, 2026
  *  version Feb.  1, 2026
- * @version Mar. 11, 2026
+ * @version Mar. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminSystemPingExecutionSpec
@@ -50,6 +50,33 @@ final class AdminSystemPingExecutionSpec
                 output shouldBe versionedPing
               case other =>
                 fail(s"expected ping scalar but got $other")
+            }
+          }
+      }
+    }
+
+    "execute resolver-normalized admin.system.status requests" in {
+      withAliasContext(RunMode.Command, aliasConfig("status" -> "admin.system.status")) {
+        (aliasResolver, context) =>
+          val subsystem = DefaultSubsystemFactory.default(Some("command"))
+          val adminComponent = subsystem.components
+            .collectFirst { case comp if comp.name == "admin" => comp }
+            .getOrElse(fail("admin component not found"))
+          val resolver = subsystem.resolver
+
+          Seq("admin.system.status", "status").foreach { selector =>
+            val normalized =
+              PathPreNormalizer.rewriteSelector(selector, RunMode.Command, aliasResolver)
+            val request = buildRequest(resolver, normalized)
+            val response = executePing(adminComponent, request)
+
+            response match {
+              case Consequence.Success(OperationResponse.RecordResponse(record)) =>
+                record.getString("status") shouldBe Some("UP")
+                record.getString("timestamp").exists(_.nonEmpty) shouldBe true
+                record.getString("uptime").exists(_.nonEmpty) shouldBe true
+              case other =>
+                fail(s"expected status record but got $other")
             }
           }
       }

@@ -36,6 +36,7 @@ import org.goldenport.cncf.backend.collaborator.CollaboratorFactory
 import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.component.repository.ComponentRepositorySpace
 import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
+import org.goldenport.cncf.resolver.{CanonicalPath, PathResolution, PathResolutionResult}
 import org.goldenport.cncf.cli.RuntimeParameterParser
 import org.goldenport.cncf.cli.help.{CliHelpOperation, ClientCommandHelp, CommandProtocolHelp, HelpOperation, ServerCommandHelp}
 import org.goldenport.cncf.observability.{LogLevel, ObservabilityEngine, VisibilityPolicy}
@@ -45,7 +46,7 @@ import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObserva
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 18, 2026
+ * @version Mar. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -982,14 +983,15 @@ object CncfRuntime extends GlobalObservable {
     mode: RunMode = RunMode.Command
   ): Consequence[Request] =
     _extract_runtime_options(args.toIndexedSeq) match { case (runtimeOptions, clean) =>
-    _selectorAndArguments(clean).flatMap { case (selector, tail) =>
-      val normalized = _normalize_meta_selector(subsystem, selector, tail.toVector)
+    _selectorAndArguments(clean).flatMap { case (selector0, tail) =>
+      val normalized = _normalize_meta_selector(subsystem, selector0, tail.toVector)
       val aliasresolver =
         if (subsystem.aliasResolver ne AliasResolver.empty) subsystem.aliasResolver
         else _alias_resolver
-      val canonicalSelector = PathPreNormalizer.rewriteSelector(normalized._1, mode, aliasresolver)
-      subsystem.resolver.resolve(canonicalSelector, allowPrefix = false, allowImplicit = false) match {
-        case ResolutionResult.Resolved(_, component, service, operation) =>
+      val rewritten = PathPreNormalizer.rewriteSelector(normalized._1, mode, aliasresolver)
+      val (selector, suffixformat) = _extract_selector_format(rewritten)
+      _resolve_selector(subsystem, selector, runtimeOptions, mode) match {
+        case Consequence.Success((component, service, operation)) =>
           val parsed = for {
             comp <- subsystem.components.find(_.name == component)
             svc <- comp.protocol.services.services.find(_.name == service)
@@ -1002,8 +1004,11 @@ object CncfRuntime extends GlobalObservable {
               Argument(s"arg${index + 1}", value, None)
             }.toList, Nil, Nil)
           }
-          val runtimeproperties = _runtime_properties(runtimeOptions, mode)
-          val allproperties = properties ++ runtimeproperties
+          val runtimeproperties = _runtime_properties(runtimeOptions, mode).filterNot(_.name.equalsIgnoreCase("format"))
+          val allproperties = _with_format_property(
+            properties ++ runtimeproperties,
+            _resolve_format(runtimeOptions, suffixformat, mode)
+          )
           Consequence.success(
             Request.of(
               component = component,
@@ -1014,31 +1019,119 @@ object CncfRuntime extends GlobalObservable {
               properties = allproperties
             )
           )
-        case ResolutionResult.NotFound(stage, input) =>
-          val symptom = Taxonomy.Symptom.NotFound
-          stage match {
-            case ResolutionStage.Component =>
-              Consequence.fail(
-                Taxonomy(Taxonomy.Category.Component, symptom),
-                Facet.Component(input)
-              )
-            case ResolutionStage.Service =>
-              Consequence.fail(
-                Taxonomy(Taxonomy.Category.Service, symptom),
-                Facet.Service(input)
-              )
-            case ResolutionStage.Operation =>
-              Consequence.fail(
-                Taxonomy(Taxonomy.Category.Operation, symptom),
-                Facet.Operation(input)
-              )
-          }
-        case ResolutionResult.Ambiguous(input, candidates) =>
-          Consequence.failure(s"ambiguous selector '$input': ${candidates.mkString(", ")}")
-        case ResolutionResult.Invalid(reason) =>
-          Consequence.failure(s"invalid selector: $reason")
+        case Consequence.Failure(conclusion) =>
+          Consequence.Failure(conclusion)
       }
     }}
+
+  private def _resolve_selector(
+    subsystem: Subsystem,
+    selector: String,
+    options: RuntimeOptionsParser.Options,
+    mode: RunMode
+  ): Consequence[(String, String, String)] = {
+    val usepathresolution = mode == RunMode.Command && options.pathResolutionCommand
+    if (usepathresolution) {
+      _resolve_selector_with_path_resolution(subsystem, selector)
+    } else {
+      // OperationResolver is the post-resolution lookup layer.
+      _resolve_selector_with_operation_resolver(subsystem, selector)
+    }
+  }
+
+  private def _resolve_selector_with_path_resolution(
+    subsystem: Subsystem,
+    selector: String
+  ): Consequence[(String, String, String)] = {
+    val registry = _component_operation_fqns(subsystem).flatMap(_to_canonical_path)
+    val builtins = subsystem.components.collect {
+      case c if c.origin == org.goldenport.cncf.component.ComponentOrigin.Builtin => c.name
+    }.toSet
+    PathResolution.resolve(selector, registry, builtins) match {
+      case PathResolutionResult.Success(path) =>
+        Consequence.success((path.component, path.service, path.operation))
+      case PathResolutionResult.Failure(reason) =>
+        Consequence.failure(s"path-resolution failed: $reason")
+    }
+  }
+
+  private def _resolve_selector_with_operation_resolver(
+    subsystem: Subsystem,
+    selector: String
+  ): Consequence[(String, String, String)] =
+    subsystem.resolver.resolve(selector, allowPrefix = false, allowImplicit = false) match {
+      case ResolutionResult.Resolved(_, component, service, operation) =>
+        Consequence.success((component, service, operation))
+      case ResolutionResult.NotFound(stage, input) =>
+        val symptom = Taxonomy.Symptom.NotFound
+        stage match {
+          case ResolutionStage.Component =>
+            Consequence.fail(
+              Taxonomy(Taxonomy.Category.Component, symptom),
+              Facet.Component(input)
+            )
+          case ResolutionStage.Service =>
+            Consequence.fail(
+              Taxonomy(Taxonomy.Category.Service, symptom),
+              Facet.Service(input)
+            )
+          case ResolutionStage.Operation =>
+            Consequence.fail(
+              Taxonomy(Taxonomy.Category.Operation, symptom),
+              Facet.Operation(input)
+            )
+        }
+      case ResolutionResult.Ambiguous(input, candidates) =>
+        Consequence.failure(s"ambiguous selector '$input': ${candidates.mkString(", ")}")
+      case ResolutionResult.Invalid(reason) =>
+        Consequence.failure(s"invalid selector: $reason")
+    }
+
+  private def _extract_selector_format(
+    selector: String
+  ): (String, Option[String]) = {
+    val normalized = selector.trim
+    if (normalized.isEmpty) {
+      (normalized, None)
+    } else {
+      val lower = normalized.toLowerCase
+      if (lower.endsWith(".json")) {
+        (normalized.dropRight(5), Some("json"))
+      } else if (lower.endsWith(".yaml")) {
+        (normalized.dropRight(5), Some("yaml"))
+      } else if (lower.endsWith(".text")) {
+        (normalized.dropRight(5), Some("text"))
+      } else {
+        (normalized, None)
+      }
+    }
+  }
+
+  private def _with_format_property(
+    properties: List[Property],
+    format: String
+  ): List[Property] = {
+    val withoutformat = properties.filterNot(_.name.equalsIgnoreCase("format"))
+    withoutformat :+ Property("format", format, None)
+  }
+
+  private def _resolve_format(
+    options: RuntimeOptionsParser.Options,
+    suffixFormat: Option[String],
+    mode: RunMode
+  ): String =
+    options.format
+      .orElse(if (options.json) Some("json") else None)
+      .orElse(suffixFormat)
+      .getOrElse(RuntimeDefaults.defaultFormat(mode))
+
+  private def _to_canonical_path(fqn: String): Option[CanonicalPath] =
+    fqn.split("\\.", 3) match {
+      case Array(component, service, operation) =>
+        Some(CanonicalPath(component, service, operation))
+      case _ =>
+        None
+    }
 
   private def _normalize_meta_selector(
     subsystem: Subsystem,
@@ -1461,7 +1554,8 @@ private[cli] object RuntimeOptionsParser {
     json: Boolean = false,
     debug: Boolean = false,
     noExit: Boolean = false,
-    format: Option[String] = None
+    format: Option[String] = None,
+    pathResolutionCommand: Boolean = false
   )
 
   def extract(
@@ -1489,10 +1583,14 @@ private[cli] object RuntimeOptionsParser {
             i = i + 1
           }
         }
+      } else if (_is_property(current, "--path-resolution")) {
+        options = options.copy(pathResolutionCommand = true)
       } else if (_is_key_value(current)) {
         _extract_key_value(current) match {
           case Some((key, value)) if key == "cncf.output.format" =>
             options = options.copy(format = Some(value))
+          case Some((key, value)) if key == "cncf.path-resolution.command" =>
+            options = options.copy(pathResolutionCommand = _is_truthy(value))
           case Some((key, value)) if _is_cncf_key(key) =>
             ()
           case Some((key, value)) if _is_cncf_alias(key) =>
@@ -1504,6 +1602,8 @@ private[cli] object RuntimeOptionsParser {
         if (i + 1 < args.length && !args(i + 1).startsWith("-")) {
           if (current.drop(2) == "cncf.output.format") {
             options = options.copy(format = Some(args(i + 1)))
+          } else if (current.drop(2) == "cncf.path-resolution.command") {
+            options = options.copy(pathResolutionCommand = _is_truthy(args(i + 1)))
           }
           i = i + 1
         }
@@ -1578,7 +1678,12 @@ private[cli] object RuntimeOptionsParser {
   private def _is_cncf_alias(
     key: String
   ): Boolean =
-    key == "log-level" || key == "log-backend" || key == "format"
+    key == "log-level" || key == "log-backend" || key == "format" || key == "path-resolution"
+
+  private def _is_truthy(value: String): Boolean = {
+    val normalized = value.trim.toLowerCase
+    normalized == "true" || normalized == "1" || normalized == "yes" || normalized == "on"
+  }
 }
 
 class CncfRuntime() extends GlobalObservable {
@@ -2233,14 +2338,15 @@ class CncfRuntime() extends GlobalObservable {
     mode: RunMode = RunMode.Command
   ): Consequence[Request] =
     _extract_runtime_options(args.toIndexedSeq) match { case (runtimeOptions, clean) =>
-    _selectorAndArguments(clean).flatMap { case (selector, tail) =>
-      val normalized = _normalize_meta_selector(subsystem, selector, tail.toVector)
+    _selectorAndArguments(clean).flatMap { case (selector0, tail) =>
+      val normalized = _normalize_meta_selector(subsystem, selector0, tail.toVector)
       val aliasresolver =
         if (subsystem.aliasResolver ne AliasResolver.empty) subsystem.aliasResolver
         else _alias_resolver
-      val canonicalSelector = PathPreNormalizer.rewriteSelector(normalized._1, mode, aliasresolver)
-      subsystem.resolver.resolve(canonicalSelector, allowPrefix = false, allowImplicit = false) match {
-        case ResolutionResult.Resolved(_, component, service, operation) =>
+      val rewritten = PathPreNormalizer.rewriteSelector(normalized._1, mode, aliasresolver)
+      val (selector, suffixformat) = _extract_selector_format(rewritten)
+      _resolve_selector(subsystem, selector, runtimeOptions, mode) match {
+        case Consequence.Success((component, service, operation)) =>
           val parsed = for {
             comp <- subsystem.components.find(_.name == component)
             svc <- comp.protocol.services.services.find(_.name == service)
@@ -2253,8 +2359,11 @@ class CncfRuntime() extends GlobalObservable {
               Argument(s"arg${index + 1}", value, None)
             }.toList, Nil, Nil)
           }
-          val runtimeproperties = _runtime_properties(runtimeOptions, mode)
-          val allproperties = properties ++ runtimeproperties
+          val runtimeproperties = _runtime_properties(runtimeOptions, mode).filterNot(_.name.equalsIgnoreCase("format"))
+          val allproperties = _with_format_property(
+            properties ++ runtimeproperties,
+            _resolve_format(runtimeOptions, suffixformat, mode)
+          )
           Consequence.success(
             Request.of(
               component = component,
@@ -2265,14 +2374,97 @@ class CncfRuntime() extends GlobalObservable {
               properties = allproperties
             )
           )
-        case ResolutionResult.NotFound(stage, input) =>
-          Consequence.failure(s"${stage.toString.toLowerCase} not found: $input")
-        case ResolutionResult.Ambiguous(input, candidates) =>
-          Consequence.failure(s"ambiguous selector '$input': ${candidates.mkString(", ")}")
-        case ResolutionResult.Invalid(reason) =>
-          Consequence.failure(s"invalid selector: $reason")
+        case Consequence.Failure(conclusion) =>
+          Consequence.Failure(conclusion)
       }
     }}
+
+  private def _resolve_selector(
+    subsystem: Subsystem,
+    selector: String,
+    options: RuntimeOptionsParser.Options,
+    mode: RunMode
+  ): Consequence[(String, String, String)] = {
+    val usepathresolution = mode == RunMode.Command && options.pathResolutionCommand
+    if (usepathresolution) {
+      _resolve_selector_with_path_resolution(subsystem, selector)
+    } else {
+      _resolve_selector_with_operation_resolver(subsystem, selector)
+    }
+  }
+
+  private def _resolve_selector_with_path_resolution(
+    subsystem: Subsystem,
+    selector: String
+  ): Consequence[(String, String, String)] = {
+    val registry = subsystem.components.flatMap { comp =>
+      comp.protocol.services.services.flatMap { service =>
+        service.operations.operations.toVector.map(op => CanonicalPath(comp.name, service.name, op.name))
+      }
+    }
+    val builtins = subsystem.components.collect {
+      case c if c.origin == org.goldenport.cncf.component.ComponentOrigin.Builtin => c.name
+    }.toSet
+    PathResolution.resolve(selector, registry, builtins) match {
+      case PathResolutionResult.Success(path) =>
+        Consequence.success((path.component, path.service, path.operation))
+      case PathResolutionResult.Failure(reason) =>
+        Consequence.failure(s"path-resolution failed: $reason")
+    }
+  }
+
+  private def _resolve_selector_with_operation_resolver(
+    subsystem: Subsystem,
+    selector: String
+  ): Consequence[(String, String, String)] =
+    subsystem.resolver.resolve(selector, allowPrefix = false, allowImplicit = false) match {
+      case ResolutionResult.Resolved(_, component, service, operation) =>
+        Consequence.success((component, service, operation))
+      case ResolutionResult.NotFound(stage, input) =>
+        Consequence.failure(s"${stage.toString.toLowerCase} not found: $input")
+      case ResolutionResult.Ambiguous(input, candidates) =>
+        Consequence.failure(s"ambiguous selector '$input': ${candidates.mkString(", ")}")
+      case ResolutionResult.Invalid(reason) =>
+        Consequence.failure(s"invalid selector: $reason")
+    }
+
+  private def _extract_selector_format(
+    selector: String
+  ): (String, Option[String]) = {
+    val normalized = selector.trim
+    if (normalized.isEmpty) {
+      (normalized, None)
+    } else {
+      val lower = normalized.toLowerCase
+      if (lower.endsWith(".json")) {
+        (normalized.dropRight(5), Some("json"))
+      } else if (lower.endsWith(".yaml")) {
+        (normalized.dropRight(5), Some("yaml"))
+      } else if (lower.endsWith(".text")) {
+        (normalized.dropRight(5), Some("text"))
+      } else {
+        (normalized, None)
+      }
+    }
+  }
+
+  private def _with_format_property(
+    properties: List[Property],
+    format: String
+  ): List[Property] = {
+    val withoutformat = properties.filterNot(_.name.equalsIgnoreCase("format"))
+    withoutformat :+ Property("format", format, None)
+  }
+
+  private def _resolve_format(
+    options: RuntimeOptionsParser.Options,
+    suffixFormat: Option[String],
+    mode: RunMode
+  ): String =
+    options.format
+      .orElse(if (options.json) Some("json") else None)
+      .orElse(suffixFormat)
+      .getOrElse(RuntimeDefaults.defaultFormat(mode))
 
   private def _normalize_meta_selector(
     subsystem: Subsystem,

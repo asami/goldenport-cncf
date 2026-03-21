@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  9, 2026
  *  version Jan. 18, 2026
- * @version Mar. 20, 2026
+ * @version Mar. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
@@ -124,6 +124,44 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
           req.arguments.headOption.map(_.value.toString).getOrElse(fail("missing component argument")) shouldBe "domain"
           req.properties.exists(_.name == "format") shouldBe true
           req.properties.exists(_.name == "no-exit") shouldBe true
+        case Consequence.Failure(c) =>
+          fail(s"unexpected failure: ${c}")
+      }
+    }
+
+    "resolve component.service omission via PathResolution feature flag in command mode" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      CncfRuntime.parseCommandArgs(subsystem, Array("--path-resolution", "admin.component")) match {
+        case Consequence.Success(req: Request) =>
+          req.component shouldBe Some("admin")
+          req.service shouldBe Some("component")
+          req.operation shouldBe "list"
+        case Consequence.Failure(c) =>
+          fail(s"unexpected failure: ${c}")
+      }
+    }
+
+    "derive output format from selector suffix when format property is absent" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      CncfRuntime.parseCommandArgs(subsystem, Array("admin.meta.describe.json")) match {
+        case Consequence.Success(req: Request) =>
+          req.component shouldBe Some("admin")
+          req.service shouldBe Some("meta")
+          req.operation shouldBe "describe"
+          req.properties.find(_.name == "format").map(_.value.toString) shouldBe Some("json")
+        case Consequence.Failure(c) =>
+          fail(s"unexpected failure: ${c}")
+      }
+    }
+
+    "prefer explicit --format over selector suffix format" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      CncfRuntime.parseCommandArgs(subsystem, Array("admin.meta.describe.json", "--format", "yaml")) match {
+        case Consequence.Success(req: Request) =>
+          req.component shouldBe Some("admin")
+          req.service shouldBe Some("meta")
+          req.operation shouldBe "describe"
+          req.properties.reverseIterator.find(_.name == "format").map(_.value.toString) shouldBe Some("yaml")
         case Consequence.Failure(c) =>
           fail(s"unexpected failure: ${c}")
       }

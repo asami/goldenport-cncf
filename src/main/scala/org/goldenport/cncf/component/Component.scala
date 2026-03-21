@@ -34,6 +34,7 @@ import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, Schem
 import cats.data.NonEmptyVector
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
+import java.time.{Duration, Instant}
 import java.util.Properties
 import scala.util.control.NonFatal
 
@@ -651,7 +652,8 @@ object Component {
     val withMetaStateMachine = _ensure_operation(withMetaTree, _default_meta_service_name, _DefaultMetaStateMachineOperation)
     val withMetaVersion = _ensure_operation(withMetaStateMachine, _default_meta_service_name, _DefaultMetaVersionOperation)
     val withSystemPing = _ensure_operation(withMetaVersion, _default_system_service_name, _DefaultSystemPingOperation)
-    _ensure_operation(withSystemPing, _default_system_service_name, _DefaultSystemHealthOperation)
+    val withSystemHealth = _ensure_operation(withSystemPing, _default_system_service_name, _DefaultSystemHealthOperation)
+    _ensure_operation(withSystemHealth, _default_system_service_name, _DefaultSystemStatusOperation)
   }
 
   private def _ensure_operation(
@@ -826,6 +828,18 @@ object Component {
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
       Consequence.success(_DefaultSystemHealthAction(req))
+  }
+
+  private object _DefaultSystemStatusOperation extends OperationDefinition {
+    override val specification: OperationDefinition.Specification =
+      OperationDefinition.Specification(
+        name = "status",
+        request = org.goldenport.protocol.spec.RequestDefinition(),
+        response = org.goldenport.protocol.spec.ResponseDefinition()
+      )
+
+    override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(_DefaultSystemStatusAction(req))
   }
 
   private final case class _DefaultMetaHelpAction(
@@ -1169,6 +1183,43 @@ object Component {
     }
   }
 
+  private final case class _DefaultSystemStatusAction(
+    request: Request
+  ) extends QueryAction {
+    override def createCall(core: ActionCall.Core): ActionCall =
+      _DefaultSystemStatusActionCall(core)
+  }
+
+  private final case class _DefaultSystemStatusActionCall(
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    override def execute(): Consequence[OperationResponse] = {
+      val now = Instant.now()
+      val base = Record.data(
+        "status" -> "UP",
+        "timestamp" -> now.toString,
+        "uptime" -> Duration.between(_booted_at, now).toString
+      )
+      val record = core.component match {
+        case Some(component) =>
+          component.jobEngine.metrics match {
+            case Some(metrics) =>
+              base ++ Record.data(
+                "jobsRunning" -> metrics.running,
+                "jobsQueued" -> metrics.queued,
+                "jobsCompleted" -> metrics.completed,
+                "jobsFailed" -> metrics.failed
+              )
+            case None =>
+              base
+          }
+        case None =>
+          base
+      }
+      Consequence.success(OperationResponse.RecordResponse(record))
+    }
+  }
+
   private def _read_resource_text(
     loader: ClassLoader,
     path: String
@@ -1390,6 +1441,8 @@ object Component {
       "ok"
     }
   }
+
+  private val _booted_at: Instant = Instant.now()
 }
 
 final case class ComponentId(

@@ -2,22 +2,22 @@
 
 ## Scope
 
-- Collection は単なる集まりを表す型である。
-- Group は意味論的な集まりであり、Collection と区別する。
-- empty が自然に存在する型のみ対象とする。
+- `Collection` represents a plain container of elements.
+- `Group` represents a semantic grouping and must be distinguished from `Collection`.
+- Only types with a natural `empty` value are in scope.
 
 ## CNCF usage
 
-- Protocol / Handler / Context 系 Collection に適用する。
-- core と idiom を共有し、差分は CNCF の文脈化に留める。
+- Apply this idiom to Protocol / Handler / Context collections.
+- Share the idiom with core and keep CNCF differences limited to contextualization.
 
 ## Required idiom
 
-- default empty 引数
-- canonical empty 値
-- zero-arg apply()（binary compatibility のため）
+- default empty arguments
+- canonical empty value
+- zero-arg `apply()` (for binary compatibility)
 
 ## Notes
 
-- Group / NonEmpty 系は対象外。
-- empty を禁止すべき型は対象外。
+- Group / NonEmpty families are out of scope.
+- Types that should prohibit `empty` are out of scope.

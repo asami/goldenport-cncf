@@ -29,3 +29,18 @@ This presentation is not a stable contract.
 - Defining specific status fields
 - Defining transport or projection mechanisms
 - Implementation details or serialization libraries
+
+# Minimum Status Schema
+
+The operation MUST include the following fields:
+
+- `status`
+- `timestamp`
+- `uptime`
+
+When job metrics are available, it SHOULD also include:
+
+- `jobsRunning`
+- `jobsQueued`
+- `jobsCompleted`
+- `jobsFailed`

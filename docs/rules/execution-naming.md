@@ -2,24 +2,24 @@
 
 ## Core guidance
 
-- ActionCall.execute が基本であること
-- Scenario / Program / UnitOfWork は run を使うこと
-- prepare が存在する理由（Executable Spec / 検証 / 将来拡張）
-- execute と run を混在させない指針
+- ActionCall execution must use `execute`.
+- Scenario / Program / UnitOfWork execution must use `run`.
+- `prepare` exists for executable specs, verification, and future extension.
+- Do not mix `execute` and `run` semantics.
 
 ## Rules
 
-- prepare は意味構造の構築を指す。実行はしない。
-- execute は prepared な ActionCall を実行する。
-- run は interpreter / scenario / workflow を駆動する。
+- `prepare` builds semantic structure and does not execute.
+- `execute` runs a prepared ActionCall.
+- `run` drives interpreter / scenario / workflow execution.
 
-混在禁止:
-- prepare / execute / run の意味を混在させない。
-- ActionCall の実行は execute に集約する。
-- Scenario の駆動は run に集約する。
+No-mix policy:
+- Do not mix the meaning of `prepare` / `execute` / `run`.
+- ActionCall execution must be centralized in `execute`.
+- Scenario driving must be centralized in `run`.
 
 ## Rationale
 
-- ActionCall は実行単位であり、execute が責務を示す。
-- Scenario / Program は実行経路の集合であり、run が責務を示す。
-- prepare は Executable Spec と将来拡張のために保持する。
+- ActionCall is an execution unit; `execute` expresses its responsibility.
+- Scenario / Program is an execution-path aggregate; `run` expresses its responsibility.
+- `prepare` is retained for executable specs and future extension.

@@ -74,6 +74,14 @@ Suffixes bypass default presentation and request a defined output format.
 5. Clients, automation, and integrations SHOULD use suffix-specified outputs
    and MUST NOT depend on default text presentation.
 
+6. When both suffix and explicit format property exist,
+   explicit format property takes precedence.
+
+7. Deterministic precedence for format selection is:
+   - explicit request property (for example `--format`)
+   - selector/path suffix (for example `.json`, `.yaml`, `.text`)
+   - mode default
+
 
 # Recommended Suffixes
 
