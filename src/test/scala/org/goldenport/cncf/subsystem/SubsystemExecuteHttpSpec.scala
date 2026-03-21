@@ -1,7 +1,6 @@
 package org.goldenport.cncf.subsystem
 
 import org.goldenport.http.HttpRequest
-import org.scalatest.OptionValues
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -10,13 +9,26 @@ import org.scalatest.wordspec.AnyWordSpec
  * @version Feb. 25, 2026
  * @author  ASAMI, Tomoharu
  */
-class SubsystemExecuteHttpSpec extends AnyWordSpec with Matchers with OptionValues {
+class SubsystemExecuteHttpSpec extends AnyWordSpec with Matchers {
 
   "Subsystem.executeHttp" should {
 
-    "return runtime introspection for admin.system.ping" in {
-      // TODO Re-enable when ping route/setup is stable without retry or test-specific scope overrides.
-      pending
+    "return runtime introspection for canonical slash route /admin/system/ping" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val req = HttpRequest.fromPath(HttpRequest.GET, "/admin/system/ping")
+      val res = subsystem.executeHttp(req)
+
+      res.code shouldBe 200
+      res.getString.getOrElse("") should include ("runtime: goldenport-cncf")
+    }
+
+    "allow compatibility dot route /admin.system.ping for now" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val req = HttpRequest.fromPath(HttpRequest.GET, "/admin.system.ping")
+      val res = subsystem.executeHttp(req)
+
+      res.code shouldBe 200
+      res.getString.getOrElse("") should include ("runtime: goldenport-cncf")
     }
 
     "return not found for unknown operation" in {

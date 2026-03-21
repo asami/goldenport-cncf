@@ -982,47 +982,7 @@ object CncfRuntime extends GlobalObservable {
     args: Array[String],
     mode: RunMode = RunMode.Command
   ): Consequence[Request] =
-    _extract_runtime_options(args.toIndexedSeq) match { case (runtimeOptions, clean) =>
-    _selectorAndArguments(clean).flatMap { case (selector0, tail) =>
-      val normalized = _normalize_meta_selector(subsystem, selector0, tail.toVector)
-      val aliasresolver =
-        if (subsystem.aliasResolver ne AliasResolver.empty) subsystem.aliasResolver
-        else _alias_resolver
-      val rewritten = PathPreNormalizer.rewriteSelector(normalized._1, mode, aliasresolver)
-      val (selector, suffixformat) = _extract_selector_format(rewritten)
-      _resolve_selector(subsystem, selector, runtimeOptions, mode) match {
-        case Consequence.Success((component, service, operation)) =>
-          val parsed = for {
-            comp <- subsystem.components.find(_.name == component)
-            svc <- comp.protocol.services.services.find(_.name == service)
-            opdef <- svc.operations.operations.find(_.name == operation)
-          } yield _args_parser.parse(opdef, normalized._2.toList)
-          val (arguments, switches, properties) = parsed.map { req =>
-            (req.arguments, req.switches, req.properties)
-          }.getOrElse {
-            (normalized._2.zipWithIndex.map { case (value, index) =>
-              Argument(s"arg${index + 1}", value, None)
-            }.toList, Nil, Nil)
-          }
-          val runtimeproperties = _runtime_properties(runtimeOptions, mode).filterNot(_.name.equalsIgnoreCase("format"))
-          val allproperties = _with_format_property(
-            properties ++ runtimeproperties,
-            _resolve_format(runtimeOptions, suffixformat, mode)
-          )
-          Consequence.success(
-            Request.of(
-              component = component,
-              service = service,
-              operation = operation,
-              arguments = arguments,
-              switches = switches,
-              properties = allproperties
-            )
-          )
-        case Consequence.Failure(conclusion) =>
-          Consequence.Failure(conclusion)
-      }
-    }}
+    new CncfRuntime().parseCommandArgs(subsystem, args, mode)
 
   private def _resolve_selector(
     subsystem: Subsystem,
@@ -2397,7 +2357,47 @@ class CncfRuntime() extends GlobalObservable {
     args: Array[String],
     mode: RunMode = RunMode.Command
   ): Consequence[Request] =
-    CncfRuntime.parseCommandArgs(subsystem, args, mode)
+    _extract_runtime_options(args.toIndexedSeq) match { case (runtimeOptions, clean) =>
+    _selectorAndArguments(clean).flatMap { case (selector0, tail) =>
+      val normalized = _normalize_meta_selector(subsystem, selector0, tail.toVector)
+      val aliasresolver =
+        if (subsystem.aliasResolver ne AliasResolver.empty) subsystem.aliasResolver
+        else _alias_resolver
+      val rewritten = PathPreNormalizer.rewriteSelector(normalized._1, mode, aliasresolver)
+      val (selector, suffixformat) = _extract_selector_format(rewritten)
+      _resolve_selector(subsystem, selector, runtimeOptions, mode) match {
+        case Consequence.Success((component, service, operation)) =>
+          val parsed = for {
+            comp <- subsystem.components.find(_.name == component)
+            svc <- comp.protocol.services.services.find(_.name == service)
+            opdef <- svc.operations.operations.find(_.name == operation)
+          } yield _args_parser.parse(opdef, normalized._2.toList)
+          val (arguments, switches, properties) = parsed.map { req =>
+            (req.arguments, req.switches, req.properties)
+          }.getOrElse {
+            (normalized._2.zipWithIndex.map { case (value, index) =>
+              Argument(s"arg${index + 1}", value, None)
+            }.toList, Nil, Nil)
+          }
+          val runtimeproperties = _runtime_properties(runtimeOptions, mode).filterNot(_.name.equalsIgnoreCase("format"))
+          val allproperties = _with_format_property(
+            properties ++ runtimeproperties,
+            _resolve_format(runtimeOptions, suffixformat, mode)
+          )
+          Consequence.success(
+            Request.of(
+              component = component,
+              service = service,
+              operation = operation,
+              arguments = arguments,
+              switches = switches,
+              properties = allproperties
+            )
+          )
+        case Consequence.Failure(conclusion) =>
+          Consequence.Failure(conclusion)
+      }
+    }}
 
   private def _resolve_selector(
     subsystem: Subsystem,
