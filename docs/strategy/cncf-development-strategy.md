@@ -219,6 +219,17 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - No security model redesign (handled by dedicated security phase).
 - Artifact (work): `docs/phase/phase-7.md`.
 
+### Phase 8: CML Operation Grammar Introduction
+- Goal: introduce first-class `operation` grammar in CML and integrate parse->AST->generation->runtime path.
+- Scope:
+- Define operation syntax/semantics (`command`/`query`, parameter/response contract).
+- Extend model/generator pipeline to propagate operation metadata.
+- Align runtime and projection/meta visibility with generated operation metadata.
+- Non-goals:
+- No aggregate/view contract redesign.
+- No workflow expansion.
+- Artifact (work): `docs/phase/phase-8.md`.
+
 ## 4. Relationship Between Phases
 - Later phases depend on earlier phases.
 - Phase 1.5 constrains Phase 2 and Phase 3.
@@ -244,7 +255,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 
 ## 7. Future Development Items
 
-This section lists planned development areas to be incorporated in future phases beyond Phase 7.
+This section lists planned development areas to be incorporated in future phases beyond Phase 8.
 These items are not yet fully assigned to specific phases and may be grouped or split as the architecture evolves.
 
 ### 7.1 Component Wiring and Subsystem Construction
