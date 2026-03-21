@@ -99,11 +99,13 @@ Flag semantics:
   - command-mode selector resolution feature flag
   - enables path-resolution route for command selector interpretation
   - `component.service` form is supported (for example `admin.component`)
-  - slash form is interpreted as command path and must satisfy:
-    - `/component/service/operation`
-    - invalid path form (for example `admin/component`) is rejected by contract
   - accepted forms:
     - `--path-resolution`
     - `--path-resolution=true|false`
     - `--path-resolution true|false`
   - non-command modes keep normal selector resolution behavior
+
+Compatibility note:
+
+- Public CLI contract is `component.service.operation` (or feature-flagged omission such as `component.service`).
+- Inputs outside this public contract are intentionally undocumented here.

@@ -13,6 +13,20 @@ Current staged adoption scope:
 HTTP and script surfaces remain on the legacy runtime routing path until
 staged rollout is completed.
 
+Public input contract (current policy):
+
+- CLI command canonical selector: `component.service.operation`
+- HTTP canonical path: `/component/service/operation`
+
+Compatibility policy (non-contract):
+
+- Some non-canonical selector forms may still work in limited paths for
+  backward compatibility.
+- These compatibility inputs are intentionally excluded from user-facing
+  manuals and MUST NOT be relied upon by clients, scripts, or automation.
+- Future versions MAY reject such inputs as `BadRequest` without preserving
+  backward compatibility for those non-contract forms.
+
 The purpose of this specification is to:
 
 - eliminate hard-coded alias handling from implementation,
@@ -138,6 +152,12 @@ The following examples demonstrate path resolution behavior using only
 the rules defined in this specification.
 
 Each example explicitly lists the input, applied rules, and result.
+
+Interpretation note:
+
+- Inputs in this section are resolver-level normalization examples.
+- They do not redefine the public CLI command syntax contract stated in
+  Section 1.
 
 ---
 
