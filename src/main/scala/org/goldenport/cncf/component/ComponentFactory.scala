@@ -19,6 +19,7 @@ import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, E
 import org.goldenport.cncf.entity.view.ViewSpace
 import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.statemachine.{CollectionStateMachinePlanner, CollectionStateMachinePlannerProvider, CollectionTransitionRule, CollectionTransitionRuleProvider, TransitionTrigger, TransitionRule}
+import scala.util.Try
 
 /*
  * @since   Jan. 30, 2026
@@ -111,7 +112,9 @@ final class ComponentFactory(
       entitySpace = Some(component.entitySpace),
       entitySubscriptionLimit = entitySubscriptionLimit,
       workingSetEntities = component.workingSetEntityNames,
-      jobEngine = Some(component.jobEngine)
+      // EventReception can be created from lightweight test components
+      // before Component.core initialization.
+      jobEngine = Try(component.jobEngine).toOption
     )
     component.eventReceptionDefinitions.foreach(reception.register)
     component.eventSubscriptionDefinitions.foreach(reception.registerSubscription)

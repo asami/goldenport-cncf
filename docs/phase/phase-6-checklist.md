@@ -164,7 +164,7 @@ Define and implement Job correlation behavior with event and replay flows.
 
 ## JM-05: Executable Specifications (Job CQRS)
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -172,22 +172,22 @@ Add executable specifications for lifecycle, query, control, and event-correlati
 
 ### Detailed Tasks
 
-- [ ] Add Given/When/Then specs for lifecycle transitions (success/failure/invalid transition).
-- [ ] Add specs for query read model consistency and deterministic ordering.
-- [ ] Add specs for control command semantics (`cancel/retry/suspend/resume`).
-- [ ] Add specs for command async default behavior and `JobId` return contract.
-- [ ] Add specs for optional synchronous command execution path and result semantics.
-- [ ] Add specs proving Task-first invariant (`ActionCall` is executed only via Task/Job path).
-- [ ] Add specs for persistence policy boundary:
+- [x] Add Given/When/Then specs for lifecycle transitions (success/failure/invalid transition).
+- [x] Add specs for query read model consistency and deterministic ordering.
+- [x] Add specs for control command semantics (`cancel/retry/suspend/resume`).
+- [x] Add specs for command async default behavior and `JobId` return contract.
+- [x] Add specs for optional synchronous command execution path and result semantics.
+- [x] Add specs proving Task-first invariant (`ActionCall` is executed only via Task/Job path).
+- [x] Add specs for persistence policy boundary:
   - Query execution -> Ephemeral Job path (non-persistent)
   - Event with no matched subscription -> Ephemeral Job path (non-persistent)
   - all other executions -> Persistent Job path
-- [ ] Add specs for event continuation modes (same-job vs new-job).
-- [ ] Add specs for correlation metadata propagation (`correlationId/causationId/parentJobId`).
-- [ ] Add specs for TraceTree/debugInfo projection consistency.
-- [ ] Add specs for replay and repeated-event idempotency behavior.
-- [ ] Add policy denial/allow specs for query and control paths.
-- [ ] Add regression specs across ActionCall/Event/Job integration path.
+- [x] Add specs for event continuation modes (same-job vs new-job).
+- [x] Add specs for correlation metadata propagation (`correlationId/causationId/parentJobId`).
+- [x] Add specs for TraceTree/debugInfo projection consistency.
+- [x] Add specs for replay and repeated-event idempotency behavior.
+- [x] Add policy denial/allow specs for query and control paths.
+- [x] Add regression specs across ActionCall/Event/Job integration path.
 
 ---
 

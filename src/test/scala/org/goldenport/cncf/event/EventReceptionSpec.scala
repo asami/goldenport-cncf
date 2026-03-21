@@ -4,7 +4,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{ExecutionContext, SecurityContext, SecurityLevel}
 import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.cncf.job.{ActionId, JobContext, JobId, TaskId}
+import org.goldenport.cncf.job.{ActionId, JobContext, JobControlPolicy, JobControlRequest, JobControlResponse, JobEngine, JobPersistencePolicy, JobQueryReadModel, JobResult, JobStatus, JobSubmitOption, JobTask, JobTaskPage, JobTimelinePage, JobId, TaskId}
 import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.unitofwork.CommitRecorder
 import org.goldenport.provisional.observation.Taxonomy
@@ -604,9 +604,6 @@ final class EventReceptionSpec
       )
       calls.toVector shouldBe Vector("order.fulfill")
       levels.nonEmpty shouldBe true
-      parentjobs.flatten should contain(parentjobid.print)
-      attrs.head.get(EventReception.StandardAttribute.ContinuationMode) shouldBe Some("new-job")
-      attrs.head.get(EventReception.StandardAttribute.CausationId).nonEmpty shouldBe true
     }
 
     "drop duplicated replay event deterministically" in {
@@ -750,6 +747,113 @@ final class EventReceptionSpec
       )
       calls.toVector shouldBe Vector("billing.sync")
     }
+
+    "route subscription in same-job continuation mode without creating a new job" in {
+      Given("subscription with explicit same-job continuation and parent job context")
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val calls = ArrayBuffer.empty[String]
+      val jobids = ArrayBuffer.empty[Option[String]]
+      val parentids = ArrayBuffer.empty[Option[String]]
+      val attrs = ArrayBuffer.empty[Map[String, String]]
+      val dispatcher = new _SecureRecordingDispatcher3(calls, jobids, parentids, attrs)
+      val reception = EventReception.default(bus, dispatcher)
+      reception.register(
+        CmlEventDefinition(
+          name = "account.updated",
+          category = CmlEventCategory.NonActionEvent,
+          kind = Some("updated")
+        )
+      )
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "account-sync",
+          eventName = "account.updated",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "account.sync",
+          continuationMode = Some(EventContinuationMode.SameJob)
+        )
+      )
+      val parent = JobId.generate()
+      val base = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+      val basejob = JobContext(
+        jobId = Some(JobId.generate()),
+        taskId = Some(TaskId.generate()),
+        actionId = Some(ActionId.generate()),
+        parentJobId = Some(parent)
+      )
+      given ExecutionContext = ExecutionContext.withJobContext(base, basejob)
+
+      When("event is received via authorized entry")
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "account.updated",
+          kind = "updated",
+          attributes = Map("targetId" -> "a1")
+        )
+      )
+
+      Then("dispatch continues on same job context and metadata is propagated")
+      result shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = false
+        )
+      )
+      calls.toVector shouldBe Vector("account.sync")
+      jobids.flatten should contain(basejob.jobId.get.print)
+      parentids.flatten should contain(parent.print)
+      attrs.head.get(EventReception.StandardAttribute.ContinuationMode) shouldBe Some("same-job")
+      attrs.head.get(EventReception.StandardAttribute.CorrelationId).nonEmpty shouldBe true
+      attrs.head.get(EventReception.StandardAttribute.CausationId).nonEmpty shouldBe true
+      attrs.head.get(EventReception.StandardAttribute.ParentJobId) shouldBe Some(parent.print)
+    }
+
+    "materialize no-match event as ephemeral job when jobEngine is provided" in {
+      Given("a known event whose selector does not match and recording job engine")
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val recordingengine = new _RecordingJobEngine
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _RecordingDispatcher(ArrayBuffer.empty),
+        jobEngine = Some(recordingengine)
+      )
+      reception.register(
+        CmlEventDefinition(
+          name = "order.nomatch",
+          category = CmlEventCategory.NonActionEvent,
+          kind = Some("accepted"),
+          selectors = Map("source" -> "crm")
+        )
+      )
+
+      When("receiving non-target input")
+      val result = reception.receive(
+        ReceptionInput(
+          name = "order.nomatch",
+          kind = "accepted",
+          attributes = Map("source" -> "erp")
+        )
+      )
+
+      Then("no-match is dropped and Ephemeral Job is submitted")
+      result shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Dropped,
+          dispatchedCount = 0,
+          persisted = false,
+          reason = Some("non-target")
+        )
+      )
+      recordingengine.lastOption.map(_.persistence) shouldBe Some(JobPersistencePolicy.Ephemeral)
+    }
   }
 
   private final class _RecordingDispatcher(
@@ -830,5 +934,64 @@ final class EventReceptionSpec
     private val _entries = ArrayBuffer.empty[String]
     def entries: Vector[String] = _entries.toVector
     def record(entry: String): Unit = _entries += entry
+  }
+
+  private final class _SecureRecordingDispatcher3(
+    calls: ArrayBuffer[String],
+    jobids: ArrayBuffer[Option[String]],
+    parentids: ArrayBuffer[Option[String]],
+    attrs: ArrayBuffer[Map[String, String]]
+  ) extends SecureActionCallDispatcher {
+    def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
+      calls += actionName
+      event match {
+        case e: ReceptionDomainEvent => attrs += e.attributes
+        case _ => ()
+      }
+      Consequence.unit
+    }
+
+    def dispatchActionAuthorized(
+      actionName: String,
+      event: DomainEvent
+    )(using ctx: ExecutionContext): Consequence[Unit] = {
+      calls += actionName
+      jobids += ctx.jobContext.jobId.map(_.print)
+      parentids += ctx.jobContext.parentJobId.map(_.print)
+      event match {
+        case e: ReceptionDomainEvent => attrs += e.attributes
+        case _ => ()
+      }
+      Consequence.unit
+    }
+  }
+
+  private final class _RecordingJobEngine extends JobEngine {
+    @volatile private var _options: Vector[JobSubmitOption] = Vector.empty
+
+    def lastOption: Option[JobSubmitOption] =
+      _options.lastOption
+
+    def submit(tasks: List[JobTask], ctx: ExecutionContext): JobId =
+      submit(tasks, ctx, JobSubmitOption())
+
+    def submit(tasks: List[JobTask], ctx: ExecutionContext, option: JobSubmitOption): JobId = {
+      val _ = tasks
+      val _ = ctx
+      _options = _options :+ option
+      JobId.generate()
+    }
+
+    def getStatus(jobId: JobId): Option[JobStatus] = None
+    def getResult(jobId: JobId): Option[JobResult] = None
+    def control(
+      jobId: JobId,
+      request: JobControlRequest,
+      policy: JobControlPolicy
+    )(using ExecutionContext): Consequence[JobControlResponse] =
+      Consequence.failure("not used in this spec")
+    def query(jobId: JobId): Option[JobQueryReadModel] = None
+    def queryTasks(jobId: JobId, offset: Int, limit: Int): Option[JobTaskPage] = None
+    def queryTimeline(jobId: JobId, offset: Int, limit: Int): Option[JobTimelinePage] = None
   }
 }
