@@ -105,7 +105,7 @@ Implement generation propagation path for operation metadata.
 
 ## OP-04: Runtime/Projection Integration
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -113,13 +113,13 @@ Align runtime and projection/meta surfaces with generated operation metadata.
 
 ### Detailed Tasks
 
-- [ ] Align runtime operation resolution with generated operation metadata.
-- [ ] Map operation type to runtime execution semantics:
+- [x] Align runtime operation resolution with generated operation metadata.
+- [x] Map operation type to runtime execution semantics:
   - Command: Job async default
   - Query: synchronous / Ephemeral Job path
 - [x] Align `meta.*` and projection outputs with operation declarations.
 - [x] Ensure deterministic operation visibility across help/schema/openapi surfaces.
-- [ ] Remove ambiguous or duplicate runtime exposure paths if present.
+- [x] Remove ambiguous or duplicate runtime exposure paths if present.
 
 ---
 

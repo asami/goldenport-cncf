@@ -4,7 +4,7 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 object OpenApiProjection {
@@ -22,7 +22,8 @@ object OpenApiProjection {
     }.mkString(",")
     val aggregates = _json_array_strings(aggregateMetas(component).map(_.name))
     val views = _json_array_views(viewMetas(component))
-    s"""{"openapi":"3.0.0","info":{"title":"${_escape(component.name)} API","version":"0.1.0","x-cncf-aggregate-collections":${aggregates},"x-cncf-view-collections":${views}},"paths":{${paths}}}"""
+    val operations = _json_array_operations(operationMetas(component))
+    s"""{"openapi":"3.0.0","info":{"title":"${_escape(component.name)} API","version":"0.1.0","x-cncf-aggregate-collections":${aggregates},"x-cncf-view-collections":${views},"x-cncf-operation-definitions":${operations}},"paths":{${paths}}}"""
   }
 
   private def _infer_method(serviceName: String, operationName: String): String = {
@@ -45,6 +46,16 @@ object OpenApiProjection {
     val entries = xs.map { x =>
       val names = _json_array_strings(x.viewNames)
       s"""{"name":"${_escape(x.name)}","entityName":"${_escape(x.entityName)}","viewNames":${names}}"""
+    }
+    entries.mkString("[", ",", "]")
+  }
+
+  private def _json_array_operations(xs: Vector[OperationMeta]): String = {
+    val entries = xs.map { x =>
+      val parameters = x.parameters.map { p =>
+        s"""{"name":"${_escape(p.getString("name").getOrElse(""))}","datatype":"${_escape(p.getString("datatype").getOrElse(""))}","multiplicity":"${_escape(p.getString("multiplicity").getOrElse(""))}"}"""
+      }.mkString("[", ",", "]")
+      s"""{"name":"${_escape(x.name)}","kind":"${_escape(x.kind)}","inputType":"${_escape(x.inputType)}","outputType":"${_escape(x.outputType)}","inputValueKind":"${_escape(x.inputValueKind)}","parameters":${parameters}}"""
     }
     entries.mkString("[", ",", "]")
   }

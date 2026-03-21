@@ -44,8 +44,8 @@ This document is a progress dashboard, not a design journal.
 - A (DONE): Define operation grammar syntax and semantic contract.
 - B (DONE): Implement AST/model extensions for operation definition.
 - C (DONE): Implement generator propagation (Cozy -> SimpleModeler -> CNCF).
-- D (ACTIVE): Integrate runtime exposure and projection/meta visibility.
-- E (PLANNED): Add executable specifications and regression coverage.
+- D (DONE): Integrate runtime exposure and projection/meta visibility.
+- E (ACTIVE): Add executable specifications and regression coverage.
 
 Resume hint:
 - Finalize runtime execution semantics and close executable specification gaps.
@@ -55,7 +55,7 @@ Resume hint:
 - [x] OP-01: Define and freeze CML operation grammar and semantic contract.
 - [x] OP-02: Implement CML AST/model extension for operation definitions.
 - [x] OP-03: Implement generation propagation path across Cozy/SimpleModeler/CNCF.
-- [ ] OP-04: Align runtime/meta/projection exposure with generated operation metadata.
+- [x] OP-04: Align runtime/meta/projection exposure with generated operation metadata.
 - [ ] OP-05: Add executable specifications for parse->AST->generation->runtime path.
 
 ## 6.1 Latest Verification Snapshot (2026-03-22)
@@ -69,6 +69,10 @@ Resume hint:
 - Focused CNCF verification:
   - `sbt --batch "testOnly org.goldenport.cncf.projection.AggregateViewProjectionAlignmentSpec"`
   - result: passed (`2 succeeded, 0 failed`)
+  - `sbt --batch "testOnly org.goldenport.cncf.cli.CommandExecuteComponentSpec"`
+  - result: passed (`42 succeeded, 0 failed`)
+  - `sbt --batch "testOnly org.goldenport.cncf.job.SCENARIO.JobLifecycleScenarioSpec"`
+  - result: passed (`3 succeeded, 0 failed`)
 
 ## 6. Inputs from Previous Phases
 

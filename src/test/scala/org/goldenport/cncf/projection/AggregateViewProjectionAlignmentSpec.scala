@@ -71,6 +71,9 @@ final class AggregateViewProjectionAlignmentSpec
       first shouldBe second
       first should include("\"x-cncf-aggregate-collections\":[\"person_aggregate\",\"profile_aggregate\"]")
       first should include("\"x-cncf-view-collections\":[")
+      first should include("\"x-cncf-operation-definitions\":[")
+      first should include("\"name\":\"getPerson\"")
+      first should include("\"name\":\"savePerson\"")
       first should include("\"name\":\"person_view\"")
       first should include("\"viewNames\":[\"detail\",\"summary\"]")
     }

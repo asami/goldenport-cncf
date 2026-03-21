@@ -121,7 +121,10 @@ private[projection] object MetaProjectionSupport {
 
   def operationMetas(component: Component): Vector[OperationMeta] =
     component.operationDefinitions
-      .sortBy(_.name)
+      .groupBy(_.name)
+      .toVector
+      .sortBy(_._1)
+      .map(_._2.head)
       .map { x =>
         OperationMeta(
           name = x.name,

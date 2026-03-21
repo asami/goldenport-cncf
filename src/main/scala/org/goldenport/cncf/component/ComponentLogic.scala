@@ -15,12 +15,13 @@ import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 import org.goldenport.cncf.statemachine.PlannedTransitionValidationHook
+import org.goldenport.cncf.operation.CmlOperationDefinition
 
 /*
  * @since   Jan.  3, 2026
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -80,32 +81,76 @@ case class ComponentLogic(
     ctx: ExecutionContext
   ): Consequence[OperationResponse] = {
     val task = ActionTask(ActionId.generate(), action, component.actionEngine, Some(component))
-    action match {
-      case _: QueryAction =>
-        val jobid = submitJob(List(task), ctx)
-        awaitJobResult(jobid)
-      case command: CommandAction =>
-        _effective_command_execution_mode(action, command).match {
-          case CommandExecutionMode.AsyncJob =>
-            val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Async)
-            val jobid = submitJob(List(task), ctx, option)
+    _resolve_operation_kind(action) match {
+      case Some(ComponentLogic.OperationKind.Query) =>
+        _execute_query_action(task, ctx)
+      case Some(ComponentLogic.OperationKind.Command) =>
+        _execute_command_action(task, action, ctx)
+      case None =>
+        action match {
+          case _: QueryAction =>
+            _execute_query_action(task, ctx)
+          case _: CommandAction =>
+            _execute_command_action(task, action, ctx)
+          case _ =>
+            val jobid = submitJob(List(task), ctx)
             Consequence.success(OperationResponse.Scalar(jobid.value))
-          case CommandExecutionMode.AsyncJobAndAwait =>
-            val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Async)
-            val jobid = submitJob(List(task), ctx, option)
-            awaitJobResult(jobid)
-          case CommandExecutionMode.SyncJob =>
-            val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Sync)
-            val jobid = submitJob(List(task), ctx, option)
-            awaitJobResult(jobid)
-          case CommandExecutionMode.SyncDirectNoJob =>
-            execute(createActionCall(action, ctx))
         }
-      case _ =>
-        val jobid = submitJob(List(task), ctx)
-        Consequence.success(OperationResponse.Scalar(jobid.value))
     }
   }
+
+  private def _execute_query_action(
+    task: ActionTask,
+    ctx: ExecutionContext
+  ): Consequence[OperationResponse] = {
+    val jobid = submitJob(List(task), ctx)
+    awaitJobResult(jobid)
+  }
+
+  private def _execute_command_action(
+    task: ActionTask,
+    action: Action,
+    ctx: ExecutionContext
+  ): Consequence[OperationResponse] = {
+    val mode = action match {
+      case command: CommandAction =>
+        _effective_command_execution_mode(action, command)
+      case _ =>
+        CommandExecutionMode.AsyncJob
+    }
+    mode match {
+      case CommandExecutionMode.AsyncJob =>
+        val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Async)
+        val jobid = submitJob(List(task), ctx, option)
+        Consequence.success(OperationResponse.Scalar(jobid.value))
+      case CommandExecutionMode.AsyncJobAndAwait =>
+        val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Async)
+        val jobid = submitJob(List(task), ctx, option)
+        awaitJobResult(jobid)
+      case CommandExecutionMode.SyncJob =>
+        val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Sync)
+        val jobid = submitJob(List(task), ctx, option)
+        awaitJobResult(jobid)
+      case CommandExecutionMode.SyncDirectNoJob =>
+        execute(createActionCall(action, ctx))
+    }
+  }
+
+  private def _resolve_operation_kind(
+    action: Action
+  ): Option[ComponentLogic.OperationKind] = {
+    val operationname = action.request.operation
+    component.operationDefinitions.find(_.name == operationname).flatMap(_to_operation_kind)
+  }
+
+  private def _to_operation_kind(
+    definition: CmlOperationDefinition
+  ): Option[ComponentLogic.OperationKind] =
+    definition.kind.trim.toUpperCase match {
+      case "QUERY" => Some(ComponentLogic.OperationKind.Query)
+      case "COMMAND" => Some(ComponentLogic.OperationKind.Command)
+      case _ => None
+    }
 
   private def _effective_command_execution_mode(
     action: Action,
@@ -259,6 +304,11 @@ case class ComponentLogic(
 }
 
 object ComponentLogic {
+  private enum OperationKind {
+    case Query
+    case Command
+  }
+
   // TODO migrate to AdminComponent
   final case class PingAction(request: Request) extends QueryAction() {
 //    def name = "ping"
