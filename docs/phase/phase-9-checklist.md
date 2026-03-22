@@ -142,7 +142,7 @@ Align runtime loading and introspection with packaged CAR/SAR artifacts.
 
 ## EX-01: Executable Specs and Phase Closure
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -150,12 +150,12 @@ Close Phase 9 with executable specification coverage and document alignment.
 
 ### Detailed Tasks
 
-- [ ] Add parse/model specs for Component/Subsystem grammar.
-- [ ] Add packaging specs for CAR/SAR structure and precedence rules.
-- [ ] Add runtime integration specs for packaged artifact loading/visibility.
-- [ ] Run focused suites across Cozy/sbt-cozy/CNCF and record commands/results.
-- [ ] Update `phase-9.md` and `phase-9-checklist.md` consistently.
-- [ ] Mark phase as closed only after all items are DONE.
+- [x] Add parse/model specs for Component/Subsystem grammar.
+- [x] Add packaging specs for CAR/SAR structure and precedence rules.
+- [x] Add runtime integration specs for packaged artifact loading/visibility.
+- [x] Run focused suites across Cozy/sbt-cozy/CNCF and record commands/results.
+- [x] Update `phase-9.md` and `phase-9-checklist.md` consistently.
+- [x] Mark phase as closed only after all items are DONE.
 
 ---
 

@@ -1,6 +1,6 @@
 # Phase 9 — Component/Subsystem Grammar and CAR/SAR Packaging
 
-status = open
+status = close
 
 ## 1. Purpose of This Document
 
@@ -35,7 +35,7 @@ This document is a progress dashboard, not a design journal.
 - C (DONE): Define and implement CAR/SAR packaging model integration.
 - D (DONE): Implement `sbt-cozy` packaging flow for CAR/SAR artifacts.
 - E (DONE): Align CNCF runtime/projection loading path for packaged artifacts.
-- F (ACTIVE): Add executable specs and close phase documents.
+- F (DONE): Add executable specs and close phase documents.
 
 Resume hint:
 - Complete runtime loading/visibility alignment for CAR/SAR and close executable specs.
@@ -47,7 +47,7 @@ Resume hint:
 - [x] PK-01: Define/freeze CAR/SAR model contract (manifest, structure, precedence).
 - [x] PK-02: Implement CAR/SAR packaging in `sbt-cozy`.
 - [x] RT-01: Align CNCF runtime loading and visibility with CAR/SAR packaging contract.
-- [ ] EX-01: Add executable specs and finalize Phase 9 closure.
+- [x] EX-01: Add executable specs and finalize Phase 9 closure.
 
 ## 6. Inputs from Previous Phases
 
@@ -74,18 +74,28 @@ Resume hint:
 ## 8. Latest Verification Snapshot (2026-03-22)
 
 - Cozy:
-  - `c322cf0 Integrate component-centric grammar and default component fallback`
   - focused test:
     - `sbt --batch "testOnly cozy.modeler.ModelerGenerationSpec"`
-    - result: passed (`22 succeeded, 0 failed`)
+    - result: passed (`22 succeeded, 0 failed, 0 pending`)
 - sbt-cozy:
   - focused test:
     - `sbt --batch test`
-    - result: passed (`10 succeeded, 0 failed`)
+    - result: passed (`10 succeeded, 0 failed, 0 pending`)
 - CNCF:
-  - RT-01 runtime alignment implementation completed.
   - focused tests:
     - `sbt --batch "testOnly org.goldenport.cncf.component.repository.ComponentRepositoryCarSpec org.goldenport.cncf.projection.AggregateViewProjectionAlignmentSpec"`
-    - result: passed (`7 succeeded, 0 failed`)
+    - result: passed (`7 succeeded, 0 failed, 0 pending`)
     - `sbt --batch compile`
     - result: passed
+
+## 9. Phase 9 Closure Note
+
+- Executed commands:
+  - `cd /Users/asami/src/dev2025/cozy && sbt --batch "testOnly cozy.modeler.ModelerGenerationSpec"`
+  - `cd /Users/asami/src/dev2026/sbt-cozy && sbt --batch test`
+  - `cd /Users/asami/src/dev2025/cloud-native-component-framework && sbt --batch "testOnly org.goldenport.cncf.component.repository.ComponentRepositoryCarSpec org.goldenport.cncf.projection.AggregateViewProjectionAlignmentSpec"`
+  - `cd /Users/asami/src/dev2025/cloud-native-component-framework && sbt --batch compile`
+- Pass/Fail summary:
+  - All focused suites passed; no pending tests in focused suites.
+- Residual risks:
+  - Runtime path for external SAR distribution coordinates is not implemented yet; current RT-01 covers local artifact intake and introspection only.
