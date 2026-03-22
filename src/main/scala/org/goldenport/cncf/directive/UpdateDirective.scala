@@ -1,6 +1,6 @@
 package org.goldenport.cncf.directive
 
-import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.model.datatype.EntityId
 
 /*
  * @since   Mar. 16, 2026

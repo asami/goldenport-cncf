@@ -6,8 +6,8 @@ import org.goldenport.id.Identifiable
 import org.goldenport.record.Record
 import org.goldenport.record.RecordEncoder
 import org.goldenport.record.RecordCodex
-import org.goldenport.cncf.datatype.EntityId
-import org.goldenport.cncf.datatype.EntityCollectionId
+import org.goldenport.model.datatype.EntityId
+import org.goldenport.model.datatype.EntityCollectionId
 
 /*
  * @since   Feb. 22, 2026

@@ -2,7 +2,7 @@ package org.goldenport.cncf.component
 
 import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
-import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.EntityPersistable
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimePlan, PartitionStrategy, WorkingSetDefinition}
 import org.goldenport.cncf.component.repository.ComponentRepositorySpace

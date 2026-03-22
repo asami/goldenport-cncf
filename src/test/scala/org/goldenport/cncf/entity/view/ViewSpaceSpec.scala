@@ -1,7 +1,7 @@
 package org.goldenport.cncf.entity.view
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.directive.Query
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers

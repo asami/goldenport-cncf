@@ -3,7 +3,7 @@ package org.goldenport.cncf.event
 import java.time.Instant
 import org.goldenport.Conclusion
 import org.goldenport.cncf.context.{ExecutionContext, ExecutionContextId}
-import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.model.datatype.EntityId
 import org.goldenport.cncf.job.{JobId, TaskId}
 import org.goldenport.cncf.statemachine.TransitionEvent
 

@@ -5,7 +5,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.goldenport.Consequence
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.model.datatype.EntityId
 import org.goldenport.cncf.entity.runtime.EntitySpace
 import org.goldenport.cncf.job.{ActionId, JobEngine, JobPersistencePolicy, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded}
 import org.goldenport.cncf.security.IngressSecurityResolver

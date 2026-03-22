@@ -2,7 +2,7 @@ package org.goldenport.cncf.component
 
 import scala.collection.concurrent.TrieMap
 import org.goldenport.Consequence
-import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.EntityPersistable
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen

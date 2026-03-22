@@ -1,7 +1,7 @@
 package org.goldenport.cncf.directive
 
-import org.goldenport.cncf.datatype.EntityId
-import org.goldenport.cncf.datatype.EntityCollectionId
+import org.goldenport.model.datatype.EntityId
+import org.goldenport.model.datatype.EntityCollectionId
 import org.goldenport.record.Record
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec

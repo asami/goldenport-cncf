@@ -1,6 +1,6 @@
 package org.goldenport.cncf.entity.runtime
 
-import org.goldenport.cncf.datatype.EntityCollectionId
+import org.goldenport.model.datatype.EntityCollectionId
 import org.goldenport.cncf.entity.EntityPersistent
 
 /*

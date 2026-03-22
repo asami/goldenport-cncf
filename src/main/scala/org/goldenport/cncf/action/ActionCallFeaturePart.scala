@@ -15,8 +15,8 @@ import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork}
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.Program
-import org.goldenport.cncf.datatype.EntityId
-import org.goldenport.cncf.datatype.EntityCollectionId
+import org.goldenport.model.datatype.EntityId
+import org.goldenport.model.datatype.EntityCollectionId
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.EntityPersistentCreate

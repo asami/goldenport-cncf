@@ -4,7 +4,7 @@ import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.event.{EventId, EventLane, EventRecord}
-import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec

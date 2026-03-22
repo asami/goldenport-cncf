@@ -1,7 +1,7 @@
 package org.goldenport.cncf.entity.runtime
 
 import java.time.Instant
-import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec

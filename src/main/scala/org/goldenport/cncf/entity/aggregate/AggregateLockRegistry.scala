@@ -2,7 +2,7 @@ package org.goldenport.cncf.entity.aggregate
 
 import scala.collection.concurrent.TrieMap
 import org.goldenport.Consequence
-import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.model.datatype.EntityId
 
 /*
  * AggregateLockRegistry

@@ -3,7 +3,7 @@ package org.goldenport.cncf.statemachine
 import scala.collection.mutable
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.model.datatype.EntityId
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
 
 /*

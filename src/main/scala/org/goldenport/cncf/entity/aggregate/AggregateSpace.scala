@@ -3,7 +3,7 @@ package org.goldenport.cncf.entity.aggregate
 import scala.collection.mutable
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
-import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.model.datatype.EntityId
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.aggregate.Repository
 

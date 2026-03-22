@@ -1,7 +1,7 @@
 package org.goldenport.cncf.entity.aggregate
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.runtime.testdomain.{
   Product,
   ProductAggregate,

@@ -2,7 +2,7 @@ package org.goldenport.cncf.entity.runtime
 
 import cats.effect.Ref
 import org.goldenport.Consequence
-import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.model.datatype.EntityId
 import org.goldenport.cncf.entity.EntityPersistent
 
 /*

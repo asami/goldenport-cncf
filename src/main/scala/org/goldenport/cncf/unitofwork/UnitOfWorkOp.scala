@@ -4,7 +4,7 @@ import org.goldenport.http.HttpResponse
 import org.goldenport.id.UniversalId
 import org.goldenport.process.{ShellCommand, ShellCommandResult}
 import org.goldenport.record.Record
-import org.goldenport.cncf.datatype.*
+import org.goldenport.model.datatype.*
 import org.goldenport.cncf.entity.*
 import org.goldenport.cncf.directive.*
 

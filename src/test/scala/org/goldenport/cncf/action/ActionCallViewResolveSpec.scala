@@ -2,7 +2,7 @@ package org.goldenport.cncf.action
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.view.{Browser, ViewBuilder, ViewCollection}
 import org.goldenport.protocol.operation.OperationResponse

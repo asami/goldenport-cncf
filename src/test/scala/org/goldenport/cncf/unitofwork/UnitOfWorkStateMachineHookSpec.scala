@@ -4,7 +4,7 @@ import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, RuntimeContext, ScopeContext, ScopeKind, TraceId}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
-import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.http.FakeHttpDriver

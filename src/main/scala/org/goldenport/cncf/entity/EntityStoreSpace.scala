@@ -4,8 +4,8 @@ import org.goldenport.Consequence
 import org.goldenport.provisional.observation.Observation
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.datatype.EntityId
-import org.goldenport.cncf.datatype.EntityCollectionId
+import org.goldenport.model.datatype.EntityId
+import org.goldenport.model.datatype.EntityCollectionId
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.directive.*
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*

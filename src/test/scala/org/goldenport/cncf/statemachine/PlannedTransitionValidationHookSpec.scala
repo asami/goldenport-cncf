@@ -2,7 +2,7 @@ package org.goldenport.cncf.statemachine
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
 import org.goldenport.cncf.event.{TransitionLifecycleEvent, TransitionLifecycleKind}
 import org.goldenport.record.Record

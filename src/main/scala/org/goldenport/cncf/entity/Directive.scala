@@ -1,6 +1,6 @@
 package org.goldenport.cncf.entity
 
-import org.goldenport.cncf.datatype.EntityCollectionId
+import org.goldenport.model.datatype.EntityCollectionId
 import org.goldenport.cncf.directive.Query
 
 /*

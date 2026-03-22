@@ -1,6 +1,6 @@
 package org.goldenport.cncf.entity.runtime.testdomain.update
 
-import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.EntityPersistable
 import org.goldenport.record.Record
 /*

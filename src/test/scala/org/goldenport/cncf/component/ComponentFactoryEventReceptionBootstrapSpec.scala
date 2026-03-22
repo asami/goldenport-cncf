@@ -4,7 +4,7 @@ import cats.data.State
 import cats.effect.Ref
 import org.goldenport.Consequence
 import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.event.*

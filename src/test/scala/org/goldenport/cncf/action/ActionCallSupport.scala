@@ -210,14 +210,14 @@ object ActionCallSupport {
   }
 
   private def _seed_entry(
-    cid: org.goldenport.cncf.datatype.EntityCollectionId,
+    cid: org.goldenport.model.datatype.EntityCollectionId,
     record: org.goldenport.record.Record
   ): DataStoreSpace.SeedEntry =
     DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), record)
 
   private def _entity_id(
     minor: String,
-    cid: org.goldenport.cncf.datatype.EntityCollectionId
-  ): org.goldenport.cncf.datatype.EntityId =
-    org.goldenport.cncf.datatype.EntityId("test", minor, cid)
+    cid: org.goldenport.model.datatype.EntityCollectionId
+  ): org.goldenport.model.datatype.EntityId =
+    org.goldenport.model.datatype.EntityId("test", minor, cid)
 }

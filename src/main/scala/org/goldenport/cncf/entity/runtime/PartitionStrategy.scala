@@ -3,7 +3,7 @@ package org.goldenport.cncf.entity.runtime
 import java.time.{Instant, ZoneOffset}
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
-import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.model.datatype.EntityId
 
 /*
  * @since   Mar. 14, 2026

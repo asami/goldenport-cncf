@@ -4,7 +4,7 @@ import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, TraceId}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
-import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.directive.{Condition, Query, Update}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}

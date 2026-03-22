@@ -4,7 +4,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
-import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.statemachine.{CollectionTransitionRule, CollectionTransitionRuleProvider, ExecutionPlan, ResolvedAction, TransitionEvent, TransitionTrigger}
 import org.goldenport.cncf.testutil.TestComponentFactory

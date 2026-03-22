@@ -11,7 +11,7 @@ import org.goldenport.process.{LocalShellCommandExecutor, ShellCommandExecutor}
 import org.goldenport.cncf.UowM
 import org.goldenport.cncf.Program
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.model.datatype.EntityId
 import org.goldenport.cncf.datastore.{DataStore, SearchableDataStore}
 import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.entity.CreateResult

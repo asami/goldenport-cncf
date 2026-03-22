@@ -3,7 +3,7 @@ package org.goldenport.cncf.entity.runtime
 import java.util.concurrent.atomic.LongAdder
 import scala.collection.mutable
 import org.goldenport.Consequence
-import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.model.datatype.EntityId
 
 /*
  * @since   Mar. 14, 2026

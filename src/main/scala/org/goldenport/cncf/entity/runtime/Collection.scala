@@ -3,7 +3,7 @@ package org.goldenport.cncf.entity.runtime
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.datatype.EntityId
+import org.goldenport.model.datatype.EntityId
 import org.goldenport.cncf.entity.EntityQuery
 import org.goldenport.cncf.directive.{Query, SearchResult}
 

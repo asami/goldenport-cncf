@@ -8,7 +8,7 @@ import org.goldenport.id.UniversalId
 import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.unitofwork.{CommitParticipant, CommitRecorder, PrepareResult, TransactionContext}
-import org.goldenport.cncf.datatype.EntityCollectionId
+import org.goldenport.model.datatype.EntityCollectionId
 import scala.util.control.NonFatal
 
 /*

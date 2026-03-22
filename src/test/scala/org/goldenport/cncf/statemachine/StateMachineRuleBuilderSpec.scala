@@ -3,7 +3,7 @@ package org.goldenport.cncf.statemachine
 import scala.collection.mutable.ArrayBuffer
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.record.Record
 import org.scalatest.matchers.should.Matchers
