@@ -8,7 +8,7 @@ lazy val root = project
   .settings(
     organization := "org.goldenport",
     name := "goldenport-cncf",
-    version := "0.3.12",
+    version := "0.3.13",
 
     scalaVersion := scala3Version,
 
