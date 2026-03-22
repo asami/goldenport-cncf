@@ -9,7 +9,9 @@ import org.goldenport.provisional.observation.Taxonomy
 import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.bag.Bag
 import org.goldenport.cli.parser.ArgsParser
-import org.goldenport.configuration.{Configuration, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
+import org.goldenport.configuration.{Configuration, ConfigurationOrigin, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
+import org.goldenport.configuration.source.ConfigurationSource
+import org.goldenport.configuration.source.file.SimpleFileConfigLoader
 import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.cncf.component.builtin.client.{GetQuery, PostCommand}
 import org.goldenport.cncf.CncfVersion
@@ -46,7 +48,7 @@ import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObserva
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -1418,11 +1420,15 @@ object CncfRuntime extends GlobalObservable {
     cwd: Path,
     args: Array[String] = Array.empty
   ): ResolvedConfiguration = {
-    val sources = ConfigurationSources.standard(
+    val configargs = _config_args(args)
+    val basesources = ConfigurationSources.standard(
       cwd,
       applicationname = _configuration_application_name,
-      args = _config_args(args)
+      args = Map.empty
     )
+    val explicitconfigs = _explicit_config_sources(cwd, configargs)
+    val argsource = ConfigurationSource.args(configargs).toSeq
+    val sources = ConfigurationSources(basesources.sources ++ explicitconfigs ++ argsource)
     // TODO Phase 2.9+: define failure policy for configuration resolution.
     // - Preserve/emit ConfigurationTrace and error details for observability.
     // - Decide whether CLI should fail-fast vs fallback to empty configuration.
@@ -1432,6 +1438,36 @@ object CncfRuntime extends GlobalObservable {
       case Consequence.Failure(_) =>
         ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
     }
+  }
+
+  private def _explicit_config_sources(
+    cwd: Path,
+    configargs: Map[String, String]
+  ): Vector[ConfigurationSource] = {
+    val files = _split_config_paths(configargs.get("cncf.config.file")) ++
+      _split_config_paths(configargs.get("cncf.config.files"))
+    files.distinct.map { path =>
+      val p = _normalize_config_path(cwd, path)
+      ConfigurationSource.File(
+        origin = ConfigurationOrigin.Arguments,
+        path = p,
+        rank = ConfigurationSource.Rank.Arguments,
+        loader = new SimpleFileConfigLoader
+      )
+    }.toVector
+  }
+
+  private def _split_config_paths(
+    value: Option[String]
+  ): Vector[String] =
+    value.toVector.flatMap(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
+
+  private def _normalize_config_path(
+    cwd: Path,
+    path: String
+  ): Path = {
+    val p = Paths.get(path)
+    if (p.isAbsolute) p.normalize else cwd.resolve(p).normalize
   }
 
   private def _config_args(
@@ -1839,11 +1875,15 @@ class CncfRuntime() extends GlobalObservable {
     cwd: Path,
     args: Array[String] = Array.empty
   ): ResolvedConfiguration = {
-    val sources = ConfigurationSources.standard(
+    val configargs = _config_args(args)
+    val basesources = ConfigurationSources.standard(
       cwd,
       applicationname = _configuration_application_name,
-      args = _config_args(args)
+      args = Map.empty
     )
+    val explicitconfigs = _explicit_config_sources(cwd, configargs)
+    val argsource = ConfigurationSource.args(configargs).toSeq
+    val sources = ConfigurationSources(basesources.sources ++ explicitconfigs ++ argsource)
     // TODO Phase 2.9+: define failure policy for configuration resolution.
     // - Preserve/emit ConfigurationTrace and error details for observability.
     // - Decide whether CLI should fail-fast vs fallback to empty configuration.
@@ -1853,6 +1893,36 @@ class CncfRuntime() extends GlobalObservable {
       case Consequence.Failure(_) =>
         ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
     }
+  }
+
+  private def _explicit_config_sources(
+    cwd: Path,
+    configargs: Map[String, String]
+  ): Vector[ConfigurationSource] = {
+    val files = _split_config_paths(configargs.get("cncf.config.file")) ++
+      _split_config_paths(configargs.get("cncf.config.files"))
+    files.distinct.map { path =>
+      val p = _normalize_config_path(cwd, path)
+      ConfigurationSource.File(
+        origin = ConfigurationOrigin.Arguments,
+        path = p,
+        rank = ConfigurationSource.Rank.Arguments,
+        loader = new SimpleFileConfigLoader
+      )
+    }.toVector
+  }
+
+  private def _split_config_paths(
+    value: Option[String]
+  ): Vector[String] =
+    value.toVector.flatMap(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
+
+  private def _normalize_config_path(
+    cwd: Path,
+    path: String
+  ): Path = {
+    val p = Paths.get(path)
+    if (p.isAbsolute) p.normalize else cwd.resolve(p).normalize
   }
 
   private def _config_args(
