@@ -61,6 +61,8 @@ Define and freeze the operational contract of `textus-user-account`.
 - [ ] Define account lifecycle operation set (create/read/update/disable/enable).
 - [ ] Define command/query boundaries for each operation.
 - [ ] Define input/output contracts and parameter normalization rules.
+- [ ] Define package-name configuration contract for generated Component.
+- [ ] Define EntityValue package contract as `${package}/entity/*`.
 - [ ] Define identity linkage points required by `textus-identity`.
 - [ ] Define deterministic naming and operation ordering rules.
 - [ ] Define failure taxonomy and error response expectations.
@@ -80,6 +82,8 @@ Implement `textus-user-account` component with operation metadata integration.
 
 - [ ] Implement component operation definitions following TU-01 contract.
 - [ ] Integrate operation metadata for runtime/projection discovery.
+- [ ] Implement configurable package-name support for generated Component.
+- [ ] Implement EntityValue output path/package as `${package}/entity/*`.
 - [ ] Align command operations with async job default path.
 - [ ] Align query operations with sync/ephemeral behavior policy.
 - [ ] Add regression safeguards for operation resolution and execution routing.

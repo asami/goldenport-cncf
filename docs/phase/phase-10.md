@@ -19,6 +19,8 @@ This document is a progress dashboard, not a design journal.
   - component/subsystem integration route for command/query execution
 - Expose stable introspection/projection surfaces (`help`, `describe`, `schema`, `meta.*`) for new operations.
 - Add executable specifications for account/identity integration behavior.
+- Support configurable package name for generated Component.
+- Enforce EntityValue package layout as `${package}/entity/*`.
 
 ## 3. Non-Goals
 
