@@ -21,6 +21,7 @@ object DescribeProjection {
         )
       case Target.ComponentTarget(component) =>
         val services = component.protocol.services.services.sortBy(_.name)
+        val artifact = component_record(component).asMap("artifact")
         val aggregates = aggregateMetas(component).map { x =>
           Record.data(
             "name" -> x.name,
@@ -47,6 +48,8 @@ object DescribeProjection {
         Record.data(
           "type" -> "component",
           "name" -> component.name,
+          "origin" -> component.origin.label,
+          "artifact" -> artifact,
           "summary" -> s"Component ${component.name}",
           "services" -> services.map(service_record),
           "aggregates" -> aggregates,

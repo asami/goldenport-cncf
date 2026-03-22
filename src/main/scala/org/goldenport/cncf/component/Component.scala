@@ -61,6 +61,7 @@ abstract class Component() extends Component.Core.Holder {
   private var _state_machine_planner_provider: StateMachinePlannerProvider =
     StateMachinePlannerProvider.noop
   private var _working_set_entity_names: Set[String] = Set.empty
+  private var _artifact_metadata: Option[Component.ArtifactMetadata] = None
   val entitySpace: EntitySpace = new EntitySpace()
   val aggregateSpace: AggregateSpace = new AggregateSpace()
   val viewSpace: ViewSpace = new ViewSpace()
@@ -160,6 +161,16 @@ abstract class Component() extends Component.Core.Holder {
   def viewDefinitions: Vector[CmlViewDefinition] = Vector.empty
   def operationDefinitions: Vector[CmlOperationDefinition] = Vector.empty
 
+  def artifactMetadata: Option[Component.ArtifactMetadata] =
+    _artifact_metadata
+
+  def withArtifactMetadata(
+    metadata: Component.ArtifactMetadata
+  ): Component = {
+    _artifact_metadata = Some(metadata)
+    this
+  }
+
   def entity[E](name: String): EntityCollection[E] =
     entitySpace.entity(name)
 
@@ -245,6 +256,16 @@ object Component {
     componentOrigin: ComponentOrigin
   ) extends ScopeContext() {
   }
+
+  final case class ArtifactMetadata(
+    sourceType: String,
+    name: String,
+    version: String,
+    component: Option[String] = None,
+    subsystem: Option[String] = None,
+    effectiveExtensions: Map[String, String] = Map.empty,
+    effectiveConfig: Map[String, String] = Map.empty
+  )
 
   object Context {
     def apply(

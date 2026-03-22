@@ -124,7 +124,7 @@ Implement CAR/SAR packaging flow via `sbt-cozy`.
 
 ## RT-01: CNCF Runtime Alignment for CAR/SAR
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -132,11 +132,11 @@ Align runtime loading and introspection with packaged CAR/SAR artifacts.
 
 ### Detailed Tasks
 
-- [ ] Define runtime intake path for CAR/SAR artifacts.
-- [ ] Align component/subsystem resolution path with packaging metadata.
-- [ ] Expose loaded artifact metadata via `meta/help/describe/schema` where required.
-- [ ] Add deterministic failure behavior for invalid/missing artifact metadata.
-- [ ] Ensure no competing parallel loading API is introduced.
+- [x] Define runtime intake path for CAR/SAR artifacts.
+- [x] Align component/subsystem resolution path with packaging metadata.
+- [x] Expose loaded artifact metadata via `meta/help/describe/schema` where required.
+- [x] Add deterministic failure behavior for invalid/missing artifact metadata.
+- [x] Ensure no competing parallel loading API is introduced.
 
 ---
 

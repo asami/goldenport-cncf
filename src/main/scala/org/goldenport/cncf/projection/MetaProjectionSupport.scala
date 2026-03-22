@@ -72,9 +72,21 @@ private[projection] object MetaProjectionSupport {
   }
 
   def component_record(comp: Component): Record =
-    Record.data(
+    Record.data( // Includes runtime-origin and archive metadata for CAR/SAR introspection.
       "type" -> "component",
-      "name" -> comp.name
+      "name" -> comp.name,
+      "origin" -> comp.origin.label,
+      "artifact" -> comp.artifactMetadata.map { m =>
+        Record.data(
+          "sourceType" -> m.sourceType,
+          "name" -> m.name,
+          "version" -> m.version,
+          "component" -> m.component.getOrElse(""),
+          "subsystem" -> m.subsystem.getOrElse(""),
+          "effectiveExtensions" -> m.effectiveExtensions.toVector.sortBy(_._1).map { case (k, v) => Record.data("key" -> k, "value" -> v) },
+          "effectiveConfig" -> m.effectiveConfig.toVector.sortBy(_._1).map { case (k, v) => Record.data("key" -> k, "value" -> v) }
+        )
+      }.getOrElse(Record.empty)
     )
 
   def service_record(service: ServiceDefinition): Record =

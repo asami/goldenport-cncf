@@ -12,11 +12,12 @@ import org.goldenport.cncf.workarea.WorkAreaSpace
 
 /*
  * @since   Feb.  3, 2026
- * @version Feb.  3, 2026
+ * @version Mar. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CarExtracted(
   root: Path,
+  manifest: ArchiveManifest,
   componentMain: Path,
   componentLibs: Vector[Path],
   collaboratorMain: Option[Path],
@@ -90,6 +91,12 @@ object CarExtractor {
     root: Path,
     car: Path
   ): Consequence[CarExtracted] = {
+    val manifest = ArchiveManifest.load(root, "car")
+    manifest match {
+      case Consequence.Failure(conclusion) =>
+        return Consequence.Failure(conclusion)
+      case _ =>
+    }
     val componentdir = root.resolve("component")
     val componentjars = _list_jars(componentdir)
     if (componentjars.isEmpty) {
@@ -105,19 +112,23 @@ object CarExtractor {
       } else {
         val collaboratormain = collaboratormainfiles.headOption
         val collaboratorlibs = _list_jars(collaboratordir.resolve("lib")).sortBy(_.getFileName.toString)
-        _success_extracted(
-          root,
-          componentMain = componentjars.head,
-          componentLibs = componentlibs,
-          collaboratorMain = collaboratormain,
-          collaboratorLibs = collaboratorlibs
-        )
+        manifest.flatMap { m =>
+          _success_extracted(
+            root,
+            manifest = m,
+            componentMain = componentjars.head,
+            componentLibs = componentlibs,
+            collaboratorMain = collaboratormain,
+            collaboratorLibs = collaboratorlibs
+          )
+        }
       }
     }
   }
 
   private def _success_extracted(
     root: Path,
+    manifest: ArchiveManifest,
     componentMain: Path,
     componentLibs: Vector[Path],
     collaboratorMain: Option[Path],
@@ -126,6 +137,7 @@ object CarExtractor {
     Consequence.success(
       CarExtracted(
         root = root,
+        manifest = manifest,
         componentMain = componentMain,
         componentLibs = componentLibs,
         collaboratorMain = collaboratorMain,

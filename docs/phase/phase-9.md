@@ -34,8 +34,8 @@ This document is a progress dashboard, not a design journal.
 - B (DONE): Implement Cozy parser/model updates for grammar.
 - C (DONE): Define and implement CAR/SAR packaging model integration.
 - D (DONE): Implement `sbt-cozy` packaging flow for CAR/SAR artifacts.
-- E (ACTIVE): Align CNCF runtime/projection loading path for packaged artifacts.
-- F (PLANNED): Add executable specs and close phase documents.
+- E (DONE): Align CNCF runtime/projection loading path for packaged artifacts.
+- F (ACTIVE): Add executable specs and close phase documents.
 
 Resume hint:
 - Complete runtime loading/visibility alignment for CAR/SAR and close executable specs.
@@ -46,7 +46,7 @@ Resume hint:
 - [x] CS-02: Implement Cozy parser/model/generator updates for grammar contract.
 - [x] PK-01: Define/freeze CAR/SAR model contract (manifest, structure, precedence).
 - [x] PK-02: Implement CAR/SAR packaging in `sbt-cozy`.
-- [ ] RT-01: Align CNCF runtime loading and visibility with CAR/SAR packaging contract.
+- [x] RT-01: Align CNCF runtime loading and visibility with CAR/SAR packaging contract.
 - [ ] EX-01: Add executable specs and finalize Phase 9 closure.
 
 ## 6. Inputs from Previous Phases
@@ -83,4 +83,9 @@ Resume hint:
     - `sbt --batch test`
     - result: passed (`10 succeeded, 0 failed`)
 - CNCF:
-  - RT-01 remains open; CAR/SAR runtime intake and visibility alignment is the current active item.
+  - RT-01 runtime alignment implementation completed.
+  - focused tests:
+    - `sbt --batch "testOnly org.goldenport.cncf.component.repository.ComponentRepositoryCarSpec org.goldenport.cncf.projection.AggregateViewProjectionAlignmentSpec"`
+    - result: passed (`7 succeeded, 0 failed`)
+    - `sbt --batch compile`
+    - result: passed

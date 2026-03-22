@@ -28,6 +28,8 @@ object HelpProjection {
         val aggregates = aggregateMetas(component).map(_.name)
         val views = viewMetas(component).map(_.name)
         val operations = operationMetas(component).map(_.name)
+        val artifactName = component.artifactMetadata.map(_.name).toVector
+        val artifactVersion = component.artifactMetadata.map(_.version).toVector
         HelpModel(
           `type` = "component",
           name = component.name,
@@ -37,7 +39,10 @@ object HelpProjection {
             "services" -> services.map(_.name),
             "aggregates" -> aggregates,
             "views" -> views,
-            "operationDefinitions" -> operations
+            "operationDefinitions" -> operations,
+            "origin" -> Vector(component.origin.label),
+            "artifactName" -> artifactName,
+            "artifactVersion" -> artifactVersion
           ),
           usage = services.headOption.map(s => Vector(s"command help ${component.name}.${s.name}")).getOrElse(Vector.empty)
         )

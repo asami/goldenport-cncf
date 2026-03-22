@@ -23,6 +23,7 @@ object SchemaProjection {
         )
       case Target.ComponentTarget(component) =>
         val services = component.protocol.services.services.sortBy(_.name)
+        val artifact = component_record(component).asMap("artifact")
         val aggregates = aggregateMetas(component).map { x =>
           Record.data(
             "name" -> x.name,
@@ -50,6 +51,8 @@ object SchemaProjection {
           "type" -> "schema",
           "targetType" -> "component",
           "name" -> component.name,
+          "origin" -> component.origin.label,
+          "artifact" -> artifact,
           "services" -> services.map { service =>
             project(base, Some(s"${component.name}.${service.name}"))
           },

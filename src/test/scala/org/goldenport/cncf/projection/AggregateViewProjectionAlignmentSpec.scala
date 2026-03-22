@@ -43,10 +43,15 @@ final class AggregateViewProjectionAlignmentSpec
       _string_vector(_record(help("details")).asMap("aggregates")) shouldBe Vector("person_aggregate", "profile_aggregate")
       _string_vector(_record(help("details")).asMap("views")) shouldBe Vector("person_view", "summary_view")
       _string_vector(_record(help("details")).asMap("operationDefinitions")) shouldBe Vector("getPerson", "savePerson")
+      _string_vector(_record(help("details")).asMap("origin")).head should include("component-dir")
+      _string_vector(_record(help("details")).asMap("artifactName")) shouldBe Vector("projection-alignment")
+      _string_vector(_record(help("details")).asMap("artifactVersion")) shouldBe Vector("0.1.0")
 
       _records(describe("aggregates")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_aggregate", "profile_aggregate")
       _records(describe("views")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_view", "summary_view")
       _string_vector(_records(describe("views")).head.asMap("viewNames")) shouldBe Vector("detail", "summary")
+      describe.get("origin").map(_.toString) shouldBe Some("component-dir:car:projection-alignment:0.1.0")
+      _record(describe("artifact")).getString("name") shouldBe Some("projection-alignment")
       _records(describe("operationDefinitions")).map(_.getString("name").getOrElse("")) shouldBe Vector("getPerson", "savePerson")
       _records(describe("operationDefinitions")).head.getString("kind") shouldBe Some("QUERY")
       _records(describe("operationDefinitions")).head.getString("inputType") shouldBe Some("GetPerson")
@@ -56,6 +61,8 @@ final class AggregateViewProjectionAlignmentSpec
 
       _records(schema("aggregateCollections")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_aggregate", "profile_aggregate")
       _records(schema("viewCollections")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_view", "summary_view")
+      schema.get("origin").map(_.toString) shouldBe Some("component-dir:car:projection-alignment:0.1.0")
+      _record(schema("artifact")).getString("version") shouldBe Some("0.1.0")
       _records(schema("operationDefinitions")).map(_.getString("name").getOrElse("")) shouldBe Vector("getPerson", "savePerson")
       _records(schema("operationDefinitions")).last.getString("kind") shouldBe Some("COMMAND")
       _records(schema("operationDefinitions")).last.getString("inputType") shouldBe Some("SavePersonInput")
@@ -157,9 +164,18 @@ final class AggregateViewProjectionAlignmentSpec
     val params = ComponentInit(
       subsystem = subsystem,
       core = core,
-      origin = ComponentOrigin.Builtin
+      origin = ComponentOrigin.Repository("component-dir:car:projection-alignment:0.1.0")
     )
     component.initialize(params)
+    component.withArtifactMetadata(
+      Component.ArtifactMetadata(
+        sourceType = "car",
+        name = "projection-alignment",
+        version = "0.1.0",
+        component = Some(component.name),
+        subsystem = None
+      )
+    )
     subsystem.add(Vector(component))
     subsystem.components.find(_.name == component.name).getOrElse(component)
   }
