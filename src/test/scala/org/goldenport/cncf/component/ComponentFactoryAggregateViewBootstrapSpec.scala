@@ -10,8 +10,8 @@ import org.goldenport.protocol.Request
 import org.goldenport.cncf.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.goldenport.cncf.entity.runtime.*
-import org.goldenport.cncf.entity.aggregate.CmlAggregateDefinition
-import org.goldenport.cncf.entity.view.CmlViewDefinition
+import org.goldenport.cncf.entity.aggregate.AggregateDefinition
+import org.goldenport.cncf.entity.view.ViewDefinition
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.record.Record
 import org.scalatest.matchers.should.Matchers
@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with Matchers {
@@ -56,12 +56,12 @@ final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with 
     )
 
     val component = new Component() {
-      override def aggregateDefinitions: Vector[CmlAggregateDefinition] =
-        Vector(CmlAggregateDefinition(name = "person_aggregate", entityName = "person"))
+      override def aggregateDefinitions: Vector[AggregateDefinition] =
+        Vector(AggregateDefinition(name = "person_aggregate", entityName = "person"))
 
-      override def viewDefinitions: Vector[CmlViewDefinition] =
+      override def viewDefinitions: Vector[ViewDefinition] =
         Vector(
-          CmlViewDefinition(
+          ViewDefinition(
             name = "person_view",
             entityName = "person",
             viewNames = Vector("detail")

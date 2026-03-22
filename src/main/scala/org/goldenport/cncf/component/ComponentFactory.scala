@@ -13,10 +13,10 @@ import org.goldenport.cncf.component.repository.ComponentSource
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.datatype.EntityId
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
-import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateSpace, CmlAggregateDefinition}
+import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateSpace, AggregateDefinition}
 import org.goldenport.cncf.event.{ActionCallDispatcher, EventBus, EventReception, EntitySubscriptionLimit}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimePlan, EntitySpace, EntityStorage, PartitionedMemoryRealm, PartitionStrategy, WorkingSetDefinition, WorkingSetInitializer}
-import org.goldenport.cncf.entity.view.{CmlViewDefinition, ViewBuilder, ViewCollection, ViewSpace}
+import org.goldenport.cncf.entity.view.{ViewDefinition, ViewBuilder, ViewCollection, ViewSpace}
 import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.statemachine.{CollectionStateMachinePlanner, CollectionStateMachinePlannerProvider, CollectionTransitionRule, CollectionTransitionRuleProvider, TransitionTrigger, TransitionRule}
 import scala.util.Try
@@ -25,7 +25,7 @@ import scala.util.Try
  * @since   Jan. 30, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -423,9 +423,9 @@ final class ComponentFactory(
   private def _resolve_view_definition(
     component: Component,
     name: String
-  ): Option[CmlViewDefinition] = {
+  ): Option[ViewDefinition] = {
     val definition = component.viewDefinitions.find(_.name == name).getOrElse {
-      CmlViewDefinition(name = name, entityName = name)
+      ViewDefinition(name = name, entityName = name)
     }
     component.entitySpace.entityOption[Any](definition.entityName).map(_ => definition)
   }

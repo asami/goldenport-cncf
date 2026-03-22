@@ -25,9 +25,9 @@ import org.goldenport.cncf.service.{Service, ServiceGroup}
 import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.cli.renderer.{CliHelpJsonRenderer, CliHelpYamlRenderer, CliTreeJsonRenderer, CliTreeYamlRenderer}
-import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace, Repository, CmlAggregateDefinition}
+import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace, Repository, AggregateDefinition}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
-import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace, CmlViewDefinition}
+import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace, ViewDefinition}
 import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.statemachine.StateMachinePlannerProvider
 import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition}
@@ -44,7 +44,7 @@ import scala.util.control.NonFatal
  *  version Jan.  3, 2026
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
- * @version Mar. 22, 2026
+ * @version Mar. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -157,8 +157,8 @@ abstract class Component() extends Component.Core.Holder {
   def eventReceptionDefinitions: Vector[CmlEventDefinition] = Vector.empty
   def eventRoutingDefinitions: Vector[CmlRoutingDefinition] = Vector.empty
   def eventSubscriptionDefinitions: Vector[CmlSubscriptionDefinition] = Vector.empty
-  def aggregateDefinitions: Vector[CmlAggregateDefinition] = Vector.empty
-  def viewDefinitions: Vector[CmlViewDefinition] = Vector.empty
+  def aggregateDefinitions: Vector[AggregateDefinition] = Vector.empty
+  def viewDefinitions: Vector[ViewDefinition] = Vector.empty
   def operationDefinitions: Vector[CmlOperationDefinition] = Vector.empty
 
   def artifactMetadata: Option[Component.ArtifactMetadata] =

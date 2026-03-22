@@ -7,8 +7,8 @@ import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
 import org.goldenport.cncf.component._
-import org.goldenport.cncf.entity.aggregate.CmlAggregateDefinition
-import org.goldenport.cncf.entity.view.CmlViewDefinition
+import org.goldenport.cncf.entity.aggregate.AggregateDefinition
+import org.goldenport.cncf.entity.view.ViewDefinition
 import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.GivenWhenThen
@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 22, 2026
+ * @version Mar. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateViewProjectionAlignmentSpec
@@ -116,16 +116,16 @@ final class AggregateViewProjectionAlignmentSpec
     )
 
     val component = new Component() {
-      override def aggregateDefinitions: Vector[CmlAggregateDefinition] =
+      override def aggregateDefinitions: Vector[AggregateDefinition] =
         Vector(
-          CmlAggregateDefinition(name = "profile_aggregate", entityName = "profile"),
-          CmlAggregateDefinition(name = "person_aggregate", entityName = "person")
+          AggregateDefinition(name = "profile_aggregate", entityName = "profile"),
+          AggregateDefinition(name = "person_aggregate", entityName = "person")
         )
 
-      override def viewDefinitions: Vector[CmlViewDefinition] =
+      override def viewDefinitions: Vector[ViewDefinition] =
         Vector(
-          CmlViewDefinition(name = "summary_view", entityName = "person", viewNames = Vector("default")),
-          CmlViewDefinition(name = "person_view", entityName = "person", viewNames = Vector("summary", "detail", "summary"))
+          ViewDefinition(name = "summary_view", entityName = "person", viewNames = Vector("default")),
+          ViewDefinition(name = "person_view", entityName = "person", viewNames = Vector("summary", "detail", "summary"))
         )
 
       override def operationDefinitions: Vector[CmlOperationDefinition] =
