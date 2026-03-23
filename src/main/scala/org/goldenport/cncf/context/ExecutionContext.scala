@@ -9,6 +9,7 @@ import org.goldenport.id.{UniversalId as CoreUniversalId}
 import org.goldenport.log.Logger
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
 import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
@@ -38,7 +39,7 @@ import cats.~>
  *  version Dec. 31, 2025
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -69,7 +70,8 @@ object ExecutionContext {
     security: SecurityContext,
     observability: ObservabilityContext,
     runtime: RuntimeContext,
-    jobContext: org.goldenport.cncf.job.JobContext
+    jobContext: org.goldenport.cncf.job.JobContext,
+    framework: FrameworkParameter = FrameworkParameter()
   ) {
     def major = "sys"
     def minor = "sys"
@@ -85,10 +87,15 @@ object ExecutionContext {
       def runtime: RuntimeContext = cncfCore.runtime
       def unitOfWork: org.goldenport.cncf.unitofwork.UnitOfWork = runtime.unitOfWork
       def jobContext: org.goldenport.cncf.job.JobContext = cncfCore.jobContext
+      def framework: FrameworkParameter = cncfCore.framework
       def major = cncfCore.major
       def minor = cncfCore.minor
     }
   }
+
+  final case class FrameworkParameter(
+    commandExecutionMode: Option[CommandExecutionMode] = None
+  )
 
   /**
     * Standard CNCF ExecutionContext implementation.
@@ -197,6 +204,22 @@ object ExecutionContext {
     case i: Instance =>
       i.copy(
         cncfCore = i.cncfCore.copy(runtime = runtime)
+      )
+    case _ =>
+      ctx
+  }
+
+  def withFrameworkCommandExecutionMode(
+    ctx: ExecutionContext,
+    mode: CommandExecutionMode
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(
+        cncfCore = i.cncfCore.copy(
+          framework = i.cncfCore.framework.copy(
+            commandExecutionMode = Some(mode)
+          )
+        )
       )
     case _ =>
       ctx

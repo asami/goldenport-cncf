@@ -21,7 +21,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  * @since   Jan.  3, 2026
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Mar. 22, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -114,7 +114,7 @@ case class ComponentLogic(
   ): Consequence[OperationResponse] = {
     val mode = action match {
       case command: CommandAction =>
-        _effective_command_execution_mode(action, command)
+        _effective_command_execution_mode(action, command, ctx)
       case _ =>
         CommandExecutionMode.AsyncJob
     }
@@ -131,6 +131,11 @@ case class ComponentLogic(
         val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Sync)
         val jobid = submitJob(List(task), ctx, option)
         awaitJobResult(jobid)
+      case CommandExecutionMode.SyncJobAsyncInterface =>
+        val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Async)
+        val jobid = submitJob(List(task), ctx, option)
+        val _ = awaitJobResult(jobid)
+        Consequence.success(OperationResponse.Scalar(jobid.value))
       case CommandExecutionMode.SyncDirectNoJob =>
         execute(createActionCall(action, ctx))
     }
@@ -154,12 +159,15 @@ case class ComponentLogic(
 
   private def _effective_command_execution_mode(
     action: Action,
-    command: CommandAction
+    command: CommandAction,
+    ctx: ExecutionContext
   ): CommandExecutionMode =
-    if (_is_command_script_combo(action))
+    ctx.framework.commandExecutionMode.getOrElse {
+      if (_is_command_script_combo(action))
       CommandExecutionMode.SyncDirectNoJob
-    else
-      command.commandExecutionMode
+      else
+        command.commandExecutionMode
+    }
 
   private def _is_command_script_combo(action: Action): Boolean = {
     val isscriptcomponent = action.request.component.exists(_.equalsIgnoreCase("SCRIPT"))

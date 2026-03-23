@@ -9,7 +9,7 @@ import org.goldenport.text.Presentable
  *  version Jan.  1, 2026
  *  version Jan. 22, 2026
  *  version Feb. 27, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Action extends OperationRequest with Presentable {
@@ -48,6 +48,7 @@ enum CommandExecutionMode {
   case AsyncJob
   case AsyncJobAndAwait
   case SyncJob
+  case SyncJobAsyncInterface
   case SyncDirectNoJob
 }
 

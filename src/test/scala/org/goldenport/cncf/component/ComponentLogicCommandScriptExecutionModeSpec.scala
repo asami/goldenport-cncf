@@ -1,12 +1,15 @@
 package org.goldenport.cncf.component
 
+import java.util.concurrent.atomic.AtomicBoolean
 import org.goldenport.Consequence
+import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.dsl.script.ScriptAction
 import org.goldenport.cncf.http.FakeHttpDriver
+import org.goldenport.cncf.job.JobId
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.protocol.{Protocol, Request}
@@ -17,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicCommandScriptExecutionModeSpec
@@ -55,6 +58,52 @@ final class ComponentLogicCommandScriptExecutionModeSpec
         _metrics(component) shouldBe (0, 0, 1, 0)
       }
     }
+
+    "allow framework meta parameter to force SyncJob for command action" in {
+      val component = TestComponentFactory.create("framework_meta_sync_job", Protocol.empty)
+      val action = _command_action("meta_sync", "ok")
+      val ctx = ExecutionContext.withFrameworkCommandExecutionMode(
+        ExecutionContext.test(),
+        CommandExecutionMode.SyncJob
+      )
+
+      withRuntimeMode(RunMode.Command) {
+        Given("a command action with framework commandExecutionMode=SyncJob")
+        When("executing through ComponentLogic")
+        val result = component.logic.executeAction(action, ctx)
+
+        Then("result is awaited synchronously and completed under job lifecycle")
+        result shouldBe Consequence.success(OperationResponse.Scalar("ok"))
+        _metrics(component) shouldBe (0, 0, 1, 0)
+      }
+    }
+
+    "allow framework meta parameter to run SyncJob with async interface" in {
+      val component = TestComponentFactory.create("framework_meta_sync_job_async_interface", Protocol.empty)
+      val executed = new AtomicBoolean(false)
+      val action = _command_action("meta_sync_async_interface", "ok", executed)
+      val ctx = ExecutionContext.withFrameworkCommandExecutionMode(
+        ExecutionContext.test(),
+        CommandExecutionMode.SyncJobAsyncInterface
+      )
+
+      withRuntimeMode(RunMode.Command) {
+        Given("a command action with framework commandExecutionMode=SyncJobAsyncInterface")
+        When("executing through ComponentLogic")
+        val response = component.logic.executeAction(action, ctx).toOption.getOrElse(fail("execution failed"))
+        val jobid = response match {
+          case OperationResponse.Scalar(v) =>
+            JobId.parse(v.toString).toOption.getOrElse(fail("response is not JobId scalar"))
+          case _ =>
+            fail("response is not scalar")
+        }
+
+        Then("interface returns JobId while execution already completed synchronously")
+        response should not be OperationResponse.Scalar("ok")
+        jobid.value.nonEmpty shouldBe true
+        executed.get() shouldBe true
+      }
+    }
   }
 
   private def _script_action(): ScriptAction = {
@@ -65,6 +114,47 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     )
     ScriptAction("script_RUN", request, _ => "ok")
   }
+
+  private def _command_action(
+    operation: String,
+    value: String
+  ): CommandAction =
+    new CommandAction() {
+      val request = Request.ofOperation(operation)
+
+      override def createCall(core: ActionCall.Core): ActionCall = {
+        val self = this
+        val c = core
+        new ActionCall {
+          override val core: ActionCall.Core = c
+          override def action: Action = self
+          def execute(): Consequence[OperationResponse] =
+            Consequence.success(OperationResponse.Scalar(value))
+        }
+      }
+    }
+
+  private def _command_action(
+    operation: String,
+    value: String,
+    executed: AtomicBoolean
+  ): CommandAction =
+    new CommandAction() {
+      val request = Request.ofOperation(operation)
+
+      override def createCall(core: ActionCall.Core): ActionCall = {
+        val self = this
+        val c = core
+        new ActionCall {
+          override val core: ActionCall.Core = c
+          override def action: Action = self
+          def execute(): Consequence[OperationResponse] = {
+            executed.set(true)
+            Consequence.success(OperationResponse.Scalar(value))
+          }
+        }
+      }
+    }
 
   private def _metrics(component: Component): (Int, Int, Int, Int) =
     component.jobEngine.metrics match {
