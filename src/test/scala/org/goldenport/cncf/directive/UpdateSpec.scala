@@ -3,12 +3,13 @@ package org.goldenport.cncf.directive
 import org.goldenport.model.datatype.EntityId
 import org.goldenport.model.datatype.EntityCollectionId
 import org.goldenport.record.Record
+import org.simplemodeling.model.directive.Update
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 17, 2026
+ * @version Mar. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UpdateSpec

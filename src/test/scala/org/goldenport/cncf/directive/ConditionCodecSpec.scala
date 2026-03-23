@@ -2,12 +2,13 @@ package org.goldenport.cncf.directive
 
 import io.circe.syntax.*
 import io.circe.parser.decode
+import org.simplemodeling.model.directive.Condition
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 17, 2026
- * @version Mar. 17, 2026
+ * @version Mar. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ConditionCodecSpec

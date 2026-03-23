@@ -1,10 +1,11 @@
 package org.goldenport.cncf.directive
 
 import java.time.Instant
+import org.simplemodeling.model.directive.Condition
 
 /*
  * @since   Feb. 19, 2026
- * @version Mar. 16, 2026
+ * @version Mar. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 case class Query[T](query: T) {

@@ -8,12 +8,13 @@ import org.goldenport.model.datatype.EntityId
 import org.goldenport.model.datatype.EntityCollectionId
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.directive.*
+import org.simplemodeling.model.directive.Update
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
 
 /*
  * @since   Feb. 24, 2026
  *  version Feb. 25, 2026
- * @version Mar. 18, 2026
+ * @version Mar. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {

@@ -5,7 +5,8 @@ import cats.effect.Ref
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
-import org.goldenport.cncf.directive.{Condition, Query}
+import org.goldenport.cncf.directive.Query
+import org.simplemodeling.model.directive.Condition
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityQuery}
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
@@ -14,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 18, 2026
+ * @version Mar. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityCollectionSearchConditionSpec

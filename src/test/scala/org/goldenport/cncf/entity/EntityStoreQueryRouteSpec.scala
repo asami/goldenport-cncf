@@ -5,7 +5,8 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, TraceId}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
-import org.goldenport.cncf.directive.{Condition, Query, Update}
+import org.goldenport.cncf.directive.Query
+import org.simplemodeling.model.directive.{Condition, Update}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.goldenport.record.Record
@@ -15,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 18, 2026
+ * @version Mar. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
