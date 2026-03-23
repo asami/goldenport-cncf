@@ -4,7 +4,7 @@ import cats.data.State
 import cats.effect.Ref
 import org.goldenport.Consequence
 import org.goldenport.cncf.datastore.DataStore
-import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.event.*
@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryEventReceptionBootstrapSpec

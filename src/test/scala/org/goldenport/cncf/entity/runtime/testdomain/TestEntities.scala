@@ -1,12 +1,12 @@
 package org.goldenport.cncf.entity.runtime.testdomain
 
-import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.EntityPersistable
 import org.goldenport.record.Record
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SalesOrderLine(

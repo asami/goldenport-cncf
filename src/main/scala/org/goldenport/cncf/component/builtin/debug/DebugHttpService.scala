@@ -1,7 +1,7 @@
 package org.goldenport.cncf.component.builtin.debug
 
 import org.goldenport.Consequence
-import org.goldenport.model.value.BaseContent
+import org.simplemodeling.model.value.BaseContent
 import org.goldenport.protocol.spec.*
 import org.goldenport.protocol.Request
 import org.goldenport.cncf.action.{QueryAction, ActionCall}
@@ -9,7 +9,8 @@ import org.goldenport.cncf.action.{QueryAction, ActionCall}
 /*
  * @since   Jan. 21, 2026
  *  version Jan. 22, 2026
- * @version Feb. 19, 2026
+ *  version Feb. 19, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object DebugHttpService extends ServiceDefinition {

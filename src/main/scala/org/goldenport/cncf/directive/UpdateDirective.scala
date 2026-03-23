@@ -1,11 +1,11 @@
 package org.goldenport.cncf.directive
 
-import org.goldenport.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.directive.Update
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 23, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UpdateDirective[+P <: Update.PatchShape] {

@@ -1,14 +1,14 @@
 package org.goldenport.cncf.entity.runtime
 
 import java.time.Instant
-import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 16, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class PartitionedMemoryRealmLimitSpec

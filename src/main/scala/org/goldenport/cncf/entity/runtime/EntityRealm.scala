@@ -2,12 +2,12 @@ package org.goldenport.cncf.entity.runtime
 
 import cats.effect.Ref
 import org.goldenport.Consequence
-import org.goldenport.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.entity.EntityPersistent
 
 /*
  * @since   Mar. 14, 2026
- * @version Mar. 14, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityRealmState[E](

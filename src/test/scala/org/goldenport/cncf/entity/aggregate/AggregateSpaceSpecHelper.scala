@@ -1,7 +1,7 @@
 package org.goldenport.cncf.entity.aggregate
 
 import org.goldenport.Consequence
-import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.runtime.testdomain.{
   Product,
   ProductAggregate,
@@ -14,7 +14,7 @@ import org.goldenport.cncf.entity.runtime.testdomain.{
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait AggregateSpaceSpecHelper {

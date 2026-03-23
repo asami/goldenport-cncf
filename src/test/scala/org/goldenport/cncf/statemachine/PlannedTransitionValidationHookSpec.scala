@@ -2,7 +2,7 @@ package org.goldenport.cncf.statemachine
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
 import org.goldenport.cncf.event.{TransitionLifecycleEvent, TransitionLifecycleKind}
 import org.goldenport.record.Record
@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 20, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matchers {

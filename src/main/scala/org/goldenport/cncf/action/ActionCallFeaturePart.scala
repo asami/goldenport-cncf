@@ -15,8 +15,8 @@ import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork}
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.Program
-import org.goldenport.model.datatype.EntityId
-import org.goldenport.model.datatype.EntityCollectionId
+import org.simplemodeling.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityCollectionId
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.EntityPersistentCreate
@@ -30,7 +30,7 @@ import org.goldenport.cncf.directive.SearchResult
  * @since   Jan.  6, 2026
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
- * @version Mar. 20, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>

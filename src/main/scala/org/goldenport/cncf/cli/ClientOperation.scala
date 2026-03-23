@@ -9,7 +9,7 @@ import org.goldenport.protocol.Argument
 import org.goldenport.protocol.Property
 import org.goldenport.protocol.spec.RequestDefinition
 import org.goldenport.protocol.spec.ParameterDefinition
-import org.goldenport.model.value.BaseContent
+import org.simplemodeling.model.value.BaseContent
 import org.goldenport.schema.{Multiplicity, ValueDomain, XString}
 import org.goldenport.datatype.{ContentType, MimeBody}
 import org.goldenport.bag.Bag
@@ -22,7 +22,8 @@ import org.goldenport.cncf.component.builtin.client.{GetQuery, PostCommand}
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
- * @version Feb.  1, 2026
+ *  version Feb.  1, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientOperation(val subsystem: Subsystem) extends CliOperation {

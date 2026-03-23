@@ -2,7 +2,7 @@ package org.goldenport.cncf.component
 
 import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
-import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.EntityPersistable
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimePlan, PartitionStrategy, WorkingSetDefinition}
 import org.goldenport.cncf.component.repository.ComponentRepositorySpace
@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryRuntimePlanActivationSpec

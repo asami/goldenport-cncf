@@ -3,7 +3,7 @@ package org.goldenport.cncf.action
 import cats.syntax.flatMap.*
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
-import org.goldenport.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpaceSpecHelper, ProductBuilder, SalesOrderBuilder, UserBuilder}
 import org.goldenport.cncf.entity.runtime.testdomain.{ProductAggregate, SalesOrder, SalesOrderAggregate, SalesOrderLine, UserAggregate}
@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 18, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallAggregateResolveSpec

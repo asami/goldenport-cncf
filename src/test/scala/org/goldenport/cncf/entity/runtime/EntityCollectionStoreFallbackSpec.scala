@@ -3,7 +3,7 @@ package org.goldenport.cncf.entity.runtime
 import cats.data.State
 import cats.effect.Ref
 import org.goldenport.Consequence
-import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 16, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityCollectionStoreFallbackSpec

@@ -15,7 +15,7 @@ import org.goldenport.protocol.Request
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object ActionCallSupport {
@@ -210,14 +210,14 @@ object ActionCallSupport {
   }
 
   private def _seed_entry(
-    cid: org.goldenport.model.datatype.EntityCollectionId,
+    cid: org.simplemodeling.model.datatype.EntityCollectionId,
     record: org.goldenport.record.Record
   ): DataStoreSpace.SeedEntry =
     DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), record)
 
   private def _entity_id(
     minor: String,
-    cid: org.goldenport.model.datatype.EntityCollectionId
-  ): org.goldenport.model.datatype.EntityId =
-    org.goldenport.model.datatype.EntityId("test", minor, cid)
+    cid: org.simplemodeling.model.datatype.EntityCollectionId
+  ): org.simplemodeling.model.datatype.EntityId =
+    org.simplemodeling.model.datatype.EntityId("test", minor, cid)
 }

@@ -4,7 +4,7 @@ import org.goldenport.http.HttpResponse
 import org.goldenport.id.UniversalId
 import org.goldenport.process.{ShellCommand, ShellCommandResult}
 import org.goldenport.record.Record
-import org.goldenport.model.datatype.*
+import org.simplemodeling.model.datatype.*
 import org.goldenport.cncf.entity.*
 import org.goldenport.cncf.directive.*
 
@@ -19,7 +19,7 @@ import org.goldenport.cncf.directive.*
  *
  * @since   Jan. 10, 2026
  *  version Feb. 25, 2026
- * @version Mar. 18, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]

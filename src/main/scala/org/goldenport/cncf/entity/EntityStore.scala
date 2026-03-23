@@ -7,19 +7,19 @@ import org.goldenport.id.UniversalId
 import org.goldenport.record.Record
 import org.goldenport.cncf.*
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.model.datatype.EntityId
-import org.goldenport.model.datatype.EntityCollectionId
+import org.simplemodeling.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityCollectionId
 import org.goldenport.cncf.directive.{Query as EntityDirectiveQuery, SearchResult}
 import org.goldenport.cncf.datastore.{DataStore, QueryDirective, QueryLimit, QueryOrder, OrderDirection}
 import org.goldenport.cncf.datastore.DataStore.EntryId
-import org.goldenport.model.statemachine.{Aliveness, PostStatus}
+import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
 
 /*
  * @since   Apr. 11, 2025
  *  version Dec. 18, 2025
  *  version Jan. 10, 2026
  *  version Feb. 26, 2026
- * @version Mar. 18, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {

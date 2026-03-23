@@ -4,7 +4,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
-import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.statemachine.{CollectionTransitionRule, CollectionTransitionRuleProvider, ExecutionPlan, ResolvedAction, TransitionEvent, TransitionTrigger}
 import org.goldenport.cncf.testutil.TestComponentFactory
@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryStateMachineBootstrapSpec

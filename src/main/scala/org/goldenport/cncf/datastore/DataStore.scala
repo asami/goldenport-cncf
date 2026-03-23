@@ -8,14 +8,14 @@ import org.goldenport.id.UniversalId
 import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.unitofwork.{CommitParticipant, CommitRecorder, PrepareResult, TransactionContext}
-import org.goldenport.model.datatype.EntityCollectionId
+import org.simplemodeling.model.datatype.EntityCollectionId
 import scala.util.control.NonFatal
 
 /*
  * @since   Jan.  6, 2026
  *  version Jan. 10, 2026
  *  version Feb. 25, 2026
- * @version Mar. 17, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {

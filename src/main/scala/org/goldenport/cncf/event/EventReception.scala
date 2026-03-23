@@ -5,7 +5,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.goldenport.Consequence
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.entity.runtime.EntitySpace
 import org.goldenport.cncf.job.{ActionId, JobEngine, JobPersistencePolicy, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded}
 import org.goldenport.cncf.security.IngressSecurityResolver
@@ -19,7 +19,7 @@ import org.goldenport.provisional.observation.Taxonomy
  * - selective routing -> ActionCall dispatcher via EventBus subscription
  *
  * @since   Mar. 21, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 enum CmlEventCategory {

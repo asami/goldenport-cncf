@@ -7,7 +7,7 @@ import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.protocol.spec as spec
 import org.goldenport.protocol.Request
-import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.aggregate.AggregateDefinition
@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 23, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with Matchers {

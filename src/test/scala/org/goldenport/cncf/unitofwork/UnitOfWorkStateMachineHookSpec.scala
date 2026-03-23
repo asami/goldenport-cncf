@@ -4,7 +4,7 @@ import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, RuntimeContext, ScopeContext, ScopeKind, TraceId}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
-import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.event.EventEngine
 import org.goldenport.cncf.http.FakeHttpDriver
@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkStateMachineHookSpec

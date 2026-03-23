@@ -4,8 +4,8 @@ import org.goldenport.Consequence
 import org.goldenport.provisional.observation.Observation
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.model.datatype.EntityId
-import org.goldenport.model.datatype.EntityCollectionId
+import org.simplemodeling.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityCollectionId
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.directive.*
 import org.simplemodeling.model.directive.Update
@@ -14,7 +14,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
 /*
  * @since   Feb. 24, 2026
  *  version Feb. 25, 2026
- * @version Mar. 23, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {

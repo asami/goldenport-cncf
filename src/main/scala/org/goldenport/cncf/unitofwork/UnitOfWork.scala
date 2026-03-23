@@ -11,7 +11,7 @@ import org.goldenport.process.{LocalShellCommandExecutor, ShellCommandExecutor}
 import org.goldenport.cncf.UowM
 import org.goldenport.cncf.Program
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.datastore.{DataStore, SearchableDataStore}
 import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.entity.CreateResult
@@ -29,7 +29,7 @@ import org.goldenport.cncf.http.HttpDriver
  *  version Dec. 21, 2025
  *  version Jan. 18, 2026
  *  version Feb. 27, 2026
- * @version Mar. 20, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(

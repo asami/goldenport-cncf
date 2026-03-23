@@ -3,11 +3,11 @@ package org.goldenport.cncf.entity.runtime
 import java.time.{Instant, ZoneOffset}
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
-import org.goldenport.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityId
 
 /*
  * @since   Mar. 14, 2026
- * @version Mar. 15, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait PartitionStrategy {

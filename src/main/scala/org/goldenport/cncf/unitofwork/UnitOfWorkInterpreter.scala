@@ -8,7 +8,7 @@ import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.datastore.*
 import org.goldenport.cncf.entity.*
-import org.goldenport.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.observability.CallTreeContext
 import org.goldenport.process.ShellCommandExecutor
@@ -24,7 +24,7 @@ import org.goldenport.cncf.statemachine.TransitionValidationHook
  * @since   Jan. 10, 2026
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {

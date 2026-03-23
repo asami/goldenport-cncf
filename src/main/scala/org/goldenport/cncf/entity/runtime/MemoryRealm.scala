@@ -3,11 +3,11 @@ package org.goldenport.cncf.entity.runtime
 import java.util.concurrent.atomic.LongAdder
 import scala.collection.mutable
 import org.goldenport.Consequence
-import org.goldenport.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityId
 
 /*
  * @since   Mar. 14, 2026
- * @version Mar. 20, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MemoryRealm[E](

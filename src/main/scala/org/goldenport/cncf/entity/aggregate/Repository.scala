@@ -1,13 +1,13 @@
 package org.goldenport.cncf.entity.aggregate
 
 import org.goldenport.Consequence
-import org.goldenport.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.runtime.Collection
 
 /*
  * @since   Mar. 15, 2026
- * @version Mar. 17, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Repository[A] {

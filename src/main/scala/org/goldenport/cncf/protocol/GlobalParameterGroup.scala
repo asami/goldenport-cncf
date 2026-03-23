@@ -1,6 +1,6 @@
 package org.goldenport.cncf.protocol
 
-import org.goldenport.model.value.BaseContent
+import org.simplemodeling.model.value.BaseContent
 import org.goldenport.protocol.spec.ParameterDefinition
 
 // TODO
@@ -12,7 +12,8 @@ import org.goldenport.protocol.spec.ParameterDefinition
  */
 /*
  * @since   Jan. 22, 2026
- * @version Feb.  6, 2026
+ *  version Feb.  6, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object GlobalParameterGroup {

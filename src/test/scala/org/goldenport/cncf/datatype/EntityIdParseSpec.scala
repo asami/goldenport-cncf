@@ -1,13 +1,13 @@
 package org.goldenport.cncf.datatype
 
 import org.goldenport.Consequence
-import org.goldenport.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityId
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 17, 2026
- * @version Mar. 23, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class

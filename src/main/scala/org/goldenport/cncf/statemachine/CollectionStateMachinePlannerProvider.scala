@@ -3,12 +3,12 @@ package org.goldenport.cncf.statemachine
 import scala.collection.mutable
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TransitionRule[S](

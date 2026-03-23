@@ -2,7 +2,7 @@ package org.goldenport.cncf.statemachine
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.record.Record
 import org.scalatest.matchers.should.Matchers
@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CollectionStateMachinePlannerProviderSpec

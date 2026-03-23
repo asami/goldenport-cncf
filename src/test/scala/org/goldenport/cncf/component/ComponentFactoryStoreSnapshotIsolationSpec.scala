@@ -2,7 +2,7 @@ package org.goldenport.cncf.component
 
 import scala.collection.concurrent.TrieMap
 import org.goldenport.Consequence
-import org.goldenport.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.EntityPersistable
 import org.scalacheck.{Gen, Prop, Test}
 import org.scalatest.GivenWhenThen
@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 17, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryStoreSnapshotIsolationSpec

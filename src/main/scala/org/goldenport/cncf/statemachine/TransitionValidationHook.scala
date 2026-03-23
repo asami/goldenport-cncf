@@ -2,7 +2,7 @@ package org.goldenport.cncf.statemachine
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
 
 /*
@@ -12,7 +12,7 @@ import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate}
  * EntityStore mutations (save/update/updateById).
  *
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait TransitionValidationHook {

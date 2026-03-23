@@ -11,7 +11,7 @@ import org.goldenport.cncf.collaborator.api
 import org.goldenport.cncf.component.repository.{ComponentRepository, ComponentRepositorySpace}
 import org.goldenport.cncf.component.repository.ComponentSource
 import org.goldenport.cncf.subsystem.Subsystem
-import org.goldenport.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateSpace, AggregateDefinition}
 import org.goldenport.cncf.event.{ActionCallDispatcher, EventBus, EventReception, EntitySubscriptionLimit}
@@ -25,7 +25,7 @@ import scala.util.Try
  * @since   Jan. 30, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 23, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -188,7 +188,7 @@ final class ComponentFactory(
     // When entity definitions are available, this bootstrap should only
     // construct descriptor/storage and avoid any legacy realm-based wiring.
     val descriptor = EntityDescriptor(
-      collectionId = org.goldenport.model.datatype.EntityCollectionId("sys", "sys", name),
+      collectionId = org.simplemodeling.model.datatype.EntityCollectionId("sys", "sys", name),
       plan = plan,
       persistent = _entity_persistent_any
     )
@@ -224,7 +224,7 @@ final class ComponentFactory(
       var storage = EntityStorage(storeRealm)
       val legacymemoryplan = _legacy_memory_plan(name)
       val descriptor = EntityDescriptor(
-        collectionId = org.goldenport.model.datatype.EntityCollectionId("sys", "sys", name),
+        collectionId = org.simplemodeling.model.datatype.EntityCollectionId("sys", "sys", name),
         plan = legacymemoryplan,
         persistent = _entity_persistent_any
       )

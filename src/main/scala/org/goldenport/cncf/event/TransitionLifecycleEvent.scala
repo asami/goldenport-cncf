@@ -3,7 +3,7 @@ package org.goldenport.cncf.event
 import java.time.Instant
 import org.goldenport.Conclusion
 import org.goldenport.cncf.context.{ExecutionContext, ExecutionContextId}
-import org.goldenport.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.job.{JobId, TaskId}
 import org.goldenport.cncf.statemachine.TransitionEvent
 
@@ -11,7 +11,7 @@ import org.goldenport.cncf.statemachine.TransitionEvent
  * Canonical transition lifecycle envelope for EV-01.
  *
  * @since   Mar. 20, 2026
- * @version Mar. 20, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 enum TransitionLifecycleKind(val value: String) {

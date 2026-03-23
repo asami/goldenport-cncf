@@ -1,13 +1,13 @@
 package org.goldenport.cncf.entity.runtime
 
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.entity.{EntityPersistent, EntityStore}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp.EntityStoreLoad
 
 /*
  * @since   Mar. 14, 2026
- * @version Mar. 20, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityLoader[E] {

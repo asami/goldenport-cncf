@@ -6,13 +6,13 @@ import org.goldenport.id.Identifiable
 import org.goldenport.record.Record
 import org.goldenport.record.RecordEncoder
 import org.goldenport.record.RecordCodex
-import org.goldenport.model.datatype.EntityId
-import org.goldenport.model.datatype.EntityCollectionId
+import org.simplemodeling.model.datatype.EntityId
+import org.simplemodeling.model.datatype.EntityCollectionId
 
 /*
  * @since   Feb. 22, 2026
  *  version Feb. 27, 2026
- * @version Mar. 17, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityPersistent[E] extends RecordCodex[E]
