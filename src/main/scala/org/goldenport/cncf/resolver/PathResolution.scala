@@ -1,5 +1,12 @@
 package org.goldenport.cncf.resolver
 
+import org.goldenport.cncf.naming.NamingConventions
+
+/*
+ * @since   May. 24, 2025
+ * @version Mar. 24, 2026
+ * @author  ASAMI, Tomoharu
+ */
 final case class CanonicalPath(
   component: String,
   service: String,
@@ -131,11 +138,11 @@ object PathResolution {
   }
 
   private def matches(input: String, target: String): Boolean =
-    input.equalsIgnoreCase(target)
+    NamingConventions.equivalentByNormalized(input, target)
 
   private def isBuiltin(
     component: String,
     builtinComponents: Set[String]
   ): Boolean =
-    builtinComponents.exists(_.equalsIgnoreCase(component))
+    builtinComponents.exists(NamingConventions.equivalentByNormalized(component, _))
 }

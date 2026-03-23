@@ -3,10 +3,11 @@ package org.goldenport.cncf.projection
 import org.goldenport.record.Record
 import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, ServiceDefinition}
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Mar.  5, 2026
- * @version Mar. 22, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -75,6 +76,7 @@ private[projection] object MetaProjectionSupport {
     Record.data( // Includes runtime-origin and archive metadata for CAR/SAR introspection.
       "type" -> "component",
       "name" -> comp.name,
+      "runtimeName" -> component_runtime_name(comp),
       "origin" -> comp.origin.label,
       "artifact" -> comp.artifactMetadata.map { m =>
         Record.data(
@@ -92,13 +94,15 @@ private[projection] object MetaProjectionSupport {
   def service_record(service: ServiceDefinition): Record =
     Record.data(
       "type" -> "service",
-      "name" -> service.name
+      "name" -> service.name,
+      "runtimeName" -> service_runtime_name(service)
     )
 
   def operation_record(service: ServiceDefinition, operation: OperationDefinition): Record =
     Record.data(
       "type" -> "operation",
-      "name" -> s"${service.name}.${operation.name}"
+      "name" -> s"${service.name}.${operation.name}",
+      "runtimeName" -> s"${service_runtime_name(service)}.${operation_runtime_name(operation)}"
     )
 
   def parameter_record(param: ParameterDefinition): Record = {
@@ -154,12 +158,28 @@ private[projection] object MetaProjectionSupport {
         )
       }
 
+  def component_runtime_name(component: Component): String =
+    NamingConventions.toNormalizedSegment(component.name)
+
+  def service_runtime_name(service: ServiceDefinition): String =
+    NamingConventions.toNormalizedSegment(service.name)
+
+  def operation_runtime_name(operation: OperationDefinition): String =
+    NamingConventions.toNormalizedSegment(operation.name)
+
+  def selector_runtime_name(
+    component: Component,
+    service: ServiceDefinition,
+    operation: OperationDefinition
+  ): String =
+    NamingConventions.toNormalizedSelector(component.name, service.name, operation.name)
+
   private def _find_component(comps: Vector[Component], name: String): Option[Component] =
-    comps.find(_.name == name)
+    comps.find(x => NamingConventions.equivalentByNormalized(x.name, name))
 
   private def _find_service(component: Component, serviceName: String): Option[ServiceDefinition] =
-    component.protocol.services.services.find(_.name == serviceName)
+    component.protocol.services.services.find(x => NamingConventions.equivalentByNormalized(x.name, serviceName))
 
   private def _find_operation(service: ServiceDefinition, operationName: String): Option[OperationDefinition] =
-    service.operations.operations.find(_.name == operationName)
+    service.operations.operations.find(x => NamingConventions.equivalentByNormalized(x.name, operationName))
 }

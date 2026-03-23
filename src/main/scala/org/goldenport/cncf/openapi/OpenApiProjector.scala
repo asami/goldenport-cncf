@@ -1,12 +1,15 @@
 package org.goldenport.cncf.openapi
 
+import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, ServiceDefinition}
+import org.goldenport.datatype.I18nString
 import org.slf4j.LoggerFactory
 
 /*
  * @since   Jan.  8, 2026
- * @version Jan. 20, 2026
+ *  version Jan. 20, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object OpenApiProjector {
@@ -22,7 +25,9 @@ object OpenApiProjector {
     httpMethod: String,
     parameters: Vector[String],
     hasRequestBody: Boolean,
-    responseSchemaKind: String
+    responseSchemaKind: String,
+    summary: String,
+    description: String
   )
 
   def forSubsystem(subsystem: Subsystem): String = {
@@ -45,26 +50,64 @@ object OpenApiProjector {
         s"[openapi:trace] service=${service.name} operations=${service.operations.operations.map(_.name)}"
       )
       service.operations.operations.toVector.map { op =>
-        val serviceTag = s"${componentName}.${service.name}"
+        val normalizedComponent = NamingConventions.toNormalizedSegment(componentName)
+        val normalizedService = NamingConventions.toNormalizedSegment(service.name)
+        val normalizedOperation = NamingConventions.toNormalizedSegment(op.name)
+        val serviceTag = s"${normalizedComponent}.${normalizedService}"
         val httpMethod = _infer_http_method(service.name, op.name).toUpperCase
+        val summary = _operation_summary(componentName, service, op)
+        val description = _operation_description(componentName, service, op)
         log.trace(
-          s"[openapi:trace] path=/${componentName}/${service.name}/${op.name} method=$httpMethod"
+          s"[openapi:trace] path=/${normalizedComponent}/${normalizedService}/${normalizedOperation} method=$httpMethod"
         )
         PathSpec(
-          path = s"/${componentName}/${service.name}/${op.name}",
+          path = NamingConventions.toNormalizedPath(componentName, service.name, op.name),
           tag = s"experimental:${serviceTag}",
           component = componentName,
           service = service.name,
           operation = op.name,
-          operationId = s"${componentName}.${service.name}.${op.name}",
+          operationId = NamingConventions.toOperationId(componentName, service.name, op.name),
           httpMethod = httpMethod,
           parameters = Vector.empty,
           hasRequestBody = _has_request_body(op),
-          responseSchemaKind = "object"
+          responseSchemaKind = "object",
+          summary = summary,
+          description = description
         )
       }
     }
  
+  private def _trim_string(p: Option[String]): Option[String] =
+    p.map(_.trim).filter(_.nonEmpty)
+
+  private def _trim_i18n(p: Option[I18nString]): Option[String] =
+    p.map(_.displayMessage.trim).filter(_.nonEmpty)
+
+  private def _operation_summary(
+    componentName: String,
+    service: ServiceDefinition,
+    operation: OperationDefinition
+  ): String =
+    _trim_i18n(operation.specification.summary).
+      orElse(_trim_i18n(operation.specification.description)).
+      orElse(_trim_i18n(service.specification.summary)).
+      getOrElse(s"${componentName}.${service.name}.${operation.name}")
+
+  private def _operation_description(
+    componentName: String,
+    service: ServiceDefinition,
+    operation: OperationDefinition
+  ): String =
+    _trim_i18n(operation.specification.description).
+      orElse(_trim_i18n(service.specification.description)).
+      orElse(_trim_i18n(service.specification.summary)).
+      getOrElse(
+        s"Component: ${componentName}\n" +
+          s"Service: ${service.name}\n" +
+          s"Operation: ${operation.name}\n" +
+          "(experimental; subject to change in Phase 2.8)"
+      )
+
   private def _infer_http_method(serviceName: String, operationName: String): String = {
     val lowered = operationName.toLowerCase
     if (serviceName.toLowerCase == "http" && (lowered == "post" || lowered == "put"))
@@ -83,13 +126,8 @@ object OpenApiProjector {
       paths.map { path =>
         val p = _escape(path.path)
         val tag = _escape(path.tag)
-        val summary = _escape(s"${path.component}.${path.service}.${path.operation}")
-        val description = _escape(
-          s"Component: ${path.component}\n" +
-            s"Service: ${path.service}\n" +
-            s"Operation: ${path.operation}\n" +
-            "(experimental; subject to change in Phase 2.8)"
-        )
+        val summary = _escape(path.summary)
+        val description = _escape(path.description)
         // TODO (Phase 2.8): Redesign OpenAPI tagging strategy.
         // TODO (Phase 2.8): Decide whether Service should map to OpenAPI tags.
         // TODO (Phase 2.8): Remove or formalize `experimental:*` tags.

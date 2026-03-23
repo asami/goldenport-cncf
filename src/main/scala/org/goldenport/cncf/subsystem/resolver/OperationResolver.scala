@@ -1,13 +1,15 @@
 package org.goldenport.cncf.subsystem.resolver
 
 import org.goldenport.cncf.component.{Component, ComponentOrigin}
+import org.goldenport.cncf.naming.NamingConventions
 import scala.collection.immutable.ListMap
 
 import OperationResolver._
 
 /*
  * @since   Jan. 15, 2026
- * @version Jan. 16, 2026
+ *  version Jan. 16, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationResolver private (
@@ -184,7 +186,7 @@ final class OperationResolver private (
     val exactMatches =
       _entries.filter { e =>
         e.origin != ComponentOrigin.Builtin &&
-        e.fqn == trimmed
+        NamingConventions.equivalentSelector(e.fqn, trimmed)
       }
 
     exactMatches match {
@@ -226,7 +228,7 @@ object OperationResolver {
 
   final case class Config(
     mode: Mode = Mode.Normal,
-    prefixMatchingEnabled: Boolean = true
+    prefixMatchingEnabled: Boolean = false
   )
 
   def empty: OperationResolver =
@@ -300,7 +302,7 @@ object OperationResolver {
     new OperationResolver(
       Config(
         mode = mode,
-        prefixMatchingEnabled = true
+        prefixMatchingEnabled = false
       ),
       entries,
       serviceSlots,
@@ -354,9 +356,27 @@ object OperationResolver {
     canonical: String,
     aliases: Vector[String] = Vector.empty
   ) {
-    private val all = canonical +: aliases
-    def matches(input: String): Boolean = all.contains(input)
-    def prefixMatches(input: String): Boolean = all.exists(_.startsWith(input))
+    private val allCanonical = canonical +: aliases
+    private val allComparison = allCanonical.map(NamingConventions.toComparisonKey).distinct
+
+    def matches(input: String): Boolean = {
+      val trimmed = input.trim
+      if (trimmed.isEmpty) {
+        false
+      } else {
+        allComparison.contains(NamingConventions.toComparisonKey(trimmed))
+      }
+    }
+
+    def prefixMatches(input: String): Boolean = {
+      val trimmed = input.trim
+      if (trimmed.isEmpty) {
+        false
+      } else {
+        val key = NamingConventions.toComparisonKey(trimmed)
+        allComparison.exists(_.startsWith(key))
+      }
+    }
   }
 
   private final case class OperationEntry(
