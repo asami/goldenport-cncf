@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- * @version Mar. 20, 2026
+ * @version Mar. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StateMachineProjectionSpec
@@ -41,6 +41,21 @@ final class StateMachineProjectionSpec
       second.get("event") shouldBe Some("update")
       second.get("priority") shouldBe Some(2)
       _record(second("guard")).asMap.get("kind") shouldBe Some("expression")
+    }
+
+    "project state machine definitions into states/events" in {
+      val component = _component_with_definitions()
+      val rec = StateMachineProjection.project(component, Some(component.name))
+      val map = rec.asMap
+
+      map.get("states") shouldBe Some(Vector("Draft", "Published"))
+      map.get("events") shouldBe Some(Vector("publish"))
+
+      val definitions = _records(map("definitions"))
+      definitions.size shouldBe 1
+      definitions.head.asMap.get("name") shouldBe Some("lifecycle")
+      definitions.head.asMap.get("states") shouldBe Some(Vector("Draft", "Published"))
+      definitions.head.asMap.get("events") shouldBe Some(Vector("publish"))
     }
   }
 
@@ -86,6 +101,35 @@ final class StateMachineProjectionSpec
       protocol = Protocol.empty
     )
     val subsystem = TestComponentFactory.emptySubsystem("projection_state_machine_spec")
+    val params = ComponentInit(
+      subsystem = subsystem,
+      core = core,
+      origin = ComponentOrigin.Builtin
+    )
+    component.initialize(params)
+    subsystem.add(Vector(component))
+    subsystem.components.find(_.name == component.name).getOrElse(component)
+  }
+
+  private def _component_with_definitions(): Component = {
+    val component = new Component() {
+      override def stateMachineDefinitions: Vector[CmlStateMachineDefinition] =
+        Vector(
+          CmlStateMachineDefinition(
+            name = "lifecycle",
+            states = Vector("Draft", "Published"),
+            events = Vector("publish")
+          )
+        )
+    }
+
+    val core = Component.Core.create(
+      name = "projection_state_machine_definition_spec",
+      componentid = ComponentId("projection_state_machine_definition_spec"),
+      instanceid = ComponentInstanceId.default(ComponentId("projection_state_machine_definition_spec")),
+      protocol = Protocol.empty
+    )
+    val subsystem = TestComponentFactory.emptySubsystem("projection_state_machine_definition_spec")
     val params = ComponentInit(
       subsystem = subsystem,
       core = core,

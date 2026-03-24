@@ -13,7 +13,8 @@ import org.goldenport.cncf.statemachine.{
 
 /*
  * @since   Mar. 20, 2026
- * @version Mar. 20, 2026
+ *  version Mar. 20, 2026
+ * @version Mar. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 object StateMachineProjection {
@@ -45,16 +46,29 @@ object StateMachineProjection {
 
   private def _component_record(component: Component): Record = {
     val rules = _rules(component)
-    val events = rules.map(_.eventName).distinct.sorted
+    val definitions = component.stateMachineDefinitions.sortBy(_.name)
+    val states = definitions.flatMap(_.states).distinct.sorted
+    val definitionevents = definitions.flatMap(_.events)
+    val events = (rules.map(_.eventName) ++ definitionevents).distinct.sorted
     Record.data(
       "type" -> "statemachine",
       "targetType" -> "component",
       "name" -> component.name,
-      "states" -> Vector.empty[String],
+      "states" -> states,
       "events" -> events,
+      "definitions" -> definitions.map(_definition_record),
       "transitions" -> rules.map(_transition_record)
     )
   }
+
+  private def _definition_record(
+    p: org.goldenport.cncf.statemachine.CmlStateMachineDefinition
+  ): Record =
+    Record.data(
+      "name" -> p.name,
+      "states" -> p.states.distinct.sorted,
+      "events" -> p.events.distinct.sorted
+    )
 
   private def _rules(component: Component): Vector[CollectionTransitionRule[Any]] =
     component match {

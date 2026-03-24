@@ -29,7 +29,7 @@ import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
 import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace, ViewDefinition}
 import org.goldenport.cncf.operation.CmlOperationDefinition
-import org.goldenport.cncf.statemachine.StateMachinePlannerProvider
+import org.goldenport.cncf.statemachine.{CmlStateMachineDefinition, StateMachinePlannerProvider}
 import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition}
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
 import cats.data.NonEmptyVector
@@ -44,7 +44,8 @@ import scala.util.control.NonFatal
  *  version Jan.  3, 2026
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
- * @version Mar. 23, 2026
+ *  version Mar. 23, 2026
+ * @version Mar. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -154,6 +155,7 @@ abstract class Component() extends Component.Core.Holder {
   }
 
   // Cozy-generated component metadata hooks (event/reception DSL).
+  def stateMachineDefinitions: Vector[CmlStateMachineDefinition] = Vector.empty
   def eventReceptionDefinitions: Vector[CmlEventDefinition] = Vector.empty
   def eventRoutingDefinitions: Vector[CmlRoutingDefinition] = Vector.empty
   def eventSubscriptionDefinitions: Vector[CmlSubscriptionDefinition] = Vector.empty
