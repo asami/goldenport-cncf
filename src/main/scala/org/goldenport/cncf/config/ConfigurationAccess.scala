@@ -4,7 +4,7 @@ import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 
 /*
  * @since   Mar. 13, 2026
- * @version Mar. 20, 2026
+ * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object ConfigurationAccess {
@@ -12,7 +12,9 @@ object ConfigurationAccess {
     conf: ResolvedConfiguration,
     key: String
   ): Option[String] =
-    _from_flat_key(conf, key).orElse(_from_object_path(conf, key))
+    _from_flat_key(conf, key)
+      .orElse(_from_object_path(conf, key))
+      .map(_normalize_string)
 
   private def _from_flat_key(
     conf: ResolvedConfiguration,
@@ -54,4 +56,14 @@ object ConfigurationAccess {
       case ConfigurationValue.BooleanValue(v) => Some(v.toString)
       case _ => None
     }
+
+  // Keep compatibility with older flat-key resolution that may surface
+  // configuration wrapper text like StringValue(path).
+  private def _normalize_string(
+    value: String
+  ): String =
+    if (value.startsWith("StringValue(") && value.endsWith(")"))
+      value.substring("StringValue(".length, value.length - 1)
+    else
+      value
 }

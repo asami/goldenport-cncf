@@ -508,8 +508,8 @@ final class ComponentFactory(
   private def _default_entity_runtime_plans(
     component: Component
   ): Vector[EntityRuntimePlan[Any]] =
-    component match {
-      case m: EntityRuntimePlanProvider =>
+    component.factory match {
+      case Some(m: EntityRuntimePlanProvider) =>
         m.entityRuntimePlans
       case _ =>
         Vector.empty
@@ -534,8 +534,8 @@ final class ComponentFactory(
     component: Component,
     plans: Vector[EntityRuntimePlan[Any]]
   ): Vector[CollectionTransitionRule[Any]] =
-    component match {
-      case m: CollectionTransitionRuleProvider =>
+    component.factory match {
+      case Some(m: CollectionTransitionRuleProvider) =>
         val _ = plans
         m.stateMachineTransitionRules
       case _ =>
