@@ -33,20 +33,20 @@ This document is a progress dashboard, not a design journal.
 
 - A (DONE): Define Textus account/identity capability contract and boundaries.
 - B (DONE): Implement `textus-user-account` component operations and metadata.
-- C (ACTIVE): Realize revised minimal-subsystem runtime integration for `textus-identity`.
-- D (PLANNED): Align runtime/projection/meta surfaces for practical operation use.
+- C (DONE): Realize revised minimal-subsystem runtime integration for `textus-identity`.
+- D (ACTIVE): Align runtime/projection/meta surfaces for practical operation use.
 - E (PLANNED): Add executable specifications and close phase documentation.
 
 Resume hint:
-- Continue the revised TI-02 slice: descriptor-first minimal Subsystem
-  realization, CAR coordinate resolution, and development override hookup.
+- Validate practical runtime/projection behavior for the now-connected
+  `textus-identity` minimal subsystem and advance PX-01.
 
 ## 5. Development Items
 
 - [x] TU-01: Define and freeze `textus-user-account` component contract.
 - [x] TU-02: Implement `textus-user-account` component and operation metadata integration.
 - [x] TI-01: Define and freeze `textus-identity` subsystem integration contract.
-- [ ] TI-02: Implement `textus-identity` subsystem runtime integration.
+- [x] TI-02: Implement `textus-identity` subsystem runtime integration.
 - [ ] PX-01: Align command/query practical runtime behavior and projection visibility.
 - [ ] PX-02: Add executable specifications and finalize Phase 10 closure.
 
@@ -65,10 +65,9 @@ Resume hint:
     - no subsystem-owned identity operation surface is frozen in TI-01
     - `textus-user-account` dependency/binding is explicit in the canonical example
   - revised TI-02 status:
-    - original generic runtime mechanism was preserved and handed off
-    - revised minimal-subsystem instruction is ready
-    - TI-02 remains open until descriptor-to-runtime hookup and override path are
-      closed under the revised contract
+    - descriptor-to-runtime hookup is implemented
+    - development override repository path is covered by focused spec
+    - revised minimal-subsystem runtime integration is complete
 - `textus-user-account`:
   - latest implementation commit: `40b30d0`
   - focused verification:
@@ -82,7 +81,8 @@ Resume hint:
   - generated `operationDefinitions` are present with `COMMAND/QUERY` and input value kind metadata
   - TU-02 implementation scope is complete
   - TI-01 contract freeze is complete
-  - current active item is revised TI-02
+  - TI-02 runtime hookup is complete
+  - current active item is PX-01
 
 ## 6.3 Progress History Comment (2026-03-26)
 
@@ -93,7 +93,8 @@ Resume hint:
   still open: reusable generic runtime mechanism exists, but the descriptor to
   runtime hookup and development override path are not yet closed under the
   revised contract.
-- PX-01 remains blocked behind revised TI-02 completion.
+- 2026-03-26 focused validation closed the revised TI-02 slice and moved
+  Phase 10 to PX-01.
 
 ## 6. Inputs from Previous Phases
 

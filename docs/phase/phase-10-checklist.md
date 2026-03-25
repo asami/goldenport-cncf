@@ -115,7 +115,7 @@ Define and freeze integration contract for `textus-identity` subsystem.
 
 ## TI-02: textus-identity Subsystem Runtime Integration
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -127,21 +127,18 @@ Implement runtime integration path for `textus-identity`.
   original TI-02 slice.
 - [x] Preserve reusable repository/configuration plumbing for component
   acquisition.
-- [ ] Realize the revised descriptor-first minimal Subsystem runtime path.
-- [ ] Implement the versioned CAR coordinate + development override model in
+- [x] Realize the revised descriptor-first minimal Subsystem runtime path.
+- [x] Implement the versioned CAR coordinate + development override model in
   the active `textus-identity` slice.
-- [ ] Expose deterministic subsystem structure visibility for the revised
+- [x] Expose deterministic subsystem structure visibility for the revised
   minimal shape.
-- [ ] Remove or quarantine superseded `textus-identity`-specific prototype
+- [x] Remove or quarantine superseded `textus-identity`-specific prototype
   assumptions from the active runtime path.
 
 Resume point:
 
-- Continue from
-  `/Users/asami/src/dev2026/textus-identity/docs/journal/2026/03/ti-02-handoff-2026-03-26.md`
-  and
-  `/Users/asami/src/dev2026/textus-identity/docs/journal/2026/03/ti-02-instruction-2026-03-26-revised.md`.
-  Close descriptor-to-runtime hookup before starting PX-01.
+- TI-02 is closed. Start PX-01 with practical runtime/projection verification
+  on top of the minimal subsystem path.
 
 History comment:
 
@@ -149,12 +146,14 @@ History comment:
   actual `textus-identity` repository state. The old TI-02 slice produced
   reusable generic runtime mechanisms, but revised minimal-subsystem closure
   work remains open.
+- 2026-03-26: focused compile and subsystem specs passed, confirming the
+  revised minimal-subsystem runtime path and development override behavior.
 
 ---
 
 ## PX-01: Practical Runtime and Projection Alignment
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 
