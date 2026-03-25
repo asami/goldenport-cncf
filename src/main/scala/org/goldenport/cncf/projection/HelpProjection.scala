@@ -8,7 +8,7 @@ import org.goldenport.datatype.I18nString
 
 /*
  * @since   Mar.  5, 2026
- * @version Mar. 24, 2026
+ * @version Mar. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 object HelpProjection {

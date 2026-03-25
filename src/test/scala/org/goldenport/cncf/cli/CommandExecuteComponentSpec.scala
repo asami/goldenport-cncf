@@ -4,6 +4,7 @@ import java.io.{ByteArrayOutputStream, PrintStream}
 import org.goldenport.Consequence
 import cats.data.NonEmptyVector
 import org.goldenport.cncf.CncfVersion
+import org.goldenport.record.Record
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.component.{ComponentInit, ComponentOrigin}
 import org.goldenport.cncf.context.GlobalRuntimeContext
@@ -20,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  9, 2026
  *  version Jan. 18, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
@@ -282,8 +283,8 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
     }
 
     "render RecordResponse as YAML by default for command mode" in {
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
-      val req = CncfRuntime.parseCommandArgs(subsystem, Array("meta.describe")).toOption.getOrElse(fail("parse failed"))
+      val subsystem = _subsystem_with_domain()
+      val req = CncfRuntime.parseCommandArgs(subsystem, Array("domain.meta.describe")).toOption.getOrElse(fail("parse failed"))
       subsystem.execute(req) match {
         case Consequence.Success(Response.Yaml(value)) =>
           value.contains("type:") shouldBe true
@@ -293,8 +294,8 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
     }
 
     "render RecordResponse as JSON when --format json is specified" in {
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
-      val req = CncfRuntime.parseCommandArgs(subsystem, Array("meta.describe", "--format", "json")).toOption.getOrElse(fail("parse failed"))
+      val subsystem = _subsystem_with_domain()
+      val req = CncfRuntime.parseCommandArgs(subsystem, Array("domain.meta.describe", "--format", "json")).toOption.getOrElse(fail("parse failed"))
       subsystem.execute(req) match {
         case Consequence.Success(Response.Json(value)) =>
           value.startsWith("{") shouldBe true
@@ -304,8 +305,8 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
     }
 
     "render RecordResponse as text when --format text is specified" in {
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
-      val req = CncfRuntime.parseCommandArgs(subsystem, Array("meta.describe", "--format", "text")).toOption.getOrElse(fail("parse failed"))
+      val subsystem = _subsystem_with_domain()
+      val req = CncfRuntime.parseCommandArgs(subsystem, Array("domain.meta.describe", "--format", "text")).toOption.getOrElse(fail("parse failed"))
       subsystem.execute(req) match {
         case Consequence.Success(Response.Scalar(value)) =>
           value.toString.nonEmpty shouldBe true
@@ -315,13 +316,26 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
     }
 
     "fallback to YAML when --format has invalid value" in {
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
-      val req = CncfRuntime.parseCommandArgs(subsystem, Array("meta.describe", "--format", "bogus")).toOption.getOrElse(fail("parse failed"))
+      val subsystem = _subsystem_with_domain()
+      val req = CncfRuntime.parseCommandArgs(subsystem, Array("domain.meta.describe", "--format", "bogus")).toOption.getOrElse(fail("parse failed"))
       subsystem.execute(req) match {
         case Consequence.Success(Response.Yaml(value)) =>
           value.contains("type:") shouldBe true
         case other =>
           fail(s"expected yaml fallback response but got: $other")
+      }
+    }
+
+    "render an address-like RecordResponse for generated VO smoke" in {
+      val subsystem = _subsystem_with_domain()
+      val req = CncfRuntime.parseCommandArgs(subsystem, Array("domain.meta.describe")).toOption.getOrElse(fail("parse failed"))
+      subsystem.execute(req) match {
+        case Consequence.Success(Response.Yaml(value)) =>
+          val body = value.toString
+          body.contains("type: component") shouldBe true
+          body.contains("name: domain") shouldBe true
+        case other =>
+          fail(s"expected yaml component payload but got: $other")
       }
     }
   }
@@ -364,6 +378,15 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
       out.contains("cncf command meta.mcp") shouldBe true
       out.contains("cncf command spec.export.mcp") shouldBe true
       out.contains("AI/MCP Navigation") shouldBe true
+    }
+
+    "print subsystem help for run command meta.help" in {
+      val (code, out) = _capture_stdout {
+        CncfRuntime().run(Array("command", "meta.help"))
+      }
+      code shouldBe 0
+      out.contains("type: subsystem") shouldBe true
+      out.contains("components:") shouldBe true
     }
 
     "print command protocol help for run command --help" in {
@@ -483,7 +506,21 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
 
     "render command output as YAML for --format yaml" in {
       val (code, out) = _capture_stdout {
-        CncfRuntime().run(Array("command", "meta.describe", "--format", "yaml"))
+        CncfRuntime.executeCommand(
+          Array("domain.meta.describe", "--format", "yaml"),
+          subsystem => {
+            val domain = TestComponentFactory.create("domain", Protocol.empty)
+            domain.withArtifactMetadata(
+              org.goldenport.cncf.component.Component.ArtifactMetadata(
+                sourceType = "test",
+                name = "domain",
+                version = "0.1.0"
+              )
+            )
+            domain.initialize(ComponentInit(subsystem, domain.core, ComponentOrigin.Main))
+            Seq(domain)
+          }
+        )
       }
       code shouldBe 0
       out.contains("type:") shouldBe true
@@ -491,7 +528,21 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
 
     "render command output as JSON for --format json" in {
       val (code, out) = _capture_stdout {
-        CncfRuntime().run(Array("command", "meta.describe", "--format", "json"))
+        CncfRuntime.executeCommand(
+          Array("domain.meta.describe", "--format", "json"),
+          subsystem => {
+            val domain = TestComponentFactory.create("domain", Protocol.empty)
+            domain.withArtifactMetadata(
+              org.goldenport.cncf.component.Component.ArtifactMetadata(
+                sourceType = "test",
+                name = "domain",
+                version = "0.1.0"
+              )
+            )
+            domain.initialize(ComponentInit(subsystem, domain.core, ComponentOrigin.Main))
+            Seq(domain)
+          }
+        )
       }
       code shouldBe 0
       out.trim.startsWith("{") shouldBe true
@@ -499,7 +550,21 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
 
     "render command output as text for --format text" in {
       val (code, out) = _capture_stdout {
-        CncfRuntime().run(Array("command", "meta.describe", "--format", "text"))
+        CncfRuntime.executeCommand(
+          Array("domain.meta.describe", "--format", "text"),
+          subsystem => {
+            val domain = TestComponentFactory.create("domain", Protocol.empty)
+            domain.withArtifactMetadata(
+              org.goldenport.cncf.component.Component.ArtifactMetadata(
+                sourceType = "test",
+                name = "domain",
+                version = "0.1.0"
+              )
+            )
+            domain.initialize(ComponentInit(subsystem, domain.core, ComponentOrigin.Main))
+            Seq(domain)
+          }
+        )
       }
       code shouldBe 0
       out.trim.nonEmpty shouldBe true
@@ -580,6 +645,13 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
 
   private def _subsystem_with_domain() = {
     val domain = TestComponentFactory.create("domain", Protocol.empty)
+    domain.withArtifactMetadata(
+      org.goldenport.cncf.component.Component.ArtifactMetadata(
+        sourceType = "test",
+        name = "domain",
+        version = "0.1.0"
+      )
+    )
     val subsystem = DefaultSubsystemFactory.default(Seq(domain), Some("command"))
     domain.initialize(ComponentInit(subsystem, domain.core, ComponentOrigin.Main))
     subsystem
