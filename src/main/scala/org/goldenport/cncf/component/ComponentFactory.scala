@@ -25,7 +25,7 @@ import scala.util.Try
  * @since   Jan. 30, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 24, 2026
+ * @version Mar. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -578,5 +578,23 @@ object ComponentFactory {
     classNames: Seq[String],
     loader: ClassLoader,
     origin: String
-  ): Consequence[Vector[ComponentSource]] = ???
+  ): Consequence[Vector[ComponentSource]] = {
+    val sources = Vector.newBuilder[ComponentSource]
+    var error: Option[Throwable] = None
+    classNames.foreach { className =>
+      if (error.isEmpty) {
+        try {
+          val cls = Class.forName(className, false, loader).asSubclass(classOf[Component])
+          sources += ComponentSource.ClassDef(cls, origin)
+        } catch {
+          case e: Throwable =>
+            error = Some(e)
+        }
+      }
+    }
+    error match {
+      case Some(e) => Consequence.failure(e)
+      case None => Consequence.success(sources.result())
+    }
+  }
 }

@@ -8,11 +8,13 @@ import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.ComponentOrigin
 import org.goldenport.cncf.backend.collaborator.CollaboratorFactory
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.subsystem.Subsystem
 
 /*
  * @since   Jan. 30, 2026
- * @version Feb.  5, 2026
+ *  version Feb.  5, 2026
+ * @version Mar. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositorySpace(
@@ -176,7 +178,7 @@ object ComponentRepositorySpace {
   private def _config_component_repository_specs(
     configuration: ResolvedConfiguration
   ): Vector[String] =
-    configuration.get[String]("cncf.component.repository") match {
+    configuration.get[String](RuntimeConfig.ComponentRepositoryKey) match {
       case Consequence.Success(Some(value)) =>
         value
           .split(",")

@@ -31,23 +31,69 @@ This document is a progress dashboard, not a design journal.
 
 ## 4. Current Work Stack
 
-- A (ACTIVE): Define Textus account/identity capability contract and boundaries.
-- B (SUSPENDED): Implement `textus-user-account` component operations and metadata.
-- C (SUSPENDED): Implement `textus-identity` subsystem integration and routing.
-- D (SUSPENDED): Align runtime/projection/meta surfaces for practical operation use.
-- E (SUSPENDED): Add executable specifications and close phase documentation.
+- A (DONE): Define Textus account/identity capability contract and boundaries.
+- B (DONE): Implement `textus-user-account` component operations and metadata.
+- C (ACTIVE): Realize revised minimal-subsystem runtime integration for `textus-identity`.
+- D (PLANNED): Align runtime/projection/meta surfaces for practical operation use.
+- E (PLANNED): Add executable specifications and close phase documentation.
 
 Resume hint:
-- Fix capability contract first; implementation and runtime alignment depend on stable boundaries.
+- Continue the revised TI-02 slice: descriptor-first minimal Subsystem
+  realization, CAR coordinate resolution, and development override hookup.
 
 ## 5. Development Items
 
-- [ ] TU-01: Define and freeze `textus-user-account` component contract.
-- [ ] TU-02: Implement `textus-user-account` component and operation metadata integration.
-- [ ] TI-01: Define and freeze `textus-identity` subsystem integration contract.
+- [x] TU-01: Define and freeze `textus-user-account` component contract.
+- [x] TU-02: Implement `textus-user-account` component and operation metadata integration.
+- [x] TI-01: Define and freeze `textus-identity` subsystem integration contract.
 - [ ] TI-02: Implement `textus-identity` subsystem runtime integration.
 - [ ] PX-01: Align command/query practical runtime behavior and projection visibility.
 - [ ] PX-02: Add executable specifications and finalize Phase 10 closure.
+
+## 6.2 Latest Verification Snapshot (2026-03-26)
+
+- `textus-identity`:
+  - contract artifacts confirmed:
+    - `docs/journal/2026/03/ti-01-contract-freeze-2026-03-26.md`
+    - `src/main/cozy/textus-identity-subsystem.cml`
+  - focused validation:
+    - `sbt --batch compile`
+    - result: passed
+  - contract notes:
+    - subsystem boundary is fixed to descriptor-first orchestration/configuration,
+      not duplicated account logic
+    - no subsystem-owned identity operation surface is frozen in TI-01
+    - `textus-user-account` dependency/binding is explicit in the canonical example
+  - revised TI-02 status:
+    - original generic runtime mechanism was preserved and handed off
+    - revised minimal-subsystem instruction is ready
+    - TI-02 remains open until descriptor-to-runtime hookup and override path are
+      closed under the revised contract
+- `textus-user-account`:
+  - latest implementation commit: `40b30d0`
+  - focused verification:
+    - `sbt --batch compile`
+    - result: passed
+    - `sbt --batch test`
+    - result: passed
+- Implementation notes:
+  - generated Component package override is active
+  - EntityValue output/package is generated under `${package}/entity/*`
+  - generated `operationDefinitions` are present with `COMMAND/QUERY` and input value kind metadata
+  - TU-02 implementation scope is complete
+  - TI-01 contract freeze is complete
+  - current active item is revised TI-02
+
+## 6.3 Progress History Comment (2026-03-26)
+
+- Phase 10 progress was corrected to match the actual `textus-identity` state.
+- TI-01 remains DONE based on the contract-freeze record and canonical
+  subsystem CML.
+- TI-02 was returned to ACTIVE because the revised minimal-subsystem slice is
+  still open: reusable generic runtime mechanism exists, but the descriptor to
+  runtime hookup and development override path are not yet closed under the
+  revised contract.
+- PX-01 remains blocked behind revised TI-02 completion.
 
 ## 6. Inputs from Previous Phases
 

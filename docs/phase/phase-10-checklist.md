@@ -50,7 +50,7 @@ This order minimizes churn across contract/runtime/spec boundaries.
 
 ## TU-01: textus-user-account Component Contract
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -58,21 +58,21 @@ Define and freeze the operational contract of `textus-user-account`.
 
 ### Detailed Tasks
 
-- [ ] Define account lifecycle operation set (create/read/update/disable/enable).
-- [ ] Define command/query boundaries for each operation.
-- [ ] Define input/output contracts and parameter normalization rules.
-- [ ] Define package-name configuration contract for generated Component.
-- [ ] Define EntityValue package contract as `${package}/entity/*`.
-- [ ] Define identity linkage points required by `textus-identity`.
-- [ ] Define deterministic naming and operation ordering rules.
-- [ ] Define failure taxonomy and error response expectations.
-- [ ] Add canonical examples and invalid-case constraints.
+- [x] Define account lifecycle operation set (create/read/update/disable/enable).
+- [x] Define command/query boundaries for each operation.
+- [x] Define input/output contracts and parameter normalization rules.
+- [x] Define package-name configuration contract for generated Component.
+- [x] Define EntityValue package contract as `${package}/entity/*`.
+- [x] Define identity linkage points required by `textus-identity`.
+- [x] Define deterministic naming and operation ordering rules.
+- [x] Define failure taxonomy and error response expectations.
+- [x] Add canonical examples and invalid-case constraints.
 
 ---
 
 ## TU-02: textus-user-account Component Implementation
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -80,19 +80,19 @@ Implement `textus-user-account` component with operation metadata integration.
 
 ### Detailed Tasks
 
-- [ ] Implement component operation definitions following TU-01 contract.
-- [ ] Integrate operation metadata for runtime/projection discovery.
-- [ ] Implement configurable package-name support for generated Component.
-- [ ] Implement EntityValue output path/package as `${package}/entity/*`.
-- [ ] Align command operations with async job default path.
-- [ ] Align query operations with sync/ephemeral behavior policy.
-- [ ] Add regression safeguards for operation resolution and execution routing.
+- [x] Implement component operation definitions following TU-01 contract.
+- [x] Integrate operation metadata for runtime/projection discovery.
+- [x] Implement configurable package-name support for generated Component.
+- [x] Implement EntityValue output path/package as `${package}/entity/*`.
+- [x] Align command operations with async job default path.
+- [x] Align query operations with sync/ephemeral behavior policy.
+- [x] Add regression safeguards for operation resolution and execution routing.
 
 ---
 
 ## TI-01: textus-identity Subsystem Contract
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -100,17 +100,22 @@ Define and freeze integration contract for `textus-identity` subsystem.
 
 ### Detailed Tasks
 
-- [ ] Define subsystem responsibility boundary vs component boundary.
-- [ ] Define identity operation set (issue/verify/lookup/revoke as applicable).
-- [ ] Define command/query boundaries and security-sensitive constraints.
-- [ ] Define integration contract with `textus-user-account`.
-- [ ] Define event/job interaction policy where required.
+- [x] Define subsystem responsibility boundary vs component boundary.
+- [x] Define identity operation set (issue/verify/lookup/revoke as applicable).
+- [x] Define command/query boundaries and security-sensitive constraints.
+- [x] Define integration contract with `textus-user-account`.
+- [x] Define event/job interaction policy where required.
+
+### Evidence
+
+- `/Users/asami/src/dev2026/textus-identity/docs/journal/2026/03/ti-01-contract-freeze-2026-03-26.md`
+- `/Users/asami/src/dev2026/textus-identity/src/main/cozy/textus-identity-subsystem.cml`
 
 ---
 
 ## TI-02: textus-identity Subsystem Runtime Integration
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 
@@ -118,11 +123,32 @@ Implement runtime integration path for `textus-identity`.
 
 ### Detailed Tasks
 
-- [ ] Integrate subsystem into runtime resolution path.
-- [ ] Connect identity operations to component execution boundaries.
-- [ ] Ensure deterministic routing for command/query paths.
-- [ ] Expose stable subsystem operation visibility in meta/projection surfaces.
-- [ ] Remove ambiguous integration paths if present.
+- [x] Preserve reusable generic subsystem bootstrap/load mechanisms from the
+  original TI-02 slice.
+- [x] Preserve reusable repository/configuration plumbing for component
+  acquisition.
+- [ ] Realize the revised descriptor-first minimal Subsystem runtime path.
+- [ ] Implement the versioned CAR coordinate + development override model in
+  the active `textus-identity` slice.
+- [ ] Expose deterministic subsystem structure visibility for the revised
+  minimal shape.
+- [ ] Remove or quarantine superseded `textus-identity`-specific prototype
+  assumptions from the active runtime path.
+
+Resume point:
+
+- Continue from
+  `/Users/asami/src/dev2026/textus-identity/docs/journal/2026/03/ti-02-handoff-2026-03-26.md`
+  and
+  `/Users/asami/src/dev2026/textus-identity/docs/journal/2026/03/ti-02-instruction-2026-03-26-revised.md`.
+  Close descriptor-to-runtime hookup before starting PX-01.
+
+History comment:
+
+- 2026-03-26: TI-02 was reclassified from DONE to ACTIVE after checking the
+  actual `textus-identity` repository state. The old TI-02 slice produced
+  reusable generic runtime mechanisms, but revised minimal-subsystem closure
+  work remains open.
 
 ---
 

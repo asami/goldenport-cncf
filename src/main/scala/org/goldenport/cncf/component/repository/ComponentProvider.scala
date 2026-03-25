@@ -18,7 +18,8 @@ import scala.util.control.NonFatal
 /*
  * @since   Jan. 12, 2026
  *  version Jan. 29, 2026
- * @version Feb. 15, 2026
+ *  version Feb. 15, 2026
+ * @version Mar. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentProvider {
@@ -226,7 +227,13 @@ object ComponentProvider {
   ): String = {
     val simple = className.split('.').lastOption.getOrElse(className)
     val base = simple.takeWhile(_ != '$')
-    if (base.nonEmpty) base else simple.replace("$", "")
+    val name =
+      if (base.nonEmpty) base else simple.replace("$", "")
+    if (name.endsWith("Component") && name.length > "Component".length) {
+      name.dropRight("Component".length)
+    } else {
+      name
+    }
   }
 
   private def _provide_via_companion_factory(

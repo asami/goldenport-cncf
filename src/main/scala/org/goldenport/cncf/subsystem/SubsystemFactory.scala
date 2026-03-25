@@ -12,6 +12,7 @@ import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.http.{FakeHttpDriver, UrlConnectionHttpDriver}
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
+import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.egress.EgressCollection
@@ -22,7 +23,8 @@ import org.goldenport.protocol.spec as spec
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 30, 2026
- * @version Feb. 15, 2026
+ *  version Feb. 15, 2026
+ * @version Mar. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {
@@ -63,6 +65,39 @@ object DefaultSubsystemFactory {
   }
 
   def defaultWithScope(
+    context: ScopeContext,
+    mode: Option[RunMode] = None,
+    configuration: ResolvedConfiguration =
+      ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
+    aliasResolver: AliasResolver = GlobalRuntimeContext.current
+      .map(_.aliasResolver)
+      .getOrElse(AliasResolver.empty)
+  ): Subsystem = {
+    val subsystemName =
+      ConfigurationAccess
+        .getString(configuration, RuntimeConfig.SubsystemNameKey)
+        .map(_.trim)
+        .filter(_.nonEmpty)
+        .getOrElse(_subsystem_name)
+    subsystemName match {
+      case "textus-identity" =>
+        TextusIdentitySubsystemFactory.defaultWithScope(
+          context = context,
+          mode = mode,
+          configuration = configuration,
+          aliasResolver = aliasResolver
+        )
+      case _ =>
+        _defaultWithScope(
+          context = context,
+          mode = mode,
+          configuration = configuration,
+          aliasResolver = aliasResolver
+        )
+    }
+  }
+
+  private def _defaultWithScope(
     context: ScopeContext,
     mode: Option[RunMode] = None,
     configuration: ResolvedConfiguration =

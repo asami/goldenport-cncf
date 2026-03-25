@@ -15,7 +15,7 @@ import org.goldenport.cncf.config.RuntimeDefaults
  * @since   Jan. 18, 2026
  *  version Jan. 30, 2026
  *  version Feb.  1, 2026
- * @version Mar. 16, 2026
+ * @version Mar. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -32,6 +32,9 @@ object RuntimeConfig {
   val ServerEmulatorBaseUrlKey = "cncf.runtime.server-emulator.baseurl"
   val HttpDriverKey = "cncf.runtime.http.driver"
   val ModeKey = "cncf.runtime.mode"
+  val SubsystemNameKey = "cncf.runtime.subsystem"
+  val ComponentRepositoryKey = "cncf.component.repository"
+  val TextusIdentityComponentRepositoryKey = "textus.identity.component.repository"
   val LogBackendKey = "cncf.logging.backend"
   val RuntimeLogBackendKey = "cncf.runtime.logging.backend"
   val LogLevelKey = "cncf.logging.level"
