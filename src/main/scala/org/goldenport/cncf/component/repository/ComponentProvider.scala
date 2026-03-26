@@ -112,8 +112,8 @@ object ComponentProvider {
     val components = factory.create(params)
     components.headOption match {
       case Some(comp) =>
-        val core = _core_from_component(comp, componentClass)
-        _initialize_component(comp, params.subsystem, core, params.origin)
+        // Factory.create already initializes the component with the factory-built core.
+        Consequence.success(comp)
       case None =>
         val message = s"factory ${factory.getClass.getName} produced no components"
         log.warn(message)
@@ -267,19 +267,29 @@ object ComponentProvider {
   private def _companion_factories(
     componentClass: Class[_ <: Component]
   ): Vector[Component.Factory] = {
-    val companionName = componentClass.getName + "$"
-    _load_optional_class(companionName, componentClass.getClassLoader) match {
-      case Some(companionClass) =>
-        _module_instance(companionClass) match {
-          case Some(factory: Component.Factory) => Vector(factory)
-          case _ =>
-            companionClass.getDeclaredClasses.view
-              .map(_resolve_factory_class)
-              .collect { case Some(factory) => factory }
-              .toVector
-        }
-      case None => Vector.empty
-    }
+    val loader = componentClass.getClassLoader
+    val directCandidates = Vector(
+      componentClass.getName + "$Factory",
+      componentClass.getName + "$Factory$"
+    ).flatMap(name => _load_factory(name, loader))
+    val companionCandidates =
+      _load_optional_class(componentClass.getName + "$", loader) match {
+        case Some(companionClass) =>
+          _module_instance(companionClass) match {
+            case Some(factory: Component.Factory) => Vector(factory)
+            case _ =>
+              companionClass.getDeclaredClasses.view
+                .map(_resolve_factory_class)
+                .collect { case Some(factory) => factory }
+                .toVector
+          }
+        case None => Vector.empty
+      }
+    (directCandidates ++ companionCandidates)
+      .groupBy(_.getClass.getName)
+      .values
+      .map(_.head)
+      .toVector
   }
 
   private def _resolve_factory_class(
