@@ -9,8 +9,9 @@ import org.goldenport.Consequence
 import org.goldenport.configuration.{Configuration, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.cli.{CncfRuntime, RunMode}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentCreate, ComponentInit, ComponentInstanceId, ComponentOrigin}
-import org.goldenport.cncf.component.repository.{ComponentRepository, ComponentRepositorySpace}
+import org.goldenport.cncf.component.repository.{ComponentProvider, ComponentRepository, ComponentRepositorySpace, ComponentSource}
 import org.goldenport.cncf.context.GlobalRuntimeContext
+import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -240,12 +241,30 @@ object CncfMain extends GlobalObservable {
     enabled: Boolean,
     workspace: Option[Path]
   ): Subsystem => Seq[Component] = {
-    if (specs.nonEmpty) {
-      _discover_from_repositories(specs)
-    } else if (enabled) {
-      _discover_components(workspace)
-    } else {
-      _ => Nil
+    (subsystem: Subsystem) => {
+      val components = Vector.newBuilder[Component]
+      val seen = mutable.LinkedHashMap.empty[String, Component]
+      def addAll(xs: Seq[Component]): Unit =
+        xs.foreach { component =>
+          val name = component.core.name
+          val key = NamingConventions.toComparisonKey(name)
+          seen.get(key) match {
+            case Some(existing) =>
+              observe_warn(
+                s"duplicate component collapsed name=${name} kept=${existing.origin} dropped=${component.origin}"
+              )
+            case None =>
+              seen += key -> component
+          }
+        }
+      if (enabled) {
+        addAll(_discover_components(workspace)(subsystem))
+      }
+      if (specs.nonEmpty) {
+        addAll(_discover_from_repositories(specs)(subsystem))
+      }
+      components ++= seen.values
+      components.result()
     }
   }
 
@@ -285,7 +304,7 @@ object CncfMain extends GlobalObservable {
           .filter(_.nonEmpty)
           .toVector
       case None =>
-        Vector("demo.")
+        Vector.empty
     }
   }
 
@@ -381,12 +400,14 @@ object CncfMain extends GlobalObservable {
   ): Vector[Component] = {
     val components =
       ServiceLoader.load(classOf[Component], loader).iterator.asScala.toVector
+        .filter(_.getClass.getClassLoader eq loader)
     val factories =
       ServiceLoader
         .load(classOf[Component.Factory], loader)
         .iterator
         .asScala
         .toVector
+        .filter(_.getClass.getClassLoader eq loader)
     val fromFactories = factories.flatMap(_.create(params))
     val direct = components.map(_initialize_component_(params))
     direct ++ fromFactories
@@ -405,8 +426,10 @@ object CncfMain extends GlobalObservable {
         val className = _class_name_(root, classFile)
         if (_accept_class_(className, packagePrefixes) && !seen.contains(className)) {
           seen += className
-          _load_component_(loader, className).foreach { comp =>
-            results += _initialize_component_(params)(comp)
+          observe_trace(s"[discover:classes] considering $className")
+          _load_component_(loader, className, params).foreach { comp =>
+            observe_trace(s"[discover:classes] loaded component ${comp.core.name} from $className")
+            results += comp
           }
         }
       }
@@ -459,7 +482,7 @@ object CncfMain extends GlobalObservable {
     packagePrefixes: Seq[String]
   ): Boolean = {
     if (packagePrefixes.isEmpty) {
-      false
+      true
     } else {
       packagePrefixes.exists(prefix => name.startsWith(prefix))
     }
@@ -467,46 +490,23 @@ object CncfMain extends GlobalObservable {
 
   private def _load_component_(
     loader: URLClassLoader,
-    className: String
+    className: String,
+    params: ComponentCreate
   ): Option[Component] = {
     try {
       val clazz = Class.forName(className, false, loader)
-      if (!classOf[Component].isAssignableFrom(clazz)) {
-        None
-      } else if (className.endsWith("$")) {
-        _load_module_instance_(clazz)
-      } else {
-        _load_class_instance_(clazz)
+      if (classOf[Component.Factory].isAssignableFrom(clazz)) {
+        observe_trace(s"[discover:classes] instantiating factory $className")
+      } else if (classOf[Component].isAssignableFrom(clazz)) {
+        observe_trace(s"[discover:classes] instantiating class component $className")
       }
-    } catch {
-      case _: Throwable => None
-    }
-  }
-
-  private def _load_module_instance_(
-    clazz: Class[_]
-  ): Option[Component] = {
-    try {
-      val field = clazz.getField("MODULE$")
-      field.get(null) match {
-        case c: Component => Some(c)
-        case _ => None
-      }
-    } catch {
-      case _: Throwable => None
-    }
-  }
-
-  private def _load_class_instance_(
-    clazz: Class[_]
-  ): Option[Component] = {
-    try {
-      val ctor = clazz.getDeclaredConstructor()
-      ctor.setAccessible(true)
-      ctor.newInstance() match {
-        case c: Component => Some(c)
-        case _ => None
-      }
+      ComponentProvider
+        .provide(
+          ComponentSource.ClassDef(clazz.asInstanceOf[Class[_ <: Component]], className),
+          params.subsystem,
+          params.origin
+        )
+        .toOption
     } catch {
       case _: Throwable => None
     }

@@ -13,6 +13,8 @@ This document is a progress dashboard, not a design journal.
 
 - Implement `textus-user-account` component as a practical account-management boundary.
 - Implement `textus-identity` subsystem as identity/auth integration boundary.
+- Track `cncf-samples` development as the practical verification vehicle for
+  Phase 10 features.
 - Establish CNCF-runtime usable flows for:
   - account lifecycle operations
   - identity issuance/verification operations
@@ -47,6 +49,7 @@ Resume hint:
 - [x] TU-02: Implement `textus-user-account` component and operation metadata integration.
 - [x] TI-01: Define and freeze `textus-identity` subsystem integration contract.
 - [x] TI-02: Implement `textus-identity` subsystem runtime integration.
+- [ ] TI-03: Track CNCF sample development status and integration checkpoints.
 - [ ] PX-01: Align command/query practical runtime behavior and projection visibility.
 - [ ] PX-02: Add executable specifications and finalize Phase 10 closure.
 
@@ -75,6 +78,13 @@ Resume hint:
     - result: passed
     - `sbt --batch test`
     - result: passed
+- `cncf-samples`:
+  - development has started in:
+    - `/Users/asami/src/dev2026/cncf-samples`
+  - detailed implementation progress is managed in the sample repository
+    itself
+  - Phase 10 tracks only integration checkpoints and overall dependency on the
+    sample work
 - Implementation notes:
   - generated Component package override is active
   - EntityValue output/package is generated under `${package}/entity/*`
@@ -82,7 +92,8 @@ Resume hint:
   - TU-02 implementation scope is complete
   - TI-01 contract freeze is complete
   - TI-02 runtime hookup is complete
-  - current active item is PX-01
+  - `cncf-samples` is the practical validation vehicle for upcoming PX/TI work
+  - current active item is PX-01; TI-03 records external sample checkpoints
 
 ## 6.3 Progress History Comment (2026-03-26)
 
@@ -108,6 +119,8 @@ Resume hint:
   - `/Users/asami/src/dev2026/textus-identity`
 - `textus-user-account`:
   - `/Users/asami/src/dev2026/textus-user-account`
+- `cncf-samples`:
+  - `/Users/asami/src/dev2026/cncf-samples`
 
 Phase 10 development tracks these repositories together with CNCF integration.
 

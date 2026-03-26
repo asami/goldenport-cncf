@@ -33,8 +33,10 @@ Phase 10 implementation proceeds in this order:
 2. TU-02 (user-account component implementation) follows the fixed contract.
 3. TI-01 (identity subsystem contract) is fixed before integration work.
 4. TI-02 (identity subsystem runtime integration) follows contract freeze.
-5. PX-01 (runtime/projection practicalization) aligns exposure and behavior.
-6. PX-02 (executable specs + closure docs) finalizes phase completion.
+5. TI-03 (sample development tracking) records cross-repo practical
+   validation checkpoints.
+6. PX-01 (runtime/projection practicalization) aligns exposure and behavior.
+7. PX-02 (executable specs + closure docs) finalizes phase completion.
 
 This order minimizes churn across contract/runtime/spec boundaries.
 
@@ -44,6 +46,7 @@ This order minimizes churn across contract/runtime/spec boundaries.
 
 - `textus-identity`: `/Users/asami/src/dev2026/textus-identity`
 - `textus-user-account`: `/Users/asami/src/dev2026/textus-user-account`
+- `cncf-samples`: `/Users/asami/src/dev2026/cncf-samples`
 - CNCF integration repo: `/Users/asami/src/dev2025/cloud-native-component-framework`
 
 ---
@@ -166,6 +169,38 @@ Ensure CNCF practical usability for account/identity operations.
 - [ ] Validate help/describe/schema/meta exposure is deterministic and complete.
 - [ ] Validate command-help guidance route for new operations.
 - [ ] Confirm baseline operational scenarios for practical usage are covered.
+
+---
+
+## TI-03: CNCF Sample Development Tracking
+
+Status: PLANNED
+
+### Objective
+
+Track `cncf-samples` as the practical validation stream for Phase 10 features
+without duplicating detailed sample-progress management inside the CNCF repo.
+
+### Detailed Tasks
+
+- [ ] Record the sample repository path and ownership boundary.
+- [ ] Record which Phase 10 capabilities are expected to be exercised in
+  `cncf-samples`.
+- [ ] Capture integration checkpoints from sample development back into Phase
+  10 when they affect CNCF/Textus work.
+- [ ] Keep detailed sample-task status in `cncf-samples`, not in this
+  checklist.
+- [ ] Use TI-03 updates to inform PX-01/PX-02 readiness only at a summary
+  level.
+
+### Tracking Policy
+
+- Detailed progress, task breakdown, and execution logs belong to:
+  `/Users/asami/src/dev2026/cncf-samples`
+- This checklist records only overall state, dependency, and notable
+  integration checkpoints relevant to Phase 10.
+- Sample development has already started, but detailed status remains owned by
+  the sample repository side.
 
 ---
 

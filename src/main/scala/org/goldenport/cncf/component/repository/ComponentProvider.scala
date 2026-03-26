@@ -49,14 +49,19 @@ object ComponentProvider {
       case Some(componentResult) =>
         componentResult
       case None =>
-        log.info(s"preferred factory unavailable for class=${componentClass.getName}; falling back to no-arg instantiation")
-        _instantiate_noarg(componentClass) match {
-          case Consequence.Success(comp) =>
-            val core = _core_from_component(comp, componentClass)
-            _initialize_component(comp, subsystem, core, origin)
-          case Consequence.Failure(conclusion) =>
-            log.warn(s"failed to instantiate class=${componentClass.getName} cause=${conclusion.show}; trying companion factory")
-            _provide_via_companion_factory(componentClass, params, log, conclusion)
+        _companion_factories(componentClass).headOption match {
+          case Some(factory) =>
+            log.info(s"preferred factory unavailable for class=${componentClass.getName}; trying companion factory")
+            _instantiate_from_factory(factory, componentClass, params, log)
+          case None =>
+            log.info(s"preferred factory unavailable for class=${componentClass.getName}; falling back to no-arg instantiation")
+            _instantiate_noarg(componentClass) match {
+              case Consequence.Success(comp) =>
+                val core = _core_from_component(comp, componentClass)
+                _initialize_component(comp, subsystem, core, origin)
+              case Consequence.Failure(conclusion) =>
+                Consequence.Failure(conclusion)
+            }
         }
     }
   }
