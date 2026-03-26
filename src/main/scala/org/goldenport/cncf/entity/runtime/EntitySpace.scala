@@ -1,10 +1,11 @@
 package org.goldenport.cncf.entity.runtime
 
 import scala.collection.mutable
+import org.simplemodeling.model.datatype.EntityCollectionId
 
 /*
  * @since   Mar. 14, 2026
- * @version Mar. 14, 2026
+ * @version Mar. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 // Component-local container for entity collections.
@@ -29,6 +30,11 @@ class EntitySpace {
 
   def entityOption[E](name: String): Option[EntityCollection[E]] =
     _entity_collections.get(name).map(_.asInstanceOf[EntityCollection[E]])
+
+  def entityOption(
+    collectionId: EntityCollectionId
+  ): Option[EntityCollection[?]] =
+    _entity_collections.values.find(_.descriptor.collectionId == collectionId)
 
   private def _resolve[A](
     map: mutable.Map[String, _],

@@ -259,6 +259,13 @@ This keeps the first implementation small, verifiable, and aligned with current 
 
 The minimal first step is now implemented in CNCF.
 
+## Startup Import Boundary Note
+
+`cncf.import.entity.file` is intentionally deferred.
+
+Reason: the framework still lacks a bootstrap decode contract for `Record -> typed entity`.
+That contract must be defined explicitly before startup entity import is enabled.
+
 Delivered:
 
 - `DataStoreSeed` / `DataStoreSeedEntry`

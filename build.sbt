@@ -36,6 +36,7 @@ lazy val root = project
       "io.circe" %% "circe-core"    % "0.14.6",
       "io.circe" %% "circe-generic" % "0.14.6",
       "io.circe" %% "circe-parser"  % "0.14.6",
+      "org.yaml" % "snakeyaml" % "2.4",
 
       "org.slf4j" % "slf4j-simple" % "2.0.12",
 

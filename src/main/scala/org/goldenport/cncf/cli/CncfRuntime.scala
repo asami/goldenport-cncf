@@ -37,6 +37,7 @@ import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.backend.collaborator.CollaboratorFactory
 import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.component.repository.ComponentRepositorySpace
+import org.goldenport.cncf.importer.StartupImport
 import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.resolver.{CanonicalPath, PathResolution, PathResolutionResult}
 import org.goldenport.cncf.cli.RuntimeParameterParser
@@ -1782,18 +1783,23 @@ class CncfRuntime() extends GlobalObservable {
       _print_usage()
       return 2
     }
-    val subsystem = _initialize(normalizedArgs, extraComponents)
-    normalizedArgs.headOption.flatMap(RunMode.from) match {
-      case Some(RunMode.Command) =>
-        _execute_command_args(subsystem, normalizedArgs.drop(1))
-      case _ =>
-        _runtime_protocol_engine.makeOperationRequest(normalizedArgs) match {
-          case Consequence.Success(req) =>
-            _run(subsystem, req)
-          case Consequence.Failure(conclusion) =>
-            _print_error(conclusion)
-            _exit_code(Consequence.Failure(conclusion))
+    Consequence(_initialize(normalizedArgs, extraComponents)) match {
+      case Consequence.Success(subsystem) =>
+        normalizedArgs.headOption.flatMap(RunMode.from) match {
+          case Some(RunMode.Command) =>
+            _execute_command_args(subsystem, normalizedArgs.drop(1))
+          case _ =>
+            _runtime_protocol_engine.makeOperationRequest(normalizedArgs) match {
+              case Consequence.Success(req) =>
+                _run(subsystem, req)
+              case Consequence.Failure(conclusion) =>
+                _print_error(conclusion)
+                _exit_code(Consequence.Failure(conclusion))
+            }
         }
+      case Consequence.Failure(conclusion) =>
+        _print_error(conclusion)
+        _exit_code(Consequence.Failure(conclusion))
     }
   }
 
@@ -1867,6 +1873,12 @@ class CncfRuntime() extends GlobalObservable {
     val extras = extraComponents(subsystem)
     if (extras.nonEmpty) {
       subsystem.add(extras)
+    }
+    StartupImport.run(cwd, configuration, runconfig, subsystem) match {
+      case Consequence.Success(_) =>
+        ()
+      case Consequence.Failure(conclusion) =>
+        throw new IllegalStateException(conclusion.show)
     }
     subsystem
   }
