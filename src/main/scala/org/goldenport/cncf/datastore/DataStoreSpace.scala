@@ -12,7 +12,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Feb. 25, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace {
@@ -50,6 +50,13 @@ class DataStoreSpace {
 
   def inject(
     seed: DataStoreSpace.Seed
+  )(using ctx: ExecutionContext): Consequence[Unit] =
+    seed.entries.foldLeft(Consequence.unit) { (z, entry) =>
+      z.flatMap(_ => inject(entry.collection, entry.record))
+    }
+
+  def importSeed(
+    seed: DataStoreSeed
   )(using ctx: ExecutionContext): Consequence[Unit] =
     seed.entries.foldLeft(Consequence.unit) { (z, entry) =>
       z.flatMap(_ => inject(entry.collection, entry.record))

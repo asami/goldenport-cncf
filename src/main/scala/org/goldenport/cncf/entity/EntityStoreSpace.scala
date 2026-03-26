@@ -14,7 +14,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
 /*
  * @since   Feb. 24, 2026
  *  version Feb. 25, 2026
- * @version Mar. 24, 2026
+ * @version Mar. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {
@@ -47,6 +47,20 @@ class EntityStoreSpace {
       r <- entitystore.create(op.entity)
     } yield r
   }
+
+  def importSeed[T](
+    seed: EntityStoreSeed[T]
+  )(using ctx: ExecutionContext, tc: EntityPersistent[T]): Consequence[Unit] =
+    seed.entries.foldLeft(Consequence.unit) { (z, entry) =>
+      z.flatMap { _ =>
+        val createTc = new EntityPersistentCreate[T] {
+          def id(e: T): Option[EntityId] = Some(tc.id(e))
+          def toRecord(e: T): org.goldenport.record.Record = tc.toRecord(e)
+          def collection(e: T): EntityCollectionId = tc.id(e).collection
+        }
+        create(EntityStoreCreate(entry.entity, createTc)).map(_ => ())
+      }
+    }
 
   def load[T](op: EntityStoreLoad[T])(using ctx: ExecutionContext): Consequence[Option[T]] = {
     given EntityPersistent[T] = op.tc
