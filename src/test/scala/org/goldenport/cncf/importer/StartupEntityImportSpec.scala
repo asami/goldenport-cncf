@@ -2,7 +2,9 @@ package org.goldenport.cncf.importer
 
 import cats.~>
 import cats.effect.Ref
+import java.net.InetSocketAddress
 import java.nio.file.{Files, Path}
+import com.sun.net.httpserver.{HttpExchange, HttpHandler, HttpServer}
 import org.goldenport.Consequence
 import org.goldenport.cncf.cli.CncfRuntime
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId, ComponentInit, ComponentOrigin}
@@ -35,6 +37,88 @@ final class StartupEntityImportSpec
   private val p2Id = _parse_entity_id(p2IdText)
 
   "Startup import for cncf.import.entity.file" should {
+    "import entities from a URL via UnitOfWork-backed fetch" in {
+      Given("a bootstrap URL source served over HTTP")
+      val cwd = Files.createTempDirectory("cncf-startup-entity-url")
+      val server = _http_server(
+        "/entity.yaml",
+        """entitystore:
+          |  - collection: test.1.person
+          |    records:
+          |      - id: test-1-entity-person-1742198400000-abcd1234
+          |        name: url-entity
+          |        age: 20
+          |""".stripMargin
+      )
+      server.start()
+
+      When("bootstrapping the runtime")
+      val runtime = new CncfRuntime()
+      try {
+        val url = s"http://127.0.0.1:${server.getAddress.getPort}/entity.yaml"
+        val subsystem = runtime.initializeForEmbedding(
+          cwd = cwd,
+          args = Array(
+            s"--cncf.datastore.sqlite.path=${cwd.resolve("startup-import.sqlite").toString}",
+            s"--cncf.runtime.http.driver=real",
+            s"--cncf.import.entity.file=${url}"
+          ),
+          extraComponents = _extra_components
+        ) match {
+          case Consequence.Success(subsystem) => subsystem
+          case Consequence.Failure(conclusion) => fail(conclusion.show)
+        }
+        given ExecutionContext = _execution_context(
+          subsystem.globalRuntimeContext.config.dataStoreSpace,
+          subsystem.globalRuntimeContext.config.entityStoreSpace
+        )
+
+        Then("the URL content is imported")
+        val space = subsystem.globalRuntimeContext.config.entityStoreSpace
+        val entity = _person(p1Id, "url-entity", 20)
+        space.load(UnitOfWorkOp.EntityStoreLoad(entity.id, _persistent)) shouldBe
+          Consequence.success(Some(entity))
+      } finally {
+        runtime.closeEmbedding()
+        server.stop(0)
+      }
+    }
+
+    "import a default entity directory at bootstrap when no explicit config is set" in {
+      Given("a bootstrap cwd with a default entity.d directory")
+      val cwd = Files.createTempDirectory("cncf-startup-entity-default")
+      val dir = Files.createDirectories(cwd.resolve("entity.d"))
+      val file = dir.resolve("a.yaml")
+      Files.writeString(
+        file,
+        """entitystore:
+          |  - collection: test.1.person
+          |    records:
+          |      - id: test-1-entity-person-1742198400000-abcd1234
+          |        name: default-entity
+          |        age: 20
+          |""".stripMargin
+      )
+
+      When("bootstrapping the runtime without explicit import config")
+      val runtime = new CncfRuntime()
+      try {
+        val subsystem = _initialize(runtime, cwd, None)
+        given ExecutionContext = _execution_context(
+          subsystem.globalRuntimeContext.config.dataStoreSpace,
+          subsystem.globalRuntimeContext.config.entityStoreSpace
+        )
+
+        Then("the default entity directory is imported")
+        val space = subsystem.globalRuntimeContext.config.entityStoreSpace
+        val entity = _person(p1Id, "default-entity", 20)
+        space.load(UnitOfWorkOp.EntityStoreLoad(entity.id, _persistent)) shouldBe
+          Consequence.success(Some(entity))
+      } finally {
+        runtime.closeEmbedding()
+      }
+    }
+
     "import a single yaml file at bootstrap" in {
       Given("a bootstrap config that points to one entity yaml file")
       val cwd = Files.createTempDirectory("cncf-startup-entity-single")
@@ -53,7 +137,7 @@ final class StartupEntityImportSpec
       When("bootstrapping the runtime")
       val runtime = new CncfRuntime()
       try {
-        val subsystem = _initialize(runtime, cwd, file.toString)
+        val subsystem = _initialize(runtime, cwd, Some(file.toString))
         given ExecutionContext = _execution_context(
           subsystem.globalRuntimeContext.config.dataStoreSpace,
           subsystem.globalRuntimeContext.config.entityStoreSpace
@@ -99,7 +183,7 @@ final class StartupEntityImportSpec
       When("bootstrapping the runtime")
       val runtime = new CncfRuntime()
       try {
-        val subsystem = _initialize(runtime, cwd, cwd.toString)
+        val subsystem = _initialize(runtime, cwd, Some(cwd.toString))
         given ExecutionContext = _execution_context(
           subsystem.globalRuntimeContext.config.dataStoreSpace,
           subsystem.globalRuntimeContext.config.entityStoreSpace
@@ -216,16 +300,123 @@ final class StartupEntityImportSpec
         runtime.closeEmbedding()
       }
     }
+
+    "import both explicit entity config and the default entity directory" in {
+      Given("a bootstrap cwd with both explicit entity config and a default entity.d directory")
+      val cwd = Files.createTempDirectory("cncf-startup-entity-override")
+      val dir = Files.createDirectories(cwd.resolve("entity.d"))
+      val defaultFile = dir.resolve("default.yaml")
+      val explicitFile = cwd.resolve("explicit.yaml")
+      Files.writeString(
+        defaultFile,
+        """entitystore:
+          |  - collection: test.1.person
+          |    records:
+          |      - id: test-1-entity-person-1742198400000-abcd1235
+          |        name: default-entity
+          |        age: 20
+          |""".stripMargin
+      )
+      Files.writeString(
+        explicitFile,
+        """entitystore:
+          |  - collection: test.1.person
+          |    records:
+          |      - id: test-1-entity-person-1742198400000-abcd1234
+          |        name: explicit-entity
+          |        age: 21
+          |""".stripMargin
+      )
+
+      When("bootstrapping the runtime")
+      val runtime = new CncfRuntime()
+      try {
+        val subsystem = _initialize(runtime, cwd, Some(explicitFile.toString))
+        given ExecutionContext = _execution_context(
+          subsystem.globalRuntimeContext.config.dataStoreSpace,
+          subsystem.globalRuntimeContext.config.entityStoreSpace
+        )
+
+        Then("both sources are imported in deterministic order")
+        val space = subsystem.globalRuntimeContext.config.entityStoreSpace
+        val explicit = _person(p1Id, "explicit-entity", 21)
+        val default = _person(p2Id, "default-entity", 20)
+        space.load(UnitOfWorkOp.EntityStoreLoad(explicit.id, _persistent)) shouldBe
+          Consequence.success(Some(explicit))
+        space.load(UnitOfWorkOp.EntityStoreLoad(default.id, _persistent)) shouldBe
+          Consequence.success(Some(default))
+      } finally {
+        runtime.closeEmbedding()
+      }
+    }
+
+    "do nothing when no explicit config and no default entity directory exist" in {
+      Given("a bootstrap cwd without explicit config or entity.d")
+      val cwd = Files.createTempDirectory("cncf-startup-entity-none")
+
+      When("bootstrapping the runtime")
+      val runtime = new CncfRuntime()
+      try {
+        val subsystem = _initialize(runtime, cwd, None)
+        given ExecutionContext = _execution_context(
+          subsystem.globalRuntimeContext.config.dataStoreSpace,
+          subsystem.globalRuntimeContext.config.entityStoreSpace
+        )
+
+        Then("startup succeeds without importing any entities")
+        val space = subsystem.globalRuntimeContext.config.entityStoreSpace
+        space.load(UnitOfWorkOp.EntityStoreLoad(p1Id, _persistent)) shouldBe Consequence.success(None)
+      } finally {
+        runtime.closeEmbedding()
+      }
+    }
+
+    "fail when an entity URL fetch fails" in {
+      Given("a bootstrap URL source whose fetch returns an error")
+      val cwd = Files.createTempDirectory("cncf-startup-entity-url-fail")
+      val server = _http_server("/entity.yaml", "not-found", 404)
+      server.start()
+
+      When("bootstrapping the runtime")
+      val runtime = new CncfRuntime()
+      try {
+        val url = s"http://127.0.0.1:${server.getAddress.getPort}/entity.yaml"
+        val result = runtime.initializeForEmbedding(
+          cwd = cwd,
+          args = Array(
+            s"--cncf.datastore.sqlite.path=${cwd.resolve("startup-import.sqlite").toString}",
+            s"--cncf.runtime.http.driver=real",
+            s"--cncf.import.entity.file=${url}"
+          ),
+          extraComponents = _extra_components
+        )
+
+        Then("startup import fails explicitly")
+        result match {
+          case Consequence.Success(_) =>
+            fail("expected startup import to fail")
+          case Consequence.Failure(conclusion) =>
+            conclusion.show should include("startup import URL fetch failed")
+        }
+      } finally {
+        runtime.closeEmbedding()
+        server.stop(0)
+      }
+    }
   }
 
   private def _initialize(
     runtime: CncfRuntime,
     cwd: Path,
-    importPath: String
+    importPath: Option[String]
   ) = {
+    val args = importPath match {
+      case Some(path) => _args(cwd, path)
+      case None => _args(cwd)
+    }
     val result = runtime.initializeForEmbedding(
       cwd = cwd,
-      args = _args(cwd, importPath),
+      args = args,
       extraComponents = _extra_components
     )
     result match {
@@ -238,12 +429,35 @@ final class StartupEntityImportSpec
 
   private def _args(
     cwd: Path,
-    importPath: String
+    importPath: String = ""
   ): Array[String] =
-    Array(
-      s"--cncf.datastore.sqlite.path=${cwd.resolve("startup-import.sqlite").toString}",
-      s"--cncf.import.entity.file=${importPath}"
-    )
+    if (importPath.isEmpty)
+      Array(
+        s"--cncf.datastore.sqlite.path=${cwd.resolve("startup-import.sqlite").toString}"
+      )
+    else
+      Array(
+        s"--cncf.datastore.sqlite.path=${cwd.resolve("startup-import.sqlite").toString}",
+        s"--cncf.import.entity.file=${importPath}"
+      )
+
+  private def _http_server(
+    path: String,
+    body: String,
+    status: Int = 200
+  ): HttpServer = {
+    val server = HttpServer.create(new InetSocketAddress(0), 0)
+    server.createContext(path, new HttpHandler {
+      def handle(exchange: HttpExchange): Unit = {
+        val bytes = body.getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        exchange.sendResponseHeaders(status, bytes.length.toLong)
+        val os = exchange.getResponseBody
+        try os.write(bytes)
+        finally os.close()
+      }
+    })
+    server
+  }
 
   private def _extra_components(
     subsystem: org.goldenport.cncf.subsystem.Subsystem

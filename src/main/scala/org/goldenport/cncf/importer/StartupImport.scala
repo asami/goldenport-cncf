@@ -13,7 +13,6 @@ import org.goldenport.cncf.context.{DataStoreContext, EntityStoreContext, Execut
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSeed, DataStoreSeedEntry, DataStoreSpace}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityStoreSeed, EntityStoreSeedEntry, EntityStoreSpace}
 import org.goldenport.cncf.entity.runtime.EntityCollection
-import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.goldenport.record.Record
@@ -28,7 +27,15 @@ import org.yaml.snakeyaml.Yaml
 object StartupImport {
   val DataFileKey = "cncf.import.data.file"
   val EntityFileKey = "cncf.import.entity.file"
+  val DefaultDataDirName = "data.d"
+  val DefaultEntityDirName = "entity.d"
+  private val _url_source_path = Path.of("startup-import-url")
   private val _data_import_sequence = new AtomicLong(0L)
+  private sealed trait _ImportSource
+  private object _ImportSource {
+    final case class Local(path: Path) extends _ImportSource
+    final case class Url(url: String) extends _ImportSource
+  }
 
   def run(
     cwd: Path,
@@ -49,17 +56,10 @@ object StartupImport {
     configuration: ResolvedConfiguration,
     dataStoreSpace: DataStoreSpace
   )(using ctx: ExecutionContext): Consequence[Unit] =
-    ConfigurationAccess.getString(configuration, DataFileKey) match {
-      case None =>
-        Consequence.unit
-      case Some(raw) if raw.trim.isEmpty =>
-        Consequence.unit
-      case Some(raw) =>
-        _resolve_paths(cwd, raw).flatMap { paths =>
-          paths.foldLeft(Consequence.unit) { (z, path) =>
-            z.flatMap(_ => _import_data_file(path, dataStoreSpace))
-          }
-        }
+    _resolve_data_sources(cwd, configuration).flatMap { paths =>
+      paths.foldLeft(Consequence.unit) { (z, path) =>
+        z.flatMap(_ => _import_data_file(path, dataStoreSpace))
+      }
     }
 
   private def _import_entity(
@@ -68,41 +68,78 @@ object StartupImport {
     entityStoreSpace: EntityStoreSpace,
     subsystem: Subsystem
   )(using ctx: ExecutionContext): Consequence[Unit] =
-    ConfigurationAccess.getString(configuration, EntityFileKey) match {
-      case None =>
-        Consequence.unit
-      case Some(raw) if raw.trim.isEmpty =>
-        Consequence.unit
-      case Some(raw) =>
-        _resolve_paths(cwd, raw).flatMap { paths =>
-          paths.foldLeft(Consequence.unit) { (z, path) =>
-            z.flatMap(_ => _import_entity_file(path, entityStoreSpace, subsystem))
-          }
-        }
+    _resolve_entity_sources(cwd, configuration).flatMap { paths =>
+      paths.foldLeft(Consequence.unit) { (z, path) =>
+        z.flatMap(_ => _import_entity_file(path, entityStoreSpace, subsystem))
+      }
     }
 
-  private def _reject_entity_import(
+  private def _resolve_data_sources(
+    cwd: Path,
     configuration: ResolvedConfiguration
-  ): Consequence[Unit] =
-    ConfigurationAccess.getString(configuration, EntityFileKey) match {
-      case None =>
-        Consequence.unit
-      case Some(_) =>
-        Consequence.unit
+  )(using ctx: ExecutionContext): Consequence[Vector[_ImportSource]] =
+    _resolve_sources(cwd, configuration, DataFileKey, DefaultDataDirName)
+
+  private def _resolve_entity_sources(
+    cwd: Path,
+    configuration: ResolvedConfiguration
+  )(using ctx: ExecutionContext): Consequence[Vector[_ImportSource]] =
+    _resolve_sources(cwd, configuration, EntityFileKey, DefaultEntityDirName)
+
+  private def _resolve_sources(
+    cwd: Path,
+    configuration: ResolvedConfiguration,
+    key: String,
+    defaultDirName: String
+  )(using ctx: ExecutionContext): Consequence[Vector[_ImportSource]] = {
+    val explicit = ConfigurationAccess.getString(configuration, key).filter(_.trim.nonEmpty)
+    val default = _default_import_path(cwd, defaultDirName)
+    (explicit, default) match {
+      case (Some(raw), Some(dir)) =>
+        _resolve_source(cwd, raw, allowDirectory = true).flatMap { explicitPaths =>
+          _resolve_source(cwd, dir.toString, allowDirectory = true).map(defaultPaths => explicitPaths ++ defaultPaths)
+        }
+      case (Some(raw), None) =>
+        _resolve_source(cwd, raw, allowDirectory = true)
+      case (None, Some(dir)) =>
+        _resolve_source(cwd, dir.toString, allowDirectory = true)
+      case (None, None) =>
+        Consequence.success(Vector.empty)
     }
+  }
+
+  private def _resolve_source(
+    cwd: Path,
+    raw: String,
+    allowDirectory: Boolean
+  )(using ctx: ExecutionContext): Consequence[Vector[_ImportSource]] =
+    if (_is_url(raw))
+      Consequence.success(Vector(_ImportSource.Url(raw.trim)))
+    else
+      _resolve_paths(cwd, raw).map(_.map(_ImportSource.Local.apply))
 
   private def _import_data_file(
-    path: Path,
+    source: _ImportSource,
     dataStoreSpace: DataStoreSpace
   )(using ctx: ExecutionContext): Consequence[Unit] =
-    _load_data_seed(path).flatMap(seed => _store_data_seed(dataStoreSpace, seed))
+    source match {
+      case _ImportSource.Local(path) =>
+        _load_data_seed(path).flatMap(seed => _store_data_seed(dataStoreSpace, seed))
+      case _ImportSource.Url(url) =>
+        _load_yaml_from_url(url).flatMap(_parse_data_seed(_url_source_path, _)).flatMap(seed => _store_data_seed(dataStoreSpace, seed))
+    }
 
   private def _import_entity_file(
-    path: Path,
+    source: _ImportSource,
     entityStoreSpace: EntityStoreSpace,
     subsystem: Subsystem
   )(using ctx: ExecutionContext): Consequence[Unit] =
-    _load_entity_seed(path).flatMap(seed => _store_entity_seed(path, entityStoreSpace, subsystem, seed))
+    source match {
+      case _ImportSource.Local(path) =>
+        _load_entity_seed(path).flatMap(seed => _store_entity_seed(path, entityStoreSpace, subsystem, seed))
+      case _ImportSource.Url(url) =>
+        _load_yaml_from_url(url).flatMap(_parse_entity_seed(_url_source_path, _)).flatMap(seed => _store_entity_seed(_url_source_path, entityStoreSpace, subsystem, seed))
+    }
 
   private def _store_data_seed(
     dataStoreSpace: DataStoreSpace,
@@ -190,6 +227,17 @@ object StartupImport {
       cwd.resolve(path).normalize
   }
 
+  private def _default_import_path(
+    cwd: Path,
+    dirname: String
+  ): Option[Path] = {
+    val path = cwd.resolve(dirname).normalize
+    if (Files.exists(path) && Files.isDirectory(path) && Files.isReadable(path))
+      Some(path)
+    else
+      None
+  }
+
   private def _is_supported_yaml(
     path: Path
   ): Boolean = {
@@ -208,6 +256,32 @@ object StartupImport {
       case e: Throwable if scala.util.control.NonFatal(e) =>
         Consequence.failure(s"failed to load yaml ${path}: ${e.getMessage}")
     }
+
+  private def _load_yaml_from_url(
+    url: String
+  )(using ctx: ExecutionContext): Consequence[Any] = {
+    val uow = new UnitOfWork(ctx)
+    val response = uow.execute(UnitOfWorkOp.HttpGet(url))
+    if (response.code != 200) {
+      Consequence.failure(s"startup import URL fetch failed: ${url} (HTTP ${response.code})")
+    } else {
+      response.getString match {
+        case Some(body) =>
+          try {
+            Consequence.success(new Yaml().load[Any](body))
+          } catch {
+            case e: Throwable if scala.util.control.NonFatal(e) =>
+              Consequence.failure(s"failed to load yaml ${url}: ${e.getMessage}")
+          }
+        case None =>
+          Consequence.failure(s"startup import URL returned empty body: ${url}")
+      }
+    }
+  }
+
+  private def _is_url(raw: String): Boolean =
+    val s = raw.trim.toLowerCase
+    s.startsWith("http://") || s.startsWith("https://")
 
   private def _parse_data_seed(
     path: Path,
@@ -485,7 +559,7 @@ object StartupImport {
         name = "startup-import",
         parent = None,
         observabilityContext = observability,
-        httpDriverOption = Some(FakeHttpDriver.okText("nop")),
+        httpDriverOption = Some(runtimeConfig.httpDriver),
         datastore = Some(DataStoreContext(runtimeConfig.dataStoreSpace)),
         entitystore = Some(EntityStoreContext(runtimeConfig.entityStoreSpace))
       ),
