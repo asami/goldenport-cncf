@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path, Paths}
 import java.util.ServiceLoader
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
+import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.configuration.{Configuration, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.cli.{CncfRuntime, RunMode}
@@ -38,10 +39,11 @@ object CncfMain extends GlobalObservable {
     val configuration = _resolve_configuration(cwd)
     val (reposResult, args1, noDefaultComponents) =
       _take_component_repository(configuration, args, cwd)
-    val (discover, args2) = _take_discover_classes(configuration, args1)
-    val (workspace, args3) = _take_workspace(configuration, args2)
-    val (forceExit, args4) = _take_force_exit(configuration, args3)
-    val (noExit, rest) = _take_no_exit(configuration, args4)
+    val (factoryClasses, args2) = _take_component_factory_classes(configuration, args1)
+    val (discover, args3) = _take_discover_classes(configuration, args2)
+    val (workspace, args4) = _take_workspace(configuration, args3)
+    val (forceExit, args5) = _take_force_exit(configuration, args4)
+    val (noExit, rest) = _take_no_exit(configuration, args5)
     val enabled = discover
 
     val code: Int =
@@ -53,7 +55,7 @@ object CncfMain extends GlobalObservable {
             Console.err.println(message)
             2
           case Right(specs) =>
-            val baseExtras = _component_extra_function(specs, enabled, workspace)
+            val baseExtras = _component_extra_function(specs, enabled, workspace, factoryClasses)
             val extras = _trace_component_dir_extras(baseExtras)
             CncfRuntime.runWithExtraComponents(rest, extras)
         }
@@ -171,6 +173,33 @@ object CncfMain extends GlobalObservable {
     (enabled, rest)
   }
 
+  private def _take_component_factory_classes(
+    configuration: ResolvedConfiguration,
+    args: Array[String]
+  ): (Vector[String], Array[String]) = {
+    val classes = Vector.newBuilder[String]
+    val rest = Vector.newBuilder[String]
+    var i = 0
+    while (i < args.length) {
+      val current = args(i)
+      if (current == "--component-factory-class" && i + 1 < args.length) {
+        classes += args(i + 1)
+        i = i + 2
+      } else if (current.startsWith("--component-factory-class=")) {
+        classes += current.drop("--component-factory-class=".length)
+        i = i + 1
+      } else {
+        rest += current
+        i = i + 1
+      }
+    }
+    val configClasses =
+      _config_string(configuration, "cncf.runtime.component-factory-class")
+        .toVector
+        .flatMap(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
+    ((configClasses ++ classes.result()).distinct, rest.result().toArray)
+  }
+
   private def _take_workspace(
     configuration: ResolvedConfiguration,
     args: Array[String]
@@ -239,7 +268,8 @@ object CncfMain extends GlobalObservable {
   private def _component_extra_function(
     specs: Vector[ComponentRepository.Specification],
     enabled: Boolean,
-    workspace: Option[Path]
+    workspace: Option[Path],
+    factoryClasses: Vector[String]
   ): Subsystem => Seq[Component] = {
     (subsystem: Subsystem) => {
       val components = Vector.newBuilder[Component]
@@ -263,10 +293,53 @@ object CncfMain extends GlobalObservable {
       if (specs.nonEmpty) {
         addAll(_discover_from_repositories(specs)(subsystem))
       }
+      if (factoryClasses.nonEmpty) {
+        addAll(_discover_from_component_factories(factoryClasses)(subsystem))
+      }
       components ++= seen.values
       components.result()
     }
   }
+
+  private def _discover_from_component_factories(
+    classNames: Seq[String]
+  ): Subsystem => Seq[Component] =
+    (subsystem: Subsystem) => {
+      val params = ComponentCreate(subsystem, ComponentOrigin.Main)
+      classNames.flatMap { name =>
+        _load_component_factory(name) match {
+          case Left(message) =>
+            observe_warn(message)
+            Nil
+          case Right(factory) =>
+            try {
+              factory.create(params)
+            } catch {
+              case NonFatal(e) =>
+                observe_warn(s"component factory failed class=${name} message=${e.getMessage}")
+                Nil
+            }
+        }
+      }
+    }
+
+  private def _load_component_factory(
+    className: String
+  ): Either[String, Component.Factory] =
+    try {
+      val loader = Thread.currentThread.getContextClassLoader
+      val clazz = Class.forName(className, true, loader)
+      if (!classOf[Component.Factory].isAssignableFrom(clazz)) {
+        Left(s"component factory class is not a Component.Factory: ${className}")
+      } else {
+        val ctor = clazz.getDeclaredConstructor()
+        ctor.setAccessible(true)
+        Right(ctor.newInstance().asInstanceOf[Component.Factory])
+      }
+    } catch {
+      case NonFatal(e) =>
+        Left(s"failed to load component factory class=${className} message=${e.getMessage}")
+    }
 
   private def _trace_component_dir_extras(
     extras: Subsystem => Seq[Component]
