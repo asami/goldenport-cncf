@@ -23,6 +23,7 @@ import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.protocol.{Property, Request, Response}
 
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
+import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.protocol.OperationResponseFormatter
@@ -32,7 +33,7 @@ import org.goldenport.cncf.security.IngressSecurityResolver
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -229,15 +230,29 @@ final class Subsystem(
         PathPreNormalizer.rewriteSegments(segments, _http_run_mode, _alias_resolver)
       normalizedSegments match {
         case Vector(componentname, servicename, operationname) =>
-          val locator = NameLocator(componentname)
-          for {
-            component <- _component_space.find(locator)
-            service <- component.protocol.services.services.find(_.name == servicename)
-            operation <- _find_operation(service, operationname)
-          } yield (component, service, operation)
+          _resolve_route_via_resolver(componentname, servicename, operationname)
         case _ =>
           None
       }
+    }
+  }
+
+  private def _resolve_route_via_resolver(
+    componentname: String,
+    servicename: String,
+    operationname: String
+  ): Option[(Component, ServiceDefinition, OperationDefinition)] = {
+    val selector = s"$componentname.$servicename.$operationname"
+    _resolver.resolve(selector, allowPrefix = false, allowImplicit = false) match {
+      case ResolutionResult.Resolved(_, component, service, operation) =>
+        val locator = NameLocator(component)
+        for {
+          component <- _component_space.find(locator)
+          service <- component.protocol.services.services.find(_.name == service)
+          operation <- _find_operation(service, operation)
+        } yield (component, service, operation)
+      case _ =>
+        None
     }
   }
 
