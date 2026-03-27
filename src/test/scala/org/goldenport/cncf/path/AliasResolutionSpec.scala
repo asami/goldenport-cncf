@@ -23,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan. 19, 2026
  *  version Feb.  1, 2026
- * @version Mar. 13, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AliasResolutionSpec
@@ -172,6 +172,7 @@ final class AliasResolutionSpec
       config = runtimeConfig,
       aliasResolver = resolver,
       runtimeMode = mode,
+      commandExecutionMode = None,
       runtimeVersion = CncfVersion.current,
       subsystemName = GlobalRuntimeContext.SubsystemName,
       subsystemVersion = CncfVersion.current

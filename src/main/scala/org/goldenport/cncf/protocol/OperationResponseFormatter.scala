@@ -8,6 +8,7 @@ import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.RuntimeDefaults
 import org.goldenport.cncf.config.ConfigurationAccess
+import scala.xml.{Elem, NodeSeq, Text}
 
 /*
  * @since   Mar. 13, 2026
@@ -15,7 +16,7 @@ import org.goldenport.cncf.config.ConfigurationAccess
  * @author  ASAMI, Tomoharu
  */
 object OperationResponseFormatter {
-  private val _supported_formats = Set("json", "yaml", "text")
+  private val _supported_formats = Set("json", "yaml", "xml", "text")
   private val _supported_shapes = Set("data", "envelope")
 
   def toResponse(
@@ -48,6 +49,8 @@ object OperationResponseFormatter {
         Response.Json(RecordEncoder.json(record))
       case "yaml" =>
         Response.Yaml(RecordEncoder.yaml(record))
+      case "xml" =>
+        Response.Xml(_record_to_xml(record))
       case "text" =>
         Response.Scalar(record.print)
       case _ =>
@@ -105,6 +108,38 @@ object OperationResponseFormatter {
     shape: String
   ): String =
     if (shape == "envelope" && format == "text") "yaml" else format
+
+  private def _record_to_xml(
+    record: Record
+  ): String = {
+    val nodes = record.fields.map { field =>
+      _field_to_node(field.key, field.value.single)
+    }
+    _elem("record", nodes).toString
+  }
+
+  private def _field_to_node(
+    name: String,
+    value: Any
+  ): scala.xml.Node =
+    value match {
+      case r: Record =>
+        _elem(name, r.fields.map(f => _field_to_node(f.key, f.value.single)))
+      case xs: Iterable[?] =>
+        _elem(name, xs.toVector.zipWithIndex.map { case (v, i) =>
+          _field_to_node(s"item", v)
+        })
+      case null =>
+        _elem(name, NodeSeq.Empty)
+      case other =>
+        _elem(name, Text(other.toString))
+    }
+
+  private def _elem(
+    name: String,
+    children: Seq[scala.xml.Node]
+  ): Elem =
+    Elem(null, name, scala.xml.Null, scala.xml.TopScope, minimizeEmpty = children.isEmpty, children*)
 
   private def _envelope_scalar(
     request: Request,

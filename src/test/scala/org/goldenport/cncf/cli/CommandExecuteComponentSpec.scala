@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  9, 2026
  *  version Jan. 18, 2026
- * @version Mar. 25, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
@@ -304,6 +304,18 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
       }
     }
 
+    "render RecordResponse as XML when --format xml is specified" in {
+      val subsystem = _subsystem_with_domain()
+      val req = CncfRuntime.parseCommandArgs(subsystem, Array("domain.meta.describe", "--format", "xml")).toOption.getOrElse(fail("parse failed"))
+      subsystem.execute(req) match {
+        case Consequence.Success(Response.Xml(value)) =>
+          value.startsWith("<") shouldBe true
+          value.contains("<type>") shouldBe true
+        case other =>
+          fail(s"expected xml response but got: $other")
+      }
+    }
+
     "render RecordResponse as text when --format text is specified" in {
       val subsystem = _subsystem_with_domain()
       val req = CncfRuntime.parseCommandArgs(subsystem, Array("domain.meta.describe", "--format", "text")).toOption.getOrElse(fail("parse failed"))
@@ -323,6 +335,21 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
           value.contains("type:") shouldBe true
         case other =>
           fail(s"expected yaml fallback response but got: $other")
+      }
+    }
+
+    "render envelope RecordResponse as XML when envelope and xml are specified" in {
+      val subsystem = _subsystem_with_domain()
+      val req = CncfRuntime.parseCommandArgs(
+        subsystem,
+        Array("domain.meta.describe", "--textus.output.shape", "envelope", "--textus.output.format", "xml")
+      ).toOption.getOrElse(fail("parse failed"))
+      subsystem.execute(req) match {
+        case Consequence.Success(Response.Xml(value)) =>
+          value.contains("<textus-execution>") shouldBe true
+          value.contains("<data>") shouldBe true
+        case other =>
+          fail(s"expected xml envelope response but got: $other")
       }
     }
 

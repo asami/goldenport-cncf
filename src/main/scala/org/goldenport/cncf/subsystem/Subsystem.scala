@@ -33,7 +33,7 @@ import org.goldenport.cncf.security.IngressSecurityResolver
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
- * @version Mar. 26, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -165,6 +165,7 @@ final class Subsystem(
   }
 
   def execute(request: Request): Consequence[Response] = {
+    val domainRequest = _domain_request(request)
     val r: Consequence[Response] = for {
       route <- _resolve_route(request) match {
         case Some(r) =>
@@ -175,7 +176,7 @@ final class Subsystem(
       response <- {
         val (component, _, _) = route
         IngressSecurityResolver.resolve(request).flatMap { security =>
-          component.logic.makeOperationRequest(request).flatMap { r =>
+          component.logic.makeOperationRequest(domainRequest).flatMap { r =>
           r match {
             case action: Action =>
               component.logic.executeAction(action, security.executionContext).flatMap { opres =>
@@ -219,6 +220,22 @@ final class Subsystem(
     response: OperationResponse
   ): Response =
     OperationResponseFormatter.toResponse(request, response, _http_run_mode)
+
+  private def _domain_request(
+    request: Request
+  ): Request =
+    request.copy(
+      properties = request.properties.filterNot(p => _is_framework_or_query_property(p.name))
+    )
+
+  private def _is_framework_or_query_property(
+    name: String
+  ): Boolean =
+    name != null && (
+      name.startsWith("textus.") ||
+      name.startsWith("cncf.") ||
+      name.startsWith("query.")
+    )
 
   private def _resolve_route(
     req: HttpRequest

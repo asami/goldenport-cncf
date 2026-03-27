@@ -21,7 +21,7 @@ import org.goldenport.cncf.protocol.OperationResponseFormatter
  *  version Jan.  3, 2026
  *  version Jan. 21, 2026
  *  version Feb. 19, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Service extends ProtocolService with Service.CCore.Holder {
@@ -121,6 +121,12 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
           _content_type_json(),
           json
         )
+      case Response.Xml(xml) =>
+        _string_response(
+          HttpStatus.Ok,
+          _content_type_xml(),
+          xml
+        )
       case Response.Scalar(value) =>
         _string_response(
           HttpStatus.Ok,
@@ -153,6 +159,9 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
 
   private def _content_type_json(): ContentType =
     ContentType(MimeType("application/json"), Some(StandardCharsets.UTF_8))
+
+  private def _content_type_xml(): ContentType =
+    ContentType(MimeType("application/xml"), Some(StandardCharsets.UTF_8))
 
   private def _content_type_text(): ContentType =
     ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8))

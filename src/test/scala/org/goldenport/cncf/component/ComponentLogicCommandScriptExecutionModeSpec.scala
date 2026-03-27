@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 24, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicCommandScriptExecutionModeSpec
@@ -185,6 +185,7 @@ final class ComponentLogicCommandScriptExecutionModeSpec
       config = runtimeConfig,
       aliasResolver = AliasResolver.empty,
       runtimeMode = mode,
+      commandExecutionMode = None,
       runtimeVersion = CncfVersion.current,
       subsystemName = GlobalRuntimeContext.SubsystemName,
       subsystemVersion = CncfVersion.current

@@ -21,7 +21,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan. 20, 2026
  *  version Feb.  1, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminSystemPingExecutionSpec
@@ -135,6 +135,7 @@ final class AdminSystemPingExecutionSpec
       config = runtimeConfig,
       aliasResolver = resolver,
       runtimeMode = mode,
+      commandExecutionMode = None,
       runtimeVersion = CncfVersion.current,
       subsystemName = GlobalRuntimeContext.SubsystemName,
       subsystemVersion = CncfVersion.current
