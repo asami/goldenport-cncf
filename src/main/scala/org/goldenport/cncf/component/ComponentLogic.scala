@@ -21,7 +21,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  * @since   Jan.  3, 2026
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Mar. 24, 2026
+ * @version Mar. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -80,20 +80,22 @@ case class ComponentLogic(
     action: Action,
     ctx: ExecutionContext
   ): Consequence[OperationResponse] = {
+    val actionscope = component.scopeContext.createChildScope(ScopeKind.Action, action.name)
+    val scopedCtx = ctx.withScope(actionscope)
     val task = ActionTask(ActionId.generate(), action, component.actionEngine, Some(component))
     _resolve_operation_kind(action) match {
       case Some(ComponentLogic.OperationKind.Query) =>
-        _execute_query_action(task, ctx)
+        _execute_query_action(task, scopedCtx)
       case Some(ComponentLogic.OperationKind.Command) =>
-        _execute_command_action(task, action, ctx)
+        _execute_command_action(task, action, scopedCtx)
       case None =>
         action match {
           case _: QueryAction =>
-            _execute_query_action(task, ctx)
+            _execute_query_action(task, scopedCtx)
           case _: CommandAction =>
-            _execute_command_action(task, action, ctx)
+            _execute_command_action(task, action, scopedCtx)
           case _ =>
-            val jobid = submitJob(List(task), ctx)
+            val jobid = submitJob(List(task), scopedCtx)
             Consequence.success(OperationResponse.Scalar(jobid.value))
         }
     }

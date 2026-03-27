@@ -58,7 +58,14 @@ class EntityStoreSpace {
           def toRecord(e: T): org.goldenport.record.Record = tc.toRecord(e)
           def collection(e: T): EntityCollectionId = tc.id(e).collection
         }
-        create(EntityStoreCreate(entry.entity, createTc)).map(_ => ())
+        given EntityPersistentCreate[T] = createTc
+        val cid = tc.id(entry.entity).collection
+        for {
+          entitystore <- _by_collection(cid)
+          _ <- entitystore.create(entry.entity).map(_ => ()).recoverWith { case _ =>
+            entitystore.save(entry.entity).map(_ => ())
+          }
+        } yield ()
       }
     }
 

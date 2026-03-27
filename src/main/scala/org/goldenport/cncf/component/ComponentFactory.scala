@@ -1,44 +1,47 @@
 package org.goldenport.cncf.component
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import cats.effect.Ref
 import cats.data.State
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.configuration.ResolvedConfiguration
+import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.backend.collaborator.{Collaborator, CollaboratorFactory}
 import org.goldenport.cncf.collaborator.api
 import org.goldenport.cncf.component.repository.{ComponentRepository, ComponentRepositorySpace}
 import org.goldenport.cncf.component.repository.ComponentSource
 import org.goldenport.cncf.subsystem.Subsystem
-import org.simplemodeling.model.datatype.EntityId
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateSpace, AggregateDefinition}
 import org.goldenport.cncf.event.{ActionCallDispatcher, EventBus, EventReception, EntitySubscriptionLimit}
-import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimePlan, EntitySpace, EntityStorage, PartitionedMemoryRealm, PartitionStrategy, WorkingSetDefinition, WorkingSetInitializer}
+import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimeDescriptor, EntityRuntimePlan, EntitySpace, EntityStorage, PartitionedMemoryRealm, PartitionStrategy, WorkingSetDefinition, WorkingSetInitializer}
 import org.goldenport.cncf.entity.view.{ViewDefinition, ViewBuilder, ViewCollection, ViewSpace}
 import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.statemachine.{CollectionStateMachinePlanner, CollectionStateMachinePlannerProvider, CollectionTransitionRule, CollectionTransitionRuleProvider, TransitionTrigger, TransitionRule}
+import org.goldenport.cncf.naming.NamingConventions
 import scala.util.Try
 
 /*
  * @since   Jan. 30, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 26, 2026
+ * @version Mar. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
   private val _component_repository_space: ComponentRepositorySpace = ComponentRepositorySpace(),
-  private val _collaborators: CollaboratorFactory = CollaboratorFactory.empty
+  private val _collaborators: CollaboratorFactory = CollaboratorFactory.empty,
+  private val _runtime_entity_descriptors: Vector[EntityRuntimeDescriptor] = Vector.empty
 ) {
   def discover(): Vector[Component] = {
     val cs = _component_repository_space.discover()
-    val xs = cs
-      .map(_initialize_special_component)
-      .map(_bootstrap_collections)
-    xs
+    cs.map(bootstrap)
   }
+
+  def bootstrap(component: Component): Component =
+    _bootstrap_collections(_initialize_special_component(component))
 
   private def _initialize_special_component(p: Component): Component =
     p match {
@@ -188,9 +191,9 @@ final class ComponentFactory(
     // When entity definitions are available, this bootstrap should only
     // construct descriptor/storage and avoid any legacy realm-based wiring.
     val descriptor = EntityDescriptor(
-      collectionId = org.simplemodeling.model.datatype.EntityCollectionId("sys", "sys", name),
+      collectionId = _bootstrap_collection_id(component, name),
       plan = plan,
-      persistent = _entity_persistent_any
+      persistent = _bootstrap_entity_persistent(component, name)
     )
 
     plan.memoryPolicy match {
@@ -224,9 +227,9 @@ final class ComponentFactory(
       var storage = EntityStorage(storeRealm)
       val legacymemoryplan = _legacy_memory_plan(name)
       val descriptor = EntityDescriptor(
-        collectionId = org.simplemodeling.model.datatype.EntityCollectionId("sys", "sys", name),
+        collectionId = _bootstrap_collection_id(component, name),
         plan = legacymemoryplan,
-        persistent = _entity_persistent_any
+        persistent = _bootstrap_entity_persistent(component, name)
       )
 
       val memoryRealm = new PartitionedMemoryRealm[Any](
@@ -354,13 +357,18 @@ final class ComponentFactory(
     component: Component
   ): Vector[String] = {
     val names =
-      component.core.protocol.services.services
-        .map(_.name)
-        .filterNot(_ == "meta")
-        .filterNot(_ == "system")
-        .toVector
+      if (component.aggregateDefinitions.nonEmpty)
+        component.aggregateDefinitions.map(_.entityName).toVector
+      else if (component.viewDefinitions.nonEmpty)
+        component.viewDefinitions.map(_.entityName).toVector
+      else
+        component.core.protocol.services.services
+          .map(_.name)
+          .filterNot(_ == "meta")
+          .filterNot(_ == "system")
+          .toVector
     // Fallback collection when no service-derived names exist
-    if (names.nonEmpty) names else Vector("default")
+    if (names.nonEmpty) names.distinct else Vector("default")
   }
 
   private def _bootstrap_aggregates(
@@ -507,13 +515,224 @@ final class ComponentFactory(
 
   private def _default_entity_runtime_plans(
     component: Component
-  ): Vector[EntityRuntimePlan[Any]] =
-    component.factory match {
-      case Some(m: EntityRuntimePlanProvider) =>
-        m.entityRuntimePlans
-      case _ =>
-        Vector.empty
+  ): Vector[EntityRuntimePlan[Any]] = {
+    val descriptors = _runtime_descriptors_for(component)
+    if (descriptors.nonEmpty)
+      descriptors.map(_.toPlan)
+    else
+      component.factory match {
+        case Some(m: EntityRuntimePlanProvider) =>
+          m.entityRuntimePlans
+        case _ if component.aggregateDefinitions.nonEmpty || component.viewDefinitions.nonEmpty =>
+          _entity_collection_names(component).map(_legacy_memory_plan)
+        case _ =>
+          Vector.empty
+      }
+  }
+
+  private def _bootstrap_collection_id(
+    component: Component,
+    entityname: String
+  ): EntityCollectionId =
+    _runtime_descriptor_for(component, entityname)
+      .map(_.collectionId)
+      .orElse {
+        _generated_entity_module(component, entityname)
+          .flatMap(_extract_collection_id)
+      }
+      .getOrElse(EntityCollectionId("sys", "sys", entityname))
+
+  private def _bootstrap_entity_persistent(
+    component: Component,
+    entityname: String
+  ): EntityPersistent[Any] = {
+    val module = _generated_entity_module(component, entityname)
+    val persistent =
+      module.flatMap(_extract_entity_persistent).orElse {
+        _generated_entity_persistent_module(component, entityname).flatMap(_as_entity_persistent)
+      }
+    persistent.getOrElse(_entity_persistent_any)
+  }
+
+  private def _runtime_descriptors_for(
+    component: Component
+  ): Vector[EntityRuntimeDescriptor] = {
+    val entities = _entity_collection_names(component).map(_.toLowerCase).toSet
+    _runtime_entity_descriptors.filter { d =>
+      val entity = d.entityName.trim.toLowerCase
+      val collection = d.collectionId.name.trim.toLowerCase
+      entities.contains(entity) || entities.contains(collection)
     }
+  }
+
+  private def _runtime_descriptor_for(
+    component: Component,
+    entityname: String
+  ): Option[EntityRuntimeDescriptor] = {
+    val normalized = entityname.trim.toLowerCase
+    _runtime_descriptors_for(component).find { d =>
+      d.entityName.trim.toLowerCase == normalized || d.collectionId.name.trim.toLowerCase == normalized
+    }
+  }
+
+  private def _generated_entity_persistent_module(
+    component: Component,
+    entityname: String
+  ): Option[AnyRef] = {
+    val packagename = Option(component.getClass.getPackage).map(_.getName).filter(_.nonEmpty)
+    val classname = _entity_class_name(entityname)
+    val candidates = packagename.toVector.flatMap { pkg =>
+      Vector(
+        s"${pkg}.entity.${classname}$$given_EntityPersistent_${classname}$$",
+        s"${pkg}.entity.read.${classname}$$given_EntityPersistent_${classname}$$",
+        s"${pkg}.entity.aggregate.${classname}$$given_EntityPersistent_${classname}$$",
+        s"${pkg}.entity.view.${classname}$$given_EntityPersistent_${classname}$$",
+        s"${pkg}.entity.operation.${classname}$$given_EntityPersistent_${classname}$$"
+      )
+    }
+    val loader = component.getClass.getClassLoader
+    candidates.iterator.flatMap(name => _load_scala_module(loader, name)).toSeq.headOption
+  }
+
+  private def _generated_entity_module(
+    component: Component,
+    entityname: String
+  ): Option[AnyRef] = {
+    val packagename = Option(component.getClass.getPackage).map(_.getName).filter(_.nonEmpty)
+    val classname = _entity_class_name(entityname)
+    val candidates = packagename.toVector.flatMap { pkg =>
+      Vector(
+        s"${pkg}.entity.${classname}$$",
+        s"${pkg}.entity.aggregate.${classname}$$",
+        s"${pkg}.entity.operation.${classname}$$",
+        s"${pkg}.entity.read.${classname}$$",
+        s"${pkg}.entity.view.${classname}$$"
+      )
+    }
+    val loader = component.getClass.getClassLoader
+    candidates.iterator.flatMap(name => _load_scala_module(loader, name)).toSeq.headOption
+  }
+
+  private def _entity_class_name(
+    entityname: String
+  ): String = {
+    val normalized = NamingConventions.toNormalizedSegment(entityname)
+    normalized
+      .split("-")
+      .toVector
+      .filter(_.nonEmpty)
+      .map(s => s.head.toUpper + s.drop(1))
+      .mkString
+  }
+
+  private def _load_scala_module(
+    loader: ClassLoader,
+    className: String
+  ): Option[AnyRef] =
+    try {
+      val cls = Class.forName(className, true, loader)
+      val field = cls.getField("MODULE$")
+      Option(field.get(null).asInstanceOf[AnyRef])
+    } catch {
+      case _: Throwable => None
+    }
+
+  private def _extract_collection_id(
+    module: AnyRef
+  ): Option[EntityCollectionId] =
+    module.getClass.getMethods.iterator
+      .filter(m => m.getParameterCount == 0 && m.getName == "collectionId")
+      .flatMap(m => _invoke_zero_arg(module, m).collect { case x: EntityCollectionId => x })
+      .toSeq
+      .headOption
+
+  private def _extract_entity_persistent(
+    module: AnyRef
+  ): Option[EntityPersistent[Any]] = {
+    val methods = module.getClass.getMethods.iterator.toVector
+    val fields = module.getClass.getFields.iterator.toVector
+    val fromNamedMethods =
+      methods
+        .filter(m => m.getParameterCount == 0 && m.getName.startsWith("given_EntityPersistent"))
+        .flatMap(m => _invoke_zero_arg(module, m))
+        .headOption
+    val fromTypedMethods =
+      methods
+        .filter(m => m.getParameterCount == 0)
+        .flatMap(m => _invoke_zero_arg(module, m))
+        .find(x => _as_entity_persistent(x).nonEmpty)
+    val fromNamedFields =
+      fields
+        .filter(_.getName.startsWith("given_EntityPersistent"))
+        .flatMap(f => _read_field(module, f))
+        .headOption
+    val fromTypedFields =
+      fields
+        .flatMap(f => _read_field(module, f))
+        .find(x => _as_entity_persistent(x).nonEmpty)
+    fromNamedMethods.orElse(fromTypedMethods).orElse(fromNamedFields).orElse(fromTypedFields).flatMap(_as_entity_persistent)
+  }
+
+  private def _invoke_zero_arg(
+    module: AnyRef,
+    method: java.lang.reflect.Method
+  ): Option[Any] =
+    try {
+      val target = if (java.lang.reflect.Modifier.isStatic(method.getModifiers)) null else module
+      Option(method.invoke(target))
+    } catch {
+      case _: Throwable => None
+    }
+
+  private def _read_field(
+    module: AnyRef,
+    field: java.lang.reflect.Field
+  ): Option[Any] =
+    try {
+      val target = if (java.lang.reflect.Modifier.isStatic(field.getModifiers)) null else module
+      Option(field.get(target))
+    } catch {
+      case _: Throwable => None
+    }
+
+  private def _as_entity_persistent(
+    raw: Any
+  ): Option[EntityPersistent[Any]] =
+    raw match {
+      case m: EntityPersistent[?] => Some(m.asInstanceOf[EntityPersistent[Any]])
+      case m: AnyRef if _looks_like_entity_persistent(m) =>
+        Some(new EntityPersistent[Any] {
+          def id(e: Any): EntityId =
+            _invoke_entity_persistent(m, "id", e).asInstanceOf[EntityId]
+
+          def toRecord(e: Any): Record =
+            _invoke_entity_persistent(m, "toRecord", e).asInstanceOf[Record]
+
+          def fromRecord(r: Record): Consequence[Any] =
+            _invoke_entity_persistent(m, "fromRecord", r).asInstanceOf[Consequence[Any]]
+        })
+      case _ => None
+    }
+
+  private def _looks_like_entity_persistent(
+    raw: AnyRef
+  ): Boolean = {
+    val methods = raw.getClass.getMethods.toVector
+    methods.exists(m => m.getName == "id" && m.getParameterCount == 1) &&
+    methods.exists(m => m.getName == "toRecord" && m.getParameterCount == 1) &&
+    methods.exists(m => m.getName == "fromRecord" && m.getParameterCount == 1)
+  }
+
+  private def _invoke_entity_persistent(
+    raw: AnyRef,
+    name: String,
+    arg: Any
+  ): Any = {
+    val method = raw.getClass.getMethods.toVector
+      .find(m => m.getName == name && m.getParameterCount == 1)
+      .getOrElse(throw new IllegalStateException(s"EntityPersistent bridge method not found: ${raw.getClass.getName}.${name}"))
+    method.invoke(raw, arg.asInstanceOf[AnyRef])
+  }
 
   private def _legacy_memory_plan(
     entityname: String
@@ -553,7 +772,8 @@ object ComponentFactory {
     c: ResolvedConfiguration
   ): ComponentFactory = {
     val space = _build_component_repository_space(subsystem, cwd, c)
-    new ComponentFactory(space, collaborators)
+    val descriptors = _resolve_entity_runtime_descriptors(cwd, c)
+    new ComponentFactory(space, collaborators, descriptors)
   }
 
   private def _build_component_repository_space(
@@ -571,7 +791,46 @@ object ComponentFactory {
     repositorySpecs: Vector[ComponentRepository.Specification]
   ): ComponentFactory = {
     val space = ComponentRepositorySpace.create(subsystem, c, repositorySpecs)
-    new ComponentFactory(space, collaborators)
+    val cwd = Paths.get("").toAbsolutePath.normalize
+    val descriptors = _resolve_entity_runtime_descriptors(cwd, c)
+    new ComponentFactory(space, collaborators, descriptors)
+  }
+
+  private val _component_descriptor_key = "cncf.component.descriptor"
+  private val _component_descriptor_dir_key = "cncf.component.descriptor.dir"
+  private val _component_descriptor_default_dir = "car.d"
+
+  private def _resolve_entity_runtime_descriptors(
+    cwd: Path,
+    c: ResolvedConfiguration
+  ): Vector[EntityRuntimeDescriptor] =
+    _resolve_component_descriptors(cwd, c).flatMap(_.entityRuntimeDescriptors)
+
+  private def _resolve_component_descriptors(
+    cwd: Path,
+    c: ResolvedConfiguration
+  ): Vector[ComponentDescriptor] = {
+    val explicit =
+      _split_paths(ConfigurationAccess.getString(c, _component_descriptor_key)) ++
+      _split_paths(ConfigurationAccess.getString(c, _component_descriptor_dir_key))
+    val default = {
+      val path = cwd.resolve(_component_descriptor_default_dir).normalize
+      if (Files.exists(path)) Vector(path) else Vector.empty
+    }
+    (explicit.map(_normalize_path(cwd, _)) ++ default).distinct.flatMap { path =>
+      ComponentDescriptorLoader.load(path) match {
+        case Consequence.Success(xs) => xs
+        case Consequence.Failure(_) => Vector.empty
+      }
+    }
+  }
+
+  private def _split_paths(value: Option[String]): Vector[String] =
+    value.toVector.flatMap(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
+
+  private def _normalize_path(cwd: Path, raw: String): Path = {
+    val path = Paths.get(raw)
+    if (path.isAbsolute) path.normalize else cwd.resolve(path).normalize
   }
 
   def build(

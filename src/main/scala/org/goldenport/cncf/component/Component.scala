@@ -45,7 +45,7 @@ import scala.util.control.NonFatal
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
  *  version Mar. 23, 2026
- * @version Mar. 25, 2026
+ * @version Mar. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -1406,7 +1406,7 @@ object Component {
 
   private def _request_wants_json(request: Request): Boolean =
     request.properties.exists { p =>
-      p.name == "format" && Option(p.value).map(_.toString.toLowerCase).contains("json")
+      p.name == "cncf.format" && Option(p.value).map(_.toString.toLowerCase).contains("json")
     }
 
   private def _configuration_value(

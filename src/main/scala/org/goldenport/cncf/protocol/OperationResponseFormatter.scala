@@ -9,7 +9,7 @@ import org.goldenport.cncf.config.RuntimeDefaults
 
 /*
  * @since   Mar. 13, 2026
- * @version Mar. 13, 2026
+ * @version Mar. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationResponseFormatter {
@@ -47,7 +47,7 @@ object OperationResponseFormatter {
     mode: RunMode
   ): String = {
     val fromrequest = request.properties.reverseIterator.collectFirst {
-      case prop if prop.name.equalsIgnoreCase("format") =>
+      case prop if prop.name.equalsIgnoreCase("cncf.format") =>
         Option(prop.value).map(_.toString.trim.toLowerCase).getOrElse("")
     }.filter(_.nonEmpty)
     fromrequest match {

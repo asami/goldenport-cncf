@@ -8,7 +8,7 @@ import org.goldenport.cncf.subsystem.Subsystem
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class McpJsonRpcAdapter(
@@ -155,7 +155,7 @@ final class McpJsonRpcAdapter(
             operation = operation,
             arguments = args,
             switches = Nil,
-            properties = List(Property("format", "json", None))
+            properties = List(Property("cncf.format", "json", None))
           )
         )
       case _ =>

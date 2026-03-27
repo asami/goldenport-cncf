@@ -70,6 +70,7 @@ object StartupImport {
     subsystem: Subsystem
   )(using ctx: ExecutionContext): Consequence[Unit] =
     _resolve_entity_sources(cwd, configuration).flatMap { paths =>
+      println(s"[startup-import] entity sources=${paths.map(_.toString)}")
       paths.foldLeft(Consequence.unit) { (z, path) =>
         z.flatMap(_ => _import_entity_file(path, entityStoreSpace, subsystem))
       }
@@ -98,7 +99,7 @@ object StartupImport {
     (explicit, default) match {
       case (Some(raw), Some(dir)) =>
         _resolve_source(cwd, raw, allowDirectory = true).flatMap { explicitPaths =>
-          _resolve_source(cwd, dir.toString, allowDirectory = true).map(defaultPaths => explicitPaths ++ defaultPaths)
+          _resolve_source(cwd, dir.toString, allowDirectory = true).map(defaultPaths => (explicitPaths ++ defaultPaths).distinct)
         }
       case (Some(raw), None) =>
         _resolve_source(cwd, raw, allowDirectory = true)
@@ -585,6 +586,7 @@ object StartupImport {
       case None =>
         Consequence.failure(s"startup entity import collection is not registered: ${entry.collection.print}")
       case Some(collection) =>
+        println(s"[startup-import] resolved entity collection request=${entry.collection.print} actual=${collection.descriptor.collectionId.print}")
         _import_entity_collection(path, entityStoreSpace, collection, entry.entity)
     }
 
@@ -607,9 +609,12 @@ object StartupImport {
     val persistent = collection.descriptor.persistent
     given EntityPersistent[E] = persistent
     persistent.fromRecord(record).flatMap { entity =>
-      entityStoreSpace.importSeed(
-        EntityStoreSeed(Vector(EntityStoreSeedEntry(entity)))
-      )
+      // Seed the component-local realm directly so runtime load/search can see
+      // the imported records through the generated entity collection.
+      collection.storage.storeRealm.put(entity)
+      collection.storage.memoryRealm.foreach(_.put(entity))
+      println(s"[startup-import] entity collection=${collection.descriptor.collectionId.print} id=${persistent.id(entity).value}")
+      Consequence.unit
     }
   }
 

@@ -30,7 +30,7 @@ import org.goldenport.cncf.directive.SearchResult
  * @since   Jan.  6, 2026
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
- * @version Mar. 24, 2026
+ * @version Mar. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -360,8 +360,14 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_load_option[T](
     id: EntityId
   )(using tc: EntityPersistent[T]): ExecUowM[Option[T]] = {
-    val op = UnitOfWorkOp.EntityStoreLoad(id, tc)
-    ConsequenceT.liftF(Free.liftF(op))
+    component.flatMap(_.entitySpace.entityOption[T](id.collection.name)) match {
+      case Some(collection) =>
+        println(s"[entity-load] collection=${id.collection.name} store=${collection.storage.storeRealm.values.size} memory=${collection.storage.memoryRealm.map(_.values.size).getOrElse(0)} id=${id.value}")
+        exec_from(Consequence.success(collection.resolve(id).toOption))
+      case None =>
+        val op = UnitOfWorkOp.EntityStoreLoad(id, tc)
+        ConsequenceT.liftF(Free.liftF(op))
+    }
   }
 
   protected final def entity_load[T](
@@ -410,8 +416,14 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_search[T](
     query: EntityQuery[T]
   )(using tc: EntityPersistent[T]): ExecUowM[SearchResult[T]] = {
-    val op = UnitOfWorkOp.EntityStoreSearch(query, tc)
-    ConsequenceT.liftF(Free.liftF(op))
+    component.flatMap(_.entitySpace.entityOption[T](query.collection.name)) match {
+      case Some(collection) =>
+        println(s"[entity-search] collection=${query.collection.name} store=${collection.storage.storeRealm.values.size} memory=${collection.storage.memoryRealm.map(_.values.size).getOrElse(0)} query=${query.query}")
+        exec_from(collection.search(query)(using execution_context))
+      case None =>
+        val op = UnitOfWorkOp.EntityStoreSearch(query, tc)
+        ConsequenceT.liftF(Free.liftF(op))
+    }
   }
 
   protected final def entity_search[T](

@@ -2,10 +2,11 @@ package org.goldenport.cncf.directive
 
 import java.time.Instant
 import org.simplemodeling.model.directive.Condition
+import org.goldenport.record.Record
 
 /*
  * @since   Feb. 19, 2026
- * @version Mar. 23, 2026
+ * @version Mar. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 case class Query[T](query: T) {
@@ -166,6 +167,8 @@ object Query {
       case expr: Expr => expr
       case p: Plan[?] => if (p.where != True) p.where else toExpr(p.condition)
       case cond: Condition[Any @unchecked] => FieldCondition("", cond)
+      case rec: Record => _expr_from_record(rec)
+      case m: Map[?, ?] => _expr_from_map(m.asInstanceOf[Map[String, Any]])
       case shape: Product => _expr_from_shape(shape)
       case literal => Eq("", literal)
     }
@@ -240,12 +243,25 @@ object Query {
       case (name, value) =>
         Some(Eq(name, value))
     }
+    _compose_clauses(clauses)
+  }
+
+  private def _expr_from_record(record: Record): Expr =
+    _expr_from_map(record.asMap)
+
+  private def _expr_from_map(record: Map[String, Any]): Expr = {
+    val clauses = record.toVector.flatMap { case (name, value) =>
+      Some(Eq(name, value))
+    }
+    _compose_clauses(clauses)
+  }
+
+  private def _compose_clauses(clauses: Vector[Expr]): Expr =
     clauses match {
       case Vector() => True
       case Vector(one) => one
       case many => And(many)
     }
-  }
 
   private def _extract(root: Any, path: String): Option[Any] = {
     if (path == null || path.isEmpty)
@@ -256,15 +272,52 @@ object Query {
       }
   }
 
+  private val _query_aliases = Map(
+    "name" -> Vector("nameAttributes.name", "name_attributes.name"),
+    "title" -> Vector("nameAttributes.title", "name_attributes.title"),
+    "poststatus" -> Vector("lifecycleAttributes.postStatus", "lifecycle_attributes.post_status"),
+    "aliveness" -> Vector("lifecycleAttributes.aliveness", "lifecycle_attributes.aliveness")
+  )
+
   private def _extract_field(value: Any, name: String): Option[Any] =
     value match {
       case p: Product =>
-        p.productElementNames.zip(p.productIterator).find(_._1 == name).map(_._2)
+        _extract_from_product(p, name).orElse(_extract_alias(value, name))
+      case r: Record =>
+        _extract_from_map(r.asMap, name).orElse(_extract_alias(value, name))
       case m: Map[?, ?] =>
-        m.asInstanceOf[Map[String, Any]].get(name)
+        _extract_from_map(m.asInstanceOf[Map[String, Any]], name).orElse(_extract_alias(value, name))
       case _ =>
         None
     }
+
+  private def _extract_from_product(value: Product, name: String): Option[Any] = {
+    val normalized = _normalize_name(name)
+    value.productElementNames.zip(value.productIterator)
+      .find { case (k, _) => _normalize_name(k) == normalized }
+      .flatMap { case (_, v) => _normalize_extracted(v) }
+  }
+
+  private def _extract_from_map(value: Map[String, Any], name: String): Option[Any] = {
+    val normalized = _normalize_name(name)
+    value.collectFirst {
+      case (k, v) if _normalize_name(k) == normalized => v
+    }.flatMap(_normalize_extracted)
+  }
+
+  private def _extract_alias(value: Any, name: String): Option[Any] =
+    _query_aliases.getOrElse(_normalize_name(name), Vector.empty).iterator.flatMap(path => _extract(value, path)).toSeq.headOption
+
+  private def _normalize_extracted(value: Any): Option[Any] =
+    value match {
+      case None => None
+      case Some(v) => _normalize_extracted(v)
+      case v: org.goldenport.text.Presentable => Some(v.print)
+      case v => Some(v)
+    }
+
+  private def _normalize_name(name: String): String =
+    name.filter(_ != '_').toLowerCase
 
   private def _compare(path: String, actualRoot: Any, expected: Any): Option[Int] =
     _extract(actualRoot, path).flatMap(_compare_values(_, expected))

@@ -49,7 +49,7 @@ import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObserva
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 25, 2026
+ * @version Mar. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -211,38 +211,18 @@ object CncfRuntime extends GlobalObservable {
     }
   }
 
-  // legacy
+  // legacy entry points now delegate to the canonical initialization path
+  // so command/client/server share the same component setup and startup import behavior.
   def buildSubsystem(
     extraComponents: Subsystem => Seq[Component] = _ => Nil,
     mode: Option[RunMode] = None
-  ): Subsystem = {
-    val cwd = Paths.get("").toAbsolutePath.normalize
-    val configuration = _resolve_configuration(cwd)
-    val modeLabel = mode.map(_.name)
-    val aliasResolver = _alias_resolver(configuration)
-    val subsystem = DefaultSubsystemFactory.defaultWithScope(
-      _runtime_scope_context(),
-      mode,
-      configuration,
-      aliasResolver
-    )
-    observe_trace(
-      s"[subsytem] buildSubsystem start mode=${modeLabel.getOrElse("none")} componentCount=${subsystem.components.size}"
-    )
-    GlobalRuntimeContext.current.foreach(_.updateSubsystemVersion(subsystem.version.getOrElse(CncfVersion.current)))
-    val extras = extraComponents(subsystem)
-    if (extras.nonEmpty) {
-      subsystem.add(extras)
-    }
-    val operations = _component_operation_fqns(subsystem)
-    observe_trace(
-      s"[subsytem] buildSubsystem complete components=${_component_names(subsystem)} operations=${_operation_sample(operations)}"
-    )
-    // modeLabel.foreach { label =>
-    //   _apply_system_context(subsystem, label)
-    // }
-    subsystem
-  }
+  ): Subsystem =
+    new CncfRuntime().initializeForEmbedding(
+      cwd = Paths.get("").toAbsolutePath.normalize,
+      args = Array.empty[String],
+      modeHint = mode,
+      extraComponents = extraComponents
+    ).TAKE
 
   // private def _build_subsystem(
   //   cofiguration: ResolvedConfiguration,
@@ -1074,8 +1054,8 @@ object CncfRuntime extends GlobalObservable {
     properties: List[Property],
     format: String
   ): List[Property] = {
-    val withoutformat = properties.filterNot(_.name.equalsIgnoreCase("format"))
-    withoutformat :+ Property("format", format, None)
+    val withoutformat = properties.filterNot(_.name.equalsIgnoreCase("cncf.format"))
+    withoutformat :+ Property("cncf.format", format, None)
   }
 
   private def _resolve_format(
@@ -1584,7 +1564,7 @@ private[cli] object RuntimeOptionsParser {
         options = options.copy(pathResolutionCommand = true)
       } else if (_is_key_value(current)) {
         _extract_key_value(current) match {
-          case Some((key, value)) if key == "cncf.output.format" =>
+          case Some((key, value)) if key == "cncf.format" || key == "cncf.output.format" =>
             options = options.copy(format = Some(value))
           case Some((key, value)) if key == "cncf.path-resolution.command" =>
             options = options.copy(pathResolutionCommand = _is_truthy(value))
@@ -1597,7 +1577,7 @@ private[cli] object RuntimeOptionsParser {
         }
       } else if (_is_cncf_key(current.drop(2))) {
         if (i + 1 < args.length && !args(i + 1).startsWith("-")) {
-          if (current.drop(2) == "cncf.output.format") {
+          if (current.drop(2) == "cncf.format" || current.drop(2) == "cncf.output.format") {
             options = options.copy(format = Some(args(i + 1)))
           } else if (current.drop(2) == "cncf.path-resolution.command") {
             options = options.copy(pathResolutionCommand = _is_truthy(args(i + 1)))
@@ -1628,10 +1608,10 @@ private[cli] object RuntimeOptionsParser {
       .orElse(if (options.json) Some("json") else None)
       .orElse(Some(RuntimeDefaults.defaultFormat(mode)))
     formatvalue.foreach { value =>
-      b += Property("format", value, None)
+      b += Property("cncf.format", value, None)
     }
-    if (options.debug) b += Property("debug", "true", None)
-    if (options.noExit) b += Property("no-exit", "true", None)
+    if (options.debug) b += Property("cncf.debug", "true", None)
+    if (options.noExit) b += Property("cncf.no-exit", "true", None)
     b.result()
   }
 
@@ -1675,7 +1655,7 @@ private[cli] object RuntimeOptionsParser {
   private def _is_cncf_alias(
     key: String
   ): Boolean =
-    key == "log-level" || key == "log-backend" || key == "format" || key == "path-resolution"
+    key == "log-level" || key == "log-backend" || key == "format" || key == "path-resolution" || key == "cncf.format" || key == "cncf.path-resolution"
 
   private def _is_truthy(value: String): Boolean = {
     val normalized = value.trim.toLowerCase
@@ -1870,7 +1850,7 @@ class CncfRuntime() extends GlobalObservable {
     val colfactory = CollaboratorFactory.create(configuration)
     val compfactory = ComponentFactory.create(subsystem, colfactory, cwd, configuration)
     subsystem.setup(compfactory)
-    val extras = extraComponents(subsystem)
+    val extras = extraComponents(subsystem).map(compfactory.bootstrap)
     if (extras.nonEmpty) {
       subsystem.add(extras)
     }
@@ -2395,7 +2375,7 @@ class CncfRuntime() extends GlobalObservable {
     val haspathresolutionflag = args.contains("--path-resolution")
     val hasselector = args.exists(x => !x.startsWith("-"))
     if (haspathresolutionflag && !hasselector) {
-      req.properties.find(_.name == "path-resolution")
+      req.properties.find(p => p.name == "cncf.path-resolution" || p.name == "path-resolution")
         .map(_.value.toString)
         .filter { x =>
           val lowered = x.trim.toLowerCase
@@ -2461,7 +2441,7 @@ class CncfRuntime() extends GlobalObservable {
               Argument(s"arg${index + 1}", value, None)
             }.toList, Nil, Nil)
           }
-          val runtimeproperties = _runtime_properties(runtimeOptions, mode).filterNot(_.name.equalsIgnoreCase("format"))
+          val runtimeproperties = _runtime_properties(runtimeOptions, mode).filterNot(_.name.equalsIgnoreCase("cncf.format"))
           val allproperties = _with_format_property(
             properties ++ runtimeproperties,
             _resolve_format(runtimeOptions, suffixformat, mode)
@@ -2554,8 +2534,8 @@ class CncfRuntime() extends GlobalObservable {
     properties: List[Property],
     format: String
   ): List[Property] = {
-    val withoutformat = properties.filterNot(_.name.equalsIgnoreCase("format"))
-    withoutformat :+ Property("format", format, None)
+    val withoutformat = properties.filterNot(_.name.equalsIgnoreCase("cncf.format"))
+    withoutformat :+ Property("cncf.format", format, None)
   }
 
   private def _resolve_format(

@@ -1,9 +1,12 @@
 package org.goldenport.cncf.security
 
-import org.goldenport.Consequence
-import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ObservabilityContext, SecurityContext, SpanId, TraceId}
+import cats.free.Free
+import cats.~>
+import org.goldenport.{Consequence, ConsequenceT}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, GlobalRuntimeContext, ObservabilityContext, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SpanId, TraceId}
 import org.goldenport.cncf.event.EventReception
 import org.goldenport.cncf.job.{ActionId, JobContext, JobId, TaskId}
+import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.provisional.observation.Taxonomy
 import org.goldenport.protocol.Request
@@ -15,7 +18,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -69,7 +72,8 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     val caps = _resolve_requested_capabilities(attributes)
     privilege.flatMap { p =>
       val ctx0 = ExecutionContext.create(p)
-      val ctx = _bind_context(attributes, ctx0)
+      val ctx1 = _production_runtime_context(ctx0)
+      val ctx = _bind_context(attributes, ctx1)
       if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
         Consequence.success(ResolvedIngressSecurity(ctx, p, caps))
       else
@@ -120,7 +124,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       None
     else
       Some(
-        ExecutionContext.withJobContext(
+      ExecutionContext.withJobContext(
           ctx,
           // Design update (2026-03-21):
           // - Restorable from event attributes: jobId/taskId/actionId/parentJobId/causationId
@@ -141,6 +145,37 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
         )
       )
   }
+
+  private def _production_runtime_context(
+    ctx: ExecutionContext
+  ): ExecutionContext =
+    GlobalRuntimeContext.current match {
+      case Some(global) =>
+        lazy val context: ExecutionContext = ExecutionContext.withRuntimeContext(ctx, runtime)
+        lazy val runtime: RuntimeContext = new RuntimeContext(
+          core = ScopeContext.Core(
+            kind = ScopeKind.Runtime,
+            name = "ingress-security",
+            parent = Some(global),
+            observabilityContext = global.core.observabilityContext,
+            httpDriverOption = Some(global.config.httpDriver)
+          ),
+          unitOfWorkSupplier = () => new UnitOfWork(context),
+          unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+            def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
+              new UnitOfWorkInterpreter(new UnitOfWork(context)).run(
+                ConsequenceT.liftF(Free.liftF(fa))
+              )
+          },
+          commitAction = _ => (),
+          abortAction = _ => (),
+          disposeAction = _ => (),
+          token = "ingress-security"
+        )
+        context
+      case None =>
+        ctx
+    }
 
   private def _minimal_trace_metadata(
     ctx: ExecutionContext
