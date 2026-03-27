@@ -12,10 +12,11 @@ import org.goldenport.cncf.collaborator.api
 import org.goldenport.cncf.component.repository.{ComponentRepository, ComponentRepositorySpace}
 import org.goldenport.cncf.component.repository.ComponentSource
 import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.cncf.datastore.DataStore
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateSpace, AggregateDefinition}
-import org.goldenport.cncf.event.{ActionCallDispatcher, EventBus, EventReception, EntitySubscriptionLimit}
+import org.goldenport.cncf.event.{ActionCallDispatcher, EventBus, EventEngine, EventReception, EventStore, EntitySubscriptionLimit}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimeDescriptor, EntityRuntimePlan, EntitySpace, EntityStorage, PartitionedMemoryRealm, PartitionStrategy, WorkingSetDefinition, WorkingSetInitializer}
 import org.goldenport.cncf.entity.view.{ViewDefinition, ViewBuilder, ViewCollection, ViewSpace}
 import org.goldenport.cncf.security.IngressSecurityResolver
@@ -27,7 +28,7 @@ import scala.util.Try
  * @since   Jan. 30, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 27, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -84,7 +85,19 @@ final class ComponentFactory(
     else
       _initialize_working_sets(component, entityspace, storesnapshot)
     _bootstrap_state_machine_planners(component, plans)
+    _bootstrap_event_reception(component)
     component
+  }
+
+  private def _bootstrap_event_reception(
+    component: Component
+  ): Unit = {
+    if (component.eventReceptionDefinitions.nonEmpty || component.eventSubscriptionDefinitions.nonEmpty) {
+      val engine = EventEngine.noop(DataStore.noop(), eventstore = EventStore.inMemory)
+      val bus = EventBus.default(engine)
+      val reception = createEventReceptionWithOperationDispatcher(component, bus)
+      component.withEventReception(reception)
+    }
   }
 
   def createEventReceptionWithOperationDispatcher(

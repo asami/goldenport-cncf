@@ -6,10 +6,11 @@ import org.goldenport.protocol.{Argument, Property, Request}
 import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.event.{DomainEvent, ParsedEventAction, ReceptionDomainEvent, SecureActionFactoryDispatcher}
+import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationRequestActionDispatcher(
@@ -48,18 +49,20 @@ final class OperationRequestActionDispatcher(
     actionName: String,
     event: ReceptionDomainEvent
   ): Consequence[Request] =
-    _parse_action_name(actionName).map { case (component, service, operation) =>
-      Request.of(
-        component = component,
-        service = service,
-        operation = operation,
-        arguments = _build_arguments(event),
-        switches = Nil,
-        properties = List(
-          Property("event_name", event.name, None),
-          Property("event_kind", event.kind, None)
+    _parse_action_name(actionName).flatMap { case (component, service, operation) =>
+      _resolve_selector(component, service, operation).map { case (resolvedComponent, resolvedService, resolvedOperation) =>
+        Request.of(
+          component = resolvedComponent,
+          service = resolvedService,
+          operation = resolvedOperation,
+          arguments = _build_arguments(event),
+          switches = Nil,
+          properties = List(
+            Property("event_name", event.name, None),
+            Property("event_kind", event.kind, None)
+          )
         )
-      )
+      }
     }
 
   private def _parse_action_name(
@@ -76,6 +79,33 @@ final class OperationRequestActionDispatcher(
 
   private def _default_component_name: String =
     Try(logic.component.name).toOption.filter(_.nonEmpty).getOrElse("domain")
+
+  private def _resolve_selector(
+    component: String,
+    service: String,
+    operation: String
+  ): Consequence[(String, String, String)] = {
+    val resolvedComponent =
+      if (NamingConventions.equivalentByNormalized(component, logic.component.name))
+        logic.component.name
+      else
+        component
+    logic.component.core.protocol.services.services.find(s =>
+      NamingConventions.equivalentByNormalized(service, s.name)
+    ) match {
+      case Some(serviceDefinition) =>
+        serviceDefinition.operations.operations.find(op =>
+          NamingConventions.equivalentByNormalized(operation, op.name)
+        ) match {
+          case Some(operationDefinition) =>
+            Consequence.success((resolvedComponent, serviceDefinition.name, operationDefinition.name))
+          case None =>
+            Consequence.failure(s"operation not found: ${serviceDefinition.name}.${operation}")
+        }
+      case None =>
+        Consequence.failure(s"service not found: $service")
+    }
+  }
 
   private def _build_arguments(
     event: ReceptionDomainEvent

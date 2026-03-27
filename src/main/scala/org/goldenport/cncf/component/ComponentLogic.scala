@@ -5,10 +5,12 @@ import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.Response
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
-import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, QueryAction, ResourceAccess}
+import org.goldenport.record.Record
+import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall, QueryAction, ResourceAccess}
 import cats.~>
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeKind}
 import org.goldenport.cncf.backend.collaborator.Collaborator
+import org.goldenport.cncf.event.ReceptionInput
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobControlPolicy, JobControlRequest, JobControlResponse, JobEngine, JobId, JobPersistencePolicy, JobResult, JobRunMode, JobStatus, JobSubmitOption, JobTask}
 import org.goldenport.cncf.unitofwork.UnitOfWork
@@ -21,7 +23,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  * @since   Jan.  3, 2026
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Mar. 27, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -62,8 +64,34 @@ case class ComponentLogic(
       Some(component),
       ctx.observability.correlationId
     )
-    action.createCall(core)
+    _event_action_call(action, core).getOrElse(action.createCall(core))
   }
+
+  private def _event_action_call(
+    action: Action,
+    core: ActionCall.Core
+  ): Option[ActionCall] = {
+    val opname = action.request.operation
+    if (component.eventReceptionDefinitions.isEmpty && component.eventSubscriptionDefinitions.isEmpty)
+      None
+    else if (_is_event_emit_operation(opname))
+      Some(ComponentLogic.EmitEventActionCall(core, action))
+    else if (_is_event_record_operation(opname))
+      Some(ComponentLogic.RecordEffectActionCall(core, action))
+    else if (_is_event_load_operation(opname))
+      Some(ComponentLogic.LoadEffectActionCall(core, action))
+    else
+      None
+  }
+
+  private def _is_event_emit_operation(opname: String): Boolean =
+    opname.equalsIgnoreCase("emitEvent")
+
+  private def _is_event_record_operation(opname: String): Boolean =
+    opname.equalsIgnoreCase("recordEffect")
+
+  private def _is_event_load_operation(opname: String): Boolean =
+    opname.equalsIgnoreCase("loadEffect")
 
   private def _get_collaborator: Option[Collaborator] = component match {
     case m: CollaboratorComponent => Some(m.collaborator)
@@ -329,6 +357,73 @@ object ComponentLogic {
   private enum OperationKind {
     case Query
     case Command
+  }
+
+  private final case class EmitEventActionCall(
+    core: ActionCall.Core,
+    override val action: Action
+  ) extends ProcedureActionCall {
+    private def _component = core.component
+    private def _executionContext = core.executionContext
+
+    private def _payload: Map[String, Any] =
+      action.request.toRecord.fields.map(x => x.key -> x.value).toMap
+
+    def execute(): Consequence[OperationResponse] =
+      _component.flatMap(_.eventReception) match {
+        case Some(reception) =>
+          _component.flatMap(_.eventReceptionDefinitions.headOption) match {
+            case Some(definition) =>
+              val input = ReceptionInput(
+                name = definition.name,
+                kind = definition.kind.getOrElse("domain-event"),
+                payload = _payload,
+                attributes = definition.selectors,
+                persistent = false
+              )
+              reception.receive(input).map { result =>
+                OperationResponse.create(
+                  Record.data(
+                    "outcome" -> result.outcome.toString,
+                    "dispatchedCount" -> result.dispatchedCount,
+                    "persisted" -> result.persisted
+                  )
+                )
+              }
+            case None =>
+              Consequence.failure("event reception definition is missing")
+          }
+        case None =>
+          Consequence.failure("event reception is not initialized")
+      }
+  }
+
+  private final case class RecordEffectActionCall(
+    core: ActionCall.Core,
+    override val action: Action
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      core.component match {
+        case Some(c) =>
+          val record = action.request.toRecord
+          c.recordEventEffect(record)
+          Consequence.success(OperationResponse.create(record))
+        case None =>
+          Consequence.failure("component is not initialized")
+      }
+  }
+
+  private final case class LoadEffectActionCall(
+    core: ActionCall.Core,
+    override val action: Action
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      core.component match {
+        case Some(c) =>
+          Consequence.success(OperationResponse.create(c.loadEventEffect()))
+        case None =>
+          Consequence.failure("component is not initialized")
+      }
   }
 
   // TODO migrate to AdminComponent

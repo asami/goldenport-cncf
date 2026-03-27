@@ -7,14 +7,14 @@ import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.id.UniversalId
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, QueryAction}
-import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.component.{Component, ComponentLogic}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.provisional.observation.Taxonomy
 
 /*
  * @since   Jan.  4, 2026
- * @version Mar. 21, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -179,9 +179,11 @@ final case class ActionTask(
   component: Option[Component]
 ) extends JobTask {
   def run(ctx: ExecutionContext): TaskOutcome = {
-    val correlationid = ctx.observability.correlationId
-    val core = ActionCall.Core(action, ctx, component, correlationid)
-    val call = action.createCall(core)
+    val call = component.map(ComponentLogic(_).createActionCall(action, ctx)).getOrElse {
+      val correlationid = ctx.observability.correlationId
+      val core = ActionCall.Core(action, ctx, component, correlationid)
+      action.createCall(core)
+    }
     actionEngine.execute(call) match {
       case Consequence.Success(res) =>
         TaskSucceeded(res)

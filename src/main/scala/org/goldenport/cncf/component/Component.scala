@@ -30,7 +30,7 @@ import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
 import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace, ViewDefinition}
 import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.statemachine.{CmlStateMachineDefinition, StateMachinePlannerProvider}
-import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition}
+import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition, EventReception}
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
 import cats.data.NonEmptyVector
 import java.io.InputStream
@@ -44,8 +44,7 @@ import scala.util.control.NonFatal
  *  version Jan.  3, 2026
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
- *  version Mar. 23, 2026
- * @version Mar. 27, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -63,6 +62,8 @@ abstract class Component() extends Component.Core.Holder {
     StateMachinePlannerProvider.noop
   private var _working_set_entity_names: Set[String] = Set.empty
   private var _artifact_metadata: Option[Component.ArtifactMetadata] = None
+  private var _event_reception: Option[EventReception] = None
+  private var _event_effect_record: Record = Record.empty
   val entitySpace: EntitySpace = new EntitySpace()
   val aggregateSpace: AggregateSpace = new AggregateSpace()
   val viewSpace: ViewSpace = new ViewSpace()
@@ -172,6 +173,26 @@ abstract class Component() extends Component.Core.Holder {
     _artifact_metadata = Some(metadata)
     this
   }
+
+  def eventReception: Option[EventReception] =
+    _event_reception
+
+  def withEventReception(
+    reception: EventReception
+  ): Component = {
+    _event_reception = Some(reception)
+    this
+  }
+
+  def recordEventEffect(
+    record: Record
+  ): Component = {
+    _event_effect_record = record
+    this
+  }
+
+  def loadEventEffect(): Record =
+    _event_effect_record
 
   def entity[E](name: String): EntityCollection[E] =
     entitySpace.entity(name)
