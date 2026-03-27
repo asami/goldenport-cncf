@@ -72,17 +72,23 @@ case class ComponentLogic(
     core: ActionCall.Core
   ): Option[ActionCall] = {
     val opname = action.request.operation
+    val implementation = _operation_implementation(opname)
     if (component.eventReceptionDefinitions.isEmpty && component.eventSubscriptionDefinitions.isEmpty)
       None
-    else if (_is_event_emit_operation(opname))
+    else if (implementation.contains("event-emit") || _is_event_emit_operation(opname))
       Some(ComponentLogic.EmitEventActionCall(core, action))
-    else if (_is_event_record_operation(opname))
+    else if (implementation.contains("event-effect-record") || _is_event_record_operation(opname))
       Some(ComponentLogic.RecordEffectActionCall(core, action))
-    else if (_is_event_load_operation(opname))
+    else if (implementation.contains("event-effect-load") || _is_event_load_operation(opname))
       Some(ComponentLogic.LoadEffectActionCall(core, action))
     else
       None
   }
+
+  private def _operation_implementation(
+    operationname: String
+  ): Option[String] =
+    component.operationDefinitions.find(_.name == operationname).flatMap(_.implementation.map(_.trim.toLowerCase))
 
   private def _is_event_emit_operation(opname: String): Boolean =
     opname.equalsIgnoreCase("emitEvent")
