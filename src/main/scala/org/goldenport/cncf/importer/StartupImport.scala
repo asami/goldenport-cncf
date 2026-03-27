@@ -16,8 +16,8 @@ import org.goldenport.cncf.entity.runtime.EntityCollection
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.goldenport.record.Record
+import org.goldenport.record.io.RecordDecoder
 import org.simplemodeling.model.datatype.EntityCollectionId
-import org.yaml.snakeyaml.Yaml
 
 /*
  * @since   Mar. 27, 2026
@@ -31,6 +31,7 @@ object StartupImport {
   val DefaultEntityDirName = "entity.d"
   private val _url_source_path = Path.of("startup-import-url")
   private val _data_import_sequence = new AtomicLong(0L)
+  private val _record_decoder = RecordDecoder()
   private sealed trait _ImportSource
   private object _ImportSource {
     final case class Local(path: Path) extends _ImportSource
@@ -126,7 +127,7 @@ object StartupImport {
       case _ImportSource.Local(path) =>
         _load_data_seed(path).flatMap(seed => _store_data_seed(dataStoreSpace, seed))
       case _ImportSource.Url(url) =>
-        _load_yaml_from_url(url).flatMap(_parse_data_seed(_url_source_path, _)).flatMap(seed => _store_data_seed(dataStoreSpace, seed))
+        _load_text_from_url(url).flatMap(text => _decode_data_seed(url, text)).flatMap(seed => _store_data_seed(dataStoreSpace, seed))
     }
 
   private def _import_entity_file(
@@ -138,7 +139,7 @@ object StartupImport {
       case _ImportSource.Local(path) =>
         _load_entity_seed(path).flatMap(seed => _store_entity_seed(path, entityStoreSpace, subsystem, seed))
       case _ImportSource.Url(url) =>
-        _load_yaml_from_url(url).flatMap(_parse_entity_seed(_url_source_path, _)).flatMap(seed => _store_entity_seed(_url_source_path, entityStoreSpace, subsystem, seed))
+        _load_text_from_url(url).flatMap(text => _decode_entity_seed(url, text)).flatMap(seed => _store_entity_seed(_url_source_path, entityStoreSpace, subsystem, seed))
     }
 
   private def _store_data_seed(
@@ -166,12 +167,12 @@ object StartupImport {
   private def _load_data_seed(
     path: Path
   ): Consequence[DataStoreSeed] =
-    _load_yaml(path).flatMap(_parse_data_seed(path, _))
+    _read_text(path).flatMap(text => _decode_data_seed(path.toString, text))
 
   private def _load_entity_seed(
     path: Path
   ): Consequence[Vector[_EntityImportEntry]] =
-    _load_yaml(path).flatMap(_parse_entity_seed(path, _))
+    _read_text(path).flatMap(text => _decode_entity_seed(path.toString, text))
 
   private def _resolve_paths(
     cwd: Path,
@@ -245,21 +246,28 @@ object StartupImport {
     lower.endsWith(".yaml") || lower.endsWith(".yml")
   }
 
-  private def _load_yaml(
+  private def _read_text(
     path: Path
-  ): Consequence[Any] =
+  ): Consequence[String] =
     try {
       Using.resource(Files.newBufferedReader(path)) { reader =>
-        Consequence.success(new Yaml().load[Any](reader))
+        val sb = new StringBuilder
+        val buf = new Array[Char](8192)
+        var read = reader.read(buf)
+        while (read != -1) {
+          sb.appendAll(buf, 0, read)
+          read = reader.read(buf)
+        }
+        Consequence.success(sb.toString)
       }
     } catch {
       case e: Throwable if scala.util.control.NonFatal(e) =>
-        Consequence.failure(s"failed to load yaml ${path}: ${e.getMessage}")
+        Consequence.failure(s"failed to load import text ${path}: ${e.getMessage}")
     }
 
-  private def _load_yaml_from_url(
+  private def _load_text_from_url(
     url: String
-  )(using ctx: ExecutionContext): Consequence[Any] = {
+  )(using ctx: ExecutionContext): Consequence[String] = {
     val uow = new UnitOfWork(ctx)
     val response = uow.execute(UnitOfWorkOp.HttpGet(url))
     if (response.code != 200) {
@@ -267,12 +275,7 @@ object StartupImport {
     } else {
       response.getString match {
         case Some(body) =>
-          try {
-            Consequence.success(new Yaml().load[Any](body))
-          } catch {
-            case e: Throwable if scala.util.control.NonFatal(e) =>
-              Consequence.failure(s"failed to load yaml ${url}: ${e.getMessage}")
-          }
+          Consequence.success(body)
         case None =>
           Consequence.failure(s"startup import URL returned empty body: ${url}")
       }
@@ -283,44 +286,81 @@ object StartupImport {
     val s = raw.trim.toLowerCase
     s.startsWith("http://") || s.startsWith("https://")
 
-  private def _parse_data_seed(
-    path: Path,
-    root: Any
+  private def _decode_data_seed(
+    sourceName: String,
+    content: String
   ): Consequence[DataStoreSeed] =
-    _asMap(root) match {
-      case None =>
-        Consequence.failure(s"yaml root must be a mapping: ${path}")
-      case Some(map) =>
-        _parse_data_sections(map).flatMap { entries =>
-          if (entries.isEmpty)
-            Consequence.failure(s"startup import file has no datastore entries: ${path}")
-          else
-            Consequence.success(DataStoreSeed(entries))
+    _decode_documents(sourceName, content).flatMap { roots =>
+      roots.foldLeft(Consequence.success(Vector.empty[DataStoreSeedEntry])) { (z, root) =>
+        z.flatMap { xs =>
+          _asMap(root) match {
+            case None =>
+              Consequence.failure(s"startup import root must be a mapping: ${sourceName}")
+            case Some(map) =>
+              _parse_data_sections(map).map(xs ++ _)
+          }
         }
+      }.flatMap { entries =>
+        if (entries.isEmpty)
+          Consequence.failure(s"startup import file has no datastore entries: ${sourceName}")
+        else
+          Consequence.success(DataStoreSeed(entries))
+      }
     }
 
-  private def _parse_entity_seed(
-    path: Path,
-    root: Any
+  private def _decode_entity_seed(
+    sourceName: String,
+    content: String
   ): Consequence[Vector[_EntityImportEntry]] =
-    _asMap(root) match {
-      case None =>
-        Consequence.failure(s"yaml root must be a mapping: ${path}")
-      case Some(map) =>
-        _parse_entity_sections(map).flatMap { entries =>
-          if (entries.isEmpty)
-            Consequence.failure(s"startup import file has no entitystore entries: ${path}")
-          else
-            Consequence.success(entries)
+    _decode_documents(sourceName, content).flatMap { roots =>
+      roots.foldLeft(Consequence.success(Vector.empty[_EntityImportEntry])) { (z, root) =>
+        z.flatMap { xs =>
+          _asMap(root) match {
+            case None =>
+              Consequence.failure(s"startup import root must be a mapping: ${sourceName}")
+            case Some(map) =>
+              _parse_entity_sections(map).map(xs ++ _)
+          }
         }
+      }.flatMap { entries =>
+        if (entries.isEmpty)
+          Consequence.failure(s"startup import file has no entitystore entries: ${sourceName}")
+        else
+          Consequence.success(entries)
+      }
     }
+
+  private def _decode_documents(
+    sourceName: String,
+    content: String
+  ): Consequence[Vector[Record]] = {
+    val lower = sourceName.toLowerCase
+    if (lower.endsWith(".json")) {
+      _record_decoder.jsonAutoRecords(content)
+    } else if (lower.endsWith(".xml")) {
+      _record_decoder.xmlAutoRecords(content)
+    } else if (lower.endsWith(".csv")) {
+      _record_decoder.csvRecords(content)
+    } else if (lower.endsWith(".tsl")) {
+      _record_decoder.tslRecords(content)
+    } else {
+      _record_decoder.yamlAutoRecords(content)
+    }
+  }
 
   private def _parse_data_sections(
     root: Map[String, Any]
   ): Consequence[Vector[DataStoreSeedEntry]] =
     root.get("datastore") match {
       case None =>
-        Consequence.failure("startup import file has no datastore entries")
+        root.get("collection") match {
+          case None =>
+            Consequence.failure("startup import file has no datastore entries")
+          case Some(collectionValue) =>
+            _parse_data_collection_value(collectionValue).map { collection =>
+              Vector(DataStoreSeedEntry(collection, _record_without_key(Record.create(root), "collection")))
+            }
+        }
       case Some(value) =>
         _parse_data_section(value)
     }
@@ -330,7 +370,14 @@ object StartupImport {
   ): Consequence[Vector[_EntityImportEntry]] =
     root.get("entitystore") match {
       case None =>
-        Consequence.failure("startup import file has no entitystore entries")
+        root.get("collection") match {
+          case None =>
+            Consequence.failure("startup import file has no entitystore entries")
+          case Some(collectionValue) =>
+            _parse_entity_collection_value(collectionValue).map { collection =>
+              Vector(_EntityImportEntry(collection, _record_without_key(Record.create(root), "collection")))
+            }
+        }
       case Some(value) =>
         _parse_entity_section(value)
     }
@@ -427,6 +474,11 @@ object StartupImport {
       Consequence.success(DataStore.CollectionId(normalized))
   }
 
+  private def _parse_data_collection_value(
+    value: Any
+  ): Consequence[DataStore.CollectionId] =
+    _parse_data_collection(value.toString)
+
   private def _parse_entity_collection(
     value: String
   ): Consequence[EntityCollectionId] = {
@@ -438,6 +490,11 @@ object StartupImport {
         Consequence.failure(s"invalid entity collection id: ${value}")
     }
   }
+
+  private def _parse_entity_collection_value(
+    value: Any
+  ): Consequence[EntityCollectionId] =
+    _parse_entity_collection(value.toString)
 
   private def _requiredString(
     map: Map[String, Any],
@@ -462,6 +519,8 @@ object StartupImport {
     value: Any
   ): Option[Map[String, Any]] =
     value match {
+      case r: Record =>
+        Some(r.asMap)
       case m: java.util.Map[?, ?] =>
         Some(m.asScala.toMap.asInstanceOf[Map[String, Any]])
       case m: Map[?, ?] =>
@@ -499,6 +558,12 @@ object StartupImport {
       case other =>
         other
     }
+
+  private def _record_without_key(
+    record: Record,
+    key: String
+  ): Record =
+    Record.create(record.asMap.toVector.filterNot(_._1 == key).sortBy(_._1))
 
   private def _store_entity_seed(
     path: Path,

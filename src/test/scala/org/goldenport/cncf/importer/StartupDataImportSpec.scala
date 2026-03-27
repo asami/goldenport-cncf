@@ -195,7 +195,7 @@ final class StartupDataImportSpec
           case Consequence.Success(_) =>
             fail("expected startup import to fail")
           case Consequence.Failure(conclusion) =>
-            conclusion.show should include("failed to load yaml")
+            conclusion.show should (include("failed to load yaml") or include("while parsing"))
         }
       } finally {
         runtime.closeEmbedding()
