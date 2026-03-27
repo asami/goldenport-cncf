@@ -15,6 +15,7 @@ import org.goldenport.protocol.handler.ingress.*
 import org.goldenport.protocol.handler.egress.*
 import org.goldenport.protocol.handler.projection.*
 import java.nio.file.Path
+import scala.reflect.ClassTag
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.subsystem.Subsystem
@@ -30,7 +31,7 @@ import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
 import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace, ViewDefinition}
 import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.statemachine.{CmlStateMachineDefinition, StateMachinePlannerProvider}
-import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition, EventReception}
+import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition, EventReception, EventStore}
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
 import cats.data.NonEmptyVector
 import java.io.InputStream
@@ -63,6 +64,8 @@ abstract class Component() extends Component.Core.Holder {
   private var _working_set_entity_names: Set[String] = Set.empty
   private var _artifact_metadata: Option[Component.ArtifactMetadata] = None
   private var _event_reception: Option[EventReception] = None
+  private var _event_store: Option[EventStore] = None
+  private var _port: Component.Port = Component.Port.empty
   private var _event_effect_record: Record = Record.empty
   val entitySpace: EntitySpace = new EntitySpace()
   val aggregateSpace: AggregateSpace = new AggregateSpace()
@@ -87,6 +90,13 @@ abstract class Component() extends Component.Core.Holder {
     _origin = Some(params.origin)
     _subsystem = Some(params.subsystem)
     _inherit_http_driver_(params)
+    _event_store = Some(params.subsystem.eventStore)
+    jobEngine match {
+      case m: InMemoryJobEngine =>
+        m.withEventStore(params.subsystem.eventStore)
+      case _ =>
+        ()
+    }
     _services = Some(ServiceGroup(protocol.services.services.map(_to_service)))
     initialize_Component(params)
     this
@@ -100,6 +110,13 @@ abstract class Component() extends Component.Core.Holder {
   protected def initialize_Component(params: ComponentInit): Unit = {}
 
   def service: Service = services.services.head // TODO
+
+  def port: Component.Port = _port
+
+  def withPort(port: Component.Port): Component = {
+    _port = port
+    this
+  }
 
   def execute(action: Action): Consequence[OperationResponse] = {
     logic.executeAction(action)
@@ -181,6 +198,16 @@ abstract class Component() extends Component.Core.Holder {
     reception: EventReception
   ): Component = {
     _event_reception = Some(reception)
+    this
+  }
+
+  def eventStore: Option[EventStore] =
+    _event_store
+
+  def withEventStore(
+    store: EventStore
+  ): Component = {
+    _event_store = Some(store)
     this
   }
 
@@ -336,6 +363,38 @@ object Component {
     )
   }
 
+  trait Port {
+    def get[T: ClassTag]: Option[T]
+    def orElse(other: Port): Port
+  }
+
+  object Port {
+    val empty: Port = new Port {
+      def get[T: ClassTag]: Option[T] = None
+      def orElse(other: Port): Port = other
+    }
+
+    def of(services: Any*): Port =
+      new Port {
+        private val _services = services.toVector
+        def get[T: ClassTag]: Option[T] = {
+          val clazz = summon[ClassTag[T]].runtimeClass
+          _services.collectFirst {
+            case service if clazz.isInstance(service) => service.asInstanceOf[T]
+          }
+        }
+        def orElse(other: Port): Port = Port.combined(this, other)
+      }
+
+    def combined(primary: Port, secondary: Port): Port =
+      new Port {
+        def get[T: ClassTag]: Option[T] =
+          primary.get[T].orElse(secondary.get[T])
+        def orElse(other: Port): Port =
+          Port.combined(this, other)
+      }
+  }
+
   final case class ApplicationConfig(
     httpDriver: Option[HttpDriver] = None,
     config: Option[org.goldenport.configuration.Configuration] = None
@@ -374,6 +433,16 @@ object Component {
       instanceid: ComponentInstanceId,
       protocol: Protocol
     ): Core = {
+      create(name, componentid, instanceid, protocol, InMemoryJobEngine.create())
+    }
+
+    def create(
+      name: String,
+      componentid: ComponentId,
+      instanceid: ComponentInstanceId,
+      protocol: Protocol,
+      jobEngine: JobEngine
+    ): Core = {
       val mergedProtocol = _with_default_services(protocol)
       Core(
         name,
@@ -383,7 +452,7 @@ object Component {
         ProtocolLogic(mergedProtocol),
         None,
         ActionEngine.create(),
-        InMemoryJobEngine.create(),
+        jobEngine,
       )
     }
 
@@ -435,7 +504,8 @@ object Component {
       val xs = create_Components(params)
       xs.map { comp =>
         val core = create_Core(params, comp)
-        comp.initialize(ComponentInit(params.subsystem, core, params.origin))
+        val sharedCore = core.copy(jobEngine = params.subsystem.jobEngine)
+        comp.initialize(ComponentInit(params.subsystem, sharedCore, params.origin))
       }
     }
 

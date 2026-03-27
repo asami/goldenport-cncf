@@ -92,8 +92,16 @@ final class ComponentFactory(
   private def _bootstrap_event_reception(
     component: Component
   ): Unit = {
+    val store = component.subsystem.map(_.eventStore).getOrElse(EventStore.inMemory)
+    val _ = component.withEventStore(store)
+    component.jobEngine match {
+      case m: org.goldenport.cncf.job.InMemoryJobEngine =>
+        m.withEventStore(store)
+      case _ =>
+        ()
+    }
     if (component.eventReceptionDefinitions.nonEmpty || component.eventSubscriptionDefinitions.nonEmpty) {
-      val engine = EventEngine.noop(DataStore.noop(), eventstore = EventStore.inMemory)
+      val engine = EventEngine.noop(DataStore.noop(), eventstore = store)
       val bus = EventBus.default(engine)
       val reception = createEventReceptionWithOperationDispatcher(component, bus)
       component.withEventReception(reception)

@@ -6,6 +6,8 @@ import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.builtin.admin.AdminComponent
 import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.cncf.component.builtin.debug.DebugComponent
+import org.goldenport.cncf.component.builtin.event.EventComponent
+import org.goldenport.cncf.component.builtin.jobcontrol.JobControlComponent
 import org.goldenport.cncf.component.builtin.specification.SpecificationComponent
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.cli.RunMode
@@ -24,7 +26,7 @@ import org.goldenport.protocol.spec as spec
  * @since   Jan.  7, 2026
  *  version Jan. 30, 2026
  *  version Feb. 15, 2026
- * @version Mar. 26, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {
@@ -133,7 +135,7 @@ object DefaultSubsystemFactory {
         runMode = runMode
       )
     val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
-    val comps = Vector(_admin, _client, DebugComponent.Factory, _spec)
+    val comps = Vector(_admin, _client, DebugComponent.Factory, EventComponent.Factory, JobControlComponent.Factory, _spec)
       .flatMap(_.create(params))
     subsystem.add(comps)
   }

@@ -9,6 +9,7 @@ import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentLogic}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.event.{EventId, EventLane, EventRecord, EventStore}
 import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.provisional.observation.Taxonomy
 
@@ -19,41 +20,53 @@ import org.goldenport.provisional.observation.Taxonomy
  */
 final case class JobId(
   major: String,
-  minor: String
-) extends UniversalId(major, minor, "job")
+  minor: String,
+  private val _preservedParts: Option[UniversalId.Parts] = None
+) extends UniversalId(major, minor, "job") {
+  override def value: String = _preservedParts.map(_.value).getOrElse(super.value)
+  override def parts: UniversalId.Parts = _preservedParts.getOrElse(super.parts)
+}
 
 object JobId {
   def generate(): JobId =
     JobId("cncf", "job")
 
   def parse(s: String): Consequence[JobId] =
-    UniversalId.parseParts(s, "job").map(parts => JobId(parts.major, parts.minor))
+    UniversalId.parseParts(s, "job").map(parts => JobId(parts.major, parts.minor, Some(parts)))
 }
 
 final case class TaskId(
   major: String,
-  minor: String
-) extends UniversalId(major, minor, "task")
+  minor: String,
+  private val _preservedParts: Option[UniversalId.Parts] = None
+) extends UniversalId(major, minor, "task") {
+  override def value: String = _preservedParts.map(_.value).getOrElse(super.value)
+  override def parts: UniversalId.Parts = _preservedParts.getOrElse(super.parts)
+}
 
 object TaskId {
   def generate(): TaskId =
     TaskId("cncf", "task")
 
   def parse(s: String): Consequence[TaskId] =
-    UniversalId.parseParts(s, "task").map(parts => TaskId(parts.major, parts.minor))
+    UniversalId.parseParts(s, "task").map(parts => TaskId(parts.major, parts.minor, Some(parts)))
 }
 
 final case class ActionId(
   major: String,
-  minor: String
-) extends UniversalId(major, minor, "action")
+  minor: String,
+  private val _preservedParts: Option[UniversalId.Parts] = None
+) extends UniversalId(major, minor, "action") {
+  override def value: String = _preservedParts.map(_.value).getOrElse(super.value)
+  override def parts: UniversalId.Parts = _preservedParts.getOrElse(super.parts)
+}
 
 object ActionId {
   def generate(): ActionId =
     ActionId("cncf", "action")
 
   def parse(s: String): Consequence[ActionId] =
-    UniversalId.parseParts(s, "action").map(parts => ActionId(parts.major, parts.minor))
+    UniversalId.parseParts(s, "action").map(parts => ActionId(parts.major, parts.minor, Some(parts)))
 }
 
 final case class JobContext(
@@ -356,6 +369,12 @@ final class InMemoryJobEngine(
 ) extends JobEngine {
   private val _durable_jobs = new ConcurrentHashMap[JobId, JobRecord]()
   private val _runtime_jobs = new ConcurrentHashMap[JobId, JobRecord]()
+  private var _event_store: Option[EventStore] = None
+
+  def withEventStore(store: EventStore): InMemoryJobEngine = {
+    _event_store = Some(store)
+    this
+  }
 
   def submit(tasks: List[JobTask], ctx: ExecutionContext): JobId =
     submit(tasks, ctx, _default_submit_option(tasks))
@@ -395,6 +414,14 @@ final class InMemoryJobEngine(
       debug = initialdebug
     )
     _put_record(record)
+    _append_event_(
+      name = "job.submitted",
+      payload = Map(
+        "job-id" -> jobid.value,
+        "status" -> JobStatus.Submitted.toString,
+        "request-summary" -> initialdebug.requestSummary.getOrElse("")
+      )
+    )
     option.runMode match {
       case JobRunMode.Async =>
         _run_job_async_(jobid, tasks, ctx)
@@ -478,10 +505,24 @@ final class InMemoryJobEngine(
   ): Unit = {
     _append_timeline_(jobid, "job.running", None, None, None)
     _update_record_(jobid, JobStatus.Running, None)
+    _append_event_(
+      name = "job.running",
+      payload = Map(
+        "job-id" -> jobid.value,
+        "status" -> JobStatus.Running.toString
+      )
+    )
     tasks match {
       case Nil =>
         _append_timeline_(jobid, "job.succeeded", None, None, Some("no task"))
         _update_record_(jobid, JobStatus.Succeeded, None)
+        _append_event_(
+          name = "job.succeeded",
+          payload = Map(
+            "job-id" -> jobid.value,
+            "status" -> JobStatus.Succeeded.toString
+          )
+        )
       case _ =>
         var previous: Option[TaskId] = None
         var failure: Option[Conclusion] = None
@@ -533,19 +574,33 @@ final class InMemoryJobEngine(
         }
         _get_record(jobid).map(_.status) match {
           case Some(JobStatus.Cancelled) =>
-            _append_timeline_(jobid, "job.cancelled", None, None, Some("cancelled"))
             _update_record_(jobid, JobStatus.Cancelled, Some(JobResult.Failure(Conclusion.simple("job cancelled"))))
           case _ =>
             failure match {
               case Some(c) =>
                 _append_timeline_(jobid, "job.failed", None, None, c.observation.getEffectiveMessage)
                 _update_record_(jobid, JobStatus.Failed, Some(JobResult.Failure(c)))
+                _append_event_(
+                  name = "job.failed",
+                  payload = Map(
+                    "job-id" -> jobid.value,
+                    "status" -> JobStatus.Failed.toString,
+                    "message" -> c.show
+                  )
+                )
               case None =>
                 _append_timeline_(jobid, "job.succeeded", None, None, None)
                 _update_record_(
                   jobid,
                   JobStatus.Succeeded,
                   successResponse.map(JobResult.Success.apply)
+                )
+                _append_event_(
+                  name = "job.succeeded",
+                  payload = Map(
+                    "job-id" -> jobid.value,
+                    "status" -> JobStatus.Succeeded.toString
+                  )
                 )
             }
         }
@@ -565,7 +620,9 @@ final class InMemoryJobEngine(
             case JobControlCommand.Retry =>
               _retry_job_(jobid, record)
             case _ =>
+              _append_timeline_for_control_(jobid, request.command, target)
               _update_record_(jobid, target, _control_result_for(target))
+              _append_event_for_control_(jobid, request.command, target)
           }
           request.option.mode match {
             case JobCommandMode.Async =>
@@ -593,8 +650,68 @@ final class InMemoryJobEngine(
       )
     )
     _append_timeline_(jobid, "job.retry.submitted", None, None, None)
+    _append_event_(
+      name = "job.retry.submitted",
+      payload = Map(
+        "job-id" -> jobid.value,
+        "status" -> JobStatus.Submitted.toString
+      )
+    )
     _run_job_async_(jobid, record.tasks, record.submittedContext)
   }
+
+  private def _append_timeline_for_control_(
+    jobid: JobId,
+    command: JobControlCommand,
+    status: JobStatus
+  ): Unit =
+    command match {
+      case JobControlCommand.Cancel =>
+        _append_timeline_(jobid, "job.cancelled", None, None, Some(status.toString))
+      case JobControlCommand.Suspend =>
+        _append_timeline_(jobid, "job.suspended", None, None, Some(status.toString))
+      case JobControlCommand.Resume =>
+        _append_timeline_(jobid, "job.resumed", None, None, Some(status.toString))
+      case JobControlCommand.Retry =>
+        ()
+    }
+
+  private def _append_event_for_control_(
+    jobid: JobId,
+    command: JobControlCommand,
+    status: JobStatus
+  ): Unit =
+    command match {
+      case JobControlCommand.Cancel =>
+        _append_event_(
+          name = "job.cancelled",
+          payload = Map(
+            "job-id" -> jobid.value,
+            "status" -> status.toString,
+            "control-command" -> command.toString
+          )
+        )
+      case JobControlCommand.Suspend =>
+        _append_event_(
+          name = "job.suspended",
+          payload = Map(
+            "job-id" -> jobid.value,
+            "status" -> status.toString,
+            "control-command" -> command.toString
+          )
+        )
+      case JobControlCommand.Resume =>
+        _append_event_(
+          name = "job.resumed",
+          payload = Map(
+            "job-id" -> jobid.value,
+            "status" -> status.toString,
+            "control-command" -> command.toString
+          )
+        )
+      case JobControlCommand.Retry =>
+        ()
+    }
 
   private def _control_result_for(status: JobStatus): Option[JobResult] =
     status match {
@@ -944,6 +1061,28 @@ final class InMemoryJobEngine(
         JobSubmitOption(persistence = JobPersistencePolicy.Ephemeral)
       case _ =>
         JobSubmitOption(persistence = JobPersistencePolicy.Persistent)
+    }
+
+  private def _append_event_(
+    name: String,
+    payload: Map[String, Any]
+  ): Unit =
+    _event_store.foreach { store =>
+      val _ = store.append(
+        Vector(
+          EventRecord(
+            id = EventId.generate(),
+            name = name,
+            kind = name,
+            payload = payload,
+            attributes = Map.empty,
+            createdAt = Instant.now(),
+            persistent = true,
+            status = EventRecord.Status.Stored,
+            lane = EventLane.NonTransactional
+          )
+        )
+      )
     }
 }
 

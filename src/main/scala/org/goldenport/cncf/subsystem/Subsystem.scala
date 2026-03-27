@@ -19,6 +19,8 @@ import org.goldenport.cncf.component.ComponentLocator.NameLocator
 import org.goldenport.cncf.component.builtin.debug.DebugComponent
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
+import org.goldenport.cncf.event.{EventStore}
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.protocol.{Property, Request, Response}
 
@@ -49,6 +51,8 @@ final class Subsystem(
   private var _component_space: ComponentSpace = ComponentSpace()
   private var _resolver: OperationResolver = OperationResolver.empty
   private val _http_driver: Option[HttpDriver] = httpdriver
+  private val _job_engine: JobEngine = InMemoryJobEngine.create()
+  private val _event_store: EventStore = EventStore.inMemory
 
   def globalRuntimeContext: GlobalRuntimeContext = {
     val a = _find_global_runtime_context(scopeContext)
@@ -68,6 +72,8 @@ final class Subsystem(
     }
 
   def httpDriver: Option[HttpDriver] = _http_driver
+  def jobEngine: JobEngine = _job_engine
+  def eventStore: EventStore = _event_store
   def serverEmulatorBaseUrl: String = globalRuntimeContext.serverEmulatorBaseUrl
 
   def setup(cf: ComponentFactory): Subsystem = {
