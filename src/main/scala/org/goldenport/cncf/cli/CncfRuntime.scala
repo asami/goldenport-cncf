@@ -44,12 +44,13 @@ import org.goldenport.cncf.cli.RuntimeParameterParser
 import org.goldenport.cncf.cli.help.{CliHelpOperation, ClientCommandHelp, CommandProtocolHelp, HelpOperation, ServerCommandHelp}
 import org.goldenport.cncf.observability.{LogLevel, ObservabilityEngine, VisibilityPolicy}
 import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObservability, GlobalObservabilityGate, ObservabilityRoot}
+import org.goldenport.record.Record
 
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 27, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -152,17 +153,18 @@ object CncfRuntime extends GlobalObservable {
   ): Unit = {
     def get(key: String): Option[String] =
       ConfigurationAccess.getString(configuration, key)
+        .orElse(_legacy_framework_key(key).flatMap(ConfigurationAccess.getString(configuration, _)))
 
-    val logfile = get("cncf.runtime.logging.slf4j.file.path")
-      .orElse(get("cncf.logging.slf4j.file.path"))
-      .orElse(get("cncf.logging.external.file.path"))
+    val logfile = get("textus.runtime.logging.slf4j.file.path")
+      .orElse(get("textus.logging.slf4j.file.path"))
+      .orElse(get("textus.logging.external.file.path"))
       .getOrElse("target/cncf.d/external.log")
-    val level = get("cncf.runtime.logging.slf4j.level")
-      .orElse(get("cncf.logging.slf4j.level"))
-      .orElse(get("cncf.logging.level"))
+    val level = get("textus.runtime.logging.slf4j.level")
+      .orElse(get("textus.logging.slf4j.level"))
+      .orElse(get("textus.logging.level"))
       .getOrElse("warn")
-    val hikarilevel = get("cncf.logging.slf4j.hikari.level").getOrElse("warn")
-    val sqlitelevel = get("cncf.logging.slf4j.sqlite.level").getOrElse("warn")
+    val hikarilevel = get("textus.logging.slf4j.hikari.level").getOrElse("warn")
+    val sqlitelevel = get("textus.logging.slf4j.sqlite.level").getOrElse("warn")
 
     val p = Paths.get(logfile)
     Option(p.getParent).foreach(Files.createDirectories(_))
@@ -200,26 +202,43 @@ object CncfRuntime extends GlobalObservable {
       import cats.syntax.all.*
 
       val env =
-        conf.get[String]("cncf.runtime.environment")
+        _config_string(conf, "textus.runtime.environment", "cncf.runtime.environment")
           .map(_.getOrElse("default"))
 
       val obs =
-        conf.get[String]("cncf.runtime.observability")
+        _config_string(conf, "textus.runtime.observability", "cncf.runtime.observability")
           .map(_.map(v => Map("default" -> v)).getOrElse(Map.empty))
 
       (env, obs).mapN(Runtime.apply)
     }
+
+    private def _config_string(
+      conf: ResolvedConfiguration,
+      primary: String,
+      legacy: String
+    ): org.goldenport.Consequence[Option[String]] =
+      conf.get[String](primary) match {
+        case success @ Consequence.Success(Some(_)) => success
+        case _ => conf.get[String](legacy)
+      }
   }
+
+  private def _legacy_framework_key(
+    key: String
+  ): Option[String] =
+    if (key.startsWith("textus.")) Some("cncf." + key.stripPrefix("textus."))
+    else None
 
   // legacy entry points now delegate to the canonical initialization path
   // so command/client/server share the same component setup and startup import behavior.
   def buildSubsystem(
     extraComponents: Subsystem => Seq[Component] = _ => Nil,
-    mode: Option[RunMode] = None
+    mode: Option[RunMode] = None,
+    args: Array[String] = Array.empty[String]
   ): Subsystem =
     new CncfRuntime().initializeForEmbedding(
       cwd = Paths.get("").toAbsolutePath.normalize,
-      args = Array.empty[String],
+      args = args,
       modeHint = mode,
       extraComponents = extraComponents
     ).TAKE
@@ -300,7 +319,7 @@ object CncfRuntime extends GlobalObservable {
       case Left(code) => return code
       case Right(xs) => xs
     }
-    val subsystem = buildSubsystem(mode = Some(RunMode.Command))
+    val subsystem = buildSubsystem(mode = Some(RunMode.Command), args = normalizedArgs)
     val result = _to_request(subsystem, normalizedArgs).flatMap { req =>
       subsystem.execute(req)
     }
@@ -321,7 +340,7 @@ object CncfRuntime extends GlobalObservable {
       case Left(code) => return code
       case Right(xs) => xs
     }
-    val subsystem = buildSubsystem(extraComponents, Some(RunMode.Command))
+    val subsystem = buildSubsystem(extraComponents, Some(RunMode.Command), normalizedArgs)
     val result = _to_request(subsystem, normalizedArgs).flatMap { req =>
       subsystem.execute(req)
     }
@@ -437,7 +456,8 @@ object CncfRuntime extends GlobalObservable {
     configure_slf4j_simple(configuration)
     val (reposResult, argsAfterRepos, noDefaultComponents) =
       ComponentRepositorySpace.extractArgs(configuration, args)
-    val (backendoption, logLevelOption, actualargs0) = _extract_log_options(argsAfterRepos)
+    val (backendoption, logLevelOption, actualargs0) =
+      _extract_log_options(argsAfterRepos)
     val actualargs = _normalize_help_aliases(actualargs0)
     _execute_top_level_help(actualargs) match {
       case Some(code) => return code
@@ -457,7 +477,7 @@ object CncfRuntime extends GlobalObservable {
         2
       case Right(specs) =>
         val runtimeParse = _runtime_parameter_parser.parse(actualargs.toIndexedSeq)
-        val domainArgs = runtimeParse.residual.toArray
+        val domainArgs = _strip_configuration_args(runtimeParse.residual.toArray)
         val mode = _mode_from_args(domainArgs)
         val configuration = _resolve_configuration(cwd, argsAfterRepos)
         val runtimeConfig = _runtime_config(configuration)
@@ -528,7 +548,8 @@ object CncfRuntime extends GlobalObservable {
     configure_slf4j_simple(configuration)
     val (reposResult, argsAfterRepos, noDefaultComponents) =
       ComponentRepositorySpace.extractArgs(configuration, args)
-    val (backendoption, logLevelOption, actualargs0) = _extract_log_options(argsAfterRepos)
+    val (backendoption, logLevelOption, actualargs0) =
+      _extract_log_options(argsAfterRepos)
     val actualargs = _normalize_help_aliases(actualargs0)
     _execute_top_level_help(actualargs) match {
       case Some(code) => return code
@@ -549,7 +570,7 @@ object CncfRuntime extends GlobalObservable {
         2
       case Right(specs) =>
         val runtimeParse = _runtime_parameter_parser.parse(actualargs.toIndexedSeq)
-        val domainArgs = runtimeParse.residual.toArray
+        val domainArgs = _strip_configuration_args(runtimeParse.residual.toArray)
         val mode = _mode_from_args(domainArgs)
         val runtimeConfig = _runtime_config(configuration)
         val logBackend = _decide_backend(backendoption, _logging_backend_from_configuration(configuration), mode)
@@ -647,6 +668,14 @@ object CncfRuntime extends GlobalObservable {
     Console.err.println(message)
   }
 
+  private def _request_record_exclude_property(name: String): Boolean =
+    name.startsWith("textus.") ||
+      name.startsWith("cncf.") ||
+      name.startsWith("query.")
+
+  private def _request_to_record(req: Request): Record =
+    req.toRecord(excludeProperty = _request_record_exclude_property)
+
   private def _print_usage(): Unit = {
     val text =
       """Usage:
@@ -672,7 +701,7 @@ object CncfRuntime extends GlobalObservable {
   private def _extract_log_options(
     args: Array[String]
   ): (Option[String], Option[String], Array[String]) = {
-    // Canonical CLI keys: --cncf.logging.backend / --cncf.logging.level
+    // Canonical CLI keys: --textus.logging.backend / --textus.logging.level
     // Other forms are experimental and kept for transitional use.
     var logBackendOption: Option[String] = None
     var logLevelOption: Option[String] = None
@@ -685,9 +714,19 @@ object CncfRuntime extends GlobalObservable {
       } else if (current == "--log-backend" && i + 1 < args.length) { // experimental
         logBackendOption = Some(args(i + 1))
         i = i + 1
-      } else if (current.startsWith("--cncf.runtime.logging.backend=")) { // experimental
+      } else if (current.startsWith("--textus.runtime.logging.backend=")) { // experimental
+        logBackendOption = Some(current.stripPrefix("--textus.runtime.logging.backend="))
+      } else if (current == "--textus.runtime.logging.backend" && i + 1 < args.length) { // experimental
+        logBackendOption = Some(args(i + 1))
+        i = i + 1
+      } else if (current.startsWith("--cncf.runtime.logging.backend=")) { // legacy
         logBackendOption = Some(current.stripPrefix("--cncf.runtime.logging.backend="))
-      } else if (current == "--cncf.runtime.logging.backend" && i + 1 < args.length) { // experimental
+      } else if (current == "--cncf.runtime.logging.backend" && i + 1 < args.length) { // legacy
+        logBackendOption = Some(args(i + 1))
+        i = i + 1
+      } else if (current.startsWith("--textus.logging.backend=")) {
+        logBackendOption = Some(current.stripPrefix("--textus.logging.backend="))
+      } else if (current == "--textus.logging.backend" && i + 1 < args.length) {
         logBackendOption = Some(args(i + 1))
         i = i + 1
       } else if (current.startsWith("--cncf.logging.backend=")) {
@@ -700,9 +739,19 @@ object CncfRuntime extends GlobalObservable {
       } else if (current == "--log-level" && i + 1 < args.length) { // experimental
         logLevelOption = Some(args(i + 1))
         i = i + 1
-      } else if (current.startsWith("--cncf.runtime.logging.level=")) { // experimental
+      } else if (current.startsWith("--textus.runtime.logging.level=")) { // experimental
+        logLevelOption = Some(current.stripPrefix("--textus.runtime.logging.level="))
+      } else if (current == "--textus.runtime.logging.level" && i + 1 < args.length) { // experimental
+        logLevelOption = Some(args(i + 1))
+        i = i + 1
+      } else if (current.startsWith("--cncf.runtime.logging.level=")) { // legacy
         logLevelOption = Some(current.stripPrefix("--cncf.runtime.logging.level="))
-      } else if (current == "--cncf.runtime.logging.level" && i + 1 < args.length) { // experimental
+      } else if (current == "--cncf.runtime.logging.level" && i + 1 < args.length) { // legacy
+        logLevelOption = Some(args(i + 1))
+        i = i + 1
+      } else if (current.startsWith("--textus.logging.level=")) {
+        logLevelOption = Some(current.stripPrefix("--textus.logging.level="))
+      } else if (current == "--textus.logging.level" && i + 1 < args.length) {
         logLevelOption = Some(args(i + 1))
         i = i + 1
       } else if (current.startsWith("--cncf.logging.level=")) {
@@ -744,14 +793,18 @@ object CncfRuntime extends GlobalObservable {
   private def _logging_backend_from_configuration(
     configuration: ResolvedConfiguration
   ): Option[String] = {
-    ConfigurationAccess.getString(configuration, "cncf.runtime.logging.backend")
+    ConfigurationAccess.getString(configuration, "textus.runtime.logging.backend")
+      .orElse(ConfigurationAccess.getString(configuration, "textus.logging.backend"))
+      .orElse(ConfigurationAccess.getString(configuration, "cncf.runtime.logging.backend"))
       .orElse(ConfigurationAccess.getString(configuration, "cncf.logging.backend"))
   }
 
   private def _log_level_from_configuration(
     configuration: ResolvedConfiguration
   ): Option[String] = {
-    ConfigurationAccess.getString(configuration, "cncf.runtime.logging.level")
+    ConfigurationAccess.getString(configuration, "textus.runtime.logging.level")
+      .orElse(ConfigurationAccess.getString(configuration, "textus.logging.level"))
+      .orElse(ConfigurationAccess.getString(configuration, "cncf.runtime.logging.level"))
       .orElse(ConfigurationAccess.getString(configuration, "cncf.logging.level"))
   }
 
@@ -1054,8 +1107,13 @@ object CncfRuntime extends GlobalObservable {
     properties: List[Property],
     format: String
   ): List[Property] = {
-    val withoutformat = properties.filterNot(_.name.equalsIgnoreCase("cncf.format"))
-    withoutformat :+ Property("cncf.format", format, None)
+    val withoutformat = properties.filterNot(p =>
+      p.name.equalsIgnoreCase("textus.format") ||
+        p.name.equalsIgnoreCase("textus.output.format") ||
+        p.name.equalsIgnoreCase("cncf.format") ||
+        p.name.equalsIgnoreCase("cncf.output.format")
+    )
+    withoutformat :+ Property("textus.format", format, None)
   }
 
   private def _resolve_format(
@@ -1456,9 +1514,9 @@ object CncfRuntime extends GlobalObservable {
   ): Map[String, String] = {
     val entries = scala.collection.mutable.Map.empty[String, String]
     val alias = Map(
-      "log-level" -> "cncf.logging.level",
-      "log-backend" -> "cncf.logging.backend",
-      "format" -> "cncf.output.format"
+      "log-level" -> "textus.logging.level",
+      "log-backend" -> "textus.logging.backend",
+      "format" -> "textus.output.format"
     )
     var i = 0
     var stop = false
@@ -1472,13 +1530,13 @@ object CncfRuntime extends GlobalObservable {
         if (parts.length == 2) {
           val key = parts(0)
           val value = parts(1)
-          if (key.startsWith("cncf.")) {
+          if (key.startsWith("textus.") || key.startsWith("cncf.")) {
             entries.update(key, value)
           }
         }
       } else if (current.startsWith("--")) {
         val key = current.drop(2)
-        if (key.startsWith("cncf.") && i + 1 < args.length && !args(i + 1).startsWith("-")) {
+        if ((key.startsWith("textus.") || key.startsWith("cncf.")) && i + 1 < args.length && !args(i + 1).startsWith("-")) {
           entries.update(key, args(i + 1))
           i = i + 1
         }
@@ -1507,6 +1565,26 @@ object CncfRuntime extends GlobalObservable {
     configuration: ResolvedConfiguration
   ): RuntimeConfig =
     RuntimeConfig.from(configuration)
+
+  private def _strip_configuration_args(
+    args: Array[String]
+  ): Array[String] = {
+    val builder = Vector.newBuilder[String]
+    var i = 0
+    while (i < args.length) {
+      val current = args(i)
+      if (current.startsWith("--cncf.")) {
+        if (!current.contains("=") && i + 1 < args.length && !args(i + 1).startsWith("-")) {
+          i = i + 1
+        }
+      } else {
+        builder += current
+      }
+      i = i + 1
+    }
+    builder.result().toArray
+  }
+
 }
 
 enum RunMode(val name: String) {
@@ -1564,27 +1642,27 @@ private[cli] object RuntimeOptionsParser {
         options = options.copy(pathResolutionCommand = true)
       } else if (_is_key_value(current)) {
         _extract_key_value(current) match {
-          case Some((key, value)) if key == "cncf.format" || key == "cncf.output.format" =>
+          case Some((key, value)) if _is_format_key(key) =>
             options = options.copy(format = Some(value))
-          case Some((key, value)) if key == "cncf.path-resolution.command" =>
+          case Some((key, value)) if _is_path_resolution_command_key(key) =>
             options = options.copy(pathResolutionCommand = _is_truthy(value))
-          case Some((key, value)) if _is_cncf_key(key) =>
+          case Some((key, value)) if _is_framework_key(key) =>
             ()
-          case Some((key, value)) if _is_cncf_alias(key) =>
+          case Some((key, value)) if _is_framework_alias(key) =>
             ()
           case _ =>
             clean += current
         }
-      } else if (_is_cncf_key(current.drop(2))) {
+      } else if (_is_framework_key(current.drop(2))) {
         if (i + 1 < args.length && !args(i + 1).startsWith("-")) {
-          if (current.drop(2) == "cncf.format" || current.drop(2) == "cncf.output.format") {
+          if (_is_format_key(current.drop(2))) {
             options = options.copy(format = Some(args(i + 1)))
-          } else if (current.drop(2) == "cncf.path-resolution.command") {
+          } else if (_is_path_resolution_command_key(current.drop(2))) {
             options = options.copy(pathResolutionCommand = _is_truthy(args(i + 1)))
           }
           i = i + 1
         }
-      } else if (_is_cncf_alias(current.drop(1))) {
+      } else if (_is_framework_alias(current.drop(1))) {
         if (i + 1 < args.length && !args(i + 1).startsWith("-")) {
           i = i + 1
         }
@@ -1608,10 +1686,10 @@ private[cli] object RuntimeOptionsParser {
       .orElse(if (options.json) Some("json") else None)
       .orElse(Some(RuntimeDefaults.defaultFormat(mode)))
     formatvalue.foreach { value =>
-      b += Property("cncf.format", value, None)
+      b += Property("textus.format", value, None)
     }
-    if (options.debug) b += Property("cncf.debug", "true", None)
-    if (options.noExit) b += Property("cncf.no-exit", "true", None)
+    if (options.debug) b += Property("textus.debug", "true", None)
+    if (options.noExit) b += Property("textus.no-exit", "true", None)
     b.result()
   }
 
@@ -1647,15 +1725,36 @@ private[cli] object RuntimeOptionsParser {
       None
     }
 
-  private def _is_cncf_key(
+  private def _is_framework_key(
     key: String
   ): Boolean =
-    key.startsWith("cncf.")
+    key.startsWith("textus.") || key.startsWith("cncf.")
 
-  private def _is_cncf_alias(
+  private def _is_framework_alias(
     key: String
   ): Boolean =
-    key == "log-level" || key == "log-backend" || key == "format" || key == "path-resolution" || key == "cncf.format" || key == "cncf.path-resolution"
+    key == "log-level" ||
+      key == "log-backend" ||
+      key == "format" ||
+      key == "path-resolution" ||
+      key == "textus.format" ||
+      key == "textus.path-resolution" ||
+      key == "cncf.format" ||
+      key == "cncf.path-resolution"
+
+  private def _is_format_key(
+    key: String
+  ): Boolean =
+    key == "textus.format" ||
+      key == "textus.output.format" ||
+      key == "cncf.format" ||
+      key == "cncf.output.format"
+
+  private def _is_path_resolution_command_key(
+    key: String
+  ): Boolean =
+    key == "textus.path-resolution.command" ||
+      key == "cncf.path-resolution.command"
 
   private def _is_truthy(value: String): Boolean = {
     val normalized = value.trim.toLowerCase
@@ -1922,9 +2021,9 @@ class CncfRuntime() extends GlobalObservable {
   ): Map[String, String] = {
     val entries = scala.collection.mutable.Map.empty[String, String]
     val alias = Map(
-      "log-level" -> "cncf.logging.level",
-      "log-backend" -> "cncf.logging.backend",
-      "format" -> "cncf.output.format"
+      "log-level" -> "textus.logging.level",
+      "log-backend" -> "textus.logging.backend",
+      "format" -> "textus.output.format"
     )
     var i = 0
     var stop = false
@@ -1938,13 +2037,13 @@ class CncfRuntime() extends GlobalObservable {
         if (parts.length == 2) {
           val key = parts(0)
           val value = parts(1)
-          if (key.startsWith("cncf.")) {
+          if (key.startsWith("textus.") || key.startsWith("cncf.")) {
             entries.update(key, value)
           }
         }
       } else if (current.startsWith("--")) {
         val key = current.drop(2)
-        if (key.startsWith("cncf.") && i + 1 < args.length && !args(i + 1).startsWith("-")) {
+        if ((key.startsWith("textus.") || key.startsWith("cncf.")) && i + 1 < args.length && !args(i + 1).startsWith("-")) {
           entries.update(key, args(i + 1))
           i = i + 1
         }
@@ -2375,7 +2474,11 @@ class CncfRuntime() extends GlobalObservable {
     val haspathresolutionflag = args.contains("--path-resolution")
     val hasselector = args.exists(x => !x.startsWith("-"))
     if (haspathresolutionflag && !hasselector) {
-      req.properties.find(p => p.name == "cncf.path-resolution" || p.name == "path-resolution")
+      req.properties.find(p =>
+        p.name == "textus.path-resolution" ||
+          p.name == "cncf.path-resolution" ||
+          p.name == "path-resolution"
+      )
         .map(_.value.toString)
         .filter { x =>
           val lowered = x.trim.toLowerCase
@@ -2441,7 +2544,10 @@ class CncfRuntime() extends GlobalObservable {
               Argument(s"arg${index + 1}", value, None)
             }.toList, Nil, Nil)
           }
-          val runtimeproperties = _runtime_properties(runtimeOptions, mode).filterNot(_.name.equalsIgnoreCase("cncf.format"))
+          val runtimeproperties = _runtime_properties(runtimeOptions, mode).filterNot(p =>
+            p.name.equalsIgnoreCase("textus.format") ||
+              p.name.equalsIgnoreCase("cncf.format")
+          )
           val allproperties = _with_format_property(
             properties ++ runtimeproperties,
             _resolve_format(runtimeOptions, suffixformat, mode)
@@ -2534,8 +2640,10 @@ class CncfRuntime() extends GlobalObservable {
     properties: List[Property],
     format: String
   ): List[Property] = {
-    val withoutformat = properties.filterNot(_.name.equalsIgnoreCase("cncf.format"))
-    withoutformat :+ Property("cncf.format", format, None)
+    val withoutformat = properties.filterNot(p =>
+      p.name.equalsIgnoreCase("textus.format") || p.name.equalsIgnoreCase("cncf.format")
+    )
+    withoutformat :+ Property("textus.format", format, None)
   }
 
   private def _resolve_format(

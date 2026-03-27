@@ -6,7 +6,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Feb. 19, 2026
- * @version Mar. 27, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 case class Query[T](query: T) {
@@ -250,11 +250,20 @@ object Query {
     _expr_from_map(record.asMap)
 
   private def _expr_from_map(record: Map[String, Any]): Expr = {
-    val clauses = record.toVector.flatMap { case (name, value) =>
+    val clauses = record.toVector.flatMap {
+      case (name, _) if _is_framework_parameter(name) => None
+      case (name, _) if _is_query_control_parameter(name) => None
+      case (name, value) =>
       Some(Eq(name, value))
     }
     _compose_clauses(clauses)
   }
+
+  private def _is_framework_parameter(name: String): Boolean =
+    name.startsWith("textus.") || name.startsWith("cncf.")
+
+  private def _is_query_control_parameter(name: String): Boolean =
+    name.startsWith("query.")
 
   private def _compose_clauses(clauses: Vector[Expr]): Expr =
     clauses match {

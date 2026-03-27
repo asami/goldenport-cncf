@@ -18,7 +18,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Mar. 27, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -151,7 +151,14 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   ): ExecutionContext =
     GlobalRuntimeContext.current match {
       case Some(global) =>
-        lazy val context: ExecutionContext = ExecutionContext.withRuntimeContext(ctx, runtime)
+        lazy val context0: ExecutionContext = ExecutionContext.withRuntimeContext(ctx, runtime)
+        lazy val context: ExecutionContext =
+          global.commandExecutionMode.orElse(global.config.commandExecutionMode) match {
+            case Some(mode) =>
+              ExecutionContext.withFrameworkCommandExecutionMode(context0, mode)
+            case None =>
+              context0
+          }
         lazy val runtime: RuntimeContext = new RuntimeContext(
           core = ScopeContext.Core(
             kind = ScopeKind.Runtime,

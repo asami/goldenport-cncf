@@ -10,12 +10,13 @@ import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
 import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.config.RuntimeDefaults
+import org.goldenport.cncf.action.CommandExecutionMode
 
 /*
  * @since   Jan. 18, 2026
  *  version Jan. 30, 2026
  *  version Feb.  1, 2026
- * @version Mar. 26, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -25,22 +26,24 @@ final case class RuntimeConfig(
   httpDriver: HttpDriver,
   dataStoreSpace: DataStoreSpace,
   entityStoreSpace: EntityStoreSpace,
-  mode: RunMode
+  mode: RunMode,
+  commandExecutionMode: Option[CommandExecutionMode] = None
 )
 
 object RuntimeConfig {
-  val ServerEmulatorBaseUrlKey = "cncf.runtime.server-emulator.baseurl"
-  val HttpDriverKey = "cncf.runtime.http.driver"
-  val ModeKey = "cncf.runtime.mode"
-  val SubsystemNameKey = "cncf.runtime.subsystem"
-  val ComponentRepositoryKey = "cncf.component.repository"
+  val ServerEmulatorBaseUrlKey = "textus.runtime.server-emulator.baseurl"
+  val HttpDriverKey = "textus.runtime.http.driver"
+  val ModeKey = "textus.runtime.mode"
+  val CommandExecutionModeKey = "textus.runtime.command.execution-mode"
+  val SubsystemNameKey = "textus.runtime.subsystem"
+  val ComponentRepositoryKey = "textus.component.repository"
   val TextusIdentityComponentRepositoryKey = "textus.identity.component.repository"
-  val LogBackendKey = "cncf.logging.backend"
-  val RuntimeLogBackendKey = "cncf.runtime.logging.backend"
-  val LogLevelKey = "cncf.logging.level"
-  val RuntimeLogLevelKey = "cncf.runtime.logging.level"
-  val LogFilePathKey = "cncf.logging.file.path"
-  val RuntimeLogFilePathKey = "cncf.runtime.logging.file.path"
+  val LogBackendKey = "textus.logging.backend"
+  val RuntimeLogBackendKey = "textus.runtime.logging.backend"
+  val LogLevelKey = "textus.logging.level"
+  val RuntimeLogLevelKey = "textus.runtime.logging.level"
+  val LogFilePathKey = "textus.logging.file.path"
+  val RuntimeLogFilePathKey = "textus.runtime.logging.file.path"
 
   val DefaultServerEmulatorBaseUrl = "http://localhost/"
   val DefaultHttpDriverName = "real"
@@ -55,7 +58,8 @@ object RuntimeConfig {
       httpDriver = HttpDriverFactory.default,
       dataStoreSpace = DataStoreSpace.default(),
       entityStoreSpace = new EntityStoreSpace(),
-      mode = RunMode.Command
+      mode = RunMode.Command,
+      commandExecutionMode = None
     )
 
   def from(
@@ -63,10 +67,10 @@ object RuntimeConfig {
     modeOverride: Option[RunMode] = None
   ): RuntimeConfig = {
     val baseurl =
-      ConfigurationAccess.getString(configuration, ServerEmulatorBaseUrlKey)
+      _get_string(configuration, ServerEmulatorBaseUrlKey)
         .getOrElse(DefaultServerEmulatorBaseUrl)
     val httpdriver = {
-      val a = ConfigurationAccess.getString(configuration, HttpDriverKey)
+      val a = _get_string(configuration, HttpDriverKey)
         .getOrElse(DefaultHttpDriverName)
       HttpDriverFactory.create(a, baseurl) match {
         case Consequence.Success(driver) =>
@@ -77,16 +81,19 @@ object RuntimeConfig {
       }
     }
     val modeName =
-      ConfigurationAccess.getString(configuration, ModeKey)
+      _get_string(configuration, ModeKey)
         .getOrElse(DefaultMode)
     val mode =
       modeOverride.orElse(RunMode.from(modeName)).getOrElse(RunMode.Command)
+    val commandExecutionMode =
+      _get_string(configuration, CommandExecutionModeKey)
+        .flatMap(parseCommandExecutionMode)
     val logbackend: LogBackend = {
-      val name = ConfigurationAccess.getString(configuration, RuntimeLogBackendKey).
-        orElse(ConfigurationAccess.getString(configuration, LogBackendKey))
+      val name = _get_string(configuration, RuntimeLogBackendKey).
+        orElse(_get_string(configuration, LogBackendKey))
       val logfile =
-        ConfigurationAccess.getString(configuration, RuntimeLogFilePathKey).
-          orElse(ConfigurationAccess.getString(configuration, LogFilePathKey)).
+        _get_string(configuration, RuntimeLogFilePathKey).
+          orElse(_get_string(configuration, LogFilePathKey)).
           getOrElse(DefaultLogFilePath)
       name match {
         case Some("file") =>
@@ -98,8 +105,8 @@ object RuntimeConfig {
       }
     }
     val loglevel = {
-      val name = ConfigurationAccess.getString(configuration, RuntimeLogLevelKey).
-        orElse(ConfigurationAccess.getString(configuration, LogLevelKey))
+      val name = _get_string(configuration, RuntimeLogLevelKey).
+        orElse(_get_string(configuration, LogLevelKey))
       name match {
         case Some(s) => LogLevel.from(s) getOrElse LogLevel.Warn
         case None => RuntimeDefaults.defaultLogLevel(mode)
@@ -114,11 +121,38 @@ object RuntimeConfig {
       httpDriver = httpdriver,
       dataStoreSpace = datastorespace,
       entityStoreSpace = entitystorespace,
-      mode = mode
+      mode = mode,
+      commandExecutionMode = commandExecutionMode
     )
   }
 
   def create(conf: ResolvedConfiguration): Consequence[RuntimeConfig] = Consequence {
     from(conf)
   }
+
+  def parseCommandExecutionMode(
+    value: String
+  ): Option[CommandExecutionMode] = {
+    value.trim.toLowerCase match {
+      case "async" | "async-job" => Some(CommandExecutionMode.AsyncJob)
+      case "async-job-and-await" => Some(CommandExecutionMode.AsyncJobAndAwait)
+      case "sync-job" => Some(CommandExecutionMode.SyncJob)
+      case "sync-job-async-interface" => Some(CommandExecutionMode.SyncJobAsyncInterface)
+      case "sync" | "sync-direct" | "sync-direct-no-job" => Some(CommandExecutionMode.SyncDirectNoJob)
+      case _ => None
+    }
+  }
+
+  private def _get_string(
+    configuration: ResolvedConfiguration,
+    key: String
+  ): Option[String] =
+    ConfigurationAccess.getString(configuration, key)
+      .orElse(_legacy_alias(key).flatMap(ConfigurationAccess.getString(configuration, _)))
+
+  private def _legacy_alias(
+    key: String
+  ): Option[String] =
+    if (key.startsWith("textus.")) Some("cncf." + key.stripPrefix("textus."))
+    else None
 }

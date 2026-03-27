@@ -5,6 +5,7 @@ import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.config.ResolvedParameters
 import org.goldenport.cncf.cli.RunMode
+import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.path.AliasResolver
@@ -14,7 +15,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  * @since   Jan. 17, 2026
  *  version Jan. 19, 2026
  *  version Feb.  1, 2026
- * @version Mar. 26, 2026
+ * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GlobalRuntimeContext(
@@ -23,6 +24,7 @@ final class GlobalRuntimeContext(
 //  override val httpDriver: HttpDriver,
   val aliasResolver: AliasResolver,
   var runtimeMode: RunMode,
+  var commandExecutionMode: Option[CommandExecutionMode],
   val runtimeVersion: String,
   val subsystemName: String,
   var subsystemVersion: String,
@@ -52,6 +54,9 @@ final class GlobalRuntimeContext(
 
   def updateRuntimeMode(mode: RunMode): Unit =
     runtimeMode = mode
+
+  def updateCommandExecutionMode(mode: Option[CommandExecutionMode]): Unit =
+    commandExecutionMode = mode
 
   def updateSubsystemVersion(version: String): Unit =
     subsystemVersion = version
@@ -112,6 +117,7 @@ object GlobalRuntimeContext {
 //      runconfig.httpDriver,
       aliasresolver,
       runconfig.mode,
+      commandExecutionMode = runconfig.commandExecutionMode,
       runtimeVersion = CncfVersion.current,
       subsystemName = _subsystem_name(resolvedConfiguration),
       subsystemVersion = CncfVersion.current,
