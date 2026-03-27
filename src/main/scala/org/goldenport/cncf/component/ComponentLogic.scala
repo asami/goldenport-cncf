@@ -165,10 +165,22 @@ case class ComponentLogic(
     ctx: ExecutionContext
   ): CommandExecutionMode =
     ctx.framework.commandExecutionMode.getOrElse {
-      if (_is_command_script_combo(action))
-      CommandExecutionMode.SyncDirectNoJob
-      else
-        command.commandExecutionMode
+      _operation_execution_mode(action.request.operation).getOrElse {
+        if (_is_command_script_combo(action))
+          CommandExecutionMode.SyncDirectNoJob
+        else
+          command.commandExecutionMode
+      }
+    }
+
+  private def _operation_execution_mode(
+    operationname: String
+  ): Option[CommandExecutionMode] =
+    component.operationDefinitions.find(_.name == operationname).flatMap { definition =>
+      definition.execution.map(_.trim.toLowerCase).collect {
+        case "sync" => CommandExecutionMode.SyncDirectNoJob
+        case "async" => CommandExecutionMode.AsyncJob
+      }
     }
 
   private def _is_command_script_combo(action: Action): Boolean = {
