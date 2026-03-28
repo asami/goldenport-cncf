@@ -35,7 +35,7 @@ import org.goldenport.cncf.security.IngressSecurityResolver
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
- * @version Mar. 28, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -414,8 +414,10 @@ final class Subsystem(
       // } else {
       //   request
       // }
-      // response <- component.service.invokeRequest(enrichedRequest)
-      response <- component.service.invokeRequest(request)
+      // Route HTTP ingress through the standard request execution path so
+      // request-derived execution mode, security, and other ingress context
+      // are applied consistently with command/client execution.
+      response <- execute(request)
     } yield response
     r match {
       case Consequence.Success(res) =>

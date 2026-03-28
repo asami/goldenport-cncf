@@ -3,6 +3,8 @@ package org.goldenport.cncf.security
 import cats.free.Free
 import cats.~>
 import org.goldenport.{Consequence, ConsequenceT}
+import org.goldenport.cncf.action.CommandExecutionMode
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, GlobalRuntimeContext, ObservabilityContext, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SpanId, TraceId}
 import org.goldenport.cncf.event.EventReception
 import org.goldenport.cncf.job.{ActionId, JobContext, JobId, TaskId}
@@ -18,7 +20,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Mar. 28, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -60,9 +62,13 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   )
 
   def resolve(request: Request): Consequence[ResolvedIngressSecurity] = {
-    val attrs = request.properties.foldLeft(Map.empty[String, String]) { (z, p) =>
+    val fromProperties = request.properties.foldLeft(Map.empty[String, String]) { (z, p) =>
       val value = Option(p.value).map(_.toString).getOrElse("")
       if (p.name.nonEmpty && value.nonEmpty) z.updated(p.name, value) else z
+    }
+    val attrs = request.arguments.foldLeft(fromProperties) { (z, a) =>
+      val value = Option(a.value).map(_.toString).getOrElse("")
+      if (a.name.nonEmpty && value.nonEmpty) z.updated(a.name, value) else z
     }
     resolve(attrs)
   }
@@ -90,8 +96,23 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     ctx: ExecutionContext
   ): ExecutionContext = {
     val withobservability = _restore_observability(attributes, ctx).getOrElse(ctx)
-    _restore_job_context(attributes, withobservability).getOrElse(withobservability)
+    val withjob = _restore_job_context(attributes, withobservability).getOrElse(withobservability)
+    _restore_command_execution_mode(attributes, withjob).getOrElse(withjob)
   }
+
+  private def _restore_command_execution_mode(
+    attributes: Map[String, String],
+    ctx: ExecutionContext
+  ): Option[ExecutionContext] =
+    _find_first(
+      attributes,
+      Vector(
+        "textus.runtime.command.execution-mode",
+        "cncf.runtime.command.execution-mode"
+      )
+    ).flatMap(RuntimeConfig.parseCommandExecutionMode).map { mode =>
+      ExecutionContext.withFrameworkCommandExecutionMode(ctx, mode)
+    }
 
   private def _restore_observability(
     attributes: Map[String, String],

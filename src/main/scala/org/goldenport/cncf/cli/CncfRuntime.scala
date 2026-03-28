@@ -916,10 +916,7 @@ object CncfRuntime extends GlobalObservable {
         _client_path_from_request(req).flatMap { path =>
           val baseurl = _client_baseurl_from_request(req)
           val rawUrl = _build_client_url(baseurl, path)
-          val url = req.operation match {
-            case "get" => _append_client_query(rawUrl, req)
-            case _ => rawUrl
-          }
+          val url = _append_client_query(rawUrl, req)
           observe_trace(
             s"[client:trace] client action request operation=${req.operation} path=${path} url=${url}"
           )
