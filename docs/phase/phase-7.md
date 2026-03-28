@@ -1,6 +1,6 @@
 # Phase 7 — Aggregate and View Completion
 
-status = done
+status = close
 
 ## 1. Purpose of This Document
 

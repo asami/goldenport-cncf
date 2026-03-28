@@ -230,6 +230,31 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - No workflow expansion.
 - Artifact (work): `docs/phase/phase-8.md`.
 
+### Phase 9: Component/Subsystem Grammar and CAR/SAR Packaging
+- Goal: freeze Component/Subsystem grammar and establish CAR/SAR packaging/runtime intake.
+- Scope:
+- Define/freeze Component, Componentlet, ExtensionPoint, and Subsystem grammar.
+- Define CAR/SAR packaging contract and precedence rules.
+- Implement packaging flow in `sbt-cozy`.
+- Align CNCF runtime/projection loading with packaged artifacts.
+- Non-goals:
+- No new identity/account domain implementation.
+- No broad runtime redesign beyond grammar/packaging alignment.
+- Artifact (work): `docs/phase/phase-9.md`.
+
+### Phase 10: Textus Identity and User Account Practicalization
+- Goal: develop practical domain boundaries on top of the completed runtime/model foundations.
+- Scope:
+- Implement `textus-user-account` component.
+- Implement `textus-identity` subsystem.
+- Track `cncf-samples` as the practical verification vehicle for Phase 10.
+- Align runtime/projection/meta surfaces for practical command/query use.
+- Add executable specifications for account/identity integration behavior.
+- Non-goals:
+- No broad security redesign.
+- No federation/multi-tenant expansion in this phase.
+- Artifact (work): `docs/phase/phase-10.md`.
+
 ## 4. Relationship Between Phases
 - Later phases depend on earlier phases.
 - Phase 1.5 constrains Phase 2 and Phase 3.
@@ -244,7 +269,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Active checklist: `docs/notes/phase-2.6-demo-done-checklist.md`
+- Active phase dashboard: `docs/phase/phase-10.md`
+- Active phase checklist: `docs/phase/phase-10-checklist.md`
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
 ## 6. Explicit Non-Goals
@@ -253,35 +279,47 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - No REST adapter explosion.
 - No demo-driven architecture distortion.
 
-## 7. Future Development Items
+## 7. Current Phase Status Snapshot
 
-This section lists planned development areas to be incorporated in future phases beyond Phase 8.
-These items are not yet fully assigned to specific phases and may be grouped or split as the architecture evolves.
+- Phase 4: closed (`docs/phase/phase-4.md`)
+- Phase 5: closed (`docs/phase/phase-5.md`)
+- Phase 6: closed (`docs/phase/phase-6.md`)
+- Phase 7: closed (`docs/phase/phase-7.md`)
+- Phase 8: closed (`docs/phase/phase-8.md`)
+- Phase 9: closed (`docs/phase/phase-9.md`)
+- Phase 10: active/open (`docs/phase/phase-10.md`)
 
-### 7.1 Component Wiring and Subsystem Construction
+## 8. Future Development Items
+
+This section lists development areas beyond the currently defined active
+phase set. Once a work area is promoted into a phase document, the phase
+document becomes authoritative and this section must not duplicate detailed
+progress tracking.
+
+### 8.1 Component Wiring and Subsystem Construction
 - Build subsystems via Component wiring
 - Define and stabilize Component ports
 
-### 7.2 Security
+### 8.2 Security
 - Authentication
 - Authorization
 - Audit logging
 
-### 7.3 Metrics and Observability
+### 8.3 Metrics and Observability
 - Metrics collection
 - Observability integration
   - OpenTelemetry support
 
-### 7.4 Web Layer
+### 8.4 Web Layer
 - Dashboard
 - Management Console
 - Documentation
   - Manual
 
-### 7.5 Tagging and Knowledge Structure
+### 8.5 Tagging and Knowledge Structure
 - Hierarchical tagging model
 - Classification and navigation support
 
-### 7.6 RDF Integration
+### 8.6 RDF Integration
 - RDF-based data representation
 - External knowledge graph integration

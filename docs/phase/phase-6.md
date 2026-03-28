@@ -1,6 +1,6 @@
 # Phase 6 — Job Management (CQRS)
 
-status = open
+status = close
 
 ## 1. Purpose of This Document
 

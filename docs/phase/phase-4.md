@@ -1,6 +1,6 @@
 # Phase 4 — State Machine Foundation
 
-status = closed
+status = close
 
 ## 1. Purpose of This Document
 

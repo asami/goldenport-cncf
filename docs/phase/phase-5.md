@@ -1,6 +1,6 @@
 # Phase 5 — Event Lifecycle and Policy Integration
 
-status = closed
+status = close
 
 ## 1. Purpose of This Document
 
