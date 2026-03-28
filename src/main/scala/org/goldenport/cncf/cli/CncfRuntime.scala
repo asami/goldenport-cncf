@@ -254,40 +254,21 @@ object CncfRuntime extends GlobalObservable {
   // }
 
   def startServer(args: Array[String]): Unit = {
-    val engine = new HttpExecutionEngine(buildSubsystem(mode = Some(RunMode.Server)))
-    val server = new Http4sHttpServer(engine)
-    server.start(args)
+    val subsystem = buildSubsystem(mode = Some(RunMode.Server), args = args)
+    new CncfRuntime().startServer(subsystem, args)
   }
 
   def startServer(
     args: Array[String],
     extraComponents: Subsystem => Seq[Component]
   ): Unit = {
-    val engine = new HttpExecutionEngine(buildSubsystem(extraComponents, Some(RunMode.Server)))
-    val server = new Http4sHttpServer(engine)
-    server.start(args)
+    val subsystem = buildSubsystem(extraComponents, Some(RunMode.Server), args)
+    new CncfRuntime().startServer(subsystem, args)
   }
 
   def executeClient(args: Array[String]): Int = {
     val subsystem = buildSubsystem(mode = Some(RunMode.Client), args = args)
-    val operations = _component_operation_fqns(subsystem)
-    observe_trace(
-      s"executeClient start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
-    )
-    val result = _client_component(subsystem).flatMap { component =>
-        parseClientArgs(subsystem, args).flatMap { req =>
-        _client_action_from_request(req).flatMap { action =>
-          component.execute(action)
-        }
-      }
-    }
-    result match {
-      case Consequence.Success(res) =>
-        _print_operation_response(res)
-      case Consequence.Failure(conclusion) =>
-        _print_error(conclusion)
-    }
-    _exit_code(result)
+    new CncfRuntime().executeClient(subsystem, args)
   }
 
   def executeClient(
@@ -295,63 +276,20 @@ object CncfRuntime extends GlobalObservable {
     extraComponents: Subsystem => Seq[Component]
   ): Int = {
     val subsystem = buildSubsystem(extraComponents, Some(RunMode.Client), args)
-    val operations = _component_operation_fqns(subsystem)
-    observe_trace(
-      s"[client] executeClient(extra) start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
-    )
-    val result = _client_component(subsystem).flatMap { component =>
-        parseClientArgs(subsystem, args).flatMap { req =>
-        _client_action_from_request(req).flatMap { action =>
-          component.execute(action)
-        }
-      }
-    }
-    result match {
-      case Consequence.Success(res) =>
-        _print_operation_response(res)
-      case Consequence.Failure(conclusion) =>
-        _print_error(conclusion)
-    }
-    _exit_code(result)
+    new CncfRuntime().executeClient(subsystem, args)
   }
 
   def executeCommand(args: Array[String]): Int = {
-    val normalizedArgs = CommandProtocolHelp.normalizeArgs(args) match {
-      case Left(code) => return code
-      case Right(xs) => xs
-    }
-    val subsystem = buildSubsystem(mode = Some(RunMode.Command), args = normalizedArgs)
-    val result = _to_request(subsystem, normalizedArgs).flatMap { req =>
-      subsystem.execute(req)
-    }
-    result match {
-      case Consequence.Success(res) =>
-        _print_response(res)
-      case Consequence.Failure(conclusion) =>
-        _print_error(conclusion)
-    }
-    _exit_code(result)
+    val subsystem = buildSubsystem(mode = Some(RunMode.Command), args = args)
+    new CncfRuntime().executeCommand(subsystem, args)
   }
 
   def executeCommand(
     args: Array[String],
     extraComponents: Subsystem => Seq[Component]
   ): Int = {
-    val normalizedArgs = CommandProtocolHelp.normalizeArgs(args) match {
-      case Left(code) => return code
-      case Right(xs) => xs
-    }
-    val subsystem = buildSubsystem(extraComponents, Some(RunMode.Command), normalizedArgs)
-    val result = _to_request(subsystem, normalizedArgs).flatMap { req =>
-      subsystem.execute(req)
-    }
-    result match {
-      case Consequence.Success(res) =>
-        _print_response(res)
-      case Consequence.Failure(conclusion) =>
-        _print_error(conclusion)
-    }
-    _exit_code(result)
+    val subsystem = buildSubsystem(extraComponents, Some(RunMode.Command), args)
+    new CncfRuntime().executeCommand(subsystem, args)
   }
 
   def executeServerEmulator(args: Array[String]): Int = {
@@ -893,171 +831,69 @@ object CncfRuntime extends GlobalObservable {
   def parseClientArgs(
     subsystem: Subsystem,
     args: Array[String]
-  ): Consequence[Request] = {
-    if (args.isEmpty) {
-      Consequence.failure("client command is required")
-    } else {
-      _parse_client_command(subsystem, args.toIndexedSeq)
-    }
-  }
+  ): Consequence[Request] =
+    new CncfRuntime().parseClientArgs(subsystem, args)
 
   private def _client_action_from_request(
     req: Request
-  ): Consequence[org.goldenport.cncf.action.Action] = {
-      if (req.component.contains("client") && req.service.contains("http")) {
-        _client_path_from_request(req).flatMap { path =>
-          val baseurl = _client_baseurl_from_request(req)
-          val rawUrl = _build_client_url(baseurl, path)
-          val url = _append_client_query(rawUrl, req)
-          observe_trace(
-            s"[client:trace] client action request operation=${req.operation} path=${path} url=${url}"
-          )
-          req.operation match {
-        case "post" =>
-          _client_http_body_and_header(req).map { case (body, header) =>
-            new PostCommand(
-              req,
-              // "system.ping", // TODO generic
-              HttpRequest.fromUrl(
-                method = HttpRequest.POST,
-                url = new URL(url),
-                header = header,
-                body = body.map(_.value)
-              )
-            )
-          }
-        case "get" =>
-          _mime_body_from_property_names(req.properties, List("body", "data", "-d")).flatMap {
-            case Some(_) =>
-              Consequence.failure("client http get does not accept a body")
-            case None =>
-              Consequence.success(
-                new GetQuery(
-                  req,
-                  // "system.ping",
-                  HttpRequest.fromUrl(
-                    method = HttpRequest.GET,
-                    url = new URL(url)
-                  )
-                )
-              )
-          }
-        case other =>
-          Consequence.failure(s"client http operation not supported: ${other}")
-      }
-      }
-    } else {
-      Consequence.failure("client http request is required")
-    }
-  }
+  ): Consequence[org.goldenport.cncf.action.Action] =
+    new CncfRuntime()._client_action_from_request(req)
 
   private def _client_baseurl_from_request(
     req: Request
   ): String =
-    req.properties.find(_.name == "baseurl").map(_.value.toString)
-      .getOrElse(ClientConfig.DefaultBaseUrl)
+    new CncfRuntime()._client_baseurl_from_request(req)
 
-  private def _client_path_from_request(
+  private[cli] def _client_path_from_request(
     req: Request
   ): Consequence[String] =
-    req.arguments.find(_.name == "path").map(_.value.toString) match {
-      case Some(path) => Consequence.success(path)
-      case None => Consequence.failure("client http path is required")
-    }
+    new CncfRuntime()._client_path_from_request(req)
 
-  private def _client_mime_body_from_request(
+  private[cli] def _client_mime_body_from_request(
     req: Request
   ): Consequence[Option[MimeBody]] =
-    _mime_body_from_property_names(req.properties, List("body", "data", "-d")).flatMap {
-      case Some(body) => Consequence.success(Some(body))
-      case None =>
-        _client_form_mime_body(req) match {
-          case Some(body) => Consequence.success(Some(body))
-          case None => Consequence.success(_mime_body_from_arguments(req.arguments))
-        }
-    }
+    new CncfRuntime()._client_mime_body_from_request(req)
 
-  private def _client_http_body_and_header(
+  private[cli] def _client_http_body_and_header(
     req: Request
   ): Consequence[(Option[MimeBody], Record)] =
-    _client_mime_body_from_request(req).map {
-      case Some(body) if _is_form_urlencoded(body) =>
-        (Some(body), Record.create(Vector("Content-Type" -> "application/x-www-form-urlencoded")))
-      case Some(body) =>
-        (Some(body), Record.empty)
-      case None =>
-        (None, Record.empty)
-    }
+    new CncfRuntime()._client_http_body_and_header(req)
 
-  private def _client_form_mime_body(
+  private[cli] def _client_form_mime_body(
     req: Request
   ): Option[MimeBody] =
-    _client_form_encoded_payload(req).map { payload =>
-      MimeBody(
-        ContentType.parse("application/x-www-form-urlencoded"),
-        Bag.text(payload, StandardCharsets.UTF_8)
-      )
-    }
+    new CncfRuntime()._client_form_mime_body(req)
 
-  private def _client_form_encoded_payload(
+  private[cli] def _client_form_encoded_payload(
     req: Request
-  ): Option[String] = {
-    val argumentParams = req.arguments.collect {
-      case Argument(name, value, _) if name != "path" && !value.isInstanceOf[MimeBody] =>
-        s"${URLEncoder.encode(name, StandardCharsets.UTF_8)}=${URLEncoder.encode(value.toString, StandardCharsets.UTF_8)}"
-    }
-    val switchParams = req.switches.collect {
-      case Switch(name, value, _) if value =>
-        s"${URLEncoder.encode(name, StandardCharsets.UTF_8)}=true"
-    }
-    val propertyParams = _client_http_parameter_properties(req).map { p =>
-      s"${URLEncoder.encode(p.name, StandardCharsets.UTF_8)}=${URLEncoder.encode(p.value.toString, StandardCharsets.UTF_8)}"
-    }
-    val params = argumentParams ++ switchParams ++ propertyParams
-    if (params.isEmpty) None else Some(params.mkString("&"))
-  }
+  ): Option[String] =
+    new CncfRuntime()._client_form_encoded_payload(req)
 
-  private def _client_http_parameter_properties(
+  private[cli] def _client_http_parameter_properties(
     req: Request
   ): List[Property] =
-    req.properties.filter(p => _is_http_parameter_property(p.name))
+    new CncfRuntime()._client_http_parameter_properties(req)
 
-  private def _is_form_urlencoded(
+  private[cli] def _is_form_urlencoded(
     body: MimeBody
   ): Boolean =
-    body.contentType.mimeType.value.equalsIgnoreCase("application/x-www-form-urlencoded")
+    new CncfRuntime()._is_form_urlencoded(body)
 
-  private def _mime_body_from_property_names(
+  private[cli] def _mime_body_from_property_names(
     properties: List[Property],
     names: List[String]
   ): Consequence[Option[MimeBody]] =
-    names match {
-      case Nil => Consequence.success(None)
-      case head :: tail =>
-        properties.find(_.name == head) match {
-          case Some(property) => _mime_body_from_value(property.value).map(Some(_))
-          case None => _mime_body_from_property_names(properties, tail)
-        }
-    }
+    new CncfRuntime()._mime_body_from_property_names(properties, names)
 
-  private def _mime_body_from_value(
+  private[cli] def _mime_body_from_value(
     value: Any
   ): Consequence[MimeBody] =
-    value match {
-      case mime: MimeBody => Consequence.success(mime)
-      case bag: Bag => Consequence.success(MimeBody(ContentType.APPLICATION_OCTET_STREAM, bag))
-      case text: String =>
-        Consequence.success(
-          MimeBody(ContentType.APPLICATION_OCTET_STREAM, Bag.text(text, StandardCharsets.UTF_8))
-        )
-      case _ =>
-        Consequence.failure("client request body must be a MimeBody, Bag, or String")
-    }
+    new CncfRuntime()._mime_body_from_value(value)
 
-  private def _mime_body_from_arguments(
+  private[cli] def _mime_body_from_arguments(
     arguments: List[Argument]
   ): Option[MimeBody] =
-    arguments.collectFirst { case Argument(_, body: MimeBody, _) => body }
+    new CncfRuntime()._mime_body_from_arguments(arguments)
 
   private[cli] def parseCommandArgs(
     subsystem: Subsystem,
@@ -1321,22 +1157,10 @@ object CncfRuntime extends GlobalObservable {
     }
   }
 
-  private def _parse_client_path(
+  private[cli] def _parse_client_path(
     args: Seq[String]
-  ): Consequence[(String, Seq[String])] = {
-    if (args.isEmpty) {
-      Consequence.failure("client path is required")
-    } else {
-      args.toVector match {
-        case Vector(component, service, operation, rest @ _*) =>
-          Consequence.success((_normalize_path(s"/${component}/${service}/${operation}"), rest))
-        case Vector(single, rest @ _*) =>
-          _parse_component_service_operation_string(single).map { case (component, service, operation) =>
-            (_normalize_path(s"/${component}/${service}/${operation}"), rest)
-          }
-      }
-    }
-  }
+  ): Consequence[(String, Seq[String])] =
+    new CncfRuntime()._parse_client_path(args)
 
   private val _client_http_request_definition: RequestDefinition = {
     val base = RequestDefinition.curlLike
@@ -1348,218 +1172,84 @@ object CncfRuntime extends GlobalObservable {
     RequestDefinition(base.parameters :+ baseurlParameter)
   }
 
-  private def _parse_client_http(
+  private[cli] def _parse_client_http(
     operation: String,
     params: Seq[String]
-  ): Consequence[(String, List[Property])] = {
-    val args = Array(operation) ++ params.toArray
-    Request.parseArgs(_client_http_request_definition, args).flatMap { parsed =>
-      parsed.arguments.headOption match {
-        case Some(pathArgument) =>
-          Consequence.success((
-            _normalize_path(pathArgument.value.toString),
-            parsed.properties ++ _http_tail_properties(parsed.arguments.drop(1))
-          ))
-        case None =>
-          Consequence.failure("client http path is required")
-      }
-    }
-  }
+  ): Consequence[(String, List[Property])] =
+    new CncfRuntime()._parse_client_http(operation, params)
 
-  private def _http_tail_properties(
+  private[cli] def _http_tail_properties(
     arguments: List[Argument]
   ): List[Property] =
-    arguments.zipWithIndex.map { case (argument, index) =>
-      val text = argument.value.toString
-      text.split("=", 2).toList match {
-        case key :: value :: Nil if key.nonEmpty =>
-          Property(key, value, None)
-        case _ =>
-          Property(s"arg${index + 1}", text, None)
-      }
-    }
+    new CncfRuntime()._http_tail_properties(arguments)
 
-  private def _normalize_path(path: String): String = {
-    val normalized = if (path.contains(".")) path.replace(".", "/") else path
-    if (normalized.startsWith("/")) normalized else s"/${normalized}"
-  }
+  private[cli] def _normalize_path(path: String): String =
+    new CncfRuntime()._normalize_path(path)
 
-  private def _build_client_url(
+  private[cli] def _build_client_url(
     baseurl: String,
     path: String
-  ): String = {
-    val base = if (baseurl.endsWith("/")) baseurl.dropRight(1) else baseurl
-    val suffix = if (path.startsWith("/")) path else s"/${path}"
-    s"${base}${suffix}"
-  }
+  ): String =
+    new CncfRuntime()._build_client_url(baseurl, path)
 
-  private def _append_client_query(
+  private[cli] def _append_client_query(
     url: String,
     req: Request
   ): String =
-    _client_query_string(req) match {
-      case Some(query) => s"${url}?${query}"
-      case None => url
-    }
+    new CncfRuntime()._append_client_query(url, req)
 
   // TODO Phase 2.85: Replace this ad-hoc query parameter mapping with OperationDefinition-driven parameter handling.
-  private def _client_query_string(
+  private[cli] def _client_query_string(
     req: Request
-  ): Option[String] = {
-    val argumentParams = req.arguments.collect {
-      case Argument(name, value, _) if name != "path" && !value.isInstanceOf[MimeBody] =>
-        val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8)
-        val encodedValue = URLEncoder.encode(value.toString, StandardCharsets.UTF_8)
-        s"${encodedName}=${encodedValue}"
-    }
-    val switchParams = req.switches.collect {
-      case Switch(name, value, _) if value =>
-        val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8)
-        s"${encodedName}=true"
-    }
-    val propertyParams = req.properties.collect {
-      case Property(name, value, _) if _is_http_parameter_property(name) =>
-        val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8)
-        val encodedValue = URLEncoder.encode(value.toString, StandardCharsets.UTF_8)
-        s"${encodedName}=${encodedValue}"
-    }
-    val params = argumentParams ++ switchParams ++ propertyParams
-    if (params.isEmpty) None else Some(params.mkString("&"))
-  }
+  ): Option[String] =
+    new CncfRuntime()._client_query_string(req)
 
-  private def _is_http_parameter_property(
+  private[cli] def _is_http_parameter_property(
     name: String
   ): Boolean =
-    name != null &&
-      name.nonEmpty &&
-      name != "baseurl" &&
-      name != "body" &&
-      name != "data" &&
-      name != "-d"
+    new CncfRuntime()._is_http_parameter_property(name)
 
-  private def _parse_client_command(
+  private[cli] def _parse_client_command(
     subsystem: Subsystem,
     args: Seq[String]
-  ): Consequence[Request] = {
-    args.toVector match {
-      case Vector("http", operation, rest @ _*) =>
-        _parse_http_operation(operation).flatMap { op =>
-          if (rest.isEmpty) {
-            Consequence.failure("client http path is required")
-          } else {
-            _parse_client_http(op, rest).map { case (path, properties) =>
-              Request.of(
-                component = "client",
-                service = "http",
-                operation = op,
-                arguments = List(Argument("path", path, None)),
-                switches = Nil,
-                properties = properties
-              )
-            }
-          }
-        }
-      case Vector("http") =>
-        Consequence.failure("client http requires operation and path")
-      case _ =>
-        _to_request(subsystem, args.toArray, RunMode.Command).flatMap { req =>
-          val passthrough = _framework_option_passthrough(args)
-          val normalized =
-            if (passthrough.isEmpty) req
-            else req.copy(properties = req.properties ++ passthrough)
-          _command_request_to_client_request(subsystem, normalized)
-        }
-    }
-  }
+  ): Consequence[Request] =
+    new CncfRuntime()._parse_client_command(subsystem, args)
 
-  private def _parse_http_operation(
+  private[cli] def _parse_http_operation(
     operation: String
-  ): Consequence[String] = {
-    val lower = operation.toLowerCase
-    lower match {
-      case "get" | "post" => Consequence.success(lower)
-      case _ => Consequence.failure("client http operation must be get or post")
-    }
-  }
+  ): Consequence[String] =
+    new CncfRuntime()._parse_http_operation(operation)
 
-  private def _command_request_to_client_request(
+  private[cli] def _command_request_to_client_request(
     subsystem: Subsystem,
     req: Request
   ): Consequence[Request] =
-    _http_method_for_request(subsystem, req).map { method =>
-      Request.of(
-        component = "client",
-        service = "http",
-        operation = method,
-        arguments = Argument("path", _request_path(req), None) :: req.arguments,
-        switches = req.switches,
-        properties = req.properties
-      )
-    }
+    new CncfRuntime()._command_request_to_client_request(subsystem, req)
 
-  private def _request_path(req: Request): String =
-    NamingConventions.toNormalizedPath(
-      req.component.getOrElse(""),
-      req.service.getOrElse(""),
-      req.operation
-    )
+  private[cli] def _request_path(req: Request): String =
+    new CncfRuntime()._request_path(req)
 
-  private def _http_method_for_request(
+  private[cli] def _http_method_for_request(
     subsystem: Subsystem,
     req: Request
   ): Consequence[String] =
-    _operation_request_definition(subsystem, req).flatMap(_.createOperationRequest(req)).map {
-      case _: org.goldenport.cncf.action.QueryAction => "get"
-      case _ => "post"
-    }
+    new CncfRuntime()._http_method_for_request(subsystem, req)
 
-  private def _operation_request_definition(
+  private[cli] def _operation_request_definition(
     subsystem: Subsystem,
     req: Request
   ): Consequence[org.goldenport.protocol.spec.OperationDefinition] =
-    (for {
-      componentName <- req.component
-      serviceName <- req.service
-      component <- subsystem.components.find(_.name == componentName)
-      service <- component.protocol.services.services.find(_.name == serviceName)
-      operation <- service.operations.operations.find(_.name == req.operation)
-    } yield operation) match {
-      case Some(op) => Consequence.success(op)
-      case None => Consequence.failure(s"client target operation not found: ${req.name}")
-    }
+    new CncfRuntime()._operation_request_definition(subsystem, req)
 
-  private def _framework_option_passthrough(
+  private[cli] def _framework_option_passthrough(
     args: Seq[String]
-  ): List[Property] = {
-    val b = List.newBuilder[Property]
-    var i = 0
-    while (i < args.length) {
-      val current = args(i)
-      if (current.startsWith("--")) {
-        val key = current.drop(2)
-        if (_is_client_passthrough_framework_key(key)) {
-          if (current.contains("=")) {
-            val eq = current.indexOf('=')
-            val actualKey = current.substring(2, eq)
-            val value = current.substring(eq + 1)
-            b += Property(actualKey, value, None)
-          } else if (i + 1 < args.length && !args(i + 1).startsWith("-")) {
-            b += Property(key, args(i + 1), None)
-            i = i + 1
-          } else {
-            b += Property(key, "true", None)
-          }
-        }
-      }
-      i = i + 1
-    }
-    b.result()
-  }
+  ): List[Property] =
+    new CncfRuntime()._framework_option_passthrough(args)
 
-  private def _is_client_passthrough_framework_key(
+  private[cli] def _is_client_passthrough_framework_key(
     key: String
   ): Boolean =
-    key.startsWith("textus.") || key.startsWith("cncf.") || key.startsWith("query.")
+    new CncfRuntime()._is_client_passthrough_framework_key(key)
 
   private def _include_header(
     args: Array[String]
@@ -2297,8 +1987,18 @@ class CncfRuntime() extends GlobalObservable {
     0
   }
 
+  def startServer(subsystem: Subsystem, args: Array[String]): Unit = {
+    val engine = new HttpExecutionEngine(subsystem)
+    val server = new Http4sHttpServer(engine)
+    server.start(args)
+  }
+
   def executeClient(subsystem: Subsystem, req: Request): Int = {
     val args = _make_args(req)
+    executeClient(subsystem, args)
+  }
+
+  def executeClient(subsystem: Subsystem, args: Array[String]): Int = {
     val operations = _component_operation_fqns(subsystem)
     observe_trace(
       s"executeClient start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
@@ -2365,7 +2065,7 @@ class CncfRuntime() extends GlobalObservable {
     }
   }
 
-  private def _parse_client_command(
+  private[cli] def _parse_client_command(
     subsystem: Subsystem,
     args: Seq[String]
   ): Consequence[Request] = {
@@ -2394,7 +2094,7 @@ class CncfRuntime() extends GlobalObservable {
     }
   }
 
-  private def _command_request_to_client_request(
+  private[cli] def _command_request_to_client_request(
     subsystem: Subsystem,
     req: Request
   ): Consequence[Request] =
@@ -2409,14 +2109,14 @@ class CncfRuntime() extends GlobalObservable {
       )
     }
 
-  private def _request_path(req: Request): String =
+  private[cli] def _request_path(req: Request): String =
     NamingConventions.toNormalizedPath(
       req.component.getOrElse(""),
       req.service.getOrElse(""),
       req.operation
     )
 
-  private def _http_method_for_request(
+  private[cli] def _http_method_for_request(
     subsystem: Subsystem,
     req: Request
   ): Consequence[String] =
@@ -2425,7 +2125,7 @@ class CncfRuntime() extends GlobalObservable {
       case _ => "post"
     }
 
-  private def _operation_request_definition(
+  private[cli] def _operation_request_definition(
     subsystem: Subsystem,
     req: Request
   ): Consequence[org.goldenport.protocol.spec.OperationDefinition] =
@@ -2440,7 +2140,40 @@ class CncfRuntime() extends GlobalObservable {
       case None => Consequence.failure(s"client target operation not found: ${req.name}")
     }
 
-  private def _parse_http_operation(
+  private[cli] def _framework_option_passthrough(
+    args: Seq[String]
+  ): List[Property] = {
+    val b = List.newBuilder[Property]
+    var i = 0
+    while (i < args.length) {
+      val current = args(i)
+      if (current.startsWith("--")) {
+        val key = current.drop(2)
+        if (_is_client_passthrough_framework_key(key)) {
+          if (current.contains("=")) {
+            val eq = current.indexOf('=')
+            val actualKey = current.substring(2, eq)
+            val value = current.substring(eq + 1)
+            b += Property(actualKey, value, None)
+          } else if (i + 1 < args.length && !args(i + 1).startsWith("-")) {
+            b += Property(key, args(i + 1), None)
+            i = i + 1
+          } else {
+            b += Property(key, "true", None)
+          }
+        }
+      }
+      i = i + 1
+    }
+    b.result()
+  }
+
+  private[cli] def _is_client_passthrough_framework_key(
+    key: String
+  ): Boolean =
+    key.startsWith("textus.") || key.startsWith("cncf.") || key.startsWith("query.")
+
+  private[cli] def _parse_http_operation(
     operation: String
   ): Consequence[String] = {
     val lower = operation.toLowerCase
@@ -2450,7 +2183,7 @@ class CncfRuntime() extends GlobalObservable {
     }
   }
 
-  private def _parse_client_http(
+  private[cli] def _parse_client_http(
     operation: String,
     params: Seq[String]
   ): Consequence[(String, List[Property])] = {
@@ -2468,7 +2201,7 @@ class CncfRuntime() extends GlobalObservable {
     }
   }
 
-  private def _http_tail_properties(
+  private[cli] def _http_tail_properties(
     arguments: List[Argument]
   ): List[Property] =
     arguments.zipWithIndex.map { case (argument, index) =>
@@ -2481,12 +2214,12 @@ class CncfRuntime() extends GlobalObservable {
       }
     }
 
-  private def _normalize_path(path: String): String = {
+  private[cli] def _normalize_path(path: String): String = {
     val normalized = if (path.contains(".")) path.replace(".", "/") else path
     if (normalized.startsWith("/")) normalized else s"/${normalized}"
   }
 
-  private def _parse_client_path(
+  private[cli] def _parse_client_path(
     args: Seq[String]
   ): Consequence[(String, Seq[String])] = {
     if (args.isEmpty) {
@@ -2513,7 +2246,7 @@ class CncfRuntime() extends GlobalObservable {
     RequestDefinition(base.parameters :+ baseurlParameter)
   }
 
-  private def _client_action_from_request(
+  private[cli] def _client_action_from_request(
     req: Request
   ): Consequence[org.goldenport.cncf.action.Action] = {
       if (req.component.contains("client") && req.service.contains("http")) {
@@ -2562,13 +2295,13 @@ class CncfRuntime() extends GlobalObservable {
     }
   }
 
-  private def _client_baseurl_from_request(
+  private[cli] def _client_baseurl_from_request(
     req: Request
   ): String =
     req.properties.find(_.name == "baseurl").map(_.value.toString)
       .getOrElse(ClientConfig.DefaultBaseUrl)
 
-  private def _build_client_url(
+  private[cli] def _build_client_url(
     baseurl: String,
     path: String
   ): String = {
@@ -2577,7 +2310,7 @@ class CncfRuntime() extends GlobalObservable {
     s"${base}${suffix}"
   }
 
-  private def _append_client_query(
+  private[cli] def _append_client_query(
     url: String,
     req: Request
   ): String =
@@ -2587,7 +2320,7 @@ class CncfRuntime() extends GlobalObservable {
     }
 
   // TODO Phase 2.85: Replace this ad-hoc query parameter mapping with OperationDefinition-driven parameter handling.
-  private def _client_query_string(
+  private[cli] def _client_query_string(
     req: Request
   ): Option[String] = {
     val argumentParams = req.arguments.collect {
@@ -2606,7 +2339,7 @@ class CncfRuntime() extends GlobalObservable {
     if (params.isEmpty) None else Some(params.mkString("&"))
   }
 
-  private def _is_http_parameter_property(
+  private[cli] def _is_http_parameter_property(
     name: String
   ): Boolean =
     name != null &&
@@ -2616,7 +2349,7 @@ class CncfRuntime() extends GlobalObservable {
       name != "data" &&
       name != "-d"
 
-  private def _client_path_from_request(
+  private[cli] def _client_path_from_request(
     req: Request
   ): Consequence[String] =
     req.arguments.find(_.name == "path").map(_.value.toString) match {
@@ -2624,16 +2357,69 @@ class CncfRuntime() extends GlobalObservable {
       case None => Consequence.failure("client http path is required")
     }
 
-  private def _client_mime_body_from_request(
+  private[cli] def _client_mime_body_from_request(
     req: Request
   ): Consequence[Option[MimeBody]] =
     _mime_body_from_property_names(req.properties, List("body", "data", "-d")).flatMap {
       case Some(body) => Consequence.success(Some(body))
       case None =>
-        Consequence.success(_mime_body_from_arguments(req.arguments))
+        _client_form_mime_body(req) match {
+          case Some(body) => Consequence.success(Some(body))
+          case None => Consequence.success(_mime_body_from_arguments(req.arguments))
+        }
     }
 
-  private def _mime_body_from_property_names(
+  private[cli] def _client_http_body_and_header(
+    req: Request
+  ): Consequence[(Option[MimeBody], Record)] =
+    _client_mime_body_from_request(req).map {
+      case Some(body) if _is_form_urlencoded(body) =>
+        (Some(body), Record.create(Vector("Content-Type" -> "application/x-www-form-urlencoded")))
+      case Some(body) =>
+        (Some(body), Record.empty)
+      case None =>
+        (None, Record.empty)
+    }
+
+  private[cli] def _client_form_mime_body(
+    req: Request
+  ): Option[MimeBody] =
+    _client_form_encoded_payload(req).map { payload =>
+      MimeBody(
+        ContentType.parse("application/x-www-form-urlencoded"),
+        Bag.text(payload, StandardCharsets.UTF_8)
+      )
+    }
+
+  private[cli] def _client_form_encoded_payload(
+    req: Request
+  ): Option[String] = {
+    val argumentParams = req.arguments.collect {
+      case Argument(name, value, _) if name != "path" && !value.isInstanceOf[MimeBody] =>
+        s"${URLEncoder.encode(name, StandardCharsets.UTF_8)}=${URLEncoder.encode(value.toString, StandardCharsets.UTF_8)}"
+    }
+    val switchParams = req.switches.collect {
+      case Switch(name, value, _) if value =>
+        s"${URLEncoder.encode(name, StandardCharsets.UTF_8)}=true"
+    }
+    val propertyParams = _client_http_parameter_properties(req).map { p =>
+      s"${URLEncoder.encode(p.name, StandardCharsets.UTF_8)}=${URLEncoder.encode(p.value.toString, StandardCharsets.UTF_8)}"
+    }
+    val params = argumentParams ++ switchParams ++ propertyParams
+    if (params.isEmpty) None else Some(params.mkString("&"))
+  }
+
+  private[cli] def _client_http_parameter_properties(
+    req: Request
+  ): List[Property] =
+    req.properties.filter(p => _is_http_parameter_property(p.name))
+
+  private[cli] def _is_form_urlencoded(
+    body: MimeBody
+  ): Boolean =
+    body.contentType.mimeType.value.equalsIgnoreCase("application/x-www-form-urlencoded")
+
+  private[cli] def _mime_body_from_property_names(
     properties: List[Property],
     names: List[String]
   ): Consequence[Option[MimeBody]] =
@@ -2646,7 +2432,7 @@ class CncfRuntime() extends GlobalObservable {
         }
     }
 
-  private def _mime_body_from_value(
+  private[cli] def _mime_body_from_value(
     value: Any
   ): Consequence[MimeBody] =
     value match {
@@ -2660,7 +2446,7 @@ class CncfRuntime() extends GlobalObservable {
         Consequence.failure("client request body must be a MimeBody, Bag, or String")
     }
 
-  private def _mime_body_from_arguments(
+  private[cli] def _mime_body_from_arguments(
     arguments: List[Argument]
   ): Option[MimeBody] =
     arguments.collectFirst { case Argument(_, body: MimeBody, _) => body }
@@ -2670,6 +2456,10 @@ class CncfRuntime() extends GlobalObservable {
     val args =
       if (primaryargs.nonEmpty) primaryargs
       else _recover_command_args(_command_args_from_request(req), req)
+    executeCommand(subsystem, args)
+  }
+
+  def executeCommand(subsystem: Subsystem, args: Array[String]): Int = {
     val normalizedArgs = CommandProtocolHelp.normalizeArgs(args) match {
       case Left(code) => return code
       case Right(xs) => xs
