@@ -2,7 +2,7 @@ package org.goldenport.cncf.cli.help
 
 /*
  * @since   Mar.  6, 2026
- * @version Mar.  6, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 object ClientCommandHelp {
@@ -16,8 +16,8 @@ object ClientCommandHelp {
       |  Call operations on a remote CNCF server.
       |
       |Examples
-      |  cncf client http get
-      |  cncf client call domain.entity.createPerson
+      |  cncf client admin.system.ping
+      |  cncf client crud.entity.create-item --name alpha --title Alpha
       |""".stripMargin
 
   def execute(): Int = {

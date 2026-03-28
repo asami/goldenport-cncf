@@ -21,7 +21,7 @@ import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.http.{HttpRequest, HttpResponse}
-import org.goldenport.protocol.{Argument, Property, Protocol, ProtocolEngine, Request, Response}
+import org.goldenport.protocol.{Argument, Property, Protocol, ProtocolEngine, Request, Response, Switch}
 import org.goldenport.datatype.{ContentType, MimeBody}
 import org.goldenport.protocol.operation.{OperationResponse, OperationRequest}
 import org.goldenport.protocol.spec.{RequestDefinition, ResponseDefinition}
@@ -39,6 +39,7 @@ import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.component.repository.ComponentRepositorySpace
 import org.goldenport.cncf.importer.StartupImport
 import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
+import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.resolver.{CanonicalPath, PathResolution, PathResolutionResult}
 import org.goldenport.cncf.cli.RuntimeParameterParser
 import org.goldenport.cncf.cli.help.{CliHelpOperation, ClientCommandHelp, CommandProtocolHelp, HelpOperation, ServerCommandHelp}
@@ -268,13 +269,13 @@ object CncfRuntime extends GlobalObservable {
   }
 
   def executeClient(args: Array[String]): Int = {
-    val subsystem = buildSubsystem(mode = Some(RunMode.Client))
+    val subsystem = buildSubsystem(mode = Some(RunMode.Client), args = args)
     val operations = _component_operation_fqns(subsystem)
     observe_trace(
       s"executeClient start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
     )
     val result = _client_component(subsystem).flatMap { component =>
-        parseClientArgs(args).flatMap { req =>
+        parseClientArgs(subsystem, args).flatMap { req =>
         _client_action_from_request(req).flatMap { action =>
           component.execute(action)
         }
@@ -293,13 +294,13 @@ object CncfRuntime extends GlobalObservable {
     args: Array[String],
     extraComponents: Subsystem => Seq[Component]
   ): Int = {
-    val subsystem = buildSubsystem(extraComponents, Some(RunMode.Client))
+    val subsystem = buildSubsystem(extraComponents, Some(RunMode.Client), args)
     val operations = _component_operation_fqns(subsystem)
     observe_trace(
       s"[client] executeClient(extra) start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
     )
     val result = _client_component(subsystem).flatMap { component =>
-        parseClientArgs(args).flatMap { req =>
+        parseClientArgs(subsystem, args).flatMap { req =>
         _client_action_from_request(req).flatMap { action =>
           component.execute(action)
         }
@@ -610,7 +611,7 @@ object CncfRuntime extends GlobalObservable {
                 observe_trace(
                   s"[client:trace] run dispatching to client mode args=${domainArgs.drop(1).mkString(" ")}"
                 )
-                executeClient(domainArgs.drop(1))
+                executeClient((runtimeParse.consumed ++ domainArgs.drop(1)).toArray)
               case Some(RunMode.Command) =>
                 executeCommand(domainArgs.drop(1))
               case Some(RunMode.ServerEmulator) =>
@@ -890,22 +891,13 @@ object CncfRuntime extends GlobalObservable {
   // }
 
   def parseClientArgs(
+    subsystem: Subsystem,
     args: Array[String]
   ): Consequence[Request] = {
     if (args.isEmpty) {
       Consequence.failure("client command is required")
     } else {
-      _parse_client_command(args.toIndexedSeq).map {
-        case (operation, path, extraArgs, clientProperties) =>
-          Request.of(
-            component = "client",
-            service = "http",
-            operation = operation,
-            arguments = _client_arguments(path, extraArgs),
-            switches = Nil,
-            properties = clientProperties
-          )
-      }
+      _parse_client_command(subsystem, args.toIndexedSeq)
     }
   }
 
@@ -1010,9 +1002,18 @@ object CncfRuntime extends GlobalObservable {
   private def _client_form_encoded_payload(
     req: Request
   ): Option[String] = {
-    val params = _client_http_parameter_properties(req).map { p =>
+    val argumentParams = req.arguments.collect {
+      case Argument(name, value, _) if name != "path" && !value.isInstanceOf[MimeBody] =>
+        s"${URLEncoder.encode(name, StandardCharsets.UTF_8)}=${URLEncoder.encode(value.toString, StandardCharsets.UTF_8)}"
+    }
+    val switchParams = req.switches.collect {
+      case Switch(name, value, _) if value =>
+        s"${URLEncoder.encode(name, StandardCharsets.UTF_8)}=true"
+    }
+    val propertyParams = _client_http_parameter_properties(req).map { p =>
       s"${URLEncoder.encode(p.name, StandardCharsets.UTF_8)}=${URLEncoder.encode(p.value.toString, StandardCharsets.UTF_8)}"
     }
+    val params = argumentParams ++ switchParams ++ propertyParams
     if (params.isEmpty) None else Some(params.mkString("&"))
   }
 
@@ -1406,10 +1407,15 @@ object CncfRuntime extends GlobalObservable {
     req: Request
   ): Option[String] = {
     val argumentParams = req.arguments.collect {
-      case Argument(name, value, _) if name.startsWith("arg") =>
+      case Argument(name, value, _) if name != "path" && !value.isInstanceOf[MimeBody] =>
         val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8)
         val encodedValue = URLEncoder.encode(value.toString, StandardCharsets.UTF_8)
         s"${encodedName}=${encodedValue}"
+    }
+    val switchParams = req.switches.collect {
+      case Switch(name, value, _) if value =>
+        val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8)
+        s"${encodedName}=true"
     }
     val propertyParams = req.properties.collect {
       case Property(name, value, _) if _is_http_parameter_property(name) =>
@@ -1417,7 +1423,7 @@ object CncfRuntime extends GlobalObservable {
         val encodedValue = URLEncoder.encode(value.toString, StandardCharsets.UTF_8)
         s"${encodedName}=${encodedValue}"
     }
-    val params = argumentParams ++ propertyParams
+    val params = argumentParams ++ switchParams ++ propertyParams
     if (params.isEmpty) None else Some(params.mkString("&"))
   }
 
@@ -1432,8 +1438,9 @@ object CncfRuntime extends GlobalObservable {
       name != "-d"
 
   private def _parse_client_command(
+    subsystem: Subsystem,
     args: Seq[String]
-  ): Consequence[(String, String, Seq[String], List[Property])] = {
+  ): Consequence[Request] = {
     args.toVector match {
       case Vector("http", operation, rest @ _*) =>
         _parse_http_operation(operation).flatMap { op =>
@@ -1441,15 +1448,26 @@ object CncfRuntime extends GlobalObservable {
             Consequence.failure("client http path is required")
           } else {
             _parse_client_http(op, rest).map { case (path, properties) =>
-              (op, path, Seq.empty, properties)
+              Request.of(
+                component = "client",
+                service = "http",
+                operation = op,
+                arguments = List(Argument("path", path, None)),
+                switches = Nil,
+                properties = properties
+              )
             }
           }
         }
       case Vector("http") =>
         Consequence.failure("client http requires operation and path")
       case _ =>
-        _parse_client_path(args).map { case (path, extra) =>
-          ("get", path, extra, Nil)
+        _to_request(subsystem, args.toArray, RunMode.Command).flatMap { req =>
+          val passthrough = _framework_option_passthrough(args)
+          val normalized =
+            if (passthrough.isEmpty) req
+            else req.copy(properties = req.properties ++ passthrough)
+          _command_request_to_client_request(subsystem, normalized)
         }
     }
   }
@@ -1464,15 +1482,84 @@ object CncfRuntime extends GlobalObservable {
     }
   }
 
-  private def _client_arguments(
-    path: String,
-    extraArgs: Seq[String]
-  ): List[Argument] = {
-    val extras = extraArgs.zipWithIndex.map { case (value, index) =>
-      Argument(s"arg${index + 1}", value, None)
+  private def _command_request_to_client_request(
+    subsystem: Subsystem,
+    req: Request
+  ): Consequence[Request] =
+    _http_method_for_request(subsystem, req).map { method =>
+      Request.of(
+        component = "client",
+        service = "http",
+        operation = method,
+        arguments = Argument("path", _request_path(req), None) :: req.arguments,
+        switches = req.switches,
+        properties = req.properties
+      )
     }
-    Argument("path", path, None) :: extras.toList
+
+  private def _request_path(req: Request): String =
+    NamingConventions.toNormalizedPath(
+      req.component.getOrElse(""),
+      req.service.getOrElse(""),
+      req.operation
+    )
+
+  private def _http_method_for_request(
+    subsystem: Subsystem,
+    req: Request
+  ): Consequence[String] =
+    _operation_request_definition(subsystem, req).flatMap(_.createOperationRequest(req)).map {
+      case _: org.goldenport.cncf.action.QueryAction => "get"
+      case _ => "post"
+    }
+
+  private def _operation_request_definition(
+    subsystem: Subsystem,
+    req: Request
+  ): Consequence[org.goldenport.protocol.spec.OperationDefinition] =
+    (for {
+      componentName <- req.component
+      serviceName <- req.service
+      component <- subsystem.components.find(_.name == componentName)
+      service <- component.protocol.services.services.find(_.name == serviceName)
+      operation <- service.operations.operations.find(_.name == req.operation)
+    } yield operation) match {
+      case Some(op) => Consequence.success(op)
+      case None => Consequence.failure(s"client target operation not found: ${req.name}")
+    }
+
+  private def _framework_option_passthrough(
+    args: Seq[String]
+  ): List[Property] = {
+    val b = List.newBuilder[Property]
+    var i = 0
+    while (i < args.length) {
+      val current = args(i)
+      if (current.startsWith("--")) {
+        val key = current.drop(2)
+        if (_is_client_passthrough_framework_key(key)) {
+          if (current.contains("=")) {
+            val eq = current.indexOf('=')
+            val actualKey = current.substring(2, eq)
+            val value = current.substring(eq + 1)
+            b += Property(actualKey, value, None)
+          } else if (i + 1 < args.length && !args(i + 1).startsWith("-")) {
+            b += Property(key, args(i + 1), None)
+            i = i + 1
+          } else {
+            b += Property(key, "true", None)
+          }
+        }
+      }
+      i = i + 1
+    }
+    b.result()
   }
+
+  private def _is_client_passthrough_framework_key(
+    key: String
+  ): Boolean =
+    key.startsWith("textus.") || key.startsWith("cncf.") || key.startsWith("query.")
 
   private def _include_header(
     args: Array[String]
@@ -2217,7 +2304,7 @@ class CncfRuntime() extends GlobalObservable {
       s"executeClient start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
     )
     val result = _client_component(subsystem).flatMap { component =>
-        parseClientArgs(args).flatMap { req =>
+        parseClientArgs(subsystem, args).flatMap { req =>
         _client_action_from_request(req).flatMap { action =>
           component.execute(action)
         }
@@ -2268,38 +2355,20 @@ class CncfRuntime() extends GlobalObservable {
     }
 
   def parseClientArgs(
+    subsystem: Subsystem,
     args: Array[String]
   ): Consequence[Request] = {
     if (args.isEmpty) {
       Consequence.failure("client command is required")
     } else {
-      _parse_client_command(args.toIndexedSeq).map {
-        case (operation, path, extraArgs, clientProperties) =>
-          Request.of(
-            component = "client",
-            service = "http",
-            operation = operation,
-            arguments = _client_arguments(path, extraArgs),
-            switches = Nil,
-            properties = clientProperties
-          )
-      }
+      _parse_client_command(subsystem, args.toIndexedSeq)
     }
-  }
-
-  private def _client_arguments(
-    path: String,
-    extraArgs: Seq[String]
-  ): List[Argument] = {
-    val extras = extraArgs.zipWithIndex.map { case (value, index) =>
-      Argument(s"arg${index + 1}", value, None)
-    }
-    Argument("path", path, None) :: extras.toList
   }
 
   private def _parse_client_command(
+    subsystem: Subsystem,
     args: Seq[String]
-  ): Consequence[(String, String, Seq[String], List[Property])] = {
+  ): Consequence[Request] = {
     args.toVector match {
       case Vector("http", operation, rest @ _*) =>
         _parse_http_operation(operation).flatMap { op =>
@@ -2307,18 +2376,69 @@ class CncfRuntime() extends GlobalObservable {
             Consequence.failure("client http path is required")
           } else {
             _parse_client_http(op, rest).map { case (path, properties) =>
-              (op, path, Seq.empty, properties)
+              Request.of(
+                component = "client",
+                service = "http",
+                operation = op,
+                arguments = List(Argument("path", path, None)),
+                switches = Nil,
+                properties = properties
+              )
             }
           }
         }
       case Vector("http") =>
         Consequence.failure("client http requires operation and path")
       case _ =>
-        _parse_client_path(args).map { case (path, extra) =>
-          ("get", path, extra, Nil)
-        }
+        _to_request(subsystem, args.toArray, RunMode.Command).flatMap(_command_request_to_client_request(subsystem, _))
     }
   }
+
+  private def _command_request_to_client_request(
+    subsystem: Subsystem,
+    req: Request
+  ): Consequence[Request] =
+    _http_method_for_request(subsystem, req).map { method =>
+      Request.of(
+        component = "client",
+        service = "http",
+        operation = method,
+        arguments = Argument("path", _request_path(req), None) :: req.arguments,
+        switches = req.switches,
+        properties = req.properties
+      )
+    }
+
+  private def _request_path(req: Request): String =
+    NamingConventions.toNormalizedPath(
+      req.component.getOrElse(""),
+      req.service.getOrElse(""),
+      req.operation
+    )
+
+  private def _http_method_for_request(
+    subsystem: Subsystem,
+    req: Request
+  ): Consequence[String] =
+    _operation_request_definition(subsystem, req).flatMap(_.createOperationRequest(req)).map {
+      case _: org.goldenport.cncf.action.QueryAction => "get"
+      case _ => "post"
+    }
+
+  private def _operation_request_definition(
+    subsystem: Subsystem,
+    req: Request
+  ): Consequence[org.goldenport.protocol.spec.OperationDefinition] =
+    (for {
+      componentName <- req.component
+      serviceName <- req.service
+      component <- subsystem.components.find(_.name == componentName)
+      service <- component.protocol.services.services.find(_.name == serviceName)
+      operation <- service.operations.operations.find(_.name == req.operation)
+    } yield operation) match {
+      case Some(op) => Consequence.success(op)
+      case None => Consequence.failure(s"client target operation not found: ${req.name}")
+    }
 
   private def _parse_http_operation(
     operation: String
