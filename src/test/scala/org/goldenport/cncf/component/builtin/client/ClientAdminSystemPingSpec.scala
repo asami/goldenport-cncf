@@ -84,6 +84,7 @@ class ClientAdminSystemPingSpec
 
       When("the client CLI request is executed")
       val request = CncfRuntime.parseClientArgs(
+        harness.subsystem,
         Array("http", "get", "/admin/system/ping")
       )
       val result = request.flatMap { req =>
@@ -106,6 +107,7 @@ class ClientAdminSystemPingSpec
 
       When("the client CLI request is executed")
       val request = CncfRuntime.parseClientArgs(
+        harness.subsystem,
         Array("http", "post", "/admin/system/ping", "-d", "pong")
       )
       val result = request.flatMap { req =>
@@ -127,6 +129,7 @@ class ClientAdminSystemPingSpec
 
       When("the client CLI request includes domain key-value parameters")
       val request = CncfRuntime.parseClientArgs(
+        harness.subsystem,
         Array("http", "get", "/crud/entity/search-item-record", "name=alpha", "title=Alpha")
       )
       val result = request.flatMap { req =>

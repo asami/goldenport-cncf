@@ -4,7 +4,11 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 
 import org.goldenport.bag.{Bag, TextBag}
+import org.goldenport.cncf.component.ComponentCreate
+import org.goldenport.cncf.component.ComponentOrigin
+import org.goldenport.cncf.component.builtin.admin.AdminComponent
 import org.goldenport.cncf.config.ClientConfig
+import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.datatype.MimeBody
 import org.goldenport.protocol.{Argument, Property, Request}
 import org.goldenport.test.matchers.ConsequenceMatchers
@@ -15,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Feb.  6, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientRequestNormalizationSpec
@@ -27,6 +31,7 @@ class ClientRequestNormalizationSpec
 
   "Client HTTP request normalization" should {
     "normalize canonical http get/post forms" in {
+      val subsystem = TestComponentFactory.emptySubsystem("client-request-normalization")
       val table = Table(
         ("args", "operation", "path", "body"),
         (
@@ -45,7 +50,7 @@ class ClientRequestNormalizationSpec
 
       forAll(table) { (args, operation, path, body) =>
         Given("canonical client http CLI arguments")
-        val request = CncfRuntime.parseClientArgs(args)
+        val request = CncfRuntime.parseClientArgs(subsystem, args)
 
         When("the arguments are normalized into a Request")
         request should be_success
@@ -75,8 +80,10 @@ class ClientRequestNormalizationSpec
     }
 
     "normalize client sugar into http get" in {
+      val subsystem = _subsystem_with_admin()
       Given("client sugar arguments without explicit http operation")
       val request = CncfRuntime.parseClientArgs(
+        subsystem,
         Array("admin", "system", "ping")
       )
 
@@ -99,12 +106,14 @@ class ClientRequestNormalizationSpec
     }
 
     "resolve -d @file into Bag at request construction time" in {
+      val subsystem = TestComponentFactory.emptySubsystem("client-request-normalization")
       Given("a local file referenced via -d @path")
       val file = Files.createTempFile("cncf-client-body", ".txt")
       val _ = Files.writeString(file, "pong", StandardCharsets.UTF_8)
 
       try {
         val request = CncfRuntime.parseClientArgs(
+          subsystem,
           Array("http", "post", "/admin/system/ping", "-d", s"@${file}")
         )
 
@@ -128,8 +137,10 @@ class ClientRequestNormalizationSpec
     }
 
     "include explicit baseurl overrides" in {
+      val subsystem = TestComponentFactory.emptySubsystem("client-request-normalization")
       Given("client http arguments with an explicit baseurl")
       val request = CncfRuntime.parseClientArgs(
+        subsystem,
         Array("http", "get", "/admin/system/ping", "--baseurl", "http://example.test")
       )
 
@@ -146,6 +157,13 @@ class ClientRequestNormalizationSpec
           fail("expected successful normalization")
       }
     }
+  }
+
+  private def _subsystem_with_admin() = {
+    val subsystem = TestComponentFactory.emptySubsystem("client-request-normalization")
+    val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
+    val admin = AdminComponent.Factory.create(params)
+    subsystem.add(admin)
   }
 
   private def _property(
