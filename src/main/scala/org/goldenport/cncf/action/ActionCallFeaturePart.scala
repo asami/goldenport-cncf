@@ -25,6 +25,7 @@ import org.goldenport.cncf.entity.EntityQuery
 import org.goldenport.cncf.entity.CreateResult
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.directive.SearchResult
+import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 
 /*
  * @since   Jan.  6, 2026
@@ -354,6 +355,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     name: String,
     attributes: Record
   ): Unit = {
+    component.flatMap(_.subsystem).map(_.entityAccessMetrics).getOrElse(EntityAccessMetricsRegistry.shared).record(name, attributes)
     val _ = execution_context.observability.emitInfo(
       execution_context.cncfCore.scope,
       name,

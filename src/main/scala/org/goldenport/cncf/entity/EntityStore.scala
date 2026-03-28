@@ -12,6 +12,7 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 import org.goldenport.cncf.directive.{Query as EntityDirectiveQuery, SearchResult}
 import org.goldenport.cncf.datastore.{DataStore, QueryDirective, QueryLimit, QueryOrder, OrderDirection}
 import org.goldenport.cncf.datastore.DataStore.EntryId
+import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
 
 /*
@@ -611,6 +612,7 @@ class StandardEntityStore(
     name: String,
     attributes: Record
   )(using ctx: ExecutionContext): Unit = {
+    EntityAccessMetricsRegistry.shared.record(name, attributes)
     val _ = ctx.observability.emitInfo(ctx.cncfCore.scope, name, attributes)
   }
 

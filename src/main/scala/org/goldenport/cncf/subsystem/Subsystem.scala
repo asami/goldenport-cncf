@@ -30,6 +30,7 @@ import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.protocol.OperationResponseFormatter
 import org.goldenport.cncf.security.IngressSecurityResolver
+import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 
 /*
  * @since   Jan.  7, 2026
@@ -53,6 +54,7 @@ final class Subsystem(
   private val _http_driver: Option[HttpDriver] = httpdriver
   private val _job_engine: JobEngine = InMemoryJobEngine.create()
   private val _event_store: EventStore = EventStore.inMemory
+  private val _entity_access_metrics: EntityAccessMetricsRegistry = EntityAccessMetricsRegistry.shared
 
   def globalRuntimeContext: GlobalRuntimeContext = {
     val a = _find_global_runtime_context(scopeContext)
@@ -74,6 +76,7 @@ final class Subsystem(
   def httpDriver: Option[HttpDriver] = _http_driver
   def jobEngine: JobEngine = _job_engine
   def eventStore: EventStore = _event_store
+  def entityAccessMetrics: EntityAccessMetricsRegistry = _entity_access_metrics
   def serverEmulatorBaseUrl: String = globalRuntimeContext.serverEmulatorBaseUrl
 
   def setup(cf: ComponentFactory): Subsystem = {
