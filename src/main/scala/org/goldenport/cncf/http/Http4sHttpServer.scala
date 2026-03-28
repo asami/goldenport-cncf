@@ -27,7 +27,7 @@ import org.goldenport.datatype.{ContentType, MimeBody}
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
- * @version Mar. 19, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -124,7 +124,7 @@ final class Http4sHttpServer(
     if (_is_multipart(contentTypeHeader))
       _to_multipart_http_request(req, method, query, header, context)
     else
-      _to_regular_http_request(req, method, query, header, context)
+      _to_regular_http_request(req, method, query, header, context, contentTypeHeader)
   }
 
   private def _is_multipart(contentType: Option[`Content-Type`]): Boolean =
@@ -138,12 +138,23 @@ final class Http4sHttpServer(
     method: HttpRequest.Method,
     query: Record,
     header: Record,
-    context: HttpContext
+    context: HttpContext,
+    contentTypeHeader: Option[`Content-Type`]
   ): IO[HttpRequest] =
     req.body.compile.to(Array).map { bytes =>
-      val bodyOption =
-        if (bytes.isEmpty) None
-        else Some(Bag.binary(bytes.toArray))
+      val isFormUrlEncoded = contentTypeHeader.exists { header =>
+        header.mediaType.mainType.equalsIgnoreCase("application") &&
+          header.mediaType.subType.equalsIgnoreCase("x-www-form-urlencoded")
+      }
+      val (bodyOption, formRecord) =
+        if (bytes.isEmpty) {
+          (None, Record.empty)
+        } else if (isFormUrlEncoded) {
+          val text = new String(bytes, java.nio.charset.StandardCharsets.UTF_8)
+          (None, HttpRequest.parseQuery(text))
+        } else {
+          (Some(Bag.binary(bytes.toArray)), Record.empty)
+        }
       HttpRequest.fromPath(
         method = method,
         path = req.uri.path.renderString,
@@ -151,7 +162,7 @@ final class Http4sHttpServer(
         header = header,
         body = bodyOption,
         context = context,
-        form = Record.empty
+        form = formRecord
       )
     }
 

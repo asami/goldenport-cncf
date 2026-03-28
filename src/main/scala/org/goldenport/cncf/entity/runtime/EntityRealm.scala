@@ -7,7 +7,7 @@ import org.goldenport.cncf.entity.EntityPersistent
 
 /*
  * @since   Mar. 14, 2026
- * @version Mar. 24, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityRealmState[E](
@@ -42,6 +42,17 @@ class EntityRealm[E](
 
   def put(entity: E): Unit =
     _update(entity)
+
+  def remove(id: EntityId): Boolean =
+    state.modify { s =>
+      val removed = s.workingSet.contains(id)
+      val ns =
+        if (removed)
+          s.copy(workingSet = s.workingSet - id)
+        else
+          s
+      (ns, removed)
+    }
 
   def contains(id: EntityId): Boolean =
     state.get.workingSet.contains(id)

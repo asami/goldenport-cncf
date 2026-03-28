@@ -15,7 +15,7 @@ import scala.util.control.NonFatal
  * @since   Jan.  6, 2026
  *  version Jan. 10, 2026
  *  version Feb. 25, 2026
- * @version Mar. 24, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {
@@ -204,20 +204,28 @@ object DataStore {
   ) extends DataStore {
     def isAccept(cid: CollectionId): Boolean = true
 
-    private var _collections: VectorMap[CollectionId, InMemoryDataStore.Collection] = VectorMap.empty
+    private var _collections: VectorMap[String, InMemoryDataStore.Collection] = VectorMap.empty
+
+    protected final def collectionKey(collection: CollectionId): String =
+      collection match {
+        case CollectionId.Instance(name) =>
+          s"instance:$name"
+        case CollectionId.EntityStore(id) =>
+          s"entity:${id.major}:${id.minor}:${id.name}"
+      }
 
     private def _ensure_collection(collection: CollectionId): Consequence[InMemoryDataStore.Collection] =
-      _collections.get(collection) match {
+      _collections.get(collectionKey(collection)) match {
         case Some(c) =>
           Consequence.success(c)
         case None =>
           val c = new InMemoryDataStore.Collection(collection)
-          _collections = _collections.updated(collection, c)
+          _collections = _collections.updated(collectionKey(collection), c)
           Consequence.success(c)
       }
 
     protected def take_collection(collection: CollectionId): Consequence[InMemoryDataStore.Collection] =
-      _collections.get(collection) match {
+      _collections.get(collectionKey(collection)) match {
         case Some(c) =>
           Consequence.success(c)
         case None =>

@@ -1,6 +1,6 @@
 package org.goldenport.cncf.component.builtin.client
 
-import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, FunctionalActionCall, ActionCallHttpPart, QueryAction, ResourceAccess}
+import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, FunctionalActionCall, ActionCallHttpPart, QueryAction, ResourceAccess}
 import org.goldenport.cncf.unitofwork.ExecUowM
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.Request
@@ -12,11 +12,15 @@ import org.goldenport.bag.TextBag
 /*
  * @since   Jan. 10, 2026
  *  version Jan. 21, 2026
- * @version Feb. 19, 2026
+ *  version Feb. 19, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class HttpCommand(
-) extends CommandAction()
+) extends CommandAction() {
+  override def commandExecutionMode: CommandExecutionMode =
+    CommandExecutionMode.SyncDirectNoJob
+}
 
 abstract class HttpQuery(
 ) extends QueryAction()

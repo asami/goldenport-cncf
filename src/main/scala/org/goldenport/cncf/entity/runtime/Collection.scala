@@ -9,7 +9,7 @@ import org.goldenport.cncf.directive.{Query, SearchResult}
 
 /*
  * @since   Mar. 14, 2026
- * @version Mar. 24, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -20,6 +20,11 @@ final class EntityCollection[E](
   val descriptor: EntityDescriptor[E],
   val storage: EntityStorage[E]
 ) extends Collection[E] {
+  def put(entity: E): Unit = {
+    storage.storeRealm.put(entity)
+    storage.memoryRealm.foreach(_.put(entity))
+  }
+
   // Load-through resolution:
   // 1. Try MemoryRealm (working set cache)
   // 2. Fallback to StoreRealm
@@ -51,8 +56,10 @@ final class EntityCollection[E](
     }
   }
 
-  def evict(id: EntityId): Unit =
+  def evict(id: EntityId): Unit = {
+    storage.storeRealm.remove(id)
     storage.memoryRealm.foreach(_.remove(id))
+  }
 
   // Current phase search API:
   // route is available through EntitySpace/EntityCollection.

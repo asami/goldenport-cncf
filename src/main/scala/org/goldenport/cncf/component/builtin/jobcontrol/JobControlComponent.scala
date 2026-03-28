@@ -4,7 +4,7 @@ import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
-import org.goldenport.cncf.job.{JobControlCommand, JobControlRequest, JobId}
+import org.goldenport.cncf.job.{JobControlCommand, JobControlRequest, JobId, JobResult}
 import org.goldenport.cncf.job.{JobQueryReadModel, JobTimelinePage}
 import org.goldenport.cncf.event.EventStore
 import org.goldenport.protocol.Protocol
@@ -16,7 +16,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Mar. 28, 2026
- * @version Mar. 28, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
@@ -24,8 +24,10 @@ final class JobControlComponent() extends Component {
 
 object JobControlComponent {
   trait JobService {
-    def loadJob(jobId: JobId): Consequence[JobQueryReadModel]
+    def getJobStatus(jobId: JobId): Consequence[JobQueryReadModel]
     def loadJobHistory(jobId: JobId): Consequence[JobTimelinePage]
+    def getJobResult(jobId: JobId): Consequence[JobResult]
+    def awaitJobResult(jobId: JobId): Consequence[OperationResponse]
   }
 
   trait JobAdminService {
@@ -49,8 +51,10 @@ object JobControlComponent {
       val request = spec.RequestDefinition()
       val response = spec.ResponseDefinition()
       val idrequest = _job_id_request
-      val loadJob = new LoadJobOperationDefinition(request = idrequest, response = response)
+      val getJobStatus = new GetJobStatusOperationDefinition(request = idrequest, response = response)
       val loadJobHistory = new LoadJobHistoryOperationDefinition(request = idrequest, response = response)
+      val getJobResult = new GetJobResultOperationDefinition(request = idrequest, response = response)
+      val awaitJobResult = new AwaitJobResultOperationDefinition(request = idrequest, response = response)
       val cancelJob = new ControlJobOperationDefinition(
         name = "cancel_job",
         command = JobControlCommand.Cancel,
@@ -73,7 +77,7 @@ object JobControlComponent {
       val jobService = spec.ServiceDefinition(
         name = "job",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(loadJob, loadJobHistory)
+          operations = NonEmptyVector.of(getJobStatus, loadJobHistory, getJobResult, awaitJobResult)
         )
       )
       val jobAdminService = spec.ServiceDefinition(
@@ -107,10 +111,12 @@ object JobControlComponent {
   }
 
   private final class DefaultJobService(component: Component) extends JobService {
-    def loadJob(jobId: JobId): Consequence[JobQueryReadModel] =
+    def getJobStatus(jobId: JobId): Consequence[JobQueryReadModel] =
+      {
       component.jobEngine.query(jobId) match {
         case Some(model) => Consequence.success(model)
         case None => Consequence.failure(s"job not found: ${jobId.value}")
+      }
       }
 
     def loadJobHistory(jobId: JobId): Consequence[JobTimelinePage] =
@@ -118,6 +124,15 @@ object JobControlComponent {
         case Some(page) => Consequence.success(page)
         case None => Consequence.failure(s"job history not found: ${jobId.value}")
       }
+
+    def getJobResult(jobId: JobId): Consequence[JobResult] =
+      component.logic.getJobResult(jobId) match {
+        case Some(result) => Consequence.success(result)
+        case None => Consequence.failure(s"job result not found: ${jobId.value}")
+      }
+
+    def awaitJobResult(jobId: JobId): Consequence[OperationResponse] =
+      component.logic.awaitJobResult(jobId)
   }
 
   private final class DefaultJobAdminService(component: Component) extends JobAdminService {
@@ -144,20 +159,20 @@ object JobControlComponent {
       }
   }
 
-  private final class LoadJobOperationDefinition(
+  private final class GetJobStatusOperationDefinition(
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition
   ) extends spec.OperationDefinition {
     val specification: spec.OperationDefinition.Specification =
         spec.OperationDefinition.Specification(
-        name = "load_job",
+        name = "get_job_status",
         request = request,
         response = response
       )
 
     def createOperationRequest(req: Request): Consequence[OperationRequest] =
       _job_id(req).map { jobid =>
-        LoadJobAction(req, jobid)
+        GetJobStatusAction(req, jobid)
       }
   }
 
@@ -175,6 +190,40 @@ object JobControlComponent {
     def createOperationRequest(req: Request): Consequence[OperationRequest] =
       _job_id(req).map { jobid =>
         LoadJobHistoryAction(req, jobid)
+      }
+  }
+
+  private final class GetJobResultOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+        spec.OperationDefinition.Specification(
+        name = "get_job_result",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _job_id(req).map { jobid =>
+        GetJobResultAction(req, jobid)
+      }
+  }
+
+  private final class AwaitJobResultOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+        spec.OperationDefinition.Specification(
+        name = "await_job_result",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _job_id(req).map { jobid =>
+        AwaitJobResultAction(req, jobid)
       }
   }
 
@@ -214,12 +263,12 @@ object JobControlComponent {
       }
   }
 
-  private final case class LoadJobAction(
+  private final case class GetJobStatusAction(
     request: Request,
     jobId: JobId
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      LoadJobCall(core, jobId)
+      GetJobStatusCall(core, jobId)
   }
 
   private final case class LoadJobHistoryAction(
@@ -228,6 +277,22 @@ object JobControlComponent {
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
       LoadJobHistoryCall(core, jobId)
+  }
+
+  private final case class GetJobResultAction(
+    request: Request,
+    jobId: JobId
+  ) extends SyncJobAction {
+    def createCall(core: ActionCall.Core): ActionCall =
+      GetJobResultCall(core, jobId)
+  }
+
+  private final case class AwaitJobResultAction(
+    request: Request,
+    jobId: JobId
+  ) extends SyncJobAction {
+    def createCall(core: ActionCall.Core): ActionCall =
+      AwaitJobResultCall(core, jobId)
   }
 
   private final case class ControlJobAction(
@@ -252,14 +317,14 @@ object JobControlComponent {
       org.goldenport.cncf.action.CommandExecutionMode.SyncDirectNoJob
   }
 
-  private final case class LoadJobCall(
+  private final case class GetJobStatusCall(
     core: ActionCall.Core,
     jobId: JobId
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
-          component.port.get[JobService].map(_.loadJob(jobId)) match {
+          component.port.get[JobService].map(_.getJobStatus(jobId)) match {
             case Some(result) => result.map(model => OperationResponse.RecordResponse(_job_record(model)))
             case None => Consequence.failure("job service is not available")
           }
@@ -283,6 +348,51 @@ object JobControlComponent {
           Consequence.failure("component is not initialized")
       }
   }
+
+  private final case class GetJobResultCall(
+    core: ActionCall.Core,
+    jobId: JobId
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _job_result_response(core, jobId, _.getJobResult(jobId))
+  }
+
+  private final case class AwaitJobResultCall(
+    core: ActionCall.Core,
+    jobId: JobId
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      core.component match {
+        case Some(component) =>
+          component.port.get[JobService].map(_.awaitJobResult(jobId)) match {
+            case Some(result) => result
+            case None => Consequence.failure("job service is not available")
+          }
+        case None =>
+          Consequence.failure("component is not initialized")
+      }
+  }
+
+  private def _job_result_response(
+    core: ActionCall.Core,
+    jobId: JobId,
+    f: JobService => Consequence[JobResult]
+  ): Consequence[OperationResponse] =
+    core.component match {
+      case Some(component) =>
+        component.port.get[JobService].map(f) match {
+          case Some(result) =>
+            result.flatMap {
+              case JobResult.Success(response) => Consequence.success(response)
+              case JobResult.Failure(conclusion) => Consequence.Failure(conclusion)
+            }
+          case None =>
+            Consequence.failure("job service is not available")
+        }
+      case None =>
+        Consequence.failure("component is not initialized")
+    }
+  
 
   private final case class ControlJobCall(
     core: ActionCall.Core,

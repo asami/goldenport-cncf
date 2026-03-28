@@ -23,7 +23,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  * @since   Jan.  3, 2026
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Mar. 28, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -224,14 +224,18 @@ case class ComponentLogic(
   }
 
   def submitJob(tasks: List[JobTask], ctx: ExecutionContext): JobId =
-    component.jobEngine.submit(tasks, ctx, _default_submit_option(tasks))
+    {
+      component.jobEngine.submit(tasks, ctx, _default_submit_option(tasks))
+    }
 
   def submitJob(
     tasks: List[JobTask],
     ctx: ExecutionContext,
     option: JobSubmitOption
   ): JobId =
-    component.jobEngine.submit(tasks, ctx, option)
+    {
+      component.jobEngine.submit(tasks, ctx, option)
+    }
 
   def getJobStatus(jobId: JobId): Option[JobStatus] =
     component.jobEngine.getStatus(jobId)

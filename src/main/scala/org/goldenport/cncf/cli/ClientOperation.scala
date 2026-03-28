@@ -23,7 +23,7 @@ import org.goldenport.cncf.component.builtin.client.{GetQuery, PostCommand}
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  1, 2026
- * @version Mar. 24, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientOperation(val subsystem: Subsystem) extends CliOperation {
@@ -187,12 +187,28 @@ class ClientOperation(val subsystem: Subsystem) extends CliOperation {
     Request.parseArgs(_client_http_request_definition, args).flatMap { parsed =>
       parsed.arguments.headOption match {
         case Some(pathArgument) =>
-          Consequence.success((_normalize_path(pathArgument.value.toString), parsed.properties))
+          Consequence.success((
+            _normalize_path(pathArgument.value.toString),
+            parsed.properties ++ _http_tail_properties(parsed.arguments.drop(1))
+          ))
         case None =>
           Consequence.failure("client http path is required")
       }
     }
   }
+
+  private def _http_tail_properties(
+    arguments: List[Argument]
+  ): List[Property] =
+    arguments.zipWithIndex.map { case (argument, index) =>
+      val text = argument.value.toString
+      text.split("=", 2).toList match {
+        case key :: value :: Nil if key.nonEmpty =>
+          Property(key, value, None)
+        case _ =>
+          Property(s"arg${index + 1}", text, None)
+      }
+    }
 
   private val _client_http_request_definition: RequestDefinition = {
     val base = RequestDefinition.curlLike
@@ -322,14 +338,31 @@ class ClientOperation(val subsystem: Subsystem) extends CliOperation {
   private def _client_query_string(
     req: Request
   ): Option[String] = {
-    val params = req.arguments.collect {
+    val argumentParams = req.arguments.collect {
       case Argument(name, value, _) if name.startsWith("arg") =>
         val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8)
         val encodedValue = URLEncoder.encode(value.toString, StandardCharsets.UTF_8)
         s"${encodedName}=${encodedValue}"
     }
+    val propertyParams = req.properties.collect {
+      case Property(name, value, _) if _is_http_parameter_property(name) =>
+        val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8)
+        val encodedValue = URLEncoder.encode(value.toString, StandardCharsets.UTF_8)
+        s"${encodedName}=${encodedValue}"
+    }
+    val params = argumentParams ++ propertyParams
     if (params.isEmpty) None else Some(params.mkString("&"))
   }
+
+  private def _is_http_parameter_property(
+    name: String
+  ): Boolean =
+    name != null &&
+      name.nonEmpty &&
+      name != "baseurl" &&
+      name != "body" &&
+      name != "data" &&
+      name != "-d"
 }
 
 object ClientOperation {

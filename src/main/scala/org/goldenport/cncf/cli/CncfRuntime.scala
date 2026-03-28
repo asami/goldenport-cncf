@@ -50,7 +50,7 @@ import org.goldenport.record.Record
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 28, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -916,25 +916,29 @@ object CncfRuntime extends GlobalObservable {
         _client_path_from_request(req).flatMap { path =>
           val baseurl = _client_baseurl_from_request(req)
           val rawUrl = _build_client_url(baseurl, path)
-          val url = _append_client_query(rawUrl, req)
+          val url = req.operation match {
+            case "get" => _append_client_query(rawUrl, req)
+            case _ => rawUrl
+          }
           observe_trace(
             s"[client:trace] client action request operation=${req.operation} path=${path} url=${url}"
           )
           req.operation match {
         case "post" =>
-          _client_mime_body_from_request(req).map { body =>
+          _client_http_body_and_header(req).map { case (body, header) =>
             new PostCommand(
               req,
               // "system.ping", // TODO generic
               HttpRequest.fromUrl(
                 method = HttpRequest.POST,
                 url = new URL(url),
+                header = header,
                 body = body.map(_.value)
               )
             )
           }
         case "get" =>
-          _client_mime_body_from_request(req).flatMap {
+          _mime_body_from_property_names(req.properties, List("body", "data", "-d")).flatMap {
             case Some(_) =>
               Consequence.failure("client http get does not accept a body")
             case None =>
@@ -978,8 +982,52 @@ object CncfRuntime extends GlobalObservable {
     _mime_body_from_property_names(req.properties, List("body", "data", "-d")).flatMap {
       case Some(body) => Consequence.success(Some(body))
       case None =>
-        Consequence.success(_mime_body_from_arguments(req.arguments))
+        _client_form_mime_body(req) match {
+          case Some(body) => Consequence.success(Some(body))
+          case None => Consequence.success(_mime_body_from_arguments(req.arguments))
+        }
     }
+
+  private def _client_http_body_and_header(
+    req: Request
+  ): Consequence[(Option[MimeBody], Record)] =
+    _client_mime_body_from_request(req).map {
+      case Some(body) if _is_form_urlencoded(body) =>
+        (Some(body), Record.create(Vector("Content-Type" -> "application/x-www-form-urlencoded")))
+      case Some(body) =>
+        (Some(body), Record.empty)
+      case None =>
+        (None, Record.empty)
+    }
+
+  private def _client_form_mime_body(
+    req: Request
+  ): Option[MimeBody] =
+    _client_form_encoded_payload(req).map { payload =>
+      MimeBody(
+        ContentType.parse("application/x-www-form-urlencoded"),
+        Bag.text(payload, StandardCharsets.UTF_8)
+      )
+    }
+
+  private def _client_form_encoded_payload(
+    req: Request
+  ): Option[String] = {
+    val params = _client_http_parameter_properties(req).map { p =>
+      s"${URLEncoder.encode(p.name, StandardCharsets.UTF_8)}=${URLEncoder.encode(p.value.toString, StandardCharsets.UTF_8)}"
+    }
+    if (params.isEmpty) None else Some(params.mkString("&"))
+  }
+
+  private def _client_http_parameter_properties(
+    req: Request
+  ): List[Property] =
+    req.properties.filter(p => _is_http_parameter_property(p.name))
+
+  private def _is_form_urlencoded(
+    body: MimeBody
+  ): Boolean =
+    body.contentType.mimeType.value.equalsIgnoreCase("application/x-www-form-urlencoded")
 
   private def _mime_body_from_property_names(
     properties: List[Property],
@@ -1310,12 +1358,28 @@ object CncfRuntime extends GlobalObservable {
     Request.parseArgs(_client_http_request_definition, args).flatMap { parsed =>
       parsed.arguments.headOption match {
         case Some(pathArgument) =>
-          Consequence.success((_normalize_path(pathArgument.value.toString), parsed.properties))
+          Consequence.success((
+            _normalize_path(pathArgument.value.toString),
+            parsed.properties ++ _http_tail_properties(parsed.arguments.drop(1))
+          ))
         case None =>
           Consequence.failure("client http path is required")
       }
     }
   }
+
+  private def _http_tail_properties(
+    arguments: List[Argument]
+  ): List[Property] =
+    arguments.zipWithIndex.map { case (argument, index) =>
+      val text = argument.value.toString
+      text.split("=", 2).toList match {
+        case key :: value :: Nil if key.nonEmpty =>
+          Property(key, value, None)
+        case _ =>
+          Property(s"arg${index + 1}", text, None)
+      }
+    }
 
   private def _normalize_path(path: String): String = {
     val normalized = if (path.contains(".")) path.replace(".", "/") else path
@@ -1344,14 +1408,31 @@ object CncfRuntime extends GlobalObservable {
   private def _client_query_string(
     req: Request
   ): Option[String] = {
-    val params = req.arguments.collect {
+    val argumentParams = req.arguments.collect {
       case Argument(name, value, _) if name.startsWith("arg") =>
         val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8)
         val encodedValue = URLEncoder.encode(value.toString, StandardCharsets.UTF_8)
         s"${encodedName}=${encodedValue}"
     }
+    val propertyParams = req.properties.collect {
+      case Property(name, value, _) if _is_http_parameter_property(name) =>
+        val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8)
+        val encodedValue = URLEncoder.encode(value.toString, StandardCharsets.UTF_8)
+        s"${encodedName}=${encodedValue}"
+    }
+    val params = argumentParams ++ propertyParams
     if (params.isEmpty) None else Some(params.mkString("&"))
   }
+
+  private def _is_http_parameter_property(
+    name: String
+  ): Boolean =
+    name != null &&
+      name.nonEmpty &&
+      name != "baseurl" &&
+      name != "body" &&
+      name != "data" &&
+      name != "-d"
 
   private def _parse_client_command(
     args: Seq[String]
@@ -2260,12 +2341,28 @@ class CncfRuntime() extends GlobalObservable {
     Request.parseArgs(_client_http_request_definition, args).flatMap { parsed =>
       parsed.arguments.headOption match {
         case Some(pathArgument) =>
-          Consequence.success((_normalize_path(pathArgument.value.toString), parsed.properties))
+          Consequence.success((
+            _normalize_path(pathArgument.value.toString),
+            parsed.properties ++ _http_tail_properties(parsed.arguments.drop(1))
+          ))
         case None =>
           Consequence.failure("client http path is required")
       }
     }
   }
+
+  private def _http_tail_properties(
+    arguments: List[Argument]
+  ): List[Property] =
+    arguments.zipWithIndex.map { case (argument, index) =>
+      val text = argument.value.toString
+      text.split("=", 2).toList match {
+        case key :: value :: Nil if key.nonEmpty =>
+          Property(key, value, None)
+        case _ =>
+          Property(s"arg${index + 1}", text, None)
+      }
+    }
 
   private def _normalize_path(path: String): String = {
     val normalized = if (path.contains(".")) path.replace(".", "/") else path
@@ -2376,14 +2473,31 @@ class CncfRuntime() extends GlobalObservable {
   private def _client_query_string(
     req: Request
   ): Option[String] = {
-    val params = req.arguments.collect {
+    val argumentParams = req.arguments.collect {
       case Argument(name, value, _) if name.startsWith("arg") =>
         val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8)
         val encodedValue = URLEncoder.encode(value.toString, StandardCharsets.UTF_8)
         s"${encodedName}=${encodedValue}"
     }
+    val propertyParams = req.properties.collect {
+      case Property(name, value, _) if _is_http_parameter_property(name) =>
+        val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8)
+        val encodedValue = URLEncoder.encode(value.toString, StandardCharsets.UTF_8)
+        s"${encodedName}=${encodedValue}"
+    }
+    val params = argumentParams ++ propertyParams
     if (params.isEmpty) None else Some(params.mkString("&"))
   }
+
+  private def _is_http_parameter_property(
+    name: String
+  ): Boolean =
+    name != null &&
+      name.nonEmpty &&
+      name != "baseurl" &&
+      name != "body" &&
+      name != "data" &&
+      name != "-d"
 
   private def _client_path_from_request(
     req: Request

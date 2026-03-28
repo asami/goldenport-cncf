@@ -30,7 +30,7 @@ import org.goldenport.cncf.directive.SearchResult
  * @since   Jan.  6, 2026
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
- * @version Mar. 27, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -350,6 +350,46 @@ trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.H
 }
 
 trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
+  private def _emit_entity_access(
+    name: String,
+    attributes: Record
+  ): Unit = {
+    val _ = execution_context.observability.emitInfo(
+      execution_context.cncfCore.scope,
+      name,
+      attributes
+    )
+  }
+
+  private def _entity_load_attributes(
+    id: EntityId,
+    source: String,
+    outcome: String
+  ): Record = Record.dataAuto(
+    "entity" -> id.collection.name,
+    "id" -> id.value,
+    "source" -> source,
+    "outcome" -> outcome
+  )
+
+  private def _entity_search_attributes(
+    query: EntityQuery[?],
+    source: String,
+    outcome: String
+  ): Record = Record.dataAuto(
+    "entity" -> query.collection.name,
+    "source" -> source,
+    "outcome" -> outcome,
+    "query" -> query.query.toString
+  )
+
+  private def _is_entity_not_found(
+    conclusion: org.goldenport.Conclusion
+  ): Boolean = {
+    val s = conclusion.show.toLowerCase
+    s.contains("not found") || s.contains("notfound")
+  }
+
   protected final def entity_create[T](
     entity: T
   )(using tc: EntityPersistentCreate[T]): ExecUowM[CreateResult[T]] = {
@@ -360,11 +400,22 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_load_option[T](
     id: EntityId
   )(using tc: EntityPersistent[T]): ExecUowM[Option[T]] = {
+    _emit_entity_access("entity.load.start", _entity_load_attributes(id, "unknown", "start"))
     component.flatMap(_.entitySpace.entityOption[T](id.collection.name)) match {
       case Some(collection) =>
-        println(s"[entity-load] collection=${id.collection.name} store=${collection.storage.storeRealm.values.size} memory=${collection.storage.memoryRealm.map(_.values.size).getOrElse(0)} id=${id.value}")
-        exec_from(Consequence.success(collection.resolve(id).toOption))
+        _emit_entity_access("entity.load.try.entity-space", _entity_load_attributes(id, "entity-space", "try"))
+        collection.resolve(id) match {
+          case Consequence.Success(entity) =>
+            _emit_entity_access("entity.load.hit.entity-space", _entity_load_attributes(id, "entity-space", "hit"))
+            exec_from(Consequence.success(Some(entity)))
+          case Consequence.Failure(conclusion) if _is_entity_not_found(conclusion) =>
+            _emit_entity_access("entity.load.fallback.entity-store", _entity_load_attributes(id, "entity-store", "fallback"))
+            ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EntityStoreLoadDirect(id, tc)))
+          case Consequence.Failure(conclusion) =>
+            exec_from(Consequence.Failure(conclusion))
+        }
       case None =>
+        _emit_entity_access("entity.load.fallback.entity-store", _entity_load_attributes(id, "entity-store", "fallback"))
         val op = UnitOfWorkOp.EntityStoreLoad(id, tc)
         ConsequenceT.liftF(Free.liftF(op))
     }
@@ -416,11 +467,22 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_search[T](
     query: EntityQuery[T]
   )(using tc: EntityPersistent[T]): ExecUowM[SearchResult[T]] = {
+    _emit_entity_access("entity.search.start", _entity_search_attributes(query, "unknown", "start"))
     component.flatMap(_.entitySpace.entityOption[T](query.collection.name)) match {
       case Some(collection) =>
-        println(s"[entity-search] collection=${query.collection.name} store=${collection.storage.storeRealm.values.size} memory=${collection.storage.memoryRealm.map(_.values.size).getOrElse(0)} query=${query.query}")
-        exec_from(collection.search(query)(using execution_context))
+        _emit_entity_access("entity.search.try.entity-space", _entity_search_attributes(query, "entity-space", "try"))
+        val hasresident =
+          collection.storage.storeRealm.values.nonEmpty ||
+            collection.storage.memoryRealm.exists(_.values.nonEmpty)
+        if (hasresident) {
+          _emit_entity_access("entity.search.hit.entity-space", _entity_search_attributes(query, "entity-space", "hit"))
+          exec_from(collection.search(query)(using execution_context))
+        } else {
+          _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(query, "entity-store", "fallback"))
+          ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EntityStoreSearchDirect(query, tc)))
+        }
       case None =>
+        _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(query, "entity-store", "fallback"))
         val op = UnitOfWorkOp.EntityStoreSearch(query, tc)
         ConsequenceT.liftF(Free.liftF(op))
     }

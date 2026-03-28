@@ -35,7 +35,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan. 10, 2026
  *  version Feb. 15, 2026
- * @version Mar. 12, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientAdminSystemPingSpec
@@ -118,6 +118,32 @@ class ClientAdminSystemPingSpec
           HttpCall("POST", s"${ClientConfig.DefaultBaseUrl}/admin/system/ping", Some("pong"), Map.empty)
       )
     }
+
+    "append CLI key-value parameters as HTTP query parameters" in {
+      Given("a subsystem with the client component wired to a fake HTTP driver")
+      val response = _response_pong()
+      val driver = new FakeHttpDriver(response)
+      val harness = _build_harness(driver)
+
+      When("the client CLI request includes domain key-value parameters")
+      val request = CncfRuntime.parseClientArgs(
+        Array("http", "get", "/crud/entity/search-item-record", "name=alpha", "title=Alpha")
+      )
+      val result = request.flatMap { req =>
+        _client_action_from_request(req).flatMap(harness.executeAction)
+      }
+
+      Then("the HTTP driver is invoked with those parameters in the query string")
+      result should be_success
+      driver.calls shouldBe Vector(
+        HttpCall(
+          "GET",
+          s"${ClientConfig.DefaultBaseUrl}/crud/entity/search-item-record?name=alpha&title=Alpha",
+          None,
+          Map.empty
+        )
+      )
+    }
   }
 
   private final case class HttpCall(
@@ -196,7 +222,7 @@ class ClientAdminSystemPingSpec
       .map(_.value.toString).getOrElse(ClientConfig.DefaultBaseUrl)
     req.arguments.find(_.name == "path").map(_.value.toString) match {
       case Some(path) =>
-        val url = _build_client_url(baseurl, path)
+        val url = _append_client_query(_build_client_url(baseurl, path), req)
         req.operation match {
           case "post" =>
             _client_body(req).map { body =>
@@ -256,6 +282,35 @@ class ClientAdminSystemPingSpec
     val suffix = if (path.startsWith("/")) path else s"/${path}"
     s"${base}${suffix}"
   }
+
+  private def _append_client_query(
+    url: String,
+    req: Request
+  ): String =
+    _client_query_string(req) match {
+      case Some(query) => s"${url}?${query}"
+      case None => url
+    }
+
+  private def _client_query_string(
+    req: Request
+  ): Option[String] = {
+    val params = req.properties.collect {
+      case Property(name, value, _) if _is_http_parameter_property(name) =>
+        s"${java.net.URLEncoder.encode(name, java.nio.charset.StandardCharsets.UTF_8)}=${java.net.URLEncoder.encode(value.toString, java.nio.charset.StandardCharsets.UTF_8)}"
+    }
+    if (params.isEmpty) None else Some(params.mkString("&"))
+  }
+
+  private def _is_http_parameter_property(
+    name: String
+  ): Boolean =
+    name != null &&
+      name.nonEmpty &&
+      name != "baseurl" &&
+      name != "body" &&
+      name != "data" &&
+      name != "-d"
 
   private final case class TestHarness(
     subsystem: Subsystem,

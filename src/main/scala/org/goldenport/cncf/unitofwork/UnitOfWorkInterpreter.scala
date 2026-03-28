@@ -24,7 +24,7 @@ import org.goldenport.cncf.statemachine.TransitionValidationHook
  * @since   Jan. 10, 2026
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
- * @version Mar. 24, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -191,7 +191,10 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
           case Consequence.Success(entity) =>
             Consequence.success(Some(entity))
           case Consequence.Failure(conclusion) if _is_entity_not_found(conclusion) =>
-            Consequence.success(None)
+            _entity_store_space.load(op).map { loaded =>
+              loaded.foreach(collection.put)
+              loaded
+            }
           case Consequence.Failure(conclusion) =>
             Consequence.Failure(conclusion)
         }
@@ -207,7 +210,15 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     _component_option
       .flatMap(_.entitySpace.entityOption[T](name)) match {
       case Some(collection) =>
-        collection.search(op.query)
+        collection.search(op.query).flatMap { result =>
+          if (result.data.nonEmpty || collection.storage.storeRealm.values.nonEmpty || collection.storage.memoryRealm.exists(_.values.nonEmpty))
+            Consequence.success(result)
+          else
+            _entity_store_space.search(op).map { loaded =>
+              loaded.data.foreach(collection.put)
+              loaded
+            }
+        }
       case None =>
         _entity_store_space.search(op)
     }
@@ -220,6 +231,16 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     _component_option
       .flatMap(_.entitySpace.entityOption[Any](name))
       .foreach(_.evict(id))
+  }
+
+  private def _entity_space_put[T](
+    entity: T,
+    tc: org.goldenport.cncf.entity.EntityPersistent[T]
+  ): Unit = {
+    val name = tc.id(entity).collection.name
+    _component_option
+      .flatMap(_.entitySpace.entityOption[T](name))
+      .foreach(_.put(entity))
   }
 
   private def _component_option: Option[Component] = {

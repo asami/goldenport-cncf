@@ -19,7 +19,7 @@ import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
  *  version Dec. 18, 2025
  *  version Jan. 10, 2026
  *  version Feb. 26, 2026
- * @version Mar. 24, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -124,7 +124,10 @@ class StandardEntityStore(
   def name: String = "standard"
 
   def createId[T](entity: T)(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): EntityId =
-    EntityId(ctx.major, ctx.minor, tc.collection(entity))
+    {
+      val collection = tc.collection(entity)
+      EntityId(collection.major, collection.minor, collection)
+    }
 
   def create[T](
     entity: T
@@ -148,6 +151,16 @@ class StandardEntityStore(
       ds <- ctx.dataStoreSpace.dataStore(cid)
       o <- ds.load(cid, dsid)
       visible = o.filterNot(_is_logically_deleted_record)
+      _ = _emit_entity_access(
+        "entity.load.hit.data-store",
+        Record.dataAuto(
+          "entity" -> id.collection.name,
+          "id" -> id.value,
+          "source" -> "data-store",
+          "raw-count" -> o.size,
+          "visible-count" -> visible.size
+        )
+      )
       r <- visible.traverse(tc.fromRecord)
     } yield r
   }
@@ -225,6 +238,22 @@ class StandardEntityStore(
       )
       notdeleted = raw.records.toVector.filterNot(_is_logically_deleted_record)
       visible = _filter_visibility(notdeleted, query.query)
+      _ = _emit_entity_access(
+        "entity.search.hit.data-store",
+        Record.dataAuto(
+          "entity" -> query.collection.name,
+          "source" -> "data-store",
+          "raw-count" -> raw.records.size,
+          "notdeleted-count" -> notdeleted.size,
+          "visible-count" -> visible.size
+        )
+      )
+      _ = _emit_visibility_filtered(
+        query.collection.name,
+        raw.records.size,
+        notdeleted.size,
+        visible.size
+      )
       decoded <- visible.traverse(tc.fromRecord)
       filtered = decoded.filter(x => EntityDirectiveQuery.matches(query.query, x))
       sorted = EntityDirectiveQuery.sortValues(filtered, query.query.sort)
@@ -576,5 +605,34 @@ class StandardEntityStore(
     val poststatus = _record_value(record, Vector("postStatus", "post_status")).flatMap(_post_status_token)
     val aliveness = _record_value(record, Vector("aliveness")).flatMap(_aliveness_token)
     hasdeletedat || poststatus.contains("archived") || aliveness.contains("dead")
+  }
+
+  private def _emit_entity_access(
+    name: String,
+    attributes: Record
+  )(using ctx: ExecutionContext): Unit = {
+    val _ = ctx.observability.emitInfo(ctx.cncfCore.scope, name, attributes)
+  }
+
+  private def _emit_visibility_filtered(
+    entity: String,
+    rawCount: Int,
+    notdeletedCount: Int,
+    visibleCount: Int
+  )(using ctx: ExecutionContext): Unit = {
+    val filteredCount = notdeletedCount - visibleCount
+    if (filteredCount > 0) {
+      val _ = _emit_entity_access(
+        "entity.search.filtered.visibility",
+        Record.dataAuto(
+          "entity" -> entity,
+          "source" -> "data-store",
+          "raw-count" -> rawCount,
+          "notdeleted-count" -> notdeletedCount,
+          "visible-count" -> visibleCount,
+          "filtered-count" -> filteredCount
+        )
+      )
+    }
   }
 }
