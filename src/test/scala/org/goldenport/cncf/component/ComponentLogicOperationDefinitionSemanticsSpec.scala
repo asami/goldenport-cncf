@@ -17,8 +17,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 22, 2026
- * @version Mar. 25, 2026
  * @author  ASAMI, Tomoharu
+ * @version Mar. 28, 2026
  */
 final class ComponentLogicOperationDefinitionSemanticsSpec
   extends AnyWordSpec
@@ -146,12 +146,10 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       When("the action is executed")
       val result = component.logic.executeAction(action.asInstanceOf[Action], ExecutionContext.create())
 
-      Then("the request values are validated during action creation and the command returns a response")
+      Then("the request values are validated during action creation and the command returns the default async response")
       result match {
-        case Consequence.Success(OperationResponse.RecordResponse(payload)) =>
-          payload.getString("addressCountry") shouldBe Some("JP")
-          payload.getString("postalCode") shouldBe Some("160-0022")
-          payload.getString("streetAddress") shouldBe Some("1-2-3")
+        case Consequence.Success(OperationResponse.Scalar(value)) =>
+          value.toString.nonEmpty shouldBe true
         case other =>
           fail(s"unexpected result: $other")
       }

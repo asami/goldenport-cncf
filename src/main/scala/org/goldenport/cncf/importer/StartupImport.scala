@@ -21,8 +21,8 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 
 /*
  * @since   Mar. 27, 2026
- * @version Mar. 27, 2026
  * @author  ASAMI, Tomoharu
+ * @version Mar. 28, 2026
  */
 object StartupImport {
   val DataFileKey = "cncf.import.data.file"
@@ -70,7 +70,6 @@ object StartupImport {
     subsystem: Subsystem
   )(using ctx: ExecutionContext): Consequence[Unit] =
     _resolve_entity_sources(cwd, configuration).flatMap { paths =>
-      println(s"[startup-import] entity sources=${paths.map(_.toString)}")
       paths.foldLeft(Consequence.unit) { (z, path) =>
         z.flatMap(_ => _import_entity_file(path, entityStoreSpace, subsystem))
       }
@@ -183,7 +182,7 @@ object StartupImport {
     if (!Files.exists(path))
       Consequence.failure(s"configured import path does not exist: ${path}")
     else if (Files.isRegularFile(path)) {
-      if (!_is_supported_yaml(path))
+      if (!_is_supported_import_file(path))
         Consequence.failure(s"unsupported import file extension: ${path}")
       else if (!Files.isReadable(path))
         Consequence.failure(s"configured import file is not readable: ${path}")
@@ -207,7 +206,7 @@ object StartupImport {
         val xs =
           stream.iterator().asScala
             .filter(Files.isRegularFile(_))
-            .filter(_is_supported_yaml)
+            .filter(_is_supported_import_file)
             .map(_.toAbsolutePath.normalize)
             .toVector
             .sortBy(_.toString)
@@ -240,11 +239,13 @@ object StartupImport {
       None
   }
 
-  private def _is_supported_yaml(
+  private def _is_supported_import_file(
     path: Path
   ): Boolean = {
     val lower = path.getFileName.toString.toLowerCase
-    lower.endsWith(".yaml") || lower.endsWith(".yml")
+    lower.endsWith(".yaml") || lower.endsWith(".yml") ||
+    lower.endsWith(".json") || lower.endsWith(".xml") ||
+    lower.endsWith(".csv") || lower.endsWith(".tsl")
   }
 
   private def _read_text(
@@ -586,7 +587,6 @@ object StartupImport {
       case None =>
         Consequence.failure(s"startup entity import collection is not registered: ${entry.collection.print}")
       case Some(collection) =>
-        println(s"[startup-import] resolved entity collection request=${entry.collection.print} actual=${collection.descriptor.collectionId.print}")
         _import_entity_collection(path, entityStoreSpace, collection, entry.entity)
     }
 
@@ -595,7 +595,9 @@ object StartupImport {
     collectionId: EntityCollectionId
   ): Option[EntityCollection[?]] = {
     subsystem.components.iterator
-      .flatMap(_.entitySpace.entityOption(collectionId.name))
+      .flatMap(component =>
+        component.entitySpace.entityOption(collectionId).orElse(component.entitySpace.entityOption(collectionId.name))
+      )
       .toSeq
       .headOption
   }
@@ -609,12 +611,11 @@ object StartupImport {
     val persistent = collection.descriptor.persistent
     given EntityPersistent[E] = persistent
     persistent.fromRecord(record).flatMap { entity =>
-      // Seed the component-local realm directly so runtime load/search can see
-      // the imported records through the generated entity collection.
-      collection.storage.storeRealm.put(entity)
-      collection.storage.memoryRealm.foreach(_.put(entity))
-      println(s"[startup-import] entity collection=${collection.descriptor.collectionId.print} id=${persistent.id(entity).value}")
-      Consequence.unit
+      val seed = EntityStoreSeed(Vector(EntityStoreSeedEntry(entity)))
+      entityStoreSpace.importSeed(seed).map { _ =>
+        collection.storage.storeRealm.put(entity)
+        collection.storage.memoryRealm.foreach(_.put(entity))
+      }
     }
   }
 

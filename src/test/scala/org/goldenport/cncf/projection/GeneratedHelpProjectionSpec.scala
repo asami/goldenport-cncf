@@ -8,8 +8,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 25, 2026
- * @version Mar. 25, 2026
  * @author  ASAMI, Tomoharu
+ * @version Mar. 28, 2026
  */
 final class GeneratedHelpProjectionSpec
   extends AnyWordSpec
@@ -35,30 +35,30 @@ final class GeneratedHelpProjectionSpec
 
       And("the service help uses the generated summary and description metadata")
       serviceHelp.`type` shouldBe "service"
-      serviceHelp.name shouldBe "domain.address"
+      serviceHelp.name shouldBe "address"
       serviceHelp.summary shouldBe "Address service for postal address support."
       serviceHelp.children shouldBe Vector("lookupAddress")
-      serviceHelp.usage shouldBe Vector("command help domain.address.lookupAddress")
+      serviceHelp.usage shouldBe Vector("command help domain.address.lookup-address")
 
       And("the operation help uses the generated summary and description metadata")
       operationHelp.`type` shouldBe "operation"
-      operationHelp.name shouldBe "domain.address.lookupAddress"
+      operationHelp.name shouldBe "lookupAddress"
       operationHelp.summary shouldBe "Look up an address by postal code."
       operationHelp.details("description") shouldBe Vector(
         "Look up an address by postal code.Returns a normalized address representation."
       )
       operationHelp.details("arguments") shouldBe Vector.empty
-      operationHelp.usage shouldBe Vector("command domain.address.lookupAddress")
+      operationHelp.usage shouldBe Vector("command domain.address.lookup-address")
 
       And("the CLI renderers can emit meta.help output from the same model")
       val yaml = CliHelpYamlRenderer.render(serviceHelp)
       yaml should include ("type: service")
-      yaml should include ("name: domain.address")
+      yaml should include ("name: address")
       yaml should include ("summary: Address service for postal address support.")
 
       val json = CliHelpJsonRenderer.render(operationHelp)
       json should include ("\"type\":\"operation\"")
-      json should include ("\"name\":\"domain.address.lookupAddress\"")
+      json should include ("\"name\":\"lookupAddress\"")
       json should include ("\"summary\":\"Look up an address by postal code.\"")
     }
   }

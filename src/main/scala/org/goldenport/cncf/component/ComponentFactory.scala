@@ -28,8 +28,8 @@ import scala.util.Try
  * @since   Jan. 30, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 28, 2026
  * @author  ASAMI, Tomoharu
+ * @version Mar. 28, 2026
  */
 final class ComponentFactory(
   private val _component_repository_space: ComponentRepositorySpace = ComponentRepositorySpace(),
@@ -541,13 +541,18 @@ final class ComponentFactory(
     if (descriptors.nonEmpty)
       descriptors.map(_.toPlan)
     else
-      component.factory match {
-        case Some(m: EntityRuntimePlanProvider) =>
+      component match {
+        case m: EntityRuntimePlanProvider =>
           m.entityRuntimePlans
-        case _ if component.aggregateDefinitions.nonEmpty || component.viewDefinitions.nonEmpty =>
-          _entity_collection_names(component).map(_legacy_memory_plan)
         case _ =>
-          Vector.empty
+          component.factory match {
+            case Some(m: EntityRuntimePlanProvider) =>
+              m.entityRuntimePlans
+            case _ if component.aggregateDefinitions.nonEmpty || component.viewDefinitions.nonEmpty =>
+              _entity_collection_names(component).map(_legacy_memory_plan)
+            case _ =>
+              Vector.empty
+          }
       }
   }
 
@@ -774,12 +779,18 @@ final class ComponentFactory(
     component: Component,
     plans: Vector[EntityRuntimePlan[Any]]
   ): Vector[CollectionTransitionRule[Any]] =
-    component.factory match {
-      case Some(m: CollectionTransitionRuleProvider) =>
+    component match {
+      case m: CollectionTransitionRuleProvider =>
         val _ = plans
         m.stateMachineTransitionRules
       case _ =>
-        Vector.empty
+        component.factory match {
+          case Some(m: CollectionTransitionRuleProvider) =>
+            val _ = plans
+            m.stateMachineTransitionRules
+          case _ =>
+            Vector.empty
+        }
     }
 
 }

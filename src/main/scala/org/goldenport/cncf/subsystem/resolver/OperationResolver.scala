@@ -9,8 +9,8 @@ import OperationResolver._
 /*
  * @since   Jan. 15, 2026
  *  version Jan. 16, 2026
- * @version Mar. 24, 2026
  * @author  ASAMI, Tomoharu
+ * @version Mar. 28, 2026
  */
 final class OperationResolver private (
   val config: Config,
@@ -302,7 +302,7 @@ object OperationResolver {
     new OperationResolver(
       Config(
         mode = mode,
-        prefixMatchingEnabled = false
+        prefixMatchingEnabled = true
       ),
       entries,
       serviceSlots,
