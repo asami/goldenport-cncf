@@ -13,6 +13,7 @@ import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
 import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
+import org.goldenport.cncf.entity.runtime.EntitySpace
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import cats.~>
@@ -39,7 +40,7 @@ import cats.~>
  *  version Dec. 31, 2025
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Mar. 24, 2026
+ * @version Mar. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -57,6 +58,10 @@ abstract class ExecutionContext
   def dataStoreSpace: DataStoreSpace = runtime.dataStoreSpace
 
   def entityStoreSpace: EntityStoreSpace = runtime.entityStoreSpace
+
+  def entitySpace: EntitySpace = runtime.entitySpace
+
+  def isAggregateInternalRead: Boolean = cncfCore.scope.isAggregateInternalRead
 
   lazy val transactionContext = TransactionContext(runtime)
 }
@@ -224,6 +229,24 @@ object ExecutionContext {
     case _ =>
       ctx
   }
+
+  def withSecurityContext(
+    ctx: ExecutionContext,
+    security: SecurityContext
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(
+        cncfCore = i.cncfCore.copy(security = security)
+      )
+    case _ =>
+      ctx
+  }
+
+  def withAggregateInternalRead(
+    ctx: ExecutionContext,
+    enabled: Boolean
+  ): ExecutionContext =
+    ctx.withScope(ScopeContext.withAggregateInternalRead(ctx.cncfCore.scope, enabled))
 
   def withObservabilityContext(
     ctx: ExecutionContext,

@@ -16,8 +16,8 @@ import org.goldenport.protocol.handler.egress.*
 import org.goldenport.protocol.handler.projection.*
 import java.nio.file.Path
 import scala.reflect.ClassTag
-import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeContext, ScopeKind}
-import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, ProcedureActionCall, QueryAction}
+import org.goldenport.cncf.context.{CorrelationId, EntitySpaceContext, ExecutionContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, AggregateBehavior, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.http.HttpDriver
@@ -45,7 +45,7 @@ import scala.util.control.NonFatal
  *  version Jan.  3, 2026
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
- * @version Mar. 28, 2026
+ * @version Mar. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -290,6 +290,16 @@ object Component {
   private val _default_repository_type = "component"
   private val _default_unknown_version = "unknown"
 
+  final case class AggregateBehaviorBinding(
+    operation_name: String,
+    behavior: AggregateBehavior[?]
+  )
+
+  final case class AggregateCollectionBinding(
+    aggregate_name: String,
+    collection: AggregateCollection[?]
+  )
+
   // private var _script_count = 0
   // private def _script_number(): String = {
   //   val s = if (_script_count == 0) "" else _script_count.toString
@@ -329,7 +339,8 @@ object Component {
         name = name,
         parent = Some(parent),
         observabilityContext = parent.observabilityContext.createChild(parent, ScopeKind.Component, name),
-        httpDriverOption = None
+        httpDriverOption = None,
+        entityspace = Some(EntitySpaceContext(component.entitySpace))
       )
       Context(
         core = _core,
@@ -499,6 +510,24 @@ object Component {
 
   abstract class Factory {
     def serviceFactory: ServiceFactory = ServiceFactory.empty
+
+    def aggregate_collection_bindings(
+      comp: Component
+    ): Vector[AggregateCollectionBinding] = Vector.empty
+
+    def aggregate_behavior_bindings(
+      comp: Component
+    ): Vector[AggregateBehaviorBinding] = Vector.empty
+
+    def create_aggregate_behavior(
+      action: Action,
+      core: ActionCall.Core
+    ): Option[AggregateBehavior[?]] =
+      for {
+        comp <- core.component
+        binding <- aggregate_behavior_bindings(comp)
+          .find(_.operation_name == action.request.operation)
+      } yield binding.behavior
 
     final def create(params: ComponentCreate): Vector[Component] = {
       val xs = create_Components(params)

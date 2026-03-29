@@ -36,7 +36,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
- * @version Mar. 29, 2026
+ * @version Mar. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -184,7 +184,7 @@ final class Subsystem(
       }
       response <- {
         val (component, _, _) = route
-        IngressSecurityResolver.resolve(request).flatMap { security =>
+        IngressSecurityResolver.resolve(component.logic.executionContext(), request).flatMap { security =>
           component.logic.makeOperationRequest(domainRequest).flatMap { r =>
           r match {
             case action: Action =>

@@ -29,7 +29,7 @@ import scala.util.Try
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  * @author  ASAMI, Tomoharu
- * @version Mar. 28, 2026
+ * @version Mar. 30, 2026
  */
 final class ComponentFactory(
   private val _component_repository_space: ComponentRepositorySpace = ComponentRepositorySpace(),
@@ -398,11 +398,17 @@ final class ComponentFactory(
     entityspace: EntitySpace
   ): Unit = {
     val names = _aggregate_collection_names(component)
+    val custombindings = component.factory.toVector.flatMap(_.aggregate_collection_bindings(component))
     names.foreach { name =>
-      _resolve_aggregate_entity_name(component, name).foreach { entityname =>
-        val builder = _default_aggregate_builder(entityspace, entityname)
-        val collection = new AggregateCollection[Any](builder)
-        aggregatespace.register(name, collection)
+      custombindings.find(_.aggregate_name == name) match {
+        case Some(binding) =>
+          aggregatespace.register(name, binding.collection.asInstanceOf[AggregateCollection[Any]])
+        case None =>
+          _resolve_aggregate_entity_name(component, name).foreach { entityname =>
+            val builder = _default_aggregate_builder(entityspace, entityname)
+            val collection = new AggregateCollection[Any](builder)
+            aggregatespace.register(name, collection)
+          }
       }
     }
   }

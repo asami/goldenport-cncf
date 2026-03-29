@@ -4,16 +4,18 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.context.DataStoreContext
 import org.goldenport.cncf.context.EntityStoreContext
+import org.goldenport.cncf.context.EntitySpaceContext
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
+import org.goldenport.cncf.entity.runtime.EntitySpace
 
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Mar. 10, 2026
+ * @version Mar. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ScopeKind {
@@ -74,7 +76,9 @@ object ScopeContext {
     observabilityContext: ObservabilityContext,
     httpDriverOption: Option[HttpDriver],
     datastore: Option[DataStoreContext] = None,
-    entitystore: Option[EntityStoreContext] = None
+    entitystore: Option[EntityStoreContext] = None,
+    entityspace: Option[EntitySpaceContext] = None,
+    aggregateInternalRead: Boolean = false
   )
   object Core {
     trait Holder {
@@ -84,6 +88,8 @@ object ScopeContext {
       def name: String = core.name
       def parent: Option[ScopeContext] = core.parent
       def observabilityContext: ObservabilityContext = core.observabilityContext
+      def isAggregateInternalRead: Boolean =
+        core.aggregateInternalRead || parent.exists(_.isAggregateInternalRead)
 
       def dataStoreSpace: DataStoreSpace = core.datastore.map(_.dataStoreSpace) orElse parent.map(_.dataStoreSpace) getOrElse {
         Consequence.unreachableReached("DataStore").RAISE
@@ -91,11 +97,23 @@ object ScopeContext {
       def entityStoreSpace: EntityStoreSpace = core.entitystore.map(_.entityStoreSpace) orElse parent.map(_.entityStoreSpace) getOrElse {
         Consequence.unreachableReached("EntityStore").RAISE
       }
+      def entitySpace: EntitySpace = core.entityspace.map(_.entitySpace) orElse parent.map(_.entitySpace) getOrElse {
+        Consequence.unreachableReached("EntitySpace").RAISE
+      }
     }
   }
 
   final case class Instance(core: ScopeContext.Core) extends ScopeContext() {
   }
+
+  def withAggregateInternalRead(
+    scope: ScopeContext,
+    enabled: Boolean
+  ): ScopeContext =
+    scope match {
+      case Instance(core) => Instance(core.copy(aggregateInternalRead = enabled))
+      case _ => scope
+    }
 
   def apply(
     kind: ScopeKind,

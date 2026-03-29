@@ -4,12 +4,13 @@ import scala.collection.mutable
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
 import org.simplemodeling.model.datatype.EntityId
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.aggregate.Repository
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 24, 2026
+ * @version Mar. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateSpace {
@@ -39,8 +40,26 @@ final class AggregateSpace {
   def query[A](
     collectionname: String,
     q: Query[?]
+  )(using ctx: ExecutionContext): Consequence[Vector[A]] =
+    query_with_context[A](collectionname, q)
+
+  def query_with_context[A](
+    collectionname: String,
+    q: Query[?]
+  )(using ctx: ExecutionContext): Consequence[Vector[A]] =
+    collection[A](collectionname).query_with_context(q)
+
+  def query[A](
+    collectionname: String,
+    q: Query[?]
   ): Consequence[Vector[A]] =
     repository[A](collectionname).query(q)
+
+  def resolve[A](id: EntityId)(using ctx: ExecutionContext): Consequence[A] =
+    resolve_with_context[A](id)
+
+  def resolve_with_context[A](id: EntityId)(using ctx: ExecutionContext): Consequence[A] =
+    collection[A](id.collection.name).resolve_with_context(id)
 
   def resolve[A](id: EntityId): Consequence[A] =
     collection[A](id.collection.name).resolve(id)
@@ -48,6 +67,21 @@ final class AggregateSpace {
   // Keep failure semantics centralized:
   // - not found => Success(None)
   // - other failures (e.g. I/O) => Failure
+  def resolveOption[A](id: EntityId)(using ctx: ExecutionContext): Consequence[Option[A]] =
+    collectionOption[A](id.collection.name) match {
+      case None =>
+        Consequence.success(None)
+      case Some(c) =>
+        c.resolve_with_context(id) match {
+          case Consequence.Success(value) =>
+            Consequence.success(Some(value))
+          case Consequence.Failure(conclusion) if _is_not_found(conclusion) =>
+            Consequence.success(None)
+          case Consequence.Failure(conclusion) =>
+            Consequence.Failure(conclusion)
+        }
+    }
+
   def resolveOption[A](id: EntityId): Consequence[Option[A]] =
     collectionOption[A](id.collection.name) match {
       case None =>

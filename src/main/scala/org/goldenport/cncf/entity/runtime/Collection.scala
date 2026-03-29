@@ -9,7 +9,7 @@ import org.goldenport.cncf.directive.{Query, SearchResult}
 
 /*
  * @since   Mar. 14, 2026
- * @version Mar. 29, 2026
+ * @version Mar. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -201,6 +201,8 @@ final class EntityCollection[E](
   }
 
   private def _is_content_manager()(using ctx: ExecutionContext): Boolean = {
+    if (ctx.isAggregateInternalRead)
+      return true
     val aliases = Set(
       "contentmanager",
       "contentadmin",

@@ -5,7 +5,7 @@ import cats.~>
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, GlobalRuntimeContext, ObservabilityContext, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SpanId, TraceId}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, GlobalRuntimeContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SpanId, TraceId}
 import org.goldenport.cncf.event.EventReception
 import org.goldenport.cncf.job.{ActionId, JobContext, JobId, TaskId}
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
@@ -20,7 +20,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Mar. 29, 2026
+ * @version Mar. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -31,7 +31,9 @@ final case class ResolvedIngressSecurity(
 
 trait IngressSecurityResolver {
   def resolve(request: Request): Consequence[ResolvedIngressSecurity]
+  def resolve(base: ExecutionContext, request: Request): Consequence[ResolvedIngressSecurity]
   def resolve(attributes: Map[String, String]): Consequence[ResolvedIngressSecurity]
+  def resolve(base: ExecutionContext, attributes: Map[String, String]): Consequence[ResolvedIngressSecurity]
 }
 
 object IngressSecurityResolver {
@@ -40,8 +42,14 @@ object IngressSecurityResolver {
   def resolve(request: Request): Consequence[ResolvedIngressSecurity] =
     default.resolve(request)
 
+  def resolve(base: ExecutionContext, request: Request): Consequence[ResolvedIngressSecurity] =
+    default.resolve(base, request)
+
   def resolve(attributes: Map[String, String]): Consequence[ResolvedIngressSecurity] =
     default.resolve(attributes)
+
+  def resolve(base: ExecutionContext, attributes: Map[String, String]): Consequence[ResolvedIngressSecurity] =
+    default.resolve(base, attributes)
 }
 
 private final class DefaultIngressSecurityResolver extends IngressSecurityResolver {
@@ -73,6 +81,18 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     resolve(attrs)
   }
 
+  def resolve(base: ExecutionContext, request: Request): Consequence[ResolvedIngressSecurity] = {
+    val fromProperties = request.properties.foldLeft(Map.empty[String, String]) { (z, p) =>
+      val value = Option(p.value).map(_.toString).getOrElse("")
+      if (p.name.nonEmpty && value.nonEmpty) z.updated(p.name, value) else z
+    }
+    val attrs = request.arguments.foldLeft(fromProperties) { (z, a) =>
+      val value = Option(a.value).map(_.toString).getOrElse("")
+      if (a.name.nonEmpty && value.nonEmpty) z.updated(a.name, value) else z
+    }
+    resolve(base, attrs)
+  }
+
   def resolve(attributes: Map[String, String]): Consequence[ResolvedIngressSecurity] = {
     val privilege = _resolve_privilege(attributes)
     val caps = _resolve_requested_capabilities(attributes)
@@ -80,6 +100,23 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       val ctx0 = ExecutionContext.create(p)
       val ctx1 = _production_runtime_context(ctx0)
       val ctx = _bind_context(attributes, ctx1)
+      if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
+        Consequence.success(ResolvedIngressSecurity(ctx, p, caps))
+      else
+        Consequence.fail(
+          Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Illegal),
+          Facet.Operation("security.resolve"),
+          Facet.Message(s"required capability: ${caps.toVector.sorted.mkString("|")}")
+        )
+    }
+  }
+
+  def resolve(base: ExecutionContext, attributes: Map[String, String]): Consequence[ResolvedIngressSecurity] = {
+    val privilege = _resolve_privilege(attributes)
+    val caps = _resolve_requested_capabilities(attributes)
+    privilege.flatMap { p =>
+      val ctx0 = ExecutionContext.withSecurityContext(base, _security_context(p))
+      val ctx = _bind_context(attributes, ctx0)
       if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
         Consequence.success(ResolvedIngressSecurity(ctx, p, caps))
       else
@@ -166,6 +203,18 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
         )
       )
   }
+
+  private def _security_context(
+    privilege: SecurityContext.Privilege
+  ): SecurityContext =
+    SecurityContext(
+      principal = new Principal {
+        val id: PrincipalId = privilege.principalId
+        val attributes: Map[String, String] = privilege.attributes
+      },
+      capabilities = privilege.capabilities,
+      level = privilege.level
+    )
 
   private def _production_runtime_context(
     ctx: ExecutionContext

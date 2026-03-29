@@ -26,12 +26,13 @@ import org.goldenport.cncf.entity.CreateResult
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
+import org.goldenport.cncf.action.AggregateBehavior
 
 /*
  * @since   Jan.  6, 2026
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
- * @version Mar. 29, 2026
+ * @version Mar. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -70,6 +71,19 @@ trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
       action_property_string(name),
       s"Property not found: $name"
     )
+
+  protected final def resolve_aggregate_behavior(
+  ): Consequence[AggregateBehavior[?]] =
+    component.flatMap(_.factory).flatMap(_.create_aggregate_behavior(action, core)) match {
+      case Some(behavior) => Consequence.success(behavior)
+      case None => Consequence.failure(s"AggregateBehavior not found: ${action.name}")
+    }
+
+  protected final def invoke_aggregate_behavior[A](
+    behavior: AggregateBehavior[A],
+    target: A
+  ): Consequence[OperationResponse] =
+    behavior.run(target, executionContext)
 }
 
 trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -85,7 +99,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     component
       .map(_.aggregateSpace)
       .getOrElse(Consequence.failUninitializedState.RAISE)
-      .resolve[A](id)
+      .resolve_with_context[A](id)(using execution_context)
 
   protected final def aggregate_load_or_throw[A](id: EntityId): A =
     aggregate_load_c[A](id).TAKE
@@ -101,7 +115,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     component
       .map(_.aggregateSpace)
       .getOrElse(Consequence.failUninitializedState.RAISE)
-      .resolveOption[A](targetid)
+      .resolveOption[A](targetid)(using execution_context)
 
   protected final def aggregate_load_option_or_throw[A](targetid: EntityId): Option[A] =
     aggregate_load_option_c[A](targetid).TAKE
@@ -119,7 +133,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     component
       .map(_.aggregate[A](collectionname))
       .getOrElse(Consequence.failUninitializedState.RAISE)
-      .resolve(id)
+      .resolve_with_context(id)(using execution_context)
 
   protected final def aggregate_load_or_throw[A](
     collectionname: String,
@@ -140,7 +154,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     component
       .map(_.aggregateSpace)
       .getOrElse(Consequence.failUninitializedState.RAISE)
-      .query[A](collectionname, q)
+      .query_with_context[A](collectionname, q)(using execution_context)
       .map { xs =>
         SearchResult(
           query = q,

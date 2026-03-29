@@ -20,7 +20,7 @@ import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
  *  version Dec. 18, 2025
  *  version Jan. 10, 2026
  *  version Feb. 26, 2026
- * @version Mar. 29, 2026
+ * @version Mar. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -388,6 +388,8 @@ class StandardEntityStore(
   }
 
   private def _is_content_manager()(using ctx: ExecutionContext): Boolean = {
+    if (ctx.isAggregateInternalRead)
+      return true
     val aliases = Set(
       "contentmanager",
       "contentadmin",
