@@ -28,7 +28,7 @@ final class ActionCallEntityAccessMetricsSpec
   extends AnyWordSpec
   with Matchers
   with GivenWhenThen {
-  private val _cid = EntityCollectionId("test", "1", "person")
+  private def _cid(name: String) = EntityCollectionId("test", "1", name)
 
   "read-side API metrics" should {
     "record entity-space hit for load when the cache already has the entity" in {
@@ -36,10 +36,11 @@ final class ActionCallEntityAccessMetricsSpec
       EntityAccessMetricsRegistry.shared.clear()
       given EntityPersistent[TestPerson] = _persistent
 
-      val id = EntityId("test", "cache_load", _cid)
+      val cid = _cid("person_metrics_cache_load")
+      val id = EntityId("test", "cache_load", cid)
       val entity = TestPerson(id, "taro", 20)
       val component = new org.goldenport.cncf.component.Component() {}
-      component.entitySpace.registerEntity("person", _resident_collection(entity))
+      component.entitySpace.registerEntity(cid.name, _resident_collection(cid, entity))
       val ctx = _execution_context(DataStoreSpace.default(), new EntityStoreSpace().addEntityStore(EntityStore.standard()))
 
       When("loading through ActionCallEntityStorePart")
@@ -61,11 +62,12 @@ final class ActionCallEntityAccessMetricsSpec
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       val ctx = _execution_context(datastorespace, entitystorespace)
       given ExecutionContext = ctx
-      val id = EntityId("test", "store_load", _cid)
+      val cid = _cid("person_metrics_store_load")
+      val id = EntityId("test", "store_load", cid)
       val entity = TestPerson(id, "hanako", 30)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
-          Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), entity.toRecord()))
+          Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), entity.toRecord()))
         )
       )
       val component = new org.goldenport.cncf.component.Component() {}
@@ -89,19 +91,20 @@ final class ActionCallEntityAccessMetricsSpec
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       val ctx = _execution_context(datastorespace, entitystorespace)
       given ExecutionContext = ctx
-      val p1 = TestPerson(EntityId("test", "search_1", _cid), "alpha", 20)
-      val p2 = TestPerson(EntityId("test", "search_2", _cid), "beta", 30)
+      val cid = _cid("person_metrics_search")
+      val p1 = TestPerson(EntityId("test", "search_1", cid), "alpha", 20)
+      val p2 = TestPerson(EntityId("test", "search_2", cid), "beta", 30)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), p1.toRecord()),
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), p2.toRecord())
           )
         )
       )
       val component = new org.goldenport.cncf.component.Component() {}
-      component.entitySpace.registerEntity("person", _empty_collection())
-      val query: EntityQuery[TestPerson] = EntityQuery(_cid, Query(TestPersonQuery(
+      component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
+      val query: EntityQuery[TestPerson] = EntityQuery(cid, Query(TestPersonQuery(
         id = Condition.any[EntityId],
         name = Condition.is("alpha"),
         age = Condition.any[Int]
@@ -184,10 +187,11 @@ final class ActionCallEntityAccessMetricsSpec
       .getOrElse(0L)
 
   private def _resident_collection(
+    cid: EntityCollectionId,
     entity: TestPerson
   )(using EntityPersistent[TestPerson]): EntityCollection[TestPerson] = {
     val storerealm = new EntityRealm[TestPerson](
-      entityName = "person",
+      entityName = cid.name,
       loader = EntityLoader[TestPerson](_ => None),
       state = new _IdRef(EntityRealmState(Map.empty))
     )
@@ -197,9 +201,9 @@ final class ActionCallEntityAccessMetricsSpec
       idOf = _.id
     )
     val descriptor = EntityDescriptor(
-      collectionId = _cid,
+      collectionId = cid,
       plan = EntityRuntimePlan(
-        entityName = "person",
+        entityName = cid.name,
         memoryPolicy = EntityMemoryPolicy.LoadToMemory,
         workingSet = None,
         partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
@@ -215,9 +219,10 @@ final class ActionCallEntityAccessMetricsSpec
   }
 
   private def _empty_collection(
+    cid: EntityCollectionId
   )(using EntityPersistent[TestPerson]): EntityCollection[TestPerson] = {
     val storerealm = new EntityRealm[TestPerson](
-      entityName = "person",
+      entityName = cid.name,
       loader = EntityLoader[TestPerson](_ => None),
       state = new _IdRef(EntityRealmState(Map.empty))
     )
@@ -226,9 +231,9 @@ final class ActionCallEntityAccessMetricsSpec
       idOf = _.id
     )
     val descriptor = EntityDescriptor(
-      collectionId = _cid,
+      collectionId = cid,
       plan = EntityRuntimePlan(
-        entityName = "person",
+        entityName = cid.name,
         memoryPolicy = EntityMemoryPolicy.LoadToMemory,
         workingSet = None,
         partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,

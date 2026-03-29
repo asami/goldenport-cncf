@@ -9,7 +9,7 @@ import org.goldenport.protocol.Argument
 import org.goldenport.protocol.Property
 import org.goldenport.protocol.spec.RequestDefinition
 import org.goldenport.protocol.spec.ParameterDefinition
-import org.simplemodeling.model.value.BaseContent
+import org.goldenport.value.BaseContent
 import org.goldenport.schema.{Multiplicity, ValueDomain, XString}
 import org.goldenport.datatype.{ContentType, MimeBody}
 import org.goldenport.bag.Bag

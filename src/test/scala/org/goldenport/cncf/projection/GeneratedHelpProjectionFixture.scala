@@ -8,11 +8,11 @@ import org.goldenport.protocol.spec.*
 import org.goldenport.cncf.action.{Action, ActionCall, QueryAction}
 import org.goldenport.cncf.component.*
 import org.goldenport.cncf.testutil.TestComponentFactory
-import org.simplemodeling.model.value.BaseContent
+import org.goldenport.value.BaseContent
 
 /*
  * @since   Mar. 25, 2026
- * @version Mar. 25, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object GeneratedHelpProjectionFixture {

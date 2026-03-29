@@ -27,7 +27,7 @@ import org.goldenport.protocol.operation.{OperationResponse, OperationRequest}
 import org.goldenport.protocol.spec.{RequestDefinition, ResponseDefinition}
 import org.goldenport.protocol.spec.ParameterDefinition
 import org.goldenport.schema.{Multiplicity, ValueDomain, XString}
-import org.simplemodeling.model.value.BaseContent
+import org.goldenport.value.BaseContent
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 import org.goldenport.cncf.http.{FakeHttpDriver, Http4sHttpServer, HttpDriver, HttpExecutionEngine, HttpDriverFactory}
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult

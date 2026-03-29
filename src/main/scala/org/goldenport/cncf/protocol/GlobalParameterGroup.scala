@@ -1,6 +1,6 @@
 package org.goldenport.cncf.protocol
 
-import org.simplemodeling.model.value.BaseContent
+import org.goldenport.value.BaseContent
 import org.goldenport.protocol.spec.ParameterDefinition
 
 // TODO
@@ -9,6 +9,7 @@ import org.goldenport.protocol.spec.ParameterDefinition
  *
  * This is a lightweight wrapper around core ParameterDefinition instances.
  * Parsing / ingestion is delegated to protocol.ingress helpers via TODOs.
+ * @version Mar. 29, 2026
  */
 /*
  * @since   Jan. 22, 2026

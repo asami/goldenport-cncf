@@ -8,11 +8,15 @@ lazy val root = project
   .settings(
     organization := "org.goldenport",
     name := "goldenport-cncf",
-    version := "0.3.14",
+    version := "0.4.0",
 
     scalaVersion := scala3Version,
 
-    resolvers += "SimpleModeling.org" at "https://www.simplemodeling.org/maven",
+    resolvers ++= Seq(
+      Resolver.defaultLocal,
+      Resolver.mavenLocal,
+      "SimpleModeling.org" at "https://www.simplemodeling.org/maven"
+    ),
 
     libraryDependencies ++= Seq(
       // Functional core
@@ -40,7 +44,8 @@ lazy val root = project
 
       "org.slf4j" % "slf4j-simple" % "2.0.12",
 
-      "org.goldenport" %% "goldenport-core" % "0.2.10",
+      "org.goldenport" %% "goldenport-core" % "0.3.0",
+      "org.simplemodeling" %% "simplemodeling-model" % "0.1.0",
       "org.goldenport" % "cncf-collaborator-api" % "0.1.0",
 
       // Testing

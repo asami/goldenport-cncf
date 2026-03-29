@@ -9,7 +9,7 @@ import org.scalatest.GivenWhenThen
 
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
-import org.simplemodeling.model.value.BaseContent
+import org.goldenport.value.BaseContent
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.spec.OperationDefinition
@@ -21,8 +21,7 @@ import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * @since   Feb.  6, 2026
- *  version Feb.  6, 2026
- * @version Mar. 24, 2026
+ * @version Mar. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 class ShellCommandOperationDefinitionSpec
