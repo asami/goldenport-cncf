@@ -23,7 +23,6 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  * @since   Jan.  3, 2026
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- *  version Mar. 30, 2026
  * @version Mar. 31, 2026
  * @author  ASAMI, Tomoharu
  */

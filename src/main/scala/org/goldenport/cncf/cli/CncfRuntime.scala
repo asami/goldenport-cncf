@@ -51,7 +51,6 @@ import org.goldenport.record.Record
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- *  version Mar. 29, 2026
  * @version Mar. 31, 2026
  * @author  ASAMI, Tomoharu
  */

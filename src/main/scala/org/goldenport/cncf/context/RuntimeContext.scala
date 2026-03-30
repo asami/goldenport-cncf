@@ -11,7 +11,6 @@ import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, Entity
 /*
  * @since   Dec. 21, 2025
  *  version Jan. 18, 2026
- *  version Mar. 30, 2026
  * @version Mar. 31, 2026
  * @author  ASAMI, Tomoharu
  */

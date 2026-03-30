@@ -20,7 +20,6 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- *  version Mar. 30, 2026
  * @version Mar. 31, 2026
  * @author  ASAMI, Tomoharu
  */
