@@ -6,13 +6,16 @@ import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
 import org.goldenport.Consequence
 import org.goldenport.text.Presentable
 import org.goldenport.record.Record
+import org.goldenport.record.Recordable
+import org.goldenport.record.io.RecordDecoder
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.unitofwork.{CommitRecorder, PrepareResult, TransactionContext}
 
 /*
  * @since   Mar. 12, 2026
- * @version Mar. 19, 2026
+ *  version Mar. 19, 2026
+ * @version Mar. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -22,6 +25,7 @@ class SqlDataStore(
   config: SqlDataStore.Config = SqlDataStore.Config()
 ) extends DataStore {
   import DataStore.*
+  private val _record_decoder = new RecordDecoder()
 
   def isAccept(cid: CollectionId): Boolean = true
 
@@ -120,7 +124,7 @@ class SqlDataStore(
     record.asMap.toVector.collect {
       case (k, v) if k != "id" =>
         val key = if (config.normalizeColumnNames) _to_column_name(k) else k
-        key -> Presentable.print(v)
+        key -> _column_value(v)
     }
       .foldLeft(Vector.empty[(String, String)]) { case (z, (k, v)) =>
         z.indexWhere(_._1 == k) match {
@@ -128,6 +132,50 @@ class SqlDataStore(
           case i => z.updated(i, k -> v)
         }
       }
+
+  private def _column_value(
+    value: Any
+  ): String =
+    value match {
+      case m: Record =>
+        m.toJsonString
+      case m: Recordable =>
+        m.toRecord().toJsonString
+      case xs: Iterable[?] if xs.forall(_is_record_like) =>
+        xs.iterator.map(_record_like_json).mkString("[", ",", "]")
+      case other =>
+        Presentable.print(other)
+    }
+
+  private def _is_record_like(
+    value: Any
+  ): Boolean =
+    value match {
+      case _: Record => true
+      case _: Recordable => true
+      case _ => false
+    }
+
+  private def _record_like_json(
+    value: Any
+  ): String =
+    value match {
+      case m: Record => m.toJsonString
+      case m: Recordable => m.toRecord().toJsonString
+      case other => Presentable.print(other)
+    }
+
+  private def _decode_column_value(
+    value: String
+  ): Any = {
+    val trimmed = value.trim
+    if (trimmed.startsWith("{") && trimmed.endsWith("}"))
+      _record_decoder.json(trimmed).toOption.getOrElse(value)
+    else if (trimmed.startsWith("[") && trimmed.endsWith("]"))
+      _record_decoder.jsonAutoRecords(trimmed).toOption.getOrElse(value)
+    else
+      value
+  }
 
   private def _table_exists(
     conn: Connection,
@@ -317,7 +365,7 @@ class SqlDataStore(
             val values = (1 to count).toVector.map { i =>
               val rawname = md.getColumnLabel(i)
               val name = if (config.normalizeColumnNames) _to_property_name(rawname) else rawname
-              val value = Option(rs.getString(i)).getOrElse("")
+              val value = _decode_column_value(Option(rs.getString(i)).getOrElse(""))
               name -> value
             }
             Some(Record.create(values))

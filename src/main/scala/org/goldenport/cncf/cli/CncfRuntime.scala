@@ -51,7 +51,8 @@ import org.goldenport.record.Record
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 29, 2026
+ *  version Mar. 29, 2026
+ * @version Mar. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -465,7 +466,7 @@ object CncfRuntime extends GlobalObservable {
               case Some(RunMode.Client) =>
                 executeClient(domainArgs.drop(1), extraComponents)
               case Some(RunMode.Command) =>
-                executeCommand(domainArgs.drop(1), extraComponents)
+                executeCommand(actualargs.drop(1), extraComponents)
               case Some(RunMode.ServerEmulator) =>
                 executeServerEmulator(domainArgs.drop(1), extraComponents)
               case Some(RunMode.Script) =>
@@ -551,7 +552,7 @@ object CncfRuntime extends GlobalObservable {
                 )
                 executeClient((runtimeParse.consumed ++ domainArgs.drop(1)).toArray)
               case Some(RunMode.Command) =>
-                executeCommand(domainArgs.drop(1))
+                executeCommand(actualargs.drop(1))
               case Some(RunMode.ServerEmulator) =>
                 executeServerEmulator(domainArgs.drop(1))
               case Some(RunMode.Script) =>
@@ -1465,7 +1466,8 @@ private[cli] object RuntimeOptionsParser {
     debug: Boolean = false,
     noExit: Boolean = false,
     format: Option[String] = None,
-    pathResolutionCommand: Boolean = false
+    pathResolutionCommand: Boolean = false,
+    commandExecutionMode: Option[String] = None
   )
 
   def extract(
@@ -1501,6 +1503,8 @@ private[cli] object RuntimeOptionsParser {
             options = options.copy(format = Some(value))
           case Some((key, value)) if _is_path_resolution_command_key(key) =>
             options = options.copy(pathResolutionCommand = _is_truthy(value))
+          case Some((key, value)) if _is_command_execution_mode_key(key) =>
+            options = options.copy(commandExecutionMode = Some(value))
           case Some((key, value)) if _is_framework_key(key) =>
             ()
           case Some((key, value)) if _is_framework_alias(key) =>
@@ -1514,6 +1518,8 @@ private[cli] object RuntimeOptionsParser {
             options = options.copy(format = Some(args(i + 1)))
           } else if (_is_path_resolution_command_key(current.drop(2))) {
             options = options.copy(pathResolutionCommand = _is_truthy(args(i + 1)))
+          } else if (_is_command_execution_mode_key(current.drop(2))) {
+            options = options.copy(commandExecutionMode = Some(args(i + 1)))
           }
           i = i + 1
         }
@@ -1545,6 +1551,9 @@ private[cli] object RuntimeOptionsParser {
     }
     if (options.debug) b += Property("textus.debug", "true", None)
     if (options.noExit) b += Property("textus.no-exit", "true", None)
+    options.commandExecutionMode.foreach { value =>
+      b += Property("textus.runtime.command.execution-mode", value, None)
+    }
     b.result()
   }
 
@@ -1610,6 +1619,14 @@ private[cli] object RuntimeOptionsParser {
   ): Boolean =
     key == "textus.path-resolution.command" ||
       key == "cncf.path-resolution.command"
+
+  private def _is_command_execution_mode_key(
+    key: String
+  ): Boolean =
+    key == "textus.runtime.command.execution-mode" ||
+      key == "cncf.runtime.command.execution-mode" ||
+      key == "runtime.command.execution-mode" ||
+      key == "command.execution-mode"
 
   private def _is_truthy(value: String): Boolean = {
     val normalized = value.trim.toLowerCase

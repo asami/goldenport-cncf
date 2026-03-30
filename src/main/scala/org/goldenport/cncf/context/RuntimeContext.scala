@@ -6,12 +6,13 @@ import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.config.ResolvedParameters
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.goldenport.cncf.statemachine.TransitionValidationHook
-import org.goldenport.cncf.context.EntitySpaceContext
+import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, EntityStoreContext}
 
 /*
  * @since   Dec. 21, 2025
  *  version Jan. 18, 2026
- * @version Mar. 30, 2026
+ *  version Mar. 30, 2026
+ * @version Mar. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -58,6 +59,8 @@ object RuntimeContext {
     parent: Option[ScopeContext],
     observabilityContext: ObservabilityContext,
     httpDriverOption: Option[HttpDriver] = None,
+    datastore: Option[DataStoreContext] = None,
+    entitystore: Option[EntityStoreContext] = None,
     entityspace: Option[EntitySpaceContext] = None
   ): ScopeContext.Core =
     ScopeContext.Core(
@@ -66,6 +69,8 @@ object RuntimeContext {
       parent = parent,
       observabilityContext = observabilityContext,
       httpDriverOption = httpDriverOption,
+      datastore = datastore,
+      entitystore = entitystore,
       entityspace = entityspace
     )
 }
