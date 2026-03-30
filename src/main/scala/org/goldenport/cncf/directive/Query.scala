@@ -6,7 +6,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Feb. 19, 2026
- * @version Mar. 28, 2026
+ * @version Mar. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 case class Query[T](query: T) {
@@ -253,6 +253,7 @@ object Query {
     val clauses = record.toVector.flatMap {
       case (name, _) if _is_framework_parameter(name) => None
       case (name, _) if _is_query_control_parameter(name) => None
+      case (name, _) if _is_visibility_control_parameter(name) => None
       case (name, value) =>
       Some(Eq(name, value))
     }
@@ -264,6 +265,9 @@ object Query {
 
   private def _is_query_control_parameter(name: String): Boolean =
     name.startsWith("query.")
+
+  private def _is_visibility_control_parameter(name: String): Boolean =
+    name == "postStatus" || name == "post_status" || name == "aliveness"
 
   private def _compose_clauses(clauses: Vector[Expr]): Expr =
     clauses match {

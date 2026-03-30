@@ -318,11 +318,20 @@ class StandardEntityStore(
     query: EntityDirectiveQuery[?]
   ): _LifecycleConstraint = {
     val expr = EntityDirectiveQuery.whereOf(query)
+    val raw = _query_condition(query)
     _LifecycleConstraint(
-      postStatusExplicit = _mentions_path(expr, Set("poststatus")),
-      alivenessExplicit = _mentions_path(expr, Set("aliveness"))
+      postStatusExplicit = _mentions_path(expr, Set("poststatus")) || _mentions_condition_key(raw, Set("poststatus")),
+      alivenessExplicit = _mentions_path(expr, Set("aliveness")) || _mentions_condition_key(raw, Set("aliveness"))
     )
   }
+
+  private def _query_condition(
+    query: EntityDirectiveQuery[?]
+  ): Any =
+    query.query match {
+      case p: EntityDirectiveQuery.Plan[?] => p.condition
+      case other => other
+    }
 
   private def _mentions_path(
     expr: EntityDirectiveQuery.Expr,
@@ -349,6 +358,21 @@ class StandardEntityStore(
       case EntityDirectiveQuery.StartsWith(path, _, _) => names.contains(_normalize_path(path))
       case EntityDirectiveQuery.EndsWith(path, _, _) => names.contains(_normalize_path(path))
       case EntityDirectiveQuery.Contains(path, _, _) => names.contains(_normalize_path(path))
+    }
+
+  private def _mentions_condition_key(
+    condition: Any,
+    names: Set[String]
+  ): Boolean =
+    condition match {
+      case r: Record =>
+        r.asMap.keys.exists(k => names.contains(_normalize_path(k)))
+      case m: Map[?, ?] =>
+        m.keysIterator.collect { case k: String => k }.exists(k => names.contains(_normalize_path(k)))
+      case p: Product =>
+        p.productElementNames.exists(k => names.contains(_normalize_path(k)))
+      case _ =>
+        false
     }
 
   private def _normalize_path(path: String): String = {

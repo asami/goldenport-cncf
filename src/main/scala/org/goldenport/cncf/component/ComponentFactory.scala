@@ -14,10 +14,13 @@ import org.goldenport.cncf.component.repository.ComponentSource
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.datastore.DataStore
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
-import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
-import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateSpace, AggregateDefinition}
+import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.directive.Query
+import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityQuery, EntityStore}
+import org.goldenport.cncf.entity.aggregate.{AggregateAssembler, AggregateBuilder, AggregateCollection, AggregateSpace, AggregateDefinition, ContextualAggregateBuilder, ContextualAggregateQuery}
 import org.goldenport.cncf.event.{ActionCallDispatcher, EventBus, EventEngine, EventReception, EventStore, EntitySubscriptionLimit}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimeDescriptor, EntityRuntimePlan, EntitySpace, EntityStorage, PartitionedMemoryRealm, PartitionStrategy, WorkingSetDefinition, WorkingSetInitializer}
+import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.entity.view.{ViewDefinition, ViewBuilder, ViewCollection, ViewSpace}
 import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.statemachine.{CollectionStateMachinePlanner, CollectionStateMachinePlannerProvider, CollectionTransitionRule, CollectionTransitionRuleProvider, TransitionTrigger, TransitionRule}
@@ -404,10 +407,18 @@ final class ComponentFactory(
         case Some(binding) =>
           aggregatespace.register(name, binding.collection.asInstanceOf[AggregateCollection[Any]])
         case None =>
-          _resolve_aggregate_entity_name(component, name).foreach { entityname =>
-            val builder = _default_aggregate_builder(entityspace, entityname)
-            val collection = new AggregateCollection[Any](builder)
-            aggregatespace.register(name, collection)
+          _resolve_aggregate_definition(component, name) match {
+            case Some(definition) if definition.members.nonEmpty =>
+              aggregatespace.register(
+                name,
+                _default_aggregate_collection(component, entityspace, definition)
+              )
+            case _ =>
+              _resolve_aggregate_entity_name(component, name).foreach { entityname =>
+                val builder = _default_aggregate_builder(entityspace, entityname)
+                val collection = new AggregateCollection[Any](builder)
+                aggregatespace.register(name, collection)
+              }
           }
       }
     }
@@ -455,6 +466,12 @@ final class ComponentFactory(
     component.entitySpace.entityOption[Any](entityname).map(_ => entityname)
   }
 
+  private def _resolve_aggregate_definition(
+    component: Component,
+    name: String
+  ): Option[AggregateDefinition] =
+    component.aggregateDefinitions.find(_.name == name)
+
   private def _resolve_view_definition(
     component: Component,
     name: String
@@ -474,6 +491,24 @@ final class ComponentFactory(
         entityspace.entity[Any](entityname).resolve(id)
     }
 
+  private def _default_aggregate_collection(
+    component: Component,
+    entityspace: EntitySpace,
+    definition: AggregateDefinition
+  ): AggregateCollection[Any] = {
+    val builder = new ContextualAggregateBuilder[Any] {
+      def build_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[Any] =
+        given ExecutionContext = ExecutionContext.withAggregateInternalRead(ctx, true)
+        _build_default_aggregate(component, entityspace, definition, id)
+    }
+    val queryfn = new ContextualAggregateQuery[Any] {
+      def query_with_context(q: Query[?])(using ctx: ExecutionContext): Consequence[Vector[Any]] =
+        given ExecutionContext = ExecutionContext.withAggregateInternalRead(ctx, true)
+        _search_default_aggregates(component, entityspace, definition, q)
+    }
+    new AggregateCollection[Any](builder = builder, queryfn = queryfn)
+  }
+
   private def _default_view_builder(
     entityspace: EntitySpace,
     entityname: String
@@ -481,6 +516,171 @@ final class ComponentFactory(
     new ViewBuilder[Any] {
       def build(id: EntityId): Consequence[Any] =
         entityspace.entity[Any](entityname).resolve(id)
+    }
+
+  private def _build_default_aggregate(
+    component: Component,
+    entityspace: EntitySpace,
+    definition: AggregateDefinition,
+    id: EntityId
+  )(using ctx: ExecutionContext): Consequence[Any] =
+    for {
+      root <- _load_entity(component, entityspace, definition.entityName, id)
+      aggregate <- _entity_to_aggregate(component, definition.entityName, root)
+      joined <- definition.members.foldLeft(Consequence.success(aggregate)) { (z, member) =>
+        z.flatMap(a => _attach_aggregate_member(component, entityspace, definition, member, root, a))
+      }
+    } yield joined
+
+  private def _search_default_aggregates(
+    component: Component,
+    entityspace: EntitySpace,
+    definition: AggregateDefinition,
+    q: Query[?]
+  )(using ctx: ExecutionContext): Consequence[Vector[Any]] = {
+    val sanitized = Query(_sanitize_query_record(_query_record(q)))
+    for {
+      roots <- _search_entities(component, entityspace, definition.entityName, sanitized)
+      aggregates <- roots.foldLeft(Consequence.success(Vector.empty[Any])) { (z, root) =>
+        z.flatMap(xs => _build_default_aggregate(component, entityspace, definition, _entity_id(component, definition.entityName, root)).map(xs :+ _))
+      }
+    } yield aggregates
+  }
+
+  private def _attach_aggregate_member(
+    component: Component,
+    entityspace: EntitySpace,
+    definition: AggregateDefinition,
+    member: org.goldenport.cncf.entity.aggregate.AggregateMemberDefinition,
+    rootEntity: Any,
+    aggregate: Any
+  )(using ctx: ExecutionContext): Consequence[Any] = {
+    val rootId = _entity_id(component, definition.entityName, rootEntity)
+    val joinFieldName = member.joinFieldName.getOrElse(s"${definition.entityName}Id")
+    for {
+      module <- Consequence.fromOption(
+        _generated_aggregate_module(component, definition.entityName),
+        s"Aggregate module not found for ${definition.entityName}"
+      )
+      entities <- _search_entities(
+        component,
+        entityspace,
+        member.entityName,
+        Query(Record.data(joinFieldName -> rootId.value))
+      )
+      aggregates <- entities.foldLeft(Consequence.success(Vector.empty[Any])) { (z, entity) =>
+        z.flatMap(xs => _entity_to_aggregate(component, member.entityName, entity).map(xs :+ _))
+      }
+      attached <- _invoke_member_setter(aggregate, module, member.name, aggregates)
+    } yield attached
+  }
+
+  private def _load_entity(
+    component: Component,
+    entityspace: EntitySpace,
+    entityname: String,
+    id: EntityId
+  )(using ctx: ExecutionContext): Consequence[Any] =
+    entityspace.entityOption[Any](entityname) match {
+      case Some(collection) =>
+        collection.resolve(id).recoverWith {
+          case _ =>
+            given EntityPersistent[Any] = _bootstrap_entity_persistent(component, entityname)
+            EntityStore.standard()
+              .load[Any](id)
+              .flatMap {
+                case Some(s) => Consequence.success(s)
+                case None => Consequence.failure(s"${_entity_class_name(entityname)} not found: ${id.value}")
+              }
+        }
+      case None =>
+        given EntityPersistent[Any] = _bootstrap_entity_persistent(component, entityname)
+        EntityStore.standard()
+          .load[Any](id)
+          .flatMap {
+            case Some(s) => Consequence.success(s)
+            case None => Consequence.failure(s"${_entity_class_name(entityname)} not found: ${id.value}")
+          }
+    }
+
+  private def _search_entities(
+    component: Component,
+    entityspace: EntitySpace,
+    entityname: String,
+    q: Query[?]
+  )(using ctx: ExecutionContext): Consequence[Vector[Any]] = {
+    val cid = _bootstrap_collection_id(component, entityname)
+    val query = EntityQuery[Any](cid, q)
+    given EntityPersistent[Any] = _bootstrap_entity_persistent(component, entityname)
+    entityspace.entityOption[Any](entityname) match {
+      case Some(collection) =>
+        collection.search(query).map(_.data).flatMap { xs =>
+          if (xs.nonEmpty)
+            Consequence.success(xs)
+          else
+            EntityStore.standard().search[Any](query).map(_.data)
+        }.recoverWith { case _ =>
+          EntityStore.standard().search[Any](query).map(_.data)
+        }
+      case None =>
+        EntityStore.standard().search[Any](query).map(_.data)
+    }
+  }
+
+  private def _entity_to_aggregate(
+    component: Component,
+    entityname: String,
+    entity: Any
+  ): Consequence[Any] =
+    for {
+      module <- Consequence.fromOption(
+        _generated_aggregate_module(component, entityname),
+        s"Aggregate module not found for ${entityname}"
+      )
+      record <- Consequence.fromTry(Try(_entity_to_record(component, entityname, entity)))
+      aggregate <- _invoke_create_from_record(module, record)
+    } yield aggregate
+
+  private def _entity_to_record(
+    component: Component,
+    entityname: String,
+    entity: Any
+  ): Record = {
+    given EntityPersistent[Any] = _bootstrap_entity_persistent(component, entityname)
+    summon[EntityPersistent[Any]].toRecord(entity)
+  }
+
+  private def _entity_id(
+    component: Component,
+    entityname: String,
+    entity: Any
+  ): EntityId = {
+    given EntityPersistent[Any] = _bootstrap_entity_persistent(component, entityname)
+    summon[EntityPersistent[Any]].id(entity)
+  }
+
+  private def _invoke_create_from_record(
+    module: AnyRef,
+    record: Record
+  ): Consequence[Any] =
+    module match {
+      case m: AggregateAssembler[?] =>
+        m.asInstanceOf[AggregateAssembler[Any]].create_from_record(record)
+      case _ =>
+        Consequence.failure(s"AggregateAssembler not found: ${module.getClass.getName}")
+    }
+
+  private def _invoke_member_setter(
+    aggregate: Any,
+    module: AnyRef,
+    memberName: String,
+    members: Vector[Any]
+  ): Consequence[Any] =
+    module match {
+      case m: AggregateAssembler[?] =>
+        m.asInstanceOf[AggregateAssembler[Any]].attach_member(aggregate, memberName, members)
+      case _ =>
+        Consequence.failure(s"AggregateAssembler not found: ${module.getClass.getName}")
     }
 
   private def _initialize_working_sets(
@@ -643,6 +843,44 @@ final class ComponentFactory(
     }
     val loader = component.getClass.getClassLoader
     candidates.iterator.flatMap(name => _load_scala_module(loader, name)).toSeq.headOption
+  }
+
+  private def _generated_aggregate_module(
+    component: Component,
+    entityname: String
+  ): Option[AnyRef] = {
+    val packagename = Option(component.getClass.getPackage).map(_.getName).filter(_.nonEmpty)
+    val classname = _entity_class_name(entityname)
+    val candidates = packagename.toVector.flatMap { pkg =>
+      Vector(
+        s"${pkg}.entity.aggregate.${classname}$$"
+      )
+    }
+    val loader = component.getClass.getClassLoader
+    candidates.iterator.flatMap(name => _load_scala_module(loader, name)).toSeq.headOption
+  }
+
+  private def _query_record(
+    q: Query[?]
+  ): Record =
+    q.query match {
+      case r: Record => r
+      case p: Query.Plan[?] =>
+        p.condition match {
+          case r: Record => r
+          case _ => Record.empty
+        }
+      case _ => Record.empty
+    }
+
+  private def _sanitize_query_record(p: Record): Record = {
+    val filtered = p.asMap.filterNot { case (k, _) =>
+      k.startsWith("security.") ||
+      k.startsWith("cncf.security.") ||
+      k.startsWith("textus.") ||
+      k.startsWith("cncf.")
+    }
+    Record.create(filtered)
   }
 
   private def _entity_class_name(

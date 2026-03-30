@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May. 16, 2026
- * @version Mar. 17, 2026
+ * @version Mar. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateSpaceResolveSpec
@@ -36,7 +36,7 @@ final class AggregateSpaceResolveSpec
 
       forAll(table) { (entityid, expected) =>
         When("resolving with the entity id")
-        val result = aggregatespace.resolve[Any](entityid)
+        val result = aggregatespace.collection[Any](entityid.collection.name).resolve(entityid)
 
         Then("the matching aggregate collection is used")
         result shouldBe Consequence.success(expected)
@@ -66,7 +66,7 @@ final class AggregateSpaceResolveSpec
       When("resolving with an unknown collection name")
       Then("an error is raised")
       intercept[IllegalStateException] {
-        aggregatespace.resolve[Any](missingid)
+        aggregatespace.collection[Any](missingid.collection.name).resolve(missingid)
       }
     }
 
@@ -81,7 +81,7 @@ final class AggregateSpaceResolveSpec
       aggregatespace.register("user", collection)
 
       When("querying by collection name")
-      val result = aggregatespace.query[Any]("user", Query("any"))
+      val result = aggregatespace.repository[Any]("user").query(Query("any"))
 
       Then("the query result is returned")
       result shouldBe Consequence.success(Vector(expected))

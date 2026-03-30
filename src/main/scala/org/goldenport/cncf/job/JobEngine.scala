@@ -15,58 +15,52 @@ import org.goldenport.provisional.observation.Taxonomy
 
 /*
  * @since   Jan.  4, 2026
- * @version Mar. 28, 2026
+ * @version Mar. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
   major: String,
   minor: String,
-  private val _preservedParts: Option[UniversalId.Parts] = None
-) extends UniversalId(major, minor, "job") {
-  override def value: String = _preservedParts.map(_.value).getOrElse(super.value)
-  override def parts: UniversalId.Parts = _preservedParts.getOrElse(super.parts)
-}
+  timestamp: Option[Instant] = None,
+  entropy: Option[String] = None
+) extends UniversalId(major, minor, "job", timestamp, entropy)
 
 object JobId {
   def generate(): JobId =
     JobId("cncf", "job")
 
   def parse(s: String): Consequence[JobId] =
-    UniversalId.parseParts(s, "job").map(parts => JobId(parts.major, parts.minor, Some(parts)))
+    UniversalId.parseParts(s, "job").map(parts => JobId(parts.major, parts.minor, Some(parts.timestamp), Some(parts.entropy)))
 }
 
 final case class TaskId(
   major: String,
   minor: String,
-  private val _preservedParts: Option[UniversalId.Parts] = None
-) extends UniversalId(major, minor, "task") {
-  override def value: String = _preservedParts.map(_.value).getOrElse(super.value)
-  override def parts: UniversalId.Parts = _preservedParts.getOrElse(super.parts)
-}
+  timestamp: Option[Instant] = None,
+  entropy: Option[String] = None
+) extends UniversalId(major, minor, "task", timestamp, entropy)
 
 object TaskId {
   def generate(): TaskId =
     TaskId("cncf", "task")
 
   def parse(s: String): Consequence[TaskId] =
-    UniversalId.parseParts(s, "task").map(parts => TaskId(parts.major, parts.minor, Some(parts)))
+    UniversalId.parseParts(s, "task").map(parts => TaskId(parts.major, parts.minor, Some(parts.timestamp), Some(parts.entropy)))
 }
 
 final case class ActionId(
   major: String,
   minor: String,
-  private val _preservedParts: Option[UniversalId.Parts] = None
-) extends UniversalId(major, minor, "action") {
-  override def value: String = _preservedParts.map(_.value).getOrElse(super.value)
-  override def parts: UniversalId.Parts = _preservedParts.getOrElse(super.parts)
-}
+  timestamp: Option[Instant] = None,
+  entropy: Option[String] = None
+) extends UniversalId(major, minor, "action", timestamp, entropy)
 
 object ActionId {
   def generate(): ActionId =
     ActionId("cncf", "action")
 
   def parse(s: String): Consequence[ActionId] =
-    UniversalId.parseParts(s, "action").map(parts => ActionId(parts.major, parts.minor, Some(parts)))
+    UniversalId.parseParts(s, "action").map(parts => ActionId(parts.major, parts.minor, Some(parts.timestamp), Some(parts.entropy)))
 }
 
 final case class JobContext(

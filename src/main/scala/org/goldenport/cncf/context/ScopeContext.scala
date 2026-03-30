@@ -112,7 +112,7 @@ object ScopeContext {
   ): ScopeContext =
     scope match {
       case Instance(core) => Instance(core.copy(aggregateInternalRead = enabled))
-      case _ => scope
+      case other => Instance(other.core.copy(aggregateInternalRead = enabled))
     }
 
   def apply(

@@ -131,11 +131,20 @@ final class EntityCollection[E](
     query: Query[?]
   ): _LifecycleConstraint = {
     val expr = Query.whereOf(query)
+    val raw = _query_condition(query)
     _LifecycleConstraint(
-      postStatusExplicit = _mentions_path(expr, Set("poststatus")),
-      alivenessExplicit = _mentions_path(expr, Set("aliveness"))
+      postStatusExplicit = _mentions_path(expr, Set("poststatus")) || _mentions_condition_key(raw, Set("poststatus")),
+      alivenessExplicit = _mentions_path(expr, Set("aliveness")) || _mentions_condition_key(raw, Set("aliveness"))
     )
   }
+
+  private def _query_condition(
+    query: Query[?]
+  ): Any =
+    query.query match {
+      case p: Query.Plan[?] => p.condition
+      case other => other
+    }
 
   private def _mentions_path(
     expr: Query.Expr,
@@ -162,6 +171,21 @@ final class EntityCollection[E](
       case Query.StartsWith(path, _, _) => names.contains(_normalize_path(path))
       case Query.EndsWith(path, _, _) => names.contains(_normalize_path(path))
       case Query.Contains(path, _, _) => names.contains(_normalize_path(path))
+    }
+
+  private def _mentions_condition_key(
+    condition: Any,
+    names: Set[String]
+  ): Boolean =
+    condition match {
+      case r: Record =>
+        r.asMap.keys.exists(k => names.contains(_normalize_path(k)))
+      case m: Map[?, ?] =>
+        m.keysIterator.collect { case k: String => k }.exists(k => names.contains(_normalize_path(k)))
+      case p: Product =>
+        p.productElementNames.exists(k => names.contains(_normalize_path(k)))
+      case _ =>
+        false
     }
 
   private def _normalize_path(path: String): String = {
