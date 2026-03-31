@@ -2,7 +2,7 @@ package org.goldenport.cncf.entity.aggregate
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 30, 2026
+ * @version Mar. 31, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AggregateDefinition(
@@ -18,6 +18,8 @@ final case class AggregateMemberDefinition(
   name: String,
   entityName: String,
   kind: Option[String] = None,
+  boundary: Option[String] = None,
+  join: Option[String] = None,
   joinFieldName: Option[String] = None,
   multiplicity: Option[String] = None
 )

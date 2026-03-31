@@ -31,8 +31,8 @@ import scala.util.Try
  * @since   Jan. 30, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
+ * @version Mar. 31, 2026
  * @author  ASAMI, Tomoharu
- * @version Mar. 30, 2026
  */
 final class ComponentFactory(
   private val _component_repository_space: ComponentRepositorySpace = ComponentRepositorySpace(),
@@ -555,25 +555,167 @@ final class ComponentFactory(
     rootEntity: Any,
     aggregate: Any
   )(using ctx: ExecutionContext): Consequence[Any] = {
-    val rootId = _entity_id(component, definition.entityName, rootEntity)
-    val joinFieldName = member.joinFieldName.getOrElse(s"${definition.entityName}Id")
     for {
       module <- Consequence.fromOption(
         _generated_aggregate_module(component, definition.entityName),
         s"Aggregate module not found for ${definition.entityName}"
       )
-      entities <- _search_entities(
+      entities <- _resolve_aggregate_member_entities(
         component,
         entityspace,
-        member.entityName,
-        Query(Record.data(joinFieldName -> rootId.value))
+        definition,
+        member,
+        rootEntity
       )
       aggregates <- entities.foldLeft(Consequence.success(Vector.empty[Any])) { (z, entity) =>
         z.flatMap(xs => _entity_to_aggregate(component, member.entityName, entity).map(xs :+ _))
       }
-      attached <- _invoke_member_setter(aggregate, module, member.name, aggregates)
+      attached <- _invoke_member_setter(aggregate, module, _aggregate_member_field_name(member.name), aggregates)
     } yield attached
   }
+
+  private def _aggregate_member_field_name(name: String): String = {
+    val parts = Option(name).getOrElse("").split("_").toVector.filter(_.nonEmpty)
+    parts.headOption.fold(name) { head =>
+      head + parts.drop(1).map(x => x.headOption.fold("")(_.toUpper.toString) + x.drop(1)).mkString
+    }
+  }
+
+  private def _resolve_aggregate_member_entities(
+    component: Component,
+    entityspace: EntitySpace,
+    definition: AggregateDefinition,
+    member: org.goldenport.cncf.entity.aggregate.AggregateMemberDefinition,
+    rootEntity: Any
+  )(using ctx: ExecutionContext): Consequence[Vector[Any]] = {
+    _aggregate_member_join_strategy(member) match {
+      case "direct" =>
+        _load_associated_entities(component, entityspace, definition, member, rootEntity)
+      case "reverse" =>
+        _search_related_entities(component, entityspace, definition, member, rootEntity)
+      case "through" =>
+        Consequence.failure(s"Aggregate join strategy 'through' is not implemented for member ${member.name}")
+      case s =>
+        Consequence.failure(s"Unsupported aggregate join strategy: $s")
+    }
+  }
+
+  private def _aggregate_member_join_strategy(
+    member: org.goldenport.cncf.entity.aggregate.AggregateMemberDefinition
+  ): String =
+    member.join.map(_.trim.toLowerCase).filter(_.nonEmpty).getOrElse {
+      val relation = member.kind.getOrElse("composition")
+      val boundary = member.boundary.getOrElse("internal")
+      if (boundary == "external" && relation == "association")
+        "direct"
+      else
+        "reverse"
+    }
+
+  private def _search_related_entities(
+    component: Component,
+    entityspace: EntitySpace,
+    definition: AggregateDefinition,
+    member: org.goldenport.cncf.entity.aggregate.AggregateMemberDefinition,
+    rootEntity: Any
+  )(using ctx: ExecutionContext): Consequence[Vector[Any]] = {
+    val rootId = _entity_id(component, definition.entityName, rootEntity)
+    val joinFieldName = member.joinFieldName.getOrElse(s"${definition.entityName}Id")
+    _search_entities(
+      component,
+      entityspace,
+      member.entityName,
+      Query(Record.data(joinFieldName -> rootId.value))
+    ).flatMap { xs =>
+      if (xs.nonEmpty || _field_name_candidates(joinFieldName).tail.isEmpty)
+        Consequence.success(xs)
+      else
+        _search_entities(
+          component,
+          entityspace,
+          member.entityName,
+          Query(Record.data(_field_name_candidates(joinFieldName).tail.head -> rootId.value))
+        )
+    }
+  }
+
+  private def _load_associated_entities(
+    component: Component,
+    entityspace: EntitySpace,
+    definition: AggregateDefinition,
+    member: org.goldenport.cncf.entity.aggregate.AggregateMemberDefinition,
+    rootEntity: Any
+  )(using ctx: ExecutionContext): Consequence[Vector[Any]] = {
+    val rootRecord = _entity_to_record(component, definition.entityName, rootEntity)
+    val joinFieldName = member.joinFieldName.getOrElse(member.name)
+    val joinKeys = _field_name_candidates(joinFieldName)
+    _record_get_entity_id(rootRecord, joinKeys).flatMap {
+      case Some(id) =>
+        _load_entity(component, entityspace, member.entityName, id).map(x => Vector(x))
+      case None =>
+        _record_get_entity_ids(rootRecord, joinKeys).flatMap { ids =>
+          ids.foldLeft(Consequence.success(Vector.empty[Any])) { (z, id) =>
+            z.flatMap(acc => _load_entity(component, entityspace, member.entityName, id).map(acc :+ _))
+          }
+        }
+    }
+  }
+
+  private def _field_name_candidates(name: String): List[String] = {
+    val snake = _snake_case(name)
+    List(name, snake).distinct
+  }
+
+  private def _snake_case(name: String): String =
+    Option(name).getOrElse("").zipWithIndex.foldLeft(new StringBuilder) { case (z, (c, i)) =>
+      if (c.isUpper && i > 0)
+        z.append('_').append(c.toLower)
+      else
+        z.append(c.toLower)
+    }.toString
+
+  private def _record_get_entity_id(
+    record: Record,
+    keys: List[String]
+  ): Consequence[Option[EntityId]] =
+    keys.foldLeft(Consequence.success(Option.empty[EntityId])) { (z, key) =>
+      z.flatMap {
+        case s @ Some(_) => Consequence.success(s)
+        case None => record.getAsC[EntityId](key)
+      }
+    }
+
+  private def _record_get_entity_ids(
+    record: Record,
+    keys: List[String]
+  ): Consequence[Vector[EntityId]] =
+    keys.foldLeft(Consequence.success(Vector.empty[EntityId])) { (z, key) =>
+      z.flatMap { xs =>
+        if (xs.nonEmpty)
+          Consequence.success(xs)
+        else
+          record.getVector(key) match {
+            case Some(vs) =>
+              vs.foldLeft(Consequence.success(Vector.empty[EntityId])) { (zz, x) =>
+                zz.flatMap(acc => _associated_entity_id(x).map(acc :+ _))
+              }
+            case None =>
+              record.getAny(key) match {
+                case Some(value) => _associated_entity_id(value).map(x => Vector(x))
+                case None => Consequence.success(Vector.empty)
+              }
+          }
+      }
+    }
+
+  private def _associated_entity_id(
+    value: Any
+  ): Consequence[EntityId] =
+    value match {
+      case id: EntityId => Consequence.success(id)
+      case s: String => EntityId.parse(s)
+      case other => EntityId.parse(other.toString)
+    }
 
   private def _load_entity(
     component: Component,
