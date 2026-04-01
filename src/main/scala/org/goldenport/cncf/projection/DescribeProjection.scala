@@ -5,8 +5,7 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- *  version Mar. 22, 2026
- * @version Apr.  1, 2026
+ * @version Apr.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 object DescribeProjection {
@@ -22,7 +21,7 @@ object DescribeProjection {
         )
       case Target.ComponentTarget(component) =>
         val services = component.protocol.services.services.sortBy(_.name)
-        val artifact = component_record(component).asMap("artifact")
+        val artifact = artifact_record(component)
         val aggregates = aggregateMetas(component).map { x =>
           Record.data(
             "name" -> x.name,
@@ -33,7 +32,10 @@ object DescribeProjection {
           Record.data(
             "name" -> x.name,
             "entityName" -> x.entityName,
-            "viewNames" -> x.viewNames
+            "viewNames" -> x.viewNames,
+            "queries" -> x.queries.map(q => Record.data("name" -> q.name, "expression" -> q.expression.getOrElse(""))),
+            "sourceEvents" -> x.sourceEvents,
+            "rebuildable" -> x.rebuildable.getOrElse(false)
           )
         }
         val operationdefs = operationMetas(component).map { x =>

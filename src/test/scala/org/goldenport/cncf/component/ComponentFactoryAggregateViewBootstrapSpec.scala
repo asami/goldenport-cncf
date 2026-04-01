@@ -11,7 +11,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.aggregate.AggregateDefinition
-import org.goldenport.cncf.entity.view.ViewDefinition
+import org.goldenport.cncf.entity.view.{ViewDefinition, ViewQueryDefinition}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.record.Record
 import org.scalatest.matchers.should.Matchers
@@ -19,7 +19,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with Matchers {
@@ -29,7 +30,10 @@ final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with 
     "register aggregate/view collections from component metadata definitions" in {
       given EntityPersistent[_PersonEntity] = _persistent
       val component = _create_component_with_metadata()
-      component.entitySpace.registerEntity("person", _collection(EntityId("m", "1", _cid), _PersonEntity(EntityId("m", "1", _cid), "taro")))
+      component.entitySpace.registerEntity("person", _collection(Vector(
+        _PersonEntity(EntityId("m", "1", _cid), "taro", "Tokyo"),
+        _PersonEntity(EntityId("m", "2", _cid), "hanako", "Osaka")
+      )))
       val factory = new ComponentFactory()
 
       _invoke_bootstrap_aggregates(factory, component)
@@ -38,6 +42,7 @@ final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with 
       component.aggregateSpace.collectionOption[Any]("person_aggregate").isDefined shouldBe true
       component.viewSpace.collectionOption[Any]("person_view").isDefined shouldBe true
       component.viewSpace.browserOption[Any]("person_view", "detail").isDefined shouldBe true
+      component.viewSpace.browserOption[Any]("person_view", "search_by_city").isDefined shouldBe true
     }
   }
 
@@ -64,7 +69,8 @@ final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with 
           ViewDefinition(
             name = "person_view",
             entityName = "person",
-            viewNames = Vector("detail")
+            viewNames = Vector("detail"),
+            queries = Vector(ViewQueryDefinition("search_by_city", Some("person.city == query.city")))
           )
         )
     }
@@ -121,12 +127,11 @@ final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with 
   }
 
   private def _collection(
-    id: EntityId,
-    entity: _PersonEntity
+    entities: Vector[_PersonEntity]
   )(using EntityPersistent[_PersonEntity]): EntityCollection[_PersonEntity] = {
     val storerealm = new EntityRealm[_PersonEntity](
       entityName = "person",
-      loader = EntityLoader[_PersonEntity](x => if (x == id) Some(entity) else None),
+      loader = EntityLoader[_PersonEntity](x => entities.find(_.id == x)),
       state = new _IdRef3[EntityRealmState[_PersonEntity]](EntityRealmState(Map.empty))
     )
     val memoryrealm = new PartitionedMemoryRealm[_PersonEntity](
@@ -145,10 +150,15 @@ final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with 
       ),
       persistent = summon[EntityPersistent[_PersonEntity]]
     )
-    new EntityCollection[_PersonEntity](
+    val collection = new EntityCollection[_PersonEntity](
       descriptor = descriptor,
       storage = EntityStorage(storerealm, Some(memoryrealm))
     )
+    entities.foreach { entity =>
+      collection.storage.storeRealm.put(entity)
+      collection.storage.memoryRealm.foreach(_.put(entity))
+    }
+    collection
   }
 
   private def _persistent: EntityPersistent[_PersonEntity] =
@@ -176,12 +186,14 @@ private final case class _NoopOperation(
 
 private final case class _PersonEntity(
   id: EntityId,
-  name: String
+  name: String,
+  city: String
 ) extends EntityPersistable {
   def toRecord(): Record =
     Record.dataAuto(
       "id" -> id,
-      "name" -> name
+      "name" -> name,
+      "city" -> city
     )
 }
 

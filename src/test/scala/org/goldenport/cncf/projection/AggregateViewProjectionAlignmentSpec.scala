@@ -8,7 +8,7 @@ import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
 import org.goldenport.cncf.component._
 import org.goldenport.cncf.entity.aggregate.AggregateDefinition
-import org.goldenport.cncf.entity.view.ViewDefinition
+import org.goldenport.cncf.entity.view.{ViewDefinition, ViewQueryDefinition}
 import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.GivenWhenThen
@@ -17,7 +17,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 23, 2026
+ *  version Mar. 23, 2026
+ * @version Apr.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateViewProjectionAlignmentSpec
@@ -50,6 +51,10 @@ final class AggregateViewProjectionAlignmentSpec
       _records(describe("aggregates")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_aggregate", "profile_aggregate")
       _records(describe("views")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_view", "summary_view")
       _string_vector(_records(describe("views")).head.asMap("viewNames")) shouldBe Vector("detail", "summary")
+      _records(_records(describe("views")).head.asMap("queries")).map(_.getString("name").getOrElse("")) shouldBe Vector("published")
+      _records(_records(describe("views")).head.asMap("queries")).head.getString("expression") shouldBe Some("status == \"published\"")
+      _string_vector(_records(describe("views")).head.asMap("sourceEvents")) shouldBe Vector("person.published")
+      _records(describe("views")).head.getBoolean("rebuildable") shouldBe Some(true)
       describe.get("origin").map(_.toString) shouldBe Some("component-dir:car:projection-alignment:0.1.0")
       _record(describe("artifact")).getString("name") shouldBe Some("projection-alignment")
       _records(describe("operationDefinitions")).map(_.getString("name").getOrElse("")) shouldBe Vector("getPerson", "savePerson")
@@ -125,7 +130,14 @@ final class AggregateViewProjectionAlignmentSpec
       override def viewDefinitions: Vector[ViewDefinition] =
         Vector(
           ViewDefinition(name = "summary_view", entityName = "person", viewNames = Vector("default")),
-          ViewDefinition(name = "person_view", entityName = "person", viewNames = Vector("summary", "detail", "summary"))
+          ViewDefinition(
+            name = "person_view",
+            entityName = "person",
+            viewNames = Vector("summary", "detail", "summary"),
+            queries = Vector(ViewQueryDefinition("published", Some("status == \"published\""))),
+            sourceEvents = Vector("person.published"),
+            rebuildable = Some(true)
+          )
         )
 
       override def operationDefinitions: Vector[CmlOperationDefinition] =

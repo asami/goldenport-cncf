@@ -8,8 +8,7 @@ import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Mar.  5, 2026
- *  version Mar. 24, 2026
- * @version Apr.  1, 2026
+ * @version Apr.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -17,10 +16,17 @@ private[projection] object MetaProjectionSupport {
     name: String,
     entityName: String
   )
+  final case class ViewQueryMeta(
+    name: String,
+    expression: Option[String]
+  )
   final case class ViewMeta(
     name: String,
     entityName: String,
-    viewNames: Vector[String]
+    viewNames: Vector[String],
+    queries: Vector[ViewQueryMeta],
+    sourceEvents: Vector[String],
+    rebuildable: Option[Boolean]
   )
   final case class OperationMeta(
     name: String,
@@ -80,18 +86,21 @@ private[projection] object MetaProjectionSupport {
       "name" -> comp.name,
       "runtimeName" -> component_runtime_name(comp),
       "origin" -> comp.origin.label,
-      "artifact" -> comp.artifactMetadata.map { m =>
-        Record.data(
-          "sourceType" -> m.sourceType,
-          "name" -> m.name,
-          "version" -> m.version,
-          "component" -> m.component.getOrElse(""),
-          "subsystem" -> m.subsystem.getOrElse(""),
-          "effectiveExtensions" -> m.effectiveExtensions.toVector.sortBy(_._1).map { case (k, v) => Record.data("key" -> k, "value" -> v) },
-          "effectiveConfig" -> m.effectiveConfig.toVector.sortBy(_._1).map { case (k, v) => Record.data("key" -> k, "value" -> v) }
-        )
-      }.getOrElse(Record.empty)
+      "artifact" -> artifact_record(comp)
     )
+
+  def artifact_record(comp: Component): Record =
+    comp.artifactMetadata.map { m =>
+      Record.data(
+        "sourceType" -> m.sourceType,
+        "name" -> m.name,
+        "version" -> m.version,
+        "component" -> m.component.getOrElse(""),
+        "subsystem" -> m.subsystem.getOrElse(""),
+        "effectiveExtensions" -> m.effectiveExtensions.toVector.sortBy(_._1).map { case (k, v) => Record.data("key" -> k, "value" -> v) },
+        "effectiveConfig" -> m.effectiveConfig.toVector.sortBy(_._1).map { case (k, v) => Record.data("key" -> k, "value" -> v) }
+      )
+    }.getOrElse(Record.empty)
 
   def service_record(service: ServiceDefinition): Record =
     Record.data(
@@ -140,7 +149,16 @@ private[projection] object MetaProjectionSupport {
   def viewMetas(component: Component): Vector[ViewMeta] =
     component.viewDefinitions
       .sortBy(_.name)
-      .map(x => ViewMeta(x.name, x.entityName, x.viewNames.distinct.sorted))
+      .map { x =>
+        ViewMeta(
+          x.name,
+          x.entityName,
+          x.viewNames.distinct.sorted,
+          x.queries.sortBy(_.name).map(q => ViewQueryMeta(q.name, q.expression)),
+          x.sourceEvents.distinct.sorted,
+          x.rebuildable
+        )
+      }
 
   def operationMetas(component: Component): Vector[OperationMeta] =
     component.operationDefinitions

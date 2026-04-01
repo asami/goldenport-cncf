@@ -7,7 +7,7 @@ import org.goldenport.protocol.spec.{ServiceDefinition, OperationDefinition}
 
 /*
  * @since   Mar.  5, 2026
- * @version Mar. 24, 2026
+ * @version Apr.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 object OpenApiProjection {
@@ -64,7 +64,13 @@ object OpenApiProjection {
   private def _json_array_views(xs: Vector[ViewMeta]): String = {
     val entries = xs.map { x =>
       val names = _json_array_strings(x.viewNames)
-      s"""{"name":"${_escape(x.name)}","entityName":"${_escape(x.entityName)}","viewNames":${names}}"""
+      val queries = x.queries.map { q =>
+        val expr = q.expression.map(_escape).getOrElse("")
+        s"""{"name":"${_escape(q.name)}","expression":"${expr}"}"""
+      }.mkString("[", ",", "]")
+      val sourceEvents = _json_array_strings(x.sourceEvents)
+      val rebuildable = x.rebuildable.getOrElse(false)
+      s"""{"name":"${_escape(x.name)}","entityName":"${_escape(x.entityName)}","viewNames":${names},"queries":${queries},"sourceEvents":${sourceEvents},"rebuildable":${rebuildable}}"""
     }
     entries.mkString("[", ",", "]")
   }

@@ -16,6 +16,7 @@ server.log
 maven-local
 .sbt
 component.d
+.codex-write-check
 
 ### Metals (VS Code Scala extension) ###
 .metals/

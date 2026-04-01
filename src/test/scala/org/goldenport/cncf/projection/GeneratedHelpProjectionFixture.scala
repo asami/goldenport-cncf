@@ -15,7 +15,7 @@ import org.goldenport.value.BaseContent
 /*
  * @since   Mar. 25, 2026
  *  version Mar. 29, 2026
- * @version Apr.  1, 2026
+ * @version Apr.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object GeneratedHelpProjectionFixture {
@@ -90,7 +90,7 @@ private[projection] object GeneratedHelpProjectionFixture {
         content = BaseContent.Builder("lookupAddress").
           summary("Look up an address by postal code.").
           description("Look up an address by postal code.Returns a normalized address representation."),
-        response = ResponseDefinition(result = List(new DataType { def name = "LookupAddressResult" }))
+        response = ResponseDefinition(result = List(DataType.Named("LookupAddressResult")))
       )
       .build()
 

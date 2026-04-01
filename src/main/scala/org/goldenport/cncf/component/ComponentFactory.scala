@@ -438,7 +438,10 @@ final class ComponentFactory(
         val browser = _default_view_browser(component, entityspace, d.entityName, collection)
         viewspace.register(name, collection, browser)
         d.viewNames.distinct.foreach { viewname =>
-          viewspace.registerView(name, viewname, browser)
+          viewspace.registerView(name, viewname, _default_named_view_browser(component, entityspace, d.entityName, viewname))
+        }
+        d.queries.distinctBy(_.name).foreach { q =>
+          viewspace.registerView(name, q.name, _default_view_query_browser(component, entityspace, d.entityName, collection, q))
         }
       }
     }
@@ -532,7 +535,47 @@ final class ComponentFactory(
         _.foldLeft(Consequence.success(Vector.empty[Any])) { (z, entity) =>
           z.flatMap(xs => _entity_to_view(component, entityname, entity).map(xs :+ _))
         }
+    }
+    Browser.from(collection, queryfn)
+  }
+
+  private def _default_named_view_browser(
+    component: Component,
+    entityspace: EntitySpace,
+    entityname: String,
+    viewname: String
+  ): Browser[Any] =
+    new Browser[Any] {
+      def find(id: EntityId): Consequence[Any] =
+        _load_view_source_entity(component, entityspace, entityname, id).flatMap(_entity_to_view(component, entityname, Some(viewname), _))
+
+      def query(q: Query[_]): Consequence[Vector[Any]] =
+        _search_view_source_entities(component, entityspace, entityname, Query(_sanitize_query_record(_query_record(q)))).flatMap {
+          _.foldLeft(Consequence.success(Vector.empty[Any])) { (z, entity) =>
+            z.flatMap(xs => _entity_to_view(component, entityname, Some(viewname), entity).map(xs :+ _))
+          }
+        }
+    }
+
+  private def _default_view_query_browser(
+    component: Component,
+    entityspace: EntitySpace,
+    entityname: String,
+    collection: ViewCollection[Any],
+    querydef: org.goldenport.cncf.entity.view.ViewQueryDefinition
+  ): Browser[Any] = {
+    val queryfn = (q: Query[_]) => {
+      val source = _sanitize_query_record(_query_record(q))
+      val filtered = _filter_view_query_record(source, querydef)
+      _search_view_source_entities(component, entityspace, entityname, q).flatMap { entities =>
+        val matched =
+          if (filtered.asMap.isEmpty) entities
+          else entities.filter(entity => _matches_view_query(entity, filtered))
+        matched.foldLeft(Consequence.success(Vector.empty[Any])) { (z, entity) =>
+          z.flatMap(xs => _entity_to_view(component, entityname, entity).map(xs :+ _))
+        }
       }
+    }
     Browser.from(collection, queryfn)
   }
 
@@ -853,9 +896,17 @@ final class ComponentFactory(
     entityname: String,
     entity: Any
   ): Consequence[Any] =
+    _entity_to_view(component, entityname, None, entity)
+
+  private def _entity_to_view(
+    component: Component,
+    entityname: String,
+    projectionName: Option[String],
+    entity: Any
+  ): Consequence[Any] =
     for {
       module <- Consequence.fromOption(
-        _generated_view_module(component, entityname),
+        _generated_view_module(component, entityname, projectionName),
         s"View module not found for ${entityname}"
       )
       record <- Consequence.fromTry(Try(_entity_to_record(component, entityname, entity)))
@@ -1052,6 +1103,7 @@ final class ComponentFactory(
         s"${pkg}.entity.${classname}$$given_EntityPersistent_${classname}$$",
         s"${pkg}.entity.read.${classname}$$given_EntityPersistent_${classname}$$",
         s"${pkg}.entity.aggregate.${classname}$$given_EntityPersistent_${classname}$$",
+        s"${pkg}.view.${classname}$$given_EntityPersistent_${classname}$$",
         s"${pkg}.entity.view.${classname}$$given_EntityPersistent_${classname}$$",
         s"${pkg}.entity.operation.${classname}$$given_EntityPersistent_${classname}$$"
       )
@@ -1081,12 +1133,19 @@ final class ComponentFactory(
 
   private def _generated_view_module(
     component: Component,
-    entityname: String
+    entityname: String,
+    projectionName: Option[String] = None
   ): Option[AnyRef] = {
     val packagename = Option(component.getClass.getPackage).map(_.getName).filter(_.nonEmpty)
     val classname = _entity_class_name(entityname)
+    val projectionToken = projectionName.map(_.trim).filter(_.nonEmpty).map(_snake_case)
     val candidates = packagename.toVector.flatMap { pkg =>
-      Vector(
+      projectionToken.toVector.flatMap { projection =>
+        Vector(
+          s"${pkg}.view.${projection}.${classname}$$"
+        )
+      } ++ Vector(
+        s"${pkg}.view.${classname}$$",
         s"${pkg}.entity.view.${classname}$$"
       )
     }
@@ -1117,10 +1176,27 @@ final class ComponentFactory(
       case p: Query.Plan[?] =>
         p.condition match {
           case r: Record => r
+          case shape: Product => _query_shape_record(shape)
           case _ => Record.empty
         }
+      case shape: Product => _query_shape_record(shape)
       case _ => Record.empty
     }
+
+  private def _query_shape_record(
+    shape: Product
+  ): Record = {
+    val fields = shape.productElementNames.zip(shape.productIterator).toVector.flatMap {
+      case (name, cond: org.simplemodeling.model.directive.Condition[Any @unchecked]) =>
+        cond match {
+          case org.simplemodeling.model.directive.Condition.Any => None
+          case other => Some(name -> other)
+        }
+      case (name, value) =>
+        Some(name -> value)
+    }
+    Record.create(fields.toMap)
+  }
 
   private def _sanitize_query_record(p: Record): Record = {
     val filtered = p.asMap.filterNot { case (k, _) =>
@@ -1130,6 +1206,42 @@ final class ComponentFactory(
       k.startsWith("cncf.")
     }
     Record.create(filtered)
+  }
+
+  private def _filter_view_query_record(
+    record: Record,
+    querydef: org.goldenport.cncf.entity.view.ViewQueryDefinition
+  ): Record = {
+    val keys = _view_query_keys(querydef)
+    if (keys.isEmpty)
+      record
+    else
+      Record.create(record.asMap.filter { case (k, _) => keys.contains(k) || keys.contains(_snake_case(k)) })
+  }
+
+  private def _view_query_keys(
+    querydef: org.goldenport.cncf.entity.view.ViewQueryDefinition
+  ): Set[String] =
+    querydef.expression.toVector.flatMap { expr =>
+      _query_field_regex.findAllMatchIn(expr).map(_.group(1)).toVector
+    }.flatMap(k => _field_name_candidates(k)).toSet
+
+  private val _query_field_regex = "query\\.([A-Za-z0-9_]+)".r
+
+  private def _matches_view_query(
+    entity: Any,
+    record: Record
+  ): Boolean = {
+    val exprs = record.asMap.toVector.flatMap {
+      case (name, cond: org.simplemodeling.model.directive.Condition[Any @unchecked]) =>
+        cond match {
+          case org.simplemodeling.model.directive.Condition.Any => None
+          case _ => Some(Query.FieldCondition(name, cond))
+        }
+      case (name, value) =>
+        Some(Query.Eq(name, value))
+    }
+    exprs.forall(expr => Query.eval(expr, entity))
   }
 
   private def _entity_class_name(
@@ -1147,14 +1259,21 @@ final class ComponentFactory(
   private def _load_scala_module(
     loader: ClassLoader,
     className: String
-  ): Option[AnyRef] =
-    try {
-      val cls = Class.forName(className, true, loader)
-      val field = cls.getField("MODULE$")
-      Option(field.get(null).asInstanceOf[AnyRef])
-    } catch {
-      case _: Throwable => None
-    }
+  ): Option[AnyRef] = {
+    val loaders = Vector(
+      Option(loader),
+      Option(Thread.currentThread.getContextClassLoader)
+    ).flatten.distinct
+    loaders.iterator.flatMap { cl =>
+      try {
+        val cls = Class.forName(className, true, cl)
+        val field = cls.getField("MODULE$")
+        Option(field.get(null).asInstanceOf[AnyRef])
+      } catch {
+        case _: Throwable => None
+      }
+    }.toSeq.headOption
+  }
 
   private def _extract_collection_id(
     module: AnyRef
