@@ -5,7 +5,8 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version Mar. 22, 2026
+ *  version Mar. 22, 2026
+ * @version Apr.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object DescribeProjection {
@@ -70,7 +71,7 @@ object DescribeProjection {
           "name" -> s"${component.name}.${service.name}.${operation.name}",
           "summary" -> s"Operation ${service.name}.${operation.name}",
           "arguments" -> operation.specification.request.parameters.toVector.map(parameter_record),
-          "returns" -> Option(operation.specification.response.result).map(_.toString).getOrElse("unknown")
+          "returns" -> render_operation_returns(operation)
         )
       case Target.NotFound(target) =>
         Record.data(

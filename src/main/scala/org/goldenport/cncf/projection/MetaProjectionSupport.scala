@@ -1,13 +1,15 @@
 package org.goldenport.cncf.projection
 
 import org.goldenport.record.Record
+import org.goldenport.schema.DataType
 import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, ServiceDefinition}
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Mar.  5, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -118,12 +120,17 @@ private[projection] object MetaProjectionSupport {
 
   def operation_details(operation: OperationDefinition): Record = {
     val args = operation.specification.request.parameters.toVector.map(parameter_record)
-    val returns = Option(operation.specification.response.result).map(_.toString).getOrElse("unknown")
+    val returns = render_operation_returns(operation)
     Record.data(
       "arguments" -> args,
       "returns" -> returns
     )
   }
+
+  def render_operation_returns(operation: OperationDefinition): String =
+    Option(operation.specification.response.result)
+      .map(_render_data_types)
+      .getOrElse("unknown")
 
   def aggregateMetas(component: Component): Vector[AggregateMeta] =
     component.aggregateDefinitions
@@ -182,4 +189,11 @@ private[projection] object MetaProjectionSupport {
 
   private def _find_operation(service: ServiceDefinition, operationName: String): Option[OperationDefinition] =
     service.operations.operations.find(x => NamingConventions.equivalentByNormalized(x.name, operationName))
+
+  private def _render_data_types(xs: Seq[DataType]): String =
+    xs.toVector match {
+      case Vector() => "unknown"
+      case Vector(x) => x.name
+      case vs => vs.map(_.name).mkString("[", ", ", "]")
+    }
 }

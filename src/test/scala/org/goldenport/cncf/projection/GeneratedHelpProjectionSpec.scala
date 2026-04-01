@@ -9,7 +9,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 25, 2026
  * @author  ASAMI, Tomoharu
- * @version Mar. 28, 2026
+ *  version Mar. 28, 2026
+ * @version Apr.  1, 2026
  */
 final class GeneratedHelpProjectionSpec
   extends AnyWordSpec
@@ -48,6 +49,7 @@ final class GeneratedHelpProjectionSpec
         "Look up an address by postal code.Returns a normalized address representation."
       )
       operationHelp.details("arguments") shouldBe Vector.empty
+      operationHelp.details("returns") shouldBe Vector("LookupAddressResult")
       operationHelp.usage shouldBe Vector("command domain.address.lookup-address")
 
       And("the CLI renderers can emit meta.help output from the same model")
@@ -60,6 +62,7 @@ final class GeneratedHelpProjectionSpec
       json should include ("\"type\":\"operation\"")
       json should include ("\"name\":\"lookupAddress\"")
       json should include ("\"summary\":\"Look up an address by postal code.\"")
+      json should include ("\"returns\":[\"LookupAddressResult\"]")
     }
   }
 }

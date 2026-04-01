@@ -9,7 +9,8 @@ import org.goldenport.datatype.I18nString
 
 /*
  * @since   Mar.  5, 2026
- * @version Mar. 28, 2026
+ *  version Mar. 28, 2026
+ * @version Apr.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object HelpProjection {
@@ -72,7 +73,7 @@ object HelpProjection {
         val serviceName = service.name
         val operationName = operation.name
         val args = operation.specification.request.parameters.toVector.map(_.name)
-        val returns = Option(operation.specification.response.result).map(_.toString).getOrElse("unknown")
+        val returns = render_operation_returns(operation)
         val summary = _operation_summary(service, operation).getOrElse(s"Operation: ${service.name}.${operation.name}")
         val descriptionDetails = _trim_i18n(operation.specification.description).fold(Map.empty[String, Vector[String]])(x => Map("description" -> Vector(x)))
         HelpModel(

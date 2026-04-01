@@ -5,14 +5,17 @@ import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.protocol.spec.*
+import org.goldenport.schema.DataType
 import org.goldenport.cncf.action.{Action, ActionCall, QueryAction}
 import org.goldenport.cncf.component.*
+import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.value.BaseContent
 
 /*
  * @since   Mar. 25, 2026
- * @version Mar. 29, 2026
+ *  version Mar. 29, 2026
+ * @version Apr.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object GeneratedHelpProjectionFixture {
@@ -32,7 +35,28 @@ private[projection] object GeneratedHelpProjectionFixture {
 
   private lazy val factory = new Component.Factory {
     override protected def create_Components(params: ComponentCreate): Vector[Component] =
-      Vector(Component.Instance(core))
+      Vector(new Component() {
+        override def operationDefinitions: Vector[CmlOperationDefinition] =
+          Vector(
+            CmlOperationDefinition(
+              name = "lookupAddress",
+              kind = "QUERY",
+              summary = Some("Look up an address by postal code."),
+              inputType = "LookupAddressQuery",
+              inputSummary = Some("Postal code lookup request."),
+              outputType = "LookupAddressResult",
+              outputSummary = Some("Normalized address representation."),
+              inputValueKind = "QUERY_VALUE",
+              parameters = Vector.empty
+            )
+          )
+      }.initialize(
+        ComponentInit(
+          subsystem = params.subsystem,
+          core = core,
+          origin = params.origin
+        )
+      ))
 
     override protected def create_Core(
       params: ComponentCreate,
@@ -65,7 +89,8 @@ private[projection] object GeneratedHelpProjectionFixture {
       copy(
         content = BaseContent.Builder("lookupAddress").
           summary("Look up an address by postal code.").
-          description("Look up an address by postal code.Returns a normalized address representation.")
+          description("Look up an address by postal code.Returns a normalized address representation."),
+        response = ResponseDefinition(result = List(new DataType { def name = "LookupAddressResult" }))
       )
       .build()
 

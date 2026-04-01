@@ -5,7 +5,8 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version Mar. 22, 2026
+ *  version Mar. 22, 2026
+ * @version Apr.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object SchemaProjection {
@@ -79,7 +80,7 @@ object SchemaProjection {
             "parameters" -> operation.specification.request.parameters.toVector.map(parameter_record)
           ),
           "response" -> Record.data(
-            "result" -> Option(operation.specification.response.result).map(_.toString).getOrElse("unknown")
+            "result" -> render_operation_returns(operation)
           )
         )
       case Target.NotFound(target) =>
