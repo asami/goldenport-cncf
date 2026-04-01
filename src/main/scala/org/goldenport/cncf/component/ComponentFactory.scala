@@ -21,7 +21,7 @@ import org.goldenport.cncf.entity.aggregate.{AggregateAssembler, AggregateBuilde
 import org.goldenport.cncf.event.{ActionCallDispatcher, EventBus, EventEngine, EventReception, EventStore, EntitySubscriptionLimit}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimeDescriptor, EntityRuntimePlan, EntitySpace, EntityStorage, PartitionedMemoryRealm, PartitionStrategy, WorkingSetDefinition, WorkingSetInitializer}
 import org.goldenport.cncf.directive.SearchResult
-import org.goldenport.cncf.entity.view.{ViewDefinition, ViewBuilder, ViewCollection, ViewSpace}
+import org.goldenport.cncf.entity.view.{Browser, ViewDefinition, ViewBuilder, ViewCollection, ViewSpace}
 import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.statemachine.{CollectionStateMachinePlanner, CollectionStateMachinePlannerProvider, CollectionTransitionRule, CollectionTransitionRuleProvider, TransitionTrigger, TransitionRule}
 import org.goldenport.cncf.naming.NamingConventions
@@ -31,7 +31,8 @@ import scala.util.Try
  * @since   Jan. 30, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 31, 2026
+ *  version Mar. 31, 2026
+ * @version Apr.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -432,11 +433,12 @@ final class ComponentFactory(
     val names = _view_collection_names(component)
     names.foreach { name =>
       _resolve_view_definition(component, name).foreach { d =>
-        val builder = _default_view_builder(entityspace, d.entityName)
+        val builder = _default_view_builder(component, entityspace, d.entityName)
         val collection = new ViewCollection[Any](builder)
-        viewspace.register(name, collection)
+        val browser = _default_view_browser(component, entityspace, d.entityName, collection)
+        viewspace.register(name, collection, browser)
         d.viewNames.distinct.foreach { viewname =>
-          viewspace.registerView(name, viewname, viewspace.browser(name))
+          viewspace.registerView(name, viewname, browser)
         }
       }
     }
@@ -510,13 +512,76 @@ final class ComponentFactory(
   }
 
   private def _default_view_builder(
+    component: Component,
     entityspace: EntitySpace,
     entityname: String
   ): ViewBuilder[Any] =
     new ViewBuilder[Any] {
       def build(id: EntityId): Consequence[Any] =
-        entityspace.entity[Any](entityname).resolve(id)
+        _load_view_source_entity(component, entityspace, entityname, id).flatMap(_entity_to_view(component, entityname, _))
     }
+
+  private def _default_view_browser(
+    component: Component,
+    entityspace: EntitySpace,
+    entityname: String,
+    collection: ViewCollection[Any]
+  ): Browser[Any] = {
+    val queryfn = (q: Query[_]) =>
+      _search_view_source_entities(component, entityspace, entityname, Query(_sanitize_query_record(_query_record(q)))).flatMap {
+        _.foldLeft(Consequence.success(Vector.empty[Any])) { (z, entity) =>
+          z.flatMap(xs => _entity_to_view(component, entityname, entity).map(xs :+ _))
+        }
+      }
+    Browser.from(collection, queryfn)
+  }
+
+  private def _load_view_source_entity(
+    component: Component,
+    entityspace: EntitySpace,
+    entityname: String,
+    id: EntityId
+  ): Consequence[Any] = {
+    val ctx0 = ExecutionContext.create()
+    given EntityPersistent[Any] = _bootstrap_entity_persistent(component, entityname)
+    entityspace.entityOption[Any](entityname) match {
+      case Some(collection) =>
+        collection.resolve(id).recoverWith { case _ =>
+          EntityStore.standard().load[Any](id)(using summon[EntityPersistent[Any]], ctx0).flatMap {
+            case Some(s) => Consequence.success(s)
+            case None => Consequence.failure(s"${_entity_class_name(entityname)} not found: ${id.value}")
+          }
+        }
+      case None =>
+        EntityStore.standard().load[Any](id)(using summon[EntityPersistent[Any]], ctx0).flatMap {
+          case Some(s) => Consequence.success(s)
+          case None => Consequence.failure(s"${_entity_class_name(entityname)} not found: ${id.value}")
+        }
+    }
+  }
+
+  private def _search_view_source_entities(
+    component: Component,
+    entityspace: EntitySpace,
+    entityname: String,
+    q: Query[?]
+  ): Consequence[Vector[Any]] = {
+    val ctx0 = ExecutionContext.create()
+    val cid = _bootstrap_collection_id(component, entityname)
+    val query = EntityQuery[Any](cid, q)
+    given EntityPersistent[Any] = _bootstrap_entity_persistent(component, entityname)
+    entityspace.entityOption[Any](entityname) match {
+      case Some(collection) =>
+        collection.search(query)(using ctx0).map(_.data).flatMap { xs =>
+          if (xs.nonEmpty) Consequence.success(xs)
+          else EntityStore.standard().search[Any](query)(using summon[EntityPersistent[Any]], ctx0).map(_.data)
+        }.recoverWith { case _ =>
+          EntityStore.standard().search[Any](query)(using summon[EntityPersistent[Any]], ctx0).map(_.data)
+        }
+      case None =>
+        EntityStore.standard().search[Any](query)(using summon[EntityPersistent[Any]], ctx0).map(_.data)
+    }
+  }
 
   private def _build_default_aggregate(
     component: Component,
@@ -783,6 +848,20 @@ final class ComponentFactory(
       aggregate <- _invoke_create_from_record(module, record)
     } yield aggregate
 
+  private def _entity_to_view(
+    component: Component,
+    entityname: String,
+    entity: Any
+  ): Consequence[Any] =
+    for {
+      module <- Consequence.fromOption(
+        _generated_view_module(component, entityname),
+        s"View module not found for ${entityname}"
+      )
+      record <- Consequence.fromTry(Try(_entity_to_record(component, entityname, entity)))
+      view <- _invoke_create_from_record(module, record)
+    } yield view
+
   private def _entity_to_record(
     component: Component,
     entityname: String,
@@ -809,7 +888,20 @@ final class ComponentFactory(
       case m: AggregateAssembler[?] =>
         m.asInstanceOf[AggregateAssembler[Any]].create_from_record(record)
       case _ =>
-        Consequence.failure(s"AggregateAssembler not found: ${module.getClass.getName}")
+        module.getClass.getMethods.iterator
+          .filter(m => m.getName == "create" && m.getParameterCount == 1 && m.getParameterTypes.head == classOf[Record])
+          .flatMap { m =>
+            try Some(m.invoke(module, record))
+            catch {
+              case _: Throwable => None
+            }
+          }
+          .toSeq
+          .headOption match {
+            case Some(c: Consequence[?]) => c.asInstanceOf[Consequence[Any]]
+            case Some(value) => Consequence.success(value)
+            case None => Consequence.failure(s"create(record) not found: ${module.getClass.getName}")
+          }
     }
 
   private def _invoke_member_setter(
@@ -980,6 +1072,21 @@ final class ComponentFactory(
         s"${pkg}.entity.aggregate.${classname}$$",
         s"${pkg}.entity.operation.${classname}$$",
         s"${pkg}.entity.read.${classname}$$",
+        s"${pkg}.entity.view.${classname}$$"
+      )
+    }
+    val loader = component.getClass.getClassLoader
+    candidates.iterator.flatMap(name => _load_scala_module(loader, name)).toSeq.headOption
+  }
+
+  private def _generated_view_module(
+    component: Component,
+    entityname: String
+  ): Option[AnyRef] = {
+    val packagename = Option(component.getClass.getPackage).map(_.getName).filter(_.nonEmpty)
+    val classname = _entity_class_name(entityname)
+    val candidates = packagename.toVector.flatMap { pkg =>
+      Vector(
         s"${pkg}.entity.view.${classname}$$"
       )
     }
