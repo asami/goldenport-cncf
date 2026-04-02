@@ -122,13 +122,13 @@ class SqlDataStore(
 
   private def _record_columns(
     record: Record
-  ): Vector[(String, String)] =
+  ): Vector[(String, Any)] =
     record.asMap.toVector.collect {
       case (k, v) if k != "id" =>
         val key = if (config.normalizeColumnNames) _to_column_name(k) else k
         key -> _column_value(v)
     }
-      .foldLeft(Vector.empty[(String, String)]) { case (z, (k, v)) =>
+      .foldLeft(Vector.empty[(String, Any)]) { case (z, (k, v)) =>
         z.indexWhere(_._1 == k) match {
           case -1 => z :+ (k -> v)
           case i => z.updated(i, k -> v)
@@ -137,7 +137,7 @@ class SqlDataStore(
 
   private def _column_value(
     value: Any
-  ): String =
+  ): Any =
     value match {
       case m: StringEncodable =>
         given org.goldenport.context.ExecutionContext = org.goldenport.convert.StringEncoder.storageExecutionContext
@@ -148,6 +148,15 @@ class SqlDataStore(
         m.toRecord().toJsonString
       case xs: Iterable[?] if xs.forall(_is_record_like) =>
         xs.iterator.map(_record_like_json).mkString("[", ",", "]")
+      case m: Byte => m.toInt
+      case m: Short => m.toInt
+      case m: Int => m
+      case m: Long => m
+      case m: Boolean => if (m) 1 else 0
+      case m: Float => m.toDouble
+      case m: Double => m
+      case m: BigInt => m.toDouble
+      case m: BigDecimal => m.toDouble
       case other =>
         Presentable.print(other)
     }
@@ -171,15 +180,20 @@ class SqlDataStore(
     }
 
   private def _decode_column_value(
-    value: String
+    value: Any
   ): Any = {
-    val trimmed = value.trim
-    if (trimmed.startsWith("{") && trimmed.endsWith("}"))
-      _record_decoder.json(trimmed).toOption.getOrElse(value)
-    else if (trimmed.startsWith("[") && trimmed.endsWith("]"))
-      _record_decoder.jsonAutoRecords(trimmed).toOption.getOrElse(value)
-    else
-      value
+    value match {
+      case s: String =>
+        val trimmed = s.trim
+        if (trimmed.startsWith("{") && trimmed.endsWith("}"))
+          _record_decoder.json(trimmed).toOption.getOrElse(s)
+        else if (trimmed.startsWith("[") && trimmed.endsWith("]"))
+          _record_decoder.jsonAutoRecords(trimmed).toOption.getOrElse(s)
+        else
+          s
+      case other =>
+        other
+    }
   }
 
   private def _table_exists(
@@ -224,7 +238,7 @@ class SqlDataStore(
   private def _ensure_table(
     conn: Connection,
     collection: CollectionId,
-    columns: Vector[(String, String)]
+    columns: Vector[(String, Any)]
   ): Consequence[Unit] =
     _table_exists(conn, collection).flatMap { exists =>
       if (exists)
@@ -236,10 +250,10 @@ class SqlDataStore(
   private def _create_table(
     conn: Connection,
     collection: CollectionId,
-    columns: Vector[(String, String)]
+    columns: Vector[(String, Any)]
   ): Consequence[Unit] =
     Consequence {
-      val sql = dialect.create_table_sql(_table_name(collection), columns.map(_._1))
+      val sql = dialect.create_table_sql(_table_name(collection), columns)
       val stmt = conn.createStatement()
       try {
         stmt.execute(sql)
@@ -251,19 +265,19 @@ class SqlDataStore(
   private def _ensure_columns(
     conn: Connection,
     collection: CollectionId,
-    columns: Vector[(String, String)]
+    columns: Vector[(String, Any)]
   ): Consequence[Unit] =
     _existing_columns(conn, collection).flatMap { existing =>
       val missing = columns.map(_._1).filterNot(existing.contains)
       missing.foldLeft(Consequence.unit) { (z, col) =>
-        z.flatMap(_ => _add_column(conn, collection, col))
+        z.flatMap(_ => _add_column(conn, collection, columns.find(_._1 == col).get))
       }
     }
 
   private def _add_column(
     conn: Connection,
     collection: CollectionId,
-    column: String
+    column: (String, Any)
   ): Consequence[Unit] =
     Consequence {
       val sql = dialect.add_column_sql(_table_name(collection), column)
@@ -297,7 +311,7 @@ class SqlDataStore(
     conn: Connection,
     collection: CollectionId,
     id: EntryId,
-    columns: Vector[(String, String)]
+    columns: Vector[(String, Any)]
   ): Consequence[Unit] =
     Consequence {
       val sql = dialect.insert_sql(_table_name(collection), columns.map(_._1))
@@ -305,7 +319,7 @@ class SqlDataStore(
       try {
         stmt.setString(1, id.print)
         columns.zipWithIndex.foreach { case ((_, v), i) =>
-          stmt.setString(i + 2, v)
+          stmt.setObject(i + 2, v)
         }
         stmt.executeUpdate()
       } finally {
@@ -317,7 +331,7 @@ class SqlDataStore(
     conn: Connection,
     collection: CollectionId,
     id: EntryId,
-    columns: Vector[(String, String)]
+    columns: Vector[(String, Any)]
   ): Consequence[Unit] =
     if (columns.isEmpty)
       Consequence.unit
@@ -327,7 +341,7 @@ class SqlDataStore(
         val stmt = conn.prepareStatement(sql)
         try {
           columns.zipWithIndex.foreach { case ((_, v), i) =>
-            stmt.setString(i + 1, v)
+            stmt.setObject(i + 1, v)
           }
           stmt.setString(columns.length + 1, id.print)
           stmt.executeUpdate()
@@ -370,7 +384,7 @@ class SqlDataStore(
             val values = (1 to count).toVector.map { i =>
               val rawname = md.getColumnLabel(i)
               val name = if (config.normalizeColumnNames) _to_property_name(rawname) else rawname
-              val value = _decode_column_value(Option(rs.getString(i)).getOrElse(""))
+              val value = _decode_column_value(Option(rs.getObject(i)).getOrElse(""))
               name -> value
             }
             Some(Record.create(values))

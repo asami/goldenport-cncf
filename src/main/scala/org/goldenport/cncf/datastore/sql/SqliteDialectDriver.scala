@@ -2,7 +2,7 @@ package org.goldenport.cncf.datastore.sql
 
 /*
  * @since   Mar. 12, 2026
- * @version Mar. 12, 2026
+ * @version Apr.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 object SqliteDialectDriver extends SqlDialectDriver {
@@ -21,7 +21,7 @@ object SqliteDialectDriver extends SqlDialectDriver {
 
   def create_table_sql(
     table: String,
-    columns: Vector[String]
+    columns: Vector[(String, Any)]
   ): String = {
     val cols = _columns_with_id(columns)
     s"CREATE TABLE IF NOT EXISTS ${quote_identifier(table)} (${cols.mkString(", ")})"
@@ -29,7 +29,7 @@ object SqliteDialectDriver extends SqlDialectDriver {
 
   def add_column_sql(
     table: String,
-    column: String
+    column: (String, Any)
   ): String =
     s"ALTER TABLE ${quote_identifier(table)} ADD COLUMN ${_column_def(column)}"
 
@@ -57,17 +57,24 @@ object SqliteDialectDriver extends SqlDialectDriver {
   def select_by_id_sql(table: String): String =
     s"SELECT * FROM ${quote_identifier(table)} WHERE ${quote_identifier("id")} = ?"
 
-  private def _columns_with_id(columns: Vector[String]): Vector[String] =
+  private def _columns_with_id(columns: Vector[(String, Any)]): Vector[String] =
     Vector(_column_def("id", "TEXT PRIMARY KEY")) ++ columns.map(_column_def(_))
 
-  private def _column_def(column: String): String =
-    _column_def(column, "TEXT")
+  private def _column_def(column: (String, Any)): String =
+    _column_def(column._1, _datatype(column._2))
 
   private def _column_def(
     column: String,
     datatype: String
   ): String =
     s"${quote_identifier(column)} $datatype"
+
+  private def _datatype(value: Any): String =
+    value match {
+      case _: Byte | _: Short | _: Int | _: Long | _: Boolean => "INTEGER"
+      case _: Float | _: Double | _: BigInt | _: BigDecimal => "REAL"
+      case _ => "TEXT"
+    }
 
   private def _escape_literal(value: String): String =
     value.replace("'", "''")

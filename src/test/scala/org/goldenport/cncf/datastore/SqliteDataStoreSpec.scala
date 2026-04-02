@@ -24,6 +24,32 @@ class SqliteDataStoreSpec
   with ConsequenceMatchers {
 
   "Sqlite DataStore" should {
+    "preserve numeric columns as numbers" in {
+      val path = Files.createTempFile("cncf-sqlite", ".db").toString
+      val datastore = SqlDataStore.sqlite(path)
+      val collection = DataStore.CollectionId("numbers")
+      val ctx = ExecutionContext.create()
+      given ExecutionContext = ctx
+
+      Given("a record with integer and boolean-like numeric values")
+      val entryid = DataStore.StringEntryId("n1")
+      val record = Record.data("id" -> "n1", "state" -> 2, "priority" -> 10L)
+
+      When("creating and loading the record")
+      datastore.create(collection, entryid, record) should be_success
+      val loaded = datastore.load(collection, entryid)
+
+      Then("numeric values remain numeric")
+      loaded should be_success
+      loaded match {
+        case Consequence.Success(Some(r)) =>
+          r.getInt("state") shouldBe Some(2)
+          r.getInt("priority") shouldBe Some(10)
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+    }
+
     "store record fields as columns" in {
       pending
       val table = Table(

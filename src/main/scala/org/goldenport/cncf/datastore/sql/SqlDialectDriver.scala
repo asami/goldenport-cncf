@@ -2,7 +2,7 @@ package org.goldenport.cncf.datastore.sql
 
 /*
  * @since   Mar. 12, 2026
- * @version Mar. 12, 2026
+ * @version Apr.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 trait SqlDialectDriver {
@@ -16,12 +16,12 @@ trait SqlDialectDriver {
 
   def create_table_sql(
     table: String,
-    columns: Vector[String]
+    columns: Vector[(String, Any)]
   ): String
 
   def add_column_sql(
     table: String,
-    column: String
+    column: (String, Any)
   ): String
 
   def insert_sql(
