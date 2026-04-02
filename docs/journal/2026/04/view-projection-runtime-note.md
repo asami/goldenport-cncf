@@ -67,10 +67,10 @@ So at the current line:
 
 - `summary`
   - runtime name
-  - generated type: `view.summary.<Type>`
+  - generated type: `entity.view.summary.<Type>`
 - `detail`
   - runtime name
-  - generated type: `view.detail.<Type>`
+  - generated type: `entity.view.detail.<Type>`
 
 For arbitrary custom projection names, the current runtime line is still alias-oriented.
 
@@ -110,8 +110,8 @@ For projection-fixed predefined operations, current runtime also supports:
 
 where the operation is statically bound to:
 
-- `view.summary.<Type>`
-- `view.detail.<Type>`
+- `entity.view.summary.<Type>`
+- `entity.view.detail.<Type>`
 
 It is not yet:
 
@@ -160,16 +160,16 @@ This appears in:
 The formal runtime type contract is:
 
 - full projection
-  - `view.<Type>`
+  - `entity.view.<Type>`
 - named projection
   - `view.<projection>.<Type>`
 
 Examples:
 
-- `view.Person`
-- `view.Item`
-- `view.summary.Person`
-- `view.detail.Person`
+- `entity.view.Person`
+- `entity.view.Item`
+- `entity.view.summary.Person`
+- `entity.view.detail.Person`
 
 This is the target runtime contract for projection typing.
 
@@ -184,17 +184,17 @@ The predefined projection set is:
 Their runtime type mapping is:
 
 - `all`
-  - `view.<Type>`
+  - `entity.view.<Type>`
 - `summary`
-  - `view.summary.<Type>`
+  - `entity.view.summary.<Type>`
 - `detail`
-  - `view.detail.<Type>`
+  - `entity.view.detail.<Type>`
 
 `all` is implicit.
 
 So runtime treats:
 
-- `view.<Type>`
+- `entity.view.<Type>`
 
 as the canonical full projection.
 
@@ -212,11 +212,11 @@ Domain models may define additional projection names, but runtime support for th
 
 Runtime module loading now supports the canonical full-projection package:
 
-- `view.<Type>`
+- `entity.view.<Type>`
 
 and also retains compatibility fallback for:
 
-- `entity.view.<Type>`
+- `entity.entity.view.<Type>`
 
 Named projection runtime classes:
 
@@ -234,10 +234,10 @@ Current custom named projections remain metadata/runtime aliases unless separate
 The current implemented runtime line is:
 
 1. default entity-backed view bootstrap
-2. canonical full-projection load/search for `view.<Type>`
+2. canonical full-projection load/search for `entity.view.<Type>`
 3. predefined projection bootstrap for:
-   - `view.summary.<Type>`
-   - `view.detail.<Type>`
+   - `entity.view.summary.<Type>`
+   - `entity.view.detail.<Type>`
 4. projection-fixed load/search for predefined projections
 5. named view alias registration
 6. named query alias registration

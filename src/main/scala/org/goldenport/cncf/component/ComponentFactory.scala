@@ -1140,14 +1140,18 @@ final class ComponentFactory(
     val classname = _entity_class_name(entityname)
     val projectionToken = projectionName.map(_.trim).filter(_.nonEmpty).map(_snake_case)
     val candidates = packagename.toVector.flatMap { pkg =>
-      projectionToken.toVector.flatMap { projection =>
-        Vector(
-          s"${pkg}.view.${projection}.${classname}$$"
-        )
-      } ++ Vector(
-        s"${pkg}.view.${classname}$$",
-        s"${pkg}.entity.view.${classname}$$"
-      )
+      projectionToken match {
+        case Some(projection) =>
+          Vector(
+            s"${pkg}.entity.view.${projection}.${classname}$$",
+            s"${pkg}.view.${projection}.${classname}$$"
+          )
+        case None =>
+          Vector(
+            s"${pkg}.entity.view.${classname}$$",
+            s"${pkg}.view.${classname}$$"
+          )
+      }
     }
     val loader = component.getClass.getClassLoader
     candidates.iterator.flatMap(name => _load_scala_module(loader, name)).toSeq.headOption

@@ -26,8 +26,8 @@ view.<projection>.<Type>
 
 Examples:
 
-view.summary.Item  
-view.detail.Item  
+entity.view.summary.Item  
+entity.view.detail.Item  
 
 ---
 
@@ -47,18 +47,18 @@ all represents the full structure.
 
 all is treated specially:
 
-view.<Type>
+entity.view.<Type>
 
 Examples:
 
-view.Item
+entity.view.Item
 
 ---
 
 ### Important Rule
 
 - view.all.<Type> is **not generated**
-- view.<Type> is the canonical representation of all
+- entity.view.<Type> is the canonical representation of all
 
 ---
 
@@ -255,7 +255,7 @@ object view {
 
 #### all
 
-view.<Type>
+entity.view.<Type>
 
 - generated as root-level case class
 - corresponds to full structure
@@ -269,8 +269,8 @@ view.<projection>.<Type>
 
 Examples:
 
-view.summary.Item  
-view.detail.Item  
+entity.view.summary.Item  
+entity.view.detail.Item  
 
 ---
 
@@ -282,7 +282,7 @@ OUTPUT = Item.summary
 
 Scala:
 
-view.summary.Item
+entity.view.summary.Item
 
 ---
 
@@ -306,9 +306,9 @@ RecordResponse(Map[String, Any])
 
 Use:
 
-view.Item  
-view.summary.Item  
-view.detail.Item  
+entity.view.Item  
+entity.view.summary.Item  
+entity.view.detail.Item  
 
 ---
 
@@ -361,7 +361,7 @@ view.detail.Item
 - projection is defined at property level
 - "all" is implicit and omitted
 - default projection is all summary detail
-- view.<Type> represents "all"
+- entity.view.<Type> represents "all"
 - view.<projection>.<Type> represents projected types
 - projection propagates by default
 - override is explicit
