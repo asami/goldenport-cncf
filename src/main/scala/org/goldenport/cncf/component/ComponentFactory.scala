@@ -1,6 +1,7 @@
 package org.goldenport.cncf.component
 
 import java.nio.file.{Files, Path, Paths}
+import java.lang.reflect.InvocationTargetException
 import cats.effect.Ref
 import cats.data.State
 import org.goldenport.Consequence
@@ -939,19 +940,34 @@ final class ComponentFactory(
       case m: AggregateAssembler[?] =>
         m.asInstanceOf[AggregateAssembler[Any]].create_from_record(record)
       case _ =>
-        module.getClass.getMethods.iterator
-          .filter(m => m.getName == "create" && m.getParameterCount == 1 && m.getParameterTypes.head == classOf[Record])
-          .flatMap { m =>
-            try Some(m.invoke(module, record))
-            catch {
-              case _: Throwable => None
-            }
+        val methods = module.getClass.getMethods.iterator
+          .filter { m =>
+            val params = m.getParameterTypes
+            (m.getName == "createC" || m.getName == "create") &&
+            params.length == 1 &&
+            params.head.isAssignableFrom(record.getClass)
           }
           .toSeq
-          .headOption match {
+          .sortBy(m => if (m.getName == "createC") 0 else 1)
+        val results = methods.flatMap { m =>
+          try Some(Right(m.invoke(module, record)))
+          catch {
+            case e: InvocationTargetException =>
+              val cause = Option(e.getTargetException).getOrElse(e)
+              Some(Left(s"${m.getName}(${m.getParameterTypes.head.getSimpleName}) failed: ${cause.getClass.getSimpleName}: ${cause.getMessage}"))
+            case e: Throwable =>
+              Some(Left(s"${m.getName}(${m.getParameterTypes.head.getSimpleName}) failed: ${e.getClass.getSimpleName}: ${e.getMessage}"))
+          }
+        }
+        results.collectFirst { case Right(value) => value } match {
             case Some(c: Consequence[?]) => c.asInstanceOf[Consequence[Any]]
             case Some(value) => Consequence.success(value)
-            case None => Consequence.failure(s"create(record) not found: ${module.getClass.getName}")
+            case None =>
+              val errors = results.collect { case Left(msg) => msg }
+              if (methods.isEmpty)
+                Consequence.failure(s"create(record) not found: ${module.getClass.getName}")
+              else
+                Consequence.failure(errors.mkString("; "))
           }
     }
 

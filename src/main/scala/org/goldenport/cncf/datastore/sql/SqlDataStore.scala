@@ -4,6 +4,7 @@ import java.sql.Connection
 import javax.sql.DataSource
 import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
 import org.goldenport.Consequence
+import org.goldenport.convert.StringEncodable
 import org.goldenport.text.Presentable
 import org.goldenport.record.Record
 import org.goldenport.record.Recordable
@@ -15,7 +16,8 @@ import org.goldenport.cncf.unitofwork.{CommitRecorder, PrepareResult, Transactio
 /*
  * @since   Mar. 12, 2026
  *  version Mar. 19, 2026
- * @version Mar. 31, 2026
+ *  version Mar. 31, 2026
+ * @version Apr.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -137,6 +139,9 @@ class SqlDataStore(
     value: Any
   ): String =
     value match {
+      case m: StringEncodable =>
+        given org.goldenport.context.ExecutionContext = org.goldenport.convert.StringEncoder.storageExecutionContext
+        m.encode
       case m: Record =>
         m.toJsonString
       case m: Recordable =>
