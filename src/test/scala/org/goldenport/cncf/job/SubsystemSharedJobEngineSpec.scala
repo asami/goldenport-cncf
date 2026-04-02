@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 28, 2026
- * @version Mar. 29, 2026
+ * @version Apr.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SubsystemSharedJobEngineSpec extends AnyWordSpec with Matchers with Eventually {
@@ -48,7 +48,7 @@ final class SubsystemSharedJobEngineSpec extends AnyWordSpec with Matchers with 
 
       admin.jobEngine eq jobControl.jobEngine shouldBe true
       val jobId = admin.logic.submitJob(
-        List(SleepTask(ActionId.generate(), 1000L)),
+        List(SleepTask(ActionId.generate(), 5000L)),
         submitCtx,
         JobSubmitOption(runMode = JobRunMode.Async, requestSummary = Some("subsystem-execute-job-control"))
       )

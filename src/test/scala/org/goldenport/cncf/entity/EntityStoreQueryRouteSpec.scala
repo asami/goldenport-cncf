@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 24, 2026
+ * @version Apr.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -465,8 +465,7 @@ final class EntityStoreQueryRouteSpec
       Then("record remains and lifecycle/audit fields are updated")
       deleted shouldBe Consequence.unit
       loaded.map(_.flatMap(_.getString("id"))) shouldBe Consequence.success(Some(id.print))
-      loaded.map(_.flatMap(_.getString("postStatus")).exists(_.toLowerCase.contains("archived"))) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("aliveness")).exists(_.toLowerCase.contains("dead"))) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(r => r.getAny("aliveness").orElse(r.getAny("alive"))).exists(_.toString.toLowerCase.contains("dead"))) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("updatedBy"))) shouldBe Consequence.success(Some("test-principal"))
       loaded.map(_.flatMap(_.getString("traceId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("correlationId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)

@@ -40,7 +40,7 @@ import cats.~>
  *  version Dec. 31, 2025
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Mar. 30, 2026
+ * @version Apr.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -325,7 +325,19 @@ object ExecutionContext {
         name = "execution-context-test",
         parent = None,
         observabilityContext = observability,
-        httpDriverOption = Some(driver)
+        httpDriverOption = Some(driver),
+        datastore = Some(DataStoreContext(DataStoreSpace.default())),
+        entitystore = Some(
+          EntityStoreContext(
+            EntityStoreSpace.create(
+              org.goldenport.configuration.ResolvedConfiguration(
+                org.goldenport.configuration.Configuration.empty,
+                org.goldenport.configuration.ConfigurationTrace.empty
+              )
+            )
+          )
+        ),
+        entityspace = Some(EntitySpaceContext(new EntitySpace()))
       ),
       unitOfWorkSupplier = () => new UnitOfWork(context()),
       unitOfWorkInterpreterFn = consequenceInterpreter,

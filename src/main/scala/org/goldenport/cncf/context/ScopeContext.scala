@@ -15,7 +15,7 @@ import org.goldenport.cncf.entity.runtime.EntitySpace
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Mar. 30, 2026
+ * @version Apr.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 enum ScopeKind {
@@ -91,15 +91,18 @@ object ScopeContext {
       def isAggregateInternalRead: Boolean =
         core.aggregateInternalRead || parent.exists(_.isAggregateInternalRead)
 
-      def dataStoreSpace: DataStoreSpace = core.datastore.map(_.dataStoreSpace) orElse parent.map(_.dataStoreSpace) getOrElse {
-        Consequence.unreachableReached("DataStore").RAISE
-      }
-      def entityStoreSpace: EntityStoreSpace = core.entitystore.map(_.entityStoreSpace) orElse parent.map(_.entityStoreSpace) getOrElse {
-        Consequence.unreachableReached("EntityStore").RAISE
-      }
-      def entitySpace: EntitySpace = core.entityspace.map(_.entitySpace) orElse parent.map(_.entitySpace) getOrElse {
-        Consequence.unreachableReached("EntitySpace").RAISE
-      }
+      def dataStoreSpace: DataStoreSpace =
+        core.datastore.map(_.dataStoreSpace) orElse
+          parent.map(_.dataStoreSpace) getOrElse
+          ScopeContext.defaultDataStoreSpace
+      def entityStoreSpace: EntityStoreSpace =
+        core.entitystore.map(_.entityStoreSpace) orElse
+          parent.map(_.entityStoreSpace) getOrElse
+          ScopeContext.defaultEntityStoreSpace
+      def entitySpace: EntitySpace =
+        core.entityspace.map(_.entitySpace) orElse
+          parent.map(_.entitySpace) getOrElse
+          ScopeContext.defaultEntitySpace
     }
   }
 
@@ -136,4 +139,18 @@ object ScopeContext {
   def unapply(x: ScopeContext): Option[ScopeContext.Core] = {
     Some(x.core)
   }
+
+  private lazy val defaultDataStoreSpace: DataStoreSpace =
+    DataStoreSpace.default()
+
+  private lazy val defaultEntityStoreSpace: EntityStoreSpace =
+    EntityStoreSpace.create(
+      org.goldenport.configuration.ResolvedConfiguration(
+        org.goldenport.configuration.Configuration.empty,
+        org.goldenport.configuration.ConfigurationTrace.empty
+      )
+    )
+
+  private lazy val defaultEntitySpace: EntitySpace =
+    new EntitySpace()
 }

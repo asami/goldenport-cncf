@@ -15,7 +15,7 @@ import scala.util.control.NonFatal
  * @since   Jan.  6, 2026
  *  version Jan. 10, 2026
  *  version Feb. 25, 2026
- * @version Mar. 29, 2026
+ * @version Apr.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {
@@ -315,7 +315,10 @@ object DataStore {
           _ <- {
             _entries.get(key) match {
               case Some(existing) => Consequence {
-                _entries = _entries.updated(key, existing ++ changes)
+                val merged = Record(
+                  existing.fields.filterNot(f => changes.keySet.contains(f.key)) ++ changes.fields
+                )
+                _entries = _entries.updated(key, merged)
               }
               case None =>
                 Consequence.DataStoreNotFound(key)
