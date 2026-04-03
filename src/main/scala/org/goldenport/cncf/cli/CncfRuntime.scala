@@ -51,7 +51,7 @@ import org.goldenport.record.Record
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Mar. 31, 2026
+ * @version Apr.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -2287,7 +2287,7 @@ class CncfRuntime() extends GlobalObservable {
             )
           }
         case "get" =>
-          _client_mime_body_from_request(req).flatMap {
+          _client_explicit_mime_body_from_request(req).flatMap {
             case Some(_) =>
               Consequence.failure("client http get does not accept a body")
             case None =>
@@ -2383,6 +2383,14 @@ class CncfRuntime() extends GlobalObservable {
           case Some(body) => Consequence.success(Some(body))
           case None => Consequence.success(_mime_body_from_arguments(req.arguments))
         }
+    }
+
+  private[cli] def _client_explicit_mime_body_from_request(
+    req: Request
+  ): Consequence[Option[MimeBody]] =
+    _mime_body_from_property_names(req.properties, List("body", "data", "-d")).flatMap {
+      case some @ Some(_) => Consequence.success(some)
+      case None => Consequence.success(_mime_body_from_arguments(req.arguments))
     }
 
   private[cli] def _client_http_body_and_header(

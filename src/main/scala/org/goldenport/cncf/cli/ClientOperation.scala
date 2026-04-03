@@ -23,7 +23,7 @@ import org.goldenport.cncf.component.builtin.client.{GetQuery, PostCommand}
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  1, 2026
- * @version Mar. 29, 2026
+ * @version Apr.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientOperation(val subsystem: Subsystem) extends CliOperation {
@@ -245,7 +245,7 @@ class ClientOperation(val subsystem: Subsystem) extends CliOperation {
             )
           }
         case "get" =>
-          _client_mime_body_from_request(req).flatMap {
+          _client_explicit_mime_body_from_request(req).flatMap {
             case Some(_) =>
               Consequence.failure("client http get does not accept a body")
             case None =>
@@ -300,6 +300,14 @@ class ClientOperation(val subsystem: Subsystem) extends CliOperation {
       case Some(body) => Consequence.success(Some(body))
       case None =>
         Consequence.success(_mime_body_from_arguments(req.arguments))
+    }
+
+  private def _client_explicit_mime_body_from_request(
+    req: Request
+  ): Consequence[Option[MimeBody]] =
+    _mime_body_from_property_names(req.properties, List("body", "data", "-d")).flatMap {
+      case some @ Some(_) => Consequence.success(some)
+      case None => Consequence.success(_mime_body_from_arguments(req.arguments))
     }
 
   private def _mime_body_from_property_names(
