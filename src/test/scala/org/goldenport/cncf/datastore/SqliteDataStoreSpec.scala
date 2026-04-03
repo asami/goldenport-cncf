@@ -2,6 +2,7 @@ package org.goldenport.cncf.datastore
 
 import java.nio.file.Files
 import org.goldenport.Consequence
+import org.goldenport.convert.ValueReader
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.sql.SqlDataStore
 import org.goldenport.record.Record
@@ -13,7 +14,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 12, 2026
- * @version Mar. 12, 2026
+ *  version Mar. 12, 2026
+ * @version Apr.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqliteDataStoreSpec
@@ -22,8 +24,39 @@ class SqliteDataStoreSpec
   with GivenWhenThen
   with TableDrivenPropertyChecks
   with ConsequenceMatchers {
+  import SqliteDataStoreSpec._
 
   "Sqlite DataStore" should {
+    "round-trip powertype db values through ValueReader" in {
+      val path = Files.createTempFile("cncf-sqlite-powertype", ".db").toString
+      val datastore = SqlDataStore.sqlite(path)
+      val collection = DataStore.CollectionId("powertype")
+      val ctx = ExecutionContext.create()
+      given ExecutionContext = ctx
+
+      Given("a record storing a powertype as its db value")
+      val entryid = DataStore.StringEntryId("p1")
+      val record = Record.data("id" -> "p1", "country" -> CountryCode.JP.dbValue.get)
+
+      When("creating and loading the record")
+      datastore.create(collection, entryid, record) should be_success
+      val loaded = datastore.load(collection, entryid)
+
+      Then("the loaded numeric value can be decoded as the powertype")
+      loaded should be_success
+      loaded match {
+        case Consequence.Success(Some(r)) =>
+          r.getInt("country") shouldBe Some(81)
+          val decoded = summon[ValueReader[CountryCode]].readC(r.getInt("country").orNull)
+          decoded match {
+            case Consequence.Success(v) => v shouldBe CountryCode.JP
+            case other => fail(s"unexpected decode result: $other")
+          }
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+    }
+
     "preserve numeric columns as numbers" in {
       val path = Files.createTempFile("cncf-sqlite", ".db").toString
       val datastore = SqlDataStore.sqlite(path)
@@ -105,6 +138,48 @@ class SqliteDataStoreSpec
         Then("the record is removed")
         deleted should be_success
         deleted shouldBe Consequence.success(None)
+      }
+    }
+  }
+}
+
+object SqliteDataStoreSpec {
+  sealed abstract class CountryCode(
+    val value: String,
+    val dbValueValue: Int
+  ) {
+    def dbValue: Option[Int] = Some(dbValueValue)
+  }
+
+  object CountryCode {
+    case object JP extends CountryCode("JP", 81)
+    case object US extends CountryCode("US", 1)
+
+    private val _by_name = Vector(JP, US).map(x => x.value -> x).toMap
+    private val _by_db_value = Vector(JP, US).map(x => x.dbValueValue -> x).toMap
+
+    def from(value: String): Option[CountryCode] =
+      _by_name.get(value)
+
+    def fromDbValue(value: Int): Option[CountryCode] =
+      _by_db_value.get(value)
+
+    def dbValueOf(value: String): Option[Int] =
+      from(value).map(_.dbValueValue)
+
+    def labelOf(value: String): Option[String] =
+      from(value).map(_.value)
+
+    given ValueReader[CountryCode] with {
+      def readC(v: Any): Consequence[CountryCode] = v match {
+        case n: Int =>
+          fromDbValue(n).map(Consequence.success).getOrElse(Consequence.failValueInvalid(v, org.goldenport.schema.XInt))
+        case n: Long if n.isValidInt =>
+          fromDbValue(n.toInt).map(Consequence.success).getOrElse(Consequence.failValueInvalid(v, org.goldenport.schema.XInt))
+        case s: String =>
+          from(s).orElse(s.trim.toIntOption.flatMap(fromDbValue)).map(Consequence.success).getOrElse(Consequence.failValueInvalid(v, org.goldenport.schema.XString))
+        case _ =>
+          Consequence.failValueInvalid(v, org.goldenport.schema.XString)
       }
     }
   }
