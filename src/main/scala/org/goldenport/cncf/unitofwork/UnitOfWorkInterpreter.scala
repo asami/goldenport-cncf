@@ -24,7 +24,8 @@ import org.goldenport.cncf.statemachine.TransitionValidationHook
  * @since   Jan. 10, 2026
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
- * @version Mar. 29, 2026
+ *  version Mar. 29, 2026
+ * @version Apr.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -100,7 +101,10 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreCreate[t] @unchecked) =>
       withCallTree("uow:entitystore:create") {
-        _entity_store_space.create(m)
+        _entity_store_space.create(m).map { r =>
+          _view_space_invalidate_all()
+          r
+        }
       }
 
     case m: (UnitOfWorkOp.EntityStoreLoad[t] @unchecked) =>
@@ -118,6 +122,10 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         _transition_validation_hook
           .beforeSave[t](m.entity, m.tc)
           .flatMap(_ => _entity_store_space.save(m))
+          .map { r =>
+            _view_space_invalidate_all()
+            r
+          }
       }
 
     case m: (UnitOfWorkOp.EntityStoreUpdate[t] @unchecked) =>
@@ -125,6 +133,10 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         _transition_validation_hook
           .beforeUpdate[t](m.entity, m.tc)
           .flatMap(_ => _entity_store_space.update(m))
+          .map { r =>
+            _view_space_invalidate_all()
+            r
+          }
       }
 
     case m: (UnitOfWorkOp.EntityStoreUpdateById[t] @unchecked) =>
@@ -132,12 +144,17 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         _transition_validation_hook
           .beforeUpdateById[t](m.id, m.patch, m.tc)
           .flatMap(_ => _entity_store_space.updateById(m))
+          .map { r =>
+            _view_space_invalidate_all()
+            r
+          }
       }
 
     case m: UnitOfWorkOp.EntityStoreDelete =>
       withCallTree("uow:entitystore:delete") {
         _entity_store_space.delete(m).map { r =>
           _entity_space_evict(m.id)
+          _view_space_invalidate_all()
           r
         }
       }
@@ -146,6 +163,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       withCallTree("uow:entitystore:delete:hard") {
         _entity_store_space.deleteHard(m).map { r =>
           _entity_space_evict(m.id)
+          _view_space_invalidate_all()
           r
         }
       }
@@ -242,6 +260,9 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       .flatMap(_.entitySpace.entityOption[T](name))
       .foreach(_.put(entity))
   }
+
+  private def _view_space_invalidate_all(): Unit =
+    _component_option.foreach(_.viewSpace.invalidateAll())
 
   private def _component_option: Option[Component] = {
     @annotation.tailrec

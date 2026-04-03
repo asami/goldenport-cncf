@@ -7,7 +7,8 @@ import org.goldenport.cncf.entity.runtime.Collection
 
 /*
  * @since   Mar. 15, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Browser[V] {
@@ -34,6 +35,9 @@ object Browser {
         collection.resolve(id)
 
       def query(q: Query[_]): Consequence[Vector[V]] =
-        queryfn(q)
+        collection match {
+          case m: ViewCollection[V @unchecked] => m.query(q)(queryfn)
+          case _ => queryfn(q)
+        }
     }
 }

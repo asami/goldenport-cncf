@@ -5,7 +5,8 @@ import org.goldenport.cncf.entity.view.Browser
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 17, 2026
+ *  version Mar. 17, 2026
+ * @version Apr.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ViewSpace {
@@ -66,6 +67,12 @@ final class ViewSpace {
       browserOption(name)
     else
       _named_browsers.get(_view_key(name, viewname)).map(_.asInstanceOf[Browser[V]])
+
+  def invalidate(name: String): Unit =
+    _collections.get(name).foreach(_.invalidateAll())
+
+  def invalidateAll(): Unit =
+    _collections.values.foreach(_.invalidateAll())
 
   private def _view_key(name: String, viewname: String): (String, String) =
     (name, Option(viewname).map(_.trim).getOrElse(""))

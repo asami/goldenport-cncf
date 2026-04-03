@@ -9,7 +9,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 17, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ViewSpaceSpec
@@ -69,6 +70,45 @@ final class ViewSpaceSpec
 
       fromempty shouldBe Consequence.success("default-u2")
       fromnone shouldBe None
+    }
+
+    "cache default view load and query results until invalidated" in {
+      var buildCount = 0
+      var queryCount = 0
+      val viewspace = new ViewSpace
+      val collectionid = EntityCollectionId("test", "1", "user")
+      val targetid = EntityId("test", "u3", collectionid)
+      val collection = new ViewCollection[String](
+        new ViewBuilder[String] {
+          def build(id: EntityId): Consequence[String] = {
+            buildCount += 1
+            Consequence.success(s"default-${id.minor}")
+          }
+        }
+      )
+      val browser = Browser.from(
+        collection,
+        _ => {
+          queryCount += 1
+          Consequence.success(Vector("default-search"))
+        }
+      )
+      viewspace.register("user", collection, browser)
+
+      viewspace.browser[String]("user").find(targetid)
+      viewspace.browser[String]("user").find(targetid)
+      viewspace.browser[String]("user").query(Query("any"))
+      viewspace.browser[String]("user").query(Query("any"))
+
+      buildCount shouldBe 1
+      queryCount shouldBe 1
+
+      viewspace.invalidateAll()
+      viewspace.browser[String]("user").find(targetid)
+      viewspace.browser[String]("user").query(Query("any"))
+
+      buildCount shouldBe 2
+      queryCount shouldBe 2
     }
   }
 }
