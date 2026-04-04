@@ -20,7 +20,8 @@ import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
  *  version Dec. 18, 2025
  *  version Jan. 10, 2026
  *  version Feb. 26, 2026
- * @version Mar. 30, 2026
+ *  version Mar. 30, 2026
+ * @version Apr.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -377,7 +378,7 @@ class StandardEntityStore(
 
   private def _normalize_path(path: String): String = {
     val segment = path.split("\\.").lastOption.getOrElse(path)
-    segment.toLowerCase.replace("_", "")
+    org.goldenport.cncf.context.RuntimeContext.PropertyNameStyle.CamelCase.transform(segment)
   }
 
   private def _is_visible(
@@ -386,7 +387,7 @@ class StandardEntityStore(
   ): Boolean = {
     val postok = policy.postStatuses match {
       case Some(allowed) =>
-        _record_value(record, Vector("postStatus", "post_status"))
+        _record_value(record, Vector("postStatus"))
           .flatMap(_post_status_token)
           .forall(allowed.contains)
       case None =>
@@ -408,7 +409,10 @@ class StandardEntityStore(
     keys: Vector[String]
   ): Option[Any] = {
     val m = record.asMap
-    keys.collectFirst(Function.unlift(m.get))
+    keys
+      .flatMap(org.goldenport.cncf.context.RuntimeContext.Context.default.propertyName.aliases)
+      .distinct
+      .collectFirst(Function.unlift(m.get))
   }
 
   private def _is_content_manager()(using ctx: ExecutionContext): Boolean = {
@@ -559,15 +563,20 @@ class StandardEntityStore(
     val now = java.time.ZonedDateTime.now(ctx.clock.withZone(ctx.timezone))
     val principalid = ctx.security.principal.id.value
     val principal = principalid
+    val propertyname = ctx.runtime.context.propertyName
     val defaults = Vector.newBuilder[(String, Any)]
     val existingmap = existing.map(_.asMap).getOrElse(Map.empty)
+    val knownkeys = record.keySet ++ existingmap.keySet
 
-    def add_if_missing(key: String, value: => Option[Any]): Unit = {
-      if (!record.keySet.contains(key))
-        value.foreach(v => defaults += (key -> v))
-    }
+    def key(canonical: String): String =
+      propertyname.preferredName(knownkeys, canonical)
 
-    def existing_value(key: String): Option[Any] = existingmap.get(key)
+    def add_if_missing(canonical: String, value: => Option[Any]): Unit =
+      if (!propertyname.aliases(canonical).exists(record.keySet.contains))
+        value.foreach(v => defaults += (key(canonical) -> v))
+
+    def existing_value(canonical: String): Option[Any] =
+      propertyname.aliases(canonical).collectFirst(Function.unlift(existingmap.get))
 
     if (includesCreationDefaults) {
       add_if_missing("id", existing_value("id").orElse(Some(id.print)))
@@ -596,26 +605,24 @@ class StandardEntityStore(
     val principalid = ctx.security.principal.id.value
     val principal = principalid
     val keyset = existing.keySet
+    val propertyname = ctx.runtime.context.propertyName
 
-    def key(camel: String, snake: String): String = {
-      val hascamel = keyset.contains(camel)
-      val hassnake = keyset.contains(snake)
-      if (!hascamel && hassnake) snake else camel
-    }
+    def key(canonical: String): String =
+      propertyname.preferredName(keyset, canonical)
 
     val base = Vector.newBuilder[(String, Any)]
-    base += key("postStatus", "post_status") -> PostStatus.Archived
-    base += key("aliveness", "aliveness") -> Aliveness.Dead
-    base += key("updatedAt", "updated_at") -> now
-    base += key("updatedBy", "updated_by") -> principal
-    base += key("traceId", "trace_id") -> ctx.observability.traceId.value
+    base += key("postStatus") -> PostStatus.Archived
+    base += key("aliveness") -> Aliveness.Dead
+    base += key("updatedAt") -> now
+    base += key("updatedBy") -> principal
+    base += key("traceId") -> ctx.observability.traceId.value
     ctx.observability.correlationId.foreach { x =>
-      base += key("correlationId", "correlation_id") -> x.value
+      base += key("correlationId") -> x.value
     }
-    if (keyset.contains("deletedAt") || keyset.contains("deleted_at"))
-      base += key("deletedAt", "deleted_at") -> now
-    if (keyset.contains("deletedBy") || keyset.contains("deleted_by"))
-      base += key("deletedBy", "deleted_by") -> principal
+    if (propertyname.aliases("deletedAt").exists(keyset.contains))
+      base += key("deletedAt") -> now
+    if (propertyname.aliases("deletedBy").exists(keyset.contains))
+      base += key("deletedBy") -> principal
     Record.dataAuto(base.result()*)
   }
 
@@ -628,8 +635,9 @@ class StandardEntityStore(
     record: Record
   ): Boolean = {
     val keyset = record.keySet
-    val hasdeletedat = keyset.contains("deletedAt") || keyset.contains("deleted_at")
-    val poststatus = _record_value(record, Vector("postStatus", "post_status")).flatMap(_post_status_token)
+    val propertyname = org.goldenport.cncf.context.RuntimeContext.Context.default.propertyName
+    val hasdeletedat = propertyname.aliases("deletedAt").exists(keyset.contains)
+    val poststatus = _record_value(record, Vector("postStatus")).flatMap(_post_status_token)
     val aliveness = _record_value(record, Vector("aliveness")).flatMap(_aliveness_token)
     hasdeletedat || poststatus.contains("archived") || aliveness.contains("dead")
   }

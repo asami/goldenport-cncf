@@ -8,11 +8,13 @@ import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.RuntimeDefaults
 import org.goldenport.cncf.config.ConfigurationAccess
+import org.goldenport.cncf.context.RuntimeContext
 import scala.xml.{Elem, NodeSeq, Text}
 
 /*
  * @since   Mar. 13, 2026
- * @version Mar. 28, 2026
+ *  version Mar. 28, 2026
+ * @version Apr.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationResponseFormatter {
@@ -29,8 +31,8 @@ object OperationResponseFormatter {
     response match {
       case OperationResponse.RecordResponse(record) =>
         val payload =
-          if (shape == "envelope") _envelope_record(request, _execution_record_for_record, record)
-          else record
+          if (shape == "envelope") _envelope_record(request, _execution_record_for_record, _output_record(record))
+          else _output_record(record)
         _record_response(_structured_format(format, shape), payload)
       case scalar: OperationResponse.Scalar[?] if shape == "envelope" =>
         val payload = _envelope_scalar(request, scalar.print)
@@ -56,6 +58,14 @@ object OperationResponseFormatter {
       case _ =>
         Response.Yaml(RecordEncoder.yaml(record))
     }
+
+  private def _output_record(
+    record: Record
+  ): Record =
+    _runtime_context.transformRecord(record)
+
+  private def _runtime_context: RuntimeContext.Context =
+    RuntimeContext.Context.default
 
   private def _resolve_format(
     request: Request,

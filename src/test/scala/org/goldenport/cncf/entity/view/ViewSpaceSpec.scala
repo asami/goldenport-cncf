@@ -12,7 +12,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 17, 2026
  *  version Mar. 24, 2026
- * @version Apr.  4, 2026
+ *  version Apr.  4, 2026
+ * @version Apr.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ViewSpaceSpec
@@ -191,6 +192,22 @@ final class ViewSpaceSpec
 
       resolved.limit shouldBe Some(2)
       resolved.offset shouldBe Some(1)
+    }
+
+    "drop nested query control container from record-based query conditions" in {
+      val request = Record.create(Vector(
+        "city" -> "Tokyo",
+        "query" -> Record.create(Vector(
+          "limit" -> 2,
+          "offset" -> 1
+        ))
+      ))
+
+      val resolved = Query.withControls(Query(request), request)
+
+      resolved.limit shouldBe Some(2)
+      resolved.offset shouldBe Some(1)
+      Query.whereOf(resolved) shouldBe Query.Eq("city", "Tokyo")
     }
   }
 }

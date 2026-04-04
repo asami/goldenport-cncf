@@ -12,7 +12,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 17, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallViewResolveSpec
@@ -63,6 +64,14 @@ final class ActionCallViewResolveSpec
       val searched = call.asInstanceOf[SearchNamedViewCall].searched
       searched.map(_.data) shouldBe Some(Vector("summary-search"))
       searched.map(_.totalCount) shouldBe Some(Some(1))
+      result match {
+        case Consequence.Success(OperationResponse.RecordResponse(record)) =>
+          record.asMap.get("query").collect { case r: org.goldenport.record.Record => r } should not be empty
+          record.getString("totalCount") shouldBe Some("1")
+          record.getString("fetchedCount") shouldBe Some("1")
+        case _ =>
+          fail("expected record response")
+      }
     }
   }
 

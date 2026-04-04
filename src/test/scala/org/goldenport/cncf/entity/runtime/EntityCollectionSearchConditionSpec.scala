@@ -15,7 +15,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityCollectionSearchConditionSpec
@@ -138,6 +139,56 @@ final class EntityCollectionSearchConditionSpec
       result.map(_.totalCount) shouldBe Consequence.success(Some(3))
       result.map(r => (r.offset, r.limit, r.fetchedCount)) shouldBe Consequence.success((Some(1), Some(1), 1))
     }
+
+    "treat camel, snake, and kebab query paths as equivalent" in {
+      given ExecutionContext = ExecutionContext.test()
+      given EntityPersistent[StatusEntity] = new EntityPersistent[StatusEntity] {
+        def id(e: StatusEntity): EntityId = e.id
+        def toRecord(e: StatusEntity): Record = e.toRecord()
+        def fromRecord(r: Record): Consequence[StatusEntity] =
+          Consequence.failure("not used in this spec")
+      }
+
+      val s1 = StatusEntity(EntityId("m", "10", _cid), "Published", "trace-a")
+      val s2 = StatusEntity(EntityId("m", "11", _cid), "Draft", "trace-b")
+
+      val storerealm = new EntityRealm[StatusEntity](
+        entityName = "statusPerson",
+        loader = EntityLoader[StatusEntity](_ => None),
+        state = new _SearchIdRef[EntityRealmState[StatusEntity]](EntityRealmState(Map.empty))
+      )
+      storerealm.put(s1)
+      storerealm.put(s2)
+
+      val descriptor = EntityDescriptor(
+        collectionId = _cid,
+        plan = EntityRuntimePlan(
+          entityName = "statusPerson",
+          memoryPolicy = EntityMemoryPolicy.StoreOnly,
+          workingSet = None,
+          partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+          maxPartitions = 4,
+          maxEntitiesPerPartition = 16
+        ),
+        persistent = summon[EntityPersistent[StatusEntity]]
+      )
+      val collection = new EntityCollection[StatusEntity](
+        descriptor = descriptor,
+        storage = EntityStorage(storerealm, None)
+      )
+
+      val camel = collection.search(EntityQuery(_cid, Query.plan(Record.empty, where = Query.Eq("postStatus", "Published"))))
+      val snake = collection.search(EntityQuery(_cid, Query.plan(Record.empty, where = Query.Eq("post_status", "Published"))))
+      val kebab = collection.search(EntityQuery(_cid, Query.plan(Record.empty, where = Query.Eq("post-status", "Published"))))
+      val traceSnake = collection.search(EntityQuery(_cid, Query.plan(Record.empty, where = Query.Eq("trace_id", "trace-a"))))
+      val traceKebab = collection.search(EntityQuery(_cid, Query.plan(Record.empty, where = Query.Eq("trace-id", "trace-a"))))
+
+      camel.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(s1.id))
+      snake.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(s1.id))
+      kebab.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(s1.id))
+      traceSnake.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(s1.id))
+      traceKebab.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(s1.id))
+    }
   }
 }
 
@@ -154,6 +205,19 @@ private final case class PersonEntity(
       "id" -> id,
       "name" -> name.value,
       "age" -> age.value
+    )
+}
+
+private final case class StatusEntity(
+  id: EntityId,
+  postStatus: String,
+  traceId: String
+) extends EntityPersistable {
+  def toRecord(): Record =
+    Record.dataAuto(
+      "id" -> id,
+      "postStatus" -> postStatus,
+      "traceId" -> traceId
     )
 }
 

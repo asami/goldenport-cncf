@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Apr.  3, 2026
+ *  version Apr.  3, 2026
+ * @version Apr.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -312,11 +313,11 @@ final class EntityStoreQueryRouteSpec
       created.map(_.id) shouldBe Consequence.success(created.take.id)
       loaded.map(_.flatMap(_.getString("id"))) shouldBe Consequence.success(Some(created.take.id.print))
       loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(Some("test-principal"))
-      loaded.map(_.flatMap(_.getString("createdBy"))) shouldBe Consequence.success(Some("test-principal"))
-      loaded.map(_.flatMap(_.getString("postStatus")).exists(_.toLowerCase.contains("draft"))) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(_.getString("created_by"))) shouldBe Consequence.success(Some("test-principal"))
+      loaded.map(_.flatMap(_.getString("post_status")).exists(_.toLowerCase.contains("draft"))) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("aliveness")).exists(_.toLowerCase.contains("alive"))) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("traceId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("correlationId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(_.getString("trace_id")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(_.getString("correlation_id")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
     }
 
     "auto-complement save defaults from ExecutionContext on entity-store route" in {
@@ -367,11 +368,11 @@ final class EntityStoreQueryRouteSpec
       saved shouldBe Consequence.unit
       loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(Some("jiro"))
       loaded.map(_.flatMap(_.getString("createdBy"))) shouldBe Consequence.success(Some("owner-x"))
-      loaded.map(_.flatMap(_.getString("updatedBy"))) shouldBe Consequence.success(Some("test-principal"))
-      loaded.map(_.flatMap(_.getString("postStatus")).exists(_.toLowerCase.contains("draft"))) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(r => r.getString("updatedBy").orElse(r.getString("updated_by")))) shouldBe Consequence.success(Some("test-principal"))
+      loaded.map(_.flatMap(r => r.getString("postStatus").orElse(r.getString("post_status"))).exists(_.toLowerCase.contains("draft"))) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("aliveness")).exists(_.toLowerCase.contains("alive"))) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("traceId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("correlationId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(r => r.getString("traceId").orElse(r.getString("trace_id"))).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(r => r.getString("correlationId").orElse(r.getString("correlation_id"))).exists(_.nonEmpty)) shouldBe Consequence.success(true)
     }
 
     "auto-complement update defaults from ExecutionContext on entity-store route" in {
@@ -423,9 +424,9 @@ final class EntityStoreQueryRouteSpec
       loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(Some("hanako"))
       loaded.map(_.flatMap(_.getString("createdBy"))) shouldBe Consequence.success(Some("owner-y"))
       loaded.map(_.flatMap(_.getString("postStatus"))) shouldBe Consequence.success(Some("Published"))
-      loaded.map(_.flatMap(_.getString("updatedBy"))) shouldBe Consequence.success(Some("test-principal"))
-      loaded.map(_.flatMap(_.getString("traceId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("correlationId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(r => r.getString("updatedBy").orElse(r.getString("updated_by")))) shouldBe Consequence.success(Some("test-principal"))
+      loaded.map(_.flatMap(r => r.getString("traceId").orElse(r.getString("trace_id"))).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(r => r.getString("correlationId").orElse(r.getString("correlation_id"))).exists(_.nonEmpty)) shouldBe Consequence.success(true)
     }
 
     "perform soft delete on entity-store route and keep record with lifecycle updates" in {
@@ -466,9 +467,9 @@ final class EntityStoreQueryRouteSpec
       deleted shouldBe Consequence.unit
       loaded.map(_.flatMap(_.getString("id"))) shouldBe Consequence.success(Some(id.print))
       loaded.map(_.flatMap(r => r.getAny("aliveness").orElse(r.getAny("alive"))).exists(_.toString.toLowerCase.contains("dead"))) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("updatedBy"))) shouldBe Consequence.success(Some("test-principal"))
-      loaded.map(_.flatMap(_.getString("traceId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
-      loaded.map(_.flatMap(_.getString("correlationId")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(r => r.getString("updatedBy").orElse(r.getString("updated_by")))) shouldBe Consequence.success(Some("test-principal"))
+      loaded.map(_.flatMap(r => r.getString("traceId").orElse(r.getString("trace_id"))).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(r => r.getString("correlationId").orElse(r.getString("correlation_id"))).exists(_.nonEmpty)) shouldBe Consequence.success(true)
     }
 
     "perform hard delete on entity-store route and remove record physically" in {

@@ -9,7 +9,8 @@ import org.goldenport.cncf.directive.{Query, SearchResult}
 
 /*
  * @since   Mar. 14, 2026
- * @version Mar. 30, 2026
+ *  version Mar. 30, 2026
+ * @version Apr.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -190,7 +191,7 @@ final class EntityCollection[E](
 
   private def _normalize_path(path: String): String = {
     val segment = path.split("\\.").lastOption.getOrElse(path)
-    segment.toLowerCase.replace("_", "")
+    org.goldenport.cncf.context.RuntimeContext.PropertyNameStyle.CamelCase.transform(segment)
   }
 
   private def _is_visible(
@@ -199,7 +200,7 @@ final class EntityCollection[E](
   ): Boolean = {
     val postok = policy.postStatuses match {
       case Some(allowed) =>
-        _record_value(record, Vector("postStatus", "post_status"))
+        _record_value(record, Vector("postStatus"))
           .flatMap(_post_status_token)
           .forall(allowed.contains)
       case None =>
@@ -221,7 +222,10 @@ final class EntityCollection[E](
     keys: Vector[String]
   ): Option[Any] = {
     val m = record.asMap
-    keys.collectFirst(Function.unlift(m.get))
+    keys
+      .flatMap(org.goldenport.cncf.context.RuntimeContext.Context.default.propertyName.aliases)
+      .distinct
+      .collectFirst(Function.unlift(m.get))
   }
 
   private def _is_content_manager()(using ctx: ExecutionContext): Boolean = {
@@ -318,8 +322,8 @@ final class EntityCollection[E](
   ): Boolean = {
     val record = descriptor.persistent.toRecord(entity)
     val keyset = record.keySet
-    val hasdeletedat = keyset.contains("deletedAt") || keyset.contains("deleted_at")
-    val poststatus = _record_value(record, Vector("postStatus", "post_status")).flatMap(_post_status_token)
+    val hasdeletedat = org.goldenport.cncf.context.RuntimeContext.Context.default.propertyName.aliases("deletedAt").exists(keyset.contains)
+    val poststatus = _record_value(record, Vector("postStatus")).flatMap(_post_status_token)
     val aliveness = _record_value(record, Vector("aliveness")).flatMap(_aliveness_token)
     hasdeletedat || poststatus.contains("archived") || aliveness.contains("dead")
   }

@@ -18,7 +18,7 @@ import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.component.{Component, ComponentInit}
 import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig, RuntimeDefaults}
 import org.goldenport.cncf.config.ConfigurationAccess
-import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.{Argument, Property, Protocol, ProtocolEngine, Request, Response, Switch}
@@ -51,7 +51,8 @@ import org.goldenport.record.Record
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Apr.  4, 2026
+ *  version Apr.  4, 2026
+ * @version Apr.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -793,6 +794,8 @@ object CncfRuntime extends GlobalObservable {
       case OperationResponse.Http(http) =>
         val body = http.getString.getOrElse(http.print)
         Console.out.println(body)
+      case OperationResponse.RecordResponse(record) =>
+        _print_response(Response.Yaml(RuntimeContext.Context.default.transformRecord(record).toYamlString))
       case _ =>
         _print_response(res.toResponse)
     }
@@ -2993,6 +2996,8 @@ class CncfRuntime() extends GlobalObservable {
       case OperationResponse.Http(http) =>
         val body = http.getString.getOrElse(http.print)
         Console.out.println(body)
+      case OperationResponse.RecordResponse(record) =>
+        _print_response(Response.Yaml(RuntimeContext.Context.default.transformRecord(record).toYamlString))
       case _ =>
         _print_response(res.toResponse)
     }

@@ -3,14 +3,18 @@ package org.goldenport.cncf.directive
 import java.time.Instant
 import org.simplemodeling.model.directive.Condition
 import org.goldenport.record.Record
+import org.goldenport.record.Recordable
+import org.goldenport.text.Presentable
+import org.goldenport.cncf.context.RuntimeContext
 
 /*
  * @since   Feb. 19, 2026
  *  version Mar. 30, 2026
- * @version Apr.  4, 2026
+ *  version Apr.  4, 2026
+ * @version Apr.  5, 2026
  * @author  ASAMI, Tomoharu
  */
-case class Query[T](query: T) {
+case class Query[T](query: T) extends Recordable {
   def matches[A](value: A): Boolean =
     Query.matches(this, value)
 
@@ -32,6 +36,9 @@ case class Query[T](query: T) {
     f: Query.SqlNames => String
   ): String =
     Query.completeSql(tables)(f)
+
+  def toRecord(): Record =
+    Query.toRecord(this)
 }
 
 object Query {
@@ -101,6 +108,24 @@ object Query {
   // case class Person(...) extends Query.ConditionShape
   trait ConditionShape extends Product
 
+  def toRecord(
+    query: Query[?]
+  ): Record =
+    query.query match {
+      case p: Plan[?] =>
+        Record.dataAuto(
+          "condition" -> _value(p.condition),
+          "where" -> _expr_record_option(p.where),
+          "sort" -> p.sort.map(_sort_record),
+          "limit" -> p.limit,
+          "offset" -> p.offset
+        )
+      case other =>
+        Record.dataAuto(
+          "condition" -> _value(other)
+        )
+    }
+
   def plan[T](
     condition: T,
     where: Expr = True,
@@ -113,7 +138,8 @@ object Query {
   def fromRecord(record: Record): Query[?] = {
     val condition = Record.create(
       record.fields.iterator.collect {
-        case field if !_is_query_control_parameter(field.key) => field.key -> field.value.single
+        case field if !_is_query_control_parameter(field.key) && !_is_query_control_container(field.key, field.value.single) =>
+          field.key -> field.value.single
       }.toVector
     )
     val limit = _query_control_int(record, "limit")
@@ -127,10 +153,25 @@ object Query {
   ): Query[?] = {
     val limit = _query_control_int(record, "limit")
     val offset = _query_control_int(record, "offset")
+    val sanitizedCondition = _condition_without_legacy_controls(query.query)
     if (limit.isEmpty && offset.isEmpty)
-      query
+      sanitizedCondition match {
+        case None => query
+        case Some(condition) => query.query match {
+          case p: Plan[?] =>
+            Query(Plan(
+              condition = condition,
+              where = p.where,
+              sort = p.sort,
+              limit = p.limit,
+              offset = p.offset
+            ))
+          case _ =>
+            Query(condition)
+        }
+      }
     else
-      query.query match {
+      sanitizedCondition.getOrElse(query.query) match {
         case p: Plan[?] =>
           Query(Plan(
             condition = p.condition,
@@ -142,13 +183,58 @@ object Query {
         case other =>
           Query.plan(
             other,
-            where = whereOf(query),
+            where = whereOf(Query(other)),
             sort = sortOf(query),
             limit = limit,
             offset = offset
           )
       }
   }
+
+  private def _condition_without_legacy_controls(
+    condition: Any
+  ): Option[Any] =
+    condition match {
+      case p: Plan[?] =>
+        _condition_without_legacy_controls(p.condition).map(x => p.copy(condition = x))
+      case rec: Record =>
+        val filtered = rec.asMap.filterNot { case (k, v) =>
+          _is_query_control_parameter(k) || _is_legacy_query_control_blob(k, v) || _is_query_control_container(k, v)
+        }
+        Some(Record.create(filtered))
+      case other =>
+        None
+    }
+
+  private def _is_legacy_query_control_blob(
+    key: String,
+    value: Any
+  ): Boolean =
+    key == "query" && Option(value).exists {
+      case s: String =>
+        val normalized = s.toLowerCase
+        normalized.contains("limit=") || normalized.contains("offset=")
+      case _ =>
+        false
+    }
+
+  private def _is_query_control_container(
+    key: String,
+    value: Any
+  ): Boolean =
+    key == "query" && (value match {
+      case rec: Record =>
+        rec.fields.forall(x => x.key == "limit" || x.key == "offset")
+      case m: Map[?, ?] =>
+        m.keys.forall {
+          case s: String => s == "limit" || s == "offset"
+          case _ => false
+        }
+      case other =>
+        val normalized = Option(other).fold("")(_.toString.toLowerCase)
+        (normalized.contains("limit=") || normalized.contains("limit:")) &&
+        (normalized.contains("offset=") || normalized.contains("offset:"))
+    })
 
   def completeSql(
     tables: Iterable[(String, String)]
@@ -195,6 +281,86 @@ object Query {
     query.query match {
       case p: Plan[?] => p.limit.filter(_ >= 0)
       case _ => None
+    }
+
+  private def _sort_record(
+    key: SortKey
+  ): Record =
+    Record.dataAuto(
+      "path" -> key.path,
+      "direction" -> key.direction.toString.toLowerCase
+    )
+
+  private def _expr_record_option(
+    expr: Expr
+  ): Option[Record] =
+    expr match {
+      case True => None
+      case other => Some(_expr_record(other))
+    }
+
+  private def _expr_record(
+    expr: Expr
+  ): Record =
+    expr match {
+      case True =>
+        Record.dataAuto("op" -> "true")
+      case False =>
+        Record.dataAuto("op" -> "false")
+      case And(items) =>
+        Record.dataAuto("op" -> "and", "items" -> items.map(_expr_record))
+      case Or(items) =>
+        Record.dataAuto("op" -> "or", "items" -> items.map(_expr_record))
+      case Not(item) =>
+        Record.dataAuto("op" -> "not", "item" -> _expr_record(item))
+      case FieldCondition(path, condition) =>
+        Record.dataAuto(
+          "op" -> "field_condition",
+          "path" -> path,
+          "condition" -> Presentable.print(condition)
+        )
+      case Eq(path, value) =>
+        Record.dataAuto("op" -> "eq", "path" -> path, "value" -> _value(value))
+      case Ne(path, value) =>
+        Record.dataAuto("op" -> "ne", "path" -> path, "value" -> _value(value))
+      case Gt(path, value) =>
+        Record.dataAuto("op" -> "gt", "path" -> path, "value" -> _value(value))
+      case Gte(path, value) =>
+        Record.dataAuto("op" -> "gte", "path" -> path, "value" -> _value(value))
+      case Lt(path, value) =>
+        Record.dataAuto("op" -> "lt", "path" -> path, "value" -> _value(value))
+      case Lte(path, value) =>
+        Record.dataAuto("op" -> "lte", "path" -> path, "value" -> _value(value))
+      case In(path, values) =>
+        Record.dataAuto("op" -> "in", "path" -> path, "values" -> values.map(_value))
+      case NotIn(path, values) =>
+        Record.dataAuto("op" -> "not_in", "path" -> path, "values" -> values.map(_value))
+      case IsNull(path) =>
+        Record.dataAuto("op" -> "is_null", "path" -> path)
+      case IsNotNull(path) =>
+        Record.dataAuto("op" -> "is_not_null", "path" -> path)
+      case Like(path, pattern, caseInsensitive) =>
+        Record.dataAuto("op" -> "like", "path" -> path, "pattern" -> pattern, "case_insensitive" -> caseInsensitive)
+      case StartsWith(path, value, caseInsensitive) =>
+        Record.dataAuto("op" -> "starts_with", "path" -> path, "value" -> value, "case_insensitive" -> caseInsensitive)
+      case EndsWith(path, value, caseInsensitive) =>
+        Record.dataAuto("op" -> "ends_with", "path" -> path, "value" -> value, "case_insensitive" -> caseInsensitive)
+      case Contains(path, value, caseInsensitive) =>
+        Record.dataAuto("op" -> "contains", "path" -> path, "value" -> value, "case_insensitive" -> caseInsensitive)
+    }
+
+  private def _value(
+    value: Any
+  ): Any =
+    value match {
+      case null => null
+      case m: Record => m
+      case m: Recordable => m.toRecord()
+      case m: Iterable[?] => m.iterator.map(_value).toVector
+      case m: Array[?] => m.toVector.map(_value)
+      case m: Option[?] => m.map(_value)
+      case m: Presentable => m.print
+      case other => other
     }
 
   def offsetOf(query: Query[?]): Option[Int] =
@@ -351,10 +517,10 @@ object Query {
 
   private def _extract_field(value: Any, name: String): Option[Any] =
     value match {
-      case p: Product =>
-        _extract_from_product(p, name).orElse(_extract_alias(value, name))
       case r: Record =>
         _extract_from_map(r.asMap, name).orElse(_extract_alias(value, name))
+      case p: Product =>
+        _extract_from_product(p, name).orElse(_extract_alias(value, name))
       case m: Map[?, ?] =>
         _extract_from_map(m.asInstanceOf[Map[String, Any]], name).orElse(_extract_alias(value, name))
       case _ =>
@@ -387,7 +553,7 @@ object Query {
     }
 
   private def _normalize_name(name: String): String =
-    name.filter(_ != '_').toLowerCase
+    RuntimeContext.PropertyNameStyle.CamelCase.transform(name)
 
   private def _compare(path: String, actualRoot: Any, expected: Any): Option[Int] =
     _extract(actualRoot, path).flatMap(_compare_values(_, expected))

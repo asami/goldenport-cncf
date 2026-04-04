@@ -439,7 +439,7 @@ final class ComponentFactory(
         val browser = _default_view_browser(component, entityspace, d.entityName, collection)
         viewspace.register(name, collection, browser)
         d.viewNames.distinct.foreach { viewname =>
-          viewspace.registerView(name, viewname, _default_named_view_browser(component, entityspace, d.entityName, viewname))
+          viewspace.registerView(name, viewname, _default_named_view_browser(component, entityspace, d.entityName, viewname, collection))
         }
         d.queries.distinctBy(_.name).foreach { q =>
           viewspace.registerView(name, q.name, _default_view_query_browser(component, entityspace, d.entityName, collection, q))
@@ -544,19 +544,17 @@ final class ComponentFactory(
     component: Component,
     entityspace: EntitySpace,
     entityname: String,
-    viewname: String
-  ): Browser[Any] =
-    new Browser[Any] {
-      def find(id: EntityId): Consequence[Any] =
-        _load_view_source_entity(component, entityspace, entityname, id).flatMap(_entity_to_view(component, entityname, Some(viewname), _))
-
-      def query(q: Query[_]): Consequence[Vector[Any]] =
-        _search_view_source_entities(component, entityspace, entityname, Query(_sanitize_query_record(_query_record(q)))).flatMap {
-          _.foldLeft(Consequence.success(Vector.empty[Any])) { (z, entity) =>
-            z.flatMap(xs => _entity_to_view(component, entityname, Some(viewname), entity).map(xs :+ _))
-          }
+    viewname: String,
+    collection: ViewCollection[Any]
+  ): Browser[Any] = {
+    val queryfn = (q: Query[_]) =>
+      _search_view_source_entities(component, entityspace, entityname, Query(_sanitize_query_record(_query_record(q)))).flatMap {
+        _.foldLeft(Consequence.success(Vector.empty[Any])) { (z, entity) =>
+          z.flatMap(xs => _entity_to_view(component, entityname, Some(viewname), entity).map(xs :+ _))
         }
-    }
+      }
+    Browser.from(collection, queryfn)
+  }
 
   private def _default_view_query_browser(
     component: Component,
@@ -567,8 +565,9 @@ final class ComponentFactory(
   ): Browser[Any] = {
     val queryfn = (q: Query[_]) => {
       val source = _sanitize_query_record(_query_record(q))
+      val sanitized = Query(source)
       val filtered = _filter_view_query_record(source, querydef)
-      _search_view_source_entities(component, entityspace, entityname, q).flatMap { entities =>
+      _search_view_source_entities(component, entityspace, entityname, sanitized).flatMap { entities =>
         val matched =
           if (filtered.asMap.isEmpty) entities
           else entities.filter(entity => _matches_view_query(entity, filtered))
