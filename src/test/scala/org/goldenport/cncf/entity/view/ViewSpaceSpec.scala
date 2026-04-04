@@ -1,8 +1,10 @@
 package org.goldenport.cncf.entity.view
 
 import org.goldenport.Consequence
+import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.directive.Query
+import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -72,7 +74,7 @@ final class ViewSpaceSpec
       fromnone shouldBe None
     }
 
-    "cache default view load and query results until invalidated" in {
+    "cache default view load results and small query results until invalidated" in {
       var buildCount = 0
       var queryCount = 0
       val viewspace = new ViewSpace
@@ -109,6 +111,86 @@ final class ViewSpaceSpec
 
       buildCount shouldBe 2
       queryCount shouldBe 2
+    }
+
+    "cache paged query results by chunk for repeated list access" in {
+      var queryCount = 0
+      EntityAccessMetricsRegistry.shared.clear()
+      val viewspace = new ViewSpace
+      val collectionid = EntityCollectionId("test", "1", "user")
+      val collection = new ViewCollection[String](
+        new ViewBuilder[String] {
+          def build(id: EntityId): Consequence[String] =
+            Consequence.success(id.minor)
+        },
+        queryChunkSize = 3
+      )
+      val browser = Browser.from(
+        collection,
+        q => {
+          queryCount += 1
+          val offset = q.offset.getOrElse(0)
+          val limit = q.limit.getOrElse(3)
+          Consequence.success((offset until (offset + limit)).toVector.map(i => s"item-$i"))
+        }
+      )
+      viewspace.register("user", collection, browser)
+
+      val first = viewspace.browser[String]("user").query(Query.plan("tokyo", limit = Some(2), offset = Some(0)))
+      val second = viewspace.browser[String]("user").query(Query.plan("tokyo", limit = Some(2), offset = Some(1)))
+      val third = viewspace.browser[String]("user").query(Query.plan("tokyo", limit = Some(2), offset = Some(3)))
+
+      first shouldBe Consequence.success(Vector("item-0", "item-1"))
+      second shouldBe Consequence.success(Vector("item-1", "item-2"))
+      third shouldBe Consequence.success(Vector("item-3", "item-4"))
+      queryCount shouldBe 2
+      val metrics = EntityAccessMetricsRegistry.shared.snapshot()
+      metrics.find(_.name == "view.query.chunk.miss").map(_.count) shouldBe Some(2L)
+      metrics.find(_.name == "view.query.chunk.hit").map(_.count) shouldBe Some(1L)
+    }
+
+    "avoid caching unbounded query results larger than the chunk size" in {
+      var queryCount = 0
+      EntityAccessMetricsRegistry.shared.clear()
+      val viewspace = new ViewSpace
+      val collectionid = EntityCollectionId("test", "1", "user")
+      val collection = new ViewCollection[String](
+        new ViewBuilder[String] {
+          def build(id: EntityId): Consequence[String] =
+            Consequence.success(id.minor)
+        },
+        queryChunkSize = 3
+      )
+      val browser = Browser.from(
+        collection,
+        _ => {
+          queryCount += 1
+          Consequence.success(Vector("item-0", "item-1", "item-2", "item-3"))
+        }
+      )
+      viewspace.register("user", collection, browser)
+
+      viewspace.browser[String]("user").query(Query("tokyo"))
+      viewspace.browser[String]("user").query(Query("tokyo"))
+
+      queryCount shouldBe 2
+      val metrics = EntityAccessMetricsRegistry.shared.snapshot()
+      metrics.find(_.name == "view.query.small.bypass").map(_.count) shouldBe Some(2L)
+    }
+
+    "read query controls from nested request records" in {
+      val request = Record.create(Vector(
+        "city" -> "Tokyo",
+        "query" -> Record.create(Vector(
+          "limit" -> 2,
+          "offset" -> 1
+        ))
+      ))
+
+      val resolved = Query.withControls(Query(Record.create(Vector("city" -> "Tokyo"))), request)
+
+      resolved.limit shouldBe Some(2)
+      resolved.offset shouldBe Some(1)
     }
   }
 }

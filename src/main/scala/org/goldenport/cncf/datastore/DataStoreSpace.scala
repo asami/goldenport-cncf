@@ -12,7 +12,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Feb. 25, 2026
- * @version Mar. 27, 2026
+ * @version Apr.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace {
@@ -59,7 +59,13 @@ class DataStoreSpace {
     seed: DataStoreSeed
   )(using ctx: ExecutionContext): Consequence[Unit] =
     seed.entries.foldLeft(Consequence.unit) { (z, entry) =>
-      z.flatMap(_ => inject(entry.collection, entry.record))
+      z.flatMap { _ =>
+        val entryid = _entry_id(entry.record, entry.collection)
+        dataStore(entry.collection).flatMap(_.create(entry.collection, entryid, entry.record)).recoverWith {
+          case _ =>
+            dataStore(entry.collection).flatMap(_.save(entry.collection, entryid, entry.record))
+        }
+      }
     }
 
   private def _entry_id(

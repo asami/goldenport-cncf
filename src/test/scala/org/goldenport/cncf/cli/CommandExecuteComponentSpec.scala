@@ -22,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Jan.  9, 2026
  *  version Jan. 18, 2026
  * @author  ASAMI, Tomoharu
- * @version Mar. 28, 2026
+ * @version Apr.  4, 2026
  */
 class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
 
@@ -72,6 +72,22 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
           req.service.getOrElse(fail("missing service")).shouldBe("system")
           req.operation.shouldBe("ping")
           req.properties.exists(p => p.name == "name" && p.value == "taro") shouldBe true
+        case Consequence.Failure(c) =>
+          fail(s"unexpected failure: ${c}")
+      }
+    }
+
+    "preserve dotted query control properties in the request record" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      CncfRuntime.parseCommandArgs(
+        subsystem,
+        Array("admin.system.ping", "--query.limit", "2", "--query.offset", "1")
+      ) match {
+        case Consequence.Success(req: Request) =>
+          req.properties.exists(p => p.name == "query.limit" && p.value == "2") shouldBe true
+          req.properties.exists(p => p.name == "query.offset" && p.value == "1") shouldBe true
+          req.toRecord.getRecord("query").flatMap(_.getInt("limit")) shouldBe Some(2)
+          req.toRecord.getRecord("query").flatMap(_.getInt("offset")) shouldBe Some(1)
         case Consequence.Failure(c) =>
           fail(s"unexpected failure: ${c}")
       }

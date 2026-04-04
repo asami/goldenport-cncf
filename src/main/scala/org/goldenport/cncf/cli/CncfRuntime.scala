@@ -51,7 +51,7 @@ import org.goldenport.record.Record
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Apr.  3, 2026
+ * @version Apr.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -2476,10 +2476,10 @@ class CncfRuntime() extends GlobalObservable {
     arguments.collectFirst { case Argument(_, body: MimeBody, _) => body }
 
   def executeCommand(subsystem: Subsystem, req: Request): Int = {
-    val primaryargs = _recover_command_args(req.toSubCommand.toArgs, req)
+    val primaryargs = _recover_command_args(_command_args_from_request(req), req)
     val args =
       if (primaryargs.nonEmpty) primaryargs
-      else _recover_command_args(_command_args_from_request(req), req)
+      else _recover_command_args(req.toSubCommand.toArgs, req)
     executeCommand(subsystem, args)
   }
 

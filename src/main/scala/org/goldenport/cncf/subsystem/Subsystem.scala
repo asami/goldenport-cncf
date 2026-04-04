@@ -36,7 +36,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
- * @version Mar. 30, 2026
+ * @version Apr.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -242,8 +242,7 @@ final class Subsystem(
   ): Boolean =
     name != null && (
       name.startsWith("textus.") ||
-      name.startsWith("cncf.") ||
-      name.startsWith("query.")
+      name.startsWith("cncf.")
     )
 
   private def _resolve_route(

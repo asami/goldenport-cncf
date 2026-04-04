@@ -6,7 +6,8 @@ import org.goldenport.record.Record
 
 /*
  * @since   Feb. 19, 2026
- * @version Mar. 30, 2026
+ *  version Mar. 30, 2026
+ * @version Apr.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 case class Query[T](query: T) {
@@ -108,6 +109,46 @@ object Query {
     offset: Option[Int] = None
   ): Query[Plan[T]] =
     Query(Plan(condition, where, sort, limit, offset))
+
+  def fromRecord(record: Record): Query[?] = {
+    val condition = Record.create(
+      record.fields.iterator.collect {
+        case field if !_is_query_control_parameter(field.key) => field.key -> field.value.single
+      }.toVector
+    )
+    val limit = _query_control_int(record, "limit")
+    val offset = _query_control_int(record, "offset")
+    Query.plan(condition, limit = limit, offset = offset)
+  }
+
+  def withControls(
+    query: Query[?],
+    record: Record
+  ): Query[?] = {
+    val limit = _query_control_int(record, "limit")
+    val offset = _query_control_int(record, "offset")
+    if (limit.isEmpty && offset.isEmpty)
+      query
+    else
+      query.query match {
+        case p: Plan[?] =>
+          Query(Plan(
+            condition = p.condition,
+            where = p.where,
+            sort = p.sort,
+            limit = limit.orElse(p.limit),
+            offset = offset.orElse(p.offset)
+          ))
+        case other =>
+          Query.plan(
+            other,
+            where = whereOf(query),
+            sort = sortOf(query),
+            limit = limit,
+            offset = offset
+          )
+      }
+  }
 
   def completeSql(
     tables: Iterable[(String, String)]
@@ -248,6 +289,22 @@ object Query {
 
   private def _expr_from_record(record: Record): Expr =
     _expr_from_map(record.asMap)
+
+  private def _int_option(p: Option[Any]): Option[Int] =
+    p.flatMap {
+      case i: Int => Some(i)
+      case l: Long if l.isValidInt => Some(l.toInt)
+      case s: Short => Some(s.toInt)
+      case b: Byte => Some(b.toInt)
+      case s: String => scala.util.Try(s.trim.toInt).toOption
+      case _ => None
+    }
+
+  private def _query_control_int(
+    record: Record,
+    key: String
+  ): Option[Int] =
+    record.getRecord("query").flatMap(_.getAny(key)).flatMap(value => _int_option(Some(value)))
 
   private def _expr_from_map(record: Map[String, Any]): Expr = {
     val clauses = record.toVector.flatMap {
