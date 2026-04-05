@@ -547,13 +547,15 @@ final class ComponentFactory(
     viewname: String,
     collection: ViewCollection[Any]
   ): Browser[Any] = {
+    val loadfn = (id: EntityId) =>
+      _load_view_source_entity(component, entityspace, entityname, id).flatMap(_entity_to_view(component, entityname, Some(viewname), _))
     val queryfn = (q: Query[_]) =>
       _search_view_source_entities(component, entityspace, entityname, Query(_sanitize_query_record(_query_record(q)))).flatMap {
         _.foldLeft(Consequence.success(Vector.empty[Any])) { (z, entity) =>
           z.flatMap(xs => _entity_to_view(component, entityname, Some(viewname), entity).map(xs :+ _))
         }
       }
-    Browser.from(collection, queryfn)
+    Browser.from(loadfn, collection, queryfn)
   }
 
   private def _default_view_query_browser(
@@ -565,9 +567,9 @@ final class ComponentFactory(
   ): Browser[Any] = {
     val queryfn = (q: Query[_]) => {
       val source = _sanitize_query_record(_query_record(q))
-      val sanitized = Query(source)
       val filtered = _filter_view_query_record(source, querydef)
-      _search_view_source_entities(component, entityspace, entityname, sanitized).flatMap { entities =>
+      val searchrecord = _searchable_query_record(if (filtered.asMap.nonEmpty) filtered else source)
+      _search_view_source_entities(component, entityspace, entityname, Query(searchrecord)).flatMap { entities =>
         val matched =
           if (filtered.asMap.isEmpty) entities
           else entities.filter(entity => _matches_view_query(entity, filtered))
@@ -1219,6 +1221,7 @@ final class ComponentFactory(
 
   private def _sanitize_query_record(p: Record): Record = {
     val filtered = p.asMap.filterNot { case (k, _) =>
+      k == "view" ||
       k.startsWith("security.") ||
       k.startsWith("cncf.security.") ||
       k.startsWith("textus.") ||
@@ -1226,6 +1229,20 @@ final class ComponentFactory(
     }
     Record.create(filtered)
   }
+
+  private def _searchable_query_record(p: Record): Record =
+    Record.create(
+      p.asMap.flatMap {
+        case (_, org.simplemodeling.model.directive.Condition.Any) =>
+          None
+        case (k, org.simplemodeling.model.directive.Condition.Is(expected)) =>
+          Some(k -> expected)
+        case (k, org.simplemodeling.model.directive.Condition.In(candidates)) =>
+          Some(k -> candidates.toVector)
+        case (k, v) =>
+          Some(k -> v)
+      }
+    )
 
   private def _filter_view_query_record(
     record: Record,

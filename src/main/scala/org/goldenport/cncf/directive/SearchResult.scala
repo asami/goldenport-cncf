@@ -1,7 +1,7 @@
 package org.goldenport.cncf.directive
 
 import org.goldenport.record.Record
-import org.goldenport.record.Recordable
+import org.goldenport.record.RecordPresentable
 import org.goldenport.text.Presentable
 
 /*
@@ -16,7 +16,7 @@ final case class SearchResult[T](
   offset: Option[Int] = None,
   limit: Option[Int] = None,
   fetchedCount: Int = 0
-) extends Recordable {
+) extends RecordPresentable {
   def size: Int = data.size
   def isEmpty: Boolean = data.isEmpty
   def nonEmpty: Boolean = data.nonEmpty
@@ -34,7 +34,7 @@ final case class SearchResult[T](
   private def _value(p: Any): Any = p match {
     case null => null
     case m: Record => m
-    case m: Recordable => m.toRecord()
+    case m: RecordPresentable => m.toRecord()
     case m: Iterable[?] => m.iterator.map(_value).toVector
     case m: Array[?] => m.toVector.map(_value)
     case m: Option[?] => m.map(_value)

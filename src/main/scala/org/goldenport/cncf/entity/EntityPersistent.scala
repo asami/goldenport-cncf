@@ -6,6 +6,7 @@ import org.goldenport.id.Identifiable
 import org.goldenport.record.Record
 import org.goldenport.record.RecordEncoder
 import org.goldenport.record.RecordCodex
+import org.goldenport.record.RecordPresentable
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.datatype.EntityCollectionId
 
@@ -58,14 +59,12 @@ object EntityPersistentQuery {
   }
 }
 
-trait EntityPersistable {
+trait EntityPersistable extends RecordPresentable {
   def id: EntityId
-  def toRecord(): Record
 }
 
-trait EntityPersistableCreate {
+trait EntityPersistableCreate extends RecordPresentable {
   def id: Option[EntityId]
-  def toRecord(): Record
 }
 object EntityPersistableCreate {
   // given entityPersistentCreate: EntityPersistentCreate[EntityPersistableCreate] = new EntityPersistentCreate[EntityPersistableCreate] {
@@ -75,9 +74,7 @@ object EntityPersistableCreate {
   // }
 }
 
-trait EntityPersistableQuery {
-  def toRecord(): Record
-}
+trait EntityPersistableQuery extends RecordPresentable
 
 trait EntityPersistentUpdate[E] extends RecordCodex[E] {
   def collection(e: E): EntityCollectionId
@@ -94,6 +91,4 @@ object EntityPersistentUpdate {
   }
 }
 
-trait EntityPersistableUpdate {
-  def toRecord(): Record
-}
+trait EntityPersistableUpdate extends RecordPresentable

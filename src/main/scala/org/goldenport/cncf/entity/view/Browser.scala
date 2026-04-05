@@ -40,4 +40,20 @@ object Browser {
           case _ => queryfn(q)
         }
     }
+
+  def from[V](
+    loadfn: EntityId => Consequence[V],
+    collection: Collection[V],
+    queryfn: Query[_] => Consequence[Vector[V]]
+  ): Browser[V] =
+    new Browser[V] {
+      def find(id: EntityId): Consequence[V] =
+        loadfn(id)
+
+      def query(q: Query[_]): Consequence[Vector[V]] =
+        collection match {
+          case m: ViewCollection[V @unchecked] => m.query(q)(queryfn)
+          case _ => queryfn(q)
+        }
+    }
 }

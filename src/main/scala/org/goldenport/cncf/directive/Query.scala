@@ -3,9 +3,10 @@ package org.goldenport.cncf.directive
 import java.time.Instant
 import org.simplemodeling.model.directive.Condition
 import org.goldenport.record.Record
-import org.goldenport.record.Recordable
+import org.goldenport.record.RecordPresentable
 import org.goldenport.text.Presentable
 import org.goldenport.cncf.context.RuntimeContext
+import org.goldenport.cncf.entity.EntityPersistableQuery
 
 /*
  * @since   Feb. 19, 2026
@@ -14,7 +15,7 @@ import org.goldenport.cncf.context.RuntimeContext
  * @version Apr.  5, 2026
  * @author  ASAMI, Tomoharu
  */
-case class Query[T](query: T) extends Recordable {
+case class Query[T](query: T) extends RecordPresentable {
   def matches[A](value: A): Boolean =
     Query.matches(this, value)
 
@@ -354,14 +355,28 @@ object Query {
   ): Any =
     value match {
       case null => null
-      case m: Record => m
-      case m: Recordable => m.toRecord()
+      case m: Record => _record_value(m)
+      case m: RecordPresentable => _record_value(m.toRecord())
+      case Condition.Any => null
+      case Condition.Is(expected) => _value(expected)
+      case Condition.In(candidates) => candidates.toVector.map(_value)
       case m: Iterable[?] => m.iterator.map(_value).toVector
       case m: Array[?] => m.toVector.map(_value)
       case m: Option[?] => m.map(_value)
       case m: Presentable => m.print
       case other => other
     }
+
+  private def _record_value(
+    record: Record
+  ): Record =
+    Record.create(
+      record.asMap.flatMap {
+        case (_, null) => None
+        case (_, Condition.Any) => None
+        case (k, v) => Some(k -> _value(v))
+      }
+    )
 
   def offsetOf(query: Query[?]): Option[Int] =
     query.query match {

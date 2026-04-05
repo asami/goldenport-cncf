@@ -7,7 +7,7 @@ import org.goldenport.Consequence
 import org.goldenport.convert.StringEncodable
 import org.goldenport.text.Presentable
 import org.goldenport.record.Record
-import org.goldenport.record.Recordable
+import org.goldenport.record.RecordPresentable
 import org.goldenport.record.io.RecordDecoder
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.datastore.DataStore
@@ -144,7 +144,7 @@ class SqlDataStore(
         m.encode
       case m: Record =>
         m.toJsonString
-      case m: Recordable =>
+      case m: RecordPresentable =>
         m.toRecord().toJsonString
       case xs: Iterable[?] if xs.forall(_is_record_like) =>
         xs.iterator.map(_record_like_json).mkString("[", ",", "]")
@@ -166,7 +166,7 @@ class SqlDataStore(
   ): Boolean =
     value match {
       case _: Record => true
-      case _: Recordable => true
+      case _: RecordPresentable => true
       case _ => false
     }
 
@@ -175,7 +175,7 @@ class SqlDataStore(
   ): String =
     value match {
       case m: Record => m.toJsonString
-      case m: Recordable => m.toRecord().toJsonString
+      case m: RecordPresentable => m.toRecord().toJsonString
       case other => Presentable.print(other)
     }
 
