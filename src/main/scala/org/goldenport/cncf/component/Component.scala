@@ -42,10 +42,10 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Jan.  1, 2026
- *  version Jan.  3, 2026
+ *  version Mar. 30, 2026
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
- * @version Mar. 30, 2026
+ * @version Apr.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -180,6 +180,8 @@ abstract class Component() extends Component.Core.Holder {
   def aggregateDefinitions: Vector[AggregateDefinition] = Vector.empty
   def viewDefinitions: Vector[ViewDefinition] = Vector.empty
   def operationDefinitions: Vector[CmlOperationDefinition] = Vector.empty
+  def componentDefinitionRecords: Vector[Record] = Vector.empty
+  def subsystemDefinitionRecords: Vector[Record] = Vector.empty
 
   def artifactMetadata: Option[Component.ArtifactMetadata] =
     _artifact_metadata

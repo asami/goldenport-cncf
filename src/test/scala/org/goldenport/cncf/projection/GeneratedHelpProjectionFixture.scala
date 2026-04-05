@@ -15,7 +15,7 @@ import org.goldenport.value.BaseContent
 /*
  * @since   Mar. 25, 2026
  *  version Mar. 29, 2026
- * @version Apr.  2, 2026
+ * @version Apr.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object GeneratedHelpProjectionFixture {
@@ -50,6 +50,47 @@ private[projection] object GeneratedHelpProjectionFixture {
               parameters = Vector.empty
             )
           )
+
+        override def componentDefinitionRecords: Vector[org.goldenport.record.Record] =
+          Vector(
+            org.goldenport.record.Record.data(
+              "name" -> "domain",
+              "use_cases" -> Vector(
+                org.goldenport.record.Record.data(
+                  "name" -> "component_postal_support",
+                  "summary" -> "Provide postal-address lookup capabilities as a component.",
+                  "primary_actor" -> "EndUser",
+                  "goal" -> "Expose reusable postal lookup behavior through the component boundary.",
+                  "precondition" -> "The address service is configured in the component.",
+                  "postcondition" -> "The component can answer postal lookup requests through its public service."
+                )
+              )
+            )
+          )
+
+        override def subsystemDefinitionRecords: Vector[org.goldenport.record.Record] =
+          Vector(
+            org.goldenport.record.Record.data(
+              "name" -> "domain",
+              "domain_visions" -> Vector(
+                org.goldenport.record.Record.data(
+                  "name" -> "trusted_postal_foundation",
+                  "summary" -> "Provide a trusted postal information foundation.",
+                  "goal" -> "Establish a subsystem-level postal information baseline."
+                )
+              ),
+              "domain_use_cases" -> Vector(
+                org.goldenport.record.Record.data(
+                  "name" -> "postal_address_lifecycle",
+                  "summary" -> "Support subsystem-level postal address lookup and reuse.",
+                  "primary_actor" -> "EndUser",
+                  "goal" -> "Expose postal capabilities at subsystem scope.",
+                  "precondition" -> "The subsystem hosts the domain component.",
+                  "postcondition" -> "Subsystem-level postal requirements are available through subsystem help."
+                )
+              )
+            )
+          )
       }.initialize(
         ComponentInit(
           subsystem = params.subsystem,
@@ -77,6 +118,18 @@ private[projection] object GeneratedHelpProjectionFixture {
     )
 
   object AddressService extends ServiceDefinition {
+    def useCaseRecords: Vector[org.goldenport.record.Record] =
+      Vector(
+        org.goldenport.record.Record.data(
+          "name" -> "postal_lookup",
+          "summary" -> "Look up an address from a postal code.",
+          "primary_actor" -> "EndUser",
+          "goal" -> "Resolve a postal code into a normalized address representation.",
+          "precondition" -> "A resolvable postal code is provided.",
+          "postcondition" -> "A normalized address projection is returned."
+        )
+      )
+
     val specification = ServiceDefinition.Specification.Builder("address").
       summary("Address service for postal address support.").
       description("Address service for postal address support.Provides help-visible metadata for CNCF projections.").

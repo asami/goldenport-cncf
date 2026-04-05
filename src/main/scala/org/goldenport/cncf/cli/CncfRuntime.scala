@@ -51,15 +51,14 @@ import org.goldenport.record.Record
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- *  version Apr.  4, 2026
- * @version Apr.  5, 2026
+ * @version Apr.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
   private val _configuration_application_name = "cncf"
   private val _help_flags = Set("--help", "-h")
   private val _runtime_service_name = "runtime"
-  private val _runtime_parameter_parser = new RuntimeParameterParser()
+  private lazy val _runtime_parameter_parser = new RuntimeParameterParser()
   private val _args_parser = new ArgsParser(ArgsParser.Config())
 
   private val _runtime_protocol: Protocol =

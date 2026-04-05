@@ -8,7 +8,7 @@ import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Mar.  5, 2026
- * @version Apr.  2, 2026
+ * @version Apr.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -106,8 +106,22 @@ private[projection] object MetaProjectionSupport {
     Record.data(
       "type" -> "service",
       "name" -> service.name,
-      "runtimeName" -> service_runtime_name(service)
+      "runtimeName" -> service_runtime_name(service),
+      "useCases" -> _service_use_case_records(service)
     )
+
+  private def _service_use_case_records(service: ServiceDefinition): Vector[Record] =
+    try {
+      val method = service.getClass.getMethod("useCaseRecords")
+      method.invoke(service) match {
+        case xs: Vector[?] => xs.collect { case r: Record => r }
+        case xs: Seq[?] => xs.collect { case r: Record => r }.toVector
+        case _ => Vector.empty
+      }
+    } catch {
+      case _: NoSuchMethodException => Vector.empty
+      case _: Throwable => Vector.empty
+    }
 
   def operation_record(service: ServiceDefinition, operation: OperationDefinition): Record =
     Record.data(
