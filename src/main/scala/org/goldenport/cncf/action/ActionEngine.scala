@@ -189,7 +189,11 @@ class ActionEngine(
     call: ActionCall,
     ec: ExecutionContext
   ): Unit = {
-    // Phase 1-b: authorization/accesses are not applied
+    call.authorize()(using ec) match {
+      case Consequence.Success(_) => ()
+      case Consequence.Failure(conclusion) =>
+        throw conclusion.getException.getOrElse(new org.goldenport.ConsequenceException(Consequence.Failure(conclusion)))
+    }
   }
 
   protected def observe_authorization(
