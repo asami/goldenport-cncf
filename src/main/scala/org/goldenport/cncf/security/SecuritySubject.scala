@@ -9,6 +9,8 @@ import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
  */
 final case class SecuritySubject(
   subjectId: String,
+  authenticationState: SecuritySubject.AuthenticationState,
+  accessTokenPresent: Boolean,
   primaryGroup: Option[String],
   groups: Set[String],
   roles: Set[String],
@@ -16,6 +18,12 @@ final case class SecuritySubject(
   capabilities: Set[String],
   securityLevel: Set[String]
 ) {
+  def isAuthenticated: Boolean =
+    authenticationState == SecuritySubject.AuthenticationState.Authenticated
+
+  def isAnonymous: Boolean =
+    authenticationState == SecuritySubject.AuthenticationState.Anonymous
+
   def hasGroup(name: String): Boolean =
     groups.contains(SecuritySubject.normalize(name))
 
@@ -39,14 +47,35 @@ final case class SecuritySubject(
       roles.contains(target)
     }
   }
+
+  def hasUsageCapability(
+    targetKind: String,
+    targetName: String,
+    action: String
+  ): Boolean = {
+    val targets = SecuritySubject.usageCapabilityTargets(targetKind, targetName, action)
+    targets.exists { target =>
+      capabilities.contains(target) ||
+      privileges.contains(target) ||
+      roles.contains(target)
+    }
+  }
 }
 
 object SecuritySubject {
+  enum AuthenticationState {
+    case Anonymous, Authenticated, Unspecified
+  }
+
   def current(using ctx: ExecutionContext): SecuritySubject =
     from(ctx.security)
 
   def from(security: SecurityContext): SecuritySubject = {
     val attributes = security.principal.attributes
+    val accessTokenPresent =
+      _has_token(attributes)
+    val authenticationState =
+      _authentication_state(security, accessTokenPresent)
     val primaryGroup =
       _first_token(attributes, "group", "group_id")
     val groupSet =
@@ -61,6 +90,8 @@ object SecuritySubject {
       splitTokens(security.level.value).map(normalize)
     SecuritySubject(
       subjectId = security.principal.id.value,
+      authenticationState = authenticationState,
+      accessTokenPresent = accessTokenPresent,
       primaryGroup = primaryGroup.map(normalize),
       groups = groupSet.map(normalize),
       roles = roleSet.map(normalize),
@@ -94,9 +125,57 @@ object SecuritySubject {
     resourceType.toSet.flatMap(mk) ++ collectionName.toSet.flatMap(mk)
   }
 
+  def usageCapabilityTargets(
+    targetKind: String,
+    targetName: String,
+    action: String
+  ): Set[String] = {
+    val kind = normalize(targetKind)
+    val name = normalize(targetName)
+    val act = normalize(action)
+    Set(
+      normalize(s"$kind:$name:$act"),
+      normalize(s"$kind.$name.$act"),
+      normalize(s"${kind}_${name}_${act}"),
+      normalize(s"$name:$act"),
+      normalize(s"$name.$act"),
+      normalize(s"${name}_${act}")
+    )
+  }
+
   private def _tokens(attributes: Map[String, String], keys: String*): Set[String] =
     keys.iterator.flatMap(k => attributes.get(k).toVector).flatMap(splitTokens).toSet
 
   private def _first_token(attributes: Map[String, String], keys: String*): Option[String] =
     keys.iterator.flatMap(k => attributes.get(k).toVector).flatMap(splitTokens).find(_.nonEmpty)
+
+  private def _has_token(attributes: Map[String, String]): Boolean =
+    Vector("access_token", "token", "bearer_token", "jwt", "authorization")
+      .exists(k => attributes.get(k).exists(_.trim.nonEmpty))
+
+  private def _authentication_state(
+    security: SecurityContext,
+    accessTokenPresent: Boolean
+  ): AuthenticationState = {
+    val attributes = security.principal.attributes
+    val explicitAuthenticated = _boolean(attributes.get("authenticated"))
+    val explicitAnonymous = _boolean(attributes.get("anonymous"))
+    val subjectId = normalize(security.principal.id.value)
+    if (explicitAuthenticated.contains(true) || accessTokenPresent)
+      AuthenticationState.Authenticated
+    else if (
+      explicitAnonymous.contains(true) ||
+      explicitAuthenticated.contains(false) ||
+      Set("", "anonymous", "anon", "guest", "unauthenticated").contains(subjectId)
+    )
+      AuthenticationState.Anonymous
+    else
+      AuthenticationState.Unspecified
+  }
+
+  private def _boolean(p: Option[String]): Option[Boolean] =
+    p.map(_.trim.toLowerCase).collect {
+      case "true" | "yes" | "on" | "1" => true
+      case "false" | "no" | "off" | "0" => false
+    }
 }

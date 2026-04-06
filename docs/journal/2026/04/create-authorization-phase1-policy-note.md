@@ -89,3 +89,17 @@ The current policy is:
 - keep `create` open by default in Phase 1
 - enforce ordinary resource authorization for existing target resources
 - reserve stricter `create` semantics for a later phase
+
+At the current stage, the main coarse-grained control for `create` is expected
+to come from service-level and operation-level usage permission.
+
+In other words:
+
+- whether a user may invoke the service;
+- whether a user may invoke the operation;
+
+is currently the primary control boundary for creation.
+
+This is considered sufficient for the present phase, while ordinary entity-side
+`read/update/delete/search` enforcement is already handled at the framework
+authorization chokepoints.
