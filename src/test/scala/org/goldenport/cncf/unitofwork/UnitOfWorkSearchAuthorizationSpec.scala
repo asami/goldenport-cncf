@@ -116,13 +116,102 @@ final class UnitOfWorkSearchAuthorizationSpec
       result.totalCount shouldBe Some(2)
       result.fetchedCount shouldBe 2
     }
+
+    "allow group-visible entities for matching group principal" in {
+      Given("a user whose group matches entity security_attributes.group_id")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(
+        datastorespace,
+        entitystorespace,
+        principalId = "group-user",
+        principalAttributes = Map("group_id" -> "team-a")
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val p1 = PersonEntity(EntityId("test", "g1", _cid), "taro", "owner-x", groupId = Some("team-a"))
+      val p2 = PersonEntity(EntityId("test", "g2", _cid), "hanako", "owner-y", groupId = Some("team-b"))
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
+          )
+        )
+      )
+      val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(summon[ExecutionContext]))
+
+      When("searching through UnitOfWorkInterpreter")
+      val result = interpreter.execute(
+        UnitOfWorkOp.EntityStoreSearch(
+          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          tc = summon[EntityPersistent[PersonEntity]],
+          authorization = Some(
+            UnitOfWorkAuthorization(
+              resourceFamily = "domain",
+              resourceType = Some("Person"),
+              accessKind = "search/list"
+            )
+          )
+        )
+      )
+
+      Then("group-visible entity remains visible")
+      result.data.map(_.id) shouldBe Vector(p1.id)
+      result.totalCount shouldBe Some(1)
+    }
+
+    "allow privilege-visible entities for matching privilege principal" in {
+      Given("a user whose privilege matches entity security_attributes.privilege_id")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(
+        datastorespace,
+        entitystorespace,
+        principalId = "priv-user",
+        principalAttributes = Map("privilege" -> "vip-access")
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val p1 = PersonEntity(EntityId("test", "p1", _cid), "taro", "owner-x", privilegeId = Some("vip-access"))
+      val p2 = PersonEntity(EntityId("test", "p2", _cid), "hanako", "owner-y", privilegeId = Some("other-access"))
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
+          )
+        )
+      )
+      val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(summon[ExecutionContext]))
+
+      When("searching through UnitOfWorkInterpreter")
+      val result = interpreter.execute(
+        UnitOfWorkOp.EntityStoreSearch(
+          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          tc = summon[EntityPersistent[PersonEntity]],
+          authorization = Some(
+            UnitOfWorkAuthorization(
+              resourceFamily = "domain",
+              resourceType = Some("Person"),
+              accessKind = "search/list"
+            )
+          )
+        )
+      )
+
+      Then("privilege-visible entity remains visible")
+      result.data.map(_.id) shouldBe Vector(p1.id)
+      result.totalCount shouldBe Some(1)
+    }
   }
 
   private def _execution_context(
     datastorespace: DataStoreSpace,
     entitystorespace: EntityStoreSpace,
     principalId: String,
-    capabilities: Vector[Capability] = Vector.empty
+    capabilities: Vector[Capability] = Vector.empty,
+    principalAttributes: Map[String, String] = Map.empty
   ): ExecutionContext = {
     val observability = ObservabilityContext(
       traceId = TraceId("test", "runtime"),
@@ -161,7 +250,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       case i: ExecutionContext.Instance =>
         val principal = new Principal {
           def id: PrincipalId = PrincipalId(principalId)
-          def attributes: Map[String, String] = Map.empty
+          def attributes: Map[String, String] = principalAttributes
         }
         i.copy(
           cncfCore = i.cncfCore.copy(
@@ -180,13 +269,24 @@ final class UnitOfWorkSearchAuthorizationSpec
   private final case class PersonEntity(
     id: EntityId,
     name: String,
-    ownerId: String
+    ownerId: String,
+    groupId: Option[String] = None,
+    privilegeId: Option[String] = None
   ) {
     def toRecord(): Record =
       Record.dataAuto(
         "id" -> id,
         "name" -> name,
-        "security_attributes" -> Record.dataAuto("owner_id" -> ownerId)
+        "security_attributes" -> Record.dataAuto(
+          "owner_id" -> ownerId,
+          "group_id" -> groupId,
+          "privilege_id" -> privilegeId,
+          "rights" -> Record.dataAuto(
+            "owner" -> Record.dataAuto("read" -> true, "write" -> true, "execute" -> true),
+            "group" -> Record.dataAuto("read" -> true, "write" -> false, "execute" -> false),
+            "other" -> Record.dataAuto("read" -> false, "write" -> false, "execute" -> false)
+          )
+        )
       )
   }
 
@@ -212,9 +312,15 @@ final class UnitOfWorkSearchAuthorizationSpec
     def id(e: PersonEntity): EntityId = e.id
     def toRecord(e: PersonEntity): Record = e.toRecord()
     def fromRecord(r: Record): Consequence[PersonEntity] =
-      (r.getAs[EntityId]("id"), r.getString("name"), r.getString(PathName(Vector("security_attributes", "owner_id")))) match
-        case (Some(entityId), Some(entityName), Some(entityOwnerId)) =>
-          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId))
+      (
+        r.getAs[EntityId]("id"),
+        r.getString("name"),
+        r.getString(PathName(Vector("security_attributes", "owner_id"))),
+        r.getString(PathName(Vector("security_attributes", "group_id"))),
+        r.getString(PathName(Vector("security_attributes", "privilege_id")))
+      ) match
+        case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId) =>
+          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId))
         case _ =>
           Consequence.failure("invalid person record")
   }

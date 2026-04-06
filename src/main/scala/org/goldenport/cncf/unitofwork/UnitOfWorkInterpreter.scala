@@ -26,7 +26,8 @@ import org.goldenport.cncf.security.OperationAccessPolicy
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 29, 2026
- * @version Apr.  4, 2026
+ *  version Apr.  4, 2026
+ * @version Apr.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -112,7 +113,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreLoad[t] @unchecked) =>
       withCallTree("uow:entityspace:load") {
-        _authorize(m.authorization).flatMap(_ => _entity_space_load(m))
+        _authorize(m.authorization, Some(() => _load_record(m.id))).flatMap(_ => _entity_space_load(m))
       }
 
     case m: (UnitOfWorkOp.EntityStoreLoadDirect[t] @unchecked) =>
@@ -122,7 +123,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreSave[t] @unchecked) =>
       withCallTree("uow:entitystore:save") {
-        _authorize(m.authorization).flatMap(_ =>
+        _authorize(m.authorization, Some(() => Consequence.success(Some(m.tc.toRecord(m.entity))))).flatMap(_ =>
           _transition_validation_hook
             .beforeSave[t](m.entity, m.tc)
             .flatMap(_ => _entity_store_space.save(m))
@@ -135,7 +136,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreUpdate[t] @unchecked) =>
       withCallTree("uow:entitystore:update") {
-        _authorize(m.authorization).flatMap(_ =>
+        _authorize(m.authorization, Some(() => Consequence.success(Some(m.tc.toRecord(m.entity))))).flatMap(_ =>
           _transition_validation_hook
             .beforeUpdate[t](m.entity, m.tc)
             .flatMap(_ => _entity_store_space.update(m))
@@ -148,7 +149,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreUpdateById[t] @unchecked) =>
       withCallTree("uow:entitystore:update:patch") {
-        _authorize(m.authorization).flatMap(_ =>
+        _authorize(m.authorization, Some(() => _load_record(m.id))).flatMap(_ =>
           _transition_validation_hook
             .beforeUpdateById[t](m.id, m.patch, m.tc)
             .flatMap(_ => _entity_store_space.updateById(m))
@@ -161,7 +162,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: UnitOfWorkOp.EntityStoreDelete =>
       withCallTree("uow:entitystore:delete") {
-        _authorize(m.authorization).flatMap(_ =>
+        _authorize(m.authorization, Some(() => _load_record(m.id))).flatMap(_ =>
           _entity_store_space.delete(m).map { r =>
             _entity_space_evict(m.id)
             _view_space_invalidate_all()
@@ -276,16 +277,32 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     _component_option.foreach(_.viewSpace.invalidateAll())
 
   private def _authorize(
-    authorization: Option[UnitOfWorkAuthorization]
+    authorization: Option[UnitOfWorkAuthorization],
+    loadRecord: Option[() => Consequence[Option[org.goldenport.record.Record]]] = None
   ): Consequence[Unit] =
     authorization.fold(Consequence.unit) { a =>
-      OperationAccessPolicy.authorizeUnitOfWorkDefault(a).flatMap { _ =>
+      val loader: EntityId => Consequence[Option[org.goldenport.record.Record]] = id =>
+        loadRecord match {
+          case Some(f) => f()
+          case None => _load_record(id)
+        }
+      OperationAccessPolicy.authorizeUnitOfWorkDefault(a, loader).flatMap { _ =>
         _component_option
           .flatMap(_.factory)
           .flatMap(_.authorize_unit_of_work(a, uow))
           .getOrElse(Consequence.unit)
       }
     }
+
+  private def _load_record(
+    id: EntityId
+  ): Consequence[Option[org.goldenport.record.Record]] =
+    for {
+      cid <- uow.executionContext.entityStoreSpace.dataStoreCollection(id)
+      dsid <- uow.executionContext.entityStoreSpace.dataStoreEntryId(id)
+      ds <- uow.executionContext.dataStoreSpace.dataStore(cid)
+      rec <- ds.load(cid, dsid)
+    } yield rec
 
   private def _filter_search_result[T](
     op: UnitOfWorkOp.EntityStoreSearch[T],

@@ -11,7 +11,8 @@ import org.simplemodeling.model.datatype.EntityId
 
 /*
  * @since   Apr.  6, 2026
- * @version Apr.  6, 2026
+ *  version Apr.  6, 2026
+ * @version Apr.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationAccessPolicy {
@@ -60,14 +61,34 @@ object OperationAccessPolicy {
   def hasManagerPrivilege(using ctx: ExecutionContext): Boolean =
     _is_manager
 
+  def authorizeSimpleEntity(
+    record: Record,
+    accessKind: String
+  )(using ctx: ExecutionContext): Consequence[Unit] =
+    if (_is_manager)
+      Consequence.unit
+    else if (_has_matching_privilege(record))
+      Consequence.unit
+    else
+      _role_for(record) match
+        case Some("owner") if _permission_for(record, "owner", accessKind) => Consequence.unit
+        case Some("group") if _permission_for(record, "group", accessKind) => Consequence.unit
+        case Some("other") if _permission_for(record, "other", accessKind) => Consequence.unit
+        case Some("owner") => Consequence.failure(s"Owner permission is insufficient for $accessKind.")
+        case Some("group") => Consequence.failure(s"Group permission is insufficient for $accessKind.")
+        case Some("other") => Consequence.failure(s"Permission is insufficient for $accessKind.")
+        case Some(_) => Consequence.failure(s"Permission is insufficient for $accessKind.")
+        case None => Consequence.failure("Security attributes are not available for authorization.")
+
   def authorizeUnitOfWorkDefault(
-    authorization: UnitOfWorkAuthorization
+    authorization: UnitOfWorkAuthorization,
+    loadRecord: EntityId => Consequence[Option[Record]] = _ => Consequence.success(None)
   )(using ctx: ExecutionContext): Consequence[Unit] =
     authorization.access.flatMap(a => Option(a.policy).map(_.trim.toLowerCase(java.util.Locale.ROOT))) match
       case Some(policy) if Set("manager_only", "manager-only").contains(policy) =>
         authorizeManagerOnly()
       case _ =>
-        _authorize_domain_default(authorization)
+        _authorize_domain_default(authorization, loadRecord)
 
   def filterVisibleSearchResult[T](
     authorization: UnitOfWorkAuthorization,
@@ -103,6 +124,32 @@ object OperationAccessPolicy {
       case Some(s) if s.trim.nonEmpty => s.trim
     }
 
+  private def _group_token(
+    record: Record
+  ): Option[String] =
+    Vector(
+      Vector("security_attributes", "group_id"),
+      Vector("securityAttributes", "groupId"),
+      Vector("group_id"),
+      Vector("groupId"),
+      Vector("group")
+    ).iterator.map(x => record.getString(PathName(x))).collectFirst {
+      case Some(s) if s.trim.nonEmpty => s.trim
+    }
+
+  private def _privilege_token(
+    record: Record
+  ): Option[String] =
+    Vector(
+      Vector("security_attributes", "privilege_id"),
+      Vector("securityAttributes", "privilegeId"),
+      Vector("privilege_id"),
+      Vector("privilegeId"),
+      Vector("privilege")
+    ).iterator.map(x => record.getString(PathName(x))).collectFirst {
+      case Some(s) if s.trim.nonEmpty => s.trim
+    }
+
   private def _is_manager(using ctx: ExecutionContext): Boolean = {
     val roles = _attribute_tokens("role", "roles", "authority", "authorities")
     val capabilities = ctx.security.capabilities.map(_.name).flatMap(_split_tokens)
@@ -120,13 +167,17 @@ object OperationAccessPolicy {
     value.trim.toLowerCase.replace("_", "").replace("-", "")
 
   private def _authorize_domain_default(
-    authorization: UnitOfWorkAuthorization
+    authorization: UnitOfWorkAuthorization,
+    loadRecord: EntityId => Consequence[Option[Record]]
   )(using ctx: ExecutionContext): Consequence[Unit] =
     authorization.resourceFamily.trim.toLowerCase(java.util.Locale.ROOT) match
       case "domain" =>
         authorization.targetId match
           case Some(id) if Set("read", "update", "delete").contains(authorization.accessKind) =>
-            authorizeSimpleEntityOwnerOrManager(id, _ => Consequence.success(None))
+            loadRecord(id).flatMap {
+              case Some(record) => authorizeSimpleEntity(record, authorization.accessKind)
+              case None => authorizeSimpleEntityOwnerOrManager(id, loadRecord)
+            }
           case _ =>
             Consequence.unit
       case _ =>
@@ -136,10 +187,74 @@ object OperationAccessPolicy {
     entity: T,
     tc: EntityPersistent[T]
   )(using ctx: ExecutionContext): Boolean = {
-    val entityId = tc.id(entity)
-    if (entityId.print == ctx.security.principal.id.value)
-      true
-    else
-      _owner_token(tc.toRecord(entity)).contains(ctx.security.principal.id.value)
+    authorizeSimpleEntity(tc.toRecord(entity), "read") match
+      case Consequence.Success(_) => true
+      case _ => false
   }
+
+  private def _role_for(
+    record: Record
+  )(using ctx: ExecutionContext): Option[String] = {
+    val principalId = ctx.security.principal.id.value
+    if (_owner_token(record).contains(principalId))
+      Some("owner")
+    else if (_group_token(record).exists(_matches_group))
+      Some("group")
+    else if (_owner_token(record).nonEmpty || _group_token(record).nonEmpty)
+      Some("other")
+    else
+      None
+  }
+
+  private def _matches_group(
+    groupId: String
+  )(using ctx: ExecutionContext): Boolean =
+    _attribute_tokens("group", "group_id", "groups", "group_ids").exists(x => _normalize_alias(x) == _normalize_alias(groupId))
+
+  private def _has_matching_privilege(
+    record: Record
+  )(using ctx: ExecutionContext): Boolean =
+    _privilege_token(record).exists { privilegeId =>
+      val p = _normalize_alias(privilegeId)
+      _attribute_tokens("privilege", "privilege_id", "privileges").exists(x => _normalize_alias(x) == p) ||
+      ctx.security.capabilities.exists(c => _normalize_alias(c.name) == p) ||
+      _normalize_alias(ctx.security.level.value) == p
+    }
+
+  private def _permission_for(
+    record: Record,
+    role: String,
+    accessKind: String
+  ): Boolean = {
+    val normalizedRole = _normalize_alias(role)
+    val segment = normalizedRole match
+      case "owner" => "owner"
+      case "group" => "group"
+      case _ => "other"
+    val pathPrefix =
+      Vector(
+        Vector("security_attributes", "rights", segment),
+        Vector("securityAttributes", "rights", segment)
+      )
+    def readBool(name: String): Option[Boolean] =
+      pathPrefix.iterator.map(x => _get_boolean(record, x :+ name)).collectFirst {
+        case Some(b) => b
+      }
+    accessKind match
+      case "read" | "search/list" => readBool("read").getOrElse(false)
+      case "update" => readBool("write").getOrElse(false)
+      case "delete" => readBool("execute").orElse(readBool("write")).getOrElse(false)
+      case "create" => false
+      case other => readBool(other).getOrElse(false)
+  }
+
+  private def _get_boolean(
+    record: Record,
+    path: Vector[String]
+  ): Option[Boolean] =
+    path.toList match
+      case Nil => None
+      case key :: Nil => record.getBoolean(key)
+      case key :: rest =>
+        record.getRecord(key).flatMap(_get_boolean(_, rest.toVector))
 }
