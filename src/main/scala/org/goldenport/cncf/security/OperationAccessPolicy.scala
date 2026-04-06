@@ -33,6 +33,15 @@ object OperationAccessPolicy {
           Consequence.failure("Owner information is not available for authorization.")
       }
 
+  def authorizeManagerOnly()(using ctx: ExecutionContext): Consequence[Unit] =
+    if (_is_manager)
+      Consequence.unit
+    else
+      Consequence.failure("Management privilege is required.")
+
+  def hasManagerPrivilege(using ctx: ExecutionContext): Boolean =
+    _is_manager
+
   private def _owner_token(
     record: Record
   ): Option[String] =
