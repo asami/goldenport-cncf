@@ -30,7 +30,7 @@ object OperationAccessPolicy {
       Consequence.unit
     else
       _owner_token(record) match {
-        case Some(owner) if owner == ctx.security.principal.id.value =>
+        case Some(owner) if owner == _subject.subjectId =>
           Consequence.unit
         case Some(_) =>
           Consequence.failure("Owner or manager privilege is required.")
@@ -50,7 +50,7 @@ object OperationAccessPolicy {
   )(using ctx: ExecutionContext): Consequence[Unit] =
     if (_is_manager)
       Consequence.unit
-    else if (entityId.print == ctx.security.principal.id.value)
+    else if (entityId.print == _subject.subjectId)
       Consequence.unit
     else
       loadRecord(entityId).flatMap {
@@ -151,20 +151,8 @@ object OperationAccessPolicy {
     }
 
   private def _is_manager(using ctx: ExecutionContext): Boolean = {
-    val roles = _attribute_tokens("role", "roles", "authority", "authorities")
-    val capabilities = ctx.security.capabilities.map(_.name).flatMap(_split_tokens)
-    val level = _split_tokens(ctx.security.level.value)
-    (roles ++ capabilities ++ level).exists(x => _manager_aliases.contains(_normalize_alias(x)))
+    (_subject.roles ++ _subject.capabilities ++ _subject.securityLevel).exists(_manager_aliases.contains)
   }
-
-  private def _attribute_tokens(keys: String*)(using ctx: ExecutionContext): Set[String] =
-    keys.iterator.flatMap(k => ctx.security.principal.attributes.get(k).toVector).flatMap(_split_tokens).toSet
-
-  private def _split_tokens(value: String): Set[String] =
-    Option(value).toSet.flatMap(_.split("[,\\s|]+")).map(_.trim).filter(_.nonEmpty)
-
-  private def _normalize_alias(value: String): String =
-    value.trim.toLowerCase.replace("_", "").replace("-", "")
 
   private def _authorize_domain_default(
     authorization: UnitOfWorkAuthorization,
@@ -172,16 +160,32 @@ object OperationAccessPolicy {
   )(using ctx: ExecutionContext): Consequence[Unit] =
     authorization.resourceFamily.trim.toLowerCase(java.util.Locale.ROOT) match
       case "domain" =>
-        authorization.targetId match
-          case Some(id) if Set("read", "update", "delete").contains(authorization.accessKind) =>
-            loadRecord(id).flatMap {
-              case Some(record) => authorizeSimpleEntity(record, authorization.accessKind)
-              case None => authorizeSimpleEntityOwnerOrManager(id, loadRecord)
-            }
+        authorization.accessKind match
+          case "create" =>
+            _authorize_domain_create_default(authorization)
+          case kind if Set("read", "update", "delete").contains(kind) =>
+            authorization.targetId match
+              case Some(id) =>
+                loadRecord(id).flatMap {
+                  case Some(record) => authorizeSimpleEntity(record, authorization.accessKind)
+                  case None => authorizeSimpleEntityOwnerOrManager(id, loadRecord)
+                }
+              case None =>
+                Consequence.unit
           case _ =>
             Consequence.unit
       case _ =>
         Consequence.unit
+
+  private def _authorize_domain_create_default(
+    authorization: UnitOfWorkAuthorization
+  )(using ctx: ExecutionContext): Consequence[Unit] =
+    if (_is_manager)
+      Consequence.unit
+    else if (_subject.hasCreateGrant(authorization.resourceType, authorization.collectionName))
+      Consequence.unit
+    else
+      Consequence.unit
 
   private def _is_visible_simple_entity[T](
     entity: T,
@@ -195,8 +199,7 @@ object OperationAccessPolicy {
   private def _role_for(
     record: Record
   )(using ctx: ExecutionContext): Option[String] = {
-    val principalId = ctx.security.principal.id.value
-    if (_owner_token(record).contains(principalId))
+    if (_owner_token(record).contains(_subject.subjectId))
       Some("owner")
     else if (_group_token(record).exists(_matches_group))
       Some("group")
@@ -209,16 +212,15 @@ object OperationAccessPolicy {
   private def _matches_group(
     groupId: String
   )(using ctx: ExecutionContext): Boolean =
-    _attribute_tokens("group", "group_id", "groups", "group_ids").exists(x => _normalize_alias(x) == _normalize_alias(groupId))
+    _subject.hasGroup(groupId)
 
   private def _has_matching_privilege(
     record: Record
   )(using ctx: ExecutionContext): Boolean =
     _privilege_token(record).exists { privilegeId =>
-      val p = _normalize_alias(privilegeId)
-      _attribute_tokens("privilege", "privilege_id", "privileges").exists(x => _normalize_alias(x) == p) ||
-      ctx.security.capabilities.exists(c => _normalize_alias(c.name) == p) ||
-      _normalize_alias(ctx.security.level.value) == p
+      _subject.hasPrivilege(privilegeId) ||
+      _subject.hasCapability(privilegeId) ||
+      _subject.securityLevel.contains(SecuritySubject.normalize(privilegeId))
     }
 
   private def _permission_for(
@@ -226,7 +228,7 @@ object OperationAccessPolicy {
     role: String,
     accessKind: String
   ): Boolean = {
-    val normalizedRole = _normalize_alias(role)
+    val normalizedRole = SecuritySubject.normalize(role)
     val segment = normalizedRole match
       case "owner" => "owner"
       case "group" => "group"
@@ -257,4 +259,7 @@ object OperationAccessPolicy {
       case key :: Nil => record.getBoolean(key)
       case key :: rest =>
         record.getRecord(key).flatMap(_get_boolean(_, rest.toVector))
+
+  private def _subject(using ctx: ExecutionContext): SecuritySubject =
+    SecuritySubject.current
 }

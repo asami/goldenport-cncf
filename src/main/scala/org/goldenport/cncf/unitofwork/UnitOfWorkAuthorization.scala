@@ -11,6 +11,7 @@ import org.goldenport.cncf.operation.CmlOperationAccess
 final case class UnitOfWorkAuthorization(
   resourceFamily: String,
   resourceType: Option[String] = None,
+  collectionName: Option[String] = None,
   targetId: Option[EntityId] = None,
   accessKind: String,
   access: Option[CmlOperationAccess] = None,

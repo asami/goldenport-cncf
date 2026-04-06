@@ -32,7 +32,8 @@ import org.goldenport.cncf.action.AggregateBehavior
  * @since   Jan.  6, 2026
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
- * @version Mar. 30, 2026
+ *  version Mar. 30, 2026
+ * @version Apr.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -709,6 +710,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       UnitOfWorkAuthorization(
         resourceFamily = "domain",
         resourceType = _declared_entities.headOption.orElse(resourceType),
+        collectionName = targetId.map(_.collection.name).orElse(resourceType),
         targetId = targetId,
         accessKind = accessKind,
         access = _declared_access,

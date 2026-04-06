@@ -2,6 +2,41 @@
 
 Date: 2026-04-07
 
+## Vision
+
+CNCF security should be stronger and more disciplined than ordinary ad-hoc
+application authorization, but it should not become so strict or complex that it
+is no longer usable in practical software development.
+
+The design target is therefore:
+
+- stricter than typical application-local authorization;
+- lighter than a full SELinux-style policy system;
+- realistic for ordinary application and component development;
+- strong enough to support current security expectations.
+
+SELinux is treated as a standing comparison point and design reference.
+It is **not** the implementation target to reproduce completely.
+
+The goal is to preserve the strengths of serious middleware-era security
+thinking, while avoiding a level of complexity that would make the framework
+hard to use.
+
+More concretely, the intended target is:
+
+- much stronger than the security usually found in mainstream TypeScript-based
+  web applications brought directly into enterprise settings;
+- still simple enough to be used as an ordinary application framework;
+- safe and reasonable even without large amounts of explicit security
+  configuration.
+
+The framework should therefore prefer:
+
+- secure-by-default behavior;
+- ordinary, unsurprising defaults;
+- explicit opt-in for exceptional privilege behavior;
+- gradual refinement instead of mandatory large policy setup.
+
 ## Scope
 
 This note summarizes the current CNCF-side security and authorization design
@@ -36,6 +71,60 @@ The preferred enforcement path is:
 4. `UnitOfWorkInterpreter` performs authorization and observability.
 5. execution proceeds only after authorization succeeds.
 
+## Design Balance
+
+The intended balance is:
+
+- keep a clear subject/object authorization model;
+- keep enforcement at explicit chokepoints;
+- keep object-side permission as the ordinary base rule;
+- allow subject-side extension through role, capability, privilege, and security
+  level;
+- avoid an overly heavy mandatory policy system too early.
+
+This means CNCF should aim for a practical middle position:
+
+- stronger than typical application-local checks;
+- lighter than full SELinux-style type enforcement and labeling.
+
+In practical terms, the current target is close to:
+
+- UNIX-style DAC on the object side;
+- role/capability extension on the subject side;
+- explicit runtime enforcement and observability at framework chokepoints.
+
+This is the current intended landing point unless experience proves it
+insufficient.
+
+The practical expectation is:
+
+- significantly better security discipline than typical modern web application
+  stacks;
+- still within the complexity range that ordinary development teams can use
+  without becoming security specialists.
+
+## Comparison Guidance
+
+SELinux should remain a standing comparison target when evaluating design
+choices.
+
+The comparison should focus on core questions such as:
+
+- is the subject model explicit enough?
+- is the object model explicit enough?
+- is enforcement done at a consistent chokepoint?
+- are override semantics explicit?
+- is the decision observable and auditable?
+
+The comparison should **not** force immediate adoption of:
+
+- full label systems;
+- full type enforcement;
+- full policy language complexity;
+- MLS / MCS class machinery.
+
+Those are useful reference ideas, but not current adoption goals.
+
 ## Two Chokepoints
 
 ### Outer Chokepoint: ActionCall
@@ -63,6 +152,33 @@ Responsibilities:
 - final permission enforcement for actual store/engine access.
 
 This is where ordinary authorization should converge.
+
+## Checkpoint Guidance
+
+Security and observability should be reviewed continuously at the two
+chokepoints:
+
+- `ActionCall` execution;
+- `UnitOfWorkInterpreter` execution.
+
+The review guidance is:
+
+1. `ActionCall` checkpoint
+   - verify action admission;
+   - verify explicit override semantics;
+   - verify action-level observability;
+   - avoid placing ordinary resource authorization logic here unless there is a
+     clear reason.
+
+2. `UnitOfWorkInterpreter` checkpoint
+   - verify ordinary resource/system authorization;
+   - verify object-side permission enforcement;
+   - verify subject/object mediation;
+   - verify execution observability;
+   - treat this as the primary enforcement checkpoint.
+
+If a new execution path bypasses both checkpoints, it should be treated as a
+design problem until its enforcement point is made explicit.
 
 ## Authorization Subject
 
@@ -271,3 +387,72 @@ The most important next implementation step is:
 
 That is the point where the current transitional subset becomes a real
 `SimpleEntity` policy.
+
+## Role and Capability Direction
+
+The current design direction is:
+
+- object-side permission performs the base control;
+- role, capability, privilege, and security level provide extension layers.
+
+### Base Control
+
+The base layer is still the `SimpleEntity`-side permission model:
+
+- owner;
+- group;
+- other;
+- rights.
+
+This is the ordinary default control path for resource access.
+
+### Role
+
+`role` should be understood as a bundle of capabilities.
+
+Assigning a role to a subject means the subject receives the capabilities tied
+to that role.
+
+### Capability
+
+`capability` should be interpreted as a permission over:
+
+- `{TARGET}`
+- `{ACTION}`
+
+Typical target categories are expected to include:
+
+- entity type;
+- service;
+- operation;
+- system function.
+
+Examples:
+
+- `UserAccount:read`
+- `UserAccount:update`
+- `ManagementService:listUserAccounts`
+- `JobControl:execute`
+
+### Privilege and Security Level
+
+The intended interpretation is:
+
+- `security level` represents ordered strength or rank;
+- `privilege` represents a named meaning or named band over that strength.
+
+This keeps the concepts separate:
+
+- role = responsibility or job function;
+- privilege / security level = authorization strength or elevation class.
+
+### Promotion and Degradation
+
+The design direction also assumes future exception semantics such as:
+
+- promotion;
+- degradation;
+- bypass.
+
+These should be treated as exceptional override semantics, not as the ordinary
+authorization path.
