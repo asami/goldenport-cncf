@@ -4,6 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.datatype.PathName
 import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
+import org.simplemodeling.model.datatype.EntityId
 
 /*
  * @since   Apr.  6, 2026
@@ -38,6 +39,20 @@ object OperationAccessPolicy {
       Consequence.unit
     else
       Consequence.failure("Management privilege is required.")
+
+  def authorizeSimpleEntityOwnerOrManager(
+    entityId: EntityId,
+    loadRecord: EntityId => Consequence[Option[Record]]
+  )(using ctx: ExecutionContext): Consequence[Unit] =
+    if (_is_manager)
+      Consequence.unit
+    else if (entityId.print == ctx.security.principal.id.value)
+      Consequence.unit
+    else
+      loadRecord(entityId).flatMap {
+        case Some(record) => authorizeOwnerOrManager(record)
+        case None => Consequence.failure(s"SimpleEntity not found: ${entityId.print}")
+      }
 
   def hasManagerPrivilege(using ctx: ExecutionContext): Boolean =
     _is_manager
