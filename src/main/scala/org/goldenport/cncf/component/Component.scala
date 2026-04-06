@@ -29,7 +29,7 @@ import org.goldenport.cncf.cli.renderer.{CliHelpJsonRenderer, CliHelpYamlRendere
 import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace, Repository, AggregateDefinition}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
 import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace, ViewDefinition}
-import org.goldenport.cncf.operation.CmlOperationDefinition
+import org.goldenport.cncf.operation.{CmlOperationAccess, CmlOperationDefinition}
 import org.goldenport.cncf.statemachine.{CmlStateMachineDefinition, StateMachinePlannerProvider}
 import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition, EventReception, EventStore}
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
@@ -530,6 +530,18 @@ object Component {
         binding <- aggregate_behavior_bindings(comp)
           .find(_.operation_name == action.request.operation)
       } yield binding.behavior
+
+    def authorize_operation_access(
+      action: Action,
+      access: CmlOperationAccess,
+      core: ActionCall.Core
+    ): Option[Consequence[Unit]] = None
+
+    def authorize_operation_entity(
+      action: Action,
+      entityName: String,
+      core: ActionCall.Core
+    ): Option[Consequence[Unit]] = None
 
     final def create(params: ComponentCreate): Vector[Component] = {
       val xs = create_Components(params)

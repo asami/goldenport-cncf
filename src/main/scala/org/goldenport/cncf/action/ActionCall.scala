@@ -28,6 +28,23 @@ abstract class ActionCall()
   with Presentable {
   def name: String = objectToSnakeName("ActionCall", this)
   def accesses: Vector[ResourceAccess] = Vector.empty
+  def authorize()(using ExecutionContext): Consequence[Unit] =
+    _declared_access.fold(
+      _declared_entities match
+        case Vector() => Consequence.unit
+        case xs =>
+          getFactory[Component.Factory].map { factory =>
+            xs.foldLeft(Consequence.unit) { (z, entityName) =>
+              z.flatMap(_ => factory.authorize_operation_entity(action, entityName, core).getOrElse(Consequence.unit))
+            }
+          } getOrElse {
+            Consequence.failure(s"Operation entity authorization is declared but no factory authorizer is available: ${action.name}")
+          }
+    ) { access =>
+      getFactory[Component.Factory].flatMap(_.authorize_operation_access(action, access, core)) getOrElse {
+        Consequence.failure(s"Operation access is declared but no factory authorizer is available: ${action.name}")
+      }
+    }
 
   def execute(): Consequence[OperationResponse]
 
@@ -46,6 +63,17 @@ abstract class ActionCall()
   def switches: List[Switch] = action.switches
   def properties: List[Property] = action.properties
   def args: List[String] = action.args
+
+  private def _declared_access =
+    component.flatMap(_.operationDefinitions.find(x => _normalize_name(x.name) == _normalize_name(action.name))).flatMap(_.access)
+
+  private def _declared_entities =
+    component.flatMap(_.operationDefinitions.find(x => _normalize_name(x.name) == _normalize_name(action.name))).map { op =>
+      if (op.entityNames.nonEmpty) op.entityNames else op.entityName.toVector
+    }.getOrElse(Vector.empty)
+
+  private def _normalize_name(p: String): String =
+    Option(p).getOrElse("").toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]", "")
 }
 
 abstract class FunctionalActionCall extends ActionCall {
