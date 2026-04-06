@@ -71,12 +71,14 @@ object UnitOfWorkOp {
   // ------------------------------------------------------------
   final case class EntityStoreCreate[T](
     entity: T,
-    tc: EntityPersistentCreate[T]
+    tc: EntityPersistentCreate[T],
+    authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[CreateResult[T]]
 
   final case class EntityStoreLoad[T](
     id: EntityId,
-    tc: EntityPersistent[T]
+    tc: EntityPersistent[T],
+    authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[Option[T]]
 
   // Special-use direct path to EntityStoreSpace (bypasses EntitySpace/MemoryRealm).
@@ -87,23 +89,27 @@ object UnitOfWorkOp {
 
   final case class EntityStoreSave[T](
     entity: T,
-    tc: EntityPersistent[T]
+    tc: EntityPersistent[T],
+    authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[Unit]
 
   final case class EntityStoreUpdate[T](
     entity: T,
-    tc: EntityPersistent[T]
+    tc: EntityPersistent[T],
+    authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[Unit]
 
   // Patch-oriented update route for cozy-generated update shapes (no id field in patch).
   final case class EntityStoreUpdateById[P](
     id: EntityId,
     patch: P,
-    tc: EntityPersistentUpdate[P]
+    tc: EntityPersistentUpdate[P],
+    authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[Unit]
 
   final case class EntityStoreDelete(
-    id: EntityId
+    id: EntityId,
+    authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[Unit]
 
   final case class EntityStoreDeleteHard(
@@ -112,7 +118,8 @@ object UnitOfWorkOp {
 
   final case class EntityStoreSearch[T](
     query: EntityQuery[T],
-    tc: EntityPersistent[T]
+    tc: EntityPersistent[T],
+    authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[SearchResult[T]]
 
   // Special-use direct path to EntityStoreSpace (bypasses EntitySpace/MemoryRealm).

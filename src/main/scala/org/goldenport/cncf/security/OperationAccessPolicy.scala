@@ -4,6 +4,9 @@ import org.goldenport.Consequence
 import org.goldenport.datatype.PathName
 import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.directive.SearchResult
+import org.goldenport.cncf.entity.EntityPersistent
+import org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization
 import org.simplemodeling.model.datatype.EntityId
 
 /*
@@ -57,6 +60,37 @@ object OperationAccessPolicy {
   def hasManagerPrivilege(using ctx: ExecutionContext): Boolean =
     _is_manager
 
+  def authorizeUnitOfWorkDefault(
+    authorization: UnitOfWorkAuthorization
+  )(using ctx: ExecutionContext): Consequence[Unit] =
+    authorization.access.flatMap(a => Option(a.policy).map(_.trim.toLowerCase(java.util.Locale.ROOT))) match
+      case Some(policy) if Set("manager_only", "manager-only").contains(policy) =>
+        authorizeManagerOnly()
+      case _ =>
+        _authorize_domain_default(authorization)
+
+  def filterVisibleSearchResult[T](
+    authorization: UnitOfWorkAuthorization,
+    result: SearchResult[T],
+    tc: EntityPersistent[T]
+  )(using ctx: ExecutionContext): Consequence[SearchResult[T]] =
+    authorization.access.flatMap(a => Option(a.policy).map(_.trim.toLowerCase(java.util.Locale.ROOT))) match
+      case Some(policy) if Set("manager_only", "manager-only").contains(policy) =>
+        authorizeManagerOnly().map(_ => result)
+      case _ =>
+        authorization.resourceFamily.trim.toLowerCase(java.util.Locale.ROOT) match
+          case "domain" if authorization.accessKind == "search/list" && !_is_manager =>
+            val visible = result.data.filter(_is_visible_simple_entity(_, tc))
+            Consequence.success(
+              result.copy(
+                data = visible,
+                totalCount = Some(visible.size),
+                fetchedCount = visible.size
+              )
+            )
+          case _ =>
+            Consequence.success(result)
+
   private def _owner_token(
     record: Record
   ): Option[String] =
@@ -84,4 +118,28 @@ object OperationAccessPolicy {
 
   private def _normalize_alias(value: String): String =
     value.trim.toLowerCase.replace("_", "").replace("-", "")
+
+  private def _authorize_domain_default(
+    authorization: UnitOfWorkAuthorization
+  )(using ctx: ExecutionContext): Consequence[Unit] =
+    authorization.resourceFamily.trim.toLowerCase(java.util.Locale.ROOT) match
+      case "domain" =>
+        authorization.targetId match
+          case Some(id) if Set("read", "update", "delete").contains(authorization.accessKind) =>
+            authorizeSimpleEntityOwnerOrManager(id, _ => Consequence.success(None))
+          case _ =>
+            Consequence.unit
+      case _ =>
+        Consequence.unit
+
+  private def _is_visible_simple_entity[T](
+    entity: T,
+    tc: EntityPersistent[T]
+  )(using ctx: ExecutionContext): Boolean = {
+    val entityId = tc.id(entity)
+    if (entityId.print == ctx.security.principal.id.value)
+      true
+    else
+      _owner_token(tc.toRecord(entity)).contains(ctx.security.principal.id.value)
+  }
 }

@@ -13,6 +13,7 @@ import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.observability.CallTreeContext
 import org.goldenport.process.ShellCommandExecutor
 import org.goldenport.cncf.statemachine.TransitionValidationHook
+import org.goldenport.cncf.security.OperationAccessPolicy
 
 /*
  * Interpreter for UnitOfWorkOp.
@@ -101,15 +102,17 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreCreate[t] @unchecked) =>
       withCallTree("uow:entitystore:create") {
-        _entity_store_space.create(m).map { r =>
-          _view_space_invalidate_all()
-          r
-        }
+        _authorize(m.authorization).flatMap(_ =>
+          _entity_store_space.create(m).map { r =>
+            _view_space_invalidate_all()
+            r
+          }
+        )
       }
 
     case m: (UnitOfWorkOp.EntityStoreLoad[t] @unchecked) =>
       withCallTree("uow:entityspace:load") {
-        _entity_space_load(m)
+        _authorize(m.authorization).flatMap(_ => _entity_space_load(m))
       }
 
     case m: (UnitOfWorkOp.EntityStoreLoadDirect[t] @unchecked) =>
@@ -119,44 +122,52 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreSave[t] @unchecked) =>
       withCallTree("uow:entitystore:save") {
-        _transition_validation_hook
-          .beforeSave[t](m.entity, m.tc)
-          .flatMap(_ => _entity_store_space.save(m))
-          .map { r =>
-            _view_space_invalidate_all()
-            r
-          }
+        _authorize(m.authorization).flatMap(_ =>
+          _transition_validation_hook
+            .beforeSave[t](m.entity, m.tc)
+            .flatMap(_ => _entity_store_space.save(m))
+            .map { r =>
+              _view_space_invalidate_all()
+              r
+            }
+        )
       }
 
     case m: (UnitOfWorkOp.EntityStoreUpdate[t] @unchecked) =>
       withCallTree("uow:entitystore:update") {
-        _transition_validation_hook
-          .beforeUpdate[t](m.entity, m.tc)
-          .flatMap(_ => _entity_store_space.update(m))
-          .map { r =>
-            _view_space_invalidate_all()
-            r
-          }
+        _authorize(m.authorization).flatMap(_ =>
+          _transition_validation_hook
+            .beforeUpdate[t](m.entity, m.tc)
+            .flatMap(_ => _entity_store_space.update(m))
+            .map { r =>
+              _view_space_invalidate_all()
+              r
+            }
+        )
       }
 
     case m: (UnitOfWorkOp.EntityStoreUpdateById[t] @unchecked) =>
       withCallTree("uow:entitystore:update:patch") {
-        _transition_validation_hook
-          .beforeUpdateById[t](m.id, m.patch, m.tc)
-          .flatMap(_ => _entity_store_space.updateById(m))
-          .map { r =>
-            _view_space_invalidate_all()
-            r
-          }
+        _authorize(m.authorization).flatMap(_ =>
+          _transition_validation_hook
+            .beforeUpdateById[t](m.id, m.patch, m.tc)
+            .flatMap(_ => _entity_store_space.updateById(m))
+            .map { r =>
+              _view_space_invalidate_all()
+              r
+            }
+        )
       }
 
     case m: UnitOfWorkOp.EntityStoreDelete =>
       withCallTree("uow:entitystore:delete") {
-        _entity_store_space.delete(m).map { r =>
-          _entity_space_evict(m.id)
-          _view_space_invalidate_all()
-          r
-        }
+        _authorize(m.authorization).flatMap(_ =>
+          _entity_store_space.delete(m).map { r =>
+            _entity_space_evict(m.id)
+            _view_space_invalidate_all()
+            r
+          }
+        )
       }
 
     case m: UnitOfWorkOp.EntityStoreDeleteHard =>
@@ -170,7 +181,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreSearch[t] @unchecked) =>
       withCallTree("uow:entityspace:search") {
-        _entity_space_search(m)
+        _authorize(m.authorization).flatMap(_ => _entity_space_search(m))
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearchDirect[t] @unchecked) =>
@@ -230,15 +241,15 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       case Some(collection) =>
         collection.search(op.query).flatMap { result =>
           if (result.data.nonEmpty || collection.storage.storeRealm.values.nonEmpty || collection.storage.memoryRealm.exists(_.values.nonEmpty))
-            Consequence.success(result)
+            _filter_search_result(op, result)
           else
-            _entity_store_space.search(op).map { loaded =>
+            _entity_store_space.search(op).flatMap { loaded =>
               loaded.data.foreach(collection.put)
-              loaded
+              _filter_search_result(op, loaded)
             }
         }
       case None =>
-        _entity_store_space.search(op)
+        _entity_store_space.search(op).flatMap(_filter_search_result(op, _))
     }
   }
 
@@ -263,6 +274,26 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
   private def _view_space_invalidate_all(): Unit =
     _component_option.foreach(_.viewSpace.invalidateAll())
+
+  private def _authorize(
+    authorization: Option[UnitOfWorkAuthorization]
+  ): Consequence[Unit] =
+    authorization.fold(Consequence.unit) { a =>
+      OperationAccessPolicy.authorizeUnitOfWorkDefault(a).flatMap { _ =>
+        _component_option
+          .flatMap(_.factory)
+          .flatMap(_.authorize_unit_of_work(a, uow))
+          .getOrElse(Consequence.unit)
+      }
+    }
+
+  private def _filter_search_result[T](
+    op: UnitOfWorkOp.EntityStoreSearch[T],
+    result: SearchResult[T]
+  ): Consequence[SearchResult[T]] =
+    op.authorization.fold(Consequence.success(result)) { auth =>
+      OperationAccessPolicy.filterVisibleSearchResult(auth, result, op.tc)
+    }
 
   private def _component_option: Option[Component] = {
     @annotation.tailrec

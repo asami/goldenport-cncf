@@ -543,6 +543,11 @@ object Component {
       core: ActionCall.Core
     ): Option[Consequence[Unit]] = None
 
+    def authorize_unit_of_work(
+      authorization: org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization,
+      uow: org.goldenport.cncf.unitofwork.UnitOfWork
+    ): Option[Consequence[Unit]] = None
+
     final def create(params: ComponentCreate): Vector[Component] = {
       val xs = create_Components(params)
       xs.map { comp =>

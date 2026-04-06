@@ -11,7 +11,7 @@ import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.http.HttpResponse
 import org.goldenport.process.{ShellCommand, ShellCommandResult}
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork}
+import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkAuthorization}
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 import org.goldenport.cncf.Program
@@ -409,7 +409,11 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_create[T](
     entity: T
   )(using tc: EntityPersistentCreate[T]): ExecUowM[CreateResult[T]] = {
-    val op = UnitOfWorkOp.EntityStoreCreate(entity, tc)
+    val op = UnitOfWorkOp.EntityStoreCreate(
+      entity,
+      tc,
+      _entity_uow_authorization(Some(tc.collection(entity).name), None, "create")
+    )
     ConsequenceT.liftF(Free.liftF(op))
   }
 
@@ -432,7 +436,11 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         }
       case None =>
         _emit_entity_access("entity.load.fallback.entity-store", _entity_load_attributes(id, "entity-store", "fallback"))
-        val op = UnitOfWorkOp.EntityStoreLoad(id, tc)
+        val op = UnitOfWorkOp.EntityStoreLoad(
+          id,
+          tc,
+          _entity_uow_authorization(Some(id.collection.name), Some(id), "read")
+        )
         ConsequenceT.liftF(Free.liftF(op))
     }
   }
@@ -449,14 +457,22 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_save[T](
     entity: T
   )(using tc: EntityPersistent[T]): ExecUowM[Unit] = {
-    val op = UnitOfWorkOp.EntityStoreSave(entity, tc)
+    val op = UnitOfWorkOp.EntityStoreSave(
+      entity,
+      tc,
+      _entity_uow_authorization(Some(tc.id(entity).collection.name), Some(tc.id(entity)), "update")
+    )
     ConsequenceT.liftF(Free.liftF(op))
   }
 
   protected final def entity_update[T](
     changes: T
   )(using tc: EntityPersistent[T]): ExecUowM[Unit] = {
-    val op = UnitOfWorkOp.EntityStoreUpdate(changes, tc)
+    val op = UnitOfWorkOp.EntityStoreUpdate(
+      changes,
+      tc,
+      _entity_uow_authorization(Some(tc.id(changes).collection.name), Some(tc.id(changes)), "update")
+    )
     ConsequenceT.liftF(Free.liftF(op))
   }
 
@@ -466,12 +482,20 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     id: EntityId,
     patch: T
   )(using tc: EntityPersistentUpdate[T]): ExecUowM[Unit] = {
-    val op = UnitOfWorkOp.EntityStoreUpdateById(id, patch, tc)
+    val op = UnitOfWorkOp.EntityStoreUpdateById(
+      id,
+      patch,
+      tc,
+      _entity_uow_authorization(Some(id.collection.name), Some(id), "update")
+    )
     ConsequenceT.liftF(Free.liftF(op))
   }
 
   protected final def entity_delete(id: EntityId): ExecUowM[Unit] = {
-    val op = UnitOfWorkOp.EntityStoreDelete(id)
+    val op = UnitOfWorkOp.EntityStoreDelete(
+      id,
+      _entity_uow_authorization(Some(id.collection.name), Some(id), "delete")
+    )
     ConsequenceT.liftF(Free.liftF(op))
   }
 
@@ -499,7 +523,11 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         }
       case None =>
         _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(query, "entity-store", "fallback"))
-        val op = UnitOfWorkOp.EntityStoreSearch(query, tc)
+        val op = UnitOfWorkOp.EntityStoreSearch(
+          query,
+          tc,
+          _entity_uow_authorization(Some(query.collection.name), None, "search/list")
+        )
         ConsequenceT.liftF(Free.liftF(op))
     }
   }
@@ -538,28 +566,44 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_save_c[T](
     entity: T
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): Consequence[Unit] = {
-    val op = UnitOfWorkOp.EntityStoreSave(entity, tc)
+    val op = UnitOfWorkOp.EntityStoreSave(
+      entity,
+      tc,
+      _entity_uow_authorization(Some(tc.id(entity).collection.name), Some(tc.id(entity)), "update")
+    )
     exec_c(op)
   }
 
   protected final def entity_save_or_throw[T](
     entity: T
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): Unit = {
-    val op = UnitOfWorkOp.EntityStoreSave(entity, tc)
+    val op = UnitOfWorkOp.EntityStoreSave(
+      entity,
+      tc,
+      _entity_uow_authorization(Some(tc.id(entity).collection.name), Some(tc.id(entity)), "update")
+    )
     exec_or_throw(op)
   }
 
   protected final def entity_update_c[T](
     changes: T
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): Consequence[Unit] = {
-    val op = UnitOfWorkOp.EntityStoreUpdate(changes, tc)
+    val op = UnitOfWorkOp.EntityStoreUpdate(
+      changes,
+      tc,
+      _entity_uow_authorization(Some(tc.id(changes).collection.name), Some(tc.id(changes)), "update")
+    )
     exec_c(op)
   }
 
   protected final def entity_update_or_throw[T](
     changes: T
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): Unit = {
-    val op = UnitOfWorkOp.EntityStoreUpdate(changes, tc)
+    val op = UnitOfWorkOp.EntityStoreUpdate(
+      changes,
+      tc,
+      _entity_uow_authorization(Some(tc.id(changes).collection.name), Some(tc.id(changes)), "update")
+    )
     exec_or_throw(op)
   }
 
@@ -567,7 +611,12 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     id: EntityId,
     patch: T
   )(using uow: UnitOfWork, tc: EntityPersistentUpdate[T]): Consequence[Unit] = {
-    val op = UnitOfWorkOp.EntityStoreUpdateById(id, patch, tc)
+    val op = UnitOfWorkOp.EntityStoreUpdateById(
+      id,
+      patch,
+      tc,
+      _entity_uow_authorization(Some(id.collection.name), Some(id), "update")
+    )
     exec_c(op)
   }
 
@@ -575,21 +624,32 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     id: EntityId,
     patch: T
   )(using uow: UnitOfWork, tc: EntityPersistentUpdate[T]): Unit = {
-    val op = UnitOfWorkOp.EntityStoreUpdateById(id, patch, tc)
+    val op = UnitOfWorkOp.EntityStoreUpdateById(
+      id,
+      patch,
+      tc,
+      _entity_uow_authorization(Some(id.collection.name), Some(id), "update")
+    )
     exec_or_throw(op)
   }
 
   protected final def entity_delete_c(
     id: EntityId
   )(using uow: UnitOfWork): Consequence[Unit] = {
-    val op = UnitOfWorkOp.EntityStoreDelete(id)
+    val op = UnitOfWorkOp.EntityStoreDelete(
+      id,
+      _entity_uow_authorization(Some(id.collection.name), Some(id), "delete")
+    )
     exec_c(op)
   }
 
   protected final def entity_delete_or_throw(
     id: EntityId
   )(using uow: UnitOfWork): Unit = {
-    val op = UnitOfWorkOp.EntityStoreDelete(id)
+    val op = UnitOfWorkOp.EntityStoreDelete(
+      id,
+      _entity_uow_authorization(Some(id.collection.name), Some(id), "delete")
+    )
     exec_or_throw(op)
   }
 
@@ -610,16 +670,54 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_search_c[T](
     query: EntityQuery[T]
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): Consequence[SearchResult[T]] = {
-    val op = UnitOfWorkOp.EntityStoreSearch(query, tc)
+    val op = UnitOfWorkOp.EntityStoreSearch(
+      query,
+      tc,
+      _entity_uow_authorization(Some(query.collection.name), None, "search/list")
+    )
     exec_c(op)
   }
 
   protected final def entity_search_or_throw[T](
     query: EntityQuery[T]
   )(using uow: UnitOfWork, tc: EntityPersistent[T]): SearchResult[T] = {
-    val op = UnitOfWorkOp.EntityStoreSearch(query, tc)
+    val op = UnitOfWorkOp.EntityStoreSearch(
+      query,
+      tc,
+      _entity_uow_authorization(Some(query.collection.name), None, "search/list")
+    )
     exec_or_throw(op)
   }
+
+  private def _declared_operation_definition =
+    component.flatMap(_.operationDefinitions.find(x => _normalize_name(x.name) == _normalize_name(action.name)))
+
+  private def _declared_access =
+    _declared_operation_definition.flatMap(_.access)
+
+  private def _declared_entities =
+    _declared_operation_definition.map { op =>
+      if (op.entityNames.nonEmpty) op.entityNames else op.entityName.toVector
+    }.getOrElse(Vector.empty)
+
+  private def _entity_uow_authorization(
+    resourceType: Option[String],
+    targetId: Option[EntityId],
+    accessKind: String
+  ): Option[UnitOfWorkAuthorization] =
+    Some(
+      UnitOfWorkAuthorization(
+        resourceFamily = "domain",
+        resourceType = _declared_entities.headOption.orElse(resourceType),
+        targetId = targetId,
+        accessKind = accessKind,
+        access = _declared_access,
+        entityNames = _declared_entities
+      )
+    )
+
+  private def _normalize_name(p: String): String =
+    Option(p).getOrElse("").toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]", "")
 }
 
 trait ActionCallDataStorePart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
