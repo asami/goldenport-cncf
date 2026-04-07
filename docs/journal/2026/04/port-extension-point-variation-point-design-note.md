@@ -17,6 +17,18 @@ This note proposes a CNCF-side abstraction set for extension-aware execution:
 The goal is to make pluggable execution explicit before binding AI components
 and other collaborator-style integrations to specific backends.
 
+Proposed CNCF rule:
+
+- `Component` owns `ExtensionPoint` and `VariationPoint`
+- `Port` is the externally visible execution surface
+- backend selection and adapter construction remain internal to the component
+
+The intended ownership model is:
+
+- `Component` owns `ExtensionPoint` and `VariationPoint`
+- `Port` is the externally visible execution surface
+- backend selection and adapter construction remain internal to the component
+
 The current CNCF documentation already defines:
 
 - `Component`
@@ -43,6 +55,20 @@ The current component model defines:
 
 This gives a strong execution model, but the extension layer is still implicit
 in many integrations.
+
+The existing runtime model also already has:
+
+- `ExecutionContext` for runtime configuration and request state
+- `OperationCall` for the engine-facing execution boundary
+
+Therefore the new abstractions should be treated as a layer between
+`Component` and `OperationCall`:
+
+- `Component` owns policy and assembly
+- `VariationPoint` resolves a selection
+- `ExtensionPoint` materializes the selected backend
+- `Port` carries the invocation
+- `OperationCall` remains the engine-facing execution boundary
 
 ## Adapter Need From `textus-ai`
 
@@ -94,6 +120,12 @@ Examples:
 
 Port is the executable surface used by components and engines.
 
+Normative intent:
+
+- `Port` MUST represent a single typed invocation boundary
+- `Port` MUST NOT decide routing policy
+- `Port` MUST NOT expose backend-specific composition details
+
 ### Suggested Shape
 
 ```scala
@@ -104,6 +136,9 @@ trait Port[-In, +Out] {
 
 Port should remain intentionally small.
 It is a call boundary, not a routing policy.
+
+Port is the only externally visible execution surface that should be exposed
+from the component assembly to runtime callers.
 
 ## ExtensionPoint
 
@@ -132,6 +167,13 @@ trait ExtensionPoint[In, Out] {
 ExtensionPoint is the place where CNCF binds a capability to a concrete
 implementation.
 
+Normative intent:
+
+- `ExtensionPoint` MUST decide whether a backend is available for the current
+  request or configuration
+- `ExtensionPoint` MUST create the backend-specific `Port`
+- `ExtensionPoint` MUST remain internal to the owning `Component`
+
 ### Adapter Interpretation
 
 In practical AI integration terms, an `ExtensionPoint` is the CNCF-level hook
@@ -144,6 +186,9 @@ For example:
 
 The adapter is not the component itself.
 It is the object produced by the `ExtensionPoint` and consumed by the `Port`.
+
+ExtensionPoint should be parameterized by `ExecutionContext`-derived runtime
+configuration, not by business-domain state.
 
 ## VariationPoint
 
@@ -172,6 +217,21 @@ trait VariationPoint[In, Out] {
 ```
 
 VariationPoint may delegate to multiple `ExtensionPoint` instances.
+
+Normative intent:
+
+- `VariationPoint` MUST select among alternative bindings or execution paths
+- `VariationPoint` MUST be able to express local-first, remote-fallback, and
+  provider-based routing
+- `VariationPoint` MUST remain internal to the owning `Component`
+
+VariationPoint should be responsible for selecting the `ExtensionPoint` from a
+small explicit policy model such as:
+
+- provider
+- mode
+- engine
+- fallback priority
 
 ## Practical Adapter Staging
 
@@ -220,6 +280,18 @@ Example flow:
 4. `Port` invokes Ollama
 5. `Engine` applies runtime policy
 
+### Stage 5: OperationCall Bridge
+
+Integrate the selected `Port` with `OperationCall`.
+
+This keeps the execution flow aligned with CNCF:
+
+1. component assembly resolves the port
+2. operation call binds execution context
+3. engine executes the call
+4. port performs backend invocation
+5. result returns through the call boundary
+
 ---
 
 # Layering
@@ -230,10 +302,19 @@ Recommended layering:
 2. `VariationPoint` chooses the execution route
 3. `ExtensionPoint` creates the backend binding
 4. `Port` performs invocation
-5. `Engine` schedules and coordinates execution
+5. `OperationCall` binds the engine-facing execution path
+6. `Engine` schedules and coordinates execution
 
 This preserves the current CNCF separation of concerns while making backend
 selection explicit.
+
+Rule summary:
+
+- capability is published through `Component`
+- routing is owned by `VariationPoint`
+- backend binding is owned by `ExtensionPoint`
+- invocation is exposed through `Port`
+- orchestration remains with `Engine`
 
 ---
 
@@ -265,6 +346,9 @@ This is the concrete adapter story the `textus-ai` work needs:
 - Port is the runtime call boundary
 - ExtensionPoint owns backend construction
 - VariationPoint owns policy and selection
+
+These rules are intended to be the basis for a future CNCF spec or design
+document, not just a project-local pattern.
 
 ---
 

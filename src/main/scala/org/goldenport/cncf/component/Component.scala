@@ -42,10 +42,11 @@ import scala.util.control.NonFatal
 
 /*
  * @since   Jan.  1, 2026
+ *  version Apr.  6, 2026
+ * @version Apr.  7, 2026
  *  version Mar. 30, 2026
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
- * @version Apr.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -66,6 +67,7 @@ abstract class Component() extends Component.Core.Holder {
   private var _event_reception: Option[EventReception] = None
   private var _event_store: Option[EventStore] = None
   private var _port: Component.Port = Component.Port.empty
+  private var _bindings: Map[String, Component.Binding[?, ?]] = Map.empty
   private var _event_effect_record: Record = Record.empty
   val entitySpace: EntitySpace = new EntitySpace()
   val aggregateSpace: AggregateSpace = new AggregateSpace()
@@ -112,6 +114,40 @@ abstract class Component() extends Component.Core.Holder {
   def service: Service = services.services.head // TODO
 
   def port: Component.Port = _port
+
+  def binding: Option[Component.Binding[?, ?]] = bindings.headOption.map(_._2)
+
+  def withBinding(binding: Component.Binding[?, ?]): Component =
+    withBinding("default", binding)
+
+  def bindings: Map[String, Component.Binding[?, ?]] = _bindings
+
+  def binding(name: String): Option[Component.Binding[?, ?]] =
+    _bindings.get(name)
+
+  def withBinding(
+    name: String,
+    binding: Component.Binding[?, ?]
+  ): Component = {
+    _bindings = _bindings.updated(name, binding)
+    this
+  }
+
+  def clearBindings(): Component = {
+    _bindings = Map.empty
+    this
+  }
+
+  def install_binding[Req, S](
+    name: String,
+    req: Req
+  )(using ExecutionContext): Consequence[Component] =
+    binding(name) match {
+      case Some(m: Component.Binding[?, ?]) =>
+        m.asInstanceOf[Component.Binding[Req, S]].install(this, req)
+      case None =>
+        Consequence.failure(s"binding not found: $name")
+    }
 
   def withPort(port: Component.Port): Component = {
     _port = port
@@ -301,6 +337,56 @@ object Component {
     aggregate_name: String,
     collection: AggregateCollection[?]
   )
+
+  final case class Binding[Req, S](
+    port: org.goldenport.cncf.component.Port[Req, S]
+  ) {
+    def bind(req: Req)(using ExecutionContext): Consequence[S] =
+      for {
+        contract <- port.api.resolve(req)
+        selection <- port.variation.current(req)
+        service <- _provide_(contract, selection)
+      } yield service
+
+    def bind(
+      req: Req,
+      selection: VariationSelection
+    )(using ExecutionContext): Consequence[S] =
+      for {
+        injected <- port.variation.inject(req, selection)
+        service <- bind(injected)
+      } yield service
+
+    def install(
+      component: Component,
+      req: Req
+    )(using ExecutionContext): Consequence[Component] =
+      bind(req).map { service =>
+        component.withPort(Component.Port.of(service).orElse(component.port))
+      }
+
+    def install(
+      component: Component,
+      req: Req,
+      selection: VariationSelection
+    )(using ExecutionContext): Consequence[Component] =
+      bind(req, selection).map { service =>
+        component.withPort(Component.Port.of(service).orElse(component.port))
+      }
+
+    private def _provide_(
+      contract: ServiceContract[S],
+      selection: VariationSelection
+    )(using ExecutionContext): Consequence[S] =
+      port.spi.find(_.supports(contract, selection)) match {
+        case Some(extensionpoint) =>
+          extensionpoint.provide(contract, selection)
+        case None =>
+          Consequence.failure(
+            s"extension point not found for contract=${contract.name}, variation=$selection"
+          )
+      }
+  }
 
   // private var _script_count = 0
   // private def _script_number(): String = {
