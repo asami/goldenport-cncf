@@ -1723,9 +1723,13 @@ object ComponentLocator {
 
 final case class ComponentCreate(
   subsystem: Subsystem,
-  origin: ComponentOrigin
+  origin: ComponentOrigin,
+  componentDescriptors: Vector[ComponentDescriptor] = Vector.empty
 ) {
   def withOrigin(p: ComponentOrigin) = copy(origin = p)
+
+  def withComponentDescriptors(p: Vector[ComponentDescriptor]) =
+    copy(componentDescriptors = p)
 
   def toInit(core: Component.Core): ComponentInit =
     ComponentInit(subsystem, core, origin)

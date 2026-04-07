@@ -72,7 +72,7 @@ class DataStoreSpace {
     record: Record,
     cid: DataStore.CollectionId
   ): DataStore.EntryId =
-    record.asMap.get("id") match {
+    record.getAny("id") match {
       case Some(m: UniversalId) => DataStore.StringEntryId(m.print)
       case Some(s: String) => DataStore.StringEntryId(s)
       case Some(v) => DataStore.StringEntryId(v.toString)

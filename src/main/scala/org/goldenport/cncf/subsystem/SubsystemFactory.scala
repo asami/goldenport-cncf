@@ -27,7 +27,8 @@ import org.goldenport.protocol.spec as spec
  * @since   Jan.  7, 2026
  *  version Jan. 30, 2026
  *  version Feb. 15, 2026
- * @version Mar. 29, 2026
+ *  version Mar. 29, 2026
+ * @version Apr.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {
@@ -76,6 +77,18 @@ object DefaultSubsystemFactory {
       .map(_.aliasResolver)
       .getOrElse(AliasResolver.empty)
   ): Subsystem = {
+    GenericSubsystemFactory.loadDescriptor(configuration) match {
+      case Some(descriptor) =>
+        return GenericSubsystemFactory.defaultWithScope(
+          descriptor = descriptor,
+          context = context,
+          mode = mode,
+          configuration = configuration,
+          aliasResolver = aliasResolver
+        )
+      case None =>
+        ()
+    }
     val subsystemName =
       ConfigurationAccess
         .getString(configuration, RuntimeConfig.SubsystemNameKey)
@@ -85,6 +98,14 @@ object DefaultSubsystemFactory {
     subsystemName match {
       case "textus-identity" =>
         TextusIdentitySubsystemFactory.defaultWithScope(
+          context = context,
+          mode = mode,
+          configuration = configuration,
+          aliasResolver = aliasResolver
+        )
+      case name if name != _subsystem_name =>
+        GenericSubsystemFactory.defaultWithScope(
+          subsystemName = name,
           context = context,
           mode = mode,
           configuration = configuration,

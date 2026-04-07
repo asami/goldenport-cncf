@@ -8,7 +8,7 @@ import org.goldenport.Consequence
 
 /*
  * @since   Mar. 22, 2026
- * @version Mar. 22, 2026
+ * @version Apr.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ArchiveManifest(
@@ -22,6 +22,9 @@ final case class ArchiveManifest(
 )
 
 object ArchiveManifest {
+  // Transitional compatibility loader. CAR/SAR packaging is planned to
+  // converge on top-level descriptors, so manifest-specific handling is
+  // expected to be retired after descriptor-based archive loading lands.
   private val _manifest_relative_path = "meta/manifest.json"
 
   def load(

@@ -18,12 +18,14 @@ import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.observability.global.{GlobalObservable, ObservabilityScopeDefaults, PersistentBootstrapLog}
 import org.goldenport.cncf.component.*
 import org.goldenport.cncf.backend.collaborator.{CollaboratorClassLoader, CollaboratorFactory}
+import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
 
 /*
  * @since   Jan. 12, 2026
  *  version Jan. 29, 2026
  *  version Feb.  5, 2026
- * @version Mar. 22, 2026
+ *  version Mar. 22, 2026
+ * @version Apr.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -250,7 +252,9 @@ object ComponentRepository extends GlobalObservable {
       artifact.kind match {
         case ArtifactKind.Jar => _discover_component_from_jar(artifact.path, params, origin, log)
         case ArtifactKind.Car => _discover_component_from_car(artifact.path, params, origin, log)
+        case ArtifactKind.CarDir => _discover_component_from_car_dir(artifact.path, params, origin, log)
         case ArtifactKind.Sar => _discover_component_from_sar(artifact.path, params, origin, log)
+        case ArtifactKind.SarDir => _discover_component_from_sar_dir(artifact.path, params, origin, log)
       }
     }
   }
@@ -258,37 +262,50 @@ object ComponentRepository extends GlobalObservable {
   private def _list_artifacts(basedir: Path): Vector[Artifact] = {
     if (!Files.exists(basedir)) {
       Vector.empty
+    } else if (_looks_like_sar_dir(basedir)) {
+      Vector(Artifact(basedir, ArtifactKind.SarDir))
+    } else if (_looks_like_car_dir(basedir)) {
+      Vector(Artifact(basedir, ArtifactKind.CarDir))
     } else {
       val stream = Files.list(basedir)
       try {
         stream
           .iterator()
           .asScala
-          .filter(p => Files.isRegularFile(p))
           .flatMap { p =>
             val fileName = p.getFileName.toString
-            if (fileName.endsWith(".car")) {
-              Some(Artifact(p, ArtifactKind.Car))
-            } else if (fileName.endsWith(".sar")) {
-              Some(Artifact(p, ArtifactKind.Sar))
-            } else if (fileName.endsWith(".jar")) {
-              Some(Artifact(p, ArtifactKind.Jar))
+            if (Files.isRegularFile(p)) {
+              if (fileName.endsWith(".car")) {
+                Some(Artifact(p, ArtifactKind.Car))
+              } else if (fileName.endsWith(".sar")) {
+                Some(Artifact(p, ArtifactKind.Sar))
+              } else if (fileName.endsWith(".jar")) {
+                Some(Artifact(p, ArtifactKind.Jar))
+              } else {
+                None
+              }
+            } else if (Files.isDirectory(p) && _looks_like_sar_dir(p)) {
+              Some(Artifact(p, ArtifactKind.SarDir))
+            } else if (Files.isDirectory(p) && _looks_like_car_dir(p)) {
+              Some(Artifact(p, ArtifactKind.CarDir))
             } else {
               None
             }
           }
           .toVector
           .sortBy(_.path.toString)
-    } finally {
-      stream.close()
+      } finally {
+        stream.close()
+      }
     }
-  }
   }
 
   private enum ArtifactKind {
     case Jar
     case Car
+    case CarDir
     case Sar
+    case SarDir
   }
 
   private case class Artifact(
@@ -303,9 +320,9 @@ object ComponentRepository extends GlobalObservable {
     log: BootstrapLog
   ): Seq[Component] =
     _discover_component_from_artifact(
-    artifactname = jarpath.getFileName.toString,
-    loaderclasspath = Seq(jarpath),
-    scanclasspath = Seq(jarpath),
+      artifactname = jarpath.getFileName.toString,
+      loaderclasspath = Seq(jarpath),
+      scanclasspath = Seq(jarpath),
       params = params,
       origin = origin,
       log = log
@@ -316,70 +333,115 @@ object ComponentRepository extends GlobalObservable {
     params: ComponentCreate,
     origin: ComponentOrigin,
     log: BootstrapLog,
-    sarManifest: Option[ArchiveManifest] = None
+    sarDescriptor: Option[GenericSubsystemDescriptor] = None
   ): Seq[Component] = {
     val areas = GlobalContext.globalContext.workAreaSpace
     CarExtractor.withExtracted(carpath, areas) { extracted =>
-      val baseOrigin = _component_origin_for_archive(
-        repositoryType = _component_dir_type,
-        carManifest = extracted.manifest,
-        sarManifest = sarManifest,
-        fallback = origin
+      _discover_component_from_car_common(
+        extracted = extracted,
+        artifactPath = carpath,
+        params = params,
+        origin = origin,
+        log = log,
+        sarDescriptor = sarDescriptor,
+        sourceType = sarDescriptor.map(_ => "sar+car").getOrElse("car")
       )
-      val (effectiveExtensions, effectiveConfig) =
-        sarManifest match {
-          case Some(sar) => ArchiveManifest.mergeSarPrecedence(extracted.manifest, sar)
-          case None => (extracted.manifest.extensions, extracted.manifest.config)
-        }
-      val artifactMetadata = Component.ArtifactMetadata(
-        sourceType = sarManifest.map(_ => "sar+car").getOrElse("car"),
-        name = extracted.manifest.name,
-        version = extracted.manifest.version,
-        component = extracted.manifest.component,
-        subsystem = sarManifest.flatMap(_.subsystem),
-        effectiveExtensions = effectiveExtensions,
-        effectiveConfig = effectiveConfig
-      )
-      Using.resource(_class_loader_from_paths(extracted.componentClasspath, getClass.getClassLoader)) { componentLoader =>
-        val components0 =
-          _discover_component_from_artifact_with_loader(
-            artifactname = carpath.getFileName.toString,
-            loader = componentLoader,
-            scanclasspath = extracted.componentClasspath,
-            params = params,
-            origin = baseOrigin,
-            log = log
-          ).toVector
-        val components = components0.map(_.withArtifactMetadata(artifactMetadata))
-        val collaboratorComponents = components.collect {
-          case comp: CollaboratorComponent => comp
-        }
-        if (collaboratorComponents.isEmpty) {
-          Consequence.success(components)
-        } else {
-          extracted.collaboratorClasspath match {
-            case Some(paths) if paths.nonEmpty =>
-              Using.resource(CollaboratorClassLoader(paths)) { collaboratorLoader =>
-                CollaboratorFactory.create(collaboratorLoader, paths) match {
-                  case Consequence.Success(collaborator) =>
-                    collaboratorComponents.foreach(_.setCollaborator(collaborator))
-                    Consequence.success(components)
-                  case Consequence.Failure(conclusion) =>
-                    log.warn(s"[component-dir] car=${carpath.getFileName} collaborator init failed cause=${conclusion.show}")
-                    Consequence.success(Vector.empty)
-                }
-              }
-            case _ =>
-              log.warn(s"[component-dir] car=${carpath.getFileName} collaborator classpath missing")
-              Consequence.success(Vector.empty)
-          }
-        }
-      }
     } match {
       case Consequence.Success(components) => components
       case Consequence.Failure(conclusion) =>
         log.warn(s"[component-dir] car=${carpath.getFileName} invalid car cause=${conclusion.show}")
         Vector.empty
+    }
+  }
+
+  private def _discover_component_from_car_dir(
+    cardir: Path,
+    params: ComponentCreate,
+    origin: ComponentOrigin,
+    log: BootstrapLog,
+    sarDescriptor: Option[GenericSubsystemDescriptor] = None
+  ): Seq[Component] =
+    CarExtractor.resolveDirectory(cardir) match {
+      case Consequence.Success(extracted) =>
+        _discover_component_from_car_common(
+          extracted = extracted,
+          artifactPath = cardir,
+          params = params,
+          origin = origin,
+          log = log,
+          sarDescriptor = sarDescriptor,
+          sourceType = sarDescriptor.map(_ => "sar+car-dir").getOrElse("car-dir")
+        ) match {
+          case Consequence.Success(components) => components
+          case Consequence.Failure(conclusion) =>
+            log.warn(s"[component-dir] car-dir=${cardir.getFileName} invalid car-dir cause=${conclusion.show}")
+            Vector.empty
+        }
+      case Consequence.Failure(conclusion) =>
+        log.warn(s"[component-dir] car-dir=${cardir.getFileName} invalid car-dir cause=${conclusion.show}")
+        Vector.empty
+    }
+
+  private def _discover_component_from_car_common(
+    extracted: CarExtracted,
+    artifactPath: Path,
+    params: ComponentCreate,
+    origin: ComponentOrigin,
+    log: BootstrapLog,
+    sarDescriptor: Option[GenericSubsystemDescriptor],
+    sourceType: String
+  ): Consequence[Vector[Component]] = {
+    val baseOrigin = _component_origin_for_archive(
+      repositoryType = _component_dir_type,
+      carDescriptor = extracted.descriptor,
+      sarDescriptor = sarDescriptor,
+      fallback = origin
+    )
+    val (effectiveExtensions, effectiveConfig) =
+      _effective_extensions_config(extracted.descriptor, sarDescriptor)
+    val artifactMetadata = Component.ArtifactMetadata(
+      sourceType = sourceType,
+      name = extracted.descriptor.name.orElse(extracted.descriptor.componentName).getOrElse(artifactPath.getFileName.toString),
+      version = extracted.descriptor.version.getOrElse("0.1.0"),
+      component = extracted.descriptor.componentName,
+      subsystem = sarDescriptor.map(_.subsystemName).orElse(extracted.descriptor.subsystemName),
+      effectiveExtensions = effectiveExtensions,
+      effectiveConfig = effectiveConfig
+    )
+    Using.resource(_class_loader_from_paths(extracted.componentClasspath, getClass.getClassLoader)) { componentLoader =>
+      val components0 =
+        _discover_component_from_artifact_with_loader(
+          artifactname = artifactPath.getFileName.toString,
+          loader = componentLoader,
+          scanclasspath = extracted.componentClasspath,
+          params = params,
+          origin = baseOrigin,
+          log = log
+        ).toVector
+      val components = components0.map(_.withArtifactMetadata(artifactMetadata))
+      val collaboratorComponents = components.collect {
+        case comp: CollaboratorComponent => comp
+      }
+      if (collaboratorComponents.isEmpty) {
+        Consequence.success(components)
+      } else {
+        extracted.collaboratorClasspath match {
+          case Some(paths) if paths.nonEmpty =>
+            Using.resource(CollaboratorClassLoader(paths)) { collaboratorLoader =>
+              CollaboratorFactory.create(collaboratorLoader, paths) match {
+                case Consequence.Success(collaborator) =>
+                  collaboratorComponents.foreach(_.setCollaborator(collaborator))
+                  Consequence.success(components)
+                case Consequence.Failure(conclusion) =>
+                  log.warn(s"[component-dir] artifact=${artifactPath.getFileName} collaborator init failed cause=${conclusion.show}")
+                  Consequence.success(Vector.empty)
+              }
+            }
+          case _ =>
+            log.warn(s"[component-dir] artifact=${artifactPath.getFileName} collaborator classpath missing")
+            Consequence.success(Vector.empty)
+        }
+      }
     }
   }
 
@@ -391,21 +453,7 @@ object ComponentRepository extends GlobalObservable {
   ): Seq[Component] = {
     val areas = GlobalContext.globalContext.workAreaSpace
     SarExtractor.withExtracted(sarpath, areas) { extracted =>
-      if (extracted.carArtifacts.isEmpty) {
-        log.warn(s"[component-dir] sar=${sarpath.getFileName} contains no embedded .car artifact")
-        Consequence.success(Vector.empty)
-      } else {
-        val components = extracted.carArtifacts.sortBy(_.toString).toVector.flatMap { car =>
-          _discover_component_from_car(
-            carpath = car,
-            params = params,
-            origin = origin,
-            log = log,
-            sarManifest = Some(extracted.manifest)
-          )
-        }
-        Consequence.success(components)
-      }
+      _discover_component_from_sar_extracted(extracted, params, origin, log)
     } match {
       case Consequence.Success(components) => components
       case Consequence.Failure(conclusion) =>
@@ -414,19 +462,91 @@ object ComponentRepository extends GlobalObservable {
     }
   }
 
+  private def _discover_component_from_sar_dir(
+    sardir: Path,
+    params: ComponentCreate,
+    origin: ComponentOrigin,
+    log: BootstrapLog
+  ): Seq[Component] =
+    SarExtractor.resolveDirectory(sardir) match {
+      case Consequence.Success(extracted) =>
+        _discover_component_from_sar_extracted(extracted, params, origin, log) match {
+          case Consequence.Success(components) => components
+          case Consequence.Failure(conclusion) =>
+            log.warn(s"[component-dir] sar-dir=${sardir.getFileName} invalid sar-dir cause=${conclusion.show}")
+            Vector.empty
+        }
+      case Consequence.Failure(conclusion) =>
+        log.warn(s"[component-dir] sar-dir=${sardir.getFileName} invalid sar-dir cause=${conclusion.show}")
+        Vector.empty
+    }
+
+  private def _discover_component_from_sar_extracted(
+    extracted: SarExtracted,
+    params: ComponentCreate,
+    origin: ComponentOrigin,
+    log: BootstrapLog
+  ): Consequence[Vector[Component]] = {
+    if (extracted.carArtifacts.isEmpty && extracted.carDirectories.isEmpty) {
+      log.warn(s"[component-dir] sar=${extracted.root.getFileName} contains no embedded component artifact")
+      Consequence.success(Vector.empty)
+    } else {
+      val fromCars = extracted.carArtifacts.sortBy(_.toString).toVector.flatMap { car =>
+        _discover_component_from_car(
+          carpath = car,
+          params = params,
+          origin = origin,
+          log = log,
+          sarDescriptor = Some(extracted.descriptor)
+        )
+      }
+      val fromCarDirs = extracted.carDirectories.sortBy(_.toString).toVector.flatMap { cardir =>
+        _discover_component_from_car_dir(
+          cardir = cardir,
+          params = params,
+          origin = origin,
+          log = log,
+          sarDescriptor = Some(extracted.descriptor)
+        )
+      }
+      Consequence.success((fromCars ++ fromCarDirs).distinctBy(_.name))
+    }
+  }
+
+  private def _looks_like_sar_dir(
+    p: Path
+  ): Boolean =
+    GenericSubsystemDescriptor.looksLikeArchiveDirectory(p)
+
+  private def _looks_like_car_dir(
+    p: Path
+  ): Boolean =
+    ComponentDescriptorLoader.looksLikeArchiveDirectory(p)
+
+  private def _effective_extensions_config(
+    carDescriptor: ComponentDescriptor,
+    sarDescriptor: Option[GenericSubsystemDescriptor]
+  ): (Map[String, String], Map[String, String]) = {
+    val extensions = carDescriptor.extensions ++ sarDescriptor.map(_.extensions).getOrElse(Map.empty)
+    val config = carDescriptor.config ++ sarDescriptor.map(_.config).getOrElse(Map.empty)
+    (extensions, config)
+  }
+
   private def _component_origin_for_archive(
     repositoryType: String,
-    carManifest: ArchiveManifest,
-    sarManifest: Option[ArchiveManifest],
+    carDescriptor: ComponentDescriptor,
+    sarDescriptor: Option[GenericSubsystemDescriptor],
     fallback: ComponentOrigin
   ): ComponentOrigin =
     fallback match {
       case ComponentOrigin.Repository(_) =>
-        val label = sarManifest match {
+        val carName = carDescriptor.name.orElse(carDescriptor.componentName).getOrElse("component")
+        val carVersion = carDescriptor.version.getOrElse("0.1.0")
+        val label = sarDescriptor match {
           case Some(sar) =>
-            s"${repositoryType}:sar:${sar.name}:${sar.version}:car:${carManifest.name}:${carManifest.version}"
+            s"${repositoryType}:sar:${sar.subsystemName}:${sar.version.getOrElse("0.1.0")}:car:${carName}:${carVersion}"
           case None =>
-            s"${repositoryType}:car:${carManifest.name}:${carManifest.version}"
+            s"${repositoryType}:car:${carName}:${carVersion}"
         }
         ComponentOrigin.Repository(label)
       case other =>
@@ -552,7 +672,7 @@ object ComponentRepository extends GlobalObservable {
     artifactname: String,
     repositoryType: String
   ): Option[Class[_ <: Component.Factory]] = {
-    classNames.view.flatMap { className =>
+    val factories = classNames.view.flatMap { className =>
       _load_class(
         className = className,
         loader = loader,
@@ -570,7 +690,16 @@ object ComponentRepository extends GlobalObservable {
           None
         }
       }
-    }.headOption
+    }.toVector
+    factories.sortBy(_factory_priority).headOption
+  }
+
+  private def _factory_priority(
+    factoryClass: Class[_ <: Component.Factory]
+  ): (Int, String) = {
+    val name = factoryClass.getName
+    val nestedPenalty = if (name.contains("$") || factoryClass.getEnclosingClass != null) 1 else 0
+    (nestedPenalty, name)
   }
 
   private def _create_components_from_factory(

@@ -1451,17 +1451,19 @@ object ComponentFactory {
     cwd: Path,
     c: ResolvedConfiguration
   ): ComponentFactory = {
-    val space = _build_component_repository_space(subsystem, cwd, c)
-    val descriptors = _resolve_entity_runtime_descriptors(cwd, c)
+    val componentDescriptors = _resolve_component_descriptors(cwd, c)
+    val space = _build_component_repository_space(subsystem, cwd, c, componentDescriptors)
+    val descriptors = componentDescriptors.flatMap(_.entityRuntimeDescriptors)
     new ComponentFactory(space, collaborators, descriptors)
   }
 
   private def _build_component_repository_space(
     subsystem: Subsystem,
     cwd: Path,
-    c: ResolvedConfiguration
+    c: ResolvedConfiguration,
+    componentDescriptors: Vector[ComponentDescriptor]
   ): ComponentRepositorySpace =
-    ComponentRepositorySpace.create(subsystem, cwd, c)
+    ComponentRepositorySpace.create(subsystem, cwd, c, componentDescriptors)
 
   // CncfRuntime
   def create(
@@ -1470,9 +1472,10 @@ object ComponentFactory {
     collaborators: CollaboratorFactory,
     repositorySpecs: Vector[ComponentRepository.Specification]
   ): ComponentFactory = {
-    val space = ComponentRepositorySpace.create(subsystem, c, repositorySpecs)
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val descriptors = _resolve_entity_runtime_descriptors(cwd, c)
+    val componentDescriptors = _resolve_component_descriptors(cwd, c)
+    val space = ComponentRepositorySpace.create(subsystem, c, repositorySpecs, componentDescriptors)
+    val descriptors = componentDescriptors.flatMap(_.entityRuntimeDescriptors)
     new ComponentFactory(space, collaborators, descriptors)
   }
 

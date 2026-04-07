@@ -1,33 +1,43 @@
 package org.goldenport.cncf.component
 
 import java.nio.file.{Files, Path}
-import scala.util.Using
-import scala.util.control.NonFatal
+import scala.jdk.CollectionConverters.*
 import org.goldenport.Consequence
 import org.goldenport.record.Record
-import org.goldenport.record.io.RecordDecoder
-import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy}
-import org.simplemodeling.model.datatype.EntityCollectionId
+import org.goldenport.record.RecordDecoder
 
 /*
  * Loader for component descriptors.
  *
  * Canonical direction:
  * - ComponentDescriptor is packaged in CAR
- * - local override uses CAR-style layout such as car.d/meta/component-descriptor.yaml
+ * - local override uses CAR-style layout or top-level descriptor files
  * - explicit path may point at a descriptor file or a CAR-style directory
  *
- * Embedded CAR descriptor loading is a later step.
- *
  * @since   Mar. 27, 2026
- * @version Mar. 27, 2026
+ * @version Apr.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentDescriptorLoader {
-  private val _decoder = RecordDecoder()
-  private val _canonical_meta_files = Vector(
+  private val _canonical_descriptor_files = Vector(
+    "descriptor.json",
+    "descriptor.yaml",
+    "descriptor.yml",
+    "descriptor.conf",
+    "descriptor.hocon",
+    "descriptor.xml",
+    "component-descriptor.json",
+    "component-descriptor.yaml",
+    "component-descriptor.yml",
+    "component-descriptor.conf",
+    "component-descriptor.hocon",
+    "component-descriptor.xml",
+    "meta/component-descriptor.json",
     "meta/component-descriptor.yaml",
-    "meta/component-descriptor.yml"
+    "meta/component-descriptor.yml",
+    "meta/component-descriptor.conf",
+    "meta/component-descriptor.hocon",
+    "meta/component-descriptor.xml"
   )
 
   def load(path: Path): Consequence[Vector[ComponentDescriptor]] =
@@ -40,6 +50,48 @@ object ComponentDescriptorLoader {
     else
       Consequence.failure(s"component descriptor path is not a file or directory: ${path}")
 
+  def loadArchive(path: Path): Consequence[ComponentDescriptor] =
+    if (!Files.exists(path))
+      Consequence.failure(s"component archive descriptor path does not exist: ${path}")
+    else {
+      val descriptorPath =
+        if (Files.isDirectory(path)) _resolve_canonical_descriptor_files(path).headOption
+        else Some(path)
+      descriptorPath match {
+        case Some(file) =>
+          _load_file(file).flatMap(_.headOption.map(Consequence.success).getOrElse(Consequence.failure(s"component archive descriptor is empty: ${file}")))
+        case None =>
+          ArchiveManifest.load(path, "car").map { m =>
+            ComponentDescriptor(
+              name = Some(m.name),
+              version = Some(m.version),
+              componentName = m.component,
+              subsystemName = m.subsystem,
+              extensions = m.extensions,
+              config = m.config
+            )
+          }
+      }
+    }
+
+  def looksLikeArchiveDirectory(path: Path): Boolean = {
+    val componentdir = path.resolve("component")
+    Files.isDirectory(path) && Files.isDirectory(componentdir) &&
+      (_resolve_canonical_descriptor_files(path).nonEmpty || Files.exists(path.resolve("meta").resolve("manifest.json"))) &&
+      _contains_component_jar(componentdir)
+  }
+
+  private def _contains_component_jar(componentdir: Path): Boolean = {
+    val stream = Files.list(componentdir)
+    try {
+      stream.iterator().asScala.exists { p =>
+        Files.isRegularFile(p) && p.getFileName.toString.toLowerCase.endsWith(".jar")
+      }
+    } finally {
+      stream.close()
+    }
+  }
+
   private def _load_directory(path: Path): Consequence[Vector[ComponentDescriptor]] = {
     val canonical = _resolve_canonical_descriptor_files(path)
     if (canonical.nonEmpty)
@@ -49,7 +101,7 @@ object ComponentDescriptorLoader {
   }
 
   private def _resolve_canonical_descriptor_files(path: Path): Vector[Path] =
-    _canonical_meta_files
+    _canonical_descriptor_files
       .map(path.resolve(_).normalize)
       .filter(Files.isRegularFile(_))
       .distinct
@@ -63,74 +115,18 @@ object ComponentDescriptorLoader {
     }
 
   private def _load_file(path: Path): Consequence[Vector[ComponentDescriptor]] =
-    _read_text(path).flatMap(_decode(path.toString, _))
-
-  private def _decode(origin: String, text: String): Consequence[Vector[ComponentDescriptor]] =
-    _decoder.yamlAutoRecords(text).flatMap { records =>
+    DescriptorRecordLoader.load(path).flatMap { records =>
       records.foldLeft(Consequence.success(Vector.empty[ComponentDescriptor])) { (z, rec) =>
         for {
           xs <- z
-          x <- _to_descriptor(origin, rec)
+          x <- _to_descriptor(path.toString, rec)
         } yield xs :+ x
       }
     }
 
   private def _to_descriptor(origin: String, rec: Record): Consequence[ComponentDescriptor] = {
-    val componentName = rec.getString("component").orElse(rec.getString("componentName"))
-    val entities = _entity_descriptors(origin, rec)
-    entities.map(xs => ComponentDescriptor(componentName = componentName, entityRuntimeDescriptors = xs))
+    summon[RecordDecoder[ComponentDescriptor]].fromRecord(rec).leftMap { c =>
+      c.copy(observation = c.observation.copy(cause = c.observation.cause.withMessage(s"${c.displayMessage} in ${origin}")))
+    }
   }
-
-  private def _entity_descriptors(origin: String, rec: Record): Consequence[Vector[EntityRuntimeDescriptor]] =
-    _to_entity_descriptor(origin, rec).map(Vector(_))
-
-  private def _to_entity_descriptor(origin: String, rec: Record): Consequence[EntityRuntimeDescriptor] =
-    for {
-      entityName <- rec.getString("entity").orElse(rec.getString("entityName")).map(Consequence.success).getOrElse(Consequence.failure(s"missing entity/entityName in ${origin}"))
-      major = rec.getString("collectionMajor").orElse(rec.getString("major")).getOrElse("sys")
-      minor = rec.getString("collectionMinor").orElse(rec.getString("minor")).getOrElse("sys")
-      name = rec.getString("collectionName").orElse(rec.getString("name")).getOrElse(entityName)
-      memory = _memory_policy(rec.getString("memoryPolicy").orElse(rec.getString("memory_policy")).getOrElse("LoadToMemory"))
-      partition = _partition_strategy(rec.getString("partitionStrategy").orElse(rec.getString("partition_strategy")).getOrElse("byOrganizationMonthUTC"))
-      maxPartitions = _int_value(rec, List("maxPartitions", "max_partitions"), 64)
-      maxEntities = _int_value(rec, List("maxEntitiesPerPartition", "max_entities_per_partition"), 10000)
-    } yield EntityRuntimeDescriptor(
-      entityName = entityName,
-      collectionId = EntityCollectionId(major, minor, name),
-      memoryPolicy = memory,
-      partitionStrategy = partition,
-      maxPartitions = maxPartitions,
-      maxEntitiesPerPartition = maxEntities
-    )
-
-  private def _int_value(rec: Record, keys: List[String], fallback: Int): Int =
-    keys.iterator.flatMap(k => rec.getString(k).flatMap(s => scala.util.Try(s.trim.toInt).toOption)).toSeq.headOption.getOrElse(fallback)
-
-  private def _memory_policy(p: String): EntityMemoryPolicy =
-    p.trim.toLowerCase match {
-      case "storeonly" | "store_only" | "store-only" => EntityMemoryPolicy.StoreOnly
-      case _ => EntityMemoryPolicy.LoadToMemory
-    }
-
-  private def _partition_strategy(p: String): PartitionStrategy =
-    p.trim match {
-      case "byOrganizationMonthUTC" => PartitionStrategy.byOrganizationMonthUTC
-      case _ => PartitionStrategy.byOrganizationMonthUTC
-    }
-
-  private def _read_text(path: Path): Consequence[String] =
-    try {
-      Using.resource(Files.newBufferedReader(path)) { reader =>
-        val sb = new StringBuilder
-        val buf = new Array[Char](8192)
-        var read = reader.read(buf)
-        while (read != -1) {
-          sb.appendAll(buf, 0, read)
-          read = reader.read(buf)
-        }
-        Consequence.success(sb.toString)
-      }
-    } catch {
-      case NonFatal(e) => Consequence.failure(s"failed to read component descriptor ${path}: ${e.getMessage}")
-    }
 }

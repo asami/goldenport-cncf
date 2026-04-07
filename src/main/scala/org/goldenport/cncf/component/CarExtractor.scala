@@ -12,12 +12,13 @@ import org.goldenport.cncf.workarea.WorkAreaSpace
 
 /*
  * @since   Feb.  3, 2026
- * @version Mar. 22, 2026
+ *  version Mar. 22, 2026
+ * @version Apr.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CarExtracted(
   root: Path,
-  manifest: ArchiveManifest,
+  descriptor: ComponentDescriptor,
   componentMain: Path,
   componentLibs: Vector[Path],
   collaboratorMain: Option[Path],
@@ -38,7 +39,7 @@ object CarExtractor {
     workarea: WorkAreaSpace
   )(
     use: CarExtracted => Consequence[R]
-  ): Consequence[R] = workarea.execute { handle => 
+  ): Consequence[R] = workarea.execute { handle =>
     handle.createTempDir("car-").flatMap { tmproot =>
       for {
         _ <- _unzip(car, tmproot)
@@ -48,21 +49,8 @@ object CarExtractor {
     }
   }
 
-  // def withExtracted[R](
-  //   car: Path,
-  //   workarea: WorkAreaSpace
-  // )(
-  //   use: CarExtracted => Consequence[R]
-  // ): Consequence[R] = {
-  //   workarea.createTempDir("car-").flatMap { tmproot =>
-  //     val attempt = for {
-  //       _ <- _unzip(car, tmproot)
-  //       extracted <- _resolve_structure(tmproot, car)
-  //       result <- use(extracted)
-  //     } yield result
-  //     _with_cleanup(tmproot)(attempt)
-  //   }
-  // }
+  def resolveDirectory(root: Path): Consequence[CarExtracted] =
+    _resolve_structure(root, root)
 
   private def _unzip(
     car: Path,
@@ -91,8 +79,8 @@ object CarExtractor {
     root: Path,
     car: Path
   ): Consequence[CarExtracted] = {
-    val manifest = ArchiveManifest.load(root, "car")
-    manifest match {
+    val descriptor = ComponentDescriptorLoader.loadArchive(root)
+    descriptor match {
       case Consequence.Failure(conclusion) =>
         return Consequence.Failure(conclusion)
       case _ =>
@@ -112,10 +100,10 @@ object CarExtractor {
       } else {
         val collaboratormain = collaboratormainfiles.headOption
         val collaboratorlibs = _list_jars(collaboratordir.resolve("lib")).sortBy(_.getFileName.toString)
-        manifest.flatMap { m =>
+        descriptor.flatMap { d =>
           _success_extracted(
             root,
-            manifest = m,
+            descriptor = d,
             componentMain = componentjars.head,
             componentLibs = componentlibs,
             collaboratorMain = collaboratormain,
@@ -126,45 +114,15 @@ object CarExtractor {
     }
   }
 
-  private def _success_extracted(
-    root: Path,
-    manifest: ArchiveManifest,
-    componentMain: Path,
-    componentLibs: Vector[Path],
-    collaboratorMain: Option[Path],
-    collaboratorLibs: Vector[Path]
-  ): Consequence[CarExtracted] =
-    Consequence.success(
-      CarExtracted(
-        root = root,
-        manifest = manifest,
-        componentMain = componentMain,
-        componentLibs = componentLibs,
-        collaboratorMain = collaboratorMain,
-        collaboratorLibs = collaboratorLibs
-      )
-    )
-
-  private def _invalid_structure(
-    car: Path,
-    area: String,
-    constraint: String,
-    found: Int
-  ): Consequence[CarExtracted] = {
-    val message = s"car.invalid-structure area=$area constraint=$constraint found=$found uri=${car.toUri}"
-    Consequence.failure(message)
-  }
-
-  private def _list_jars(dir: Path): Vector[Path] = {
-    if (!Files.exists(dir)) {
+  private def _list_jars(root: Path): Vector[Path] = {
+    if (!Files.exists(root)) {
       Vector.empty
     } else {
-      val stream = Files.list(dir)
+      val stream = Files.list(root)
       try {
-        stream
-          .iterator()
-          .asScala
-          .filter(p => Files.isRegularFile(p) && p.getFileName.toString.endsWith(".jar"))
+        stream.iterator().asScala
+          .filter(p => Files.isRegularFile(p))
+          .filter(_.getFileName.toString.toLowerCase.endsWith(".jar"))
           .toVector
       } finally {
         stream.close()
@@ -172,25 +130,29 @@ object CarExtractor {
     }
   }
 
-  // private def _with_cleanup[R](root: Path)(body: => Consequence[R]): Consequence[R] = {
-  //   val attempt = Consequence.run(body)
-  //   attempt match {
-  //     case Consequence.Success(result) =>
-  //       _delete_tree(root).map(_ => result)
-  //     case Consequence.Failure(conclusion) =>
-  //       _delete_tree(root).flatMap(_ => Consequence.Failure(conclusion))
-  //   }
-  // }
+  private def _success_extracted(
+    root: Path,
+    descriptor: ComponentDescriptor,
+    componentMain: Path,
+    componentLibs: Vector[Path],
+    collaboratorMain: Option[Path],
+    collaboratorLibs: Vector[Path]
+  ): Consequence[CarExtracted] = Consequence.success(
+    CarExtracted(
+      root = root,
+      descriptor = descriptor,
+      componentMain = componentMain,
+      componentLibs = componentLibs,
+      collaboratorMain = collaboratorMain,
+      collaboratorLibs = collaboratorLibs
+    )
+  )
 
-  // private def _delete_tree(root: Path): Consequence[Unit] = Consequence {
-  //   if (Files.exists(root)) {
-  //     Using.resource(Files.walk(root)) { stream =>
-  //       stream
-  //         .sorted(Comparator.reverseOrder())
-  //         .iterator()
-  //         .asScala
-  //         .foreach(p => Files.deleteIfExists(p))
-  //     }
-  //   }
-  // }
+  private def _invalid_structure(
+    car: Path,
+    location: String,
+    required: String,
+    actual: Int
+  ): Consequence[CarExtracted] =
+    Consequence.failure(s"invalid car structure path=${car} location=${location} required=${required} actual=${actual}")
 }

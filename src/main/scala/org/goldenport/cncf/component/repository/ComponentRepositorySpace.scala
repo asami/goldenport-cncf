@@ -6,6 +6,7 @@ import org.goldenport.Consequence
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentCreate
+import org.goldenport.cncf.component.ComponentDescriptor
 import org.goldenport.cncf.component.ComponentOrigin
 import org.goldenport.cncf.backend.collaborator.CollaboratorFactory
 import org.goldenport.cncf.config.RuntimeConfig
@@ -34,10 +35,11 @@ object ComponentRepositorySpace {
   def create(
     subsystem: Subsystem,
     cwd: Path,
-    configuration: ResolvedConfiguration
+    configuration: ResolvedConfiguration,
+    componentDescriptors: Vector[ComponentDescriptor] = Vector.empty
   ): ComponentRepositorySpace = {
     val specs = _make_specs(cwd, configuration)
-    val entries = _make_repositories(subsystem, specs)
+    val entries = _make_repositories(subsystem, specs, componentDescriptors)
     ComponentRepositorySpace(entries.toVector)
   }
 
@@ -55,11 +57,12 @@ object ComponentRepositorySpace {
 
   private def _make_repositories(
     subsystem: Subsystem,
-    specs: Seq[ComponentRepository.Specification]
+    specs: Seq[ComponentRepository.Specification],
+    componentDescriptors: Vector[ComponentDescriptor]
   ): Seq[Slot] = {
     specs.map { spec =>
       val origin = _origin_for_spec(spec)
-      val params = ComponentCreate(subsystem, origin)
+      val params = ComponentCreate(subsystem, origin, componentDescriptors)
       val repo = spec.build(params)
       Slot(repo, origin)
     }
@@ -82,19 +85,21 @@ object ComponentRepositorySpace {
   def create(
     subsystem: Subsystem,
     c: ResolvedConfiguration,
-    repositorySpecs: Vector[ComponentRepository.Specification]
+    repositorySpecs: Vector[ComponentRepository.Specification],
+    componentDescriptors: Vector[ComponentDescriptor]
   ): ComponentRepositorySpace = {
-    build(subsystem, repositorySpecs)
+    build(subsystem, repositorySpecs, componentDescriptors)
   }
 
   // Legacy
   private def build(
     subsystem: Subsystem,
-    specs: Seq[ComponentRepository.Specification]
+    specs: Seq[ComponentRepository.Specification],
+    componentDescriptors: Vector[ComponentDescriptor]
   ): ComponentRepositorySpace = {
     val entries = specs.toVector.map { spec =>
       val origin = originForSpec(spec)
-      val params = ComponentCreate(subsystem, origin)
+      val params = ComponentCreate(subsystem, origin, componentDescriptors)
       val repo = spec.build(params)
       Slot(repo, origin)
     }
@@ -222,5 +227,5 @@ object ComponentRepositorySpace {
   def component_extra_function(
     specs: Seq[ComponentRepository.Specification]
   ): Subsystem => Seq[Component] =
-    (subsystem: Subsystem) => build(subsystem, specs).discover()
+    (subsystem: Subsystem) => build(subsystem, specs, Vector.empty).discover()
 }

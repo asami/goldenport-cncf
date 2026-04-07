@@ -6,16 +6,18 @@ import scala.jdk.CollectionConverters._
 import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.cncf.workarea.WorkAreaSpace
+import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
 
 /*
  * @since   Mar. 22, 2026
- * @version Mar. 22, 2026
+ * @version Apr.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SarExtracted(
   root: Path,
-  manifest: ArchiveManifest,
+  descriptor: GenericSubsystemDescriptor,
   carArtifacts: Vector[Path],
+  carDirectories: Vector[Path],
   extensionJars: Vector[Path],
   configFiles: Vector[Path]
 )
@@ -35,6 +37,9 @@ object SarExtractor {
       } yield result
     }
   }
+
+  def resolveDirectory(root: Path): Consequence[SarExtracted] =
+    _resolve_structure(root)
 
   private def _unzip(
     sar: Path,
@@ -62,15 +67,18 @@ object SarExtractor {
   private def _resolve_structure(
     root: Path
   ): Consequence[SarExtracted] = {
-    val manifest = ArchiveManifest.load(root, "sar")
+    val descriptor = GenericSubsystemDescriptor.loadArchive(root)
+    val componentdir = root.resolve("component")
     val cars = _list_files_by_suffix(root, ".car")
+    val cardirs = _list_directories(componentdir).filter(ComponentDescriptorLoader.looksLikeArchiveDirectory)
     val extensionJars = _list_files_by_suffix(root.resolve("extension"), ".jar")
     val configFiles = _list_regular_files(root.resolve("config"))
-    manifest.map { m =>
+    descriptor.map { d =>
       SarExtracted(
         root = root,
-        manifest = m,
+        descriptor = d,
         carArtifacts = cars.sortBy(_.toString),
+        carDirectories = cardirs.sortBy(_.toString),
         extensionJars = extensionJars.sortBy(_.toString),
         configFiles = configFiles.sortBy(_.toString)
       )
@@ -96,6 +104,19 @@ object SarExtractor {
           .asScala
           .filter(Files.isRegularFile(_))
           .toVector
+      } finally {
+        stream.close()
+      }
+    }
+  }
+
+  private def _list_directories(root: Path): Vector[Path] = {
+    if (!Files.isDirectory(root)) {
+      Vector.empty
+    } else {
+      val stream = Files.list(root)
+      try {
+        stream.iterator().asScala.filter(Files.isDirectory(_)).toVector
       } finally {
         stream.close()
       }

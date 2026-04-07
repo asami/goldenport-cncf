@@ -20,9 +20,9 @@ object Order {
   def createC(r: Record): Consequence[Order] =
     Consequence.success(
       Order(
-        id = EntityId.parse(r.asMap("id").toString).TAKE,
-        name = r.asMap("name").toString,
-        status = r.asMap("status").toString
+        id = EntityId.parse(r.getString("id").getOrElse(sys.error("id missing"))).TAKE,
+        name = r.getString("name").getOrElse(sys.error("name missing")),
+        status = r.getString("status").getOrElse(sys.error("status missing"))
       )
     )
 }
@@ -53,10 +53,10 @@ object OrderLine {
   def createC(r: Record): Consequence[OrderLine] =
     Consequence.success(
       OrderLine(
-        id = EntityId.parse(r.asMap("id").toString).TAKE,
-        orderId = EntityId.parse(r.asMap("orderId").toString).TAKE,
-        name = r.asMap("name").toString,
-        quantity = r.asMap("quantity").toString.toInt
+        id = EntityId.parse(r.getString("id").getOrElse(sys.error("id missing"))).TAKE,
+        orderId = EntityId.parse(r.getString("orderId").getOrElse(sys.error("orderId missing"))).TAKE,
+        name = r.getString("name").getOrElse(sys.error("name missing")),
+        quantity = r.getInt("quantity").getOrElse(sys.error("quantity missing"))
       )
     )
 }
@@ -89,9 +89,9 @@ object Customer {
   def createC(r: Record): Consequence[Customer] =
     Consequence.success(
       Customer(
-        id = EntityId.parse(r.asMap("id").toString).TAKE,
-        orderId = EntityId.parse(r.asMap("orderId").toString).TAKE,
-        name = r.asMap("name").toString
+        id = EntityId.parse(r.getString("id").getOrElse(sys.error("id missing"))).TAKE,
+        orderId = EntityId.parse(r.getString("orderId").getOrElse(sys.error("orderId missing"))).TAKE,
+        name = r.getString("name").getOrElse(sys.error("name missing"))
       )
     )
 }

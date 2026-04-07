@@ -245,6 +245,7 @@ object HelpProjection {
   ): String =
     _subsystem_definition_record(components, fallback).
       flatMap(_.getString("name")).
+      orElse(components.flatMap(_.artifactMetadata.flatMap(_.subsystem)).headOption).
       orElse(components match {
         case Vector(single) => Some(single.name)
         case _ => None
