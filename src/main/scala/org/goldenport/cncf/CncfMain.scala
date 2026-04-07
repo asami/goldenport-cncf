@@ -569,11 +569,9 @@ object CncfMain extends GlobalObservable {
     try {
       val clazz = Class.forName(className, false, loader)
       if (classOf[Component.Factory].isAssignableFrom(clazz)) {
-        observe_trace(s"[discover:classes] instantiating factory $className")
-        val ctor = clazz.getDeclaredConstructor()
-        ctor.setAccessible(true)
-        val factory = ctor.newInstance().asInstanceOf[Component.Factory]
-        factory.create(params).headOption
+        // Factory classes are resolved through the component class path
+        // so preferred impl factories can win during ComponentProvider bootstrap.
+        None
       } else if (classOf[Component].isAssignableFrom(clazz)) {
         observe_trace(s"[discover:classes] instantiating class component $className")
         ComponentProvider
