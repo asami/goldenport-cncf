@@ -18,6 +18,12 @@ of known anti-patterns.
 
 **IDs are opaque to program logic, but self-describing to humans and observability tools.**
 
+UniversalId labels (`major`, `minor`, `kind`, `subkind`) use the restricted grammar `[A-Za-z][A-Za-z0-9_]*`.
+This restriction exists for transport safety: these identifiers are expected to pass through HTTP and to
+appear in URLs in their canonical form without additional escaping. Labels must begin with an ASCII letter. Hyphen is reserved as the structural
+separator of the canonical UniversalId format and therefore MUST NOT appear inside labels. Parsers must
+reject out-of-grammar inputs rather than infer alternative label boundaries.
+
 IDs must support:
 - observability
 - debugging
