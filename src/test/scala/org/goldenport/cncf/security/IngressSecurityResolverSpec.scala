@@ -1,16 +1,18 @@
 package org.goldenport.cncf.security
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.{CorrelationId, SecurityLevel, TraceId}
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeContext, ScopeKind, SecurityLevel, TraceId}
+import org.goldenport.cncf.subsystem.{GenericSubsystemAuthenticationBinding, GenericSubsystemAuthenticationProviderBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemSecurityBinding, Subsystem}
 import org.goldenport.cncf.event.EventReception
 import org.goldenport.cncf.job.{ActionId, JobId, TaskId}
-import org.goldenport.protocol.{Property, Request}
+import org.goldenport.protocol.{Property, Protocol, Request}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- * @version Mar. 21, 2026
+ * @version Apr.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
@@ -86,5 +88,80 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
       resolved.executionContext.jobContext.traceMetadata.get("traceId").nonEmpty shouldBe true
       resolved.executionContext.jobContext.traceMetadata.get("correlationId").nonEmpty shouldBe true
     }
+
+    "deny when authentication providers do not resolve and privilege fallback is disabled by resolved wiring" in {
+      val subsystem = _subsystem(fallbackEnabled = false)
+      val base = subsystem.components.head.logic.executionContext()
+
+      val result = IngressSecurityResolver.resolve(base, Map("access_token" -> "missing-token", "capability" -> "content_manager"))
+
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
+    "fallback to privilege resolution when providers do not resolve and fallback remains enabled" in {
+      val subsystem = _subsystem(fallbackEnabled = true)
+      val base = subsystem.components.head.logic.executionContext()
+
+      val result = IngressSecurityResolver.resolve(
+        base,
+        Map(
+          "access_token" -> "missing-token",
+          "privilege" -> "application_content_manager"
+        )
+      )
+
+      result shouldBe a[Consequence.Success[_]]
+      val resolved = result.toOption.get
+      resolved.executionContext.security.level shouldBe SecurityLevel("content_manager")
+    }
+  }
+
+  private def _subsystem(fallbackEnabled: Boolean): Subsystem = {
+    val subsystem = Subsystem(
+      name = "security-test",
+      scopeContext = Some(
+        ScopeContext(
+          kind = ScopeKind.Subsystem,
+          name = "security-test",
+          parent = None,
+          observabilityContext = ExecutionContext.create().observability
+        )
+      ),
+      configuration = org.goldenport.configuration.ResolvedConfiguration(
+        org.goldenport.configuration.Configuration.empty,
+        org.goldenport.configuration.ConfigurationTrace.empty
+      )
+    )
+    val component = Component.create(
+      "Dummy",
+      ComponentId("dummy"),
+      ComponentInstanceId.default(ComponentId("dummy")),
+      Protocol.empty
+    )
+    subsystem.add(Vector(component))
+    subsystem.withDescriptor(
+      GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("<memory>"),
+        subsystemName = "security-test",
+        componentBindings = Vector(GenericSubsystemComponentBinding("dummy")),
+        security = Some(
+          GenericSubsystemSecurityBinding(
+            authentication = Some(
+              GenericSubsystemAuthenticationBinding(
+                convention = Some("enabled"),
+                fallbackPrivilege = Some(if (fallbackEnabled) "enabled" else "disabled"),
+                providers = Vector(
+                  GenericSubsystemAuthenticationProviderBinding(
+                    name = "dummy-provider",
+                    component = "dummy",
+                    enabled = Some(true)
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+    )
   }
 }

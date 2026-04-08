@@ -1,0 +1,19 @@
+subsystem: textus-identity
+version: 0.1.0-SNAPSHOT
+components:
+  - component: textus-user-account
+    coordinate: org.textus:textus-user-account:0.1.0-SNAPSHOT
+security:
+  authentication:
+    convention: enabled
+    fallback_privilege: disabled
+    providers:
+      - name: user-account
+        component: textus-user-account
+        kind: human
+        enabled: true
+        priority: 100
+        schemes:
+          - bearer
+          - refresh-token
+        default: true

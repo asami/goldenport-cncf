@@ -1,0 +1,8 @@
+subsystem: mcprag
+version: 0.1.0-SNAPSHOT
+components:
+  - component: textus-mcp-rag
+    coordinate: org.textus:textus-mcp-rag:0.1.0-SNAPSHOT
+    extension_bindings:
+      knowledge_source_adapters:
+        - key: view

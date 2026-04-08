@@ -11,9 +11,29 @@ import org.goldenport.cncf.component.DescriptorRecordLoader
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr.  8, 2026
+ * @version Apr.  9, 2026
  * @author  ASAMI, Tomoharu
  */
+final case class GenericSubsystemAuthenticationProviderBinding(
+  name: String,
+  component: String,
+  kind: Option[String] = None,
+  enabled: Option[Boolean] = None,
+  priority: Option[Int] = None,
+  schemes: Vector[String] = Vector.empty,
+  isDefault: Option[Boolean] = None
+)
+
+final case class GenericSubsystemAuthenticationBinding(
+  convention: Option[String] = None,
+  fallbackPrivilege: Option[String] = None,
+  providers: Vector[GenericSubsystemAuthenticationProviderBinding] = Vector.empty
+)
+
+final case class GenericSubsystemSecurityBinding(
+  authentication: Option[GenericSubsystemAuthenticationBinding] = None
+)
+
 final case class GenericSubsystemComponentBinding(
   componentName: String,
   coordinate: Option[String] = None,
@@ -39,7 +59,8 @@ final case class GenericSubsystemDescriptor(
   componentBindings: Vector[GenericSubsystemComponentBinding] = Vector.empty,
   extensions: Map[String, String] = Map.empty,
   config: Map[String, String] = Map.empty,
-  wiring: Record = Record.empty
+  wiring: Record = Record.empty,
+  security: Option[GenericSubsystemSecurityBinding] = None
 ) {
   def componentVersion: Option[String] =
     version.orElse(componentBindings.headOption.flatMap(_.componentVersion))
@@ -70,7 +91,8 @@ object GenericSubsystemDescriptor {
     componentBindings: Vector[GenericSubsystemComponentBinding],
     extensions: Map[String, String],
     config: Map[String, String],
-    wiring: Record
+    wiring: Record,
+    security: Option[GenericSubsystemSecurityBinding]
   )
 
   private val _canonical_descriptor_files = Vector(
@@ -85,8 +107,7 @@ object GenericSubsystemDescriptor {
     "subsystem-descriptor.yml",
     "subsystem-descriptor.conf",
     "subsystem-descriptor.hocon",
-    "subsystem-descriptor.xml",
-    "subsystem.cml"
+    "subsystem-descriptor.xml"
   )
 
   def load(path: Path): Consequence[GenericSubsystemDescriptor] =
@@ -95,6 +116,8 @@ object GenericSubsystemDescriptor {
     else if (Files.isDirectory(path))
       _resolve_descriptor_file(path) match {
         case Some(file) => _load_file(file)
+        // Descriptor-first path is the current design.
+        // manifest.json fallback remains only as a compatibility memo.
         case None => _load_manifest_compat(path)
       }
     else
@@ -106,6 +129,8 @@ object GenericSubsystemDescriptor {
   def looksLikeArchiveDirectory(path: Path): Boolean = {
     val componentdir = path.resolve("component")
     Files.isDirectory(path) && Files.isDirectory(componentdir) &&
+      // Descriptor files are the intended signal.
+      // manifest.json is still accepted only for compatibility.
       (_resolve_descriptor_file(path).nonEmpty || Files.exists(path.resolve("meta").resolve("manifest.json"))) &&
       _contains_component_archive(componentdir)
   }
@@ -147,17 +172,14 @@ object GenericSubsystemDescriptor {
       .map(path.resolve(_).normalize)
       .find(Files.isRegularFile(_))
 
-  private def _load_file(path: Path): Consequence[GenericSubsystemDescriptor] = {
-    val lower = path.getFileName.toString.toLowerCase
-    if (lower.endsWith(".cml"))
-      _load_cml(path)
-    else
-      DescriptorRecordLoader.load(path).flatMap { records =>
-        records.headOption.map(_from_record(path, _)).getOrElse(Consequence.failure(s"subsystem descriptor is empty: ${path}"))
-      }
-  }
+  private def _load_file(path: Path): Consequence[GenericSubsystemDescriptor] =
+    DescriptorRecordLoader.load(path).flatMap { records =>
+      records.headOption.map(_from_record(path, _)).getOrElse(Consequence.failure(s"subsystem descriptor is empty: ${path}"))
+    }
 
   private def _load_manifest_compat(path: Path): Consequence[GenericSubsystemDescriptor] =
+    // Compatibility-only path. New subsystem archives are expected to carry
+    // an explicit descriptor instead of relying on meta/manifest.json.
     org.goldenport.cncf.component.ArchiveManifest.load(path, "sar").map { m =>
       GenericSubsystemDescriptor(
         path = path,
@@ -166,55 +188,10 @@ object GenericSubsystemDescriptor {
         componentBindings = Vector.empty,
         extensions = m.extensions,
         config = m.config,
-        wiring = Record.empty
+        wiring = Record.empty,
+        security = None
       )
     }
-
-  private def _load_cml(path: Path): Consequence[GenericSubsystemDescriptor] =
-    Consequence {
-      val lines = Files.readAllLines(path).asScala.toVector.map(_.trim).filterNot(_.isEmpty)
-      val subsystemName = _single_value(lines, "subsystem", path)
-      val version = _optional_single_value(lines, "version")
-      val bindings = _bindings_from_cml(lines)
-      require(bindings.nonEmpty, s"missing component in ${path}")
-      GenericSubsystemDescriptor(
-        path = path,
-        subsystemName = subsystemName,
-        version = version,
-        componentBindings = bindings,
-        wiring = Record.empty
-      )
-    }
-
-  private def _bindings_from_cml(lines: Vector[String]): Vector[GenericSubsystemComponentBinding] = {
-    val buffer = Vector.newBuilder[GenericSubsystemComponentBinding]
-    var currentName: Option[String] = None
-    var currentCoordinate: Option[String] = None
-    def flush(): Unit =
-      currentName.foreach { name =>
-        currentCoordinate.foreach { coordinate =>
-          val parts = coordinateParts(coordinate)
-          require(parts.size == 3, s"invalid component coordinate: $coordinate")
-          require(parts(1) == name, s"component coordinate artifact must match component name: component=$name coordinate=$coordinate")
-        }
-        buffer += GenericSubsystemComponentBinding(
-          componentName = name,
-          coordinate = currentCoordinate,
-          extensionBindings = _component_extension_bindings(lines, name)
-        )
-      }
-    lines.foreach { line =>
-      if (line.startsWith("component ")) {
-        flush()
-        currentName = Some(line.stripPrefix("component ").trim)
-        currentCoordinate = None
-      } else if (line.startsWith("coordinate ")) {
-        currentCoordinate = Some(line.stripPrefix("coordinate ").trim)
-      }
-    }
-    flush()
-    buffer.result()
-  }
 
   private def _from_record(path: Path, rec: Record): Consequence[GenericSubsystemDescriptor] = {
     summon[RecordDecoder[Shape]].fromRecord(rec).map { s =>
@@ -225,7 +202,8 @@ object GenericSubsystemDescriptor {
         componentBindings = s.componentBindings,
         extensions = s.extensions,
         config = s.config,
-        wiring = s.wiring
+        wiring = s.wiring,
+        security = s.security
       )
     }.leftMap { c =>
       c.copy(observation = c.observation.copy(cause = c.observation.cause.withMessage(s"${c.displayMessage} in ${path}")))
@@ -278,6 +256,21 @@ object GenericSubsystemDescriptor {
         "knowledge_source_adapters" -> keys.map(key => Record.data("key" -> key)).toVector
       )
   }
+
+  private def _boolean(rec: Record, keys: String*): Option[Boolean] =
+    keys.iterator.map(rec.getString).collectFirst {
+      case Some(s) if s.trim.equalsIgnoreCase("true") || s.trim.equalsIgnoreCase("yes") || s.trim.equalsIgnoreCase("on") || s.trim == "1" => true
+      case Some(s) if s.trim.equalsIgnoreCase("false") || s.trim.equalsIgnoreCase("no") || s.trim.equalsIgnoreCase("off") || s.trim == "0" => false
+    }
+
+  private def _int(rec: Record, keys: String*): Option[Int] =
+    keys.iterator.flatMap(rec.getString).flatMap(s => scala.util.Try(s.trim.toInt).toOption).toSeq.headOption
+
+  private def _string_vector(rec: Record, keys: List[String]): Vector[String] =
+    keys.iterator.map(rec.getAny).collectFirst {
+      case Some(xs: Seq[?]) => xs.toVector.collect { case s: String if s.trim.nonEmpty => s.trim }
+      case Some(s: String) if s.trim.nonEmpty => s.split("[,|\\s]+").toVector.map(_.trim).filter(_.nonEmpty)
+    }.getOrElse(Vector.empty)
 
   private def _string(rec: Record, keys: String*): Option[String] =
     keys.iterator.map(rec.getString).collectFirst { case Some(s) if s.trim.nonEmpty => s.trim }
@@ -332,6 +325,52 @@ object GenericSubsystemDescriptor {
       }
     }
 
+  given RecordDecoder[GenericSubsystemAuthenticationProviderBinding] with
+    def fromRecord(rec: Record): Consequence[GenericSubsystemAuthenticationProviderBinding] = {
+      val name = _string(rec, "name")
+      val component = _string(rec, "component")
+      (name, component) match {
+        case (Some(n), Some(c)) =>
+          Consequence.success(
+            GenericSubsystemAuthenticationProviderBinding(
+              name = n,
+              component = c,
+              kind = _string(rec, "kind"),
+              enabled = _boolean(rec, "enabled"),
+              priority = _int(rec, "priority"),
+              schemes = _string_vector(rec, List("schemes", "scheme")),
+              isDefault = _boolean(rec, "default", "isDefault")
+            )
+          )
+        case _ =>
+          Consequence.failure("missing authentication provider name/component")
+      }
+    }
+
+  given RecordDecoder[GenericSubsystemAuthenticationBinding] with
+    def fromRecord(rec: Record): Consequence[GenericSubsystemAuthenticationBinding] = {
+      val providers = rec.getAny("providers") match {
+        case Some(xs: Seq[?]) =>
+          xs.toVector.flatMap(_any_to_record).flatMap(r => summon[RecordDecoder[GenericSubsystemAuthenticationProviderBinding]].fromRecord(r).toOption)
+        case _ =>
+          Vector.empty
+      }
+      Consequence.success(
+        GenericSubsystemAuthenticationBinding(
+          convention = _string(rec, "convention"),
+          fallbackPrivilege = _string(rec, "fallback_privilege", "fallbackPrivilege"),
+          providers = providers
+        )
+      )
+    }
+
+  given RecordDecoder[GenericSubsystemSecurityBinding] with
+    def fromRecord(rec: Record): Consequence[GenericSubsystemSecurityBinding] =
+      _record_value(rec, List("authentication")) match {
+        case Some(auth) => summon[RecordDecoder[GenericSubsystemAuthenticationBinding]].fromRecord(auth).map(x => GenericSubsystemSecurityBinding(Some(x)))
+        case None => Consequence.success(GenericSubsystemSecurityBinding(None))
+      }
+
   given RecordDecoder[Shape] with
     def fromRecord(rec: Record): Consequence[Shape] = {
       val subsystemName = _string(rec, "subsystem", "subsystemName", "name")
@@ -348,7 +387,8 @@ object GenericSubsystemDescriptor {
                 componentBindings = bindings,
                 extensions = _string_map_value(rec, List("extension", "extensions")),
                 config = _string_map_value(rec, List("config")),
-                wiring = _record_value(rec, List("wiring")).getOrElse(Record.empty)
+                wiring = _record_value(rec, List("wiring")).getOrElse(Record.empty),
+                security = _record_value(rec, List("security")).flatMap(r => summon[RecordDecoder[GenericSubsystemSecurityBinding]].fromRecord(r).toOption)
               )
             )
         case None =>

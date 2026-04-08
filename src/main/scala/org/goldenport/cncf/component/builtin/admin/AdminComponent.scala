@@ -13,6 +13,7 @@ import org.goldenport.configuration.ConfigurationResolver
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.configuration.ConfigurationSources
 import org.goldenport.configuration.ConfigurationOrigin
+import org.goldenport.cncf.projection.{SecurityDeploymentMarkdownProjection, SecurityDeploymentProjection}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
@@ -22,11 +23,13 @@ import org.goldenport.protocol.handler.ingress.{IngressCollection, RestIngress}
 import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
+import org.goldenport.value.BaseContent
 
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
- * @version Feb. 19, 2026
+ *  version Feb. 19, 2026
+ * @version Apr.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -68,6 +71,16 @@ object AdminComponent {
         response,
         params.subsystem
       )
+      val opDeploymentSecurityMermaid = new DeploymentSecurityMermaidOperationDefinition(
+        request,
+        response,
+        params.subsystem
+      )
+      val opDeploymentSecurityMarkdown = new DeploymentSecurityMarkdownOperationDefinition(
+        request,
+        response,
+        params.subsystem
+      )
       val serviceSystem = spec.ServiceDefinition(
         name = "system",
         operations = spec.OperationDefinitionGroup(
@@ -98,13 +111,23 @@ object AdminComponent {
           operations = NonEmptyVector.of(opExtensionList)
         )
       )
+      val serviceDeployment = spec.ServiceDefinition(
+        name = "deployment",
+        operations = spec.OperationDefinitionGroup(
+          operations = NonEmptyVector.of(
+            opDeploymentSecurityMermaid,
+            opDeploymentSecurityMarkdown
+          )
+        )
+      )
       val services = spec.ServiceDefinitionGroup(
         services = Vector(
           serviceSystem,
           serviceComponent,
           serviceConfig,
           serviceVariation,
-          serviceExtension
+          serviceExtension,
+          serviceDeployment
         )
       )
       val protocol = Protocol(
@@ -217,6 +240,48 @@ object AdminComponent {
     }
   }
 
+  private final class DeploymentSecurityMermaidOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        content = BaseContent.Builder("securityMermaid")
+          .summary("Render the subsystem security deployment diagram as Mermaid.")
+          .description("Project the resolved security wiring into a minimal Mermaid deployment diagram with ingress, providers, SecurityContext, ActionCall, and UnitOfWork.")
+          .build(),
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: Request
+    ): Consequence[OperationRequest] =
+      Consequence.success(DeploymentSecurityMermaidAction(req, subsystem))
+  }
+
+  private final class DeploymentSecurityMarkdownOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        content = BaseContent.Builder("securityMarkdown")
+          .summary("Render the subsystem security deployment specification as Markdown.")
+          .description("Project the resolved security wiring into an editable Markdown specification draft including Mermaid, provider metadata, and framework chokepoints.")
+          .build(),
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: Request
+    ): Consequence[OperationRequest] =
+      Consequence.success(DeploymentSecurityMarkdownAction(req, subsystem))
+  }
+
   private final case class ComponentListAction(
     request: Request,
     subsystem: Subsystem
@@ -257,6 +322,38 @@ object AdminComponent {
         OperationResponse.Scalar(text)
       }
     }
+  }
+
+  private final case class DeploymentSecurityMermaidAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      DeploymentSecurityMermaidActionCall(core, subsystem)
+  }
+
+  private final case class DeploymentSecurityMermaidActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      Consequence.success(OperationResponse.Scalar(SecurityDeploymentProjection.projectMermaid(subsystem)))
+  }
+
+  private final case class DeploymentSecurityMarkdownAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      DeploymentSecurityMarkdownActionCall(core, subsystem)
+  }
+
+  private final case class DeploymentSecurityMarkdownActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      Consequence.success(OperationResponse.Scalar(SecurityDeploymentMarkdownProjection.project(subsystem)))
   }
 
   private final case class VariationListAction(

@@ -36,7 +36,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
- * @version Apr.  4, 2026
+ * @version Apr.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -55,6 +55,8 @@ final class Subsystem(
   private val _job_engine: JobEngine = InMemoryJobEngine.create()
   private val _event_store: EventStore = EventStore.inMemory
   private val _entity_access_metrics: EntityAccessMetricsRegistry = EntityAccessMetricsRegistry.shared
+  private var _descriptor: Option[GenericSubsystemDescriptor] = None
+  private var _resolved_security_wiring: ResolvedSecurityWiring = ResolvedSecurityWiring.empty
 
   def globalRuntimeContext: GlobalRuntimeContext = {
     val a = _find_global_runtime_context(scopeContext)
@@ -78,6 +80,14 @@ final class Subsystem(
   def eventStore: EventStore = _event_store
   def entityAccessMetrics: EntityAccessMetricsRegistry = _entity_access_metrics
   def serverEmulatorBaseUrl: String = globalRuntimeContext.serverEmulatorBaseUrl
+  def descriptor: Option[GenericSubsystemDescriptor] = _descriptor
+  def resolvedSecurityWiring: ResolvedSecurityWiring = _resolved_security_wiring
+
+  def withDescriptor(descriptor: GenericSubsystemDescriptor): Subsystem = {
+    _descriptor = Some(descriptor)
+    _resolved_security_wiring = ResolvedSecurityWiring.resolve(_descriptor, components)
+    this
+  }
 
   def setup(cf: ComponentFactory): Subsystem = {
     _component_factory = cf
@@ -163,6 +173,7 @@ final class Subsystem(
 
   private def _rebuildResolver(): Unit =
     _resolver = OperationResolver.build(_component_space.components)
+    _resolved_security_wiring = ResolvedSecurityWiring.resolve(_descriptor, _component_space.components)
 
   def executeHttp(req: HttpRequest): HttpResponse = {
     _resolve_route(req) match {

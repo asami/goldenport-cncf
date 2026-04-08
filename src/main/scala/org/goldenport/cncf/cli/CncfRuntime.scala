@@ -51,7 +51,7 @@ import org.goldenport.record.Record
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Apr.  6, 2026
+ * @version Apr.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -626,6 +626,8 @@ object CncfRuntime extends GlobalObservable {
         |  cncf server
         |  cncf client admin.system.ping
         |  cncf command admin.system.ping
+        |  cncf command admin.deployment.securityMermaid
+        |  cncf command admin.deployment.securityMarkdown
         |
         |Log backend behavior:
         |  command / client : no logs by default
@@ -2977,6 +2979,8 @@ class CncfRuntime() extends GlobalObservable {
         |  cncf server
         |  cncf client http get
         |  cncf command admin.system.ping
+        |  cncf command admin.deployment.securityMermaid
+        |  cncf command admin.deployment.securityMarkdown
         |
         |Log backend behavior:
         |  command / client : no logs by default

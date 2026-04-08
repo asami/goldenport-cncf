@@ -7,7 +7,9 @@ import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
-import org.goldenport.configuration.{Configuration, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
+import org.goldenport.configuration.{Configuration, ConfigurationOrigin, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
+import org.goldenport.configuration.source.ConfigurationSource
+import org.goldenport.configuration.source.file.SimpleFileConfigLoader
 import org.goldenport.cncf.cli.{CncfRuntime, RunMode}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentCreate, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.component.repository.{ComponentProvider, ComponentRepository, ComponentRepositorySpace, ComponentSource}
@@ -36,7 +38,7 @@ object CncfMain extends GlobalObservable {
 
   def main(args: Array[String]): Unit = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val configuration = _resolve_configuration(cwd)
+    val configuration = _resolve_configuration(cwd, args)
     val (reposResult, args1, noDefaultComponents) =
       _take_component_repository(configuration, args, cwd)
     val (factoryClasses, args2) = _take_component_factory_classes(configuration, args1)
@@ -607,14 +609,71 @@ object CncfMain extends GlobalObservable {
     _config_string(configuration, key).exists(_truthy_)
 
   private def _resolve_configuration(
-    cwd: Path
+    cwd: Path,
+    args: Array[String]
   ): ResolvedConfiguration = {
-    val sources = ConfigurationSources.standard(cwd, applicationname = "cncf")
+    val basesources = ConfigurationSources.standard(cwd, applicationname = "cncf", args = Map.empty)
+    val explicitconfigs = _explicit_config_sources(cwd, _config_args(args))
+    val sources = ConfigurationSources(basesources.sources ++ explicitconfigs)
     ConfigurationResolver.default.resolve(sources) match {
       case Consequence.Success(resolved) =>
         resolved
       case Consequence.Failure(_) =>
         ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
     }
+  }
+
+  private def _explicit_config_sources(
+    cwd: Path,
+    configargs: Map[String, String]
+  ) = {
+    val files = _split_config_paths(configargs.get("cncf.config.file")) ++
+      _split_config_paths(configargs.get("cncf.config.files"))
+    files.distinct.map { path =>
+      val p = _normalize_config_path(cwd, path)
+      ConfigurationSource.File(
+        origin = ConfigurationOrigin.Arguments,
+        path = p,
+        rank = ConfigurationSource.Rank.Arguments,
+        loader = new SimpleFileConfigLoader
+      )
+    }.toVector
+  }
+
+  private def _split_config_paths(
+    value: Option[String]
+  ): Vector[String] =
+    value.toVector.flatMap(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
+
+  private def _normalize_config_path(
+    cwd: Path,
+    path: String
+  ): Path = {
+    val p = Paths.get(path)
+    if (p.isAbsolute) p.normalize else cwd.resolve(p).normalize
+  }
+
+  private def _config_args(
+    args: Array[String]
+  ): Map[String, String] = {
+    val entries = scala.collection.mutable.Map.empty[String, String]
+    var i = 0
+    while (i < args.length) {
+      val current = args(i)
+      if (current.startsWith("--") && current.contains("=")) {
+        val raw = current.drop(2)
+        val idx = raw.indexOf('=')
+        if (idx > 0) {
+          entries += raw.substring(0, idx) -> raw.substring(idx + 1)
+        }
+        i += 1
+      } else if (current.startsWith("--") && i + 1 < args.length && !args(i + 1).startsWith("--")) {
+        entries += current.drop(2) -> args(i + 1)
+        i += 2
+      } else {
+        i += 1
+      }
+    }
+    entries.toMap
   }
 }

@@ -11,7 +11,7 @@ import org.goldenport.cncf.path.AliasResolver
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr.  8, 2026
+ * @version Apr.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -165,7 +165,7 @@ object GenericSubsystemFactory {
         .filter(component => descriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding.componentName)))
         .distinctBy(_.name)
     subsystem.add(components)
-    subsystem
+    subsystem.withDescriptor(descriptor)
   }
 
   private def _repository_specs(

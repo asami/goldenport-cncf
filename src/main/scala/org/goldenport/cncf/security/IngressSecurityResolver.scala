@@ -6,6 +6,7 @@ import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, GlobalRuntimeContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SpanId, TraceId}
+import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.event.EventReception
 import org.goldenport.cncf.job.{ActionId, JobContext, JobId, TaskId}
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
@@ -20,7 +21,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Mar. 31, 2026
+ * @version Apr.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -112,14 +113,26 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   }
 
   def resolve(base: ExecutionContext, attributes: Map[String, String]): Consequence[ResolvedIngressSecurity] = {
-    val privilege = _resolve_privilege(attributes)
     val caps = _resolve_requested_capabilities(attributes)
-    privilege.flatMap { p =>
-      val ctx0 = ExecutionContext.withSecurityContext(base, _security_context(p))
+    val request = AuthenticationRequest(attributes)
+    val resolvedProviders = _resolved_authentication_providers(base)
+    val security0 =
+      if (resolvedProviders.nonEmpty)
+        _resolve_authenticated_security(resolvedProviders, base, request)
+      else
+        Consequence.failure[SecurityContext]("No authentication provider accepted the request.")
+    security0.orElse {
+      if (_fallback_privilege_enabled(base))
+        _resolve_privilege(attributes).map(_security_context)
+      else
+        Consequence.failure[SecurityContext]("Privilege fallback is disabled by resolved security wiring.")
+    }.flatMap { security =>
+      val privilege = _resolve_privilege_from_security(security)
+      val ctx0 = ExecutionContext.withSecurityContext(base, security)
       val ctx1 = _production_runtime_context_from_base(ctx0)
       val ctx = _bind_context(attributes, ctx1)
       if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
-        Consequence.success(ResolvedIngressSecurity(ctx, p, caps))
+        Consequence.success(ResolvedIngressSecurity(ctx, privilege, caps))
       else
         Consequence.fail(
           Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Illegal),
@@ -214,8 +227,58 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
         val attributes: Map[String, String] = privilege.attributes
       },
       capabilities = privilege.capabilities,
-      level = privilege.level
+      level = privilege.level,
+      subjectKind = privilege.subjectKind
     )
+
+  private def _resolve_authenticated_security(
+    providers: Vector[AuthenticationProvider],
+    base: ExecutionContext,
+    request: AuthenticationRequest
+  ): Consequence[SecurityContext] = {
+    providers.foldLeft(Consequence.failure[SecurityContext]("No authentication provider accepted the request.")) { (z, provider) =>
+      z.orElse {
+        provider.authenticate(request)(using base).flatMap {
+          case Some(result) => Consequence.success(result.toSecurityContext)
+          case None => Consequence.failure[SecurityContext](s"Authentication provider did not match: ${provider.name}")
+        }
+      }
+    }
+  }
+
+  private def _resolved_authentication_providers(base: ExecutionContext): Vector[AuthenticationProvider] =
+    _subsystem_from_scope(base.cncfCore.scope)
+      .toVector
+      .flatMap(_.resolvedSecurityWiring.authentication.enabledProviders)
+      .flatMap(_.provider)
+
+  private def _fallback_privilege_enabled(base: ExecutionContext): Boolean =
+    _subsystem_from_scope(base.cncfCore.scope)
+      .map(_.resolvedSecurityWiring.authentication.fallbackPrivilegeEnabled)
+      .getOrElse(true)
+
+  @annotation.tailrec
+  private def _subsystem_from_scope(scope: ScopeContext): Option[org.goldenport.cncf.subsystem.Subsystem] =
+    scope match {
+      case cc: Component.Context =>
+        cc.component.subsystem
+      case other =>
+        other.parent match {
+          case Some(parent) => _subsystem_from_scope(parent)
+          case None => None
+        }
+    }
+
+  private def _resolve_privilege_from_security(
+    security: SecurityContext
+  ): SecurityContext.Privilege =
+    if (security.capabilities.exists { c =>
+      val n = _normalize_token(c.name)
+      n == _normalize_token("content_manager") || n == _normalize_token("content_admin")
+    })
+      SecurityContext.Privilege.ApplicationContentManager
+    else
+      SecurityContext.Privilege.User
 
   private def _production_runtime_context(
     ctx: ExecutionContext

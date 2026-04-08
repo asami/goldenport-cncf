@@ -299,7 +299,8 @@ object ExecutionContext {
     SecurityContext(
       principal = new _TestPrincipal(privilege),
       capabilities = privilege.capabilities,
-      level = privilege.level
+      level = privilege.level,
+      subjectKind = privilege.subjectKind
     )
 
   private def _observability_context(

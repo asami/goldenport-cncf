@@ -5,7 +5,7 @@ import org.goldenport.id.UniversalId
 
 /*
  * @since   Dec. 21, 2025
- * @version Mar. 18, 2026
+ * @version Apr.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class PrincipalId(
@@ -16,12 +16,30 @@ final case class SecurityLevel(
   value: String
 )
 
+enum SubjectKind {
+  case User, Subsystem, Service, Anonymous, Unspecified
+}
+
+final case class SessionContext(
+  sessionId: Option[String] = None,
+  tokenId: Option[String] = None,
+  tokenKind: Option[String] = None,
+  issuer: Option[String] = None,
+  audience: Option[String] = None,
+  authenticatedAt: Option[Instant] = None,
+  expiresAt: Option[Instant] = None,
+  refreshSessionId: Option[String] = None,
+  attributes: Map[String, String] = Map.empty
+)
+
 sealed trait AuditOutcome
 
 final case class SecurityContext(
   principal: Principal,
   capabilities: Set[Capability],
-  level: SecurityLevel
+  level: SecurityLevel,
+  subjectKind: SubjectKind = SubjectKind.Unspecified,
+  session: Option[SessionContext] = None
 ) {
   def hasCapability(name: String): Boolean = {
     val target = _normalize_token(name)
@@ -52,6 +70,7 @@ object SecurityContext {
     def attributes: Map[String, String]
     def capabilities: Set[Capability]
     def level: SecurityLevel
+    def subjectKind: SubjectKind = SubjectKind.User
   }
 
   object Privilege {

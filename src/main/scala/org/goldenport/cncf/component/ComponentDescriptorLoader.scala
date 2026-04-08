@@ -61,6 +61,8 @@ object ComponentDescriptorLoader {
         case Some(file) =>
           _load_file(file).flatMap(_.headOption.map(Consequence.success).getOrElse(Consequence.failure(s"component archive descriptor is empty: ${file}")))
         case None =>
+          // Descriptor-first path is the current design.
+          // manifest.json fallback remains only as a compatibility memo.
           ArchiveManifest.load(path, "car").map { m =>
             ComponentDescriptor(
               name = Some(m.name),
@@ -77,6 +79,8 @@ object ComponentDescriptorLoader {
   def looksLikeArchiveDirectory(path: Path): Boolean = {
     val componentdir = path.resolve("component")
     Files.isDirectory(path) && Files.isDirectory(componentdir) &&
+      // Descriptor files are the intended signal.
+      // manifest.json is still accepted only for compatibility.
       (_resolve_canonical_descriptor_files(path).nonEmpty || Files.exists(path.resolve("meta").resolve("manifest.json"))) &&
       _contains_component_jar(componentdir)
   }
