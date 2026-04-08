@@ -27,12 +27,13 @@ import org.goldenport.datatype.{ContentType, MimeBody}
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
- * @version Mar. 29, 2026
+ *  version Mar. 29, 2026
+ * @version Apr.  8, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
   engine: HttpExecutionEngine,
-  port: Int = 8080
+  port: Int = Http4sHttpServer.defaultPort
 ) extends HttpServer(engine) {
   private val _bind_host = Host.fromString("0.0.0.0").get
 
@@ -228,6 +229,14 @@ final class Http4sHttpServer(
 }
 
 object Http4sHttpServer {
+  val PortPropertyKey = "cncf.server.port"
+
+  def defaultPort: Int =
+    sys.props
+      .get(PortPropertyKey)
+      .flatMap(x => scala.util.Try(x.toInt).toOption)
+      .getOrElse(8080)
+
   def create(): Http4sHttpServer =
     new Http4sHttpServer(
       HttpExecutionEngine.Factory.engine()

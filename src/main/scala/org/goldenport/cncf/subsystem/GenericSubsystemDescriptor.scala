@@ -6,6 +6,7 @@ import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.record.RecordDecoder
 import org.goldenport.cncf.component.ComponentDescriptor
+import org.goldenport.cncf.component.ComponentDescriptorLoader
 import org.goldenport.cncf.component.DescriptorRecordLoader
 
 /*
@@ -102,9 +103,24 @@ object GenericSubsystemDescriptor {
   def loadArchive(path: Path): Consequence[GenericSubsystemDescriptor] =
     load(path)
 
-  def looksLikeArchiveDirectory(path: Path): Boolean =
-    Files.isDirectory(path) && Files.isDirectory(path.resolve("component")) &&
-      (_resolve_descriptor_file(path).nonEmpty || Files.exists(path.resolve("meta").resolve("manifest.json")))
+  def looksLikeArchiveDirectory(path: Path): Boolean = {
+    val componentdir = path.resolve("component")
+    Files.isDirectory(path) && Files.isDirectory(componentdir) &&
+      (_resolve_descriptor_file(path).nonEmpty || Files.exists(path.resolve("meta").resolve("manifest.json"))) &&
+      _contains_component_archive(componentdir)
+  }
+
+  private def _contains_component_archive(componentdir: Path): Boolean = {
+    val stream = Files.list(componentdir)
+    try {
+      stream.iterator().asScala.exists { p =>
+        (Files.isRegularFile(p) && p.getFileName.toString.toLowerCase.endsWith(".car")) ||
+        (Files.isDirectory(p) && ComponentDescriptorLoader.looksLikeArchiveDirectory(p))
+      }
+    } finally {
+      stream.close()
+    }
+  }
 
   def coordinateParts(coordinate: String): Vector[String] =
     coordinate.split(":").toVector.map(_.trim).filter(_.nonEmpty)
