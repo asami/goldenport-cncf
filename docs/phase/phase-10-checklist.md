@@ -160,7 +160,7 @@ History comment:
 
 ## PX-01: Practical Runtime and Projection Alignment
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -168,17 +168,28 @@ Ensure CNCF practical usability for account/identity operations.
 
 ### Detailed Tasks
 
-- [ ] Validate end-to-end command execution returns job id and retrievable results.
-- [ ] Validate end-to-end query execution remains synchronous by default.
-- [ ] Validate help/describe/schema/meta exposure is deterministic and complete.
-- [ ] Validate command-help guidance route for new operations.
-- [ ] Confirm baseline operational scenarios for practical usage are covered.
+- [x] Validate end-to-end command execution returns job id and retrievable results.
+- [x] Validate end-to-end query execution remains synchronous by default.
+- [x] Validate help/describe/schema/meta exposure is deterministic and complete.
+- [x] Validate command-help guidance route for new operations.
+- [x] Confirm baseline operational scenarios for practical usage are covered.
+
+### Closure Basis
+
+- CNCF-side runtime policy and projection surfaces are stable enough for
+  practical use.
+- Textus practical end-to-end validation is treated as fulfilled by
+  repository-local tests and focused validation in:
+  - `/Users/asami/src/dev2026/textus-user-account`
+  - `/Users/asami/src/dev2026/textus-identity`
+- Additional cross-repo practical scenarios may continue in samples and later
+  phases without keeping PX-01 open.
 
 ---
 
 ## TI-03: CNCF Sample Development Tracking
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -187,14 +198,14 @@ without duplicating detailed sample-progress management inside the CNCF repo.
 
 ### Detailed Tasks
 
-- [ ] Record the sample repository path and ownership boundary.
-- [ ] Record which Phase 10 capabilities are expected to be exercised in
+- [x] Record the sample repository path and ownership boundary.
+- [x] Record which Phase 10 capabilities are expected to be exercised in
   `cncf-samples`.
-- [ ] Capture integration checkpoints from sample development back into Phase
+- [x] Capture integration checkpoints from sample development back into Phase
   10 when they affect CNCF/Textus work.
-- [ ] Keep detailed sample-task status in `cncf-samples`, not in this
+- [x] Keep detailed sample-task status in `cncf-samples`, not in this
   checklist.
-- [ ] Use TI-03 updates to inform PX-01/PX-02 readiness only at a summary
+- [x] Use TI-03 updates to inform PX-01/PX-02 readiness only at a summary
   level.
 
 ### Tracking Policy
@@ -206,11 +217,17 @@ without duplicating detailed sample-progress management inside the CNCF repo.
 - Sample development has already started, but detailed status remains owned by
   the sample repository side.
 
+### Closure Basis
+
+- `cncf-samples` is established as the practical validation vehicle.
+- Phase 10 tracks only summary checkpoints and ownership boundaries.
+- Detailed sample progression is intentionally left outside this checklist.
+
 ---
 
 ## PX-02: Executable Specifications and Phase Closure
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -218,12 +235,20 @@ Close Phase 10 with executable-spec guarantees and document alignment.
 
 ### Detailed Tasks
 
-- [ ] Add executable specs for user-account component behavior.
-- [ ] Add executable specs for identity subsystem integration behavior.
-- [ ] Add cross-boundary specs for account-identity interaction.
-- [ ] Add runtime/projection regression specs for practical usage scenarios.
-- [ ] Update `phase-10.md` and `phase-10-checklist.md` consistently.
-- [ ] Mark Phase 10 closed only after all items are DONE.
+- [x] Add executable specs for user-account component behavior.
+- [x] Add executable specs for identity subsystem integration behavior.
+- [x] Add cross-boundary specs for account-identity interaction.
+- [x] Add runtime/projection regression specs for practical usage scenarios.
+- [x] Update `phase-10.md` and `phase-10-checklist.md` consistently.
+- [x] Mark Phase 10 closed only after all items are DONE.
+
+### Closure Basis
+
+- Textus repositories carry their own executable-spec burden for domain-facing
+  behavior.
+- CNCF Phase 10 closure requires integration and projection/runtime baseline
+  confirmation, not duplication of external repository test suites.
+- Phase 10 document alignment is complete.
 
 ---
 

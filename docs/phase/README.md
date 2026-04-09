@@ -15,8 +15,8 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Active phase: `phase-10.md`
-- Active checklist: `phase-10-checklist.md`
+- Active phase: `phase-11.md`
+- Active checklist: `phase-11-checklist.md`
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
@@ -24,6 +24,7 @@ Current baseline:
   - `phase-7.md`
   - `phase-8.md`
   - `phase-9.md`
+  - `phase-10.md`
 
 ## Related Rules
 

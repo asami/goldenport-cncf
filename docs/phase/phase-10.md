@@ -1,6 +1,6 @@
 # Phase 10 — Textus Identity and User Account Practicalization
 
-status = open
+status = close
 
 ## 1. Purpose of This Document
 
@@ -36,12 +36,12 @@ This document is a progress dashboard, not a design journal.
 - A (DONE): Define Textus account/identity capability contract and boundaries.
 - B (DONE): Implement `textus-user-account` component operations and metadata.
 - C (DONE): Realize revised minimal-subsystem runtime integration for `textus-identity`.
-- D (ACTIVE): Align runtime/projection/meta surfaces for practical operation use.
-- E (PLANNED): Add executable specifications and close phase documentation.
+- D (DONE): Align runtime/projection/meta surfaces for practical operation use.
+- E (DONE): Add executable specifications and close phase documentation.
 
 Resume hint:
-- Validate practical runtime/projection behavior for the now-connected
-  `textus-identity` minimal subsystem and advance PX-01.
+- Phase 10 is closed. Follow-up work moves to later phases instead of
+  reopening this phase.
 
 ## 5. Development Items
 
@@ -49,9 +49,9 @@ Resume hint:
 - [x] TU-02: Implement `textus-user-account` component and operation metadata integration.
 - [x] TI-01: Define and freeze `textus-identity` subsystem integration contract.
 - [x] TI-02: Implement `textus-identity` subsystem runtime integration.
-- [ ] TI-03: Track CNCF sample development status and integration checkpoints.
-- [ ] PX-01: Align command/query practical runtime behavior and projection visibility.
-- [ ] PX-02: Add executable specifications and finalize Phase 10 closure.
+- [x] TI-03: Track CNCF sample development status and integration checkpoints.
+- [x] PX-01: Align command/query practical runtime behavior and projection visibility.
+- [x] PX-02: Add executable specifications and finalize Phase 10 closure.
 
 ## 6.2 Latest Verification Snapshot (2026-03-26)
 
@@ -107,6 +107,21 @@ Resume hint:
 - 2026-03-26 focused validation closed the revised TI-02 slice and moved
   Phase 10 to PX-01.
 
+## 6.4 Closure Note (2026-04-09)
+
+- `textus-user-account` and `textus-identity` practical end-to-end validation
+  is treated as fulfilled by their own repository-side test coverage and
+  focused validation history.
+- CNCF-side practical runtime/projection baseline is treated as fulfilled by:
+  - command/query runtime policy stabilization
+  - deterministic help/describe/schema/meta projection coverage
+  - subsystem descriptor-first runtime integration closure
+- `cncf-samples` tracking is treated as fulfilled at summary level:
+  - practical validation ownership is recorded
+  - detailed sample execution remains owned by the sample repository
+- Remaining follow-up work belongs to later phases rather than keeping
+  Phase 10 open.
+
 ## 6. Inputs from Previous Phases
 
 - Phase 8 operation grammar/model propagation and runtime metadata integration baselines.
@@ -128,4 +143,7 @@ Phase 10 development tracks these repositories together with CNCF integration.
 
 - `/Users/asami/src/dev2025/cloud-native-component-framework/docs/phase/phase-8.md`
 - `/Users/asami/src/dev2025/cloud-native-component-framework/docs/phase/phase-8-checklist.md`
+- `/Users/asami/src/dev2025/cloud-native-component-framework/docs/phase/phase-11.md`
 - `/Users/asami/src/dev2025/cloud-native-component-framework/docs/strategy/cncf-development-strategy.md`
+
+closed_at = 2026-04-09
