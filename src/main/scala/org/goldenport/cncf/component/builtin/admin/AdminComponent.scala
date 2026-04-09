@@ -479,7 +479,7 @@ object AdminComponent {
         "subsystem" -> subsystem.name,
         "ports" -> ports,
         "wiring" -> wiring,
-        "wiringBindings" -> wiringBindings,
+        "wiring_bindings" -> wiringBindings,
         "components" -> components,
         "warnings" -> warnings
       )

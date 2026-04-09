@@ -84,20 +84,24 @@ final case class GenericSubsystemResolvedWiringBinding(
   fromComponent: String,
   fromService: String,
   fromOperation: String,
+  fromApi: Option[String] = None,
   toComponent: String,
+  toSpi: Option[String] = None,
   toService: String,
   toOperation: String,
-  mode: String = "direct-operation-routing"
+  mode: String = "api-spi-routing"
 ) {
   def toRecord: Record =
     Record.data(
       "from" -> Record.data(
         "component" -> fromComponent,
         "service" -> fromService,
-        "operation" -> fromOperation
+        "operation" -> fromOperation,
+        "api" -> fromApi.getOrElse("")
       ),
       "to" -> Record.data(
         "component" -> toComponent,
+        "spi" -> toSpi.getOrElse(""),
         "service" -> toService,
         "operation" -> toOperation
       ),
@@ -143,7 +147,10 @@ final case class GenericSubsystemDescriptor(
       .map(_.portRecord)
 
   def resolvedWiringBindings: Vector[Record] =
-    GenericSubsystemDescriptor.resolveWiringBindings(wiring).map(_.toRecord)
+    GenericSubsystemDescriptor.resolveWiringBindings(this).map(_.toRecord)
+
+  def resolvedWiring: Vector[GenericSubsystemResolvedWiringBinding] =
+    GenericSubsystemDescriptor.resolveWiringBindings(this)
 }
 
 object GenericSubsystemDescriptor {
@@ -405,6 +412,70 @@ object GenericSubsystemDescriptor {
       if (entries.isEmpty) Record.empty else Record.create(entries)
     }
 
+  def resolveWiringBindings(descriptor: GenericSubsystemDescriptor): Vector[GenericSubsystemResolvedWiringBinding] = {
+    val componentIndex = descriptor.componentBindings.map(x => x.componentName -> x).toMap
+    val groups = scala.collection.mutable.LinkedHashMap.empty[String, scala.collection.mutable.Map[String, String]]
+    _flatten_record(descriptor.wiring).iterator.foreach {
+      case (k, v) =>
+        val key = k.toString
+        val value = Option(v).map(_.toString).getOrElse("")
+        val path = key.split("/").toVector.filter(_.nonEmpty)
+        if (path.size >= 4) {
+          val group = path.dropRight(1).mkString("/")
+          val leaf = path.last
+          val slot = groups.getOrElseUpdate(group, scala.collection.mutable.LinkedHashMap.empty[String, String])
+          slot.update(leaf, value)
+        }
+      case _ =>
+    }
+    groups.toVector.flatMap { case (group, values) =>
+      group.split("/").toVector.filter(_.nonEmpty) match {
+        case Vector(fromComponent, fromService, fromOperation) =>
+          val targetComponent = values.get("target_component")
+          val fromApi = values.get("api")
+          val targetSpi = values.get("target_spi").orElse(values.get("spi"))
+          (targetComponent, targetSpi) match {
+            case (Some(toComponent), Some(spiName)) =>
+              componentIndex.get(toComponent)
+                .flatMap(_.spi.find(_.name == spiName))
+                .flatMap { spi =>
+                  for {
+                    toService <- spi.service
+                    toOperation <- spi.operation
+                  } yield GenericSubsystemResolvedWiringBinding(
+                    fromComponent = fromComponent,
+                    fromService = fromService,
+                    fromOperation = fromOperation,
+                    fromApi = fromApi,
+                    toComponent = toComponent,
+                    toSpi = Some(spiName),
+                    toService = toService,
+                    toOperation = toOperation
+                  )
+                }
+            case _ =>
+              for {
+                toComponent <- values.get("target_component")
+                toService <- values.get("target_service")
+                toOperation <- values.get("target_operation")
+              } yield GenericSubsystemResolvedWiringBinding(
+                fromComponent = fromComponent,
+                fromService = fromService,
+                fromOperation = fromOperation,
+                fromApi = fromApi,
+                toComponent = toComponent,
+                toSpi = targetSpi,
+                toService = toService,
+                toOperation = toOperation,
+                mode = "direct-operation-routing"
+              )
+          }
+        case _ =>
+          None
+      }
+    }
+  }
+
   def resolveWiringBindings(wiring: Record): Vector[GenericSubsystemResolvedWiringBinding] = {
     val groups = scala.collection.mutable.LinkedHashMap.empty[String, scala.collection.mutable.Map[String, String]]
     _flatten_record(wiring).iterator.foreach {
@@ -431,9 +502,12 @@ object GenericSubsystemDescriptor {
             fromComponent = fromComponent,
             fromService = fromService,
             fromOperation = fromOperation,
+            fromApi = values.get("api"),
             toComponent = toComponent,
+            toSpi = values.get("target_spi").orElse(values.get("spi")),
             toService = toService,
-            toOperation = toOperation
+            toOperation = toOperation,
+            mode = "direct-operation-routing"
           )
         case _ =>
           None
