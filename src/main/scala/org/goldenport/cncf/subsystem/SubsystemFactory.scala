@@ -28,7 +28,7 @@ import org.goldenport.protocol.spec as spec
  *  version Jan. 30, 2026
  *  version Feb. 15, 2026
  *  version Mar. 29, 2026
- * @version Apr.  9, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {
@@ -38,6 +38,21 @@ object DefaultSubsystemFactory {
   private val _subsystem_name = GlobalRuntimeContext.SubsystemName
 
   def subsystemName: String = _subsystem_name
+
+  def builtinComponents(
+    subsystem: Subsystem
+  ): Vector[Component] = {
+    val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
+    Vector(
+      _admin,
+      _client,
+      DebugComponent.Factory,
+      EventComponent.Factory,
+      JobControlComponent.Factory,
+      MetricsComponent.Factory,
+      _spec
+    ).flatMap(_.create(params))
+  }
 
   def default(
     mode: Option[String] = None,
@@ -156,9 +171,7 @@ object DefaultSubsystemFactory {
         aliasResolver = aliasResolver,
         runMode = runMode
       )
-    val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
-    val comps = Vector(_admin, _client, DebugComponent.Factory, EventComponent.Factory, JobControlComponent.Factory, MetricsComponent.Factory, _spec)
-      .flatMap(_.create(params))
+    val comps = builtinComponents(subsystem)
     subsystem.add(comps)
   }
 

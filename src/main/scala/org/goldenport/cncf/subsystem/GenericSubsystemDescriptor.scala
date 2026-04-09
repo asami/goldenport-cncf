@@ -36,6 +36,10 @@ final case class GenericSubsystemSecurityBinding(
   authentication: Option[GenericSubsystemAuthenticationBinding] = None
 )
 
+final case class GenericSubsystemBuiltinBinding(
+  exclude: Vector[String] = Vector.empty
+)
+
 final case class GenericSubsystemComponentBinding(
   componentName: String,
   coordinate: Option[String] = None,
@@ -62,7 +66,8 @@ final case class GenericSubsystemDescriptor(
   extensions: Map[String, String] = Map.empty,
   config: Map[String, String] = Map.empty,
   wiring: Record = Record.empty,
-  security: Option[GenericSubsystemSecurityBinding] = None
+  security: Option[GenericSubsystemSecurityBinding] = None,
+  builtin: Option[GenericSubsystemBuiltinBinding] = None
 ) {
   def componentVersion: Option[String] =
     version.orElse(componentBindings.headOption.flatMap(_.componentVersion))
@@ -94,7 +99,8 @@ object GenericSubsystemDescriptor {
     extensions: Map[String, String],
     config: Map[String, String],
     wiring: Record,
-    security: Option[GenericSubsystemSecurityBinding]
+    security: Option[GenericSubsystemSecurityBinding],
+    builtin: Option[GenericSubsystemBuiltinBinding]
   )
 
   private val _canonical_descriptor_files = Vector(
@@ -213,7 +219,8 @@ object GenericSubsystemDescriptor {
         extensions = m.extensions,
         config = m.config,
         wiring = Record.empty,
-        security = None
+        security = None,
+        builtin = None
       )
     }
 
@@ -227,7 +234,8 @@ object GenericSubsystemDescriptor {
         extensions = s.extensions,
         config = s.config,
         wiring = s.wiring,
-        security = s.security
+        security = s.security,
+        builtin = s.builtin
       )
     }.leftMap { c =>
       c.copy(observation = c.observation.copy(cause = c.observation.cause.withMessage(s"${c.displayMessage} in ${path}")))
@@ -395,6 +403,14 @@ object GenericSubsystemDescriptor {
         case None => Consequence.success(GenericSubsystemSecurityBinding(None))
       }
 
+  given RecordDecoder[GenericSubsystemBuiltinBinding] with
+    def fromRecord(rec: Record): Consequence[GenericSubsystemBuiltinBinding] =
+      Consequence.success(
+        GenericSubsystemBuiltinBinding(
+          exclude = _string_vector(rec, List("exclude", "excluded", "disable", "disabled"))
+        )
+      )
+
   given RecordDecoder[Shape] with
     def fromRecord(rec: Record): Consequence[Shape] = {
       val subsystemName = _string(rec, "subsystem", "subsystemName", "name")
@@ -412,7 +428,8 @@ object GenericSubsystemDescriptor {
                 extensions = _string_map_value(rec, List("extension", "extensions")),
                 config = _string_map_value(rec, List("config")),
                 wiring = _record_value(rec, List("wiring")).getOrElse(Record.empty),
-                security = _record_value(rec, List("security")).flatMap(r => summon[RecordDecoder[GenericSubsystemSecurityBinding]].fromRecord(r).toOption)
+                security = _record_value(rec, List("security")).flatMap(r => summon[RecordDecoder[GenericSubsystemSecurityBinding]].fromRecord(r).toOption),
+                builtin = _record_value(rec, List("builtin", "builtins")).flatMap(r => summon[RecordDecoder[GenericSubsystemBuiltinBinding]].fromRecord(r).toOption)
               )
             )
         case None =>

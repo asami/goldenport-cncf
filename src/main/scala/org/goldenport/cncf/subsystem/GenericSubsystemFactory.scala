@@ -2,6 +2,7 @@ package org.goldenport.cncf.subsystem
 
 import java.nio.file.{Path, Paths}
 import org.goldenport.cncf.cli.RunMode
+import org.goldenport.cncf.assembly.AssemblyReport
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentOrigin}
 import org.goldenport.cncf.component.repository.ComponentRepository
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
@@ -11,7 +12,7 @@ import org.goldenport.cncf.path.AliasResolver
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr.  9, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -120,10 +121,11 @@ object GenericSubsystemFactory {
         runMode = runMode
       )
     val params = ComponentCreate(subsystem, ComponentOrigin.Repository("subsystem-name"))
-    val components =
+    val components0 =
       _repository_specs(configuration).flatMap(_.build(params).discover())
         .filter(_matches_named_subsystem(_, subsystemName))
-        .distinctBy(_.name)
+    val builtins = DefaultSubsystemFactory.builtinComponents(subsystem)
+    val components = _collapse_duplicate_components(builtins ++ components0)
     subsystem.add(components)
     subsystem
   }
@@ -169,10 +171,11 @@ object GenericSubsystemFactory {
       ComponentOrigin.Repository("subsystem-descriptor"),
       descriptor.toComponentDescriptors
     )
-    val components =
+    val components0 =
       _repository_specs(configuration).flatMap(_.build(params).discover())
         .filter(component => descriptor.componentBindings.exists(binding => _matches_descriptor_component(component, binding.componentName)))
-        .distinctBy(_.name)
+    val builtins = _builtin_components(subsystem, descriptor)
+    val components = _collapse_duplicate_components(builtins ++ components0)
     subsystem.add(components)
     subsystem.withDescriptor(descriptor)
   }
@@ -243,5 +246,39 @@ object GenericSubsystemFactory {
     } else {
       stripped
     }
+  }
+
+  private def _collapse_duplicate_components(
+    components: Seq[Component]
+  ): Vector[Component] = {
+    val seen = scala.collection.mutable.LinkedHashMap.empty[String, Component]
+    components.foreach { component =>
+      seen.get(component.name) match {
+        case Some(existing) =>
+          val selection = AssemblyReport.selectPreferred(existing, component)
+          seen.update(component.name, selection.selected)
+          GlobalRuntimeContext.current.foreach(
+            _.assemblyReport.addWarning(
+              AssemblyReport.duplicateComponentWarning(
+                componentName = component.name,
+                selected = selection.selected,
+                dropped = selection.dropped,
+                reason = selection.reason
+              )
+            )
+          )
+        case None =>
+          seen += component.name -> component
+      }
+    }
+    seen.values.toVector
+  }
+
+  private def _builtin_components(
+    subsystem: Subsystem,
+    descriptor: GenericSubsystemDescriptor
+  ): Vector[Component] = {
+    val excluded = descriptor.builtin.map(_.exclude.map(_.trim.toLowerCase).toSet).getOrElse(Set.empty)
+    DefaultSubsystemFactory.builtinComponents(subsystem).filterNot(c => excluded.contains(c.name.trim.toLowerCase))
   }
 }

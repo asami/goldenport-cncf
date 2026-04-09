@@ -13,6 +13,7 @@ import org.goldenport.configuration.source.file.SimpleFileConfigLoader
 import org.goldenport.cncf.cli.{CncfRuntime, RunMode}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentCreate, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.component.repository.{ComponentProvider, ComponentRepository, ComponentRepositorySpace, ComponentSource}
+import org.goldenport.cncf.assembly.AssemblyReport
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.subsystem.Subsystem
@@ -28,7 +29,8 @@ import org.goldenport.cncf.observability.global.GlobalObservable
  * @since   Jan.  7, 2026
  *  version Jan. 23, 2026
  *  version Feb.  1, 2026
- * @version Mar. 26, 2026
+ *  version Mar. 26, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfMain extends GlobalObservable {
@@ -282,8 +284,20 @@ object CncfMain extends GlobalObservable {
           val key = NamingConventions.toComparisonKey(name)
           seen.get(key) match {
             case Some(existing) =>
+              val selection = AssemblyReport.selectPreferred(existing, component)
+              seen.update(key, selection.selected)
+              GlobalRuntimeContext.current.foreach(
+                _.assemblyReport.addWarning(
+                  AssemblyReport.duplicateComponentWarning(
+                    componentName = name,
+                    selected = selection.selected,
+                    dropped = selection.dropped,
+                    reason = selection.reason
+                  )
+                )
+              )
               observe_warn(
-                s"duplicate component collapsed name=${name} kept=${existing.origin} dropped=${component.origin}"
+                s"duplicate component collapsed name=${name} kept=${selection.selected.origin} dropped=${selection.dropped.map(_.origin).mkString(",")} reason=${selection.reason}"
               )
             case None =>
               seen += key -> component

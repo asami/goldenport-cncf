@@ -7,6 +7,7 @@ import org.goldenport.cncf.config.ResolvedParameters
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.component.ComponentFactory
+import org.goldenport.cncf.assembly.AssemblyReport
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
@@ -15,7 +16,8 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  * @since   Jan. 17, 2026
  *  version Jan. 19, 2026
  *  version Feb.  1, 2026
- * @version Mar. 28, 2026
+ *  version Mar. 28, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GlobalRuntimeContext(
@@ -38,6 +40,7 @@ final class GlobalRuntimeContext(
 //     httpDriverOption = Some(httpDriver)
 //   )
   private var _componentFactory: Option[ComponentFactory] = None
+  val assemblyReport: AssemblyReport = new AssemblyReport()
 
   lazy val resolvedParameters: ResolvedParameters =
     ResolvedParameters.fromResolvedConfiguration(resolvedConfiguration)

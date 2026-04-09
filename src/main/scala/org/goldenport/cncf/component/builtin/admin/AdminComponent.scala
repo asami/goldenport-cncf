@@ -13,6 +13,7 @@ import org.goldenport.configuration.ConfigurationResolver
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.configuration.ConfigurationSources
 import org.goldenport.configuration.ConfigurationOrigin
+import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.projection.{SecurityDeploymentMarkdownProjection, SecurityDeploymentProjection}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.Protocol
@@ -30,7 +31,6 @@ import org.goldenport.schema.{DataType, XString}
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
- *  version Apr.  9, 2026
  * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -82,6 +82,11 @@ object AdminComponent {
         spec.ResponseDefinition(result = List(XString)),
         params.subsystem
       )
+      val opAssemblyWarnings = new AssemblyWarningsOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(DataType.Named("Record"))),
+        params.subsystem
+      )
       val serviceSystem = spec.ServiceDefinition(
         name = "system",
         operations = spec.OperationDefinitionGroup(
@@ -121,6 +126,12 @@ object AdminComponent {
           )
         )
       )
+      val serviceAssembly = spec.ServiceDefinition(
+        name = "assembly",
+        operations = spec.OperationDefinitionGroup(
+          operations = NonEmptyVector.of(opAssemblyWarnings)
+        )
+      )
       val services = spec.ServiceDefinitionGroup(
         services = Vector(
           serviceSystem,
@@ -128,7 +139,8 @@ object AdminComponent {
           serviceConfig,
           serviceVariation,
           serviceExtension,
-          serviceDeployment
+          serviceDeployment,
+          serviceAssembly
         )
       )
       val protocol = Protocol(
@@ -283,6 +295,27 @@ object AdminComponent {
       Consequence.success(DeploymentSecurityMarkdownAction(req, subsystem))
   }
 
+  private final class AssemblyWarningsOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        content = BaseContent.Builder("warnings")
+          .summary("Show assembly warnings detected during component and subsystem loading.")
+          .description("Return duplicate-component and related assembly warnings captured during runtime assembly.")
+          .build(),
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: Request
+    ): Consequence[OperationRequest] =
+      Consequence.success(AssemblyWarningsAction(req, subsystem))
+  }
+
   private final case class ComponentListAction(
     request: Request,
     subsystem: Subsystem
@@ -349,12 +382,33 @@ object AdminComponent {
       DeploymentSecurityMarkdownActionCall(core, subsystem)
   }
 
+  private final case class AssemblyWarningsAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      AssemblyWarningsActionCall(core, subsystem)
+  }
+
   private final case class DeploymentSecurityMarkdownActionCall(
     core: ActionCall.Core,
     subsystem: Subsystem
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
       Consequence.success(OperationResponse.Scalar(SecurityDeploymentMarkdownProjection.project(subsystem)))
+  }
+
+  private final case class AssemblyWarningsActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] = {
+      val report =
+        GlobalRuntimeContext.current
+          .map(_.assemblyReport.toRecord)
+          .getOrElse(subsystem.globalRuntimeContext.assemblyReport.toRecord)
+      Consequence.success(OperationResponse.RecordResponse(report))
+    }
   }
 
   private final case class VariationListAction(
