@@ -89,6 +89,7 @@ final case class GenericSubsystemResolvedWiringBinding(
   toSpi: Option[String] = None,
   toService: String,
   toOperation: String,
+  glue: Record = Record.empty,
   mode: String = "api-spi-routing"
 ) {
   def toRecord: Record =
@@ -105,6 +106,7 @@ final case class GenericSubsystemResolvedWiringBinding(
         "service" -> toService,
         "operation" -> toOperation
       ),
+      "glue" -> glue,
       "mode" -> mode
     )
 }
@@ -421,8 +423,8 @@ object GenericSubsystemDescriptor {
         val value = Option(v).map(_.toString).getOrElse("")
         val path = key.split("/").toVector.filter(_.nonEmpty)
         if (path.size >= 4) {
-          val group = path.dropRight(1).mkString("/")
-          val leaf = path.last
+          val group = path.take(3).mkString("/")
+          val leaf = path.drop(3).mkString("/")
           val slot = groups.getOrElseUpdate(group, scala.collection.mutable.LinkedHashMap.empty[String, String])
           slot.update(leaf, value)
         }
@@ -451,6 +453,8 @@ object GenericSubsystemDescriptor {
                     toSpi = Some(spiName),
                     toService = toService,
                     toOperation = toOperation
+                    ,
+                    glue = _glue_value(values)
                   )
                 }
             case _ =>
@@ -467,6 +471,7 @@ object GenericSubsystemDescriptor {
                 toSpi = targetSpi,
                 toService = toService,
                 toOperation = toOperation,
+                glue = _glue_value(values),
                 mode = "direct-operation-routing"
               )
           }
@@ -484,8 +489,8 @@ object GenericSubsystemDescriptor {
         val value = Option(v).map(_.toString).getOrElse("")
         val path = key.split("/").toVector.filter(_.nonEmpty)
         if (path.size >= 4) {
-          val group = path.dropRight(1).mkString("/")
-          val leaf = path.last
+          val group = path.take(3).mkString("/")
+          val leaf = path.drop(3).mkString("/")
           val slot = groups.getOrElseUpdate(group, scala.collection.mutable.LinkedHashMap.empty[String, String])
           slot.update(leaf, value)
         }
@@ -507,12 +512,23 @@ object GenericSubsystemDescriptor {
             toSpi = values.get("target_spi").orElse(values.get("spi")),
             toService = toService,
             toOperation = toOperation,
+            glue = _glue_value(values),
             mode = "direct-operation-routing"
           )
         case _ =>
           None
       }
     }
+  }
+
+  private def _glue_value(values: collection.Map[String, String]): Record = {
+    val entries = values.iterator.collect {
+      case (k, v) if k.startsWith("glue/") =>
+        k.stripPrefix("glue/") -> v
+      case (k, v) if k.startsWith("glue.") =>
+        k.stripPrefix("glue.") -> v
+    }.toVector
+    if (entries.isEmpty) Record.empty else Record.create(entries)
   }
 
   private def _flatten_record(
