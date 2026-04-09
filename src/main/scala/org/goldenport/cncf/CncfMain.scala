@@ -53,16 +53,20 @@ object CncfMain extends GlobalObservable {
 
     val code: Int =
       try {
-        val reposWithDefault =
+        val activeRepos = reposResult
+        val searchRepos =
           _append_default_component_repository(reposResult, cwd, noDefaultComponents)
-        reposWithDefault match {
-          case Left(message) =>
+        (activeRepos, searchRepos) match {
+          case (Left(message), _) =>
             Console.err.println(message)
             2
-          case Right(specs) =>
-            val baseExtras = _component_extra_function(specs, enabled, workspace, factoryClasses)
+          case (_, Left(message)) =>
+            Console.err.println(message)
+            2
+          case (Right(activeSpecs), Right(searchSpecs)) =>
+            val baseExtras = _component_extra_function(activeSpecs, enabled, workspace, factoryClasses)
             val extras = _trace_component_dir_extras(baseExtras)
-            val runtimeArgs = _with_resolved_subsystem_descriptor_arg(configuration, specs, rest)
+            val runtimeArgs = _with_resolved_subsystem_descriptor_arg(configuration, searchSpecs, rest)
             CncfRuntime.runWithExtraComponents(runtimeArgs, extras)
         }
       } catch {
@@ -396,11 +400,48 @@ object CncfMain extends GlobalObservable {
     } else {
       GenericSubsystemFactory
         .subsystemName(configuration)
-        .flatMap(name => ComponentRepository.resolveSubsystemDescriptor(specs, name).map(_.path))
-        .map(path => args ++ Array(s"--${RuntimeConfig.SubsystemFileKey}=${path}"))
+        .flatMap(name => _resolve_subsystem_descriptor_entry(specs, name))
+        .map { case (spec, descriptor) =>
+          val repoArgs =
+            _spec_argument(spec)
+              .filterNot(arg => _has_component_repository_arg(args, arg))
+              .map(arg => Array(s"--component-repository=${arg}"))
+              .getOrElse(Array.empty[String])
+          args ++ repoArgs ++ Array(s"--${RuntimeConfig.SubsystemFileKey}=${descriptor.path}")
+        }
         .getOrElse(args)
     }
   }
+
+  private def _resolve_subsystem_descriptor_entry(
+    specs: Vector[ComponentRepository.Specification],
+    subsystemName: String
+  ): Option[(ComponentRepository.Specification, org.goldenport.cncf.subsystem.GenericSubsystemDescriptor)] =
+    specs.iterator.flatMap { spec =>
+      spec.resolveSubsystemDescriptor(subsystemName).map(spec -> _)
+    }.toSeq.headOption
+
+  private def _spec_argument(
+    spec: ComponentRepository.Specification
+  ): Option[String] =
+    spec match {
+      case ComponentRepository.ComponentDirRepository.Specification(baseDir) =>
+        Some(s"component-dir:${baseDir}")
+      case ComponentRepository.ScalaCliRepository.Specification(baseDir) =>
+        Some(s"scala-cli:${baseDir}")
+      case _ =>
+        None
+    }
+
+  private def _has_component_repository_arg(
+    args: Array[String],
+    value: String
+  ): Boolean =
+    args.contains(s"--component-repository=${value}") ||
+      args.sliding(2).exists {
+        case Array("--component-repository", current) => current == value
+        case _ => false
+      }
 
   private def _class_dirs_(
     workspace: Option[Path]

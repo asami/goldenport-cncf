@@ -16,7 +16,7 @@ import org.goldenport.cncf.subsystem.Subsystem
  * @since   Jan. 30, 2026
  *  version Feb.  5, 2026
  *  version Mar. 26, 2026
- * @version Apr.  9, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositorySpace(
@@ -132,7 +132,7 @@ object ComponentRepositorySpace {
             case Some(err) => Left(err)
             case None => Right(parsed.result())
           }
-        appendDefaultComponentRepository(specsResult, cwd, noDefault)
+        specsResult
     }
 
   private def originForSpec(
