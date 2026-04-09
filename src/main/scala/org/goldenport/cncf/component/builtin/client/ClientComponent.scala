@@ -19,11 +19,13 @@ import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.protocol.spec as spec
 import java.net.URL
 import java.nio.charset.StandardCharsets
+import org.goldenport.schema.DataType
 
 /*
  * @since   Jan. 10, 2026
  *  version Jan. 21, 2026
- * @version Feb. 15, 2026
+ *  version Feb. 15, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ClientComponent() extends Component {
@@ -44,7 +46,7 @@ object ClientComponent {
 
     protected def create_Core(params: ComponentCreate, comp: Component): Component.Core = {
       val request = spec.RequestDefinition()
-      val response = spec.ResponseDefinition()
+      val response = spec.ResponseDefinition(result = List(DataType.Named("HttpResponse")))
       val opget = new ClientGetOperationDefinition(request, response)
       val oppost = new ClientPostOperationDefinition(request, response)
       val service = spec.ServiceDefinition(

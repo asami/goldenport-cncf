@@ -11,10 +11,12 @@ import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.action.{Action, ActionCall, CollaboratorActionCall}
 import org.goldenport.cncf.action.QueryAction
 import org.goldenport.cncf.collaborator.api.Collaborator
+import org.goldenport.schema.XString
 
 /*
  * @since   Jan. 30, 2026
- * @version Feb. 19, 2026
+ *  version Feb. 19, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MiniCollaboratorComponent() extends CollaboratorComponent {
@@ -56,6 +58,7 @@ object MainService extends ServiceDefinition {
   
   object PingOperation extends OperationDefinition {
     val specification = OperationDefinition.Specification.Builder("ping").
+      copy(response = ResponseDefinition(result = List(XString))).
       build()
 
     override def createOperationRequest(

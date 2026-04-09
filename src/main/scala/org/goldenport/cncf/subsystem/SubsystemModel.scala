@@ -2,10 +2,12 @@ package org.goldenport.cncf.subsystem
 
 import cats.data.NonEmptyVector
 import org.goldenport.protocol.spec as spec
+import org.goldenport.schema.XString
 
 /*
  * @since   Jan.  7, 2026
- * @version Jan.  7, 2026
+ *  version Jan.  7, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SubsystemModel(
@@ -43,7 +45,7 @@ object DefaultSubsystemMapping {
       spec.OperationDefinition.Specification(
         name = "ping",
         request = spec.RequestDefinition(),
-        response = spec.ResponseDefinition()
+        response = spec.ResponseDefinition(result = List(XString))
       )
     )
     val service = spec.ServiceDefinition(

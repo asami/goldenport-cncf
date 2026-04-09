@@ -5,12 +5,14 @@ import org.goldenport.value.BaseContent
 import org.goldenport.protocol.spec.*
 import org.goldenport.protocol.Request
 import org.goldenport.cncf.action.{QueryAction, ActionCall}
+import org.goldenport.schema.XString
 
 /*
  * @since   Jan. 21, 2026
  *  version Jan. 22, 2026
  *  version Feb. 19, 2026
- * @version Mar. 29, 2026
+ *  version Mar. 29, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 object DebugHttpService extends ServiceDefinition {
@@ -25,6 +27,7 @@ object DebugHttpService extends ServiceDefinition {
 
   object EchoOperation extends OperationDefinition {
     val specification = OperationDefinition.Specification.Builder("echo").
+      copy(response = ResponseDefinition(result = List(XString))).
       build()
 
     override def createOperationRequest(
@@ -35,6 +38,7 @@ object DebugHttpService extends ServiceDefinition {
 
   object GetOperation extends OperationDefinition {
     val specification = OperationDefinition.Specification.Builder("get").
+      copy(response = ResponseDefinition(result = List(XString))).
       build()
 
     override def createOperationRequest(
@@ -45,6 +49,7 @@ object DebugHttpService extends ServiceDefinition {
 
   object PostOperation extends OperationDefinition {
     val specification = OperationDefinition.Specification.Builder("post").
+      copy(response = ResponseDefinition(result = List(XString))).
       build()
 
     override def createOperationRequest(
@@ -55,6 +60,7 @@ object DebugHttpService extends ServiceDefinition {
 
   object PutOperation extends OperationDefinition {
     val specification = OperationDefinition.Specification.Builder("put").
+      copy(response = ResponseDefinition(result = List(XString))).
       build()
 
     override def createOperationRequest(
@@ -65,6 +71,7 @@ object DebugHttpService extends ServiceDefinition {
 
   object DeleteOperation extends OperationDefinition {
     val specification = OperationDefinition.Specification.Builder("delete").
+      copy(response = ResponseDefinition(result = List(XString))).
       build()
 
     override def createOperationRequest(

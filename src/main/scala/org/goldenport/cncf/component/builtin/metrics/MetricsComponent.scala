@@ -11,10 +11,12 @@ import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
+import org.goldenport.schema.DataType
 
 /*
  * @since   Mar. 29, 2026
- * @version Mar. 29, 2026
+ *  version Mar. 29, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MetricsComponent() extends Component {
@@ -37,7 +39,7 @@ object MetricsComponent {
       comp: Component
     ): Component.Core = {
       val request = spec.RequestDefinition()
-      val response = spec.ResponseDefinition()
+      val response = spec.ResponseDefinition(result = List(DataType.Named("Record")))
       val loadEntityAccessMetrics = new LoadEntityAccessMetricsOperationDefinition(request, response)
       val service = spec.ServiceDefinition(
         name = "metrics",

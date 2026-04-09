@@ -24,12 +24,14 @@ import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.value.BaseContent
+import org.goldenport.schema.{DataType, XString}
 
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
- * @version Apr.  9, 2026
+ *  version Apr.  9, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -49,36 +51,35 @@ object AdminComponent {
       comp: Component
     ): Component.Core = {
       val request = spec.RequestDefinition()
-      val response = spec.ResponseDefinition()
-      val opPing = new PingOperationDefinition(request, response)
+      val opPing = new PingOperationDefinition(request, spec.ResponseDefinition(result = List(XString)))
       val opComponentList = new ComponentListOperationDefinition(
         request,
-        response,
+        spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
       val opConfigShow = new ConfigShowOperationDefinition(
         request,
-        response,
+        spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
       val opVariationList = new VariationListOperationDefinition(
         request,
-        response,
+        spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
       val opExtensionList = new ExtensionListOperationDefinition(
         request,
-        response,
+        spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
       val opDeploymentSecurityMermaid = new DeploymentSecurityMermaidOperationDefinition(
         request,
-        response,
+        spec.ResponseDefinition(result = List(XString)),
         params.subsystem
       )
       val opDeploymentSecurityMarkdown = new DeploymentSecurityMarkdownOperationDefinition(
         request,
-        response,
+        spec.ResponseDefinition(result = List(XString)),
         params.subsystem
       )
       val serviceSystem = spec.ServiceDefinition(

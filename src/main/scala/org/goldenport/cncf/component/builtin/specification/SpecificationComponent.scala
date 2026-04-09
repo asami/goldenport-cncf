@@ -19,12 +19,14 @@ import org.goldenport.protocol.handler.ingress.{IngressCollection, RestIngress}
 import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
+import org.goldenport.schema.XString
 
 /*
  * @since   Jan.  8, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
- * @version Mar. 19, 2026
+ *  version Mar. 19, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SpecificationComponent() extends Component {
@@ -46,7 +48,7 @@ object SpecificationComponent {
       val subsystem = params.subsystem
       val exportService = new DefaultExportSpecificationService(subsystem)
       val request = spec.RequestDefinition()
-      val response = spec.ResponseDefinition()
+      val response = spec.ResponseDefinition(result = List(XString))
       val openapiop = new ExportOperationDefinition("openapi", exportService, request, response)
       val mcpop = new ExportOperationDefinition("mcp", exportService, request, response)
       val service = spec.ServiceDefinition(

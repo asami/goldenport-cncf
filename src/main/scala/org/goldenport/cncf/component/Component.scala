@@ -40,13 +40,15 @@ import java.nio.charset.StandardCharsets
 import java.time.{Duration, Instant}
 import java.util.Properties
 import scala.util.control.NonFatal
+import org.goldenport.schema.{DataType, XString}
 
 /*
  * @since   Jan.  1, 2026
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
  *  version Mar. 30, 2026
- * @version Apr.  9, 2026
+ *  version Apr.  9, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -932,7 +934,7 @@ object Component {
       OperationDefinition.Specification(
         name = "help",
         request = org.goldenport.protocol.spec.RequestDefinition(),
-        response = org.goldenport.protocol.spec.ResponseDefinition()
+        response = org.goldenport.protocol.spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
@@ -944,7 +946,7 @@ object Component {
       OperationDefinition.Specification(
         name = "describe",
         request = org.goldenport.protocol.spec.RequestDefinition(),
-        response = org.goldenport.protocol.spec.ResponseDefinition()
+        response = org.goldenport.protocol.spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
@@ -956,7 +958,7 @@ object Component {
       OperationDefinition.Specification(
         name = "components",
         request = org.goldenport.protocol.spec.RequestDefinition(),
-        response = org.goldenport.protocol.spec.ResponseDefinition()
+        response = org.goldenport.protocol.spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
@@ -968,7 +970,7 @@ object Component {
       OperationDefinition.Specification(
         name = "services",
         request = org.goldenport.protocol.spec.RequestDefinition(),
-        response = org.goldenport.protocol.spec.ResponseDefinition()
+        response = org.goldenport.protocol.spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
@@ -980,7 +982,7 @@ object Component {
       OperationDefinition.Specification(
         name = "operations",
         request = org.goldenport.protocol.spec.RequestDefinition(),
-        response = org.goldenport.protocol.spec.ResponseDefinition()
+        response = org.goldenport.protocol.spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
@@ -992,7 +994,7 @@ object Component {
       OperationDefinition.Specification(
         name = "schema",
         request = org.goldenport.protocol.spec.RequestDefinition(),
-        response = org.goldenport.protocol.spec.ResponseDefinition()
+        response = org.goldenport.protocol.spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
@@ -1004,7 +1006,7 @@ object Component {
       OperationDefinition.Specification(
         name = "openapi",
         request = org.goldenport.protocol.spec.RequestDefinition(),
-        response = org.goldenport.protocol.spec.ResponseDefinition()
+        response = org.goldenport.protocol.spec.ResponseDefinition(result = List(XString))
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
@@ -1016,7 +1018,7 @@ object Component {
       OperationDefinition.Specification(
         name = "tree",
         request = org.goldenport.protocol.spec.RequestDefinition(),
-        response = org.goldenport.protocol.spec.ResponseDefinition()
+        response = org.goldenport.protocol.spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
@@ -1028,7 +1030,7 @@ object Component {
       OperationDefinition.Specification(
         name = "mcp",
         request = org.goldenport.protocol.spec.RequestDefinition(),
-        response = org.goldenport.protocol.spec.ResponseDefinition()
+        response = org.goldenport.protocol.spec.ResponseDefinition(result = List(XString))
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
@@ -1040,7 +1042,7 @@ object Component {
       OperationDefinition.Specification(
         name = "statemachine",
         request = org.goldenport.protocol.spec.RequestDefinition(),
-        response = org.goldenport.protocol.spec.ResponseDefinition()
+        response = org.goldenport.protocol.spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
@@ -1052,7 +1054,7 @@ object Component {
       OperationDefinition.Specification(
         name = "version",
         request = org.goldenport.protocol.spec.RequestDefinition(),
-        response = org.goldenport.protocol.spec.ResponseDefinition()
+        response = org.goldenport.protocol.spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
@@ -1064,7 +1066,7 @@ object Component {
       OperationDefinition.Specification(
         name = "ping",
         request = org.goldenport.protocol.spec.RequestDefinition(),
-        response = org.goldenport.protocol.spec.ResponseDefinition()
+        response = org.goldenport.protocol.spec.ResponseDefinition(result = List(XString))
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
@@ -1076,7 +1078,7 @@ object Component {
       OperationDefinition.Specification(
         name = "health",
         request = org.goldenport.protocol.spec.RequestDefinition(),
-        response = org.goldenport.protocol.spec.ResponseDefinition()
+        response = org.goldenport.protocol.spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
@@ -1088,7 +1090,7 @@ object Component {
       OperationDefinition.Specification(
         name = "status",
         request = org.goldenport.protocol.spec.RequestDefinition(),
-        response = org.goldenport.protocol.spec.ResponseDefinition()
+        response = org.goldenport.protocol.spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =

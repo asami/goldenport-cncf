@@ -51,7 +51,8 @@ import org.goldenport.record.Record
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Apr.  9, 2026
+ *  version Apr.  9, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -63,11 +64,11 @@ object CncfRuntime extends GlobalObservable {
 
   private val _runtime_protocol: Protocol =
     Protocol.Builder()
-      .addOperation(_runtime_service_name, RunMode.Server.name, RequestDefinition(), ResponseDefinition())
-      .addOperation(_runtime_service_name, RunMode.Client.name, RequestDefinition(), ResponseDefinition())
-      .addOperation(_runtime_service_name, RunMode.Command.name, RequestDefinition(), ResponseDefinition())
-      .addOperation(_runtime_service_name, RunMode.ServerEmulator.name, RequestDefinition(), ResponseDefinition())
-      .addOperation(_runtime_service_name, RunMode.Script.name, RequestDefinition(), ResponseDefinition())
+      .addOperation(_runtime_service_name, RunMode.Server.name, RequestDefinition(), ResponseDefinition.void)
+      .addOperation(_runtime_service_name, RunMode.Client.name, RequestDefinition(), ResponseDefinition.void)
+      .addOperation(_runtime_service_name, RunMode.Command.name, RequestDefinition(), ResponseDefinition.void)
+      .addOperation(_runtime_service_name, RunMode.ServerEmulator.name, RequestDefinition(), ResponseDefinition.void)
+      .addOperation(_runtime_service_name, RunMode.Script.name, RequestDefinition(), ResponseDefinition.void)
       .build()
 
   private val _runtime_protocol_engine = ProtocolEngine.create(_runtime_protocol)
@@ -1645,11 +1646,11 @@ class CncfRuntime() extends GlobalObservable {
 
   private val _runtime_protocol: Protocol =
     Protocol.Builder()
-      .addOperation(_runtime_service_name, RunMode.Server.name, RequestDefinition(), ResponseDefinition())
-      .addOperation(_runtime_service_name, RunMode.Client.name, RequestDefinition(), ResponseDefinition())
-      .addOperation(_runtime_service_name, RunMode.Command.name, RequestDefinition(), ResponseDefinition())
-      .addOperation(_runtime_service_name, RunMode.ServerEmulator.name, RequestDefinition(), ResponseDefinition())
-      .addOperation(_runtime_service_name, RunMode.Script.name, RequestDefinition(), ResponseDefinition())
+      .addOperation(_runtime_service_name, RunMode.Server.name, RequestDefinition(), ResponseDefinition.void)
+      .addOperation(_runtime_service_name, RunMode.Client.name, RequestDefinition(), ResponseDefinition.void)
+      .addOperation(_runtime_service_name, RunMode.Command.name, RequestDefinition(), ResponseDefinition.void)
+      .addOperation(_runtime_service_name, RunMode.ServerEmulator.name, RequestDefinition(), ResponseDefinition.void)
+      .addOperation(_runtime_service_name, RunMode.Script.name, RequestDefinition(), ResponseDefinition.void)
       .build()
 
   private val _runtime_protocol_engine = ProtocolEngine.create(_runtime_protocol)

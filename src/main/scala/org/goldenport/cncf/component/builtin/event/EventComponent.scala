@@ -11,10 +11,12 @@ import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
+import org.goldenport.schema.DataType
 
 /*
  * @since   Mar. 28, 2026
- * @version Mar. 28, 2026
+ *  version Mar. 28, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventComponent() extends Component {
@@ -44,14 +46,13 @@ object EventComponent {
       comp: Component
     ): Component.Core = {
       val request = spec.RequestDefinition()
-      val response = spec.ResponseDefinition()
       val idRequest = _event_id_request
       val jobIdRequest = _job_id_request
-      val loadEvent = new LoadEventOperationDefinition(request = idRequest, response = response)
-      val searchEvent = new SearchEventOperationDefinition(request = request, response = response)
-      val loadEventStoreStatus = new LoadEventStoreStatusOperationDefinition(request = request, response = response)
-      val searchEventLog = new SearchEventLogOperationDefinition(request = request, response = response)
-      val loadJobEvents = new LoadJobEventsOperationDefinition(request = jobIdRequest, response = response)
+      val loadEvent = new LoadEventOperationDefinition(request = idRequest, response = spec.ResponseDefinition(result = List(DataType.Named("EventRecord"))))
+      val searchEvent = new SearchEventOperationDefinition(request = request, response = spec.ResponseDefinition(result = List(DataType.Named("EventRecordList"))))
+      val loadEventStoreStatus = new LoadEventStoreStatusOperationDefinition(request = request, response = spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val searchEventLog = new SearchEventLogOperationDefinition(request = request, response = spec.ResponseDefinition(result = List(DataType.Named("EventRecordList"))))
+      val loadJobEvents = new LoadJobEventsOperationDefinition(request = jobIdRequest, response = spec.ResponseDefinition(result = List(DataType.Named("EventRecordList"))))
       val eventService = spec.ServiceDefinition(
         name = "event",
         operations = spec.OperationDefinitionGroup(

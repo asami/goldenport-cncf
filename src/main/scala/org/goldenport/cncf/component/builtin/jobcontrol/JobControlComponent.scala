@@ -13,10 +13,12 @@ import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
+import org.goldenport.schema.DataType
 
 /*
  * @since   Mar. 28, 2026
- * @version Mar. 29, 2026
+ *  version Mar. 29, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
@@ -49,31 +51,30 @@ object JobControlComponent {
       comp: Component
     ): Component.Core = {
       val request = spec.RequestDefinition()
-      val response = spec.ResponseDefinition()
       val idrequest = _job_id_request
-      val getJobStatus = new GetJobStatusOperationDefinition(request = idrequest, response = response)
-      val loadJobHistory = new LoadJobHistoryOperationDefinition(request = idrequest, response = response)
-      val getJobResult = new GetJobResultOperationDefinition(request = idrequest, response = response)
-      val awaitJobResult = new AwaitJobResultOperationDefinition(request = idrequest, response = response)
+      val getJobStatus = new GetJobStatusOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobQueryReadModel"))))
+      val loadJobHistory = new LoadJobHistoryOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobTimelinePage"))))
+      val getJobResult = new GetJobResultOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobResult"))))
+      val awaitJobResult = new AwaitJobResultOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("OperationResponse"))))
       val cancelJob = new ControlJobOperationDefinition(
         name = "cancel_job",
         command = JobControlCommand.Cancel,
         request = idrequest,
-        response = response
+        response = spec.ResponseDefinition(result = List(DataType.Named("JobControlResponse")))
       )
       val suspendJob = new ControlJobOperationDefinition(
         name = "suspend_job",
         command = JobControlCommand.Suspend,
         request = idrequest,
-        response = response
+        response = spec.ResponseDefinition(result = List(DataType.Named("JobControlResponse")))
       )
       val resumeJob = new ControlJobOperationDefinition(
         name = "resume_job",
         command = JobControlCommand.Resume,
         request = idrequest,
-        response = response
+        response = spec.ResponseDefinition(result = List(DataType.Named("JobControlResponse")))
       )
-      val loadJobEvents = new LoadJobEventsOperationDefinition(request = idrequest, response = response)
+      val loadJobEvents = new LoadJobEventsOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("RecordList"))))
       val jobService = spec.ServiceDefinition(
         name = "job",
         operations = spec.OperationDefinitionGroup(

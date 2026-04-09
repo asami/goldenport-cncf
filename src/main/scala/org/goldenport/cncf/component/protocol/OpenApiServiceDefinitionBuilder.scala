@@ -4,12 +4,14 @@ import cats.data.NonEmptyVector
 import org.goldenport.protocol.*
 import org.goldenport.protocol.operation.*
 import org.goldenport.protocol.spec as spec
+import org.goldenport.schema.DataType
 
 /*
  * OpenAPI -> ServiceDefinitionGroup transformer (compile-only).
  *
  * @since   Feb.  7, 2026
- * @version Feb.  7, 2026
+ *  version Feb.  7, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 trait OpenApiServiceDefinitionBuilder {
@@ -45,7 +47,7 @@ final class DefaultOpenApiServiceDefinitionBuilder
     spec.OperationDefinition(
       name = op.operationId,
       request = spec.RequestDefinition(),
-      response = spec.ResponseDefinition()
+      response = spec.ResponseDefinition(result = List(DataType.Named("HttpResponse")))
     )
 
   private def _build_placeholder_operation(
@@ -54,6 +56,6 @@ final class DefaultOpenApiServiceDefinitionBuilder
     spec.OperationDefinition(
       name = s"$serviceName-noop",
       request = spec.RequestDefinition(),
-      response = spec.ResponseDefinition()
+      response = spec.ResponseDefinition.void
     )
 }

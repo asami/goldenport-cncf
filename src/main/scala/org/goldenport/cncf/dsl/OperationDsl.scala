@@ -9,6 +9,7 @@ import org.goldenport.protocol.handler.ingress.IngressCollection
 import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
+import org.goldenport.schema.DataType
 
 /**
  * Stage 5 DSL (Level 1 / Level 2 ready).
@@ -22,7 +23,8 @@ import org.goldenport.protocol.spec as spec
 /*
  * @since   Jan. 11, 2026
  *  version Jan. 17, 2026
- * @version Feb. 15, 2026
+ *  version Feb. 15, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 trait OperationDsl {
@@ -65,7 +67,7 @@ object OperationDsl {
     operations: NonEmptyVector[spec.OperationDefinition]
   ): Protocol = {
     val request = spec.RequestDefinition()
-    val response = spec.ResponseDefinition()
+    val response = spec.ResponseDefinition(result = List(DataType.Named("OperationResponse")))
     val service = spec.ServiceDefinition(
       name = serviceName,
       operations = spec.OperationDefinitionGroup(operations = operations)
@@ -96,7 +98,7 @@ object OperationDsl {
       spec.OperationDefinition.Specification(
         name = opName,
         request = spec.RequestDefinition(),
-        response = spec.ResponseDefinition()
+        response = spec.ResponseDefinition(result = List(DataType.Named("OperationResponse")))
       )
 
     def createOperationRequest(

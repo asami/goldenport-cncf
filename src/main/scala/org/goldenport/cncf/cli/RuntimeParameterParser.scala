@@ -15,7 +15,8 @@ import org.slf4j.LoggerFactory
 
 /*
  * @since   Jan. 22, 2026
- * @version Jan. 29, 2026
+ *  version Jan. 29, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeParameterParseResult(
@@ -33,7 +34,7 @@ final class RuntimeParameterParser {
     RequestDefinition(parameters = GlobalParameterGroup.runtimeParameters.toList)
   private val _runtimeProtocol: Protocol =
     Protocol.Builder()
-      .addOperation(_serviceName, _operationName, _runtimeRequestDefinition, ResponseDefinition())
+      .addOperation(_serviceName, _operationName, _runtimeRequestDefinition, ResponseDefinition.void)
       .build()
   private val _runtimeProtocolEngine = ProtocolEngine.create(_runtimeProtocol)
   private val _baseUrlParamNameOption =
