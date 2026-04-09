@@ -16,6 +16,7 @@ import org.goldenport.cncf.entity.EntityStoreSpace
 import org.goldenport.cncf.entity.runtime.EntitySpace
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
+import org.goldenport.cncf.observability.CallTreeContext
 import cats.~>
 
 /**
@@ -40,7 +41,7 @@ import cats.~>
  *  version Dec. 31, 2025
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Apr.  3, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -99,7 +100,8 @@ object ExecutionContext {
   }
 
   final case class FrameworkParameter(
-    commandExecutionMode: Option[CommandExecutionMode] = None
+    commandExecutionMode: Option[CommandExecutionMode] = None,
+    callTreeEnabled: Boolean = false
   )
 
   /**
@@ -223,6 +225,26 @@ object ExecutionContext {
         cncfCore = i.cncfCore.copy(
           framework = i.cncfCore.framework.copy(
             commandExecutionMode = Some(mode)
+          )
+        )
+      )
+    case _ =>
+      ctx
+  }
+
+  def withFrameworkCallTreeEnabled(
+    ctx: ExecutionContext,
+    enabled: Boolean
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      val observability = i.cncfCore.observability.copy(
+        callTreeContext = if (enabled) CallTreeContext.enabled else CallTreeContext.Disabled
+      )
+      i.copy(
+        cncfCore = i.cncfCore.copy(
+          observability = observability,
+          framework = i.cncfCore.framework.copy(
+            callTreeEnabled = enabled
           )
         )
       )

@@ -1,7 +1,12 @@
 package org.goldenport.cncf.component.builtin.admin
 
 import cats.data.NonEmptyVector
+import java.net.URI
+import java.nio.file.FileSystems
+import java.nio.file.Files
 import java.nio.file.Paths
+import scala.jdk.CollectionConverters.*
+import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall, QueryAction, ResourceAccess}
 import org.goldenport.cncf.component.{Component, ComponentInit}
@@ -9,6 +14,7 @@ import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.component.ComponentInstanceId
 import org.goldenport.cncf.component.ComponentLogic
+import org.goldenport.cncf.component.DescriptorRecordLoader
 import org.goldenport.configuration.ConfigurationResolver
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.configuration.ConfigurationSources
@@ -24,6 +30,7 @@ import org.goldenport.protocol.handler.ingress.{IngressCollection, RestIngress}
 import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
+import org.goldenport.record.Record
 import org.goldenport.value.BaseContent
 import org.goldenport.schema.{DataType, XString}
 
@@ -87,6 +94,11 @@ object AdminComponent {
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
+      val opAssemblyReport = new AssemblyReportOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(DataType.Named("Record"))),
+        params.subsystem
+      )
       val serviceSystem = spec.ServiceDefinition(
         name = "system",
         operations = spec.OperationDefinitionGroup(
@@ -129,7 +141,10 @@ object AdminComponent {
       val serviceAssembly = spec.ServiceDefinition(
         name = "assembly",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(opAssemblyWarnings)
+          operations = NonEmptyVector.of(
+            opAssemblyWarnings,
+            opAssemblyReport
+          )
         )
       )
       val services = spec.ServiceDefinitionGroup(
@@ -316,6 +331,27 @@ object AdminComponent {
       Consequence.success(AssemblyWarningsAction(req, subsystem))
   }
 
+  private final class AssemblyReportOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        content = BaseContent.Builder("report")
+          .summary("Show the resolved assembly report for the selected subsystem.")
+          .description("Return subsystem descriptor wiring, loaded component origins, and assembly warnings captured during runtime assembly.")
+          .build(),
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: Request
+    ): Consequence[OperationRequest] =
+      Consequence.success(AssemblyReportAction(req, subsystem))
+  }
+
   private final case class ComponentListAction(
     request: Request,
     subsystem: Subsystem
@@ -390,6 +426,14 @@ object AdminComponent {
       AssemblyWarningsActionCall(core, subsystem)
   }
 
+  private final case class AssemblyReportAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      AssemblyReportActionCall(core, subsystem)
+  }
+
   private final case class DeploymentSecurityMarkdownActionCall(
     core: ActionCall.Core,
     subsystem: Subsystem
@@ -408,6 +452,116 @@ object AdminComponent {
           .map(_.assemblyReport.toRecord)
           .getOrElse(subsystem.globalRuntimeContext.assemblyReport.toRecord)
       Consequence.success(OperationResponse.RecordResponse(report))
+    }
+  }
+
+  private final case class AssemblyReportActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] = {
+      val warnings =
+        GlobalRuntimeContext.current
+          .map(_.assemblyReport.toRecord)
+          .getOrElse(subsystem.globalRuntimeContext.assemblyReport.toRecord)
+      val wiring = _subsystem_wiring_(subsystem)
+      val ports = subsystem.descriptor.map(_.declaredPorts).getOrElse(Vector.empty)
+      val wiringBindings = subsystem.descriptor.map(_.resolvedWiringBindings).getOrElse(Vector.empty)
+      val components = org.goldenport.record.Record.data(
+        "loaded" -> subsystem.components.toVector.map { comp =>
+          org.goldenport.record.Record.data(
+            "name" -> comp.name,
+            "origin" -> comp.origin.label
+          )
+        }
+      )
+      val report = org.goldenport.record.Record.data(
+        "subsystem" -> subsystem.name,
+        "ports" -> ports,
+        "wiring" -> wiring,
+        "wiringBindings" -> wiringBindings,
+        "components" -> components,
+        "warnings" -> warnings
+      )
+      Consequence.success(OperationResponse.RecordResponse(report))
+    }
+  }
+
+  private def _subsystem_wiring_(subsystem: Subsystem): Record =
+    subsystem.descriptor.map(_.wiring).filterNot(_.isEmpty).getOrElse {
+      subsystem.descriptor.flatMap { descriptor =>
+        _load_descriptor_record_(descriptor.path).map(_wiring_from_record_).filterNot(_.isEmpty)
+          .orElse(_load_wiring_from_text_(descriptor.path))
+      }.getOrElse(Record.empty)
+    }
+
+  private def _load_descriptor_record_(path: java.nio.file.Path): Option[Record] = {
+    val name = path.getFileName.toString.toLowerCase
+    if (name.endsWith(".sar") || name.endsWith(".zip")) {
+      val uri = URI.create(s"jar:${path.toUri}")
+      Using.resource(FileSystems.newFileSystem(uri, Map.empty[String, String].asJava)) { fs =>
+        Vector(
+          "subsystem-descriptor.yaml",
+          "subsystem-descriptor.yml",
+          "descriptor.yaml",
+          "descriptor.yml",
+          "subsystem-descriptor.json",
+          "descriptor.json"
+        ).iterator
+          .map(fs.getPath("/").resolve(_))
+          .find(java.nio.file.Files.isRegularFile(_))
+          .flatMap(p => DescriptorRecordLoader.load(p).toOption.flatMap(_.headOption))
+      }
+    } else {
+      DescriptorRecordLoader.load(path).toOption.flatMap(_.headOption)
+    }
+  }
+
+  private def _wiring_from_record_(rec: Record): Record =
+    rec.getRecord("wiring").orElse {
+      val entries = rec.asMap.iterator.collect {
+        case (k, v) if k.startsWith("wiring/") =>
+          k.stripPrefix("wiring/") -> v
+        case (k, v) if k.startsWith("wiring.") =>
+          k.stripPrefix("wiring.") -> v
+      }.toVector
+      if (entries.isEmpty) None else Some(Record.create(entries))
+    }.getOrElse(Record.empty)
+
+  private def _load_wiring_from_text_(path: java.nio.file.Path): Option[Record] = {
+    def parse(text: String): Option[Record] = {
+      val entries = text.linesIterator.flatMap { line =>
+        val trimmed = line.trim
+        if (trimmed.startsWith("wiring/") || trimmed.startsWith("wiring.")) {
+          trimmed.split(":", 2) match {
+            case Array(k, v) =>
+              Some(k.stripPrefix("wiring/").stripPrefix("wiring.") -> v.trim)
+            case _ =>
+              None
+          }
+        } else None
+      }.toVector
+      if (entries.isEmpty) None else Some(Record.create(entries))
+    }
+
+    val name = path.getFileName.toString.toLowerCase
+    if (name.endsWith(".sar") || name.endsWith(".zip")) {
+      val uri = URI.create(s"jar:${path.toUri}")
+      Using.resource(FileSystems.newFileSystem(uri, Map.empty[String, String].asJava)) { fs =>
+        Vector(
+          "subsystem-descriptor.yaml",
+          "subsystem-descriptor.yml",
+          "descriptor.yaml",
+          "descriptor.yml"
+        ).iterator
+          .map(fs.getPath("/").resolve(_))
+          .find(Files.isRegularFile(_))
+          .flatMap(p => parse(Files.readString(p)))
+      }
+    } else if (Files.isRegularFile(path)) {
+      parse(Files.readString(path))
+    } else {
+      None
     }
   }
 

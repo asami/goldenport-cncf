@@ -13,7 +13,7 @@ import org.goldenport.cncf.component.DescriptorRecordLoader
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr.  9, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -40,10 +40,25 @@ final case class GenericSubsystemBuiltinBinding(
   exclude: Vector[String] = Vector.empty
 )
 
+final case class GenericSubsystemPortBinding(
+  name: String,
+  service: Option[String] = None,
+  operation: Option[String] = None
+) {
+  def toRecord: Record =
+    Record.data(
+      "name" -> name,
+      "service" -> service.getOrElse(""),
+      "operation" -> operation.getOrElse("")
+    )
+}
+
 final case class GenericSubsystemComponentBinding(
   componentName: String,
   coordinate: Option[String] = None,
-  extensionBindings: Record = Record.empty
+  extensionBindings: Record = Record.empty,
+  api: Vector[GenericSubsystemPortBinding] = Vector.empty,
+  spi: Vector[GenericSubsystemPortBinding] = Vector.empty
 ) {
   def componentVersion: Option[String] =
     coordinate.flatMap(GenericSubsystemDescriptor.coordinateParts(_).lift(2))
@@ -55,6 +70,38 @@ final case class GenericSubsystemComponentBinding(
     ComponentDescriptor(
       componentName = Some(runtimeComponentName),
       extensionBindings = extensionBindings
+    )
+
+  def portRecord: Record =
+    Record.data(
+      "component" -> componentName,
+      "api" -> api.map(_.toRecord),
+      "spi" -> spi.map(_.toRecord)
+    )
+}
+
+final case class GenericSubsystemResolvedWiringBinding(
+  fromComponent: String,
+  fromService: String,
+  fromOperation: String,
+  toComponent: String,
+  toService: String,
+  toOperation: String,
+  mode: String = "direct-operation-routing"
+) {
+  def toRecord: Record =
+    Record.data(
+      "from" -> Record.data(
+        "component" -> fromComponent,
+        "service" -> fromService,
+        "operation" -> fromOperation
+      ),
+      "to" -> Record.data(
+        "component" -> toComponent,
+        "service" -> toService,
+        "operation" -> toOperation
+      ),
+      "mode" -> mode
     )
 }
 
@@ -89,6 +136,14 @@ final case class GenericSubsystemDescriptor(
 
   def toComponentDescriptors: Vector[ComponentDescriptor] =
     componentBindings.map(_.toComponentDescriptor)
+
+  def declaredPorts: Vector[Record] =
+    componentBindings
+      .filterNot(x => x.api.isEmpty && x.spi.isEmpty)
+      .map(_.portRecord)
+
+  def resolvedWiringBindings: Vector[Record] =
+    GenericSubsystemDescriptor.resolveWiringBindings(wiring).map(_.toRecord)
 }
 
 object GenericSubsystemDescriptor {
@@ -269,10 +324,32 @@ object GenericSubsystemDescriptor {
       GenericSubsystemComponentBinding(
         componentName = name,
         coordinate = coordinate,
-        extensionBindings = _record_value(rec, List("extension_bindings", "extensionBindings", "extension_binding")).getOrElse(Record.empty)
+        extensionBindings = _record_value(rec, List("extension_bindings", "extensionBindings", "extension_binding")).getOrElse(Record.empty),
+        api = _ports_from_record(rec, "api"),
+        spi = _ports_from_record(rec, "spi")
       )
     }
   }
+
+  private def _ports_from_record(rec: Record, key: String): Vector[GenericSubsystemPortBinding] =
+    _record_value(rec, List(key)).map { ports =>
+      ports.asMap.toVector.flatMap { case (name, value) =>
+        _any_to_record(value).map { r =>
+          GenericSubsystemPortBinding(
+            name = name,
+            service = _string(r, "service"),
+            operation = _string(r, "operation")
+          )
+        }.orElse {
+          value match {
+            case s: String if s.trim.nonEmpty =>
+              Some(GenericSubsystemPortBinding(name = name, operation = Some(s.trim)))
+            case _ =>
+              None
+          }
+        }
+      }
+    }.getOrElse(Vector.empty)
 
   private def _component_extension_bindings(lines: Vector[String], componentName: String): Record = {
     val runtimeName = runtimeComponentName(componentName)
@@ -310,17 +387,97 @@ object GenericSubsystemDescriptor {
   private def _record_value(rec: Record, keys: List[String]): Option[Record] =
     keys.iterator.map(rec.getAny).collectFirst {
       case Some(r: Record) => r
-      case Some(m: Map[?, ?]) => Record.create(m.iterator.map { case (k, v) => k.toString -> v }.toMap)
+      case Some(m: Map[?, ?]) => _map_to_record(m)
+      case Some(m: java.util.Map[?, ?]) => _map_to_record(m.asScala.toMap)
     }
 
   private def _string_map_value(rec: Record, keys: List[String]): Map[String, String] =
     _record_value(rec, keys).map(_.asMap.collect { case (k, v: String) => k -> v }).getOrElse(Map.empty)
 
+  private def _wiring_value(rec: Record): Record =
+    _record_value(rec, List("wiring")).getOrElse {
+      val entries = rec.asMap.iterator.collect {
+        case (k, v) if k.startsWith("wiring/") =>
+          k.stripPrefix("wiring/") -> _record_value_any(v)
+        case (k, v) if k.startsWith("wiring.") =>
+          k.stripPrefix("wiring.") -> _record_value_any(v)
+      }.toVector
+      if (entries.isEmpty) Record.empty else Record.create(entries)
+    }
+
+  def resolveWiringBindings(wiring: Record): Vector[GenericSubsystemResolvedWiringBinding] = {
+    val groups = scala.collection.mutable.LinkedHashMap.empty[String, scala.collection.mutable.Map[String, String]]
+    _flatten_record(wiring).iterator.foreach {
+      case (k, v) =>
+        val key = k.toString
+        val value = Option(v).map(_.toString).getOrElse("")
+        val path = key.split("/").toVector.filter(_.nonEmpty)
+        if (path.size >= 4) {
+          val group = path.dropRight(1).mkString("/")
+          val leaf = path.last
+          val slot = groups.getOrElseUpdate(group, scala.collection.mutable.LinkedHashMap.empty[String, String])
+          slot.update(leaf, value)
+        }
+      case _ =>
+    }
+    groups.toVector.flatMap { case (group, values) =>
+      group.split("/").toVector.filter(_.nonEmpty) match {
+        case Vector(fromComponent, fromService, fromOperation) =>
+          for {
+            toComponent <- values.get("target_component")
+            toService <- values.get("target_service")
+            toOperation <- values.get("target_operation")
+          } yield GenericSubsystemResolvedWiringBinding(
+            fromComponent = fromComponent,
+            fromService = fromService,
+            fromOperation = fromOperation,
+            toComponent = toComponent,
+            toService = toService,
+            toOperation = toOperation
+          )
+        case _ =>
+          None
+      }
+    }
+  }
+
+  private def _flatten_record(
+    rec: Record,
+    prefix: Vector[String] = Vector.empty
+  ): Vector[(String, Any)] =
+    rec.asMap.toVector.flatMap { case (k, v) =>
+      val path = prefix :+ k.toString
+      v match {
+        case r: Record =>
+          _flatten_record(r, path)
+        case m: Map[?, ?] =>
+          _flatten_record(_map_to_record(m), path)
+        case m: java.util.Map[?, ?] =>
+          _flatten_record(_map_to_record(m.asScala.toMap), path)
+        case other =>
+          Vector(path.mkString("/") -> other)
+      }
+    }
+
   private def _any_to_record(value: Any): Option[Record] =
     value match {
       case r: Record => Some(r)
-      case m: Map[?, ?] => Some(Record.create(m.iterator.map { case (k, v) => k.toString -> v }.toMap))
+      case m: Map[?, ?] => Some(_map_to_record(m))
+      case m: java.util.Map[?, ?] => Some(_map_to_record(m.asScala.toMap))
       case _ => None
+    }
+
+  private def _map_to_record(m: collection.Map[?, ?]): Record =
+    Record.create(m.iterator.map { case (k, v) => k.toString -> _record_value_any(v) }.toSeq)
+
+  private def _record_value_any(value: Any): Any =
+    value match {
+      case r: Record => r
+      case m: Map[?, ?] => _map_to_record(m)
+      case m: java.util.Map[?, ?] => _map_to_record(m.asScala.toMap)
+      case xs: Seq[?] => xs.toVector.map(_record_value_any)
+      case xs: java.util.List[?] => xs.asScala.toVector.map(_record_value_any)
+      case other => other
     }
 
   private def _single_value(lines: Vector[String], key: String, path: Path): String =
@@ -427,7 +584,7 @@ object GenericSubsystemDescriptor {
                 componentBindings = bindings,
                 extensions = _string_map_value(rec, List("extension", "extensions")),
                 config = _string_map_value(rec, List("config")),
-                wiring = _record_value(rec, List("wiring")).getOrElse(Record.empty),
+                wiring = _wiring_value(rec),
                 security = _record_value(rec, List("security")).flatMap(r => summon[RecordDecoder[GenericSubsystemSecurityBinding]].fromRecord(r).toOption),
                 builtin = _record_value(rec, List("builtin", "builtins")).flatMap(r => summon[RecordDecoder[GenericSubsystemBuiltinBinding]].fromRecord(r).toOption)
               )

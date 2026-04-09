@@ -14,9 +14,10 @@ import org.goldenport.cncf.cli.{CncfRuntime, RunMode}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentCreate, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.component.repository.{ComponentProvider, ComponentRepository, ComponentRepositorySpace, ComponentSource}
 import org.goldenport.cncf.assembly.AssemblyReport
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.naming.NamingConventions
-import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.cncf.subsystem.{GenericSubsystemFactory, Subsystem}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.egress.EgressCollection
@@ -61,7 +62,8 @@ object CncfMain extends GlobalObservable {
           case Right(specs) =>
             val baseExtras = _component_extra_function(specs, enabled, workspace, factoryClasses)
             val extras = _trace_component_dir_extras(baseExtras)
-            CncfRuntime.runWithExtraComponents(rest, extras)
+            val runtimeArgs = _with_resolved_subsystem_descriptor_arg(configuration, specs, rest)
+            CncfRuntime.runWithExtraComponents(runtimeArgs, extras)
         }
       } catch {
         case e: CliFailed => e.code
@@ -361,18 +363,44 @@ object CncfMain extends GlobalObservable {
     extras: Subsystem => Seq[Component]
   ): Subsystem => Seq[Component] =
     (subsystem: Subsystem) => {
-    val components = extras(subsystem)
-    if (components.nonEmpty) {
-      val modeLabel = GlobalRuntimeContext.current
-        .flatMap(ctx => Option(ctx.runtimeMode))
-        .map(_.name)
-        .getOrElse("unknown")
-      observe_trace(
-        s"[component-dir] mode=${modeLabel} loaded components=${components.map(_.core.name).mkString(",")}"
-      )
+      val components = extras(subsystem)
+      if (components.nonEmpty) {
+        val modeLabel = GlobalRuntimeContext.current
+          .flatMap(ctx => Option(ctx.runtimeMode))
+          .map(_.name)
+          .getOrElse("unknown")
+        observe_trace(
+          s"[component-dir] mode=${modeLabel} loaded components=${components.map(_.core.name).mkString(",")}"
+        )
+      }
+      components
     }
-    components
+
+  private def _with_resolved_subsystem_descriptor_arg(
+    configuration: ResolvedConfiguration,
+    specs: Vector[ComponentRepository.Specification],
+    args: Array[String]
+  ): Array[String] = {
+    val alreadySpecified =
+      args.exists(_.startsWith(s"--${RuntimeConfig.SubsystemDescriptorKey}=")) ||
+        args.exists(_.startsWith(s"--${RuntimeConfig.SubsystemFileKey}=")) ||
+        args.sliding(2).exists {
+          case Array(k, _) =>
+            k == s"--${RuntimeConfig.SubsystemDescriptorKey}" ||
+              k == s"--${RuntimeConfig.SubsystemFileKey}"
+          case _ =>
+            false
+        }
+    if (alreadySpecified) {
+      args
+    } else {
+      GenericSubsystemFactory
+        .subsystemName(configuration)
+        .flatMap(name => ComponentRepository.resolveSubsystemDescriptor(specs, name).map(_.path))
+        .map(path => args ++ Array(s"--${RuntimeConfig.SubsystemFileKey}=${path}"))
+        .getOrElse(args)
     }
+  }
 
   private def _class_dirs_(
     workspace: Option[Path]

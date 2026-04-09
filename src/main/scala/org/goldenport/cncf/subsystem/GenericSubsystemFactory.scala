@@ -95,6 +95,19 @@ object GenericSubsystemFactory {
     configuration: ResolvedConfiguration,
     aliasResolver: AliasResolver
   ): Subsystem = {
+    val repos = _repository_specs(configuration)
+    ComponentRepository.resolveSubsystemDescriptor(repos, subsystemName) match {
+      case Some(descriptor) =>
+        return defaultWithScope(
+          descriptor = descriptor,
+          context = context,
+          mode = mode,
+          configuration = configuration,
+          aliasResolver = aliasResolver
+        )
+      case None =>
+        ()
+    }
     val runtimeConfig = RuntimeConfig.from(configuration)
     val runMode = mode.getOrElse(runtimeConfig.mode)
     val subsystem =
@@ -122,7 +135,7 @@ object GenericSubsystemFactory {
       )
     val params = ComponentCreate(subsystem, ComponentOrigin.Repository("subsystem-name"))
     val components0 =
-      _repository_specs(configuration).flatMap(_.build(params).discover())
+      repos.flatMap(_.build(params).discover())
         .filter(_matches_named_subsystem(_, subsystemName))
     val builtins = DefaultSubsystemFactory.builtinComponents(subsystem)
     val components = _collapse_duplicate_components(builtins ++ components0)

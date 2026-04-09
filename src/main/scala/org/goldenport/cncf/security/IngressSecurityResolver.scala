@@ -21,7 +21,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Apr.  9, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -148,7 +148,8 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   ): ExecutionContext = {
     val withobservability = _restore_observability(attributes, ctx).getOrElse(ctx)
     val withjob = _restore_job_context(attributes, withobservability).getOrElse(withobservability)
-    _restore_command_execution_mode(attributes, withjob).getOrElse(withjob)
+    val withmode = _restore_command_execution_mode(attributes, withjob).getOrElse(withjob)
+    _restore_calltree_mode(attributes, withmode).getOrElse(withmode)
   }
 
   private def _restore_command_execution_mode(
@@ -164,6 +165,27 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     ).flatMap(RuntimeConfig.parseCommandExecutionMode).map { mode =>
       ExecutionContext.withFrameworkCommandExecutionMode(ctx, mode)
     }
+
+  private def _restore_calltree_mode(
+    attributes: Map[String, String],
+    ctx: ExecutionContext
+  ): Option[ExecutionContext] =
+    _find_first(
+      attributes,
+      Vector(
+        "textus.runtime.calltree",
+        "cncf.runtime.calltree",
+        "textus.calltree",
+        "cncf.calltree"
+      )
+    ).map(_is_truthy).map { enabled =>
+      ExecutionContext.withFrameworkCallTreeEnabled(ctx, enabled)
+    }
+
+  private def _is_truthy(p: String): Boolean = {
+    val lower = Option(p).getOrElse("").trim.toLowerCase(java.util.Locale.ROOT)
+    lower == "true" || lower == "1" || lower == "yes" || lower == "on"
+  }
 
   private def _restore_observability(
     attributes: Map[String, String],

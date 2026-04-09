@@ -51,7 +51,6 @@ import org.goldenport.record.Record
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- *  version Apr.  9, 2026
  * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -1471,7 +1470,8 @@ private[cli] object RuntimeOptionsParser {
     noExit: Boolean = false,
     format: Option[String] = None,
     pathResolutionCommand: Boolean = false,
-    commandExecutionMode: Option[String] = None
+    commandExecutionMode: Option[String] = None,
+    calltree: Boolean = false
   )
 
   def extract(
@@ -1490,6 +1490,8 @@ private[cli] object RuntimeOptionsParser {
         options = options.copy(json = true)
       } else if (_is_property(current, "--debug")) {
         options = options.copy(debug = true)
+      } else if (_is_property(current, "--calltree")) {
+        options = options.copy(calltree = true)
       } else if (current == "--no-exit") {
         options = options.copy(noExit = true)
       } else if (_is_property(current, "--format") || _is_property(current, "-format")) {
@@ -1554,6 +1556,7 @@ private[cli] object RuntimeOptionsParser {
       b += Property("textus.format", value, None)
     }
     if (options.debug) b += Property("textus.debug", "true", None)
+    if (options.calltree) b += Property("textus.runtime.calltree", "true", None)
     if (options.noExit) b += Property("textus.no-exit", "true", None)
     options.commandExecutionMode.foreach { value =>
       b += Property("textus.runtime.command.execution-mode", value, None)
