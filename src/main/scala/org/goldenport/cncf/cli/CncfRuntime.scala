@@ -1432,7 +1432,7 @@ object CncfRuntime extends GlobalObservable {
     var i = 0
     while (i < args.length) {
       val current = args(i)
-      if (current.startsWith("--cncf.")) {
+      if (current.startsWith("--cncf.") || current.startsWith("--textus.")) {
         if (!current.contains("=") && i + 1 < args.length && !args(i + 1).startsWith("-")) {
           i = i + 1
         }
@@ -1823,7 +1823,11 @@ class CncfRuntime() extends GlobalObservable {
     GlobalRuntimeContext.current.foreach(_.updateSubsystemVersion(subsystem.version.getOrElse(CncfVersion.current)))
     val colfactory = CollaboratorFactory.create(configuration)
     val compfactory = ComponentFactory.create(subsystem, colfactory, cwd, configuration)
-    subsystem.setup(compfactory)
+    if (subsystem.descriptor.nonEmpty && subsystem.components.nonEmpty) {
+      subsystem.components.foreach(compfactory.bootstrap)
+    } else {
+      subsystem.setup(compfactory)
+    }
     val extras = extraComponents(subsystem).map(compfactory.bootstrap)
     if (extras.nonEmpty) {
       subsystem.add(extras)

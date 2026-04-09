@@ -14,6 +14,10 @@ define shared structure and boundaries across the codebase.
 - **ai-assisted-development-rules.md**  
   Global rules for AI-assisted development, defining the strict separation of:
   design discussion, instruction writing, and implementation execution.
+- **ai-operation-guidance.md**  
+  CNCF-local bridge to shared operational directives used during AI-assisted
+  work. Use this for external shared instructions such as Scala version-header
+  update handling.
 
 - **context-and-scope.md**  
   Architecture rules for context and scope separation across runtime boundaries.

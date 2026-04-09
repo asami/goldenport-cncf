@@ -25,7 +25,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Jan. 29, 2026
  *  version Feb.  5, 2026
  *  version Mar. 22, 2026
- * @version Apr.  8, 2026
+ * @version Apr.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -40,6 +40,9 @@ object ComponentRepository extends GlobalObservable {
 
   sealed abstract class Specification {
     def build(params: ComponentCreate): ComponentRepository
+    def resolveSubsystemDescriptor(
+      subsystemName: String
+    ): Option[GenericSubsystemDescriptor] = None
   }
 
   def parseSpecs(
@@ -211,7 +214,48 @@ object ComponentRepository extends GlobalObservable {
           packagePrefixes = ComponentRepository.resolvePackagePrefixes()
         )
       }
+
+      override def resolveSubsystemDescriptor(
+        subsystemName: String
+      ): Option[GenericSubsystemDescriptor] =
+        ComponentRepository.resolveSubsystemDescriptorFromComponentDir(baseDir, subsystemName)
     }
+  }
+
+  def resolveSubsystemDescriptor(
+    specs: Seq[Specification],
+    subsystemName: String
+  ): Option[GenericSubsystemDescriptor] =
+    specs.iterator.flatMap(_.resolveSubsystemDescriptor(subsystemName)).toSeq.headOption
+
+  def resolveSubsystemDescriptorFromComponentDir(
+    baseDir: Path,
+    subsystemName: String
+  ): Option[GenericSubsystemDescriptor] = {
+    if (!Files.isDirectory(baseDir)) {
+      None
+    } else {
+      _list_artifacts(baseDir).iterator.flatMap {
+        case Artifact(path, ArtifactKind.Sar) =>
+          GenericSubsystemDescriptor.load(path).toOption
+        case Artifact(path, ArtifactKind.SarDir) =>
+          GenericSubsystemDescriptor.load(path).toOption
+        case _ =>
+          None
+      }.find(_matches_subsystem_descriptor(_, subsystemName))
+    }
+  }
+
+  private def _matches_subsystem_descriptor(
+    descriptor: GenericSubsystemDescriptor,
+    subsystemName: String
+  ): Boolean = {
+    val requested = subsystemName.trim
+    val versionedName =
+      descriptor.version.map(v => s"${descriptor.subsystemName}-${v}")
+    descriptor.subsystemName == requested ||
+      versionedName.contains(requested) ||
+      descriptor.path.getFileName.toString.stripSuffix(".sar").stripSuffix(".zip") == requested
   }
 
   private def _class_loader_from_paths(
@@ -413,7 +457,10 @@ object ComponentRepository extends GlobalObservable {
         _discover_component_from_artifact_with_loader(
           artifactname = artifactPath.getFileName.toString,
           loader = componentLoader,
-          scanclasspath = extracted.componentClasspath,
+          // Scan only the component's main archive. Dependency jars may contain
+          // demo or builtin components that must not be treated as packaged
+          // component definitions for this CAR.
+          scanclasspath = Vector(extracted.componentMain),
           params = params,
           origin = baseOrigin,
           log = log

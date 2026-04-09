@@ -10,7 +10,7 @@ import org.goldenport.datatype.I18nString
 /*
  * @since   Mar.  5, 2026
  *  version Mar. 28, 2026
- * @version Apr.  6, 2026
+ * @version Apr.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 object HelpProjection {
@@ -241,16 +241,19 @@ object HelpProjection {
 
   private def _subsystem_effective_name(
     components: Vector[Component],
-    fallback: String
+    runtimeSubsystemName: String
   ): String =
-    _subsystem_definition_record(components, fallback).
+    Option(runtimeSubsystemName).map(_.trim).filter(_.nonEmpty).
+      orElse(
+        _subsystem_definition_record(components, runtimeSubsystemName).
       flatMap(_.getString("name")).
       orElse(components.flatMap(_.artifactMetadata.flatMap(_.subsystem)).headOption).
       orElse(components match {
         case Vector(single) => Some(single.name)
         case _ => None
-      }).
-      getOrElse(fallback)
+      })
+      ).
+      getOrElse(runtimeSubsystemName)
 
   private def _subsystem_domain_vision_models(
     components: Vector[Component],

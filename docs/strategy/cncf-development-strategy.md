@@ -299,6 +299,11 @@ progress tracking.
 ### 8.1 Component Wiring and Subsystem Construction
 - Build subsystems via Component wiring
 - Define and stabilize Component ports
+- Define and stabilize `ComponentRepository` repository specifications
+- Add remote subsystem artifact resolution
+  - Resolve versioned subsystem artifacts such as `textus-identity-1.0.2`
+  - Support remote component repositories such as `component.simplemodeling.org`
+  - Keep `component.d` as a local development/test repository path
 
 ### 8.2 Security
 - Authentication

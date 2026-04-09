@@ -15,7 +15,8 @@ import org.goldenport.cncf.subsystem.Subsystem
 /*
  * @since   Jan. 30, 2026
  *  version Feb.  5, 2026
- * @version Mar. 26, 2026
+ *  version Mar. 26, 2026
+ * @version Apr.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositorySpace(
@@ -201,6 +202,7 @@ object ComponentRepositorySpace {
     result match {
       case left @ Left(_) => left
       case Right(specs) if noDefault => Right(specs)
+      case Right(specs) if specs.nonEmpty => Right(specs)
       case Right(specs) =>
         _default_components_dir(cwd) match {
           case Some(dir) if !_has_default_components_spec(specs, dir) =>

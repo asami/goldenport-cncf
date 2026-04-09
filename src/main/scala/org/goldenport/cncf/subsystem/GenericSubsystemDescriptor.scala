@@ -1,7 +1,9 @@
 package org.goldenport.cncf.subsystem
 
-import java.nio.file.{Files, Path}
+import java.net.URI
+import java.nio.file.{FileSystems, Files, Path}
 import scala.jdk.CollectionConverters.*
+import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.record.RecordDecoder
@@ -120,6 +122,8 @@ object GenericSubsystemDescriptor {
         // manifest.json fallback remains only as a compatibility memo.
         case None => _load_manifest_compat(path)
       }
+    else if (_is_archive_file(path))
+      _load_archive_file(path)
     else
       _load_file(path)
 
@@ -171,6 +175,26 @@ object GenericSubsystemDescriptor {
     _canonical_descriptor_files
       .map(path.resolve(_).normalize)
       .find(Files.isRegularFile(_))
+
+  private def _is_archive_file(path: Path): Boolean = {
+    val name = path.getFileName.toString.toLowerCase
+    name.endsWith(".sar") || name.endsWith(".zip")
+  }
+
+  private def _load_archive_file(path: Path): Consequence[GenericSubsystemDescriptor] = {
+    val uri = URI.create(s"jar:${path.toUri}")
+    Using.resource(FileSystems.newFileSystem(uri, Map.empty[String, String].asJava)) { fs =>
+      val root = fs.getPath("/")
+      _resolve_descriptor_file(root) match {
+        case Some(file) =>
+          DescriptorRecordLoader.load(file).flatMap { records =>
+            records.headOption.map(_from_record(path, _)).getOrElse(Consequence.failure(s"subsystem descriptor is empty in archive: ${path}"))
+          }
+        case None =>
+          Consequence.failure(s"subsystem descriptor not found in archive: ${path}")
+      }
+    }
+  }
 
   private def _load_file(path: Path): Consequence[GenericSubsystemDescriptor] =
     DescriptorRecordLoader.load(path).flatMap { records =>

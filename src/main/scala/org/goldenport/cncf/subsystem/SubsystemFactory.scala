@@ -28,7 +28,7 @@ import org.goldenport.protocol.spec as spec
  *  version Jan. 30, 2026
  *  version Feb. 15, 2026
  *  version Mar. 29, 2026
- * @version Apr.  8, 2026
+ * @version Apr.  9, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {
@@ -77,7 +77,7 @@ object DefaultSubsystemFactory {
       .map(_.aliasResolver)
       .getOrElse(AliasResolver.empty)
   ): Subsystem = {
-    GenericSubsystemFactory.loadDescriptor(configuration) match {
+    GenericSubsystemFactory.resolveDescriptor(configuration) match {
       case Some(descriptor) =>
         return GenericSubsystemFactory.defaultWithScope(
           descriptor = descriptor,

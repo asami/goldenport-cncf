@@ -40,6 +40,15 @@ object GenericSubsystemFactory {
       GenericSubsystemDescriptor.load(path).toOption
     }
 
+  def resolveDescriptor(
+    configuration: ResolvedConfiguration
+  ): Option[GenericSubsystemDescriptor] =
+    loadDescriptor(configuration).orElse {
+      subsystemName(configuration).flatMap { name =>
+        ComponentRepository.resolveSubsystemDescriptor(_repository_specs(configuration), name)
+      }
+    }
+
   def default(
     subsystemName: String,
     mode: Option[String],

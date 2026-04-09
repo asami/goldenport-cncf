@@ -112,7 +112,7 @@ Define and freeze integration contract for `textus-identity` subsystem.
 ### Evidence
 
 - `/Users/asami/src/dev2026/textus-identity/docs/journal/2026/03/ti-01-contract-freeze-2026-03-26.md`
-- `/Users/asami/src/dev2026/textus-identity/src/main/cozy/textus-identity-subsystem.cml`
+- `/Users/asami/src/dev2026/textus-identity/subsystem-descriptor.yaml`
 
 ---
 
@@ -151,6 +151,10 @@ History comment:
   work remains open.
 - 2026-03-26: focused compile and subsystem specs passed, confirming the
   revised minimal-subsystem runtime path and development override behavior.
+- 2026-04-09: local repository bootstrap is closed with descriptor-first
+  CAR/SAR packaging, `component.d` verification, and subsystem-name-based
+  SAR resolution. Remote repository specification and HTTP acquisition are
+  deferred under Future Development Items.
 
 ---
 

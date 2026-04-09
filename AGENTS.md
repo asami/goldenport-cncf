@@ -10,6 +10,11 @@
 
 Earlier Chappie-specific rules have been removed. Current agent-facing rules and conventions are located under `docs/ai/`. The `RULE.md` file and documents under `docs/rules/` remain authoritative for all agents.
 
+Shared AI operational directives are mounted under `ai/directive/`.
+Repository-local AI bridge guidance lives under `docs/ai/`.
+Agents must use the shared directives through that mounted path and follow
+repository-local bridge instructions where present.
+
 Agents must comply with these rules before performing any action,
 especially before editing files or generating implementation results.
 
@@ -33,8 +38,9 @@ unless explicitly instructed.
 6. `docs/design/` (design intent and boundaries; start with `docs/design/cncf-architecture-overview.md`)
 7. `docs/notes/` (non-normative notes; never overrides rules/spec/design)
 8. `docs/ai/` (agent/AI operational notes; never overrides rules/spec/design)
-9. `src/main/scala/` (implementation)
-10. `src/test/scala/` (Executable Specifications)
+9. `ai/directive/` (shared AI operational directives mounted as submodule; use via repository-local bridge guidance)
+10. `src/main/scala/` (implementation)
+11. `src/test/scala/` (Executable Specifications)
 
 ## Canonical Design Documents
 
@@ -152,5 +158,6 @@ AI agents MUST follow the AI–Human Collaboration Convention.
 
 Canonical reference:
 - docs/ai/ai-human-collaboration-convention.md
+- docs/ai/shared-directive-bridge.md
 
 END OF AGENTS.md

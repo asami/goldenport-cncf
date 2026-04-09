@@ -12,6 +12,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
 import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.GlobalContext
+import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.should.Matchers
@@ -97,6 +98,68 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       wiring.providers.head.priority shouldBe 100
       wiring.providers.head.schemes shouldBe Vector("bearer", "refresh-token")
       wiring.providers.head.provider shouldBe empty
+    }
+
+    "resolve a subsystem descriptor from component repository using subsystem name only" in {
+      _with_temp_dir { componentdir =>
+        val fakecomponentjar = _create_fake_component_jar(componentdir.resolve("assets").resolve("component-main.jar"))
+        val componentDescriptor = componentdir.resolve("component-descriptor.json")
+        Files.writeString(
+          componentDescriptor,
+          """{"name":"textus-user-account","version":"0.1.0-SNAPSHOT","componentName":"textus-user-account"}"""
+        )
+        _create_car(
+          componentdir.resolve("textus-user-account-0.1.0-SNAPSHOT.car"),
+          Seq(
+            "component/main.jar" -> fakecomponentjar,
+            "component-descriptor.json" -> componentDescriptor
+          )
+        )
+
+        val subsystemDescriptor = componentdir.resolve("subsystem-descriptor.yaml")
+        Files.writeString(
+          subsystemDescriptor,
+          """subsystem: textus-identity
+            |version: 0.1.0-SNAPSHOT
+            |components:
+            |  - component: textus-user-account
+            |    coordinate: org.simplemodeling.car:textus-user-account:0.1.0-SNAPSHOT
+            |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+        _create_car(
+          componentdir.resolve("textus-identity-0.1.0-SNAPSHOT.sar"),
+          Seq(
+            "subsystem-descriptor.yaml" -> subsystemDescriptor
+          )
+        )
+
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.SubsystemNameKey ->
+              ConfigurationValue.StringValue("textus-identity"),
+            RuntimeConfig.ComponentRepositoryKey ->
+              ConfigurationValue.StringValue(s"component-dir:${componentdir.toString}")
+          )),
+          ConfigurationTrace.empty
+        )
+
+        val subsystem = DefaultSubsystemFactory.defaultWithScope(
+          context = ScopeContext(
+            kind = ScopeKind.Subsystem,
+            name = "textus-identity",
+            parent = None,
+            observabilityContext = ExecutionContext.create().observability
+          ),
+          configuration = configuration
+        )
+
+        subsystem.name shouldBe "textus-identity"
+        subsystem.version shouldBe Some("0.1.0-SNAPSHOT")
+        subsystem.descriptor.map(_.subsystemName) shouldBe Some("textus-identity")
+        subsystem.components.map(_.name).sorted shouldBe Vector("spec")
+        subsystem.components.flatMap(_.artifactMetadata).flatMap(_.component) should contain ("textus-user-account")
+      }
     }
 
   }
