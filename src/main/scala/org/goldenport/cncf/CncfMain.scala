@@ -47,8 +47,7 @@ object CncfMain extends GlobalObservable {
     workspace: Option[Path],
     forceExit: Boolean,
     noExit: Boolean,
-    subsystemName: Option[String],
-    runtimeArgs: Array[String]
+    invocation: CncfRuntime.RuntimeInvocationParameters
   )
 
   def main(args: Array[String]): Unit = {
@@ -105,8 +104,7 @@ object CncfMain extends GlobalObservable {
       workspace = workspace,
       forceExit = forceExit,
       noExit = noExit,
-      subsystemName = invocation.subsystemName,
-      runtimeArgs = invocation.actualArgs
+      invocation = invocation
     )
   }
 
@@ -410,7 +408,7 @@ object CncfMain extends GlobalObservable {
     launch: LaunchParameters,
     specs: Vector[ComponentRepository.Specification]
   ): Array[String] = {
-    val args = launch.runtimeArgs
+    val args = launch.invocation.actualArgs
     val alreadySpecified =
       args.exists(_.startsWith(s"--${RuntimeConfig.SubsystemDescriptorKey}=")) ||
         args.exists(_.startsWith(s"--${RuntimeConfig.SubsystemFileKey}=")) ||
@@ -424,7 +422,7 @@ object CncfMain extends GlobalObservable {
     if (alreadySpecified) {
       args
     } else {
-      launch.subsystemName
+      launch.invocation.subsystemName
         .flatMap(name => _resolve_subsystem_descriptor_entry(specs, name))
         .map { case (spec, descriptor) =>
           val repoArgs =
