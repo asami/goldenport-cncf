@@ -9,7 +9,7 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall, QueryAction, ResourceAccess}
-import org.goldenport.cncf.component.{Component, ComponentInit}
+import org.goldenport.cncf.component.{Component, ComponentInit, ComponentOrigin}
 import org.goldenport.cncf.component.ComponentOriginLabel
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.ComponentId
@@ -532,24 +532,31 @@ object AdminComponent {
         GlobalRuntimeContext.current
           .map(_.assemblyReport.toRecord)
           .getOrElse(subsystem.globalRuntimeContext.assemblyReport.toRecord)
+      val components = subsystem.components.toVector
+      val descriptorComponents = components.filterNot(_.origin == ComponentOrigin.Builtin)
+      val builtinComponents = components.filter(_.origin == ComponentOrigin.Builtin)
       val descriptor = org.goldenport.record.Record.data(
         "kind" -> "assembly-descriptor",
         "subsystem" -> subsystem.name,
         "version" -> subsystem.version.getOrElse(""),
-        "components" -> subsystem.components.toVector.map { comp =>
-          org.goldenport.record.Record.data(
-            "name" -> comp.name,
-            "origin" -> ComponentOriginLabel.userLabel(comp.origin.label)
-          )
-        },
+        "components" -> descriptorComponents.map(_assembly_component_record_),
         "ports" -> subsystem.descriptor.map(_.declaredPorts).getOrElse(Vector.empty),
         "wiring" -> _subsystem_wiring_(subsystem),
         "wiring_bindings" -> subsystem.descriptor.map(_.resolvedWiringBindings).getOrElse(Vector.empty),
+        "runtime" -> org.goldenport.record.Record.data(
+          "builtin_components" -> builtinComponents.map(_assembly_component_record_)
+        ),
         "warnings" -> warnings
       )
       Consequence.success(OperationResponse.RecordResponse(descriptor))
     }
   }
+
+  private def _assembly_component_record_(comp: Component): Record =
+    org.goldenport.record.Record.data(
+      "name" -> comp.name,
+      "origin" -> ComponentOriginLabel.userLabel(comp.origin.label)
+    )
 
   private def _subsystem_wiring_(subsystem: Subsystem): Record =
     subsystem.descriptor.map(_.wiring).filterNot(_.isEmpty).getOrElse {
