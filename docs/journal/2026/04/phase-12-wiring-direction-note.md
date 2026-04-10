@@ -72,9 +72,9 @@ The wiring diagram should include:
 - warnings, conflicts, and selection reasons
 
 `admin.assembly.report` should be treated as the current retrieval surface for
-that wiring diagram. Later, the same resolved result should be exportable back
-into a subsystem descriptor, or into a separate assembly descriptor, so the
-operator can review and pin the convention-generated wiring.
+that wiring diagram. Later, the same resolved result should be exportable into
+a separate assembly descriptor, so the operator can review and pin the
+convention-generated wiring.
 
 The wiring diagram should be retrievable in two classes of representation:
 
@@ -97,6 +97,40 @@ This separates:
   - minimum intent, often component-list-first
 - resolved assembly / wiring diagram
   - runtime-completed result, suitable for review, dashboard display, and descriptor export
+
+### Subsystem Descriptor And Assembly Descriptor Should Be Separate
+
+The subsystem descriptor and the assembly descriptor should be separate documents.
+
+The subsystem descriptor is the human-authored design intent:
+
+- subsystem name
+- required component list
+- explicit settings that should be fixed by the author
+- optionally explicit wiring when the author wants to override convention
+
+The assembly descriptor is the runtime-resolved operational plan:
+
+- selected components and artifact/source decisions
+- resolved `api` / `spi` ports
+- convention-completed wiring
+- resolved `glue`
+- warnings, conflicts, and selection reasons
+
+This separation makes operations easier because the authored intent does not
+get mixed with generated resolution output. It also supports a practical admin
+workflow:
+
+1. author or update the subsystem descriptor
+2. let CNCF resolve the assembly by convention
+3. inspect the assembly descriptor and visual wiring diagram in admin/dashboard
+4. edit or approve the assembly descriptor if needed
+5. store the assembly descriptor for reproducible operation
+
+In this model:
+
+- subsystem descriptor = design intent
+- assembly descriptor = resolved operational plan
 
 ## Current Runtime State
 
