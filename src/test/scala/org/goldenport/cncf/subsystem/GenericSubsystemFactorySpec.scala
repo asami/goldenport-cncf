@@ -64,7 +64,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         val descriptor = GenericSubsystemDescriptor.load(descriptorPath).toOption.get
         val configuration = ResolvedConfiguration(
           Configuration(Map(
-            RuntimeConfig.ComponentRepositoryKey ->
+            RuntimeConfig.RepositoryDirKey ->
               ConfigurationValue.StringValue(s"component-dir:${componentdir.toString}")
           )),
           ConfigurationTrace.empty
@@ -138,7 +138,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           Configuration(Map(
             RuntimeConfig.SubsystemNameKey ->
               ConfigurationValue.StringValue("textus-identity"),
-            RuntimeConfig.ComponentRepositoryKey ->
+            RuntimeConfig.RepositoryDirKey ->
               ConfigurationValue.StringValue(s"component-dir:${componentdir.toString}")
           )),
           ConfigurationTrace.empty

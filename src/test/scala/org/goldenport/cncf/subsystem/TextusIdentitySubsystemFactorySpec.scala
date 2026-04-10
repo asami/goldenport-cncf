@@ -23,7 +23,7 @@ final class TextusIdentitySubsystemFactorySpec extends AnyWordSpec with Matchers
     "honor the development override repository" in {
       val configuration = ResolvedConfiguration(
         Configuration(Map(
-          RuntimeConfig.TextusIdentityComponentRepositoryKey ->
+          RuntimeConfig.RepositoryDirKey ->
             ConfigurationValue.StringValue("scala-cli:/Users/asami/src/dev2026/textus-user-account")
         )),
         ConfigurationTrace.empty

@@ -18,7 +18,7 @@ Current note:
     - select a packaged component by name from search repositories
   - `--textus.runtime.subsystem=<name>`
     - select a subsystem by name
-- `--component-repository` remains as a legacy search-oriented alias
+- `--repository-dir` is the packaged search-oriented option
 
 ## 1. Concept
 
@@ -39,7 +39,7 @@ This mechanism unifies all Component discovery paths under a single abstraction.
 
 ### Legacy Option
 
-    --component-repository <spec>[,<spec>...]
+    --repository-dir <path>
 
 Current primary options:
 
@@ -119,7 +119,7 @@ Multiple repositories may be specified using a comma-separated list in the legac
 
 Example:
 
-    --component-repository=official,project,component-dir,scala-cli
+    --repository-dir repository.d
 
 Current preferred shape is:
 
@@ -167,7 +167,7 @@ official and project are specification-only at this stage.
 
 ## 8. Summary
 
-- `--component-repository` was the earlier single discovery mechanism
+- the earlier single discovery mechanism has been removed
 - Repositories are specified as repository-type[:directory]
 - Default directories are repository-type specific
 - current runtime also distinguishes active packaged directories from search repositories

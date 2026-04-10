@@ -119,11 +119,11 @@ The primary goal is to validate that a user can:
 - and access all standard CNCF execution surfaces without special setup.
 
 - [x] Evidence (verified): scala-cli command list is documented
-  - CNCF_BOOTSTRAP_LOG=1 scala-cli run . -- command admin component list --component-repository=scala-cli
+  - CNCF_BOOTSTRAP_LOG=1 scala-cli run . -- command admin component list --repository-dir=.
 - [x] Evidence (verified): demo component appears in admin component list
   - Expected: component "hello" listed with origin: scala-cli
 - [x] Evidence (verified): demo command execution output is documented
-  - CNCF_BOOTSTRAP_LOG=1 scala-cli run . -- command hello world greeting --component-repository=scala-cli
+  - CNCF_BOOTSTRAP_LOG=1 scala-cli run . -- command hello world greeting --repository-dir=.
   - Expected stdout: ok
 - [x] Evidence (verified): reproduction steps are copy-paste runnable
   - All commands listed in the runbook can be executed as-is with scala-cli only
@@ -202,10 +202,10 @@ Notes:
   scala-cli compile .
 
 - Run Admin listing (with bootstrap log):
-  CNCF_BOOTSTRAP_LOG=1 scala-cli run . -- command admin component list --component-repository=scala-cli
+  CNCF_BOOTSTRAP_LOG=1 scala-cli run . -- command admin component list --repository-dir=.
 
 - Run demo command (with bootstrap log):
-  CNCF_BOOTSTRAP_LOG=1 scala-cli run . -- command hello world greeting --component-repository=scala-cli
+  CNCF_BOOTSTRAP_LOG=1 scala-cli run . -- command hello world greeting --repository-dir=.
 
 Expected Results:
 - admin component list includes demo component

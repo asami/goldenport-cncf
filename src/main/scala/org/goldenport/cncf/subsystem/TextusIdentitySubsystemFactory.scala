@@ -91,8 +91,7 @@ object TextusIdentitySubsystemFactory {
   ): Vector[ComponentRepository.Specification] = {
     val values =
       ConfigurationAccess
-        .getString(configuration, RuntimeConfig.TextusIdentityComponentRepositoryKey)
-        .orElse(ConfigurationAccess.getString(configuration, RuntimeConfig.ComponentRepositoryKey))
+        .getString(configuration, RuntimeConfig.RepositoryDirKey)
     values match {
       case Some(value) =>
         _parse_repository_specs(value)

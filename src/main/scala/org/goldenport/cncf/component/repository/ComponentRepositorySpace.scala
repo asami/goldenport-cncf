@@ -166,15 +166,6 @@ object ComponentRepositorySpace {
       if (arg == _no_default_components_flag) {
         noDefault = true
         i += 1
-      } else if (arg.startsWith("--component-repository=")) {
-        search += arg.stripPrefix("--component-repository=")
-        i += 1
-      } else if (arg == "--component-repository") {
-        if (i + 1 >= args.length) {
-          return ExtractedArgs(Left("--component-repository requires a value"), Right(Vector.empty), args, noDefault)
-        }
-        search += args(i + 1)
-        i += 2
       } else if (arg.startsWith("--repository-dir=")) {
         search += s"component-dir:${arg.stripPrefix("--repository-dir=")}"
         i += 1
@@ -220,8 +211,7 @@ object ComponentRepositorySpace {
   private def _config_search_repository_specs(
     configuration: ResolvedConfiguration
   ): Vector[String] =
-    configuration.get[String](RuntimeConfig.ComponentRepositoryKey)
-      .orElse(configuration.get[String](RuntimeConfig.RepositoryDirKey)) match {
+    configuration.get[String](RuntimeConfig.RepositoryDirKey) match {
       case Consequence.Success(Some(value)) =>
         value
           .split(",")

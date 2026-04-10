@@ -523,9 +523,6 @@ object CncfRuntime extends GlobalObservable {
               .filterNot {
                 case (RuntimeConfig.ComponentDirKey, value) =>
                   _has_component_dir_config_arg(args, value)
-                case (RuntimeConfig.ComponentRepositoryKey, value) =>
-                  _has_component_repository_config_arg(args, value) ||
-                    _has_component_repository_spec(activeSpecs, value)
                 case _ =>
                   false
               }
@@ -544,12 +541,10 @@ object CncfRuntime extends GlobalObservable {
   ): RuntimeInvocationParameters = {
     val args = invocation.actualArgs
     val alreadySpecified =
-      args.exists(_.startsWith(s"--${RuntimeConfig.ComponentRepositoryKey}=")) ||
-        args.exists(_.startsWith(s"--${RuntimeConfig.ComponentDirKey}=")) ||
+      args.exists(_.startsWith(s"--${RuntimeConfig.ComponentDirKey}=")) ||
         args.sliding(2).exists {
           case Array(k, _) =>
-            k == s"--${RuntimeConfig.ComponentRepositoryKey}" ||
-              k == s"--${RuntimeConfig.ComponentDirKey}"
+            k == s"--${RuntimeConfig.ComponentDirKey}"
           case _ =>
             false
         }
@@ -563,9 +558,6 @@ object CncfRuntime extends GlobalObservable {
             .filterNot {
               case (RuntimeConfig.ComponentDirKey, value) =>
                 _has_component_dir_config_arg(args, value)
-              case (RuntimeConfig.ComponentRepositoryKey, value) =>
-                _has_component_repository_config_arg(args, value) ||
-                  _has_component_repository_spec(activeSpecs, value)
               case _ =>
                 false
             }
@@ -860,17 +852,6 @@ object CncfRuntime extends GlobalObservable {
         Some(s"scala-cli:${baseDir}")
     }
 
-  private def _has_component_repository_config_arg(
-    args: Array[String],
-    value: String
-  ): Boolean =
-    args.contains(s"--${RuntimeConfig.ComponentRepositoryKey}=${value}") ||
-      args.sliding(2).exists {
-        case Array(currentKey, currentValue) =>
-          currentKey == s"--${RuntimeConfig.ComponentRepositoryKey}" && currentValue == value
-        case _ => false
-      }
-
   private def _has_component_dir_config_arg(
     args: Array[String],
     value: String
@@ -882,12 +863,6 @@ object CncfRuntime extends GlobalObservable {
         case _ => false
       }
 
-  private def _has_component_repository_spec(
-    specs: Vector[ComponentRepository.Specification],
-    value: String
-  ): Boolean =
-    specs.exists(spec => _spec_argument(spec).contains(value))
-
   private def _active_spec_argument(
     spec: ComponentRepository.Specification
   ): Option[(String, String)] =
@@ -895,7 +870,7 @@ object CncfRuntime extends GlobalObservable {
       case ComponentRepository.ComponentDirRepository.Specification(baseDir) =>
         Some((RuntimeConfig.ComponentDirKey, baseDir.toString))
       case _ =>
-        _spec_argument(spec).map(v => (RuntimeConfig.ComponentRepositoryKey, v))
+        None
     }
 
   private def _discover_components(

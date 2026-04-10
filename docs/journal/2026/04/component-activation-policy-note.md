@@ -140,7 +140,7 @@ Implementation follow-up should include:
 - component activation policy in runtime behavior
 - possible explicit component-selection parameter
 - review of sample options such as:
-  - `--component-repository` as a legacy search alias
+  - `--repository-dir` as the packaged search option
   - `--repository-dir`
   - `--component-dir`
   - `--no-default-components`

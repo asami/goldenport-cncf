@@ -50,7 +50,7 @@ Expected output (example):
 ### Admin component list (with bootstrap log)
 
 ```sh
-CNCF_BOOTSTRAP_LOG=1 scala-cli run . -- command admin component list --component-repository=scala-cli
+CNCF_BOOTSTRAP_LOG=1 scala-cli run . -- command admin component list --repository-dir=.
 ```
 
 Expected output:
@@ -59,7 +59,7 @@ Expected output:
 ### Demo command execution (with bootstrap log)
 
 ```sh
-CNCF_BOOTSTRAP_LOG=1 scala-cli run . -- command hello world greeting --component-repository=scala-cli
+CNCF_BOOTSTRAP_LOG=1 scala-cli run . -- command hello world greeting --repository-dir=.
 ```
 
 Expected output:
