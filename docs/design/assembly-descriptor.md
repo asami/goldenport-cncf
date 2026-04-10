@@ -43,12 +43,20 @@ The intended packaged layout is:
 The subsystem descriptor remains the authored intent.
 The assembly descriptor records the resolved operational plan that should be reused for reproducible execution when present.
 
-An explicit `--assembly-descriptor <path>` option is still useful, but it is not the normal operation path.
+The descriptor can also be overridden through runtime configuration.
+The intended configuration key is:
+
+```text
+textus.runtime.assembly.descriptor=<path>
+```
+
+An explicit `--assembly-descriptor <path>` CLI option is still useful, but it is not the normal operation path.
+It should be treated as the CLI way to set the same runtime configuration value.
 It is intended for debugging, experiments, and temporary override cases where the operator needs to test a descriptor outside the packaged SAR.
 
 Resolution order should be:
 
-1. explicit `--assembly-descriptor <path>` when supplied
+1. configured `textus.runtime.assembly.descriptor`, including the equivalent `--assembly-descriptor <path>` CLI form
 2. `assembly-descriptor.*` at the top level of the selected SAR
 3. convention-based assembly from the subsystem descriptor
 
