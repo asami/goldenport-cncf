@@ -96,6 +96,7 @@ object CncfMain extends GlobalObservable {
     val (workspace, args4) = _take_workspace(configuration, args3)
     val (forceExit, args5) = _take_force_exit(configuration, args4)
     val (noExit, rest) = _take_no_exit(configuration, args5)
+    val invocation = CncfRuntime.canonicalInvocationParameters(configuration, rest)
     LaunchParameters(
       activeRepositories = reposResult,
       searchRepositories = _append_default_component_repository(reposResult, cwd, noDefaultComponents),
@@ -104,8 +105,8 @@ object CncfMain extends GlobalObservable {
       workspace = workspace,
       forceExit = forceExit,
       noExit = noExit,
-      subsystemName = _subsystem_name(configuration, rest),
-      runtimeArgs = rest
+      subsystemName = invocation.subsystemName,
+      runtimeArgs = invocation.actualArgs
     )
   }
 
@@ -446,28 +447,6 @@ object CncfMain extends GlobalObservable {
     specs.iterator.flatMap { spec =>
       spec.resolveSubsystemDescriptor(subsystemName).map(spec -> _)
     }.toSeq.headOption
-
-  private def _subsystem_name(
-    configuration: ResolvedConfiguration,
-    args: Array[String]
-  ): Option[String] =
-    _subsystem_name_from_args(args).orElse(GenericSubsystemFactory.subsystemName(configuration))
-
-  private def _subsystem_name_from_args(
-    args: Array[String]
-  ): Option[String] = {
-    var i = 0
-    while (i < args.length) {
-      val current = args(i)
-      if (current == s"--${RuntimeConfig.SubsystemNameKey}" && i + 1 < args.length) {
-        return Option(args(i + 1)).map(_.trim).filter(_.nonEmpty)
-      } else if (current.startsWith(s"--${RuntimeConfig.SubsystemNameKey}=")) {
-        return Option(current.drop(s"--${RuntimeConfig.SubsystemNameKey}=".length)).map(_.trim).filter(_.nonEmpty)
-      }
-      i += 1
-    }
-    None
-  }
 
   private def _spec_argument(
     spec: ComponentRepository.Specification

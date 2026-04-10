@@ -55,6 +55,11 @@ import org.goldenport.record.Record
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
+  private[cncf] final case class RuntimeInvocationParameters(
+    actualArgs: Array[String],
+    subsystemName: Option[String]
+  )
+
   private final case class RuntimeLaunch(
     cwd: Path,
     configuration: ResolvedConfiguration,
@@ -399,6 +404,17 @@ object CncfRuntime extends GlobalObservable {
   def runExitCode(args: Array[String]): Int =
     run(args)
 
+  private[cncf] def canonicalInvocationParameters(
+    configuration: ResolvedConfiguration,
+    args: Array[String]
+  ): RuntimeInvocationParameters = {
+    val actualArgs = _normalize_help_aliases(args)
+    RuntimeInvocationParameters(
+      actualArgs = actualArgs,
+      subsystemName = _subsystem_name(configuration, actualArgs)
+    )
+  }
+
   private def _prepare_launch(
     cwd: Path,
     args: Array[String]
@@ -409,7 +425,8 @@ object CncfRuntime extends GlobalObservable {
       ComponentRepositorySpace.extractArgs(configuration, args)
     val (backendoption, logLevelOption, actualargs0) =
       _extract_log_options(argsAfterRepos)
-    val actualargs = _normalize_help_aliases(actualargs0)
+    val invocation = canonicalInvocationParameters(configuration, actualargs0)
+    val actualargs = invocation.actualArgs
     _execute_top_level_help(actualargs) match {
       case Some(code) => return Left(code)
       case None => ()
@@ -572,6 +589,29 @@ object CncfRuntime extends GlobalObservable {
             _exit_code(Consequence.Failure(conclusion))
         }
     }
+  }
+
+  private def _subsystem_name(
+    configuration: ResolvedConfiguration,
+    args: Array[String]
+  ): Option[String] =
+    _subsystem_name_from_args(args)
+      .orElse(org.goldenport.cncf.subsystem.GenericSubsystemFactory.subsystemName(configuration))
+
+  private def _subsystem_name_from_args(
+    args: Array[String]
+  ): Option[String] = {
+    var i = 0
+    while (i < args.length) {
+      val current = args(i)
+      if (current == s"--${RuntimeConfig.SubsystemNameKey}" && i + 1 < args.length) {
+        return Option(args(i + 1)).map(_.trim).filter(_.nonEmpty)
+      } else if (current.startsWith(s"--${RuntimeConfig.SubsystemNameKey}=")) {
+        return Option(current.drop(s"--${RuntimeConfig.SubsystemNameKey}=".length)).map(_.trim).filter(_.nonEmpty)
+      }
+      i += 1
+    }
+    None
   }
 
   private def _exit_code(c: Consequence[_]): Int =
