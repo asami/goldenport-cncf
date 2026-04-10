@@ -1,9 +1,20 @@
-Design Note — component.dir (Docker Distribution Contract)
+Design Note — component.dir (Historical Docker Distribution Contract)
 ==========================================================
 
 Purpose
 -------
-component.dir defines the canonical mechanism for loading external CNCF
+This note records the earlier `component.dir` distribution contract.
+
+Current note:
+- the runtime now distinguishes:
+  - search repositories
+  - active packaged component sources
+- the closest current runtime concept to this document is:
+  - `--component-dir`
+    - an active packaged component source
+- `repository.d` / `--repository-dir` is the search-oriented counterpart
+
+Historically, `component.dir` defined the canonical mechanism for loading external CNCF
 components in Docker-based distributions.
 
 The goal is to separate the CNCF runtime from user-defined components

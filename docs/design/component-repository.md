@@ -1,7 +1,24 @@
 # Component Repository Specification
 
-Status: Fixed  
+Status: Historical Draft  
 Scope: Phase 2.6 / Stage 5 -> Stage 6+
+
+Current note:
+
+- this document describes the earlier repository-only model
+- current runtime distinguishes:
+  - search repositories
+  - active packaged component sources
+- current CLI direction is:
+  - `--repository-dir <path>`
+    - search packaged `CAR` / `SAR`
+  - `--component-dir <path>`
+    - activate packaged `CAR` / `SAR`
+  - `--textus.runtime.component=<name>`
+    - select a packaged component by name from search repositories
+  - `--textus.runtime.subsystem=<name>`
+    - select a subsystem by name
+- `--component-repository` remains as a legacy search-oriented alias
 
 ## 1. Concept
 
@@ -140,8 +157,8 @@ official and project are specification-only at this stage.
 
 ## 8. Summary
 
-- --component-repository is the single authoritative mechanism for Component discovery
+- `--component-repository` was the earlier single discovery mechanism
 - Repositories are specified as repository-type[:directory]
 - Default directories are repository-type specific
-- component.dir is fully integrated as a repository implementation
+- current runtime also distinguishes active packaged directories from search repositories
 - This specification remains valid beyond Stage 5
