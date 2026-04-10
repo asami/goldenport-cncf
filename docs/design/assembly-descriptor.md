@@ -64,9 +64,9 @@ Resolution order should be:
 2. `assembly-descriptor.*` at the top level of the selected SAR
 3. convention-based assembly from the subsystem descriptor
 
-The current implementation detects the configured or SAR-top assembly descriptor and exposes it as source/provenance in `admin.assembly.descriptor`.
+The current implementation detects the configured or SAR-top assembly descriptor and uses its `wiring` as the primary resolved wiring input when present.
 The provenance block includes whether an assembly descriptor was present, the source kind such as `config` or `sar`, the selected path, and the descriptor identity fields.
-It does not yet replace the subsystem wiring resolution with the assembly descriptor contents.
+When no assembly descriptor wiring is present, the runtime falls back to convention or subsystem descriptor wiring.
 
 ## Current Shape
 

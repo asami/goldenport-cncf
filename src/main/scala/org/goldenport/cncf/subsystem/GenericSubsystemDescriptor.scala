@@ -156,10 +156,12 @@ final case class GenericSubsystemDescriptor(
       .map(_.portRecord)
 
   def resolvedWiringBindings: Vector[Record] =
-    GenericSubsystemDescriptor.resolveWiringBindings(this).map(_.toRecord)
+    resolvedWiring.map(_.toRecord)
 
   def resolvedWiring: Vector[GenericSubsystemResolvedWiringBinding] =
-    GenericSubsystemDescriptor.resolveWiringBindings(this)
+    GenericSubsystemDescriptor.resolveAssemblyWiringBindings(this)
+      .filter(_.nonEmpty)
+      .getOrElse(GenericSubsystemDescriptor.resolveWiringBindings(this))
 }
 
 object GenericSubsystemDescriptor {
@@ -557,6 +559,45 @@ object GenericSubsystemDescriptor {
       }
     }
   }
+
+  def resolveAssemblyWiringBindings(
+    descriptor: GenericSubsystemDescriptor
+  ): Option[Vector[GenericSubsystemResolvedWiringBinding]] =
+    descriptor.assemblyDescriptor.map { source =>
+      source.record.getAny("wiring") match {
+        case Some(xs: Seq[?]) =>
+          xs.toVector.flatMap(_any_to_record).flatMap(_resolved_wiring_binding_from_record)
+        case Some(xs: java.util.List[?]) =>
+          xs.asScala.toVector.flatMap(_any_to_record).flatMap(_resolved_wiring_binding_from_record)
+        case _ =>
+          Vector.empty
+      }
+    }
+
+  private def _resolved_wiring_binding_from_record(
+    rec: Record
+  ): Option[GenericSubsystemResolvedWiringBinding] =
+    for {
+      from <- rec.getRecord("from")
+      to <- rec.getRecord("to")
+      fromComponent <- _string(from, "component")
+      fromService <- _string(from, "service")
+      fromOperation <- _string(from, "operation")
+      toComponent <- _string(to, "component")
+      toService <- _string(to, "service")
+      toOperation <- _string(to, "operation")
+    } yield GenericSubsystemResolvedWiringBinding(
+      fromComponent = fromComponent,
+      fromService = fromService,
+      fromOperation = fromOperation,
+      fromApi = _string(from, "api"),
+      toComponent = toComponent,
+      toSpi = _string(to, "spi"),
+      toService = toService,
+      toOperation = toOperation,
+      glue = _record_value(rec, List("glue")).getOrElse(Record.empty),
+      mode = _string(rec, "mode").getOrElse("api-spi-routing")
+    )
 
   def resolveWiringBindings(wiring: Record): Vector[GenericSubsystemResolvedWiringBinding] = {
     val groups = scala.collection.mutable.LinkedHashMap.empty[String, scala.collection.mutable.Map[String, String]]
