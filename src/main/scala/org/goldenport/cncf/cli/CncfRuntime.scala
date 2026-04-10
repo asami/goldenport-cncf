@@ -2202,13 +2202,19 @@ class CncfRuntime() extends GlobalObservable {
     if (args.isEmpty) {
       Consequence.failure("client path is required")
     } else {
-      args.toVector match {
-        case Vector(component, service, operation, rest @ _*) =>
-          Consequence.success((_normalize_path(s"/${component}/${service}/${operation}"), rest))
-        case Vector(single, rest @ _*) =>
-          _parse_component_service_operation_string(single).map { case (component, service, operation) =>
-            (_normalize_path(s"/${component}/${service}/${operation}"), rest)
-          }
+      val xs = args.toVector
+      if (xs.length >= 3) {
+        val component = xs(0)
+        val service = xs(1)
+        val operation = xs(2)
+        val rest = xs.drop(3)
+        Consequence.success((_normalize_path(s"/${component}/${service}/${operation}"), rest))
+      } else {
+        val single = xs.head
+        val rest = xs.drop(1)
+        _parse_component_service_operation_string(single).map { case (component, service, operation) =>
+          (_normalize_path(s"/${component}/${service}/${operation}"), rest)
+        }
       }
     }
   }

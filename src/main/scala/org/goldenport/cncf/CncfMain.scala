@@ -299,8 +299,6 @@ object CncfMain extends GlobalObservable {
         ComponentOrigin.Repository("component-dir")
       case _: ComponentRepository.ScalaCliRepository.Specification =>
         ComponentOrigin.Repository("scala-cli")
-      case _ =>
-        ComponentOrigin.Repository("component-repository")
     }
 
   private def _component_extra_function(
@@ -456,8 +454,6 @@ object CncfMain extends GlobalObservable {
         Some(s"component-dir:${baseDir}")
       case ComponentRepository.ScalaCliRepository.Specification(baseDir) =>
         Some(s"scala-cli:${baseDir}")
-      case _ =>
-        None
     }
 
   private def _has_component_repository_config_arg(
