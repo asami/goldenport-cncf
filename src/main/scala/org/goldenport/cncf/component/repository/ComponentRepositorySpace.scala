@@ -27,6 +27,13 @@ class ComponentRepositorySpace(
 }
 
 object ComponentRepositorySpace {
+  final case class ExtractedArgs(
+    active: Either[String, Vector[String]],
+    search: Either[String, Vector[String]],
+    residual: Array[String],
+    noDefault: Boolean
+  )
+
   case class Slot(
     repository: ComponentRepository,
     origin: ComponentOrigin
@@ -48,9 +55,8 @@ object ComponentRepositorySpace {
     cwd: Path,
     configuration: ResolvedConfiguration
   ) = {
-    val args = Array[String]()
-    val (result, rest, nodefault) = ComponentRepositorySpace.extractArgs(configuration, args)
-    ComponentRepositorySpace.resolveSpecifications(result, cwd, nodefault) match {
+    val extracted = ComponentRepositorySpace.extractRepositoryArgs(configuration, Array[String]())
+    ComponentRepositorySpace.resolveSpecifications(extracted.active, cwd, extracted.noDefault) match {
       case Left(err) => Vector.empty
       case Right(specs) => specs
     }
@@ -77,8 +83,6 @@ object ComponentRepositorySpace {
         ComponentOrigin.Repository("component-dir")
       case _: ComponentRepository.ScalaCliRepository.Specification =>
         ComponentOrigin.Repository("scala-cli")
-      case _ =>
-        ComponentOrigin.Repository("component-repository")
     }
 
   // Legacy
@@ -143,18 +147,18 @@ object ComponentRepositorySpace {
         ComponentOrigin.Repository("component-dir")
       case _: ComponentRepository.ScalaCliRepository.Specification =>
         ComponentOrigin.Repository("scala-cli")
-      case _ =>
-        ComponentOrigin.Repository("component-repository")
     }
 
   // CncfRuntime
-  def extractArgs(
+  def extractRepositoryArgs(
     configuration: ResolvedConfiguration,
     args: Array[String]
-  ): (Either[String, Vector[String]], Array[String], Boolean) = {
-    val buffer = Vector.newBuilder[String]
-    val specs = Vector.newBuilder[String]
-    specs ++= _config_component_repository_specs(configuration)
+  ): ExtractedArgs = {
+    val residual = Vector.newBuilder[String]
+    val active = Vector.newBuilder[String]
+    val search = Vector.newBuilder[String]
+    search ++= _config_search_repository_specs(configuration)
+    active ++= _config_active_repository_specs(configuration)
     var noDefault = false
     var i = 0
     while (i < args.length) {
@@ -163,28 +167,61 @@ object ComponentRepositorySpace {
         noDefault = true
         i += 1
       } else if (arg.startsWith("--component-repository=")) {
-        specs += arg.stripPrefix("--component-repository=")
+        search += arg.stripPrefix("--component-repository=")
         i += 1
       } else if (arg == "--component-repository") {
         if (i + 1 >= args.length) {
-          return (Left("--component-repository requires a value"), args, noDefault)
+          return ExtractedArgs(Left("--component-repository requires a value"), Right(Vector.empty), args, noDefault)
         }
-        specs += args(i + 1)
+        search += args(i + 1)
+        i += 2
+      } else if (arg.startsWith("--repository-dir=")) {
+        search += s"component-dir:${arg.stripPrefix("--repository-dir=")}"
+        i += 1
+      } else if (arg == "--repository-dir") {
+        if (i + 1 >= args.length) {
+          return ExtractedArgs(Left("--repository-dir requires a value"), Right(Vector.empty), args, noDefault)
+        }
+        search += s"component-dir:${args(i + 1)}"
+        i += 2
+      } else if (arg.startsWith("--component-dir=")) {
+        active += s"component-dir:${arg.stripPrefix("--component-dir=")}"
+        i += 1
+      } else if (arg == "--component-dir") {
+        if (i + 1 >= args.length) {
+          return ExtractedArgs(Right(Vector.empty), Left("--component-dir requires a value"), args, noDefault)
+        }
+        active += s"component-dir:${args(i + 1)}"
         i += 2
       } else {
-        buffer += arg
+        residual += arg
         i += 1
       }
     }
-    (Right(specs.result()), buffer.result().toArray, noDefault)
+    ExtractedArgs(
+      active = Right(active.result()),
+      search = Right(search.result()),
+      residual = residual.result().toArray,
+      noDefault = noDefault
+    )
+  }
+
+  // Legacy
+  def extractArgs(
+    configuration: ResolvedConfiguration,
+    args: Array[String]
+  ): (Either[String, Vector[String]], Array[String], Boolean) = {
+    val extracted = extractRepositoryArgs(configuration, args)
+    (extracted.search, extracted.residual, extracted.noDefault)
   }
 
   private val _no_default_components_flag = "--no-default-components"
 
-  private def _config_component_repository_specs(
+  private def _config_search_repository_specs(
     configuration: ResolvedConfiguration
   ): Vector[String] =
-    configuration.get[String](RuntimeConfig.ComponentRepositoryKey) match {
+    configuration.get[String](RuntimeConfig.ComponentRepositoryKey)
+      .orElse(configuration.get[String](RuntimeConfig.RepositoryDirKey)) match {
       case Consequence.Success(Some(value)) =>
         value
           .split(",")
@@ -194,20 +231,38 @@ object ComponentRepositorySpace {
       case _ => Vector.empty
     }
 
-  def appendDefaultComponentRepository(
+  private def _config_active_repository_specs(
+    configuration: ResolvedConfiguration
+  ): Vector[String] =
+    configuration.get[String](RuntimeConfig.ComponentDirKey) match {
+      case Consequence.Success(Some(value)) =>
+        value
+          .split(",")
+          .map(_.trim)
+          .filter(_.nonEmpty)
+          .map(v => if (v.startsWith("component-dir:") || v.contains(":")) v else s"component-dir:${v}")
+          .toVector
+      case _ => Vector.empty
+    }
+
+  def appendDefaultSearchRepositories(
     result: Either[String, Vector[ComponentRepository.Specification]],
+    active: Vector[ComponentRepository.Specification],
     cwd: Path,
     noDefault: Boolean
   ): Either[String, Vector[ComponentRepository.Specification]] =
     result match {
       case left @ Left(_) => left
       case Right(specs) if noDefault => Right(specs)
-      case Right(specs) if specs.nonEmpty => Right(specs)
       case Right(specs) =>
-        _default_components_dir(cwd) match {
-          case Some(dir) if !_has_default_components_spec(specs, dir) =>
-            Right(specs :+ ComponentRepository.ComponentDirRepository.Specification(dir))
-          case _ => Right(specs)
+        val merged = active.foldLeft(specs) { (z, spec) =>
+          _append_spec_if_missing(z, spec)
+        }
+        _default_repository_dir(cwd) match {
+          case Some(dir) =>
+            Right(_append_spec_if_missing(merged, ComponentRepository.ComponentDirRepository.Specification(dir)))
+          case None =>
+            Right(merged)
         }
     }
 
@@ -220,15 +275,19 @@ object ComponentRepositorySpace {
       case left @ Left(_) => left
       case Right(specs) if noDefault => Right(specs)
       case Right(specs) =>
-        val defaults = Vector(_default_car_dir(cwd), _default_sar_dir(cwd)).flatten
+        val defaults = Vector(_default_component_dir(cwd), _default_car_dir(cwd), _default_sar_dir(cwd)).flatten
         Right(defaults.foldLeft(specs) { (z, dir) =>
-          if (_has_default_components_spec(z, dir)) z
-          else z :+ ComponentRepository.ComponentDirRepository.Specification(dir)
+          _append_spec_if_missing(z, ComponentRepository.ComponentDirRepository.Specification(dir))
         })
     }
 
-  private def _default_components_dir(cwd: Path): Option[Path] = {
+  private def _default_component_dir(cwd: Path): Option[Path] = {
     val dir = cwd.resolve("component.d").normalize
+    if (Files.isDirectory(dir)) Some(dir) else None
+  }
+
+  private def _default_repository_dir(cwd: Path): Option[Path] = {
+    val dir = cwd.resolve("repository.d").normalize
     if (Files.isDirectory(dir)) Some(dir) else None
   }
 
@@ -250,6 +309,17 @@ object ComponentRepositorySpace {
       case ComponentRepository.ComponentDirRepository.Specification(base) =>
         base.normalize == dir.normalize
       case _ => false
+    }
+
+  private def _append_spec_if_missing(
+    specs: Vector[ComponentRepository.Specification],
+    spec: ComponentRepository.Specification
+  ): Vector[ComponentRepository.Specification] =
+    spec match {
+      case ComponentRepository.ComponentDirRepository.Specification(base) =>
+        if (_has_default_components_spec(specs, base)) specs else specs :+ spec
+      case _ =>
+        if (specs.contains(spec)) specs else specs :+ spec
     }
 
   def component_extra_function(

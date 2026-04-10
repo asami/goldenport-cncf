@@ -462,19 +462,20 @@ object CncfRuntime extends GlobalObservable {
     args: Array[String],
     cwd: Path
   ): RuntimeRepositoryParameters = {
-    val (reposResult, _, noDefaultComponents) =
-      ComponentRepositorySpace.extractArgs(configuration, args)
+    val extracted =
+      ComponentRepositorySpace.extractRepositoryArgs(configuration, args)
     val activeRepositories =
       ComponentRepositorySpace.appendDefaultActiveRepositories(
-        ComponentRepositorySpace.resolveSpecifications(reposResult, cwd, noDefaultComponents),
+        ComponentRepositorySpace.resolveSpecifications(extracted.active, cwd, extracted.noDefault),
         cwd,
-        noDefaultComponents
+        extracted.noDefault
       )
     val searchRepositories =
-      ComponentRepositorySpace.appendDefaultComponentRepository(
-        activeRepositories,
+      ComponentRepositorySpace.appendDefaultSearchRepositories(
+        ComponentRepositorySpace.resolveSpecifications(extracted.search, cwd, extracted.noDefault),
+        activeRepositories.getOrElse(Vector.empty),
         cwd,
-        noDefaultComponents
+        extracted.noDefault
       )
     RuntimeRepositoryParameters(
       activeRepositories = activeRepositories,
@@ -518,12 +519,17 @@ object CncfRuntime extends GlobalObservable {
         .flatMap(name => _resolve_subsystem_descriptor_entry(searchSpecs, name))
         .map { case (spec, descriptor) =>
           val repoArgs =
-            _spec_argument(spec)
-              .filterNot(arg =>
-                _has_component_repository_config_arg(args, arg) ||
-                  _has_component_repository_spec(activeSpecs, arg)
-              )
-              .map(arg => Array(s"--${RuntimeConfig.ComponentRepositoryKey}=${arg}"))
+            _active_spec_argument(spec)
+              .filterNot {
+                case (RuntimeConfig.ComponentDirKey, value) =>
+                  _has_component_dir_config_arg(args, value)
+                case (RuntimeConfig.ComponentRepositoryKey, value) =>
+                  _has_component_repository_config_arg(args, value) ||
+                    _has_component_repository_spec(activeSpecs, value)
+                case _ =>
+                  false
+              }
+              .map { case (key, value) => Array(s"--${key}=${value}") }
               .getOrElse(Array.empty[String])
           componentResolved.copy(actualArgs = args ++ repoArgs ++ Array(s"--${RuntimeConfig.SubsystemFileKey}=${descriptor.path}"))
         }
@@ -539,9 +545,11 @@ object CncfRuntime extends GlobalObservable {
     val args = invocation.actualArgs
     val alreadySpecified =
       args.exists(_.startsWith(s"--${RuntimeConfig.ComponentRepositoryKey}=")) ||
+        args.exists(_.startsWith(s"--${RuntimeConfig.ComponentDirKey}=")) ||
         args.sliding(2).exists {
           case Array(k, _) =>
-            k == s"--${RuntimeConfig.ComponentRepositoryKey}"
+            k == s"--${RuntimeConfig.ComponentRepositoryKey}" ||
+              k == s"--${RuntimeConfig.ComponentDirKey}"
           case _ =>
             false
         }
@@ -551,12 +559,19 @@ object CncfRuntime extends GlobalObservable {
       invocation.componentName
         .flatMap(name => _resolve_component_descriptor_entry(searchSpecs, name))
         .flatMap { case (spec, _) =>
-          _spec_argument(spec)
-            .filterNot(arg =>
-              _has_component_repository_config_arg(args, arg) ||
-                _has_component_repository_spec(activeSpecs, arg)
-            )
-            .map(arg => invocation.copy(actualArgs = args ++ Array(s"--${RuntimeConfig.ComponentRepositoryKey}=${arg}")))
+          _active_spec_argument(spec)
+            .filterNot {
+              case (RuntimeConfig.ComponentDirKey, value) =>
+                _has_component_dir_config_arg(args, value)
+              case (RuntimeConfig.ComponentRepositoryKey, value) =>
+                _has_component_repository_config_arg(args, value) ||
+                  _has_component_repository_spec(activeSpecs, value)
+              case _ =>
+                false
+            }
+            .map { case (key, value) =>
+              invocation.copy(actualArgs = args ++ Array(s"--${key}=${value}"))
+            }
         }
         .getOrElse(invocation)
     }
@@ -582,10 +597,10 @@ object CncfRuntime extends GlobalObservable {
     val bootstrap = this.bootstrap(cwd, args)
     val configuration = bootstrap.configuration
     configure_slf4j_simple(configuration)
-    val (reposResult, argsAfterRepos, noDefaultComponents) =
-      ComponentRepositorySpace.extractArgs(configuration, args)
+    val extracted =
+      ComponentRepositorySpace.extractRepositoryArgs(configuration, args)
     val (backendoption, logLevelOption, actualargs0) =
-      _extract_log_options(argsAfterRepos)
+      _extract_log_options(extracted.residual)
     val invocation = canonicalInvocationParameters(configuration, actualargs0)
     val actualargs = invocation.actualArgs
     _execute_top_level_help(actualargs) match {
@@ -596,11 +611,7 @@ object CncfRuntime extends GlobalObservable {
       _print_usage()
       return Left(2)
     }
-    ComponentRepositorySpace.resolveSpecifications(
-      reposResult,
-      cwd,
-      noDefaultComponents
-    ) match {
+    bootstrap.repositories.activeRepositories match {
       case Left(message) =>
         Console.err.println(message)
         Left(2)
@@ -860,11 +871,32 @@ object CncfRuntime extends GlobalObservable {
         case _ => false
       }
 
+  private def _has_component_dir_config_arg(
+    args: Array[String],
+    value: String
+  ): Boolean =
+    args.contains(s"--${RuntimeConfig.ComponentDirKey}=${value}") ||
+      args.sliding(2).exists {
+        case Array(currentKey, currentValue) =>
+          currentKey == s"--${RuntimeConfig.ComponentDirKey}" && currentValue == value
+        case _ => false
+      }
+
   private def _has_component_repository_spec(
     specs: Vector[ComponentRepository.Specification],
     value: String
   ): Boolean =
     specs.exists(spec => _spec_argument(spec).contains(value))
+
+  private def _active_spec_argument(
+    spec: ComponentRepository.Specification
+  ): Option[(String, String)] =
+    spec match {
+      case ComponentRepository.ComponentDirRepository.Specification(baseDir) =>
+        Some((RuntimeConfig.ComponentDirKey, baseDir.toString))
+      case _ =>
+        _spec_argument(spec).map(v => (RuntimeConfig.ComponentRepositoryKey, v))
+    }
 
   private def _discover_components(
     workspace: Option[Path]

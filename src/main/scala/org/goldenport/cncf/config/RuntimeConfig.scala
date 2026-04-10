@@ -46,6 +46,8 @@ object RuntimeConfig {
   val SubsystemDescriptorKey = "textus.runtime.subsystem.descriptor"
   val SubsystemFileKey = "textus.runtime.subsystem.file"
   val ComponentRepositoryKey = "textus.component.repository"
+  val RepositoryDirKey = "textus.repository.dir"
+  val ComponentDirKey = "textus.component.dir"
   val TextusIdentityComponentRepositoryKey = "textus.identity.component.repository"
   val LogBackendKey = "textus.logging.backend"
   val RuntimeLogBackendKey = "textus.runtime.logging.backend"
