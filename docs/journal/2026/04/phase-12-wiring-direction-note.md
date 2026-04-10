@@ -132,6 +132,28 @@ In this model:
 - subsystem descriptor = design intent
 - assembly descriptor = resolved operational plan
 
+### Assembly Descriptor Placement
+
+The primary operation should place the assembly descriptor at the top level of the SAR.
+
+The intended packaged layout is:
+
+```text
+<subsystem>.sar
+  subsystem-descriptor.yaml
+  assembly-descriptor.yaml
+```
+
+This keeps the normal runtime path simple:
+
+1. select the subsystem/SAR
+2. read the subsystem descriptor as intent
+3. read the assembly descriptor as the resolved operational plan when present
+4. otherwise resolve wiring by convention
+
+An explicit `--assembly-descriptor <path>` option is still useful for debugging,
+experiments, and temporary overrides, but it should not be the default user flow.
+
 ## Current Runtime State
 
 The framework now supports:

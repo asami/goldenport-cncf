@@ -28,6 +28,30 @@ cncf command admin.assembly.descriptor --format yaml
 The returned document is intended for review, version control, editing, and later re-application as an assembly descriptor.
 It is also the descriptor representation of the wiring diagram.
 
+## Placement And Override
+
+The primary operational placement is the top level of the SAR.
+
+The intended packaged layout is:
+
+```text
+<subsystem>.sar
+  subsystem-descriptor.yaml
+  assembly-descriptor.yaml
+```
+
+The subsystem descriptor remains the authored intent.
+The assembly descriptor records the resolved operational plan that should be reused for reproducible execution when present.
+
+An explicit `--assembly-descriptor <path>` option is still useful, but it is not the normal operation path.
+It is intended for debugging, experiments, and temporary override cases where the operator needs to test a descriptor outside the packaged SAR.
+
+Resolution order should be:
+
+1. explicit `--assembly-descriptor <path>` when supplied
+2. `assembly-descriptor.*` at the top level of the selected SAR
+3. convention-based assembly from the subsystem descriptor
+
 ## Current Shape
 
 The current YAML shape is:
