@@ -22,7 +22,7 @@ import org.goldenport.configuration.ConfigurationSources
 import org.goldenport.configuration.ConfigurationOrigin
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.projection.{SecurityDeploymentMarkdownProjection, SecurityDeploymentProjection}
-import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.cncf.subsystem.{GenericSubsystemAssemblyDescriptorSource, Subsystem}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -614,6 +614,18 @@ object AdminComponent {
       "kind" -> rec.getString("kind").getOrElse(""),
       "subsystem" -> rec.getString("subsystem").getOrElse(""),
       "version" -> rec.getString("version").getOrElse("")
+    )
+
+  private def _assembly_descriptor_source_record_(
+    src: GenericSubsystemAssemblyDescriptorSource
+  ): Record =
+    org.goldenport.record.Record.data(
+      "present" -> true,
+      "source" -> src.source,
+      "path" -> src.path.map(_.toString).getOrElse(""),
+      "kind" -> src.record.getString("kind").getOrElse(""),
+      "subsystem" -> src.record.getString("subsystem").getOrElse(""),
+      "version" -> src.record.getString("version").getOrElse("")
     )
 
   private def _assembly_mermaid_(subsystem: Subsystem): String = {
