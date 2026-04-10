@@ -42,11 +42,7 @@ object CncfMain extends GlobalObservable {
   private final case class LaunchParameters(
     activeRepositories: Either[String, Vector[ComponentRepository.Specification]],
     searchRepositories: Either[String, Vector[ComponentRepository.Specification]],
-    factoryClasses: Vector[String],
-    discoverClasses: Boolean,
-    workspace: Option[Path],
-    forceExit: Boolean,
-    noExit: Boolean,
+    front: CncfRuntime.RuntimeFrontParameters,
     invocation: CncfRuntime.RuntimeInvocationParameters
   )
 
@@ -65,7 +61,7 @@ object CncfMain extends GlobalObservable {
             Console.err.println(message)
             2
           case (Right(activeSpecs), Right(searchSpecs)) =>
-            val baseExtras = _component_extra_function(activeSpecs, launch.discoverClasses, launch.workspace, launch.factoryClasses)
+            val baseExtras = _component_extra_function(activeSpecs, launch.front.discoverClasses, launch.front.workspace, launch.front.factoryClasses)
             val extras = _trace_component_dir_extras(baseExtras)
             val runtimeArgs = _with_resolved_subsystem_descriptor_arg(launch, searchSpecs)
             CncfRuntime.runWithExtraComponents(runtimeArgs, extras)
@@ -74,9 +70,9 @@ object CncfMain extends GlobalObservable {
         case e: CliFailed => e.code
       }
 
-    if (launch.forceExit) {
+    if (launch.front.forceExit) {
       sys.exit(code) // CLI adapter may exit only when --force-exit is requested.
-    } else if (launch.noExit && code != 0) {
+    } else if (launch.front.noExit && code != 0) {
       throw new CliFailed(code)
     } else {
       ()
@@ -91,46 +87,18 @@ object CncfMain extends GlobalObservable {
     val configuration = bootstrap.configuration
     val (reposResult, args1, noDefaultComponents) =
       _take_component_repository(configuration, args, cwd)
-    val (factoryClasses, args2) = _take_component_factory_classes(configuration, args1)
-    val (discover, args3) = _take_discover_classes(configuration, args2)
-    val (workspace, args4) = _take_workspace(configuration, args3)
-    val (forceExit, args5) = _take_force_exit(configuration, args4)
-    val (noExit, rest) = _take_no_exit(configuration, args5)
+    val front =
+      if (args1.sameElements(args)) bootstrap.front
+      else CncfRuntime.frontParameters(configuration, args1)
     val invocation =
-      if (rest.sameElements(args)) bootstrap.invocation
-      else CncfRuntime.canonicalInvocationParameters(configuration, rest)
+      if (front.residualArgs.sameElements(args)) bootstrap.invocation
+      else CncfRuntime.canonicalInvocationParameters(configuration, front.residualArgs)
     LaunchParameters(
       activeRepositories = reposResult,
       searchRepositories = _append_default_component_repository(reposResult, cwd, noDefaultComponents),
-      factoryClasses = factoryClasses,
-      discoverClasses = discover,
-      workspace = workspace,
-      forceExit = forceExit,
-      noExit = noExit,
+      front = front,
       invocation = invocation
     )
-  }
-
-  private def _take_no_exit(
-    configuration: ResolvedConfiguration,
-    args: Array[String]
-  ): (Boolean, Array[String]) = {
-    val noexit =
-      args.contains("--no-exit") ||
-        _config_truthy(configuration, RuntimeConfig.NoExitKey)
-    val rest = args.filterNot(_ == "--no-exit")
-    (noexit, rest)
-  }
-
-  private def _take_force_exit(
-    configuration: ResolvedConfiguration,
-    args: Array[String]
-  ): (Boolean, Array[String]) = {
-    val forceexit =
-      args.contains("--force-exit") ||
-        _config_truthy(configuration, RuntimeConfig.ForceExitKey)
-    val rest = args.filterNot(_ == "--force-exit")
-    (forceexit, rest)
   }
 
   private val _no_default_components_flag = "--no-default-components"
@@ -200,71 +168,6 @@ object CncfMain extends GlobalObservable {
       case _ => false
     }
 
-  private def _take_discover_classes(
-    configuration: ResolvedConfiguration,
-    args: Array[String]
-  ): (Boolean, Array[String]) = {
-    val enabled =
-      args.contains("--discover=classes") ||
-        _config_truthy(configuration, RuntimeConfig.DiscoverClassesKey) ||
-        _discover_env_enabled()
-    val rest = args.filterNot(_ == "--discover=classes")
-    (enabled, rest)
-  }
-
-  private def _take_component_factory_classes(
-    configuration: ResolvedConfiguration,
-    args: Array[String]
-  ): (Vector[String], Array[String]) = {
-    val classes = Vector.newBuilder[String]
-    val rest = Vector.newBuilder[String]
-    var i = 0
-    while (i < args.length) {
-      val current = args(i)
-      if (current == "--component-factory-class" && i + 1 < args.length) {
-        classes += args(i + 1)
-        i = i + 2
-      } else if (current.startsWith("--component-factory-class=")) {
-        classes += current.drop("--component-factory-class=".length)
-        i = i + 1
-      } else {
-        rest += current
-        i = i + 1
-      }
-    }
-    val configClasses =
-      _config_string(configuration, RuntimeConfig.ComponentFactoryClassKey)
-        .toVector
-        .flatMap(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
-    ((configClasses ++ classes.result()).distinct, rest.result().toArray)
-  }
-
-  private def _take_workspace(
-    configuration: ResolvedConfiguration,
-    args: Array[String]
-  ): (Option[Path], Array[String]) = {
-    val buffer = Vector.newBuilder[String]
-    var workspace: Option[Path] = None
-    var i = 0
-    while (i < args.length) {
-      if (args(i) == "--workspace" && i + 1 < args.length) {
-        workspace = Some(Paths.get(args(i + 1)))
-        i = i + 2
-      } else {
-        buffer += args(i)
-        i = i + 1
-      }
-    }
-    val resolved =
-      workspace.orElse(_config_string(configuration, RuntimeConfig.WorkspaceKey).map(Paths.get(_)))
-    (resolved, buffer.result().toArray)
-  }
-
-  private def _discover_env_enabled(): Boolean = {
-    sys.env
-      .get("CNCF_DISCOVER_CLASSES")
-      .exists(v => _truthy_(v))
-  }
 
   private def _discover_components(
     workspace: Option[Path]

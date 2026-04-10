@@ -55,8 +55,18 @@ import org.goldenport.record.Record
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
+  private[cncf] final case class RuntimeFrontParameters(
+    factoryClasses: Vector[String],
+    discoverClasses: Boolean,
+    workspace: Option[Path],
+    forceExit: Boolean,
+    noExit: Boolean,
+    residualArgs: Array[String]
+  )
+
   private[cncf] final case class RuntimeBootstrap(
     configuration: ResolvedConfiguration,
+    front: RuntimeFrontParameters,
     invocation: RuntimeInvocationParameters
   )
 
@@ -409,13 +419,26 @@ object CncfRuntime extends GlobalObservable {
   def runExitCode(args: Array[String]): Int =
     run(args)
 
+  private[cncf] def frontParameters(
+    configuration: ResolvedConfiguration,
+    args: Array[String]
+  ): RuntimeFrontParameters = {
+    val (factoryClasses, args2) = _take_component_factory_classes(configuration, args)
+    val (discover, args3) = _take_discover_classes(configuration, args2)
+    val (workspace, args4) = _take_workspace(configuration, args3)
+    val (forceExit, args5) = _take_force_exit(configuration, args4)
+    val (noExit, rest) = _take_no_exit(configuration, args5)
+    RuntimeFrontParameters(factoryClasses, discover, workspace, forceExit, noExit, rest)
+  }
+
   private[cncf] def bootstrap(
     cwd: Path,
     args: Array[String]
   ): RuntimeBootstrap = {
     val configuration = _resolve_configuration(cwd, args)
-    val invocation = canonicalInvocationParameters(configuration, args)
-    RuntimeBootstrap(configuration, invocation)
+    val front = frontParameters(configuration, args)
+    val invocation = canonicalInvocationParameters(configuration, front.residualArgs)
+    RuntimeBootstrap(configuration, front, invocation)
   }
 
   private[cncf] def canonicalInvocationParameters(
@@ -628,6 +651,111 @@ object CncfRuntime extends GlobalObservable {
     }
     None
   }
+
+  private def _take_no_exit(
+    configuration: ResolvedConfiguration,
+    args: Array[String]
+  ): (Boolean, Array[String]) = {
+    val noexit =
+      args.contains("--no-exit") ||
+        _config_truthy(configuration, RuntimeConfig.NoExitKey)
+    val rest = args.filterNot(_ == "--no-exit")
+    (noexit, rest)
+  }
+
+  private def _take_force_exit(
+    configuration: ResolvedConfiguration,
+    args: Array[String]
+  ): (Boolean, Array[String]) = {
+    val forceexit =
+      args.contains("--force-exit") ||
+        _config_truthy(configuration, RuntimeConfig.ForceExitKey)
+    val rest = args.filterNot(_ == "--force-exit")
+    (forceexit, rest)
+  }
+
+  private def _take_discover_classes(
+    configuration: ResolvedConfiguration,
+    args: Array[String]
+  ): (Boolean, Array[String]) = {
+    val enabled =
+      args.contains("--discover=classes") ||
+        _config_truthy(configuration, RuntimeConfig.DiscoverClassesKey) ||
+        _discover_env_enabled()
+    val rest = args.filterNot(_ == "--discover=classes")
+    (enabled, rest)
+  }
+
+  private def _take_component_factory_classes(
+    configuration: ResolvedConfiguration,
+    args: Array[String]
+  ): (Vector[String], Array[String]) = {
+    val classes = Vector.newBuilder[String]
+    val rest = Vector.newBuilder[String]
+    var i = 0
+    while (i < args.length) {
+      val current = args(i)
+      if (current == "--component-factory-class" && i + 1 < args.length) {
+        classes += args(i + 1)
+        i = i + 2
+      } else if (current.startsWith("--component-factory-class=")) {
+        classes += current.drop("--component-factory-class=".length)
+        i = i + 1
+      } else {
+        rest += current
+        i = i + 1
+      }
+    }
+    val configClasses =
+      _config_string(configuration, RuntimeConfig.ComponentFactoryClassKey)
+        .toVector
+        .flatMap(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
+    ((configClasses ++ classes.result()).distinct, rest.result().toArray)
+  }
+
+  private def _take_workspace(
+    configuration: ResolvedConfiguration,
+    args: Array[String]
+  ): (Option[Path], Array[String]) = {
+    val buffer = Vector.newBuilder[String]
+    var workspace: Option[Path] = None
+    var i = 0
+    while (i < args.length) {
+      if (args(i) == "--workspace" && i + 1 < args.length) {
+        workspace = Some(Paths.get(args(i + 1)))
+        i = i + 2
+      } else {
+        buffer += args(i)
+        i = i + 1
+      }
+    }
+    val resolved =
+      workspace.orElse(_config_string(configuration, RuntimeConfig.WorkspaceKey).map(Paths.get(_)))
+    (resolved, buffer.result().toArray)
+  }
+
+  private def _discover_env_enabled(): Boolean =
+    sys.env
+      .get("CNCF_DISCOVER_CLASSES")
+      .exists(v => _truthy_(v))
+
+  private def _truthy_(p: String): Boolean =
+    p.equalsIgnoreCase("true") || p.equalsIgnoreCase("on") || p == "1"
+
+  private def _config_truthy(
+    configuration: ResolvedConfiguration,
+    key: String
+  ): Boolean =
+    _config_string(configuration, key).exists(_truthy_)
+
+  private def _config_string(
+    configuration: ResolvedConfiguration,
+    key: String
+  ): Option[String] =
+    configuration.get[String](key).toOption.flatten.orElse {
+      if (key.startsWith("cncf.")) configuration.get[String](key.replaceFirst("^cncf\\.", "textus.")).toOption.flatten
+      else None
+    }
 
   private def _exit_code(c: Consequence[_]): Int =
     c match {
