@@ -2426,9 +2426,26 @@ class CncfRuntime() extends GlobalObservable {
     modeHint: Option[RunMode],
     extraComponents: Subsystem => Seq[Component]
   ): Subsystem = {
-    val configuration = _resolve_configuration(cwd, args)
+    val bootstrap0 = CncfRuntime.bootstrap(cwd, args)
+    val searchSpecs = bootstrap0.repositories.searchRepositories match {
+      case Left(message) =>
+        throw new IllegalArgumentException(message)
+      case Right(specs) =>
+        specs
+    }
+    val invocation = CncfRuntime.resolveSubsystemInvocation(bootstrap0.invocation, searchSpecs)
+    val bootstrap =
+      if (invocation.actualArgs.sameElements(args)) bootstrap0
+      else CncfRuntime.bootstrap(cwd, invocation.actualArgs)
+    val configuration = bootstrap.configuration
+    val activeSpecs = bootstrap.repositories.activeRepositories match {
+      case Left(message) =>
+        throw new IllegalArgumentException(message)
+      case Right(specs) =>
+        specs
+    }
     CncfRuntime.configure_slf4j_simple(configuration)
-    val modehint = modeHint.orElse(args.headOption.flatMap(RunMode.from))
+    val modehint = modeHint.orElse(invocation.actualArgs.headOption.flatMap(RunMode.from))
     val runconfig = RuntimeConfig.from(configuration, modehint)
     val aliasresolver = AliasLoader.load(configuration.configuration)
     LogBackendHolder.install(runconfig.logBackend)
@@ -2460,7 +2477,8 @@ class CncfRuntime() extends GlobalObservable {
     } else {
       subsystem.setup(compfactory)
     }
-    val extras = extraComponents(subsystem).map(compfactory.bootstrap)
+    val runtimeExtras = CncfRuntime.componentExtraFunction(activeSpecs, bootstrap.front)
+    val extras = (runtimeExtras(subsystem) ++ extraComponents(subsystem)).map(compfactory.bootstrap)
     if (extras.nonEmpty) {
       subsystem.add(extras)
     }
