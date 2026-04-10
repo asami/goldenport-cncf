@@ -128,8 +128,8 @@ Execution is explicitly phased (docs/execution-model.md):
   - `docs/design/event-driven-job-management.md`
 - Client execution / demo specs
   - `docs/design/client-component-action-api.md` — Stage 4 finalized behavior (execution path, driver resolution chain, output contract, config keys).
-- Component repository
-  - `docs/design/component-repository.md` — canonical specification for repository types, CLI syntax, and discovery unification.
+- Packaged source search and activation
+  - `docs/design/component-repository.md` — canonical specification for `repository.d`, `component.d`, CLI syntax, and packaged source discovery/activation.
 - Component instantiation
   - `docs/design/component-factory.md` — Factory/Provider/Group contract for turning discovered classes into Component instances.
   - JobPlan and ExpectedEvent (supporting)
