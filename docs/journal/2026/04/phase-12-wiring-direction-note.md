@@ -153,10 +153,9 @@ This keeps the normal runtime path simple:
 
 The descriptor can also be overridden through runtime configuration.
 The intended key is `textus.runtime.assembly.descriptor`.
+The CLI form should use the same key: `--textus.runtime.assembly.descriptor=<path>`.
 
-An explicit `--assembly-descriptor <path>` option is still useful for debugging,
-experiments, and temporary overrides, but it should not be the default user flow.
-It should be treated as the CLI form of setting the same runtime configuration value.
+This override is useful for debugging, experiments, and temporary override cases, but it should not be the default user flow.
 
 ## Current Runtime State
 
