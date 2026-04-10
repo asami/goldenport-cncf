@@ -47,10 +47,11 @@ runtime:
   builtin_components:
     - name: admin
       origin: builtin
-warnings:
-  status: ok
-  warning_count: 0
-  warnings: []
+diagnostics:
+  warnings:
+    status: ok
+    warning_count: 0
+    warnings: []
 ```
 
 `components` contains the selected application-level components that should be part of the reusable descriptor body.
@@ -61,6 +62,9 @@ It is the primary wiring representation in the assembly descriptor because this 
 
 `source.wiring` preserves the raw subsystem descriptor wiring block when available.
 It is kept as provenance, not as the primary re-application shape.
+
+`diagnostics.warnings` contains assembly warnings and related diagnostic information.
+It is separated from the descriptor body because warnings are inspection output, not the reusable operational plan itself.
 
 ## Report Boundary
 

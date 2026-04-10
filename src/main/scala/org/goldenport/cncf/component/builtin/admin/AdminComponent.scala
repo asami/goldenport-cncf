@@ -585,7 +585,9 @@ object AdminComponent {
         "runtime" -> org.goldenport.record.Record.data(
           "builtin_components" -> builtinComponents.map(_assembly_component_record_)
         ),
-        "warnings" -> warnings
+        "diagnostics" -> org.goldenport.record.Record.data(
+          "warnings" -> warnings
+        )
       )
       Consequence.success(OperationResponse.RecordResponse(descriptor))
     }
