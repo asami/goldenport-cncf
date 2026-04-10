@@ -86,7 +86,8 @@ object CncfRuntime extends GlobalObservable {
 
   private[cncf] final case class RuntimeInvocationParameters(
     actualArgs: Array[String],
-    subsystemName: Option[String]
+    subsystemName: Option[String],
+    componentName: Option[String]
   )
 
   private final case class RuntimeLaunch(
@@ -485,10 +486,11 @@ object CncfRuntime extends GlobalObservable {
     configuration: ResolvedConfiguration,
     args: Array[String]
   ): RuntimeInvocationParameters = {
-    val actualArgs = _normalize_help_aliases(args)
+    val actualArgs = _strip_invocation_selection_args(_normalize_help_aliases(args))
     RuntimeInvocationParameters(
       actualArgs = actualArgs,
-      subsystemName = _subsystem_name(configuration, actualArgs)
+      subsystemName = _subsystem_name(configuration, args),
+      componentName = _component_name(configuration, args)
     )
   }
 
@@ -497,7 +499,8 @@ object CncfRuntime extends GlobalObservable {
     searchSpecs: Vector[ComponentRepository.Specification],
     activeSpecs: Vector[ComponentRepository.Specification] = Vector.empty
   ): RuntimeInvocationParameters = {
-    val args = invocation.actualArgs
+    val componentResolved = resolveComponentInvocation(invocation, searchSpecs, activeSpecs)
+    val args = componentResolved.actualArgs
     val alreadySpecified =
       args.exists(_.startsWith(s"--${RuntimeConfig.SubsystemDescriptorKey}=")) ||
         args.exists(_.startsWith(s"--${RuntimeConfig.SubsystemFileKey}=")) ||
@@ -509,9 +512,9 @@ object CncfRuntime extends GlobalObservable {
             false
         }
     if (alreadySpecified) {
-      invocation
+      componentResolved
     } else {
-      invocation.subsystemName
+      componentResolved.subsystemName
         .flatMap(name => _resolve_subsystem_descriptor_entry(searchSpecs, name))
         .map { case (spec, descriptor) =>
           val repoArgs =
@@ -522,7 +525,38 @@ object CncfRuntime extends GlobalObservable {
               )
               .map(arg => Array(s"--${RuntimeConfig.ComponentRepositoryKey}=${arg}"))
               .getOrElse(Array.empty[String])
-          invocation.copy(actualArgs = args ++ repoArgs ++ Array(s"--${RuntimeConfig.SubsystemFileKey}=${descriptor.path}"))
+          componentResolved.copy(actualArgs = args ++ repoArgs ++ Array(s"--${RuntimeConfig.SubsystemFileKey}=${descriptor.path}"))
+        }
+        .getOrElse(componentResolved)
+    }
+  }
+
+  private[cncf] def resolveComponentInvocation(
+    invocation: RuntimeInvocationParameters,
+    searchSpecs: Vector[ComponentRepository.Specification],
+    activeSpecs: Vector[ComponentRepository.Specification] = Vector.empty
+  ): RuntimeInvocationParameters = {
+    val args = invocation.actualArgs
+    val alreadySpecified =
+      args.exists(_.startsWith(s"--${RuntimeConfig.ComponentRepositoryKey}=")) ||
+        args.sliding(2).exists {
+          case Array(k, _) =>
+            k == s"--${RuntimeConfig.ComponentRepositoryKey}"
+          case _ =>
+            false
+        }
+    if (alreadySpecified) {
+      invocation
+    } else {
+      invocation.componentName
+        .flatMap(name => _resolve_component_descriptor_entry(searchSpecs, name))
+        .flatMap { case (spec, _) =>
+          _spec_argument(spec)
+            .filterNot(arg =>
+              _has_component_repository_config_arg(args, arg) ||
+                _has_component_repository_spec(activeSpecs, arg)
+            )
+            .map(arg => invocation.copy(actualArgs = args ++ Array(s"--${RuntimeConfig.ComponentRepositoryKey}=${arg}")))
         }
         .getOrElse(invocation)
     }
@@ -725,6 +759,13 @@ object CncfRuntime extends GlobalObservable {
     _subsystem_name_from_args(args)
       .orElse(org.goldenport.cncf.subsystem.GenericSubsystemFactory.subsystemName(configuration))
 
+  private def _component_name(
+    configuration: ResolvedConfiguration,
+    args: Array[String]
+  ): Option[String] =
+    _component_name_from_args(args)
+      .orElse(ConfigurationAccess.getString(configuration, RuntimeConfig.ComponentNameKey))
+
   private def _subsystem_name_from_args(
     args: Array[String]
   ): Option[String] = {
@@ -741,12 +782,61 @@ object CncfRuntime extends GlobalObservable {
     None
   }
 
+  private def _component_name_from_args(
+    args: Array[String]
+  ): Option[String] = {
+    var i = 0
+    while (i < args.length) {
+      val current = args(i)
+      if (current == s"--${RuntimeConfig.ComponentNameKey}" && i + 1 < args.length) {
+        return Option(args(i + 1)).map(_.trim).filter(_.nonEmpty)
+      } else if (current.startsWith(s"--${RuntimeConfig.ComponentNameKey}=")) {
+        return Option(current.drop(s"--${RuntimeConfig.ComponentNameKey}=".length)).map(_.trim).filter(_.nonEmpty)
+      }
+      i += 1
+    }
+    None
+  }
+
+  private def _strip_invocation_selection_args(
+    args: Array[String]
+  ): Array[String] = {
+    val buffer = Vector.newBuilder[String]
+    var i = 0
+    while (i < args.length) {
+      val current = args(i)
+      if (
+        current == s"--${RuntimeConfig.SubsystemNameKey}" ||
+        current == s"--${RuntimeConfig.ComponentNameKey}"
+      ) {
+        i += (if (i + 1 < args.length) 2 else 1)
+      } else if (
+        current.startsWith(s"--${RuntimeConfig.SubsystemNameKey}=") ||
+        current.startsWith(s"--${RuntimeConfig.ComponentNameKey}=")
+      ) {
+        i += 1
+      } else {
+        buffer += current
+        i += 1
+      }
+    }
+    buffer.result().toArray
+  }
+
   private def _resolve_subsystem_descriptor_entry(
     specs: Vector[ComponentRepository.Specification],
     subsystemName: String
   ): Option[(ComponentRepository.Specification, GenericSubsystemDescriptor)] =
     specs.iterator.flatMap { spec =>
       spec.resolveSubsystemDescriptor(subsystemName).map(spec -> _)
+    }.toSeq.headOption
+
+  private def _resolve_component_descriptor_entry(
+    specs: Vector[ComponentRepository.Specification],
+    componentName: String
+  ): Option[(ComponentRepository.Specification, org.goldenport.cncf.component.ComponentDescriptor)] =
+    specs.iterator.flatMap { spec =>
+      spec.resolveComponentDescriptor(componentName).map(spec -> _)
     }.toSeq.headOption
 
   private def _spec_argument(

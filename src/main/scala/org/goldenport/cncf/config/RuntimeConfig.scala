@@ -42,6 +42,7 @@ object RuntimeConfig {
   val ForceExitKey = "cncf.runtime.force-exit"
   val NoExitKey = "cncf.runtime.no-exit"
   val SubsystemNameKey = "textus.runtime.subsystem"
+  val ComponentNameKey = "textus.runtime.component"
   val SubsystemDescriptorKey = "textus.runtime.subsystem.descriptor"
   val SubsystemFileKey = "textus.runtime.subsystem.file"
   val ComponentRepositoryKey = "textus.component.repository"

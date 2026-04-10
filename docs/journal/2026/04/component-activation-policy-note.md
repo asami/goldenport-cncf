@@ -75,6 +75,12 @@ The intended direction is:
 - packaged component artifact
   - explicitly selected by component name
 
+The current runtime shape is:
+
+- `--textus.runtime.component=<name>`
+  - search packaged component repositories
+  - activate the repository that contains the selected component
+
 This keeps component and subsystem activation conceptually symmetric.
 
 ### 4. Discovery Does Not Imply Activation

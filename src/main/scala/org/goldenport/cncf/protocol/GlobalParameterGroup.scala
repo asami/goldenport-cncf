@@ -23,9 +23,14 @@ object GlobalParameterGroup {
     kind = ParameterDefinition.Kind.Property
   )
 
+  private val COMPONENT = ParameterDefinition(
+    content = BaseContent.simple("component"),
+    kind = ParameterDefinition.Kind.Property
+  )
+
   // TODO add other runtime parameters (log_level, log_backend, http_driver, env) as ParameterDefinition instances.
 
-  val runtimeParameters: Vector[ParameterDefinition] = Vector(BASE_URL)
+  val runtimeParameters: Vector[ParameterDefinition] = Vector(BASE_URL, COMPONENT)
 
   /** Names -> definitions map for parser helpers. */
   val runtimeNameMap: Map[String, ParameterDefinition] =

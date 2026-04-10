@@ -43,6 +43,9 @@ object ComponentRepository extends GlobalObservable {
     def resolveSubsystemDescriptor(
       subsystemName: String
     ): Option[GenericSubsystemDescriptor] = None
+    def resolveComponentDescriptor(
+      componentName: String
+    ): Option[ComponentDescriptor] = None
   }
 
   def parseSpecs(
@@ -219,6 +222,11 @@ object ComponentRepository extends GlobalObservable {
         subsystemName: String
       ): Option[GenericSubsystemDescriptor] =
         ComponentRepository.resolveSubsystemDescriptorFromComponentDir(baseDir, subsystemName)
+
+      override def resolveComponentDescriptor(
+        componentName: String
+      ): Option[ComponentDescriptor] =
+        ComponentRepository.resolveComponentDescriptorFromComponentDir(baseDir, componentName)
     }
   }
 
@@ -227,6 +235,12 @@ object ComponentRepository extends GlobalObservable {
     subsystemName: String
   ): Option[GenericSubsystemDescriptor] =
     specs.iterator.flatMap(_.resolveSubsystemDescriptor(subsystemName)).toSeq.headOption
+
+  def resolveComponentDescriptor(
+    specs: Seq[Specification],
+    componentName: String
+  ): Option[ComponentDescriptor] =
+    specs.iterator.flatMap(_.resolveComponentDescriptor(componentName)).toSeq.headOption
 
   def resolveSubsystemDescriptorFromComponentDir(
     baseDir: Path,
@@ -246,6 +260,24 @@ object ComponentRepository extends GlobalObservable {
     }
   }
 
+  def resolveComponentDescriptorFromComponentDir(
+    baseDir: Path,
+    componentName: String
+  ): Option[ComponentDescriptor] = {
+    if (!Files.isDirectory(baseDir)) {
+      None
+    } else {
+      _list_artifacts(baseDir).iterator.flatMap {
+        case Artifact(path, ArtifactKind.Car) =>
+          ComponentDescriptorLoader.loadArchive(path).toOption
+        case Artifact(path, ArtifactKind.CarDir) =>
+          ComponentDescriptorLoader.load(path).toOption.flatMap(_.headOption)
+        case _ =>
+          None
+      }.find(_matches_component_descriptor(_, componentName))
+    }
+  }
+
   private def _matches_subsystem_descriptor(
     descriptor: GenericSubsystemDescriptor,
     subsystemName: String
@@ -256,6 +288,18 @@ object ComponentRepository extends GlobalObservable {
     descriptor.subsystemName == requested ||
       versionedName.contains(requested) ||
       descriptor.path.getFileName.toString.stripSuffix(".sar").stripSuffix(".zip") == requested
+  }
+
+  private def _matches_component_descriptor(
+    descriptor: ComponentDescriptor,
+    componentName: String
+  ): Boolean = {
+    val requested = componentName.trim
+    val names = Vector(
+      descriptor.componentName,
+      descriptor.name
+    ).flatten
+    names.contains(requested)
   }
 
   private def _class_loader_from_paths(
