@@ -74,7 +74,13 @@ object CncfRuntime extends GlobalObservable {
   private[cncf] final case class RuntimeBootstrap(
     configuration: ResolvedConfiguration,
     front: RuntimeFrontParameters,
-    invocation: RuntimeInvocationParameters
+    invocation: RuntimeInvocationParameters,
+    repositories: RuntimeRepositoryParameters
+  )
+
+  private[cncf] final case class RuntimeRepositoryParameters(
+    activeRepositories: Either[String, Vector[ComponentRepository.Specification]],
+    searchRepositories: Either[String, Vector[ComponentRepository.Specification]]
   )
 
   private[cncf] final case class RuntimeInvocationParameters(
@@ -445,7 +451,29 @@ object CncfRuntime extends GlobalObservable {
     val configuration = _resolve_configuration(cwd, args)
     val front = frontParameters(configuration, args)
     val invocation = canonicalInvocationParameters(configuration, front.residualArgs)
-    RuntimeBootstrap(configuration, front, invocation)
+    val repositories = repositoryParameters(configuration, args, cwd)
+    RuntimeBootstrap(configuration, front, invocation, repositories)
+  }
+
+  private[cncf] def repositoryParameters(
+    configuration: ResolvedConfiguration,
+    args: Array[String],
+    cwd: Path
+  ): RuntimeRepositoryParameters = {
+    val (reposResult, _, noDefaultComponents) =
+      ComponentRepositorySpace.extractArgs(configuration, args)
+    val activeRepositories =
+      ComponentRepositorySpace.resolveSpecifications(reposResult, cwd, noDefaultComponents)
+    val searchRepositories =
+      ComponentRepositorySpace.appendDefaultComponentRepository(
+        activeRepositories,
+        cwd,
+        noDefaultComponents
+      )
+    RuntimeRepositoryParameters(
+      activeRepositories = activeRepositories,
+      searchRepositories = searchRepositories
+    )
   }
 
   private[cncf] def canonicalInvocationParameters(
