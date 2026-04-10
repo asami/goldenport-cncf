@@ -670,6 +670,9 @@ Prefer a concrete semantic owner:
 - `textus.logging.level`
 - `textus.logging.file.path`
 
+`textus.calltree` controls the operation result calltree projection described
+in `docs/design/observability/calltree-runtime-result.md`.
+
 Use `runtime` only when the value is genuinely about the runtime process itself and no clearer owner exists.
 
 Examples to avoid for new primary keys:
