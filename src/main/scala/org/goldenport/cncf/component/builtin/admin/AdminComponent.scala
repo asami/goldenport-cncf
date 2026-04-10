@@ -100,6 +100,11 @@ object AdminComponent {
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
+      val opAssemblyDescriptor = new AssemblyDescriptorOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(DataType.Named("Record"))),
+        params.subsystem
+      )
       val serviceSystem = spec.ServiceDefinition(
         name = "system",
         operations = spec.OperationDefinitionGroup(
@@ -144,7 +149,8 @@ object AdminComponent {
         operations = spec.OperationDefinitionGroup(
           operations = NonEmptyVector.of(
             opAssemblyWarnings,
-            opAssemblyReport
+            opAssemblyReport,
+            opAssemblyDescriptor
           )
         )
       )
@@ -353,6 +359,27 @@ object AdminComponent {
       Consequence.success(AssemblyReportAction(req, subsystem))
   }
 
+  private final class AssemblyDescriptorOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        content = BaseContent.Builder("descriptor")
+          .summary("Export the resolved assembly descriptor for the selected subsystem.")
+          .description("Return a descriptor-oriented document for the runtime-resolved assembly, suitable for review and later descriptor export.")
+          .build(),
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: Request
+    ): Consequence[OperationRequest] =
+      Consequence.success(AssemblyDescriptorAction(req, subsystem))
+  }
+
   private final case class ComponentListAction(
     request: Request,
     subsystem: Subsystem
@@ -435,6 +462,14 @@ object AdminComponent {
       AssemblyReportActionCall(core, subsystem)
   }
 
+  private final case class AssemblyDescriptorAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      AssemblyDescriptorActionCall(core, subsystem)
+  }
+
   private final case class DeploymentSecurityMarkdownActionCall(
     core: ActionCall.Core,
     subsystem: Subsystem
@@ -485,6 +520,34 @@ object AdminComponent {
         "warnings" -> warnings
       )
       Consequence.success(OperationResponse.RecordResponse(report))
+    }
+  }
+
+  private final case class AssemblyDescriptorActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] = {
+      val warnings =
+        GlobalRuntimeContext.current
+          .map(_.assemblyReport.toRecord)
+          .getOrElse(subsystem.globalRuntimeContext.assemblyReport.toRecord)
+      val descriptor = org.goldenport.record.Record.data(
+        "kind" -> "assembly-descriptor",
+        "subsystem" -> subsystem.name,
+        "version" -> subsystem.version.getOrElse(""),
+        "components" -> subsystem.components.toVector.map { comp =>
+          org.goldenport.record.Record.data(
+            "name" -> comp.name,
+            "origin" -> ComponentOriginLabel.userLabel(comp.origin.label)
+          )
+        },
+        "ports" -> subsystem.descriptor.map(_.declaredPorts).getOrElse(Vector.empty),
+        "wiring" -> _subsystem_wiring_(subsystem),
+        "wiring_bindings" -> subsystem.descriptor.map(_.resolvedWiringBindings).getOrElse(Vector.empty),
+        "warnings" -> warnings
+      )
+      Consequence.success(OperationResponse.RecordResponse(descriptor))
     }
   }
 
