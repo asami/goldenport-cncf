@@ -464,7 +464,11 @@ object CncfRuntime extends GlobalObservable {
     val (reposResult, _, noDefaultComponents) =
       ComponentRepositorySpace.extractArgs(configuration, args)
     val activeRepositories =
-      ComponentRepositorySpace.resolveSpecifications(reposResult, cwd, noDefaultComponents)
+      ComponentRepositorySpace.appendDefaultActiveRepositories(
+        ComponentRepositorySpace.resolveSpecifications(reposResult, cwd, noDefaultComponents),
+        cwd,
+        noDefaultComponents
+      )
     val searchRepositories =
       ComponentRepositorySpace.appendDefaultComponentRepository(
         activeRepositories,
@@ -490,7 +494,8 @@ object CncfRuntime extends GlobalObservable {
 
   private[cncf] def resolveSubsystemInvocation(
     invocation: RuntimeInvocationParameters,
-    searchSpecs: Vector[ComponentRepository.Specification]
+    searchSpecs: Vector[ComponentRepository.Specification],
+    activeSpecs: Vector[ComponentRepository.Specification] = Vector.empty
   ): RuntimeInvocationParameters = {
     val args = invocation.actualArgs
     val alreadySpecified =
@@ -511,7 +516,10 @@ object CncfRuntime extends GlobalObservable {
         .map { case (spec, descriptor) =>
           val repoArgs =
             _spec_argument(spec)
-              .filterNot(arg => _has_component_repository_config_arg(args, arg))
+              .filterNot(arg =>
+                _has_component_repository_config_arg(args, arg) ||
+                  _has_component_repository_spec(activeSpecs, arg)
+              )
               .map(arg => Array(s"--${RuntimeConfig.ComponentRepositoryKey}=${arg}"))
               .getOrElse(Array.empty[String])
           invocation.copy(actualArgs = args ++ repoArgs ++ Array(s"--${RuntimeConfig.SubsystemFileKey}=${descriptor.path}"))
@@ -761,6 +769,12 @@ object CncfRuntime extends GlobalObservable {
           currentKey == s"--${RuntimeConfig.ComponentRepositoryKey}" && currentValue == value
         case _ => false
       }
+
+  private def _has_component_repository_spec(
+    specs: Vector[ComponentRepository.Specification],
+    value: String
+  ): Boolean =
+    specs.exists(spec => _spec_argument(spec).contains(value))
 
   private def _discover_components(
     workspace: Option[Path]
@@ -2468,12 +2482,18 @@ class CncfRuntime() extends GlobalObservable {
       case Right(specs) =>
         specs
     }
-    val invocation = CncfRuntime.resolveSubsystemInvocation(bootstrap0.invocation, searchSpecs)
+    val activeSpecs = bootstrap0.repositories.activeRepositories match {
+      case Left(message) =>
+        throw new IllegalArgumentException(message)
+      case Right(specs) =>
+        specs
+    }
+    val invocation = CncfRuntime.resolveSubsystemInvocation(bootstrap0.invocation, searchSpecs, activeSpecs)
     val bootstrap =
       if (invocation.actualArgs.sameElements(args)) bootstrap0
       else CncfRuntime.bootstrap(cwd, invocation.actualArgs)
     val configuration = bootstrap.configuration
-    val activeSpecs = bootstrap.repositories.activeRepositories match {
+    val resolvedActiveSpecs = bootstrap.repositories.activeRepositories match {
       case Left(message) =>
         throw new IllegalArgumentException(message)
       case Right(specs) =>
@@ -2512,8 +2532,11 @@ class CncfRuntime() extends GlobalObservable {
     } else {
       subsystem.setup(compfactory)
     }
-    val runtimeExtras = CncfRuntime.componentExtraFunction(activeSpecs, bootstrap.front)
-    val extras = (runtimeExtras(subsystem) ++ extraComponents(subsystem)).map(compfactory.bootstrap)
+    val runtimeExtras = CncfRuntime.componentExtraFunction(resolvedActiveSpecs, bootstrap.front)
+    val extras = _collapse_component_duplicates(
+      subsystem.components.toVector,
+      (runtimeExtras(subsystem) ++ extraComponents(subsystem)).map(compfactory.bootstrap)
+    )
     if (extras.nonEmpty) {
       subsystem.add(extras)
     }
@@ -2524,6 +2547,56 @@ class CncfRuntime() extends GlobalObservable {
         throw new IllegalStateException(conclusion.show)
     }
     subsystem
+  }
+
+  private def _collapse_component_duplicates(
+    existing: Vector[Component],
+    candidates: Seq[Component]
+  ): Vector[Component] = {
+    val existingKeys = existing.map(x => NamingConventions.toComparisonKey(x.core.name)).toSet
+    val seen = mutable.LinkedHashMap.empty[String, Component]
+    candidates.foreach { component =>
+      val key = NamingConventions.toComparisonKey(component.core.name)
+      if (existingKeys.contains(key)) {
+        existing.find(x => NamingConventions.toComparisonKey(x.core.name) == key).foreach { current =>
+          val selection = AssemblyReport.selectPreferred(current, component)
+          if (selection.selected ne current) {
+            seen.update(key, selection.selected)
+          }
+          GlobalRuntimeContext.current.foreach(
+            _.assemblyReport.addWarning(
+              AssemblyReport.duplicateComponentWarning(
+                componentName = component.core.name,
+                selected = selection.selected,
+                dropped = selection.dropped,
+                reason = selection.reason
+              )
+            )
+          )
+        }
+      } else {
+        seen.get(key) match {
+          case Some(current) =>
+            val selection = AssemblyReport.selectPreferred(current, component)
+            seen.update(key, selection.selected)
+            GlobalRuntimeContext.current.foreach(
+              _.assemblyReport.addWarning(
+                AssemblyReport.duplicateComponentWarning(
+                  componentName = component.core.name,
+                  selected = selection.selected,
+                  dropped = selection.dropped,
+                  reason = selection.reason
+                )
+              )
+            )
+          case None =>
+            seen += key -> component
+        }
+      }
+    }
+    seen.iterator.collect {
+      case (key, component) if !existingKeys.contains(key) => component
+    }.toVector
   }
 
   private def _resolve_configuration(

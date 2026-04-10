@@ -211,8 +211,34 @@ object ComponentRepositorySpace {
         }
     }
 
+  def appendDefaultActiveRepositories(
+    result: Either[String, Vector[ComponentRepository.Specification]],
+    cwd: Path,
+    noDefault: Boolean
+  ): Either[String, Vector[ComponentRepository.Specification]] =
+    result match {
+      case left @ Left(_) => left
+      case Right(specs) if noDefault => Right(specs)
+      case Right(specs) =>
+        val defaults = Vector(_default_car_dir(cwd), _default_sar_dir(cwd)).flatten
+        Right(defaults.foldLeft(specs) { (z, dir) =>
+          if (_has_default_components_spec(z, dir)) z
+          else z :+ ComponentRepository.ComponentDirRepository.Specification(dir)
+        })
+    }
+
   private def _default_components_dir(cwd: Path): Option[Path] = {
     val dir = cwd.resolve("component.d").normalize
+    if (Files.isDirectory(dir)) Some(dir) else None
+  }
+
+  private def _default_car_dir(cwd: Path): Option[Path] = {
+    val dir = cwd.resolve("car.d").normalize
+    if (Files.isDirectory(dir)) Some(dir) else None
+  }
+
+  private def _default_sar_dir(cwd: Path): Option[Path] = {
+    val dir = cwd.resolve("sar.d").normalize
     if (Files.isDirectory(dir)) Some(dir) else None
   }
 

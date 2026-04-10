@@ -27,6 +27,7 @@ The following concerns now live primarily in `CncfRuntime`:
 - canonical invocation parameter normalization
 - subsystem name resolution
 - subsystem descriptor lookup and invocation rewriting
+- repository activation/search policy bootstrap
 - front parameter parsing for:
   - `--discover=classes`
   - `--workspace`
@@ -35,6 +36,14 @@ The following concerns now live primarily in `CncfRuntime`:
   - `--no-exit`
 - extra component assembly
 - class discovery helper logic
+- embedding handle initialization
+
+The runtime-side launch bootstrap now also carries the current activation rule:
+
+- packaged `component.d/*.car` stays search-oriented and does not auto-activate by default
+- expanded `car.d` and `sar.d` are treated as development/debug shapes and can auto-activate
+- subsystem-selected repository injection avoids re-injecting a repository that is already active
+- duplicate components introduced by runtime extras are collapsed during initialization
 
 ## Current Role Of CncfMain
 
@@ -42,10 +51,14 @@ The following concerns now live primarily in `CncfRuntime`:
 
 - obtaining the current working directory
 - delegating bootstrap and front/invocation normalization to `CncfRuntime`
-- extracting repository arguments through repository-space helpers
 - deciding exit behavior for the CLI wrapper
 
 This is much closer to the intended shape of a thin adapter.
+
+`CncfBootstrap` is also thinner now:
+
+- runtime handle creation is owned by `CncfRuntime`
+- bootstrap remains as a facade-oriented embedding entry point
 
 ## Why This Matters
 
@@ -69,9 +82,9 @@ The launch path is not fully unified yet.
 Remaining areas to revisit:
 
 - whether `CncfMain` can be reduced even further or folded into runtime entry logic
-- whether repository activation/search policy can be represented in the same
-  canonical launch model as invocation parameters
 - whether embedding entry points can share more of the same bootstrap path
+- whether a single public launch/embedding model should replace multiple thin
+  facades over time
 
 ## Current Rule Of Thumb
 

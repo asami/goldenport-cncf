@@ -32,7 +32,7 @@ object CncfMain extends GlobalObservable {
             2
           case (Right(activeSpecs), Right(searchSpecs)) =>
             val extras = CncfRuntime.componentExtraFunction(activeSpecs, bootstrap.front)
-            val invocation = CncfRuntime.resolveSubsystemInvocation(bootstrap.invocation, searchSpecs)
+            val invocation = CncfRuntime.resolveSubsystemInvocation(bootstrap.invocation, searchSpecs, activeSpecs)
             CncfRuntime.runWithExtraComponents(invocation.actualArgs, extras)
         }
       } catch {

@@ -1473,7 +1473,7 @@ object ComponentFactory {
     repositorySpecs: Vector[ComponentRepository.Specification]
   ): ComponentFactory = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val componentDescriptors = _resolve_component_descriptors(cwd, c)
+    val componentDescriptors = _resolve_component_descriptors(cwd, c, repositorySpecs)
     val space = ComponentRepositorySpace.create(subsystem, c, repositorySpecs, componentDescriptors)
     val descriptors = componentDescriptors.flatMap(_.entityRuntimeDescriptors)
     new ComponentFactory(space, collaborators, descriptors)
@@ -1492,13 +1492,24 @@ object ComponentFactory {
   private def _resolve_component_descriptors(
     cwd: Path,
     c: ResolvedConfiguration
+  ): Vector[ComponentDescriptor] =
+    _resolve_component_descriptors(cwd, c, Vector.empty)
+
+  private def _resolve_component_descriptors(
+    cwd: Path,
+    c: ResolvedConfiguration,
+    repositorySpecs: Vector[ComponentRepository.Specification]
   ): Vector[ComponentDescriptor] = {
     val explicit =
       _split_paths(ConfigurationAccess.getString(c, _component_descriptor_key)) ++
       _split_paths(ConfigurationAccess.getString(c, _component_descriptor_dir_key))
+    val repositoryDirs = repositorySpecs.collect {
+      case ComponentRepository.ComponentDirRepository.Specification(base) =>
+        base.normalize
+    }
     val default = {
       val path = cwd.resolve(_component_descriptor_default_dir).normalize
-      if (Files.exists(path)) Vector(path) else Vector.empty
+      if (Files.exists(path) && !repositoryDirs.contains(path)) Vector(path) else Vector.empty
     }
     (explicit.map(_normalize_path(cwd, _)) ++ default).distinct.flatMap { path =>
       ComponentDescriptorLoader.load(path) match {
