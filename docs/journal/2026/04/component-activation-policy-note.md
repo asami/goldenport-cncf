@@ -57,13 +57,13 @@ Packaged artifacts should remain discoverable and searchable, but should not aut
 
 This includes:
 
-- `component.d/*.car`
+- `repository.d/*.car`
 - packaged subsystem artifacts that are not explicitly selected
 
 Rationale:
 
 - packaged artifacts behave more like deployable inventory than like an active work area
-- auto-activating every discovered packaged artifact increases ambiguity and noise
+- auto-activating every discovered packaged artifact in a search repository increases ambiguity and noise
 - explicit selection is more suitable for predictable CLI and production behavior
 
 ### 3. Packaged Components Should Be Explicitly Selected
@@ -74,12 +74,20 @@ The intended direction is:
   - explicitly selected by subsystem name
 - packaged component artifact
   - explicitly selected by component name
+- packaged search repository
+  - `repository.d`
+- active packaged source
+  - `component.d`
 
 The current runtime shape is:
 
 - `--textus.runtime.component=<name>`
   - search packaged component repositories
-  - activate the repository that contains the selected component
+  - activate the packaged component source that contains the selected component
+- `--repository-dir <path>`
+  - add packaged artifacts to the search repository
+- `--component-dir <path>`
+  - add packaged artifacts to the active component source
 
 This keeps component and subsystem activation conceptually symmetric.
 
@@ -106,9 +114,11 @@ The intended runtime rule is:
   - discover + activate
 - `sar.d`
   - discover + activate
-- `component.d/*.car`
+- `repository.d/*.car`
   - discover/search only
   - no default activation
+- `component.d/*.car`
+  - active packaged source
 - packaged subsystem artifact
   - explicit subsystem selection
 
@@ -130,6 +140,8 @@ Implementation follow-up should include:
 - component activation policy in runtime behavior
 - possible explicit component-selection parameter
 - review of sample options such as:
-  - `--component-repository`
+  - `--component-repository` as a legacy search alias
+  - `--repository-dir`
+  - `--component-dir`
   - `--no-default-components`
 - removal of now-unnecessary options where the new baseline behavior is sufficient

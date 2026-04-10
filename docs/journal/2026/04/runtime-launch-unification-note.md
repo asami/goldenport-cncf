@@ -40,7 +40,8 @@ The following concerns now live primarily in `CncfRuntime`:
 
 The runtime-side launch bootstrap now also carries the current activation rule:
 
-- packaged `component.d/*.car` stays search-oriented and does not auto-activate by default
+- packaged `repository.d/*.car` stays search-oriented and does not auto-activate by default
+- packaged `component.d/*.car` is treated as an active packaged source
 - expanded `car.d` and `sar.d` are treated as development/debug shapes and can auto-activate
 - subsystem-selected repository injection avoids re-injecting a repository that is already active
 - duplicate components introduced by runtime extras are collapsed during initialization
