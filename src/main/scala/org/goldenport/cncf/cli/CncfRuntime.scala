@@ -36,7 +36,7 @@ import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.backend.collaborator.CollaboratorFactory
 import org.goldenport.cncf.component.ComponentFactory
-import org.goldenport.cncf.component.repository.ComponentRepositorySpace
+import org.goldenport.cncf.component.repository.{ComponentRepository, ComponentRepositorySpace}
 import org.goldenport.cncf.importer.StartupImport
 import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.naming.NamingConventions
@@ -46,6 +46,7 @@ import org.goldenport.cncf.cli.help.{CliHelpOperation, ClientCommandHelp, Comman
 import org.goldenport.cncf.observability.{LogLevel, ObservabilityEngine, VisibilityPolicy}
 import org.goldenport.cncf.observability.global.{GlobalObservable, GlobalObservability, GlobalObservabilityGate, ObservabilityRoot}
 import org.goldenport.record.Record
+import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
 
 /*
  * @since   Jan.  7, 2026
@@ -452,6 +453,38 @@ object CncfRuntime extends GlobalObservable {
     )
   }
 
+  private[cncf] def resolveSubsystemInvocation(
+    invocation: RuntimeInvocationParameters,
+    searchSpecs: Vector[ComponentRepository.Specification]
+  ): RuntimeInvocationParameters = {
+    val args = invocation.actualArgs
+    val alreadySpecified =
+      args.exists(_.startsWith(s"--${RuntimeConfig.SubsystemDescriptorKey}=")) ||
+        args.exists(_.startsWith(s"--${RuntimeConfig.SubsystemFileKey}=")) ||
+        args.sliding(2).exists {
+          case Array(k, _) =>
+            k == s"--${RuntimeConfig.SubsystemDescriptorKey}" ||
+              k == s"--${RuntimeConfig.SubsystemFileKey}"
+          case _ =>
+            false
+        }
+    if (alreadySpecified) {
+      invocation
+    } else {
+      invocation.subsystemName
+        .flatMap(name => _resolve_subsystem_descriptor_entry(searchSpecs, name))
+        .map { case (spec, descriptor) =>
+          val repoArgs =
+            _spec_argument(spec)
+              .filterNot(arg => _has_component_repository_config_arg(args, arg))
+              .map(arg => Array(s"--${RuntimeConfig.ComponentRepositoryKey}=${arg}"))
+              .getOrElse(Array.empty[String])
+          invocation.copy(actualArgs = args ++ repoArgs ++ Array(s"--${RuntimeConfig.SubsystemFileKey}=${descriptor.path}"))
+        }
+        .getOrElse(invocation)
+    }
+  }
+
   private def _prepare_launch(
     cwd: Path,
     args: Array[String]
@@ -651,6 +684,35 @@ object CncfRuntime extends GlobalObservable {
     }
     None
   }
+
+  private def _resolve_subsystem_descriptor_entry(
+    specs: Vector[ComponentRepository.Specification],
+    subsystemName: String
+  ): Option[(ComponentRepository.Specification, GenericSubsystemDescriptor)] =
+    specs.iterator.flatMap { spec =>
+      spec.resolveSubsystemDescriptor(subsystemName).map(spec -> _)
+    }.toSeq.headOption
+
+  private def _spec_argument(
+    spec: ComponentRepository.Specification
+  ): Option[String] =
+    spec match {
+      case ComponentRepository.ComponentDirRepository.Specification(baseDir) =>
+        Some(s"component-dir:${baseDir}")
+      case ComponentRepository.ScalaCliRepository.Specification(baseDir) =>
+        Some(s"scala-cli:${baseDir}")
+    }
+
+  private def _has_component_repository_config_arg(
+    args: Array[String],
+    value: String
+  ): Boolean =
+    args.contains(s"--${RuntimeConfig.ComponentRepositoryKey}=${value}") ||
+      args.sliding(2).exists {
+        case Array(currentKey, currentValue) =>
+          currentKey == s"--${RuntimeConfig.ComponentRepositoryKey}" && currentValue == value
+        case _ => false
+      }
 
   private def _take_no_exit(
     configuration: ResolvedConfiguration,
