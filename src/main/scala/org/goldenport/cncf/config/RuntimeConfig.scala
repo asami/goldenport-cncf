@@ -17,7 +17,7 @@ import org.goldenport.cncf.action.CommandExecutionMode
  *  version Jan. 30, 2026
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
- * @version Apr.  8, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -45,6 +45,7 @@ object RuntimeConfig {
   val ComponentNameKey = "textus.runtime.component"
   val SubsystemDescriptorKey = "textus.runtime.subsystem.descriptor"
   val SubsystemFileKey = "textus.runtime.subsystem.file"
+  val AssemblyDescriptorKey = "textus.assembly.descriptor"
   val RepositoryDirKey = "textus.repository.dir"
   val ComponentDirKey = "textus.component.dir"
   val LogBackendKey = "textus.logging.backend"
