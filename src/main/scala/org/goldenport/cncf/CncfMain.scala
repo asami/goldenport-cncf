@@ -398,14 +398,13 @@ object CncfMain extends GlobalObservable {
     if (alreadySpecified) {
       args
     } else {
-      GenericSubsystemFactory
-        .subsystemName(configuration)
+      _subsystem_name(configuration, args)
         .flatMap(name => _resolve_subsystem_descriptor_entry(specs, name))
         .map { case (spec, descriptor) =>
           val repoArgs =
             _spec_argument(spec)
-              .filterNot(arg => _has_component_repository_arg(args, arg))
-              .map(arg => Array(s"--component-repository=${arg}"))
+              .filterNot(arg => _has_component_repository_config_arg(args, arg))
+              .map(arg => Array(s"--${RuntimeConfig.ComponentRepositoryKey}=${arg}"))
               .getOrElse(Array.empty[String])
           args ++ repoArgs ++ Array(s"--${RuntimeConfig.SubsystemFileKey}=${descriptor.path}")
         }
@@ -421,6 +420,28 @@ object CncfMain extends GlobalObservable {
       spec.resolveSubsystemDescriptor(subsystemName).map(spec -> _)
     }.toSeq.headOption
 
+  private def _subsystem_name(
+    configuration: ResolvedConfiguration,
+    args: Array[String]
+  ): Option[String] =
+    _subsystem_name_from_args(args).orElse(GenericSubsystemFactory.subsystemName(configuration))
+
+  private def _subsystem_name_from_args(
+    args: Array[String]
+  ): Option[String] = {
+    var i = 0
+    while (i < args.length) {
+      val current = args(i)
+      if (current == s"--${RuntimeConfig.SubsystemNameKey}" && i + 1 < args.length) {
+        return Option(args(i + 1)).map(_.trim).filter(_.nonEmpty)
+      } else if (current.startsWith(s"--${RuntimeConfig.SubsystemNameKey}=")) {
+        return Option(current.drop(s"--${RuntimeConfig.SubsystemNameKey}=".length)).map(_.trim).filter(_.nonEmpty)
+      }
+      i += 1
+    }
+    None
+  }
+
   private def _spec_argument(
     spec: ComponentRepository.Specification
   ): Option[String] =
@@ -433,13 +454,14 @@ object CncfMain extends GlobalObservable {
         None
     }
 
-  private def _has_component_repository_arg(
+  private def _has_component_repository_config_arg(
     args: Array[String],
     value: String
   ): Boolean =
-    args.contains(s"--component-repository=${value}") ||
+    args.contains(s"--${RuntimeConfig.ComponentRepositoryKey}=${value}") ||
       args.sliding(2).exists {
-        case Array("--component-repository", current) => current == value
+        case Array(currentKey, currentValue) =>
+          currentKey == s"--${RuntimeConfig.ComponentRepositoryKey}" && currentValue == value
         case _ => false
       }
 
