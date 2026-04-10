@@ -35,7 +35,8 @@ object RuntimeConfig {
   val ServerEmulatorBaseUrlKey = "textus.runtime.server-emulator.baseurl"
   val HttpDriverKey = "textus.runtime.http.driver"
   val ModeKey = "textus.runtime.mode"
-  val CommandExecutionModeKey = "textus.runtime.command.execution-mode"
+  val CommandExecutionModeKey = "textus.command.execution-mode"
+  val RuntimeCommandExecutionModeKey = "textus.runtime.command.execution-mode"
   val DiscoverClassesKey = "cncf.runtime.discover.classes"
   val ComponentFactoryClassKey = "cncf.runtime.component-factory-class"
   val WorkspaceKey = "cncf.runtime.workspace"
@@ -175,6 +176,7 @@ object RuntimeConfig {
   ): Vector[String] = {
     val textusRuntime =
       key match {
+        case CommandExecutionModeKey => Vector(RuntimeCommandExecutionModeKey)
         case SubsystemNameKey => Vector(RuntimeSubsystemNameKey)
         case ComponentNameKey => Vector(RuntimeComponentNameKey)
         case SubsystemDescriptorKey => Vector(RuntimeSubsystemDescriptorKey)

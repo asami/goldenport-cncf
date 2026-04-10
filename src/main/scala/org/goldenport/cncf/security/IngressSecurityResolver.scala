@@ -159,7 +159,9 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     _find_first(
       attributes,
       Vector(
-        "textus.runtime.command.execution-mode",
+        RuntimeConfig.CommandExecutionModeKey,
+        RuntimeConfig.RuntimeCommandExecutionModeKey,
+        "cncf.command.execution-mode",
         "cncf.runtime.command.execution-mode"
       )
     ).flatMap(RuntimeConfig.parseCommandExecutionMode).map { mode =>

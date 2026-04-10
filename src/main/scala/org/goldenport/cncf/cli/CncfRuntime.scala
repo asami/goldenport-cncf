@@ -2351,7 +2351,7 @@ private[cli] object RuntimeOptionsParser {
     if (options.calltree) b += Property("textus.runtime.calltree", "true", None)
     if (options.noExit) b += Property("textus.no-exit", "true", None)
     options.commandExecutionMode.foreach { value =>
-      b += Property("textus.runtime.command.execution-mode", value, None)
+      b += Property(RuntimeConfig.CommandExecutionModeKey, value, None)
     }
     b.result()
   }
@@ -2422,7 +2422,9 @@ private[cli] object RuntimeOptionsParser {
   private def _is_command_execution_mode_key(
     key: String
   ): Boolean =
-    key == "textus.runtime.command.execution-mode" ||
+    key == RuntimeConfig.CommandExecutionModeKey ||
+      key == RuntimeConfig.RuntimeCommandExecutionModeKey ||
+      key == "cncf.command.execution-mode" ||
       key == "cncf.runtime.command.execution-mode" ||
       key == "runtime.command.execution-mode" ||
       key == "command.execution-mode"

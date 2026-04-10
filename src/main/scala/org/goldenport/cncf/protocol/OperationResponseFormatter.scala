@@ -7,7 +7,7 @@ import org.goldenport.record.io.RecordEncoder
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.RuntimeDefaults
-import org.goldenport.cncf.config.ConfigurationAccess
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.RuntimeContext
 import scala.xml.{Elem, NodeSeq, Text}
 
@@ -199,11 +199,13 @@ object OperationResponseFormatter {
   ): Option[String] =
     request.properties.reverseIterator.collectFirst {
       case prop if
-          prop.name.equalsIgnoreCase("textus.runtime.command.execution-mode") ||
+          prop.name.equalsIgnoreCase(RuntimeConfig.CommandExecutionModeKey) ||
+          prop.name.equalsIgnoreCase(RuntimeConfig.RuntimeCommandExecutionModeKey) ||
+          prop.name.equalsIgnoreCase("cncf.command.execution-mode") ||
           prop.name.equalsIgnoreCase("cncf.runtime.command.execution-mode") =>
         Option(prop.value).map(_.toString.trim).getOrElse("")
     }.filter(_.nonEmpty)
-      .orElse(_configuration_string("textus.runtime.command.execution-mode"))
+      .orElse(_configuration_string(RuntimeConfig.CommandExecutionModeKey))
       .orElse(GlobalRuntimeContext.current.flatMap(_.commandExecutionMode).map(_.toString))
 
   private def _scalar_data(
@@ -223,13 +225,6 @@ object OperationResponseFormatter {
     key: String
   ): Option[String] =
     GlobalRuntimeContext.current.flatMap { global =>
-      ConfigurationAccess.getString(global.resolvedConfiguration, key)
-        .orElse(_legacy_alias(key).flatMap(ConfigurationAccess.getString(global.resolvedConfiguration, _)))
+      RuntimeConfig.getString(global.resolvedConfiguration, key)
     }
-
-  private def _legacy_alias(
-    key: String
-  ): Option[String] =
-    if (key.startsWith("textus.")) Some("cncf." + key.stripPrefix("textus."))
-    else None
 }
