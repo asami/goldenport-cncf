@@ -16,19 +16,19 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 24, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryEventReceptionBootstrapSpec
   extends AnyWordSpec
   with Matchers
   with GivenWhenThen {
-  private val _cid = EntityCollectionId("test", "1", "customer")
+  private val _cid = EntityCollectionId("test", "a", "customer")
 
   "ComponentFactory.createEventReception" should {
     "propagate working-set entity names to reception and enforce keep-resident pub-sub" in {
       Given("component with working-set entity marker and empty memory realm")
-      val id = EntityId("m", "1", _cid)
+      val id = EntityId("m", "a", _cid)
       val entity = _BootEntity(id, "suzuki")
       given EntityPersistent[_BootEntity] = _persistent
 

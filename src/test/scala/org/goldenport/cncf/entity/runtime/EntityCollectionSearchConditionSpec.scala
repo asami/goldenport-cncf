@@ -16,14 +16,14 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 16, 2026
  *  version Mar. 24, 2026
- * @version Apr.  5, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityCollectionSearchConditionSpec
   extends AnyWordSpec
   with Matchers
   with GivenWhenThen {
-  private val _cid = EntityCollectionId("test", "1", "person")
+  private val _cid = EntityCollectionId("test", "a", "person")
 
   "EntityCollection.search" should {
     "filter entities by generated condition object via directive.Query" in {
@@ -36,9 +36,9 @@ final class EntityCollectionSearchConditionSpec
           Consequence.failure("not used in this spec")
       }
 
-      val p1 = PersonEntity(EntityId("m", "1", _cid), Name("taro"), Age(20))
-      val p2 = PersonEntity(EntityId("m", "2", _cid), Name("hanako"), Age(30))
-      val p3 = PersonEntity(EntityId("m", "3", _cid), Name("taro"), Age(40))
+      val p1 = PersonEntity(EntityId("m", "a", _cid), Name("taro"), Age(20))
+      val p2 = PersonEntity(EntityId("m", "b", _cid), Name("hanako"), Age(30))
+      val p3 = PersonEntity(EntityId("m", "c", _cid), Name("taro"), Age(40))
 
       val storerealm = new EntityRealm[PersonEntity](
         entityName = "person",
@@ -89,9 +89,9 @@ final class EntityCollectionSearchConditionSpec
           Consequence.failure("not used in this spec")
       }
 
-      val p1 = PersonEntity(EntityId("m", "1", _cid), Name("taro"), Age(20))
-      val p2 = PersonEntity(EntityId("m", "2", _cid), Name("hanako"), Age(30))
-      val p3 = PersonEntity(EntityId("m", "3", _cid), Name("jiro"), Age(40))
+      val p1 = PersonEntity(EntityId("m", "a", _cid), Name("taro"), Age(20))
+      val p2 = PersonEntity(EntityId("m", "b", _cid), Name("hanako"), Age(30))
+      val p3 = PersonEntity(EntityId("m", "c", _cid), Name("jiro"), Age(40))
 
       val storerealm = new EntityRealm[PersonEntity](
         entityName = "person",
@@ -149,8 +149,8 @@ final class EntityCollectionSearchConditionSpec
           Consequence.failure("not used in this spec")
       }
 
-      val s1 = StatusEntity(EntityId("m", "10", _cid), "Published", "trace-a")
-      val s2 = StatusEntity(EntityId("m", "11", _cid), "Draft", "trace-b")
+      val s1 = StatusEntity(EntityId("m", "ja", _cid), "Published", "trace-a")
+      val s2 = StatusEntity(EntityId("m", "jb", _cid), "Draft", "trace-b")
 
       val storerealm = new EntityRealm[StatusEntity](
         entityName = "statusPerson",

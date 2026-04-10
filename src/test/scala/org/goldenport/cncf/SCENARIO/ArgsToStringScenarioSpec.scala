@@ -38,7 +38,7 @@ import org.scalatest.matchers.should.Matchers
  */
 /*
  * @since   Jan.  1, 2026
- * @version Feb. 27, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -95,7 +95,7 @@ private object TestQueryOperation extends spec.OperationDefinition {
           )
         )
       ),
-      response = spec.ResponseDefinition(result = Nil)
+      response = spec.ResponseDefinition.void
     )
 
   override def createOperationRequest(

@@ -34,7 +34,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  4, 2026
  *  version Feb. 27, 2026
- * @version Mar. 21, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -220,7 +220,7 @@ private object TestCommandOperation extends spec.OperationDefinition {
           )
         )
       ),
-      response = spec.ResponseDefinition(result = Nil)
+      response = spec.ResponseDefinition.void
     )
 
   override def createOperationRequest(
@@ -266,7 +266,7 @@ private object TestCommandFailOperation extends spec.OperationDefinition {
           )
         )
       ),
-      response = spec.ResponseDefinition(result = Nil)
+      response = spec.ResponseDefinition.void
     )
 
   override def createOperationRequest(
@@ -312,7 +312,7 @@ private object TestQueryOperation extends spec.OperationDefinition {
           )
         )
       ),
-      response = spec.ResponseDefinition(result = Nil)
+      response = spec.ResponseDefinition.void
     )
 
   override def createOperationRequest(

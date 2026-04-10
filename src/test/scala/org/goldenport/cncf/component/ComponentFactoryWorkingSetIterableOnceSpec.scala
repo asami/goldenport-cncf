@@ -29,7 +29,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 24, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryWorkingSetIterableOnceSpec
@@ -43,8 +43,8 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
       val factory = new ComponentFactory()
       val entityspace = new EntitySpace
       val snapshot = TrieMap.empty[EntityId, Any]
-      val cid = EntityCollectionId("test", "1", "sample")
-      val id = EntityId("m", "1", cid)
+      val cid = EntityCollectionId("test", "a", "sample")
+      val id = EntityId("m", "a", cid)
       val entity = WorkingSetEntity(id, "sample")
 
       given EntityPersistent[Any] = new EntityPersistent[Any] {
@@ -120,7 +120,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
         val factory = new ComponentFactory()
         val entityspace = new EntitySpace
         val snapshot = TrieMap.empty[EntityId, Any]
-        val cid = EntityCollectionId("test", "1", "sample")
+        val cid = EntityCollectionId("test", "a", "sample")
         val id = EntityId("m", minor, cid)
         val entity = WorkingSetEntity(id, name)
 
@@ -184,7 +184,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
     }
 
     "satisfy IterableOnce materialization safety as a ScalaCheck property" in {
-      val genMinor = Gen.nonEmptyListOf(Gen.alphaNumChar).map(_.mkString)
+      val genMinor = Gen.nonEmptyListOf(Gen.alphaChar).map(_.mkString)
       val genName = Gen.nonEmptyListOf(Gen.alphaChar).map(_.mkString)
       val gencase = for {
         minor <- genMinor
@@ -195,7 +195,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
         val factory = new ComponentFactory()
         val entityspace = new EntitySpace
         val snapshot = TrieMap.empty[EntityId, Any]
-        val cid = EntityCollectionId("test", "1", "sample")
+        val cid = EntityCollectionId("test", "a", "sample")
         val id = EntityId("m", minor, cid)
         val entity = WorkingSetEntity(id, name)
 

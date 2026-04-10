@@ -5,7 +5,7 @@ import org.goldenport.cncf.entity.EntityPersistable
 import org.goldenport.record.Record
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 24, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SalesOrderLine(
@@ -29,7 +29,7 @@ object SalesOrderLine {
   final val PROP_QUANTITY = "quantity"
 
   val collectionId: EntityCollectionId =
-    EntityCollectionId("test", "1", "sales_order_line")
+    EntityCollectionId("test", "a", "sales_order_line")
 }
 
 final case class SalesOrder(
@@ -50,7 +50,7 @@ object SalesOrder {
   final val PROP_LINE = "line"
 
   val collectionId: EntityCollectionId =
-    EntityCollectionId("test", "1", "sales_order")
+    EntityCollectionId("test", "a", "sales_order")
 }
 
 final case class User(
@@ -71,7 +71,7 @@ object User {
   final val PROP_NAME = "name"
 
   val collectionId: EntityCollectionId =
-    EntityCollectionId("test", "1", "user")
+    EntityCollectionId("test", "a", "user")
 }
 
 final case class Product(
@@ -92,5 +92,5 @@ object Product {
   final val PROP_NAME = "name"
 
   val collectionId: EntityCollectionId =
-    EntityCollectionId("test", "1", "product")
+    EntityCollectionId("test", "a", "product")
 }

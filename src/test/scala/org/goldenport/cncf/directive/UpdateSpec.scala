@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 24, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UpdateSpec
@@ -32,7 +32,7 @@ final class UpdateSpec
     }
 
     "allow cozy-style update directive object" in {
-      val id = EntityId("test", "1", EntityCollectionId("test", "1", "person"))
+      val id = EntityId("test", "a", EntityCollectionId("test", "a", "person"))
       val directive = domain.update.Person(
         name = Update.set(Name("hanako")),
         age = Update.noop[Age]

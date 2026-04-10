@@ -12,8 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 17, 2026
  *  version Mar. 24, 2026
- *  version Apr.  4, 2026
- * @version Apr.  5, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ViewSpaceSpec
@@ -25,7 +24,7 @@ final class ViewSpaceSpec
     "resolve default and named browser separately" in {
       Given("a view space with default and named browser")
       val viewspace = new ViewSpace
-      val collectionid = EntityCollectionId("test", "1", "user")
+      val collectionid = EntityCollectionId("test", "a", "user")
       val targetid = EntityId("test", "u1", collectionid)
       val collection = new ViewCollection[String](
         new ViewBuilder[String] {
@@ -58,7 +57,7 @@ final class ViewSpaceSpec
 
     "treat empty view name as default browser" in {
       val viewspace = new ViewSpace
-      val collectionid = EntityCollectionId("test", "1", "user")
+      val collectionid = EntityCollectionId("test", "a", "user")
       val targetid = EntityId("test", "u2", collectionid)
       val collection = new ViewCollection[String](
         new ViewBuilder[String] {
@@ -79,7 +78,7 @@ final class ViewSpaceSpec
       var buildCount = 0
       var queryCount = 0
       val viewspace = new ViewSpace
-      val collectionid = EntityCollectionId("test", "1", "user")
+      val collectionid = EntityCollectionId("test", "a", "user")
       val targetid = EntityId("test", "u3", collectionid)
       val collection = new ViewCollection[String](
         new ViewBuilder[String] {
@@ -118,7 +117,7 @@ final class ViewSpaceSpec
       var queryCount = 0
       EntityAccessMetricsRegistry.shared.clear()
       val viewspace = new ViewSpace
-      val collectionid = EntityCollectionId("test", "1", "user")
+      val collectionid = EntityCollectionId("test", "a", "user")
       val collection = new ViewCollection[String](
         new ViewBuilder[String] {
           def build(id: EntityId): Consequence[String] =
@@ -154,7 +153,7 @@ final class ViewSpaceSpec
       var queryCount = 0
       EntityAccessMetricsRegistry.shared.clear()
       val viewspace = new ViewSpace
-      val collectionid = EntityCollectionId("test", "1", "user")
+      val collectionid = EntityCollectionId("test", "a", "user")
       val collection = new ViewCollection[String](
         new ViewBuilder[String] {
           def build(id: EntityId): Consequence[String] =

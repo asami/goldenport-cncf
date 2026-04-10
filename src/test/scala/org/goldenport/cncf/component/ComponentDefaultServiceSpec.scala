@@ -12,7 +12,7 @@ import org.scalatest.matchers.should.Matchers
 
 /*
  * @since   Mar.  4, 2026
- * @version Mar. 20, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentDefaultServiceSpec extends AnyWordSpec with Matchers {
@@ -108,7 +108,7 @@ private final case class _CustomPingOperation() extends spec.OperationDefinition
     spec.OperationDefinition.Specification(
       name = "ping",
       request = spec.RequestDefinition(),
-      response = spec.ResponseDefinition()
+      response = spec.ResponseDefinition.void
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =

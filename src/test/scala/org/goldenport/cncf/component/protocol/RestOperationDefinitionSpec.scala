@@ -11,7 +11,7 @@ import org.goldenport.cncf.component.protocol.ComponentOperationDefinition.Opera
 
 /*
  * @since   Feb.  6, 2026
- * @version Feb.  7, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class RestOperationDefinitionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -101,7 +101,7 @@ class RestOperationDefinitionSpec extends AnyWordSpec with Matchers with GivenWh
       OperationDefinition.Specification(
         name = "test",
         request = RequestDefinition(),
-        response = ResponseDefinition()
+        response = ResponseDefinition.void
       )
   }
 

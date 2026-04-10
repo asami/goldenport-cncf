@@ -12,7 +12,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Feb. 25, 2026
- * @version Apr.  4, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace {
@@ -77,7 +77,7 @@ class DataStoreSpace {
       case Some(s: String) => DataStore.StringEntryId(s)
       case Some(v) => DataStore.StringEntryId(v.toString)
       case None =>
-        val seq = _inject_sequence.incrementAndGet().toString
+        val seq = s"n${_inject_sequence.incrementAndGet()}"
         DataStore.DataStoreEntryId("sys", seq, cid.collectionName)
     }
 }

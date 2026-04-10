@@ -8,7 +8,7 @@ import org.goldenport.bag.Bag
 
 /*
  * @since   Feb.  7, 2026
- * @version Feb.  7, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class RestOperationMappingRuleSpec extends AnyWordSpec with Matchers {
@@ -44,7 +44,7 @@ class RestOperationMappingRuleSpec extends AnyWordSpec with Matchers {
           OperationDefinition.Specification(
             name = "test",
             request = RequestDefinition(),
-            response = ResponseDefinition()
+            response = ResponseDefinition.void
           )
 
         override def restSpecification: RestSpecification =

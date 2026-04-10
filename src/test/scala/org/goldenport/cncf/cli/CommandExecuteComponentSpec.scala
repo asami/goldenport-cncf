@@ -22,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Jan.  9, 2026
  *  version Jan. 18, 2026
  * @author  ASAMI, Tomoharu
- * @version Apr.  4, 2026
+ * @version Apr. 10, 2026
  */
 class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
 
@@ -410,7 +410,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
       val op = spec.OperationDefinition(
         name = "createPerson",
         request = spec.RequestDefinition(),
-        response = spec.ResponseDefinition()
+        response = spec.ResponseDefinition.void
       )
       val service = spec.ServiceDefinition(
         name = "entity",
@@ -450,7 +450,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
       val op = spec.OperationDefinition(
         name = "createPerson",
         request = spec.RequestDefinition(),
-        response = spec.ResponseDefinition()
+        response = spec.ResponseDefinition.void
       )
       val service = spec.ServiceDefinition(
         name = "entity",

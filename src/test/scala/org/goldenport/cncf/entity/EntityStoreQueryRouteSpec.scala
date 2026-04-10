@@ -16,8 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- *  version Apr.  3, 2026
- * @version Apr.  5, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -25,7 +24,7 @@ final class EntityStoreQueryRouteSpec
   with Matchers
   with GivenWhenThen {
 
-  private val _cid = EntityCollectionId("test", "1", "person")
+  private val _cid = EntityCollectionId("test", "a", "person")
 
   "EntityStoreSpace.search" should {
     "apply Query where/sort/offset/limit on entity-store route" in {
@@ -48,9 +47,9 @@ final class EntityStoreQueryRouteSpec
         }
       }
 
-      val p1 = PersonEntity(EntityId("test", "1", _cid), "jiro", 20)
-      val p2 = PersonEntity(EntityId("test", "2", _cid), "hanako", 30)
-      val p3 = PersonEntity(EntityId("test", "3", _cid), "taro", 40)
+      val p1 = PersonEntity(EntityId("test", "a", _cid), "jiro", 20)
+      val p2 = PersonEntity(EntityId("test", "b", _cid), "hanako", 30)
+      val p3 = PersonEntity(EntityId("test", "c", _cid), "taro", 40)
 
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
@@ -253,7 +252,7 @@ final class EntityStoreQueryRouteSpec
       given EntityPersistent[PersonEntity] = _person_persistent
       given EntityPersistentUpdate[PersonPatch] = _person_patch_persistent
 
-      val id = EntityId("test", "11", _cid)
+      val id = EntityId("test", "ka", _cid)
       val entity = PersonEntity(id, "taro", 20)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
@@ -327,8 +326,8 @@ final class EntityStoreQueryRouteSpec
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[SaveCandidate] = _save_candidate_persistent
 
-      val collectionid = EntityCollectionId("test", "1", "save_candidate")
-      val id = EntityId("test", "31", collectionid)
+      val collectionid = EntityCollectionId("test", "a", "save_candidate")
+      val id = EntityId("test", "ma", collectionid)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -382,8 +381,8 @@ final class EntityStoreQueryRouteSpec
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
       given EntityPersistent[UpdateCandidate] = _update_candidate_persistent
 
-      val collectionid = EntityCollectionId("test", "1", "update_candidate")
-      val id = EntityId("test", "41", collectionid)
+      val collectionid = EntityCollectionId("test", "a", "update_candidate")
+      val id = EntityId("test", "na", collectionid)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -435,7 +434,7 @@ final class EntityStoreQueryRouteSpec
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
 
-      val id = EntityId("test", "51", _cid)
+      val id = EntityId("test", "oa", _cid)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -478,7 +477,7 @@ final class EntityStoreQueryRouteSpec
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
 
-      val id = EntityId("test", "52", _cid)
+      val id = EntityId("test", "ob", _cid)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -516,7 +515,7 @@ final class EntityStoreQueryRouteSpec
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
       given ExecutionContext = _execution_context(datastorespace, entitystorespace)
 
-      val id = EntityId("test", "53", _cid)
+      val id = EntityId("test", "oc", _cid)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -649,7 +648,7 @@ private def _person_persistent: EntityPersistent[PersonEntity] =
   }
 
 private def _person_patch_persistent: EntityPersistentUpdate[PersonPatch] =
-  EntityPersistentUpdate.derived(PersonPatch.createC, EntityCollectionId("test", "1", "person"))
+  EntityPersistentUpdate.derived(PersonPatch.createC, EntityCollectionId("test", "a", "person"))
 
 private object PersonPatch {
   def createC(record: Record): Consequence[PersonPatch] = {
@@ -689,7 +688,7 @@ private final case class CreateCandidate(
 
 private def _create_candidate_persistent: EntityPersistentCreate[CreateCandidate] =
   new EntityPersistentCreate[CreateCandidate] {
-    private val _collectionid = EntityCollectionId("test", "1", "create_candidate")
+    private val _collectionid = EntityCollectionId("test", "a", "create_candidate")
 
     def id(e: CreateCandidate): Option[EntityId] = e.id
     def toRecord(e: CreateCandidate): Record = e.toRecord()

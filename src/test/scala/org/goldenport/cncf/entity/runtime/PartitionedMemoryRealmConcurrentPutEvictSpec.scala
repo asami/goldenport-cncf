@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 24, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class PartitionedMemoryRealmConcurrentPutEvictSpec
@@ -22,7 +22,7 @@ final class PartitionedMemoryRealmConcurrentPutEvictSpec
   "PartitionedMemoryRealm.put" should {
     "hold realm update inside lock so concurrent put cannot pass while first put is in critical section" in {
       Given("maxPartitions=1 and an idOf hook that blocks in the second idOf call for entity A")
-      val cid = EntityCollectionId("test", "1", "sample")
+      val cid = EntityCollectionId("test", "a", "sample")
       val ida = EntityId("m", "a", cid)
       val idb = EntityId("m", "b", cid)
       val entercritical = new CountDownLatch(1)

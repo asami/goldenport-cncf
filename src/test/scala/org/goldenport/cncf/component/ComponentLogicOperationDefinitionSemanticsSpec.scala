@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 22, 2026
  * @author  ASAMI, Tomoharu
- * @version Mar. 28, 2026
+ * @version Apr. 10, 2026
  */
 final class ComponentLogicOperationDefinitionSemanticsSpec
   extends AnyWordSpec
@@ -239,7 +239,7 @@ private final case class _ActionOperation(
     spec.OperationDefinition.Specification(
       name = opname,
       request = spec.RequestDefinition(),
-      response = spec.ResponseDefinition()
+      response = spec.ResponseDefinition.void
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
@@ -269,7 +269,7 @@ private final case class _RecordOperation(
     spec.OperationDefinition.Specification(
       name = opname,
       request = spec.RequestDefinition(),
-      response = spec.ResponseDefinition()
+      response = spec.ResponseDefinition.void
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
@@ -305,7 +305,7 @@ private final case class _ValidatedRecordOperation(
     spec.OperationDefinition.Specification(
       name = opname,
       request = spec.RequestDefinition(),
-      response = spec.ResponseDefinition()
+      response = spec.ResponseDefinition.void
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
@@ -344,7 +344,7 @@ private final case class _ValidatedCommandOperation(
     spec.OperationDefinition.Specification(
       name = opname,
       request = spec.RequestDefinition(),
-      response = spec.ResponseDefinition()
+      response = spec.ResponseDefinition.void
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =

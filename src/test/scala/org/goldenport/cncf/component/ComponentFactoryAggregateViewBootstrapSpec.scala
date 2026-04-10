@@ -20,19 +20,19 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 24, 2026
- * @version Apr.  2, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with Matchers {
-  private val _cid = EntityCollectionId("test", "1", "person")
+  private val _cid = EntityCollectionId("test", "a", "person")
 
   "ComponentFactory bootstrap" should {
     "register aggregate/view collections from component metadata definitions" in {
       given EntityPersistent[_PersonEntity] = _persistent
       val component = _create_component_with_metadata()
       component.entitySpace.registerEntity("person", _collection(Vector(
-        _PersonEntity(EntityId("m", "1", _cid), "taro", "Tokyo"),
-        _PersonEntity(EntityId("m", "2", _cid), "hanako", "Osaka")
+        _PersonEntity(EntityId("m", "a", _cid), "taro", "Tokyo"),
+        _PersonEntity(EntityId("m", "b", _cid), "hanako", "Osaka")
       )))
       val factory = new ComponentFactory()
 
@@ -177,7 +177,7 @@ private final case class _NoopOperation(
     spec.OperationDefinition.Specification(
       name = opname,
       request = spec.RequestDefinition(),
-      response = spec.ResponseDefinition()
+      response = spec.ResponseDefinition.void
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =

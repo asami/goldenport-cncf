@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr.  7, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkSearchAuthorizationSpec
@@ -39,8 +39,8 @@ final class UnitOfWorkSearchAuthorizationSpec
       )
       given EntityPersistent[PersonEntity] = _person_persistent
 
-      val p1 = PersonEntity(EntityId("test", "1", _cid), "taro", "owner-1")
-      val p2 = PersonEntity(EntityId("test", "2", _cid), "hanako", "owner-2")
+      val p1 = PersonEntity(EntityId("test", "a", _cid), "taro", "owner-1")
+      val p2 = PersonEntity(EntityId("test", "b", _cid), "hanako", "owner-2")
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(

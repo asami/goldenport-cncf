@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 24, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryStoreSnapshotIsolationSpec
@@ -24,8 +24,8 @@ final class ComponentFactoryStoreSnapshotIsolationSpec
     "isolate lookup by snapshot instance" in {
       Given("two different snapshots with the same entity id and different payloads")
       val factory = new ComponentFactory()
-      val cid = EntityCollectionId("test", "1", "sample")
-      val id = EntityId("m", "1", cid)
+      val cid = EntityCollectionId("test", "a", "sample")
+      val id = EntityId("m", "a", cid)
       val left = SnapshotEntity(id, "left")
       val right = SnapshotEntity(id, "right")
       val leftsnapshot = TrieMap.empty[EntityId, Any]
@@ -48,14 +48,14 @@ final class ComponentFactoryStoreSnapshotIsolationSpec
     "isolate snapshot lookup across multiple generated minor/name combinations" in {
       val table = Table(
         ("minor", "leftname", "rightname"),
-        ("1", "left-a", "right-a"),
-        ("2", "left-b", "right-b"),
-        ("3", "left-c", "right-c")
+        ("a", "left-a", "right-a"),
+        ("b", "left-b", "right-b"),
+        ("c", "left-c", "right-c")
       )
 
       forAll(table) { (minor, leftname, rightname) =>
         val factory = new ComponentFactory()
-        val cid = EntityCollectionId("test", "1", "sample")
+        val cid = EntityCollectionId("test", "a", "sample")
         val id = EntityId("m", minor, cid)
         val left = SnapshotEntity(id, leftname)
         val right = SnapshotEntity(id, rightname)
@@ -73,7 +73,7 @@ final class ComponentFactoryStoreSnapshotIsolationSpec
     }
 
     "satisfy snapshot isolation as a ScalaCheck property" in {
-      val genMinor = Gen.nonEmptyListOf(Gen.alphaNumChar).map(_.mkString)
+      val genMinor = Gen.nonEmptyListOf(Gen.alphaChar).map(_.mkString)
       val genName = Gen.nonEmptyListOf(Gen.alphaChar).map(_.mkString)
       val genCase = for {
         minor <- genMinor
@@ -83,7 +83,7 @@ final class ComponentFactoryStoreSnapshotIsolationSpec
 
       val property = Prop.forAll(genCase) { (minor, leftname, rightname) =>
         val factory = new ComponentFactory()
-        val cid = EntityCollectionId("test", "1", "sample")
+        val cid = EntityCollectionId("test", "a", "sample")
         val id = EntityId("m", minor, cid)
         val left = SnapshotEntity(id, leftname)
         val right = SnapshotEntity(id, rightname)

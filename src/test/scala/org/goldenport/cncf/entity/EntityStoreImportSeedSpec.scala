@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 27, 2026
- * @version Mar. 27, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreImportSeedSpec
@@ -21,7 +21,7 @@ final class EntityStoreImportSeedSpec
   with Matchers
   with GivenWhenThen {
 
-  private val collectionId = EntityCollectionId("test", "1", "import_seed_person")
+  private val collectionId = EntityCollectionId("test", "a", "import_seed_person")
 
   "EntityStoreSpace.importSeed" should {
     "import entities and make them loadable through the entity-store route" in {

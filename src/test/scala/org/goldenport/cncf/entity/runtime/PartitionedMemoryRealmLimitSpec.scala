@@ -8,14 +8,14 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 24, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class PartitionedMemoryRealmLimitSpec
   extends AnyWordSpec
   with Matchers
   with GivenWhenThen {
-  private val _cid = EntityCollectionId("test", "1", "sample")
+  private val _cid = EntityCollectionId("test", "a", "sample")
 
   "PartitionedMemoryRealm" should {
     "apply maxEntitiesPerPartition to each partition memory realm" in {
@@ -35,8 +35,8 @@ final class PartitionedMemoryRealmLimitSpec
         maxPartitions = 2,
         maxEntitiesPerPartition = 1
       )
-      val id1 = EntityId("m", "1", _cid)
-      val id2 = EntityId("m", "2", _cid)
+      val id1 = EntityId("m", "a", _cid)
+      val id2 = EntityId("m", "b", _cid)
 
       When("putting two entities into the same partition")
       val e1 = TestEntityInPartition(id1)

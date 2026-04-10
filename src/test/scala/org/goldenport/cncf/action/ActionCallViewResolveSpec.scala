@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 17, 2026
  *  version Mar. 24, 2026
- * @version Apr.  5, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallViewResolveSpec
@@ -27,7 +27,7 @@ final class ActionCallViewResolveSpec
       Given("a component with default and named view browser")
       val component = _component_with_views()
       val pair = ActionCallSupport.componentPair(component)
-      val targetid = EntityId("test", "u1", EntityCollectionId("test", "1", "user"))
+      val targetid = EntityId("test", "u1", EntityCollectionId("test", "a", "user"))
 
       When("executing default load")
       val defaultcall = action_call("load-default-view", pair) { core =>

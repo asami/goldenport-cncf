@@ -16,19 +16,19 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- * @version Mar. 24, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventReceptionEntitySubscriptionSpec
   extends AnyWordSpec
   with Matchers
   with GivenWhenThen {
-  private val _cid = EntityCollectionId("test", "1", "customer")
+  private val _cid = EntityCollectionId("test", "a", "customer")
 
   "EventReception entity subscription" should {
     "activate entity on receive when memory miss occurs" in {
       Given("entity subscription with ActivateOnReceive")
-      val id = EntityId("m", "1", _cid)
+      val id = EntityId("m", "a", _cid)
       val entity = _TestEntity(id, "taro")
       given EntityPersistent[_TestEntity] = _persistent
       val collection = _collection("customer", id, entity)
@@ -89,7 +89,7 @@ final class EventReceptionEntitySubscriptionSpec
 
     "fail KeepResident when entity is not active in memory" in {
       Given("entity subscription with KeepResident and empty memory")
-      val id = EntityId("m", "1", _cid)
+      val id = EntityId("m", "a", _cid)
       val entity = _TestEntity(id, "hanako")
       given EntityPersistent[_TestEntity] = _persistent
       val collection = _collection("customer", id, entity)
@@ -168,7 +168,7 @@ final class EventReceptionEntitySubscriptionSpec
 
     "treat working-set pub-sub subscription as keep-resident automatically" in {
       Given("pub-sub subscription for working-set entity")
-      val id = EntityId("m", "1", _cid)
+      val id = EntityId("m", "a", _cid)
       val entity = _TestEntity(id, "jiro")
       given EntityPersistent[_TestEntity] = _persistent
       val collection = _collection("customer", id, entity)

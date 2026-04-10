@@ -1,6 +1,6 @@
 /*
  * @since   Mar. 30, 2026
- * @version Mar. 30, 2026
+ * @version Apr. 10, 2026
  */
 package org.goldenport.cncf.component.entity
 
@@ -10,7 +10,7 @@ import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 object Order {
-  val collectionId: EntityCollectionId = EntityCollectionId("test", "1", "order")
+  val collectionId: EntityCollectionId = EntityCollectionId("test", "a", "order")
 
   given EntityPersistent[Order] with
     def id(e: Order): EntityId = e.id
@@ -43,7 +43,7 @@ final case class Order(
 }
 
 object OrderLine {
-  val collectionId: EntityCollectionId = EntityCollectionId("test", "1", "order_line")
+  val collectionId: EntityCollectionId = EntityCollectionId("test", "a", "order_line")
 
   given EntityPersistent[OrderLine] with
     def id(e: OrderLine): EntityId = e.id
@@ -79,7 +79,7 @@ final case class OrderLine(
 }
 
 object Customer {
-  val collectionId: EntityCollectionId = EntityCollectionId("test", "1", "customer")
+  val collectionId: EntityCollectionId = EntityCollectionId("test", "a", "customer")
 
   given EntityPersistent[Customer] with
     def id(e: Customer): EntityId = e.id

@@ -22,7 +22,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Mar. 27, 2026
- * @version Mar. 27, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StartupEntityImportSpec
@@ -30,9 +30,9 @@ final class StartupEntityImportSpec
   with Matchers
   with GivenWhenThen {
 
-  private val collectionId = EntityCollectionId("test", "1", "person")
-  private val p1IdText = "test-1-entity-person-1742198400000-abcd1234"
-  private val p2IdText = "test-1-entity-person-1742198400000-abcd1235"
+  private val collectionId = EntityCollectionId("test", "a", "person")
+  private val p1IdText = "test-a-entity-person-1742198400000-abcd1234"
+  private val p2IdText = "test-a-entity-person-1742198400000-abcd1235"
   private val p1Id = _parse_entity_id(p1IdText)
   private val p2Id = _parse_entity_id(p2IdText)
 
@@ -43,9 +43,9 @@ final class StartupEntityImportSpec
       val server = _http_server(
         "/entity.yaml",
         """entitystore:
-          |  - collection: test.1.person
+          |  - collection: test.a.person
           |    records:
-          |      - id: test-1-entity-person-1742198400000-abcd1234
+          |      - id: test-a-entity-person-1742198400000-abcd1234
           |        name: url-entity
           |        age: 20
           |""".stripMargin
@@ -92,9 +92,9 @@ final class StartupEntityImportSpec
       Files.writeString(
         file,
         """entitystore:
-          |  - collection: test.1.person
+          |  - collection: test.a.person
           |    records:
-          |      - id: test-1-entity-person-1742198400000-abcd1234
+          |      - id: test-a-entity-person-1742198400000-abcd1234
           |        name: default-entity
           |        age: 20
           |""".stripMargin
@@ -126,9 +126,9 @@ final class StartupEntityImportSpec
       Files.writeString(
         file,
         """entitystore:
-          |  - collection: test.1.person
+          |  - collection: test.a.person
           |    records:
-          |      - id: test-1-entity-person-1742198400000-abcd1234
+          |      - id: test-a-entity-person-1742198400000-abcd1234
           |        name: taro
           |        age: 20
           |""".stripMargin
@@ -162,9 +162,9 @@ final class StartupEntityImportSpec
       Files.writeString(
         earlier,
         """entitystore:
-          |  - collection: test.1.person
+          |  - collection: test.a.person
           |    records:
-          |      - id: test-1-entity-person-1742198400000-abcd1234
+          |      - id: test-a-entity-person-1742198400000-abcd1234
           |        name: nested-first
           |        age: 10
           |""".stripMargin
@@ -172,9 +172,9 @@ final class StartupEntityImportSpec
       Files.writeString(
         later,
         """entitystore:
-          |  - collection: test.1.person
+          |  - collection: test.a.person
           |    records:
-          |      - id: test-1-entity-person-1742198400000-abcd1235
+          |      - id: test-a-entity-person-1742198400000-abcd1235
           |        name: root-second
           |        age: 11
           |""".stripMargin
@@ -209,7 +209,7 @@ final class StartupEntityImportSpec
       Files.writeString(
         file,
         """entitystore:
-          |  - collection: unknown.1.person
+          |  - collection: unknown.a.person
           |    records:
           |      - id: p1
           |        name: taro
@@ -310,9 +310,9 @@ final class StartupEntityImportSpec
       Files.writeString(
         defaultFile,
         """entitystore:
-          |  - collection: test.1.person
+          |  - collection: test.a.person
           |    records:
-          |      - id: test-1-entity-person-1742198400000-abcd1235
+          |      - id: test-a-entity-person-1742198400000-abcd1235
           |        name: default-entity
           |        age: 20
           |""".stripMargin
@@ -320,9 +320,9 @@ final class StartupEntityImportSpec
       Files.writeString(
         explicitFile,
         """entitystore:
-          |  - collection: test.1.person
+          |  - collection: test.a.person
           |    records:
-          |      - id: test-1-entity-person-1742198400000-abcd1234
+          |      - id: test-a-entity-person-1742198400000-abcd1234
           |        name: explicit-entity
           |        age: 21
           |""".stripMargin

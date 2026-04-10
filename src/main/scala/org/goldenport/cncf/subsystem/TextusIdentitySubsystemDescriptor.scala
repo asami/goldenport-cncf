@@ -6,7 +6,7 @@ import org.goldenport.Consequence
 
 /*
  * @since   Mar. 26, 2026
- * @version Mar. 26, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TextusIdentitySubsystemDescriptor(
@@ -21,7 +21,7 @@ final case class TextusIdentitySubsystemDescriptor(
 
 object TextusIdentitySubsystemDescriptor {
   val DefaultPath: Path =
-    Paths.get("/Users/asami/src/dev2026/textus-identity/src/main/cozy/textus-identity-subsystem.cml")
+    Paths.get("/Users/asami/src/dev2026/textus-identity/subsystem-descriptor.yaml")
 
   def default(path: Path = DefaultPath): TextusIdentitySubsystemDescriptor =
     TextusIdentitySubsystemDescriptor(
@@ -60,10 +60,13 @@ object TextusIdentitySubsystemDescriptor {
     key: String,
     path: Path
   ): String = {
-    val prefix = s"$key "
+    val prefixes = Vector(s"$key ", s"$key:", s"- $key ", s"- $key:")
     lines.collectFirst {
-      case line if line.startsWith(prefix) =>
-        line.substring(prefix.length).trim
+      case line if prefixes.exists(line.startsWith) =>
+        prefixes.find(line.startsWith) match {
+          case Some(prefix) => line.substring(prefix.length).trim
+          case None => ""
+        }
     } match {
       case Some(value) if value.nonEmpty => value
       case _ => throw new IllegalArgumentException(s"missing $key in ${path}")

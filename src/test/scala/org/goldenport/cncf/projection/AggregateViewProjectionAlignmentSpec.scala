@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 23, 2026
- * @version Apr.  2, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateViewProjectionAlignmentSpec
@@ -149,8 +149,8 @@ final class AggregateViewProjectionAlignmentSpec
             outputType = "SavePersonResult",
             inputValueKind = "COMMAND_VALUE",
             parameters = Vector(
-              CmlOperationField("id", "EntityId", "1"),
-              CmlOperationField("name", "Name", "1")
+              CmlOperationField("id", "EntityId", "one"),
+              CmlOperationField("name", "Name", "one")
             )
           ),
           CmlOperationDefinition(
@@ -160,7 +160,7 @@ final class AggregateViewProjectionAlignmentSpec
             outputType = "GetPersonResult",
             inputValueKind = "QUERY_VALUE",
             parameters = Vector(
-              CmlOperationField("id", "EntityId", "1")
+              CmlOperationField("id", "EntityId", "one")
             )
           )
         )
@@ -220,7 +220,7 @@ private final case class _NoopOperation(
     spec.OperationDefinition.Specification(
       name = opname,
       request = spec.RequestDefinition(),
-      response = spec.ResponseDefinition()
+      response = spec.ResponseDefinition.void
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =

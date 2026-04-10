@@ -1,6 +1,6 @@
 /*
  * @since   Mar. 30, 2026
- * @version Mar. 30, 2026
+ * @version Apr. 10, 2026
  */
 package org.goldenport.cncf.component
 
@@ -247,7 +247,7 @@ private final case class _AggregateNoopOperation(
     spec.OperationDefinition.Specification(
       name = opname,
       request = spec.RequestDefinition(),
-      response = spec.ResponseDefinition()
+      response = spec.ResponseDefinition.void
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =

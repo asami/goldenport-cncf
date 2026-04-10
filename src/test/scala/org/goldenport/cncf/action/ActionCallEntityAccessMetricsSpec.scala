@@ -4,7 +4,7 @@ import cats.~>
 import cats.data.State
 import cats.effect.Ref
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.{CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, RuntimeContext, ScopeContext, ScopeKind, TraceId}
+import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, TraceId}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.directive.{Query, SearchResult}
 import org.goldenport.cncf.entity.runtime.*
@@ -21,104 +21,110 @@ import org.simplemodeling.model.directive.Condition
 
 /*
  * @since   Mar. 29, 2026
- * @version Mar. 29, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallEntityAccessMetricsSpec
   extends AnyWordSpec
   with Matchers
   with GivenWhenThen {
-  private def _cid(name: String) = EntityCollectionId("test", "1", name)
+  private def _cid(name: String) = EntityCollectionId("test", "a", name)
 
   "read-side API metrics" should {
     "record entity-space hit for load when the cache already has the entity" in {
-      Given("a component entity space with a resident entity")
-      EntityAccessMetricsRegistry.shared.clear()
-      given EntityPersistent[TestPerson] = _persistent
+      EntityAccessMetricsRegistry.shared.synchronized {
+        Given("a component entity space with a resident entity")
+        EntityAccessMetricsRegistry.shared.clear()
+        given EntityPersistent[TestPerson] = _persistent
 
-      val cid = _cid("person_metrics_cache_load")
-      val id = EntityId("test", "cache_load", cid)
-      val entity = TestPerson(id, "taro", 20)
-      val component = new org.goldenport.cncf.component.Component() {}
-      component.entitySpace.registerEntity(cid.name, _resident_collection(cid, entity))
-      val ctx = _execution_context(DataStoreSpace.default(), new EntityStoreSpace().addEntityStore(EntityStore.standard()))
+        val cid = _cid("person_metrics_cache_load")
+        val id = EntityId("test", "cache_load", cid)
+        val entity = TestPerson(id, "taro", 20)
+        val component = new org.goldenport.cncf.component.Component() {}
+        component.entitySpace.registerEntity(cid.name, _resident_collection(cid, entity))
+        val ctx = _execution_context(DataStoreSpace.default(), new EntityStoreSpace().addEntityStore(EntityStore.standard()))
 
-      When("loading through ActionCallEntityStorePart")
-      val result = _probe(component, ctx).load[TestPerson](id)
+        When("loading through ActionCallEntityStorePart")
+        val result = _probe(component, ctx).load[TestPerson](id)
 
-      Then("the result comes from entity-space and metrics reflect the cache hit")
-      result shouldBe Consequence.success(Some(entity))
-      _metric_count("entity.load.try.entity-space", "entity-space") shouldBe 1L
-      _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 1L
-      _metric_count("entity.load.hit.data-store", "data-store") shouldBe 0L
+        Then("the result comes from entity-space and metrics reflect the cache hit")
+        result shouldBe Consequence.success(Some(entity))
+        _metric_count("entity.load.try.entity-space", "entity-space") shouldBe 1L
+        _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 1L
+        _metric_count("entity.load.hit.data-store", "data-store") shouldBe 0L
+      }
     }
 
     "record data-store hit for load when entity-space misses and store fallback is used" in {
-      Given("a datastore-backed entity store without a resident entity collection")
-      EntityAccessMetricsRegistry.shared.clear()
-      given EntityPersistent[TestPerson] = _persistent
+      EntityAccessMetricsRegistry.shared.synchronized {
+        Given("a datastore-backed entity store without a resident entity collection")
+        EntityAccessMetricsRegistry.shared.clear()
+        given EntityPersistent[TestPerson] = _persistent
 
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-      val ctx = _execution_context(datastorespace, entitystorespace)
-      given ExecutionContext = ctx
-      val cid = _cid("person_metrics_store_load")
-      val id = EntityId("test", "store_load", cid)
-      val entity = TestPerson(id, "hanako", 30)
-      val _ = datastorespace.inject(
-        DataStoreSpace.Seed(
-          Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), entity.toRecord()))
+        val datastorespace = DataStoreSpace.default()
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        val ctx = _execution_context(datastorespace, entitystorespace)
+        given ExecutionContext = ctx
+        val cid = _cid("person_metrics_store_load")
+        val id = EntityId("test", "store_load", cid)
+        val entity = TestPerson(id, "hanako", 30)
+        val _ = datastorespace.inject(
+          DataStoreSpace.Seed(
+            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), entity.toRecord()))
+          )
         )
-      )
-      val component = new org.goldenport.cncf.component.Component() {}
+        val component = new org.goldenport.cncf.component.Component() {}
 
-      When("loading through ActionCallEntityStorePart")
-      val result = _probe(component, ctx).load[TestPerson](id)
+        When("loading through ActionCallEntityStorePart")
+        val result = _probe(component, ctx).load[TestPerson](id)
 
-      Then("the result falls back to datastore and metrics reflect that path")
-      result shouldBe Consequence.success(Some(entity))
-      _metric_count("entity.load.fallback.entity-store", "entity-store") shouldBe 1L
-      _metric_count("entity.load.hit.data-store", "data-store") shouldBe 1L
-      _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 0L
+        Then("the result falls back to datastore and metrics reflect that path")
+        result shouldBe Consequence.success(Some(entity))
+        _metric_count("entity.load.fallback.entity-store", "entity-store") shouldBe 1L
+        _metric_count("entity.load.hit.data-store", "data-store") shouldBe 1L
+        _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 0L
+      }
     }
 
     "record data-store hit for search when resident cache is empty" in {
-      Given("an entity collection registered in entity space but with no resident values")
-      EntityAccessMetricsRegistry.shared.clear()
-      given EntityPersistent[TestPerson] = _persistent
+      EntityAccessMetricsRegistry.shared.synchronized {
+        Given("an entity collection registered in entity space but with no resident values")
+        EntityAccessMetricsRegistry.shared.clear()
+        given EntityPersistent[TestPerson] = _persistent
 
-      val datastorespace = DataStoreSpace.default()
-      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-      val ctx = _execution_context(datastorespace, entitystorespace)
-      given ExecutionContext = ctx
-      val cid = _cid("person_metrics_search")
-      val p1 = TestPerson(EntityId("test", "search_1", cid), "alpha", 20)
-      val p2 = TestPerson(EntityId("test", "search_2", cid), "beta", 30)
-      val _ = datastorespace.inject(
-        DataStoreSpace.Seed(
-          Vector(
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), p1.toRecord()),
-            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), p2.toRecord())
+        val datastorespace = DataStoreSpace.default()
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        val ctx = _execution_context(datastorespace, entitystorespace)
+        given ExecutionContext = ctx
+        val cid = _cid("person_metrics_search")
+        val p1 = TestPerson(EntityId("test", "search_1", cid), "alpha", 20)
+        val p2 = TestPerson(EntityId("test", "search_2", cid), "beta", 30)
+        val _ = datastorespace.inject(
+          DataStoreSpace.Seed(
+            Vector(
+              DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), p1.toRecord()),
+              DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), p2.toRecord())
+            )
           )
         )
-      )
-      val component = new org.goldenport.cncf.component.Component() {}
-      component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
-      val query: EntityQuery[TestPerson] = EntityQuery(cid, Query(TestPersonQuery(
-        id = Condition.any[EntityId],
-        name = Condition.is("alpha"),
-        age = Condition.any[Int]
-      )))
+        val component = new org.goldenport.cncf.component.Component() {}
+        component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
+        val query: EntityQuery[TestPerson] = EntityQuery(cid, Query(TestPersonQuery(
+          id = Condition.any[EntityId],
+          name = Condition.is("alpha"),
+          age = Condition.any[Int]
+        )))
 
-      When("searching through ActionCallEntityStorePart")
-      val result = _probe(component, ctx).search[TestPerson](query)
+        When("searching through ActionCallEntityStorePart")
+        val result = _probe(component, ctx).search[TestPerson](query)
 
-      Then("the result comes from datastore fallback and metrics reflect the search route")
-      result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(p1.id))
-      _metric_count("entity.search.try.entity-space", "entity-space") shouldBe 1L
-      _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 1L
-      _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
-      _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 0L
+        Then("the result comes from datastore fallback and metrics reflect the search route")
+        result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(p1.id))
+        _metric_count("entity.search.try.entity-space", "entity-space") shouldBe 1L
+        _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 1L
+        _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
+        _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 0L
+      }
     }
   }
 
@@ -174,7 +180,24 @@ final class ActionCallEntityAccessMetricsSpec
       disposeAction = _ => (),
       token = "entity-access-metrics-runtime"
     )
-    context
+    context match {
+      case i: ExecutionContext.Instance =>
+        val principal = new Principal {
+          def id: PrincipalId = PrincipalId("test-principal")
+          def attributes: Map[String, String] = Map("role" -> "content_manager")
+        }
+        i.copy(
+          cncfCore = i.cncfCore.copy(
+            security = SecurityContext(
+              principal = principal,
+              capabilities = Set(Capability("content_manager")),
+              level = SecurityLevel("content_manager")
+            )
+          )
+        )
+      case _ =>
+        context
+    }
   }
 
   private def _metric_count(

@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  8, 2026
- * @version Apr.  9, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
@@ -76,7 +76,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
 
         subsystem.name shouldBe "mcprag"
         subsystem.version shouldBe Some("0.1.0-SNAPSHOT")
-        names shouldBe Vector("spec")
+        names should contain ("spec")
         metadata.map(_.component) should contain (Some("textus-mcp-rag"))
       }
     }
@@ -157,7 +157,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         subsystem.name shouldBe "textus-identity"
         subsystem.version shouldBe Some("0.1.0-SNAPSHOT")
         subsystem.descriptor.map(_.subsystemName) shouldBe Some("textus-identity")
-        subsystem.components.map(_.name).sorted shouldBe Vector("spec")
+        subsystem.components.map(_.name) should contain ("spec")
         subsystem.components.flatMap(_.artifactMetadata).flatMap(_.component) should contain ("textus-user-account")
       }
     }

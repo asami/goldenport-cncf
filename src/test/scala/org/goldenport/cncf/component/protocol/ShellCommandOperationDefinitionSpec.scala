@@ -21,7 +21,7 @@ import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * @since   Feb.  6, 2026
- * @version Mar. 29, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class ShellCommandOperationDefinitionSpec
@@ -185,7 +185,7 @@ class ShellCommandOperationDefinitionSpec
       OperationDefinition(
         BaseContent.simple("shell"),
         RequestDefinition(),
-        ResponseDefinition()
+        ResponseDefinition.void
       )
 
     override def specification: OperationDefinition.Specification =

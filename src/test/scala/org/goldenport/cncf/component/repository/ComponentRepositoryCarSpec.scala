@@ -21,7 +21,7 @@ import org.goldenport.configuration.ConfigurationTrace
 
 /*
  * @since   Feb.  4, 2026
- * @version Mar. 22, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
@@ -154,7 +154,7 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         components should not be empty
         val comp = components.head
         val metadata = comp.artifactMetadata.getOrElse(fail("missing artifact metadata"))
-        comp.origin.label should include("component-dir:sar:demo-subsystem:2.0.0:car:base-component:1.0.0")
+        comp.origin.label should include("component-dir:sar:demo:2.0.0:car:base-component:1.0.0")
         metadata.subsystem shouldBe Some("demo")
         metadata.effectiveExtensions.get("driver") shouldBe Some("sar-override")
         metadata.effectiveExtensions.get("hash") shouldBe Some("sha256")

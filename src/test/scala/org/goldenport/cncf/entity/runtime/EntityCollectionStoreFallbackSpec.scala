@@ -12,19 +12,19 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Mar. 24, 2026
+ * @version Apr. 10, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityCollectionStoreFallbackSpec
   extends AnyWordSpec
   with Matchers
   with GivenWhenThen {
-  private val _cid = EntityCollectionId("test", "1", "sample")
+  private val _cid = EntityCollectionId("test", "a", "sample")
 
   "EntityCollection.resolve" should {
     "load from store realm on memory miss and cache it into memory realm" in {
       Given("an entity collection with empty memory and store loader containing the entity")
-      val id = EntityId("m", "1", _cid)
+      val id = EntityId("m", "a", _cid)
       val entity = TestEntity(id, "name-1")
 
       given EntityPersistent[TestEntity] = new EntityPersistent[TestEntity] {
