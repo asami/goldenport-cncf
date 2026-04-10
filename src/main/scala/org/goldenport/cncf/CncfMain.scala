@@ -39,24 +39,26 @@ object CncfMain extends GlobalObservable {
       extends RuntimeException(s"Command failed (exit=$code)")
       with scala.util.control.NoStackTrace
 
+  private final case class LaunchParameters(
+    activeRepositories: Either[String, Vector[ComponentRepository.Specification]],
+    searchRepositories: Either[String, Vector[ComponentRepository.Specification]],
+    factoryClasses: Vector[String],
+    discoverClasses: Boolean,
+    workspace: Option[Path],
+    forceExit: Boolean,
+    noExit: Boolean,
+    subsystemName: Option[String],
+    runtimeArgs: Array[String]
+  )
+
   def main(args: Array[String]): Unit = {
     val cwd = Paths.get("").toAbsolutePath.normalize
     val configuration = _resolve_configuration(cwd, args)
-    val (reposResult, args1, noDefaultComponents) =
-      _take_component_repository(configuration, args, cwd)
-    val (factoryClasses, args2) = _take_component_factory_classes(configuration, args1)
-    val (discover, args3) = _take_discover_classes(configuration, args2)
-    val (workspace, args4) = _take_workspace(configuration, args3)
-    val (forceExit, args5) = _take_force_exit(configuration, args4)
-    val (noExit, rest) = _take_no_exit(configuration, args5)
-    val enabled = discover
+    val launch = _launch_parameters(configuration, cwd, args)
 
     val code: Int =
       try {
-        val activeRepos = reposResult
-        val searchRepos =
-          _append_default_component_repository(reposResult, cwd, noDefaultComponents)
-        (activeRepos, searchRepos) match {
+        (launch.activeRepositories, launch.searchRepositories) match {
           case (Left(message), _) =>
             Console.err.println(message)
             2
@@ -64,22 +66,47 @@ object CncfMain extends GlobalObservable {
             Console.err.println(message)
             2
           case (Right(activeSpecs), Right(searchSpecs)) =>
-            val baseExtras = _component_extra_function(activeSpecs, enabled, workspace, factoryClasses)
+            val baseExtras = _component_extra_function(activeSpecs, launch.discoverClasses, launch.workspace, launch.factoryClasses)
             val extras = _trace_component_dir_extras(baseExtras)
-            val runtimeArgs = _with_resolved_subsystem_descriptor_arg(configuration, searchSpecs, rest)
+            val runtimeArgs = _with_resolved_subsystem_descriptor_arg(launch, searchSpecs)
             CncfRuntime.runWithExtraComponents(runtimeArgs, extras)
         }
       } catch {
         case e: CliFailed => e.code
       }
 
-    if (forceExit) {
+    if (launch.forceExit) {
       sys.exit(code) // CLI adapter may exit only when --force-exit is requested.
-    } else if (noExit && code != 0) {
+    } else if (launch.noExit && code != 0) {
       throw new CliFailed(code)
     } else {
       ()
     }
+  }
+
+  private def _launch_parameters(
+    configuration: ResolvedConfiguration,
+    cwd: Path,
+    args: Array[String]
+  ): LaunchParameters = {
+    val (reposResult, args1, noDefaultComponents) =
+      _take_component_repository(configuration, args, cwd)
+    val (factoryClasses, args2) = _take_component_factory_classes(configuration, args1)
+    val (discover, args3) = _take_discover_classes(configuration, args2)
+    val (workspace, args4) = _take_workspace(configuration, args3)
+    val (forceExit, args5) = _take_force_exit(configuration, args4)
+    val (noExit, rest) = _take_no_exit(configuration, args5)
+    LaunchParameters(
+      activeRepositories = reposResult,
+      searchRepositories = _append_default_component_repository(reposResult, cwd, noDefaultComponents),
+      factoryClasses = factoryClasses,
+      discoverClasses = discover,
+      workspace = workspace,
+      forceExit = forceExit,
+      noExit = noExit,
+      subsystemName = _subsystem_name(configuration, rest),
+      runtimeArgs = rest
+    )
   }
 
   private def _take_no_exit(
@@ -88,7 +115,7 @@ object CncfMain extends GlobalObservable {
   ): (Boolean, Array[String]) = {
     val noexit =
       args.contains("--no-exit") ||
-        _config_truthy(configuration, "cncf.runtime.no-exit")
+        _config_truthy(configuration, RuntimeConfig.NoExitKey)
     val rest = args.filterNot(_ == "--no-exit")
     (noexit, rest)
   }
@@ -99,7 +126,7 @@ object CncfMain extends GlobalObservable {
   ): (Boolean, Array[String]) = {
     val forceexit =
       args.contains("--force-exit") ||
-        _config_truthy(configuration, "cncf.runtime.force-exit")
+        _config_truthy(configuration, RuntimeConfig.ForceExitKey)
     val rest = args.filterNot(_ == "--force-exit")
     (forceexit, rest)
   }
@@ -177,7 +204,7 @@ object CncfMain extends GlobalObservable {
   ): (Boolean, Array[String]) = {
     val enabled =
       args.contains("--discover=classes") ||
-        _config_truthy(configuration, "cncf.runtime.discover.classes") ||
+        _config_truthy(configuration, RuntimeConfig.DiscoverClassesKey) ||
         _discover_env_enabled()
     val rest = args.filterNot(_ == "--discover=classes")
     (enabled, rest)
@@ -204,7 +231,7 @@ object CncfMain extends GlobalObservable {
       }
     }
     val configClasses =
-      _config_string(configuration, "cncf.runtime.component-factory-class")
+      _config_string(configuration, RuntimeConfig.ComponentFactoryClassKey)
         .toVector
         .flatMap(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
     ((configClasses ++ classes.result()).distinct, rest.result().toArray)
@@ -227,7 +254,7 @@ object CncfMain extends GlobalObservable {
       }
     }
     val resolved =
-      workspace.orElse(_config_string(configuration, "cncf.runtime.workspace").map(Paths.get(_)))
+      workspace.orElse(_config_string(configuration, RuntimeConfig.WorkspaceKey).map(Paths.get(_)))
     (resolved, buffer.result().toArray)
   }
 
@@ -381,10 +408,10 @@ object CncfMain extends GlobalObservable {
     }
 
   private def _with_resolved_subsystem_descriptor_arg(
-    configuration: ResolvedConfiguration,
-    specs: Vector[ComponentRepository.Specification],
-    args: Array[String]
+    launch: LaunchParameters,
+    specs: Vector[ComponentRepository.Specification]
   ): Array[String] = {
+    val args = launch.runtimeArgs
     val alreadySpecified =
       args.exists(_.startsWith(s"--${RuntimeConfig.SubsystemDescriptorKey}=")) ||
         args.exists(_.startsWith(s"--${RuntimeConfig.SubsystemFileKey}=")) ||
@@ -398,7 +425,7 @@ object CncfMain extends GlobalObservable {
     if (alreadySpecified) {
       args
     } else {
-      _subsystem_name(configuration, args)
+      launch.subsystemName
         .flatMap(name => _resolve_subsystem_descriptor_entry(specs, name))
         .map { case (spec, descriptor) =>
           val repoArgs =

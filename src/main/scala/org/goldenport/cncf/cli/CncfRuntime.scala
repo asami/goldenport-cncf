@@ -55,6 +55,20 @@ import org.goldenport.record.Record
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
+  private final case class RuntimeLaunch(
+    cwd: Path,
+    configuration: ResolvedConfiguration,
+    activeSpecifications: Vector[org.goldenport.cncf.component.repository.ComponentRepository.Specification],
+    logBackendOption: Option[String],
+    logLevelOption: Option[String],
+    actualArgs: Array[String],
+    runtimeParse: RuntimeParameterParseResult,
+    domainArgs: Array[String],
+    mode: RunMode,
+    runtimeConfig: RuntimeConfig,
+    aliasResolver: AliasResolver
+  )
+
   private val _configuration_application_name = "cncf"
   private val _help_flags = Set("--help", "-h")
   private val _runtime_service_name = "runtime"
@@ -385,12 +399,10 @@ object CncfRuntime extends GlobalObservable {
   def runExitCode(args: Array[String]): Int =
     run(args)
 
-  // legacy: see run
-  def runWithExtraComponents(
-    args: Array[String],
-    extraComponents: Subsystem => Seq[Component]
-  ): Int = {
-    val cwd = Paths.get("").toAbsolutePath.normalize
+  private def _prepare_launch(
+    cwd: Path,
+    args: Array[String]
+  ): Either[Int, RuntimeLaunch] = {
     val configuration = _resolve_configuration(cwd, args)
     configure_slf4j_simple(configuration)
     val (reposResult, argsAfterRepos, noDefaultComponents) =
@@ -399,12 +411,12 @@ object CncfRuntime extends GlobalObservable {
       _extract_log_options(argsAfterRepos)
     val actualargs = _normalize_help_aliases(actualargs0)
     _execute_top_level_help(actualargs) match {
-      case Some(code) => return code
+      case Some(code) => return Left(code)
       case None => ()
     }
     if (actualargs.isEmpty) {
       _print_usage()
-      return 2
+      return Left(2)
     }
     ComponentRepositorySpace.resolveSpecifications(
       reposResult,
@@ -413,34 +425,65 @@ object CncfRuntime extends GlobalObservable {
     ) match {
       case Left(message) =>
         Console.err.println(message)
-        2
+        Left(2)
       case Right(specs) =>
         val runtimeParse = _runtime_parameter_parser.parse(actualargs.toIndexedSeq)
         val domainArgs = _strip_configuration_args(runtimeParse.residual.toArray)
         val mode = _mode_from_args(domainArgs)
-        val configuration = _resolve_configuration(cwd, argsAfterRepos)
         val runtimeConfig = _runtime_config(configuration)
-        val logBackend = _decide_backend(backendoption, _logging_backend_from_configuration(configuration), mode)
-        val httpDriver = runtimeConfig.httpDriver
         val aliasResolver = _alias_resolver(configuration)
-        _install_log_backend(logBackend)
-        _update_visibility_policy(logLevelOption, configuration, mode)
-        _reset_global_runtime_context()
-        val context = _create_global_runtime_context(
-          runtimeConfig,
-          configuration,
-          // httpDriver,
-          // runtimeConfig.mode,
-          aliasResolver
+        Right(
+          RuntimeLaunch(
+            cwd = cwd,
+            configuration = configuration,
+            activeSpecifications = specs,
+            logBackendOption = backendoption,
+            logLevelOption = logLevelOption,
+            actualArgs = actualargs,
+            runtimeParse = runtimeParse,
+            domainArgs = domainArgs,
+            mode = mode,
+            runtimeConfig = runtimeConfig,
+            aliasResolver = aliasResolver
+          )
         )
-        _mark_used_parameters(configuration)
+    }
+  }
+
+  private def _prepare_runtime(
+    launch: RuntimeLaunch
+  ): Unit = {
+    val logBackend = _decide_backend(
+      launch.logBackendOption,
+      _logging_backend_from_configuration(launch.configuration),
+      launch.mode
+    )
+    _install_log_backend(logBackend)
+    _update_visibility_policy(launch.logLevelOption, launch.configuration, launch.mode)
+    _reset_global_runtime_context()
+    _create_global_runtime_context(
+      launch.runtimeConfig,
+      launch.configuration,
+      launch.aliasResolver
+    )
+    _mark_used_parameters(launch.configuration)
+  }
+
+  // legacy: see run
+  def runWithExtraComponents(
+    args: Array[String],
+    extraComponents: Subsystem => Seq[Component]
+  ): Int = {
+    val cwd = Paths.get("").toAbsolutePath.normalize
+    _prepare_launch(cwd, args) match {
+      case Left(code) =>
+        code
+      case Right(launch) =>
+        _prepare_runtime(launch)
         val r: Consequence[OperationRequest] =
-          _runtime_protocol_engine.makeOperationRequest(domainArgs)
+          _runtime_protocol_engine.makeOperationRequest(launch.domainArgs)
         r match {
           case Consequence.Success(req) =>
-            // TODO Phase 2.9+: bind mode-specific runtime configuration.
-            // - Derive Config.Runtime from ResolvedConfiguration and bind into ExecutionContext / observability.
-            // - Consider per-mode defaults (server/client/command/server-emulator/script) while keeping CLI normalization execution-free.
             val requestmode = RunMode.from(req.request.operation)
             if (requestmode.contains(RunMode.Server)) {
               LogBackendHolder.backend match {
@@ -452,24 +495,21 @@ object CncfRuntime extends GlobalObservable {
             requestmode.foreach { m =>
               GlobalRuntimeContext.current.foreach(_.updateRuntimeMode(m))
             }
-            requestmode.foreach { m =>
-              GlobalRuntimeContext.current.foreach(_.updateRuntimeMode(m))
-            }
             observe_trace(
-              s"[subsytem] runWithExtraComponents dispatching to client mode args=${domainArgs.drop(1).mkString(" ")}"
+              s"[subsytem] runWithExtraComponents dispatching mode args=${launch.domainArgs.drop(1).mkString(" ")}"
             )
             requestmode match {
               case Some(RunMode.Server) =>
-                startServer(domainArgs.drop(1), extraComponents)
+                startServer(launch.domainArgs.drop(1), extraComponents)
                 0
               case Some(RunMode.Client) =>
-                executeClient(domainArgs.drop(1), extraComponents)
+                executeClient(launch.domainArgs.drop(1), extraComponents)
               case Some(RunMode.Command) =>
-                executeCommand(actualargs.drop(1), extraComponents)
+                executeCommand(launch.actualArgs.drop(1), extraComponents)
               case Some(RunMode.ServerEmulator) =>
-                executeServerEmulator(domainArgs.drop(1), extraComponents)
+                executeServerEmulator(launch.domainArgs.drop(1), extraComponents)
               case Some(RunMode.Script) =>
-                _run_script(domainArgs.drop(1), extraComponents)
+                _run_script(launch.domainArgs.drop(1), extraComponents)
               case _ =>
                 _print_usage()
                 2
@@ -483,56 +523,21 @@ object CncfRuntime extends GlobalObservable {
 
   def run(args: Array[String]): Int = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val configuration = _resolve_configuration(cwd, args)
-    configure_slf4j_simple(configuration)
-    val (reposResult, argsAfterRepos, noDefaultComponents) =
-      ComponentRepositorySpace.extractArgs(configuration, args)
-    val (backendoption, logLevelOption, actualargs0) =
-      _extract_log_options(argsAfterRepos)
-    val actualargs = _normalize_help_aliases(actualargs0)
-    _execute_top_level_help(actualargs) match {
-      case Some(code) => return code
-      case None => ()
-    }
-    if (actualargs.isEmpty) {
-      _print_usage()
-      return 2
-    }
-    ComponentRepositorySpace.resolveSpecifications(
-      reposResult,
-      cwd,
-      noDefaultComponents
-    ) match {
-      case Left(message) =>
-        Console.err.println(message)
-        _print_usage()
-        2
-      case Right(specs) =>
-        val runtimeParse = _runtime_parameter_parser.parse(actualargs.toIndexedSeq)
-        val domainArgs = _strip_configuration_args(runtimeParse.residual.toArray)
-        val mode = _mode_from_args(domainArgs)
-        val runtimeConfig = _runtime_config(configuration)
-        val logBackend = _decide_backend(backendoption, _logging_backend_from_configuration(configuration), mode)
-        val httpDriver = runtimeConfig.httpDriver
-        val aliasResolver = _alias_resolver(configuration)
-        _install_log_backend(logBackend)
-        _update_visibility_policy(logLevelOption, configuration, mode)
-        _reset_global_runtime_context()
-        val context = _create_global_runtime_context(
-          runtimeConfig,
-          configuration,
-          // httpDriver,
-          // runtimeConfig.mode,
-          aliasResolver
-        )
-        _mark_used_parameters(configuration)
+    _prepare_launch(cwd, args) match {
+      case Left(code) =>
+        if (code == 2) {
+          val normalizedArgs = _normalize_help_aliases(args)
+          if (normalizedArgs.nonEmpty) {
+            ()
+          }
+        }
+        code
+      case Right(launch) =>
+        _prepare_runtime(launch)
         val r: Consequence[OperationRequest] =
-          _runtime_protocol_engine.makeOperationRequest(domainArgs)
+          _runtime_protocol_engine.makeOperationRequest(launch.domainArgs)
         r match {
           case Consequence.Success(req) =>
-            // TODO Phase 2.9+: bind mode-specific runtime configuration.
-            // - Derive Config.Runtime from ResolvedConfiguration and bind into ExecutionContext / observability.
-            // - Consider per-mode defaults (server/client/command/server-emulator/script) while keeping CLI normalization execution-free.
             val mode = RunMode.from(req.request.operation)
             if (mode.contains(RunMode.Server)) {
               LogBackendHolder.backend match {
@@ -543,19 +548,19 @@ object CncfRuntime extends GlobalObservable {
             }
             mode match {
               case Some(RunMode.Server) =>
-                startServer(domainArgs.drop(1))
+                startServer(launch.domainArgs.drop(1))
                 0
               case Some(RunMode.Client) =>
                 observe_trace(
-                  s"[client:trace] run dispatching to client mode args=${domainArgs.drop(1).mkString(" ")}"
+                  s"[client:trace] run dispatching to client mode args=${launch.domainArgs.drop(1).mkString(" ")}"
                 )
-                executeClient((runtimeParse.consumed ++ domainArgs.drop(1)).toArray)
+                executeClient((launch.runtimeParse.consumed ++ launch.domainArgs.drop(1)).toArray)
               case Some(RunMode.Command) =>
-                executeCommand(actualargs.drop(1))
+                executeCommand(launch.actualArgs.drop(1))
               case Some(RunMode.ServerEmulator) =>
-                executeServerEmulator(domainArgs.drop(1))
+                executeServerEmulator(launch.domainArgs.drop(1))
               case Some(RunMode.Script) =>
-                _run_script(domainArgs.drop(1), _ => Nil)
+                _run_script(launch.domainArgs.drop(1), _ => Nil)
               case None =>
                 _print_error(s"Unknown mode: ${req.request.operation}")
                 _print_usage()
@@ -1849,106 +1854,32 @@ class CncfRuntime() extends GlobalObservable {
     cwd: Path,
     args: Array[String] = Array.empty
   ): ResolvedConfiguration = {
-    val configargs = _config_args(args)
-    val basesources = ConfigurationSources.standard(
-      cwd,
-      applicationname = _configuration_application_name,
-      args = Map.empty
-    )
-    val explicitconfigs = _explicit_config_sources(cwd, configargs)
-    val argsource = ConfigurationSource.args(configargs).toSeq
-    val sources = ConfigurationSources(basesources.sources ++ explicitconfigs ++ argsource)
-    // TODO Phase 2.9+: define failure policy for configuration resolution.
-    // - Preserve/emit ConfigurationTrace and error details for observability.
-    // - Decide whether CLI should fail-fast vs fallback to empty configuration.
-    ConfigurationResolver.default.resolve(sources) match {
-      case Consequence.Success(resolved) =>
-        resolved
-      case Consequence.Failure(_) =>
-        ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
-    }
+    CncfRuntime._resolve_configuration(cwd, args)
   }
 
   private def _explicit_config_sources(
     cwd: Path,
     configargs: Map[String, String]
   ): Vector[ConfigurationSource] = {
-    val files = _split_config_paths(configargs.get("cncf.config.file")) ++
-      _split_config_paths(configargs.get("cncf.config.files"))
-    files.distinct.map { path =>
-      val p = _normalize_config_path(cwd, path)
-      ConfigurationSource.File(
-        origin = ConfigurationOrigin.Arguments,
-        path = p,
-        rank = ConfigurationSource.Rank.Arguments,
-        loader = new SimpleFileConfigLoader
-      )
-    }.toVector
+    CncfRuntime._explicit_config_sources(cwd, configargs)
   }
 
   private def _split_config_paths(
     value: Option[String]
   ): Vector[String] =
-    value.toVector.flatMap(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
+    CncfRuntime._split_config_paths(value)
 
   private def _normalize_config_path(
     cwd: Path,
     path: String
   ): Path = {
-    val p = Paths.get(path)
-    if (p.isAbsolute) p.normalize else cwd.resolve(p).normalize
+    CncfRuntime._normalize_config_path(cwd, path)
   }
 
   private def _config_args(
     args: Array[String]
   ): Map[String, String] = {
-    val entries = scala.collection.mutable.Map.empty[String, String]
-    val alias = Map(
-      "log-level" -> "textus.logging.level",
-      "log-backend" -> "textus.logging.backend",
-      "format" -> "textus.output.format"
-    )
-    var i = 0
-    var stop = false
-    while (i < args.length && !stop) {
-      val current = args(i)
-      if (current == "--") {
-        stop = true
-      } else if (current.startsWith("--") && current.contains("=")) {
-        val raw = current.drop(2)
-        val parts = raw.split("=", 2)
-        if (parts.length == 2) {
-          val key = parts(0)
-          val value = parts(1)
-          if (key.startsWith("textus.") || key.startsWith("cncf.")) {
-            entries.update(key, value)
-          }
-        }
-      } else if (current.startsWith("--")) {
-        val key = current.drop(2)
-        if ((key.startsWith("textus.") || key.startsWith("cncf.")) && i + 1 < args.length && !args(i + 1).startsWith("-")) {
-          entries.update(key, args(i + 1))
-          i = i + 1
-        }
-      } else if (current.startsWith("-") && !current.startsWith("--")) {
-        val raw = current.drop(1)
-        if (raw.contains("=")) {
-          val parts = raw.split("=", 2)
-          val key = parts(0)
-          val value = if (parts.length > 1) parts(1) else ""
-          alias.get(key).foreach(entries.update(_, value))
-        } else {
-          alias.get(raw).foreach { key =>
-            if (i + 1 < args.length && !args(i + 1).startsWith("-")) {
-              entries.update(key, args(i + 1))
-              i = i + 1
-            }
-          }
-        }
-      }
-      i = i + 1
-    }
-    entries.toMap
+    CncfRuntime._config_args(args)
   }
 
   private def _runtime_scope_context(): ScopeContext =
@@ -2171,29 +2102,7 @@ class CncfRuntime() extends GlobalObservable {
   private[cli] def _framework_option_passthrough(
     args: Seq[String]
   ): List[Property] = {
-    val b = List.newBuilder[Property]
-    var i = 0
-    while (i < args.length) {
-      val current = args(i)
-      if (current.startsWith("--")) {
-        val key = current.drop(2)
-        if (_is_client_passthrough_framework_key(key)) {
-          if (current.contains("=")) {
-            val eq = current.indexOf('=')
-            val actualKey = current.substring(2, eq)
-            val value = current.substring(eq + 1)
-            b += Property(actualKey, value, None)
-          } else if (i + 1 < args.length && !args(i + 1).startsWith("-")) {
-            b += Property(key, args(i + 1), None)
-            i = i + 1
-          } else {
-            b += Property(key, "true", None)
-          }
-        }
-      }
-      i = i + 1
-    }
-    b.result()
+    CncfRuntime._framework_option_passthrough(args)
   }
 
   private[cli] def _is_client_passthrough_framework_key(
