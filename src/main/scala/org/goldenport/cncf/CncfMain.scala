@@ -95,7 +95,7 @@ object CncfMain extends GlobalObservable {
       else CncfRuntime.canonicalInvocationParameters(configuration, front.residualArgs)
     LaunchParameters(
       activeRepositories = reposResult,
-      searchRepositories = _append_default_component_repository(reposResult, cwd, noDefaultComponents),
+      searchRepositories = ComponentRepositorySpace.appendDefaultComponentRepository(reposResult, cwd, noDefaultComponents),
       front = front,
       invocation = invocation
     )
@@ -110,63 +110,9 @@ object CncfMain extends GlobalObservable {
   ): (Either[String, Vector[ComponentRepository.Specification]], Array[String], Boolean) = {
     val (specsresult, rest, nodefault) =
       ComponentRepositorySpace.extractArgs(configuration, args)
-    specsresult match {
-      case Left(message) =>
-        (Left(message), rest, nodefault)
-      case Right(values) if values.isEmpty =>
-        (Right(Vector.empty), rest, nodefault)
-      case Right(values) =>
-        var error: Option[String] = None
-        val parsed = Vector.newBuilder[ComponentRepository.Specification]
-        values.foreach { value =>
-          ComponentRepository.parseSpecs(value, cwd) match {
-            case Left(err) =>
-              if (error.isEmpty) {
-                error = Some(err)
-              }
-            case Right(xs) =>
-              if (error.isEmpty) {
-                parsed ++= xs
-              }
-          }
-        }
-        error match {
-          case Some(err) => (Left(err), rest, nodefault)
-          case None => (Right(parsed.result()), rest, nodefault)
-        }
-    }
+    val parsed = ComponentRepositorySpace.resolveSpecifications(specsresult, cwd, nodefault)
+    (parsed, rest, nodefault)
   }
-
-  private def _append_default_component_repository(
-    result: Either[String, Vector[ComponentRepository.Specification]],
-    cwd: Path,
-    noDefault: Boolean
-  ): Either[String, Vector[ComponentRepository.Specification]] =
-    result match {
-      case left @ Left(_) => left
-      case Right(specs) if noDefault => Right(specs)
-      case Right(specs) =>
-        _default_components_dir(cwd) match {
-          case Some(dir) if !_has_default_components_spec(specs, dir) =>
-            Right(specs :+ ComponentRepository.ComponentDirRepository.Specification(dir))
-          case _ => Right(specs)
-        }
-    }
-
-  private def _default_components_dir(cwd: Path): Option[Path] = {
-    val dir = cwd.resolve("component.d").normalize
-    if (Files.isDirectory(dir)) Some(dir) else None
-  }
-
-  private def _has_default_components_spec(
-    specs: Vector[ComponentRepository.Specification],
-    dir: Path
-  ): Boolean =
-    specs.exists {
-      case ComponentRepository.ComponentDirRepository.Specification(base) =>
-        base.normalize == dir.normalize
-      case _ => false
-    }
 
 
   private def _discover_components(
