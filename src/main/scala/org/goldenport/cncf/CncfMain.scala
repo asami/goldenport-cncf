@@ -52,8 +52,8 @@ object CncfMain extends GlobalObservable {
 
   def main(args: Array[String]): Unit = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val configuration = _resolve_configuration(cwd, args)
-    val launch = _launch_parameters(configuration, cwd, args)
+    val bootstrap = CncfRuntime.bootstrap(cwd, args)
+    val launch = _launch_parameters(bootstrap, cwd, args)
 
     val code: Int =
       try {
@@ -84,10 +84,11 @@ object CncfMain extends GlobalObservable {
   }
 
   private def _launch_parameters(
-    configuration: ResolvedConfiguration,
+    bootstrap: CncfRuntime.RuntimeBootstrap,
     cwd: Path,
     args: Array[String]
   ): LaunchParameters = {
+    val configuration = bootstrap.configuration
     val (reposResult, args1, noDefaultComponents) =
       _take_component_repository(configuration, args, cwd)
     val (factoryClasses, args2) = _take_component_factory_classes(configuration, args1)
@@ -95,7 +96,9 @@ object CncfMain extends GlobalObservable {
     val (workspace, args4) = _take_workspace(configuration, args3)
     val (forceExit, args5) = _take_force_exit(configuration, args4)
     val (noExit, rest) = _take_no_exit(configuration, args5)
-    val invocation = CncfRuntime.canonicalInvocationParameters(configuration, rest)
+    val invocation =
+      if (rest.sameElements(args)) bootstrap.invocation
+      else CncfRuntime.canonicalInvocationParameters(configuration, rest)
     LaunchParameters(
       activeRepositories = reposResult,
       searchRepositories = _append_default_component_repository(reposResult, cwd, noDefaultComponents),

@@ -55,6 +55,11 @@ import org.goldenport.record.Record
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
+  private[cncf] final case class RuntimeBootstrap(
+    configuration: ResolvedConfiguration,
+    invocation: RuntimeInvocationParameters
+  )
+
   private[cncf] final case class RuntimeInvocationParameters(
     actualArgs: Array[String],
     subsystemName: Option[String]
@@ -404,6 +409,15 @@ object CncfRuntime extends GlobalObservable {
   def runExitCode(args: Array[String]): Int =
     run(args)
 
+  private[cncf] def bootstrap(
+    cwd: Path,
+    args: Array[String]
+  ): RuntimeBootstrap = {
+    val configuration = _resolve_configuration(cwd, args)
+    val invocation = canonicalInvocationParameters(configuration, args)
+    RuntimeBootstrap(configuration, invocation)
+  }
+
   private[cncf] def canonicalInvocationParameters(
     configuration: ResolvedConfiguration,
     args: Array[String]
@@ -419,7 +433,8 @@ object CncfRuntime extends GlobalObservable {
     cwd: Path,
     args: Array[String]
   ): Either[Int, RuntimeLaunch] = {
-    val configuration = _resolve_configuration(cwd, args)
+    val bootstrap = this.bootstrap(cwd, args)
+    val configuration = bootstrap.configuration
     configure_slf4j_simple(configuration)
     val (reposResult, argsAfterRepos, noDefaultComponents) =
       ComponentRepositorySpace.extractArgs(configuration, args)
