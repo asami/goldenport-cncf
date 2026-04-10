@@ -40,8 +40,9 @@ components:
   - name: <component-name>
     origin: <component-origin>
 ports: []
-wiring: {}
-wiring_bindings: []
+wiring: []
+source:
+  wiring: {}
 runtime:
   builtin_components:
     - name: admin
@@ -54,6 +55,12 @@ warnings:
 
 `components` contains the selected application-level components that should be part of the reusable descriptor body.
 Builtin components are normally runtime-provided and are therefore placed under `runtime.builtin_components` instead of being mixed into `components`.
+
+`wiring` is the resolved wiring binding list.
+It is the primary wiring representation in the assembly descriptor because this document represents the resolved operational plan.
+
+`source.wiring` preserves the raw subsystem descriptor wiring block when available.
+It is kept as provenance, not as the primary re-application shape.
 
 ## Report Boundary
 

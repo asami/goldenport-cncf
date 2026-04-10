@@ -570,14 +570,18 @@ object AdminComponent {
       val components = subsystem.components.toVector
       val descriptorComponents = components.filterNot(_.origin == ComponentOrigin.Builtin)
       val builtinComponents = components.filter(_.origin == ComponentOrigin.Builtin)
+      val sourceWiring = _subsystem_wiring_(subsystem)
+      val resolvedWiring = subsystem.descriptor.map(_.resolvedWiringBindings).getOrElse(Vector.empty)
       val descriptor = org.goldenport.record.Record.data(
         "kind" -> "assembly-descriptor",
         "subsystem" -> subsystem.name,
         "version" -> subsystem.version.getOrElse(""),
         "components" -> descriptorComponents.map(_assembly_component_record_),
         "ports" -> subsystem.descriptor.map(_.declaredPorts).getOrElse(Vector.empty),
-        "wiring" -> _subsystem_wiring_(subsystem),
-        "wiring_bindings" -> subsystem.descriptor.map(_.resolvedWiringBindings).getOrElse(Vector.empty),
+        "wiring" -> resolvedWiring,
+        "source" -> org.goldenport.record.Record.data(
+          "wiring" -> sourceWiring
+        ),
         "runtime" -> org.goldenport.record.Record.data(
           "builtin_components" -> builtinComponents.map(_assembly_component_record_)
         ),
