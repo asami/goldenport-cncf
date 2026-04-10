@@ -64,6 +64,9 @@ Resolution order should be:
 2. `assembly-descriptor.*` at the top level of the selected SAR
 3. convention-based assembly from the subsystem descriptor
 
+The current implementation detects the configured or SAR-top assembly descriptor and exposes it as source/provenance in `admin.assembly.descriptor`.
+It does not yet replace the subsystem wiring resolution with the assembly descriptor contents.
+
 ## Current Shape
 
 The current YAML shape is:

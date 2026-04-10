@@ -580,7 +580,8 @@ object AdminComponent {
         "ports" -> subsystem.descriptor.map(_.declaredPorts).getOrElse(Vector.empty),
         "wiring" -> resolvedWiring,
         "source" -> org.goldenport.record.Record.data(
-          "wiring" -> sourceWiring
+          "wiring" -> sourceWiring,
+          "assembly_descriptor" -> subsystem.descriptor.flatMap(_.assemblyDescriptor).map(_assembly_descriptor_source_record_).getOrElse(Record.empty)
         ),
         "runtime" -> org.goldenport.record.Record.data(
           "builtin_components" -> builtinComponents.map(_assembly_component_record_)
@@ -605,6 +606,14 @@ object AdminComponent {
     org.goldenport.record.Record.data(
       "name" -> comp.name,
       "origin" -> ComponentOriginLabel.userLabel(comp.origin.label)
+    )
+
+  private def _assembly_descriptor_source_record_(rec: Record): Record =
+    org.goldenport.record.Record.data(
+      "present" -> true,
+      "kind" -> rec.getString("kind").getOrElse(""),
+      "subsystem" -> rec.getString("subsystem").getOrElse(""),
+      "version" -> rec.getString("version").getOrElse("")
     )
 
   private def _assembly_mermaid_(subsystem: Subsystem): String = {

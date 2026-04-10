@@ -12,7 +12,7 @@ import org.goldenport.cncf.path.AliasResolver
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -38,7 +38,7 @@ object GenericSubsystemFactory {
     configuration: ResolvedConfiguration
   ): Option[GenericSubsystemDescriptor] =
     descriptorPath(configuration).flatMap { path =>
-      GenericSubsystemDescriptor.load(path).toOption
+      GenericSubsystemDescriptor.load(path).toOption.map(_with_assembly_descriptor_override(_, configuration))
     }
 
   def resolveDescriptor(
@@ -47,6 +47,7 @@ object GenericSubsystemFactory {
     loadDescriptor(configuration).orElse {
       subsystemName(configuration).flatMap { name =>
         ComponentRepository.resolveSubsystemDescriptor(_repository_specs(configuration), name)
+          .map(_with_assembly_descriptor_override(_, configuration))
       }
     }
 
@@ -212,6 +213,25 @@ object GenericSubsystemFactory {
     value: String
   ): Option[Vector[ComponentRepository.Specification]] =
     ComponentRepository.parseSpecs(_normalize_repository_spec_value(value), Paths.get("").toAbsolutePath.normalize).toOption
+
+  private def _with_assembly_descriptor_override(
+    descriptor: GenericSubsystemDescriptor,
+    configuration: ResolvedConfiguration
+  ): GenericSubsystemDescriptor =
+    _assembly_descriptor_path(configuration)
+      .flatMap(GenericSubsystemDescriptor.loadAssemblyDescriptor)
+      .map(record => descriptor.copy(assemblyDescriptor = Some(record)))
+      .getOrElse(descriptor)
+
+  private def _assembly_descriptor_path(
+    configuration: ResolvedConfiguration
+  ): Option[Path] =
+    ConfigurationAccess
+      .getString(configuration, RuntimeConfig.AssemblyDescriptorKey)
+      .orElse(ConfigurationAccess.getString(configuration, "cncf.assembly.descriptor"))
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .map(Paths.get(_))
 
   private def _normalize_repository_spec_value(
     value: String

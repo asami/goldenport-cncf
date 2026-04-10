@@ -13,7 +13,7 @@ import org.goldenport.cncf.component.DescriptorRecordLoader
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -119,6 +119,7 @@ final case class GenericSubsystemDescriptor(
   extensions: Map[String, String] = Map.empty,
   config: Map[String, String] = Map.empty,
   wiring: Record = Record.empty,
+  assemblyDescriptor: Option[Record] = None,
   security: Option[GenericSubsystemSecurityBinding] = None,
   builtin: Option[GenericSubsystemBuiltinBinding] = None
 ) {
@@ -182,6 +183,15 @@ object GenericSubsystemDescriptor {
     "subsystem-descriptor.xml"
   )
 
+  private val _canonical_assembly_descriptor_files = Vector(
+    "assembly-descriptor.yaml",
+    "assembly-descriptor.yml",
+    "assembly-descriptor.json",
+    "assembly-descriptor.conf",
+    "assembly-descriptor.hocon",
+    "assembly-descriptor.xml"
+  )
+
   def load(path: Path): Consequence[GenericSubsystemDescriptor] =
     if (!Files.exists(path))
       Consequence.failure(s"subsystem descriptor path does not exist: ${path}")
@@ -199,6 +209,26 @@ object GenericSubsystemDescriptor {
 
   def loadArchive(path: Path): Consequence[GenericSubsystemDescriptor] =
     load(path)
+
+  def loadAssemblyDescriptor(path: Path): Option[Record] =
+    if (!Files.exists(path))
+      None
+    else if (Files.isDirectory(path))
+      _resolve_assembly_descriptor_file(path).flatMap(_load_record)
+    else if (_is_archive_file(path))
+      _load_assembly_descriptor_from_archive(path)
+    else
+      _load_record(path)
+
+  def loadAdjacentAssemblyDescriptor(path: Path): Option[Record] =
+    if (!Files.exists(path))
+      None
+    else if (Files.isDirectory(path))
+      _resolve_assembly_descriptor_file(path).flatMap(_load_record)
+    else if (_is_archive_file(path))
+      _load_assembly_descriptor_from_archive(path)
+    else
+      Option(path.getParent).flatMap(parent => _resolve_assembly_descriptor_file(parent).flatMap(_load_record))
 
   def looksLikeArchiveDirectory(path: Path): Boolean = {
     val componentdir = path.resolve("component")
@@ -246,9 +276,24 @@ object GenericSubsystemDescriptor {
       .map(path.resolve(_).normalize)
       .find(Files.isRegularFile(_))
 
+  private def _resolve_assembly_descriptor_file(path: Path): Option[Path] =
+    _canonical_assembly_descriptor_files
+      .map(path.resolve(_).normalize)
+      .find(Files.isRegularFile(_))
+
   private def _is_archive_file(path: Path): Boolean = {
     val name = path.getFileName.toString.toLowerCase
     name.endsWith(".sar") || name.endsWith(".zip")
+  }
+
+  private def _load_record(path: Path): Option[Record] =
+    DescriptorRecordLoader.load(path).toOption.flatMap(_.headOption)
+
+  private def _load_assembly_descriptor_from_archive(path: Path): Option[Record] = {
+    val uri = URI.create(s"jar:${path.toUri}")
+    Using.resource(FileSystems.newFileSystem(uri, Map.empty[String, String].asJava)) { fs =>
+      _resolve_assembly_descriptor_file(fs.getPath("/")).flatMap(_load_record)
+    }
   }
 
   private def _load_archive_file(path: Path): Consequence[GenericSubsystemDescriptor] = {
@@ -258,7 +303,9 @@ object GenericSubsystemDescriptor {
       _resolve_descriptor_file(root) match {
         case Some(file) =>
           DescriptorRecordLoader.load(file).flatMap { records =>
-            records.headOption.map(_from_record(path, _)).getOrElse(Consequence.failure(s"subsystem descriptor is empty in archive: ${path}"))
+            records.headOption.map { rec =>
+              _from_record(path, rec, _resolve_assembly_descriptor_file(root).flatMap(_load_record))
+            }.getOrElse(Consequence.failure(s"subsystem descriptor is empty in archive: ${path}"))
           }
         case None =>
           Consequence.failure(s"subsystem descriptor not found in archive: ${path}")
@@ -283,12 +330,18 @@ object GenericSubsystemDescriptor {
         extensions = m.extensions,
         config = m.config,
         wiring = Record.empty,
+        assemblyDescriptor = loadAdjacentAssemblyDescriptor(path),
         security = None,
         builtin = None
       )
     }
 
-  private def _from_record(path: Path, rec: Record): Consequence[GenericSubsystemDescriptor] = {
+  private def _from_record(
+    path: Path,
+    rec: Record,
+    assemblyDescriptor: Option[Record] = None
+  ): Consequence[GenericSubsystemDescriptor] = {
+    val assemblyDescriptor0 = assemblyDescriptor.orElse(loadAdjacentAssemblyDescriptor(path))
     summon[RecordDecoder[Shape]].fromRecord(rec).map { s =>
       GenericSubsystemDescriptor(
         path = path,
@@ -298,6 +351,7 @@ object GenericSubsystemDescriptor {
         extensions = s.extensions,
         config = s.config,
         wiring = s.wiring,
+        assemblyDescriptor = assemblyDescriptor0,
         security = s.security,
         builtin = s.builtin
       )
