@@ -67,3 +67,12 @@ It should avoid report-only structure where possible and should keep generated r
 
 Future visual output such as SVG or a web dashboard diagram should be a projection of the same resolved assembly model.
 The visual projection must not become a separate semantic source of truth.
+
+The current CLI/admin visual operation is:
+
+```bash
+cncf command admin.assembly.diagram
+```
+
+It returns a Mermaid `flowchart` projection of the same resolved assembly wiring.
+This is the current text-based visual representation and is intended to be replaceable or complemented by SVG/web dashboard rendering later.

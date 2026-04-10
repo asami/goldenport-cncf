@@ -105,6 +105,11 @@ object AdminComponent {
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
+      val opAssemblyDiagram = new AssemblyDiagramOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(XString)),
+        params.subsystem
+      )
       val serviceSystem = spec.ServiceDefinition(
         name = "system",
         operations = spec.OperationDefinitionGroup(
@@ -150,7 +155,8 @@ object AdminComponent {
           operations = NonEmptyVector.of(
             opAssemblyWarnings,
             opAssemblyReport,
-            opAssemblyDescriptor
+            opAssemblyDescriptor,
+            opAssemblyDiagram
           )
         )
       )
@@ -380,6 +386,27 @@ object AdminComponent {
       Consequence.success(AssemblyDescriptorAction(req, subsystem))
   }
 
+  private final class AssemblyDiagramOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        content = BaseContent.Builder("diagram")
+          .summary("Export the resolved assembly wiring diagram.")
+          .description("Return a web-renderable Mermaid projection of the runtime-resolved assembly wiring.")
+          .build(),
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: Request
+    ): Consequence[OperationRequest] =
+      Consequence.success(AssemblyDiagramAction(req, subsystem))
+  }
+
   private final case class ComponentListAction(
     request: Request,
     subsystem: Subsystem
@@ -470,6 +497,14 @@ object AdminComponent {
       AssemblyDescriptorActionCall(core, subsystem)
   }
 
+  private final case class AssemblyDiagramAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      AssemblyDiagramActionCall(core, subsystem)
+  }
+
   private final case class DeploymentSecurityMarkdownActionCall(
     core: ActionCall.Core,
     subsystem: Subsystem
@@ -552,11 +587,63 @@ object AdminComponent {
     }
   }
 
+  private final case class AssemblyDiagramActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      Consequence.success(OperationResponse.Scalar(_assembly_mermaid_(subsystem)))
+  }
+
   private def _assembly_component_record_(comp: Component): Record =
     org.goldenport.record.Record.data(
       "name" -> comp.name,
       "origin" -> ComponentOriginLabel.userLabel(comp.origin.label)
     )
+
+  private def _assembly_mermaid_(subsystem: Subsystem): String = {
+    val components = subsystem.components.toVector
+    val appComponents = components.filterNot(_.origin == ComponentOrigin.Builtin)
+    val builtinComponents = components.filter(_.origin == ComponentOrigin.Builtin)
+    val bindings = subsystem.descriptor.map(_.resolvedWiring).getOrElse(Vector.empty)
+    val lines = scala.collection.mutable.ArrayBuffer[String]()
+    lines += "flowchart LR"
+    lines += s"  subgraph ${_mermaid_id_(subsystem.name)}[\"${_mermaid_label_(subsystem.name)}\"]"
+    appComponents.foreach { comp =>
+      lines += s"    ${_mermaid_id_(comp.name)}[\"${_mermaid_label_(comp.name)}\"]"
+    }
+    if (builtinComponents.nonEmpty) {
+      lines += "    subgraph runtime_builtins[\"runtime builtins\"]"
+      builtinComponents.foreach { comp =>
+        lines += s"      ${_mermaid_id_(s"builtin_${comp.name}")}[[\"${_mermaid_label_(comp.name)}\"]]"
+      }
+      lines += "    end"
+    }
+    bindings.foreach { binding =>
+      val from = _mermaid_id_(binding.fromComponent)
+      val to = _mermaid_id_(binding.toComponent)
+      val api = binding.fromApi.filter(_.nonEmpty).getOrElse(binding.fromOperation)
+      val spi = binding.toSpi.filter(_.nonEmpty).getOrElse(binding.toOperation)
+      val glue = if (binding.glue.isEmpty) "" else " / glue"
+      val label = s"${api} -> ${spi}${glue}"
+      lines += s"    ${from} -->|\"${_mermaid_label_(label)}\"| ${to}"
+    }
+    lines += "  end"
+    lines.mkString("\n")
+  }
+
+  private def _mermaid_id_(name: String): String =
+    name.map {
+      case c if c.isLetterOrDigit => c
+      case _ => '_'
+    }.mkString match {
+      case "" => "node"
+      case s if s.head.isDigit => s"n_${s}"
+      case s => s
+    }
+
+  private def _mermaid_label_(name: String): String =
+    name.replace("\\", "\\\\").replace("\"", "\\\"")
 
   private def _subsystem_wiring_(subsystem: Subsystem): Record =
     subsystem.descriptor.map(_.wiring).filterNot(_.isEmpty).getOrElse {
