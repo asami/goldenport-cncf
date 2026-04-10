@@ -5,7 +5,7 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version Apr.  2, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object DescribeProjection {
@@ -51,7 +51,7 @@ object DescribeProjection {
         Record.data(
           "type" -> "component",
           "name" -> component.name,
-          "origin" -> component.origin.label,
+          "origin" -> user_origin_label(component.origin.label),
           "artifact" -> artifact,
           "summary" -> s"Component ${component.name}",
           "services" -> services.map(service_record),

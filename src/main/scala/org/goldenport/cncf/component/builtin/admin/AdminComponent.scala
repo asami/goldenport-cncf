@@ -10,6 +10,7 @@ import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall, QueryAction, ResourceAccess}
 import org.goldenport.cncf.component.{Component, ComponentInit}
+import org.goldenport.cncf.component.ComponentOriginLabel
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.ComponentId
 import org.goldenport.cncf.component.ComponentInstanceId
@@ -38,7 +39,7 @@ import org.goldenport.schema.{DataType, XString}
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -471,7 +472,7 @@ object AdminComponent {
         "loaded" -> subsystem.components.toVector.map { comp =>
           org.goldenport.record.Record.data(
             "name" -> comp.name,
-            "origin" -> comp.origin.label
+            "origin" -> ComponentOriginLabel.userLabel(comp.origin.label)
           )
         }
       )
@@ -610,7 +611,7 @@ object AdminComponent {
   }
 
   private def _component_origin_(comp: Component): String = {
-    comp.origin.label
+    ComponentOriginLabel.userLabel(comp.origin.label)
   }
 
   private def _component_lines_(

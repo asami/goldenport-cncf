@@ -10,7 +10,7 @@ import org.goldenport.datatype.I18nString
 /*
  * @since   Mar.  5, 2026
  *  version Mar. 28, 2026
- * @version Apr.  9, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object HelpProjection {
@@ -82,7 +82,7 @@ object HelpProjection {
             "aggregates" -> aggregates,
             "views" -> views,
             "operationDefinitions" -> operations,
-            "origin" -> Vector(component.origin.label),
+            "origin" -> Vector(user_origin_label(component.origin.label)),
             "artifactName" -> artifactName,
             "artifactVersion" -> artifactVersion
           ) ++ (if (useCases.nonEmpty) Map("useCases" -> useCases) else Map.empty),

@@ -4,11 +4,12 @@ import org.goldenport.record.Record
 import org.goldenport.schema.DataType
 import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, ServiceDefinition}
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.component.ComponentOriginLabel
 import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Mar.  5, 2026
- * @version Apr.  6, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -85,9 +86,12 @@ private[projection] object MetaProjectionSupport {
       "type" -> "component",
       "name" -> comp.name,
       "runtimeName" -> component_runtime_name(comp),
-      "origin" -> comp.origin.label,
+      "origin" -> user_origin_label(comp.origin.label),
       "artifact" -> artifact_record(comp)
     )
+
+  def user_origin_label(origin: String): String =
+    ComponentOriginLabel.userLabel(origin)
 
   def artifact_record(comp: Component): Record =
     comp.artifactMetadata.map { m =>

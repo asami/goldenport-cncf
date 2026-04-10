@@ -3,10 +3,11 @@ package org.goldenport.cncf.assembly
 import scala.collection.mutable
 import org.goldenport.record.Record
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.component.ComponentOriginLabel
 
 /*
  * @since   Apr. 10, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AssemblyWarning(
@@ -87,11 +88,11 @@ object AssemblyReport {
       severity = "warning",
       componentName = componentName,
       reason = Some(reason),
-      selectedOrigin = Some(selected.origin.label),
-      droppedOrigins = dropped.map(_.origin.label).distinct,
+      selectedOrigin = Some(ComponentOriginLabel.userLabel(selected.origin.label)),
+      droppedOrigins = dropped.map(x => ComponentOriginLabel.userLabel(x.origin.label)).distinct,
       message =
         s"duplicate component '${componentName}' was collapsed during assembly; " +
-          s"selected=${selected.origin.label}, dropped=${dropped.map(_.origin.label).distinct.mkString(",")}, reason=${reason}"
+          s"selected=${ComponentOriginLabel.userLabel(selected.origin.label)}, dropped=${dropped.map(x => ComponentOriginLabel.userLabel(x.origin.label)).distinct.mkString(",")}, reason=${reason}"
     )
 
   private def _priority(component: Component): Int =

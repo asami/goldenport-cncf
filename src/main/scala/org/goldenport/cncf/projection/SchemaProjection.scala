@@ -5,7 +5,7 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version Apr.  2, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object SchemaProjection {
@@ -54,7 +54,7 @@ object SchemaProjection {
           "type" -> "schema",
           "targetType" -> "component",
           "name" -> component.name,
-          "origin" -> component.origin.label,
+          "origin" -> user_origin_label(component.origin.label),
           "artifact" -> artifact,
           "services" -> services.map { service =>
             project(base, Some(s"${component.name}.${service.name}"))
