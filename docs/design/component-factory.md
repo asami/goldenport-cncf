@@ -14,8 +14,8 @@ Terms
 -----
 
 - **Component**: a runtime instance that participates in CNCF routing/execution.
-- **Discovered class**: a class definition that has been found in some repository
-  (scala-cli output, sbt target, component.dir, etc.) and is loadable by a ClassLoader.
+- **Discovered class**: a class definition that has been found in some source
+  (scala-cli output, sbt target, repository.d, component.d, etc.) and is loadable by a ClassLoader.
 - **Component repository**: a source of discovered classes and/or component artifacts.
 - **Factory / Provider**: two-stage instantiation pipeline.
 
@@ -96,7 +96,7 @@ Provider guidelines:
 - Else use zero-arg constructor if available.
 - Else fail with a clear diagnostic (DbC-style in internal code, Consequence at boundary).
 
-**Component generation scope**: For Phase 2.8 the Provider only handles concrete `Component` classes discovered on the classpath or from component repositories. The previous `ComponentDefinition` / `GeneratedComponent` path has been removed, so the runtime no longer interprets DSL-based definitions—every discovered artifact must resolve to an instantiable `Component` class (including script-generated classes or classes from `component.dir`). Future automated component generation is expected to emit such concrete classes so the Provider can apply the documented reflection/constructor logic without additional semantic layers.
+**Component generation scope**: For Phase 2.8 the Provider only handles concrete `Component` classes discovered on the classpath or from packaged/component sources. The previous `ComponentDefinition` / `GeneratedComponent` path has been removed, so the runtime no longer interprets DSL-based definitions. Every discovered artifact must resolve to an instantiable `Component` class, including script-generated classes or classes loaded from packaged search or active directories such as `repository.d` and `component.d`. Future automated component generation is expected to emit such concrete classes so the Provider can apply the documented reflection/constructor logic without additional semantic layers.
 
 
 ### ComponentFactoryGroup
@@ -216,7 +216,8 @@ Immediate targets (Phase 2.6 / Stage 5):
 
 Future targets (directional):
 
-- `component.dir`: directory-based repository for runtime deployment
+- active packaged component directories such as `component.d`
+- packaged search repositories such as `repository.d`
 - official repository (SimpleModeling.org managed)
 - project-specific repository (BoK / project workspace)
 

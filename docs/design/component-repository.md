@@ -37,9 +37,14 @@ This mechanism unifies all Component discovery paths under a single abstraction.
 
 ## 2. CLI Interface
 
-### Option
+### Legacy Option
 
     --component-repository <spec>[,<spec>...]
+
+Current primary options:
+
+    --repository-dir <path>
+    --component-dir <path>
 
 ### spec syntax
 
@@ -110,11 +115,16 @@ this structure.
 
 ## 4. Multiple Repositories
 
-Multiple repositories may be specified using a comma-separated list.
+Multiple repositories may be specified using a comma-separated list in the legacy form.
 
 Example:
 
     --component-repository=official,project,component-dir,scala-cli
+
+Current preferred shape is:
+
+    --repository-dir /path/to/repository.d
+    --component-dir /path/to/component.d
 
 Priority and override rules are defined separately.
 

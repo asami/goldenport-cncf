@@ -2,7 +2,7 @@
 
     ## Purpose
 
-    This document defines how **bootstrap-phase events** (especially component.d loading)
+    This document defines how **bootstrap-phase events** (especially packaged source loading)
     are made observable in Cloud Native Component Framework (CNCF).
 
     The goal is to ensure that **initialization failures and early component loading behavior
@@ -23,9 +23,9 @@
     - Trace logs written during bootstrap were often **dropped**
     - `--log-level trace` did not reliably surface early initialization behavior
     - It was impossible to distinguish:
-      - “component.d is not loaded”
+      - “the expected packaged source is not loaded”
       - vs.
-      - “component.d is loaded but invisible”
+      - “the packaged source is loaded but invisible”
 
     This document describes the corrected design.
 
@@ -48,7 +48,7 @@
 
     - Scope name: `Bootstrap`
     - Used exclusively during:
-      - component.d discovery
+      - packaged source discovery
       - component instantiation
       - early runtime construction
 
@@ -153,7 +153,7 @@
     With this design:
 
     - Bootstrap-phase failures are observable in production
-    - component.d loading behavior is diagnosable
+    - packaged source loading behavior is diagnosable
     - Observability is no longer dependent on initialization order
     - Logs written during bootstrap behave the same as runtime logs
 

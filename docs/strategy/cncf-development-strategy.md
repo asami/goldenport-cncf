@@ -303,7 +303,8 @@ progress tracking.
 - Add remote subsystem artifact resolution
   - Resolve versioned subsystem artifacts such as `textus-identity-1.0.2`
   - Support remote component repositories such as `component.simplemodeling.org`
-  - Keep `component.d` as a local development/test repository path
+  - Keep `repository.d` as a local packaged search path
+  - Keep `component.d` as a local active packaged source
 
 ### 8.2 Security
 - Authentication
