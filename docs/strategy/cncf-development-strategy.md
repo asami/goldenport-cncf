@@ -87,7 +87,7 @@ Complete remaining Phase 2.0 demo stages on top of frozen platform contracts.
 - Stage 4 (Client demo) is DONE; client demo verified via real/fake HttpDriver with curl-equivalent output (`ok`).
 
 **Exit Criteria**
-- See: `docs/notes/phase-2.6-demo-done-checklist.md`
+- Historical note: `docs/notes/history/2026/04/phase-2.6-demo-done-checklist.md`
 
 **Relationship**
 Phase 2.0 may be incomplete; Phase 2.6 completes it without re-opening

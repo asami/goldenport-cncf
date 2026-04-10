@@ -2,7 +2,7 @@
 
 This document defines the HelloWorld demo strategy and phase structure.
 Phase 2.6 owns completion of Stage 3–6 on frozen platform contracts
-(see `docs/notes/phase-2.6-demo-done-checklist.md`).
+(see historical note `docs/notes/history/2026/04/phase-2.6-demo-done-checklist.md`).
 
 ## 9. HelloWorld Demo (Plan)
 

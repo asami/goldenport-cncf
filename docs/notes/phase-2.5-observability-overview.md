@@ -22,4 +22,4 @@ It does not define backends, exporters, or operational policies.
 ## Closing Note
 
 Phase 3 is expected to build on top of these decisions.
-Next: Phase 2.6 checklist at `docs/notes/phase-2.6-demo-done-checklist.md`.
+Next historical note: `docs/notes/history/2026/04/phase-2.6-demo-done-checklist.md`.

@@ -223,7 +223,7 @@ Requirements:
 - No undocumented environment variables or configuration files are required.
 
 Evidence:
-- [x] Runbook: docs/notes/scala-cli/scala-cli-component-runbook.md
+- [x] Runbook: docs/notes/history/2026/04/scala-cli-component-runbook.md
 
 Acceptance:
 - A new user can reproduce the demo by following the listed commands only.
