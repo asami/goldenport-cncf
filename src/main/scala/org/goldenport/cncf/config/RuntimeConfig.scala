@@ -37,6 +37,8 @@ object RuntimeConfig {
   val ModeKey = "textus.runtime.mode"
   val CommandExecutionModeKey = "textus.command.execution-mode"
   val RuntimeCommandExecutionModeKey = "textus.runtime.command.execution-mode"
+  val CallTreeKey = "textus.calltree"
+  val RuntimeCallTreeKey = "textus.runtime.calltree"
   val DiscoverClassesKey = "cncf.runtime.discover.classes"
   val ComponentFactoryClassKey = "cncf.runtime.component-factory-class"
   val WorkspaceKey = "cncf.runtime.workspace"
@@ -177,6 +179,7 @@ object RuntimeConfig {
     val textusRuntime =
       key match {
         case CommandExecutionModeKey => Vector(RuntimeCommandExecutionModeKey)
+        case CallTreeKey => Vector(RuntimeCallTreeKey)
         case SubsystemNameKey => Vector(RuntimeSubsystemNameKey)
         case ComponentNameKey => Vector(RuntimeComponentNameKey)
         case SubsystemDescriptorKey => Vector(RuntimeSubsystemDescriptorKey)

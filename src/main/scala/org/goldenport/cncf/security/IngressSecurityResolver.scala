@@ -175,10 +175,10 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     _find_first(
       attributes,
       Vector(
-        "textus.runtime.calltree",
-        "cncf.runtime.calltree",
-        "textus.calltree",
-        "cncf.calltree"
+        RuntimeConfig.CallTreeKey,
+        RuntimeConfig.RuntimeCallTreeKey,
+        "cncf.calltree",
+        "cncf.runtime.calltree"
       )
     ).map(_is_truthy).map { enabled =>
       ExecutionContext.withFrameworkCallTreeEnabled(ctx, enabled)

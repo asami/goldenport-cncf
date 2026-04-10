@@ -2348,7 +2348,7 @@ private[cli] object RuntimeOptionsParser {
       b += Property("textus.format", value, None)
     }
     if (options.debug) b += Property("textus.debug", "true", None)
-    if (options.calltree) b += Property("textus.runtime.calltree", "true", None)
+    if (options.calltree) b += Property(RuntimeConfig.CallTreeKey, "true", None)
     if (options.noExit) b += Property("textus.no-exit", "true", None)
     options.commandExecutionMode.foreach { value =>
       b += Property(RuntimeConfig.CommandExecutionModeKey, value, None)
