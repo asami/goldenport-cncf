@@ -4,9 +4,9 @@ This document summarizes the component discovery and initialization pipeline
 that AI agents must respect when reasoning about CNCF runtime behavior.
 
 Related:
-- docs/design/component-repository.md (search and active packaged source model)
+- docs/design/packaged-source-activation.md
 - docs/design/component-factory.md
-- docs/design/component-loading.md
+- docs/design/history/2026/04/component-loading.md
 
 ## Problem Statement
 

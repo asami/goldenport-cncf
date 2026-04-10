@@ -16,7 +16,7 @@ Terms
 - **Component**: a runtime instance that participates in CNCF routing/execution.
 - **Discovered class**: a class definition that has been found in some source
   (scala-cli output, sbt target, repository.d, component.d, etc.) and is loadable by a ClassLoader.
-- **Component repository**: a source of discovered classes and/or component artifacts.
+- **Packaged source**: a search or active source of discovered classes and/or component artifacts.
 - **Factory / Provider**: two-stage instantiation pipeline.
 
 
@@ -30,7 +30,7 @@ Design Goals
    - "not my target" (None)
    - "my target but failed" (Consequence.failure)
    - "my target and succeeded" (Some(NonEmptyVector[Component]))
-4. **No demo-only semantics**: scala-cli support is a general component repository target,
+4. **No demo-only semantics**: scala-cli support is a general packaged-source target,
    not a special "demo mode".
 5. **Config integration path**: bootstrap toggles may exist temporarily but must have an
    explicit deprecation path into the Config mechanism.
@@ -46,7 +46,7 @@ that can actually load it.
 
 - `className`: fully qualified class name
 - `classLoader`: the ClassLoader that can load the class
-- `origin`: repository descriptor (scala-cli / sbt / component-dir / etc.)
+- `origin`: packaged-source descriptor (scala-cli / sbt / component-dir / etc.)
 - `evidence`: optional evidence for diagnostics (paths, fingerprints)
 
 This is intentionally *not* a Class[_] value. Discovery may prefer names first and
@@ -180,7 +180,7 @@ Rules:
 - It must have a documented migration path into Config-driven logging.
 
 Diagnostics MUST include:
-- chosen repository targets
+- chosen packaged-source targets
 - resolved class directories / artifacts
 - attempted class names and ClassLoader identity
 - instantiation strategy path (singleton / ctor / failed)
@@ -221,4 +221,4 @@ Future targets (directional):
 - official repository (SimpleModeling.org managed)
 - project-specific repository (BoK / project workspace)
 
-The repository layer provides DiscoveredClass values; the factory/provider pipeline remains unchanged.
+The packaged-source layer provides DiscoveredClass values; the factory/provider pipeline remains unchanged.
