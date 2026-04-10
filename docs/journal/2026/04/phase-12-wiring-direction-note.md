@@ -63,21 +63,21 @@ The framework now supports:
 
 ## Remaining Gap
 
-`glue` now has a minimal execution meaning in the phase 12 sample.
+`glue` now has a minimal execution meaning through the framework `Subsystem.executeWired` helper.
 
-The current sample-level implementation applies:
+The current framework-level helper applies:
 
 - `request/mode: passthrough`
 - `response/mode: passthrough`
 
-This proves the descriptor shape and execution direction, but the implementation
-is still inside the sample caller component.
+This proves the descriptor shape and execution direction without keeping the
+passthrough rule inside the sample caller component.
 
-The remaining framework gap is that `glue` is not yet applied by a general
-runtime mediation layer.
+The remaining framework gap is that the mediation entry point is still an
+explicit helper call from the sample, not a fully general dispatch path.
 
 ## Next Step
 
-- move `glue` execution from sample-local caller logic into framework-level runtime mediation
+- move from explicit `executeWired` helper calls toward more general runtime-mediated dispatch
 - add convention-based completion for unspecified wiring
 - move from sample-local delegated interpretation toward more general runtime mediation

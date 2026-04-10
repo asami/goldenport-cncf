@@ -36,7 +36,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
- * @version Apr.  9, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -225,6 +225,22 @@ final class Subsystem(
     r
   }
 
+  def executeWired(
+    binding: GenericSubsystemResolvedWiringBinding,
+    request: Request
+  ): Consequence[Subsystem.WiredExecutionResult] =
+    executeWired(Some(binding), request)
+
+  def executeWired(
+    binding: Option[GenericSubsystemResolvedWiringBinding],
+    request: Request
+  ): Consequence[Subsystem.WiredExecutionResult] =
+    for {
+      mediatedRequest <- _apply_request_glue(binding, request)
+      response <- execute(mediatedRequest)
+      mediatedResponse <- _apply_response_glue(binding, mediatedRequest, response)
+    } yield mediatedResponse
+
   def executeAction(action: Action): Consequence[OperationResponse] =
     _resolve_route(action.request) match {
       case Some((component, _, _)) =>
@@ -240,6 +256,52 @@ final class Subsystem(
     response: OperationResponse
   ): Response =
     OperationResponseFormatter.toResponse(request, response, _http_run_mode)
+
+  private def _apply_request_glue(
+    binding: Option[GenericSubsystemResolvedWiringBinding],
+    request: Request
+  ): Consequence[Request] =
+    _glue_mode(binding, "request/mode") match {
+      case "passthrough" =>
+        Consequence.success(request)
+      case other =>
+        Consequence.failure(s"unsupported request glue mode: ${other}")
+    }
+
+  private def _apply_response_glue(
+    binding: Option[GenericSubsystemResolvedWiringBinding],
+    request: Request,
+    response: Response
+  ): Consequence[Subsystem.WiredExecutionResult] = {
+    val requestMode = _glue_mode(binding, "request/mode")
+    val responseMode = _glue_mode(binding, "response/mode")
+    responseMode match {
+      case "passthrough" =>
+        Consequence.success(
+          Subsystem.WiredExecutionResult(
+            request = request,
+            response = response,
+            glueApplied = Record.data(
+              "request_mode" -> requestMode,
+              "response_mode" -> responseMode
+            )
+          )
+        )
+      case other =>
+        Consequence.failure(s"unsupported response glue mode: ${other}")
+    }
+  }
+
+  private def _glue_mode(
+    binding: Option[GenericSubsystemResolvedWiringBinding],
+    key: String
+  ): String =
+    binding
+      .map(_.glue)
+      .flatMap(_.asMap.get(key))
+      .map(_.toString)
+      .filter(_.nonEmpty)
+      .getOrElse("passthrough")
 
   private def _domain_request(
     request: Request
@@ -499,6 +561,12 @@ object Subsystem {
   import org.goldenport.Consequence
   import org.goldenport.configuration.ResolvedConfiguration
   import org.goldenport.cncf.cli.RunMode
+
+  final case class WiredExecutionResult(
+    request: Request,
+    response: Response,
+    glueApplied: Record
+  )
 
   // Unused
   final case class Config(
