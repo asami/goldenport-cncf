@@ -3,6 +3,11 @@ package org.goldenport.cncf.cli
 import java.net.{URL, URLEncoder}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
+import java.net.URLClassLoader
+import java.util.ServiceLoader
+import scala.collection.mutable
+import scala.jdk.CollectionConverters._
+import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
 import org.goldenport.provisional.observation.Taxonomy
@@ -15,7 +20,8 @@ import org.goldenport.configuration.source.file.SimpleFileConfigLoader
 import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.cncf.component.builtin.client.{GetQuery, PostCommand}
 import org.goldenport.cncf.CncfVersion
-import org.goldenport.cncf.component.{Component, ComponentInit}
+import org.goldenport.cncf.assembly.AssemblyReport
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentInit, ComponentOrigin}
 import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig, RuntimeDefaults}
 import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
@@ -485,6 +491,19 @@ object CncfRuntime extends GlobalObservable {
     }
   }
 
+  private[cncf] def componentExtraFunction(
+    specs: Vector[ComponentRepository.Specification],
+    front: RuntimeFrontParameters
+  ): Subsystem => Seq[Component] =
+    _trace_component_dir_extras(
+      _component_extra_function(
+        specs,
+        front.discoverClasses,
+        front.workspace,
+        front.factoryClasses
+      )
+    )
+
   private def _prepare_launch(
     cwd: Path,
     args: Array[String]
@@ -713,6 +732,337 @@ object CncfRuntime extends GlobalObservable {
           currentKey == s"--${RuntimeConfig.ComponentRepositoryKey}" && currentValue == value
         case _ => false
       }
+
+  private def _discover_components(
+    workspace: Option[Path]
+  ): Subsystem => Seq[Component] = {
+    val classDirs = _class_dirs_(workspace)
+    if (classDirs.isEmpty) {
+      _ => Nil
+    } else {
+      (subsystem: Subsystem) => {
+        val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
+        _discover_from_class_dirs_(params, classDirs, _package_prefixes_())
+      }
+    }
+  }
+
+  private def _discover_from_repositories(
+    specs: Seq[ComponentRepository.Specification]
+  ): Subsystem => Seq[Component] =
+    (subsystem: Subsystem) => {
+      val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
+      specs.flatMap { spec =>
+        val origin = _origin_for_spec(spec)
+        spec.build(params.withOrigin(origin)).discover()
+      }
+    }
+
+  private def _origin_for_spec(
+    spec: ComponentRepository.Specification
+  ): ComponentOrigin =
+    spec match {
+      case _: ComponentRepository.ComponentDirRepository.Specification =>
+        ComponentOrigin.Repository("component-dir")
+      case _: ComponentRepository.ScalaCliRepository.Specification =>
+        ComponentOrigin.Repository("scala-cli")
+    }
+
+  private def _component_extra_function(
+    specs: Vector[ComponentRepository.Specification],
+    enabled: Boolean,
+    workspace: Option[Path],
+    factoryClasses: Vector[String]
+  ): Subsystem => Seq[Component] = {
+    (subsystem: Subsystem) => {
+      val components = Vector.newBuilder[Component]
+      val seen = mutable.LinkedHashMap.empty[String, Component]
+      def addAll(xs: Seq[Component]): Unit =
+        xs.foreach { component =>
+          val name = component.core.name
+          val key = NamingConventions.toComparisonKey(name)
+          seen.get(key) match {
+            case Some(existing) =>
+              val selection = AssemblyReport.selectPreferred(existing, component)
+              seen.update(key, selection.selected)
+              GlobalRuntimeContext.current.foreach(
+                _.assemblyReport.addWarning(
+                  AssemblyReport.duplicateComponentWarning(
+                    componentName = name,
+                    selected = selection.selected,
+                    dropped = selection.dropped,
+                    reason = selection.reason
+                  )
+                )
+              )
+              observe_warn(
+                s"duplicate component collapsed name=${name} kept=${selection.selected.origin} dropped=${selection.dropped.map(_.origin).mkString(",")} reason=${selection.reason}"
+              )
+            case None =>
+              seen += key -> component
+          }
+        }
+      if (enabled) {
+        addAll(_discover_components(workspace)(subsystem))
+      }
+      if (specs.nonEmpty) {
+        addAll(_discover_from_repositories(specs)(subsystem))
+      }
+      if (factoryClasses.nonEmpty) {
+        addAll(_discover_from_component_factories(factoryClasses)(subsystem))
+      }
+      components ++= seen.values
+      components.result()
+    }
+  }
+
+  private def _discover_from_component_factories(
+    classNames: Seq[String]
+  ): Subsystem => Seq[Component] =
+    (subsystem: Subsystem) => {
+      val params = ComponentCreate(subsystem, ComponentOrigin.Main)
+      classNames.flatMap { name =>
+        _load_component_factory(name) match {
+          case Left(message) =>
+            observe_warn(message)
+            Nil
+          case Right(factory) =>
+            try {
+              factory.create(params)
+            } catch {
+              case NonFatal(e) =>
+                observe_warn(s"component factory failed class=${name} message=${e.getMessage}")
+                Nil
+            }
+        }
+      }
+    }
+
+  private def _load_component_factory(
+    className: String
+  ): Either[String, Component.Factory] =
+    try {
+      val loader = Thread.currentThread.getContextClassLoader
+      val clazz = Class.forName(className, true, loader)
+      if (!classOf[Component.Factory].isAssignableFrom(clazz)) {
+        Left(s"component factory class is not a Component.Factory: ${className}")
+      } else {
+        val ctor = clazz.getDeclaredConstructor()
+        ctor.setAccessible(true)
+        Right(ctor.newInstance().asInstanceOf[Component.Factory])
+      }
+    } catch {
+      case NonFatal(e) =>
+        Left(s"failed to load component factory class=${className} message=${e.getMessage}")
+    }
+
+  private def _trace_component_dir_extras(
+    extras: Subsystem => Seq[Component]
+  ): Subsystem => Seq[Component] =
+    (subsystem: Subsystem) => {
+      val components = extras(subsystem)
+      if (components.nonEmpty) {
+        val modeLabel = GlobalRuntimeContext.current
+          .flatMap(ctx => Option(ctx.runtimeMode))
+          .map(_.name)
+          .getOrElse("unknown")
+        observe_trace(
+          s"[component-dir] mode=${modeLabel} loaded components=${components.map(_.core.name).mkString(",")}"
+        )
+      }
+      components
+    }
+
+  private def _class_dirs_(
+    workspace: Option[Path]
+  ): Vector[Path] = {
+    val cwd = Paths.get("").toAbsolutePath.normalize
+    val scalaCliRoot = workspace.getOrElse(cwd)
+    val scalaCli = _scala_cli_classes_dirs_(scalaCliRoot)
+    val sbt = _sbt_classes_dirs_(cwd)
+    (scalaCli ++ sbt).distinct
+  }
+
+  private def _package_prefixes_(): Vector[String] =
+    sys.env.get("CNCF_DISCOVER_PREFIX") match {
+      case Some(value) =>
+        value.split(",").map(_.trim).filter(_.nonEmpty).toVector
+      case None =>
+        Vector.empty
+    }
+
+  private def _scala_cli_classes_dirs_(workspace: Path): Vector[Path] = {
+    val root = workspace.resolve(".scala-build")
+    if (!Files.exists(root)) {
+      Vector.empty
+    } else {
+      val stream = Files.walk(root)
+      try {
+        stream.iterator().asScala.filter(p => Files.isDirectory(p)).filter(p => p.getFileName.toString == "classes").toVector
+      } finally {
+        stream.close()
+      }
+    }
+  }
+
+  private def _sbt_classes_dirs_(baseDir: Path): Vector[Path] = {
+    val root = baseDir.resolve("target")
+    if (!Files.exists(root)) {
+      Vector.empty
+    } else {
+      val stream = Files.walk(root)
+      try {
+        stream.iterator().asScala
+          .filter(p => Files.isDirectory(p))
+          .filter(p => p.getFileName.toString == "classes")
+          .filter(p => _is_scala_target_(p))
+          .toVector
+      } finally {
+        stream.close()
+      }
+    }
+  }
+
+  private def _is_scala_target_(classesDir: Path): Boolean = {
+    val parent = classesDir.getParent
+    if (parent == null) false
+    else parent.getFileName.toString.startsWith("scala-")
+  }
+
+  private def _discover_from_class_dirs_(
+    params: ComponentCreate,
+    classDirs: Seq[Path],
+    packagePrefixes: Seq[String]
+  ): Seq[Component] =
+    if (classDirs.isEmpty) {
+      Nil
+    } else {
+      val loader = _class_loader_(classDirs)
+      val service = _discover_service_loader_(loader, params)
+      if (service.nonEmpty) service
+      else _discover_by_scan_(loader, params, classDirs, packagePrefixes)
+    }
+
+  private def _class_loader_(
+    classDirs: Seq[Path]
+  ): URLClassLoader = {
+    val urls = classDirs.map(_.toUri.toURL).toArray
+    new URLClassLoader(urls, getClass.getClassLoader)
+  }
+
+  private def _discover_service_loader_(
+    loader: URLClassLoader,
+    params: ComponentCreate
+  ): Vector[Component] = {
+    val components =
+      ServiceLoader.load(classOf[Component], loader).iterator.asScala.toVector
+        .filter(_.getClass.getClassLoader eq loader)
+    val factories =
+      ServiceLoader
+        .load(classOf[Component.Factory], loader)
+        .iterator
+        .asScala
+        .toVector
+        .filter(_.getClass.getClassLoader eq loader)
+    val fromFactories = factories.flatMap(_.create(params))
+    val direct = components.map(_initialize_component_(params))
+    direct ++ fromFactories
+  }
+
+  private def _discover_by_scan_(
+    loader: URLClassLoader,
+    params: ComponentCreate,
+    classDirs: Seq[Path],
+    packagePrefixes: Seq[String]
+  ): Vector[Component] = {
+    val seen = mutable.Set.empty[String]
+    val results = Vector.newBuilder[Component]
+    classDirs.foreach { root =>
+      _class_files_(root).foreach { classFile =>
+        val className = _class_name_(root, classFile)
+        if (_accept_class_(className, packagePrefixes) && !seen.contains(className)) {
+          seen += className
+          observe_trace(s"[discover:classes] considering $className")
+          _load_component_(loader, className, params).foreach { comp =>
+            observe_trace(s"[discover:classes] loaded component ${comp.core.name} from $className")
+            results += comp
+          }
+        }
+      }
+    }
+    results.result()
+  }
+
+  private def _initialize_component_(
+    params: ComponentCreate
+  )(
+    comp: Component
+  ): Component = {
+    val core = Component.createScriptCore()
+    val init = params.toInit(core)
+    comp.initialize(init)
+    comp
+  }
+
+  private def _class_files_(root: Path): Vector[Path] =
+    if (!Files.exists(root)) {
+      Vector.empty
+    } else {
+      val stream = Files.walk(root)
+      try {
+        stream.iterator().asScala
+          .filter(p => Files.isRegularFile(p))
+          .filter(p => p.toString.endsWith(".class"))
+          .toVector
+      } finally {
+        stream.close()
+      }
+    }
+
+  private def _class_name_(root: Path, classFile: Path): String = {
+    val relative = root.relativize(classFile).toString
+    val noExt =
+      if (relative.endsWith(".class"))
+        relative.substring(0, relative.length - ".class".length)
+      else
+        relative
+    noExt.replace('/', '.').replace('\\', '.')
+  }
+
+  private def _accept_class_(
+    name: String,
+    packagePrefixes: Seq[String]
+  ): Boolean =
+    if (packagePrefixes.isEmpty) true
+    else packagePrefixes.exists(prefix => name.startsWith(prefix))
+
+  private def _load_component_(
+    loader: URLClassLoader,
+    className: String,
+    params: ComponentCreate
+  ): Option[Component] =
+    try {
+      val clazz = Class.forName(className, false, loader)
+      if (classOf[Component.Factory].isAssignableFrom(clazz)) {
+        None
+      } else if (classOf[Component].isAssignableFrom(clazz)) {
+        observe_trace(s"[discover:classes] instantiating class component $className")
+        org.goldenport.cncf.component.repository.ComponentProvider
+          .provide(
+            org.goldenport.cncf.component.repository.ComponentSource.ClassDef(
+              clazz.asInstanceOf[Class[_ <: Component]],
+              className
+            ),
+            params.subsystem,
+            params.origin
+          )
+          .toOption
+      } else {
+        None
+      }
+    } catch {
+      case _: Throwable => None
+    }
 
   private def _take_no_exit(
     configuration: ResolvedConfiguration,
