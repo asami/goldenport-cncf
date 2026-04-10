@@ -76,6 +76,21 @@ that wiring diagram. Later, the same resolved result should be exportable back
 into a subsystem descriptor, or into a separate assembly descriptor, so the
 operator can review and pin the convention-generated wiring.
 
+The wiring diagram should be retrievable in two classes of representation:
+
+- descriptor representation
+  - YAML / JSON / HOCON document
+  - directly usable as a subsystem descriptor fragment or standalone assembly descriptor
+  - intended for review, version control, editing, and re-application
+- visual representation
+  - SVG or another web-renderable diagram format
+  - intended for admin console / dashboard display
+  - should show components, ports, wiring edges, glue, convention-generated entries, and warnings
+
+The descriptor representation is the authoritative export format.
+The visual representation is a projection of the same resolved assembly model.
+They should not diverge semantically.
+
 This separates:
 
 - input subsystem descriptor
