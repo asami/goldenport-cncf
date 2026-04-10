@@ -63,12 +63,21 @@ The framework now supports:
 
 ## Remaining Gap
 
-`glue` is currently metadata only.
+`glue` now has a minimal execution meaning in the phase 12 sample.
 
-It is observable, but it does not yet execute request / response adaptation logic.
+The current sample-level implementation applies:
+
+- `request/mode: passthrough`
+- `response/mode: passthrough`
+
+This proves the descriptor shape and execution direction, but the implementation
+is still inside the sample caller component.
+
+The remaining framework gap is that `glue` is not yet applied by a general
+runtime mediation layer.
 
 ## Next Step
 
-- give `glue` runtime execution meaning
+- move `glue` execution from sample-local caller logic into framework-level runtime mediation
 - add convention-based completion for unspecified wiring
 - move from sample-local delegated interpretation toward more general runtime mediation
