@@ -15,7 +15,6 @@ import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.http.{FakeHttpDriver, UrlConnectionHttpDriver}
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
-import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.egress.EgressCollection
@@ -105,7 +104,7 @@ object DefaultSubsystemFactory {
         ()
     }
     val subsystemName =
-      ConfigurationAccess
+      RuntimeConfig
         .getString(configuration, RuntimeConfig.SubsystemNameKey)
         .map(_.trim)
         .filter(_.nonEmpty)

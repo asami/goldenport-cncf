@@ -19,7 +19,7 @@ object GenericSubsystemFactory {
   def subsystemName(
     configuration: ResolvedConfiguration
   ): Option[String] =
-    ConfigurationAccess
+    RuntimeConfig
       .getString(configuration, RuntimeConfig.SubsystemNameKey)
       .map(_.trim)
       .filter(_.nonEmpty)
@@ -27,9 +27,9 @@ object GenericSubsystemFactory {
   def descriptorPath(
     configuration: ResolvedConfiguration
   ): Option[Path] =
-    ConfigurationAccess
+    RuntimeConfig
       .getString(configuration, RuntimeConfig.SubsystemDescriptorKey)
-      .orElse(ConfigurationAccess.getString(configuration, RuntimeConfig.SubsystemFileKey))
+      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemFileKey))
       .map(_.trim)
       .filter(_.nonEmpty)
       .map(Paths.get(_))
@@ -226,9 +226,8 @@ object GenericSubsystemFactory {
   private def _assembly_descriptor_path(
     configuration: ResolvedConfiguration
   ): Option[Path] =
-    ConfigurationAccess
+    RuntimeConfig
       .getString(configuration, RuntimeConfig.AssemblyDescriptorKey)
-      .orElse(ConfigurationAccess.getString(configuration, "cncf.assembly.descriptor"))
       .map(_.trim)
       .filter(_.nonEmpty)
       .map(Paths.get(_))

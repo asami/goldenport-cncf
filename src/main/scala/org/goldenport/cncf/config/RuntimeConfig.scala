@@ -41,10 +41,14 @@ object RuntimeConfig {
   val WorkspaceKey = "cncf.runtime.workspace"
   val ForceExitKey = "cncf.runtime.force-exit"
   val NoExitKey = "cncf.runtime.no-exit"
-  val SubsystemNameKey = "textus.runtime.subsystem"
-  val ComponentNameKey = "textus.runtime.component"
-  val SubsystemDescriptorKey = "textus.runtime.subsystem.descriptor"
-  val SubsystemFileKey = "textus.runtime.subsystem.file"
+  val SubsystemNameKey = "textus.subsystem"
+  val ComponentNameKey = "textus.component"
+  val SubsystemDescriptorKey = "textus.subsystem.descriptor"
+  val SubsystemFileKey = "textus.subsystem.file"
+  val RuntimeSubsystemNameKey = "textus.runtime.subsystem"
+  val RuntimeComponentNameKey = "textus.runtime.component"
+  val RuntimeSubsystemDescriptorKey = "textus.runtime.subsystem.descriptor"
+  val RuntimeSubsystemFileKey = "textus.runtime.subsystem.file"
   val AssemblyDescriptorKey = "textus.assembly.descriptor"
   val RepositoryDirKey = "textus.repository.dir"
   val ComponentDirKey = "textus.component.dir"
@@ -153,16 +157,34 @@ object RuntimeConfig {
     }
   }
 
-  private def _get_string(
+  def getString(
     configuration: ResolvedConfiguration,
     key: String
   ): Option[String] =
     ConfigurationAccess.getString(configuration, key)
-      .orElse(_legacy_alias(key).flatMap(ConfigurationAccess.getString(configuration, _)))
+      .orElse(_legacy_aliases(key).iterator.flatMap(ConfigurationAccess.getString(configuration, _)).toSeq.headOption)
 
-  private def _legacy_alias(
+  private def _get_string(
+    configuration: ResolvedConfiguration,
     key: String
   ): Option[String] =
-    if (key.startsWith("textus.")) Some("cncf." + key.stripPrefix("textus."))
-    else None
+    getString(configuration, key)
+
+  private def _legacy_aliases(
+    key: String
+  ): Vector[String] = {
+    val textusRuntime =
+      key match {
+        case SubsystemNameKey => Vector(RuntimeSubsystemNameKey)
+        case ComponentNameKey => Vector(RuntimeComponentNameKey)
+        case SubsystemDescriptorKey => Vector(RuntimeSubsystemDescriptorKey)
+        case SubsystemFileKey => Vector(RuntimeSubsystemFileKey)
+        case _ => Vector.empty
+      }
+    val cncfAliases =
+      (key +: textusRuntime).collect {
+        case k if k.startsWith("textus.") => "cncf." + k.stripPrefix("textus.")
+      }
+    textusRuntime ++ cncfAliases
+  }
 }

@@ -503,14 +503,10 @@ object CncfRuntime extends GlobalObservable {
     val componentResolved = resolveComponentInvocation(invocation, searchSpecs, activeSpecs)
     val args = componentResolved.actualArgs
     val alreadySpecified =
-      args.exists(_.startsWith(s"--${RuntimeConfig.SubsystemDescriptorKey}=")) ||
-        args.exists(_.startsWith(s"--${RuntimeConfig.SubsystemFileKey}=")) ||
+      args.exists(_has_option_value(_, _subsystem_descriptor_keys)) ||
         args.sliding(2).exists {
-          case Array(k, _) =>
-            k == s"--${RuntimeConfig.SubsystemDescriptorKey}" ||
-              k == s"--${RuntimeConfig.SubsystemFileKey}"
-          case _ =>
-            false
+          case Array(k, _) => _is_option_name(k, _subsystem_descriptor_keys)
+          case _ => false
         }
     if (alreadySpecified) {
       componentResolved
@@ -767,7 +763,7 @@ object CncfRuntime extends GlobalObservable {
     args: Array[String]
   ): Option[String] =
     _component_name_from_args(args)
-      .orElse(ConfigurationAccess.getString(configuration, RuntimeConfig.ComponentNameKey))
+      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.ComponentNameKey))
 
   private def _subsystem_name_from_args(
     args: Array[String]
@@ -775,10 +771,13 @@ object CncfRuntime extends GlobalObservable {
     var i = 0
     while (i < args.length) {
       val current = args(i)
-      if (current == s"--${RuntimeConfig.SubsystemNameKey}" && i + 1 < args.length) {
+      if (_is_option_name(current, _subsystem_name_keys) && i + 1 < args.length) {
         return Option(args(i + 1)).map(_.trim).filter(_.nonEmpty)
-      } else if (current.startsWith(s"--${RuntimeConfig.SubsystemNameKey}=")) {
-        return Option(current.drop(s"--${RuntimeConfig.SubsystemNameKey}=".length)).map(_.trim).filter(_.nonEmpty)
+      } else {
+        _option_value(current, _subsystem_name_keys) match {
+          case Some(value) => return Some(value)
+          case None => ()
+        }
       }
       i += 1
     }
@@ -791,10 +790,13 @@ object CncfRuntime extends GlobalObservable {
     var i = 0
     while (i < args.length) {
       val current = args(i)
-      if (current == s"--${RuntimeConfig.ComponentNameKey}" && i + 1 < args.length) {
+      if (_is_option_name(current, _component_name_keys) && i + 1 < args.length) {
         return Option(args(i + 1)).map(_.trim).filter(_.nonEmpty)
-      } else if (current.startsWith(s"--${RuntimeConfig.ComponentNameKey}=")) {
-        return Option(current.drop(s"--${RuntimeConfig.ComponentNameKey}=".length)).map(_.trim).filter(_.nonEmpty)
+      } else {
+        _option_value(current, _component_name_keys) match {
+          case Some(value) => return Some(value)
+          case None => ()
+        }
       }
       i += 1
     }
@@ -809,13 +811,11 @@ object CncfRuntime extends GlobalObservable {
     while (i < args.length) {
       val current = args(i)
       if (
-        current == s"--${RuntimeConfig.SubsystemNameKey}" ||
-        current == s"--${RuntimeConfig.ComponentNameKey}"
+        _is_option_name(current, _subsystem_name_keys ++ _component_name_keys)
       ) {
         i += (if (i + 1 < args.length) 2 else 1)
       } else if (
-        current.startsWith(s"--${RuntimeConfig.SubsystemNameKey}=") ||
-        current.startsWith(s"--${RuntimeConfig.ComponentNameKey}=")
+        _has_option_value(current, _subsystem_name_keys ++ _component_name_keys)
       ) {
         i += 1
       } else {
@@ -825,6 +825,58 @@ object CncfRuntime extends GlobalObservable {
     }
     buffer.result().toArray
   }
+
+  private def _subsystem_name_keys: Vector[String] =
+    Vector(
+      RuntimeConfig.SubsystemNameKey,
+      RuntimeConfig.RuntimeSubsystemNameKey,
+      "cncf.subsystem",
+      "cncf.runtime.subsystem"
+    )
+
+  private def _component_name_keys: Vector[String] =
+    Vector(
+      RuntimeConfig.ComponentNameKey,
+      RuntimeConfig.RuntimeComponentNameKey,
+      "cncf.component",
+      "cncf.runtime.component"
+    )
+
+  private def _subsystem_descriptor_keys: Vector[String] =
+    Vector(
+      RuntimeConfig.SubsystemDescriptorKey,
+      RuntimeConfig.SubsystemFileKey,
+      RuntimeConfig.RuntimeSubsystemDescriptorKey,
+      RuntimeConfig.RuntimeSubsystemFileKey,
+      "cncf.subsystem.descriptor",
+      "cncf.subsystem.file",
+      "cncf.runtime.subsystem.descriptor",
+      "cncf.runtime.subsystem.file"
+    )
+
+  private def _is_option_name(
+    current: String,
+    keys: Vector[String]
+  ): Boolean =
+    keys.exists(key => current == s"--${key}")
+
+  private def _has_option_value(
+    current: String,
+    keys: Vector[String]
+  ): Boolean =
+    keys.exists(key => current.startsWith(s"--${key}="))
+
+  private def _option_value(
+    current: String,
+    keys: Vector[String]
+  ): Option[String] =
+    keys.iterator.flatMap { key =>
+      val prefix = s"--${key}="
+      if (current.startsWith(prefix))
+        Option(current.drop(prefix.length)).map(_.trim).filter(_.nonEmpty)
+      else
+        None
+    }.toSeq.headOption
 
   private def _resolve_subsystem_descriptor_entry(
     specs: Vector[ComponentRepository.Specification],

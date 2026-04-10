@@ -57,9 +57,9 @@ The following are development-time activation paths:
 
 The primary explicit activation mechanisms are:
 
-- `--textus.runtime.component=<name>`
+- `--textus.component=<name>`
   - select a packaged component by name from search sources
-- `--textus.runtime.subsystem=<name>`
+- `--textus.subsystem=<name>`
   - select a subsystem by name from search sources
 
 When a component or subsystem is selected by name, the runtime resolves the

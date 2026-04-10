@@ -72,6 +72,24 @@ but it is **not a configuration root**.
 
 ---
 
+#### 3. Runtime Selection Keys
+
+Runtime selection uses `textus.*` keys without the intermediate `runtime`
+segment when the key directly selects a model element.
+
+Primary keys:
+
+- `textus.component`
+- `textus.subsystem`
+- `textus.subsystem.descriptor`
+- `textus.subsystem.file`
+
+The older `textus.runtime.*` forms are compatibility aliases only.
+The older `cncf.*` forms are also compatibility aliases while command lines and
+samples converge on the Textus namespace.
+
+---
+
 ### Configuration Layers
 
 Configuration is structured as **owner-centric nested models**.

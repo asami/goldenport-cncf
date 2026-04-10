@@ -2,7 +2,6 @@ package org.goldenport.cncf.context
 
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.config.ResolvedParameters
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.action.CommandExecutionMode
@@ -17,7 +16,7 @@ import org.goldenport.configuration.{Configuration, ConfigurationTrace, Resolved
  *  version Jan. 19, 2026
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GlobalRuntimeContext(
@@ -131,7 +130,7 @@ object GlobalRuntimeContext {
   private def _subsystem_name(
     resolvedConfiguration: ResolvedConfiguration
   ): String =
-    ConfigurationAccess
+    RuntimeConfig
       .getString(resolvedConfiguration, RuntimeConfig.SubsystemNameKey)
       .getOrElse(SubsystemName)
 }
