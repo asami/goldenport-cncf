@@ -51,6 +51,38 @@ This preserves chokepoints for:
 - retry and timeout policy
 - future governance and policy control
 
+### Resolved Assembly Is The Wiring Diagram
+
+The intended operating model is:
+
+1. The subsystem descriptor lists the components that are required.
+2. CNCF resolves wiring by convention where explicit wiring is not provided.
+3. CNCF resolves `glue` by convention where explicit glue is not provided.
+4. The subsystem should run with those resolved bindings.
+5. The resolved assembly result becomes the runtime-generated wiring diagram.
+
+The wiring diagram should include:
+
+- selected components
+- declared or inferred `api` ports
+- declared or inferred `spi` ports
+- resolved wiring edges
+- resolved `glue`
+- convention-completed entries
+- warnings, conflicts, and selection reasons
+
+`admin.assembly.report` should be treated as the current retrieval surface for
+that wiring diagram. Later, the same resolved result should be exportable back
+into a subsystem descriptor, or into a separate assembly descriptor, so the
+operator can review and pin the convention-generated wiring.
+
+This separates:
+
+- input subsystem descriptor
+  - minimum intent, often component-list-first
+- resolved assembly / wiring diagram
+  - runtime-completed result, suitable for review, dashboard display, and descriptor export
+
 ## Current Runtime State
 
 The framework now supports:
