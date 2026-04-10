@@ -7,6 +7,7 @@ import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.FakeHttpDriver
+import org.goldenport.cncf.observability.ObservabilityEngine
 import org.goldenport.cncf.path.{AliasLoader, AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
@@ -21,7 +22,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan. 20, 2026
  *  version Feb.  1, 2026
- * @version Mar. 28, 2026
+ *  version Mar. 28, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminSystemPingExecutionSpec
@@ -81,15 +83,68 @@ final class AdminSystemPingExecutionSpec
           }
       }
     }
+
+    "retain action execution history for admin execution inspection" in {
+      withAliasContext(RunMode.Command, Configuration.empty) { (_, _) =>
+        ObservabilityEngine.clearExecutionHistory()
+        val subsystem = DefaultSubsystemFactory.default(Some("command"))
+        val adminComponent = subsystem.components
+          .collectFirst { case comp if comp.name == "admin" => comp }
+          .getOrElse(fail("admin component not found"))
+        val resolver = subsystem.resolver
+        val pingRequest = buildRequest(resolver, "admin.system.ping")
+        val historyRequest = buildRequest(resolver, "admin.execution.history")
+        val calltreeRequest = buildRequest(resolver, "admin.execution.calltree")
+        val calltreeContext = ExecutionContext.withFrameworkCallTreeEnabled(adminComponent.logic.executionContext(), enabled = true)
+
+        _execute_operation(adminComponent, pingRequest, Some(calltreeContext)) match {
+          case Consequence.Success(OperationResponse.Scalar(_)) =>
+          case other =>
+            fail(s"expected ping scalar but got $other")
+        }
+
+        _execute_operation(adminComponent, historyRequest) match {
+          case Consequence.Success(OperationResponse.RecordResponse(record)) =>
+            record.getString("count") shouldBe Some("1")
+            val executions = record.getAny("executions").collect { case xs: Seq[?] => xs }.getOrElse(fail("executions missing"))
+            executions.size shouldBe 1
+            val execution = executions.head.asInstanceOf[org.goldenport.record.Record]
+            execution.getString("operation") shouldBe Some("admin.system.ping")
+            execution.getAny("parameters") shouldBe defined
+            execution.getString("outcome") shouldBe Some("success")
+            execution.getString("result_type") shouldBe Some("Scalar")
+            execution.getAny("calltree") shouldBe defined
+          case other =>
+            fail(s"expected execution history record but got $other")
+        }
+
+        _execute_operation(adminComponent, calltreeRequest) match {
+          case Consequence.Success(OperationResponse.RecordResponse(record)) =>
+            record.getString("operation") shouldBe Some("admin.system.ping")
+            record.getAny("calltree") shouldBe defined
+          case other =>
+            fail(s"expected execution calltree record but got $other")
+        }
+      }
+    }
   }
 
   private def executePing(
     component: Component,
     request: Request
+  ): Consequence[OperationResponse] =
+    _execute_operation(component, request)
+
+  private def _execute_operation(
+    component: Component,
+    request: Request,
+    executionContext: Option[ExecutionContext] = None
   ): Consequence[OperationResponse] = {
     component.logic.makeOperationRequest(request).flatMap {
       case action: Action =>
-        val call = component.logic.createActionCall(action)
+        val call = executionContext
+          .map(ctx => component.logic.createActionCall(action, ctx))
+          .getOrElse(component.logic.createActionCall(action))
         component.logic.execute(call)
       case other =>
         Consequence.failure(s"unexpected OperationRequest type: ${other.getClass.getName}")

@@ -89,14 +89,41 @@ The `duration_*` values are redundant convenience projections of the same
 elapsed interval. `duration_nanos` is the canonical precision value; micros and
 millis are included for easier reading in YAML output and operational diagnosis.
 
-## Retained Runtime State
+## Retained Execution History
 
-Inline result projection and retained runtime state are separate surfaces.
+Inline result projection and retained execution history are separate surfaces.
 
 The current result projection is designed for immediate inspection of the
-current operation. A future admin surface may retain recent execution
-observations, including latest calltree and short execution history, for
-dashboard and admin console use.
+current operation.
 
-That future admin surface should reuse the same calltree event semantics rather
+CNCF also retains action execution records for later inspection. Each retained
+record should include:
+
+- action / operation name
+- input parameters
+- input parameter summary
+- outcome
+- result type
+- result summary
+- captured time
+- calltree projection, when calltree capture was enabled for that action
+
+The initial retention policy is two-tiered:
+
+- keep the most recent 100 action executions unconditionally
+- keep up to 10000 additional executions that match configured debug filters
+
+The intent is to make production use bounded by default while still allowing
+debug-targeted executions to survive beyond the short recent window.
+
+Admin retrieval surfaces:
+
+- `admin.execution.history`: returns retained action execution records
+- `admin.execution.calltree`: returns the calltree projection from the latest retained action execution
+
+History display should support filtering by operation name so dashboard and
+admin-console views can focus on the debugging target without dumping the full
+retention buffer.
+
+Admin and dashboard surfaces must reuse the same calltree event semantics rather
 than inventing another timing vocabulary.

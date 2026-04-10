@@ -23,7 +23,8 @@ import org.goldenport.cncf.config.ResolvedParameters
  *  version Jan.  2, 2026
  *  version Jan. 29, 2026
  *  version Feb.  6, 2026
- * @version Mar. 13, 2026
+ *  version Mar. 13, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -64,6 +65,7 @@ class ActionEngine(
     val label =
       if (call.action.name.nonEmpty) s"action:${call.action.name}"
       else "action"
+    var executionOutcome: Option[Either[org.goldenport.Conclusion, OperationResponse]] = None
 
     val authresult: Consequence[Unit] =
       Consequence {
@@ -82,6 +84,12 @@ class ActionEngine(
             observe_enter(call)
             try {
               val r = call.execute()
+              r match {
+                case Consequence.Success(response) =>
+                  executionOutcome = Some(Right(response))
+                case Consequence.Failure(conclusion) =>
+                  executionOutcome = Some(Left(conclusion))
+              }
               ec.runtime.commit()
               observe_leave(call, r)
               val _ = ObservabilityEngine.build( // TODO
@@ -103,6 +111,7 @@ class ActionEngine(
               case e: Throwable =>
                 ec.runtime.abort()
                 val conclusion = org.goldenport.Conclusion.from(e)
+                executionOutcome = Some(Left(conclusion))
                 observe_leave(call, Consequence.Failure(conclusion))
                 val _ = ObservabilityEngine.build( // TODO
                   scope = ScopeContext(
@@ -122,6 +131,15 @@ class ActionEngine(
               ec.runtime.dispose()
             } finally {
               calltree.leave()
+              executionOutcome.foreach { outcome =>
+                ObservabilityEngine.recordActionExecution(
+                  operation = call.action.name,
+                  parameters = call.request.toRecord,
+                  parametersText = params.usedText.getOrElse(""),
+                  outcome = outcome,
+                  calltree = calltree.build()
+                )
+              }
             }
           }
         } finally {

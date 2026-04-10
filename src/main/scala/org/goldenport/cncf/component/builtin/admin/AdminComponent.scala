@@ -21,6 +21,7 @@ import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.configuration.ConfigurationSources
 import org.goldenport.configuration.ConfigurationOrigin
 import org.goldenport.cncf.context.GlobalRuntimeContext
+import org.goldenport.cncf.observability.ObservabilityEngine
 import org.goldenport.cncf.projection.{SecurityDeploymentMarkdownProjection, SecurityDeploymentProjection}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAssemblyDescriptorSource, Subsystem}
 import org.goldenport.protocol.Protocol
@@ -39,6 +40,7 @@ import org.goldenport.schema.{DataType, XString}
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
+ *  version Apr. 11, 2026
  * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -110,6 +112,14 @@ object AdminComponent {
         spec.ResponseDefinition(result = List(XString)),
         params.subsystem
       )
+      val opExecutionCalltree = new ExecutionCalltreeOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
+      val opExecutionHistory = new ExecutionHistoryOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
       val serviceSystem = spec.ServiceDefinition(
         name = "system",
         operations = spec.OperationDefinitionGroup(
@@ -160,6 +170,15 @@ object AdminComponent {
           )
         )
       )
+      val serviceExecution = spec.ServiceDefinition(
+        name = "execution",
+        operations = spec.OperationDefinitionGroup(
+          operations = NonEmptyVector.of(
+            opExecutionHistory,
+            opExecutionCalltree
+          )
+        )
+      )
       val services = spec.ServiceDefinitionGroup(
         services = Vector(
           serviceSystem,
@@ -168,7 +187,8 @@ object AdminComponent {
           serviceVariation,
           serviceExtension,
           serviceDeployment,
-          serviceAssembly
+          serviceAssembly,
+          serviceExecution
         )
       )
       val protocol = Protocol(
@@ -407,6 +427,46 @@ object AdminComponent {
       Consequence.success(AssemblyDiagramAction(req, subsystem))
   }
 
+  private final class ExecutionCalltreeOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        content = BaseContent.Builder("calltree")
+          .summary("Show the latest retained execution calltree.")
+          .description("Return the latest finalized operation calltree retained by the runtime for admin inspection.")
+          .build(),
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: Request
+    ): Consequence[OperationRequest] =
+      Consequence.success(ExecutionCalltreeAction(req))
+  }
+
+  private final class ExecutionHistoryOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        content = BaseContent.Builder("history")
+          .summary("Show retained action execution history.")
+          .description("Return retained action execution records including parameters, result summaries, and calltree projections when captured.")
+          .build(),
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: Request
+    ): Consequence[OperationRequest] =
+      Consequence.success(ExecutionHistoryAction(req))
+  }
+
   private final case class ComponentListAction(
     request: Request,
     subsystem: Subsystem
@@ -505,6 +565,20 @@ object AdminComponent {
       AssemblyDiagramActionCall(core, subsystem)
   }
 
+  private final case class ExecutionCalltreeAction(
+    request: Request
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      ExecutionCalltreeActionCall(core)
+  }
+
+  private final case class ExecutionHistoryAction(
+    request: Request
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      ExecutionHistoryActionCall(core, request)
+  }
+
   private final case class DeploymentSecurityMarkdownActionCall(
     core: ActionCall.Core,
     subsystem: Subsystem
@@ -601,6 +675,46 @@ object AdminComponent {
     def execute(): Consequence[OperationResponse] =
       Consequence.success(OperationResponse.Scalar(_assembly_mermaid_(subsystem)))
   }
+
+  private final case class ExecutionCalltreeActionCall(
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] = {
+      val record = ObservabilityEngine.latestExecution
+        .map(_.calltreeRecord)
+        .getOrElse(
+          Record.data(
+            "status" -> "empty",
+            "message" -> "No retained action execution is available."
+          )
+        )
+      Consequence.success(OperationResponse.RecordResponse(record))
+    }
+  }
+
+  private final case class ExecutionHistoryActionCall(
+    core: ActionCall.Core,
+    historyRequest: Request
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] = {
+      val operationFilter = _request_property_(historyRequest, "operation")
+        .orElse(_request_property_(historyRequest, "operation_contains"))
+      val entries = ObservabilityEngine.executionHistory(operationFilter)
+      val config = ObservabilityEngine.executionHistoryConfig
+      val record = Record.data(
+        "recent_limit" -> config.recentLimit,
+        "filtered_limit" -> config.filteredLimit,
+        "filter_count" -> config.filters.size,
+        "operation_filter" -> operationFilter.getOrElse(""),
+        "count" -> entries.size,
+        "executions" -> entries.map(_.toRecord)
+      )
+      Consequence.success(OperationResponse.RecordResponse(record))
+    }
+  }
+
+  private def _request_property_(request: Request, name: String): Option[String] =
+    request.properties.find(_.name == name).map(_.value.toString).filter(_.nonEmpty)
 
   private def _assembly_component_record_(comp: Component): Record =
     org.goldenport.record.Record.data(
