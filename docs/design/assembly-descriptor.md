@@ -47,20 +47,20 @@ The descriptor can also be overridden through runtime configuration.
 The intended configuration key is:
 
 ```text
-textus.runtime.assembly.descriptor=<path>
+textus.assembly.descriptor=<path>
 ```
 
 The CLI form should use the same key:
 
 ```bash
---textus.runtime.assembly.descriptor=<path>
+--textus.assembly.descriptor=<path>
 ```
 
 This override is intended for debugging, experiments, and temporary cases where the operator needs to test a descriptor outside the packaged SAR.
 
 Resolution order should be:
 
-1. configured `textus.runtime.assembly.descriptor`, including the `--textus.runtime.assembly.descriptor=<path>` CLI form
+1. configured `textus.assembly.descriptor`, including the `--textus.assembly.descriptor=<path>` CLI form
 2. `assembly-descriptor.*` at the top level of the selected SAR
 3. convention-based assembly from the subsystem descriptor
 

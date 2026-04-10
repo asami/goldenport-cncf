@@ -634,3 +634,31 @@ Each layer has a single responsibility.
 > This separation enables correctness,
 > scalability, automation,
 > and long-term architectural stability.
+
+---
+
+## 13. Configuration Key Naming
+
+The primary configuration namespace should be `textus.*`.
+
+Older `cncf.*` keys may remain as compatibility aliases, but new documentation and examples should prefer `textus.*`.
+
+The `runtime` segment should not be used as a generic bucket.
+Prefer a concrete semantic owner:
+
+- `textus.assembly.descriptor`
+- `textus.command.execution-mode`
+- `textus.calltree`
+- `textus.logging.level`
+- `textus.logging.file.path`
+
+Use `runtime` only when the value is genuinely about the runtime process itself and no clearer owner exists.
+
+Examples to avoid for new primary keys:
+
+- `textus.runtime.assembly.descriptor`
+- `textus.runtime.command.execution-mode`
+- `textus.runtime.calltree`
+- `textus.runtime.logging.level`
+
+Compatibility aliases may still accept older keys where they already exist.
