@@ -41,6 +41,7 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
 import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.backend.collaborator.CollaboratorFactory
+import org.goldenport.cncf.bootstrap.{BootstrapConfig, CncfHandle}
 import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.component.repository.{ComponentRepository, ComponentRepositorySpace}
 import org.goldenport.cncf.importer.StartupImport
@@ -2349,6 +2350,40 @@ class CncfRuntime() extends GlobalObservable {
     extraComponents: Subsystem => Seq[Component] = (_: Subsystem) => Nil
   ): Consequence[Subsystem] =
     Consequence(_initialize(cwd, args, modeHint, extraComponents))
+
+  def initializeHandle(
+    config: BootstrapConfig
+  ): Consequence[CncfHandle] =
+    initializeForEmbedding(
+      cwd = config.cwd,
+      args = config.args,
+      modeHint = config.modeHint,
+      extraComponents = config.extraComponents
+    ).map { initializedSubsystem =>
+      new CncfHandle {
+        @volatile private var _is_closed: Boolean = false
+
+        def subsystem: Subsystem = initializedSubsystem
+
+        def executeCommand(args: Array[String]): Consequence[Response] =
+          if (_is_closed)
+            Consequence.failure("CncfHandle is already closed")
+          else
+            executeCommandResponse(initializedSubsystem, args)
+
+        def executeAction(action: org.goldenport.cncf.action.Action): Consequence[OperationResponse] =
+          if (_is_closed)
+            Consequence.failure("CncfHandle is already closed")
+          else
+            executeActionResponse(initializedSubsystem, action)
+
+        def close(): Unit =
+          if (!_is_closed) {
+            _is_closed = true
+            closeEmbedding()
+          }
+      }
+    }
 
   def closeEmbedding(): Unit = {
     _reset_global_runtime_context()
