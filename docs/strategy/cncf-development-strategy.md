@@ -269,8 +269,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Active phase dashboard: `docs/phase/phase-11.md`
-- Active phase checklist: `docs/phase/phase-11-checklist.md`
+- Active phase dashboard: `docs/phase/phase-12.md`
+- Active phase checklist: `docs/phase/phase-12-checklist.md`
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
 ## 6. Explicit Non-Goals
@@ -288,7 +288,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 8: closed (`docs/phase/phase-8.md`)
 - Phase 9: closed (`docs/phase/phase-9.md`)
 - Phase 10: closed (`docs/phase/phase-10.md`)
-- Phase 11: active/open (`docs/phase/phase-11.md`)
+- Phase 11: closed (`docs/phase/phase-11.md`)
+- Phase 12: active/open (`docs/phase/phase-12.md`)
 
 ## 8. Future Development Items
 
@@ -298,36 +299,48 @@ document becomes authoritative and this section must not duplicate detailed
 progress tracking.
 
 ### 8.1 Component Wiring and Subsystem Construction
-Promoted to Phase 11.
+Completed in Phase 11.
 
-- Active dashboard: `docs/phase/phase-11.md`
-- Active checklist: `docs/phase/phase-11-checklist.md`
-- Current focus:
+- Closed dashboard: `docs/phase/phase-11.md`
+- Closed checklist: `docs/phase/phase-11-checklist.md`
+- Completed scope:
   - Component port/binding baseline
   - subsystem construction via bound Components
   - executable wiring and assembly specifications
   - sample-facing wiring rules
 
-### 8.2 Security
+### 8.2 Event Mechanism Extension
+Promoted to Phase 12.
+
+- Active dashboard: `docs/phase/phase-12.md`
+- Active checklist: `docs/phase/phase-12-checklist.md`
+- Current focus:
+  - subsystem-level shared event wiring
+  - Component subscription bootstrap
+  - event-to-action dispatch and continuation/job semantics
+  - internal await support
+  - executable specifications and observability coverage
+
+### 8.3 Security
 - Authentication
 - Authorization
 - Audit logging
 
-### 8.3 Metrics and Observability
+### 8.4 Metrics and Observability
 - Metrics collection
 - Observability integration
   - OpenTelemetry support
 
-### 8.4 Web Layer
+### 8.5 Web Layer
 - Dashboard
 - Management Console
 - Documentation
   - Manual
 
-### 8.5 Tagging and Knowledge Structure
+### 8.6 Tagging and Knowledge Structure
 - Hierarchical tagging model
 - Classification and navigation support
 
-### 8.6 RDF Integration
+### 8.7 RDF Integration
 - RDF-based data representation
 - External knowledge graph integration
