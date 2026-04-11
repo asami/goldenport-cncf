@@ -46,12 +46,25 @@ and later:
 
 ## Current Position
 
-The current implementation has the inline `--calltree` path.
+At the time of this note, the implementation had the inline `--calltree` path.
 
-The retained admin-visible execution history is still a follow-up item.
+Follow-up implementation has since added retained admin-visible execution
+history and calltree retrieval.
+
+Current implemented surfaces include:
+
+- `admin.execution.history`
+- `admin.execution.calltree`
+
+The retained execution record includes action / operation identity, input
+parameters, result summary, outcome, captured time, and calltree projection when
+calltree capture was enabled.
+
+The current design summary is maintained in:
+
+- `docs/design/observability/calltree-runtime-result.md`
 
 ## Next Step
 
-- add retained execution observations to runtime state
-- expose them through admin operations
+- keep the design document aligned with implementation changes
 - reuse the same data in dashboard / admin console
