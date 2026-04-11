@@ -36,9 +36,12 @@ final case class RuntimeConfig(
 )
 
 object RuntimeConfig {
-  val ServerEmulatorBaseUrlKey = "textus.runtime.server-emulator.baseurl"
-  val HttpDriverKey = "textus.runtime.http.driver"
-  val ModeKey = "textus.runtime.mode"
+  val ServerEmulatorBaseUrlKey = "textus.server-emulator.baseurl"
+  val RuntimeServerEmulatorBaseUrlKey = "textus.runtime.server-emulator.baseurl"
+  val HttpDriverKey = "textus.http.driver"
+  val RuntimeHttpDriverKey = "textus.runtime.http.driver"
+  val ModeKey = "textus.mode"
+  val RuntimeModeKey = "textus.runtime.mode"
   val CommandExecutionModeKey = "textus.command.execution-mode"
   val RuntimeCommandExecutionModeKey = "textus.runtime.command.execution-mode"
   val CallTreeKey = "textus.calltree"
@@ -223,6 +226,9 @@ object RuntimeConfig {
   ): Vector[String] = {
     val textusRuntime =
       key match {
+        case ServerEmulatorBaseUrlKey => Vector(RuntimeServerEmulatorBaseUrlKey)
+        case HttpDriverKey => Vector(RuntimeHttpDriverKey)
+        case ModeKey => Vector(RuntimeModeKey)
         case CommandExecutionModeKey => Vector(RuntimeCommandExecutionModeKey)
         case CallTreeKey => Vector(RuntimeCallTreeKey)
         case ExecutionHistoryRecentLimitKey => Vector(RuntimeExecutionHistoryRecentLimitKey)

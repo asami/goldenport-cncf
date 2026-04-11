@@ -83,6 +83,9 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers {
       val configuration = ResolvedConfiguration(
         Configuration(
           Map(
+            "cncf.runtime.server-emulator.baseurl" -> ConfigurationValue.StringValue("http://example.com/"),
+            "cncf.runtime.http.driver" -> ConfigurationValue.StringValue("fake"),
+            "cncf.runtime.mode" -> ConfigurationValue.StringValue("server"),
             "cncf.runtime.discover.classes" -> ConfigurationValue.BooleanValue(true),
             "cncf.runtime.component-factory-class" -> ConfigurationValue.StringValue("example.Factory"),
             "cncf.runtime.workspace" -> ConfigurationValue.StringValue("/tmp/workspace"),
@@ -96,6 +99,9 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers {
         ConfigurationTrace.empty
       )
 
+      RuntimeConfig.getString(configuration, RuntimeConfig.ServerEmulatorBaseUrlKey) shouldBe Some("http://example.com/")
+      RuntimeConfig.getString(configuration, RuntimeConfig.HttpDriverKey) shouldBe Some("fake")
+      RuntimeConfig.getString(configuration, RuntimeConfig.ModeKey) shouldBe Some("server")
       RuntimeConfig.getString(configuration, RuntimeConfig.DiscoverClassesKey) shouldBe Some("true")
       RuntimeConfig.getString(configuration, RuntimeConfig.ComponentFactoryClassKey) shouldBe Some("example.Factory")
       RuntimeConfig.getString(configuration, RuntimeConfig.WorkspaceKey) shouldBe Some("/tmp/workspace")

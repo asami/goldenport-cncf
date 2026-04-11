@@ -665,6 +665,9 @@ The `runtime` segment should not be used as a generic bucket.
 Prefer a concrete semantic owner:
 
 - `textus.assembly.descriptor`
+- `textus.server-emulator.baseurl`
+- `textus.http.driver`
+- `textus.mode`
 - `textus.command.execution-mode`
 - `textus.calltree`
 - `textus.discover.classes`
@@ -690,6 +693,9 @@ Use `runtime` only when the value is genuinely about the runtime process itself 
 Examples to avoid for new primary keys:
 
 - `textus.runtime.assembly.descriptor`
+- `textus.runtime.server-emulator.baseurl`
+- `textus.runtime.http.driver`
+- `textus.runtime.mode`
 - `textus.runtime.command.execution-mode`
 - `textus.runtime.calltree`
 - `textus.runtime.discover.classes`
