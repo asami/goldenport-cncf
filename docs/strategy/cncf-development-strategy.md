@@ -255,6 +255,19 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - No federation/multi-tenant expansion in this phase.
 - Artifact (work): `docs/phase/phase-10.md`.
 
+### Phase 11: Component Wiring and Subsystem Construction
+- Goal: formalize Component port/binding semantics and subsystem construction through bound Components.
+- Scope:
+- Stabilize the Component port/binding baseline.
+- Define subsystem construction via bound Components.
+- Add executable specifications for Component wiring and subsystem assembly.
+- Fix sample-facing wiring guidance.
+- Non-goals:
+- No replacement of `OperationCall` / `Engine` as the canonical execution boundary.
+- No generalized plugin marketplace/runtime in this phase.
+- No external service-bus integration in this phase.
+- Artifact (work): `docs/phase/phase-11.md`.
+
 ## 4. Relationship Between Phases
 - Later phases depend on earlier phases.
 - Phase 1.5 constrains Phase 2 and Phase 3.
@@ -291,12 +304,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 11: closed (`docs/phase/phase-11.md`)
 - Phase 12: active/open (`docs/phase/phase-12.md`)
 
-## 8. Future Development Items
+## 8. Development Item Status
 
-This section lists development areas beyond the currently defined active
-phase set. Once a work area is promoted into a phase document, the phase
-document becomes authoritative and this section must not duplicate detailed
-progress tracking.
+This section lists promoted, active, and future development areas. Once a work
+area is promoted into a phase document, the phase document becomes authoritative
+and this section must not duplicate detailed progress tracking.
 
 ### 8.1 Component Wiring and Subsystem Construction
 Completed in Phase 11.
