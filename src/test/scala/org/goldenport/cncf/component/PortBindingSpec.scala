@@ -185,6 +185,22 @@ final class PortBindingSpec
       Then("the resolved service is available from Component.Port")
       result.toOption.get.port.get[_GenerateService].map(_.generate("hello")) shouldBe Some("generated:local-gemma")
     }
+
+    "return failure when a requested named binding is missing" in {
+      Given("a component without the requested named binding")
+      given ExecutionContext = ExecutionContext.create()
+      val component = new Component() {}
+      component.withBinding("chat", _binding())
+
+      When("a different binding name is installed")
+      val result = component.install_binding[_Requirement, _GenerateService](
+        name = "generate",
+        req = _Requirement("generate")
+      )
+
+      Then("an explicit failure is returned")
+      result shouldBe a[Consequence.Failure[_]]
+    }
   }
 
   private def _binding(): Component.Binding[_Requirement, _GenerateService] =

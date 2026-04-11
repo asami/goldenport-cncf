@@ -13,6 +13,7 @@ import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.matchers.should.Matchers
@@ -78,6 +79,54 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         subsystem.version shouldBe Some("0.1.0-SNAPSHOT")
         names should contain ("spec")
         metadata.map(_.component) should contain (Some("textus-mcp-rag"))
+      }
+    }
+
+    "make descriptor-bound component operations visible through the subsystem resolver" in {
+      _with_temp_dir { componentdir =>
+        val fakecomponentjar = _create_fake_component_jar(componentdir.resolve("assets").resolve("component-main.jar"))
+        val manifest = componentdir.resolve("manifest-car.json")
+        Files.writeString(
+          manifest,
+          """{"name":"structured-knowledge","version":"0.1.0","component":"textus-mcp-rag"}"""
+        )
+        _create_car(
+          componentdir.resolve("structured-knowledge.car"),
+          Seq(
+            "component/main.jar" -> fakecomponentjar,
+            "meta/manifest.json" -> manifest
+          )
+        )
+
+        val descriptorPath = Files.createTempFile("generic-subsystem-factory-visibility", ".yaml")
+        Files.writeString(
+          descriptorPath,
+          """subsystem: mcprag
+            |version: 0.1.0-SNAPSHOT
+            |components:
+            |  - component: textus-mcp-rag
+            |    coordinate: org.textus:textus-mcp-rag:0.1.0-SNAPSHOT
+            |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+        val descriptor = GenericSubsystemDescriptor.load(descriptorPath).toOption.get
+        val configuration = ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.RepositoryDirKey ->
+              ConfigurationValue.StringValue(s"component-dir:${componentdir.toString}")
+          )),
+          ConfigurationTrace.empty
+        )
+
+        val subsystem = GenericSubsystemFactory.default(descriptor, configuration = configuration)
+
+        subsystem.resolver.resolve("spec.export.openapi") shouldBe
+          ResolutionResult.Resolved(
+            fqn = "spec.export.openapi",
+            component = "spec",
+            service = "export",
+            operation = "openapi"
+          )
       }
     }
 

@@ -119,7 +119,7 @@ Verification:
 
 ## CW-03: Executable Specifications for Wiring and Assembly
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -128,17 +128,21 @@ Executable Specifications.
 
 ### Detailed Tasks
 
-- [ ] Add Given/When/Then spec for contract resolution through `PortApi`.
-- [ ] Add spec for adapter realization through compatible `ExtensionPoint`.
-- [ ] Add spec for named binding installation into `Component.Port`.
-- [ ] Add subsystem-level spec for bound Component visibility after assembly.
-- [ ] Add deterministic failure-path spec for missing binding / incompatible extension point.
+- [x] Add Given/When/Then spec for contract resolution through `PortApi`.
+- [x] Add spec for adapter realization through compatible `ExtensionPoint`.
+- [x] Add spec for named binding installation into `Component.Port`.
+- [x] Add subsystem-level spec for bound Component visibility after assembly.
+- [x] Add deterministic failure-path spec for missing binding / incompatible extension point.
+
+Verification:
+
+- `sbt --batch "testOnly org.goldenport.cncf.component.PortBindingSpec org.goldenport.cncf.subsystem.GenericSubsystemFactorySpec"`
 
 ---
 
 ## CW-04: Sample-Facing Wiring Rules and Adapter Registration Path
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 
