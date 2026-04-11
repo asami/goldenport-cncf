@@ -30,8 +30,8 @@ This document is a progress dashboard, not a design journal.
 ## 4. Current Work Stack
 
 - A (DONE): CW-01 — Stabilize Port / Binding / ExtensionPoint framework baseline.
-- B (ACTIVE): CW-02 — Define subsystem construction path based on bound Components.
-- C (SUSPENDED): CW-03 — Validate sample-oriented wiring path and close remaining framework gaps.
+- B (DONE): CW-02 — Define subsystem construction path based on bound Components.
+- C (ACTIVE): CW-03 — Validate sample-oriented wiring path and close remaining framework gaps.
 
 Current note:
 - Wiring-time `Port` / `VariationPoint` / `ExtensionPoint` redesign has been introduced.
@@ -40,7 +40,7 @@ Current note:
 ## 5. Development Items
 
 - [x] CW-01: Stabilize Component port/binding model and framework-level install path.
-- [ ] CW-02: Define and implement subsystem construction via bound Components.
+- [x] CW-02: Define and implement subsystem construction via bound Components.
 - [ ] CW-03: Add executable specifications for Component wiring and subsystem assembly semantics.
 - [ ] CW-04: Document sample-facing wiring rules and adapter registration path.
 

@@ -74,7 +74,7 @@ Verification:
 
 ## CW-02: Subsystem Construction via Bound Components
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -83,11 +83,27 @@ through bound Components rather than ad hoc factory coupling.
 
 ### Detailed Tasks
 
-- [ ] Make subsystem-owned binding/install responsibilities explicit.
-- [ ] Define how Component-bound services become visible in subsystem scope.
-- [ ] Define ordering and deterministic conflict handling when multiple Components contribute bindings.
-- [ ] Clarify subsystem lifecycle for binding installation versus runtime execution availability.
-- [ ] Add minimal construction path used by sample projects and internal demos.
+- [x] Make subsystem-owned binding/install responsibilities explicit.
+- [x] Define how Component-bound services become visible in subsystem scope.
+- [x] Define ordering and deterministic conflict handling when multiple Components contribute bindings.
+- [x] Clarify subsystem lifecycle for binding installation versus runtime execution availability.
+- [x] Add minimal construction path used by sample projects and internal demos.
+
+Decision:
+
+- `GenericSubsystemFactory` resolves subsystem descriptors from explicit
+  descriptor configuration or subsystem name, discovers descriptor-bound
+  Components from repositories, adds default built-ins unless excluded, and
+  collapses duplicate Component names before subsystem installation.
+- `Subsystem.add` owns installation into subsystem scope by injecting
+  Component context, adding Components to `ComponentSpace`, and rebuilding
+  `OperationResolver`.
+- Component-owned `install_binding(...)` remains inside the Component
+  port/binding lifecycle. Runtime invocation uses the rebuilt resolver and does
+  not reinstall bindings during operation execution.
+- Duplicate Component names are resolved by `AssemblyReport.selectPreferred`;
+  dropped candidates are retained as assembly warnings for admin and
+  diagnostic views.
 
 ### Inputs
 
@@ -95,11 +111,15 @@ through bound Components rather than ad hoc factory coupling.
 - `src/main/scala/org/goldenport/cncf/subsystem/`
 - `src/main/scala/org/goldenport/cncf/component/`
 
+Verification:
+
+- `sbt --batch "testOnly org.goldenport.cncf.subsystem.GenericSubsystemFactorySpec"`
+
 ---
 
 ## CW-03: Executable Specifications for Wiring and Assembly
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 
