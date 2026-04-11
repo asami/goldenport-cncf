@@ -667,11 +667,17 @@ Prefer a concrete semantic owner:
 - `textus.assembly.descriptor`
 - `textus.command.execution-mode`
 - `textus.calltree`
+- `textus.execution.history.recent-limit`
+- `textus.execution.history.filtered-limit`
+- `textus.execution.history.filter.operation-contains`
 - `textus.logging.level`
 - `textus.logging.file.path`
 
 `textus.calltree` controls the operation result calltree projection described
 in `docs/design/observability/calltree-runtime-result.md`.
+
+`textus.execution.history.*` controls the retained action execution history
+used by `admin.execution.history` and `admin.execution.calltree`.
 
 Use `runtime` only when the value is genuinely about the runtime process itself and no clearer owner exists.
 
@@ -680,6 +686,9 @@ Examples to avoid for new primary keys:
 - `textus.runtime.assembly.descriptor`
 - `textus.runtime.command.execution-mode`
 - `textus.runtime.calltree`
+- `textus.runtime.execution.history.recent-limit`
+- `textus.runtime.execution.history.filtered-limit`
+- `textus.runtime.execution.history.filter.operation-contains`
 - `textus.runtime.logging.level`
 
 Compatibility aliases may still accept older keys where they already exist.

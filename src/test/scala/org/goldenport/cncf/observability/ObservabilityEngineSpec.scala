@@ -3,11 +3,14 @@ package org.goldenport.cncf.observability
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 import org.goldenport.Conclusion
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{ObservabilityContext, ScopeContext, ScopeKind, TraceId}
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 
 /*
  * @since   Jan.  8, 2026
- * @version Jan. 20, 2026
+ *  version Jan. 20, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class ObservabilityEngineSpec extends AnyWordSpec with Matchers {
@@ -52,6 +55,28 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers {
       keys.contains("result.success") shouldBe true
       keys.contains("error.kind") shouldBe true
       keys.contains("error.code") shouldBe true
+    }
+  }
+
+  "execution history configuration" should {
+    "load retention limits and operation filters from RuntimeConfig" in {
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            RuntimeConfig.ExecutionHistoryRecentLimitKey -> ConfigurationValue.NumberValue(BigDecimal(7)),
+            RuntimeConfig.ExecutionHistoryFilteredLimitKey -> ConfigurationValue.NumberValue(BigDecimal(70)),
+            RuntimeConfig.ExecutionHistoryFilterOperationContainsKey -> ConfigurationValue.StringValue("foo,bar")
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+
+      val config = RuntimeConfig.from(configuration)
+
+      config.executionHistoryConfig.recentLimit shouldBe 7
+      config.executionHistoryConfig.filteredLimit shouldBe 70
+      config.executionHistoryConfig.filters.map(_.operationContains) shouldBe Vector(Some("foo"), Some("bar"))
+      ObservabilityEngine.executionHistoryConfig shouldBe config.executionHistoryConfig
     }
   }
 }

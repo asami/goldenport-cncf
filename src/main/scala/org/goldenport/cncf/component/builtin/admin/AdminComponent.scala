@@ -21,6 +21,7 @@ import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.configuration.ConfigurationSources
 import org.goldenport.configuration.ConfigurationOrigin
 import org.goldenport.cncf.context.GlobalRuntimeContext
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.observability.ObservabilityEngine
 import org.goldenport.cncf.projection.{SecurityDeploymentMarkdownProjection, SecurityDeploymentProjection}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAssemblyDescriptorSource, Subsystem}
@@ -76,6 +77,10 @@ object AdminComponent {
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
+      )
+      val opVariationDescribe = new VariationDescribeOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
       val opExtensionList = new ExtensionListOperationDefinition(
         request,
@@ -141,7 +146,10 @@ object AdminComponent {
       val serviceVariation = spec.ServiceDefinition(
         name = "variation",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(opVariationList)
+          operations = NonEmptyVector.of(
+            opVariationList,
+            opVariationDescribe
+          )
         )
       )
       val serviceExtension = spec.ServiceDefinition(
@@ -261,6 +269,26 @@ object AdminComponent {
       val _ = req
       Consequence.success(VariationListAction(req, subsystem))
     }
+  }
+
+  private final class VariationDescribeOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        content = BaseContent.Builder("describe")
+          .summary("Describe a runtime variation point.")
+          .description("Return detailed information for an individual variation point key.")
+          .build(),
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: Request
+    ): Consequence[OperationRequest] =
+      Consequence.success(VariationDescribeAction(req))
   }
 
   private final class ExtensionListOperationDefinition(
@@ -874,6 +902,13 @@ object AdminComponent {
       VariationListActionCall(core, subsystem)
   }
 
+  private final case class VariationDescribeAction(
+    request: Request
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      VariationDescribeActionCall(core, request)
+  }
+
   private final case class VariationListActionCall(
     core: ActionCall.Core,
     subsystem: Subsystem
@@ -881,6 +916,31 @@ object AdminComponent {
     def execute(): Consequence[OperationResponse] = {
       _config_snapshot_().map { text =>
         OperationResponse.Scalar(_variation_lines_(text))
+      }
+    }
+  }
+
+  private final case class VariationDescribeActionCall(
+    core: ActionCall.Core,
+    describeRequest: Request
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] = {
+      val key = describeRequest.arguments.headOption.map(_.printValue)
+        .orElse(_request_property_(describeRequest, "key"))
+        .getOrElse("")
+      _declared_runtime_variation_points.find(_.key == key) match {
+        case Some(point) =>
+          Consequence.success(OperationResponse.RecordResponse(point.toRecord))
+        case None =>
+          Consequence.success(
+            OperationResponse.RecordResponse(
+              Record.data(
+                "status" -> "not_found",
+                "key" -> key,
+                "message" -> s"variation point not found: ${key}"
+              )
+            )
+          )
       }
     }
   }
@@ -969,7 +1029,56 @@ object AdminComponent {
         }
       }
     }
+    lines += ""
+    lines += "Declared Runtime Variation Points"
+    lines += ""
+    _declared_runtime_variation_points.foreach {
+      point =>
+        lines += s"- key  : ${point.key}"
+        lines += s"  value: ${point.value}"
+        lines += s"  brief: ${point.brief}"
+        lines += ""
+    }
     lines.result().mkString("\n").trim
+  }
+
+  private def _declared_runtime_variation_points: Vector[_DeclaredVariationPoint] = {
+    val defaults = ObservabilityEngine.ExecutionHistoryConfig()
+    Vector(
+      _DeclaredVariationPoint(
+        key = RuntimeConfig.ExecutionHistoryRecentLimitKey,
+        value = defaults.recentLimit.toString,
+        brief = "Recent execution history size.",
+        detail = "Number of most recent action execution records retained unconditionally for admin inspection."
+      ),
+      _DeclaredVariationPoint(
+        key = RuntimeConfig.ExecutionHistoryFilteredLimitKey,
+        value = defaults.filteredLimit.toString,
+        brief = "Filtered execution history size.",
+        detail = "Number of additional action execution records retained when they match configured debug filters."
+      ),
+      _DeclaredVariationPoint(
+        key = RuntimeConfig.ExecutionHistoryFilterOperationContainsKey,
+        value = "",
+        brief = "Operation-name debug filter.",
+        detail = "Comma-separated operation-name substrings. Matching executions are retained in the filtered history buffer."
+      )
+    )
+  }
+
+  private final case class _DeclaredVariationPoint(
+    key: String,
+    value: String,
+    brief: String,
+    detail: String
+  ) {
+    def toRecord: Record =
+      Record.data(
+        "key" -> key,
+        "value" -> value,
+        "brief" -> brief,
+        "detail" -> detail
+      )
   }
 
   private def _extension_lines_(

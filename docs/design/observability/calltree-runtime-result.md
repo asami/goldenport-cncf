@@ -116,6 +116,29 @@ The initial retention policy is two-tiered:
 The intent is to make production use bounded by default while still allowing
 debug-targeted executions to survive beyond the short recent window.
 
+Configuration keys:
+
+- `textus.execution.history.recent-limit`: size of the unconditional recent buffer
+- `textus.execution.history.filtered-limit`: size of the debug-filtered buffer
+- `textus.execution.history.filter.operation-contains`: comma-separated operation-name substrings retained in the filtered buffer
+
+These keys are runtime variation points. They are intended to be supplied from
+configuration, environment, or CLI property sources and to appear in admin
+variation inspection surfaces.
+
+Variation list inspection should show:
+
+- key
+- current/default value
+- short description
+
+Individual variation detail operations should show:
+
+- key
+- current/default value
+- short description
+- detailed description for the individual variation
+
 Admin retrieval surfaces:
 
 - `admin.execution.history`: returns retained action execution records

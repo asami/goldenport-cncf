@@ -11,12 +11,14 @@ import org.goldenport.cncf.entity.EntityStoreSpace
 import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.config.RuntimeDefaults
 import org.goldenport.cncf.action.CommandExecutionMode
+import org.goldenport.cncf.observability.ObservabilityEngine
 
 /*
  * @since   Jan. 18, 2026
  *  version Jan. 30, 2026
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
+ *  version Apr. 11, 2026
  * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -28,7 +30,9 @@ final case class RuntimeConfig(
   dataStoreSpace: DataStoreSpace,
   entityStoreSpace: EntityStoreSpace,
   mode: RunMode,
-  commandExecutionMode: Option[CommandExecutionMode] = None
+  commandExecutionMode: Option[CommandExecutionMode] = None,
+  executionHistoryConfig: ObservabilityEngine.ExecutionHistoryConfig =
+    ObservabilityEngine.ExecutionHistoryConfig()
 )
 
 object RuntimeConfig {
@@ -39,6 +43,12 @@ object RuntimeConfig {
   val RuntimeCommandExecutionModeKey = "textus.runtime.command.execution-mode"
   val CallTreeKey = "textus.calltree"
   val RuntimeCallTreeKey = "textus.runtime.calltree"
+  val ExecutionHistoryRecentLimitKey = "textus.execution.history.recent-limit"
+  val RuntimeExecutionHistoryRecentLimitKey = "textus.runtime.execution.history.recent-limit"
+  val ExecutionHistoryFilteredLimitKey = "textus.execution.history.filtered-limit"
+  val RuntimeExecutionHistoryFilteredLimitKey = "textus.runtime.execution.history.filtered-limit"
+  val ExecutionHistoryFilterOperationContainsKey = "textus.execution.history.filter.operation-contains"
+  val RuntimeExecutionHistoryFilterOperationContainsKey = "textus.runtime.execution.history.filter.operation-contains"
   val DiscoverClassesKey = "cncf.runtime.discover.classes"
   val ComponentFactoryClassKey = "cncf.runtime.component-factory-class"
   val WorkspaceKey = "cncf.runtime.workspace"
@@ -76,7 +86,8 @@ object RuntimeConfig {
       dataStoreSpace = DataStoreSpace.default(),
       entityStoreSpace = new EntityStoreSpace(),
       mode = RunMode.Command,
-      commandExecutionMode = None
+      commandExecutionMode = None,
+      executionHistoryConfig = ObservabilityEngine.ExecutionHistoryConfig()
     )
 
   def from(
@@ -131,6 +142,8 @@ object RuntimeConfig {
     }
     val datastorespace = DataStoreSpace.create(configuration)
     val entitystorespace = EntityStoreSpace.create(configuration)
+    val executionHistoryConfig = _execution_history_config(configuration)
+    ObservabilityEngine.updateExecutionHistoryConfig(executionHistoryConfig)
     RuntimeConfig(
       logbackend,
       loglevel,
@@ -139,7 +152,8 @@ object RuntimeConfig {
       dataStoreSpace = datastorespace,
       entityStoreSpace = entitystorespace,
       mode = mode,
-      commandExecutionMode = commandExecutionMode
+      commandExecutionMode = commandExecutionMode,
+      executionHistoryConfig = executionHistoryConfig
     )
   }
 
@@ -173,6 +187,35 @@ object RuntimeConfig {
   ): Option[String] =
     getString(configuration, key)
 
+  private def _get_int(
+    configuration: ResolvedConfiguration,
+    key: String
+  ): Option[Int] =
+    _get_string(configuration, key).flatMap(x => scala.util.Try(x.trim.toInt).toOption)
+
+  private def _execution_history_config(
+    configuration: ResolvedConfiguration
+  ): ObservabilityEngine.ExecutionHistoryConfig = {
+    val defaults = ObservabilityEngine.ExecutionHistoryConfig()
+    val recentLimit =
+      _get_int(configuration, ExecutionHistoryRecentLimitKey).getOrElse(defaults.recentLimit)
+    val filteredLimit =
+      _get_int(configuration, ExecutionHistoryFilteredLimitKey).getOrElse(defaults.filteredLimit)
+    val filters =
+      _split_csv(_get_string(configuration, ExecutionHistoryFilterOperationContainsKey))
+        .map(x => ObservabilityEngine.ExecutionHistoryFilter(operationContains = Some(x)))
+    defaults.copy(
+      recentLimit = math.max(0, recentLimit),
+      filteredLimit = math.max(0, filteredLimit),
+      filters = filters
+    )
+  }
+
+  private def _split_csv(
+    value: Option[String]
+  ): Vector[String] =
+    value.toVector.flatMap(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
+
   private def _legacy_aliases(
     key: String
   ): Vector[String] = {
@@ -180,6 +223,9 @@ object RuntimeConfig {
       key match {
         case CommandExecutionModeKey => Vector(RuntimeCommandExecutionModeKey)
         case CallTreeKey => Vector(RuntimeCallTreeKey)
+        case ExecutionHistoryRecentLimitKey => Vector(RuntimeExecutionHistoryRecentLimitKey)
+        case ExecutionHistoryFilteredLimitKey => Vector(RuntimeExecutionHistoryFilteredLimitKey)
+        case ExecutionHistoryFilterOperationContainsKey => Vector(RuntimeExecutionHistoryFilterOperationContainsKey)
         case SubsystemNameKey => Vector(RuntimeSubsystemNameKey)
         case ComponentNameKey => Vector(RuntimeComponentNameKey)
         case SubsystemDescriptorKey => Vector(RuntimeSubsystemDescriptorKey)

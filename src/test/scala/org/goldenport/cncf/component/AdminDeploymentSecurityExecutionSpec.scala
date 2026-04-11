@@ -3,9 +3,11 @@ package org.goldenport.cncf.component
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
+import org.goldenport.protocol.Argument
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.matchers.should.Matchers
@@ -13,7 +15,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  9, 2026
- * @version Apr.  9, 2026
+ *  version Apr.  9, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminDeploymentSecurityExecutionSpec
@@ -50,6 +53,33 @@ final class AdminDeploymentSecurityExecutionSpec
           text should include ("## Framework Chokepoints")
         case other =>
           fail(s"expected markdown scalar but got $other")
+      }
+    }
+
+    "execute variation list and describe requests" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val adminComponent = _admin_component(subsystem)
+      val listRequest = _build_request(subsystem.resolver, "admin.variation.list")
+      val describeRequest = _build_request(subsystem.resolver, "admin.variation.describe").copy(
+        arguments = List(Argument("key", RuntimeConfig.ExecutionHistoryRecentLimitKey))
+      )
+
+      _execute(adminComponent, listRequest) match {
+        case Consequence.Success(OperationResponse.Scalar(text: String)) =>
+          text should include (s"key  : ${RuntimeConfig.ExecutionHistoryRecentLimitKey}")
+          text should include ("brief: Recent execution history size.")
+          text should not include ("detail: Number of most recent action execution records")
+        case other =>
+          fail(s"expected variation list scalar but got $other")
+      }
+
+      _execute(adminComponent, describeRequest) match {
+        case Consequence.Success(OperationResponse.RecordResponse(record)) =>
+          record.getString("key") shouldBe Some(RuntimeConfig.ExecutionHistoryRecentLimitKey)
+          record.getString("brief") shouldBe Some("Recent execution history size.")
+          record.getString("detail").exists(_.contains("Number of most recent action execution records")) shouldBe true
+        case other =>
+          fail(s"expected variation describe record but got $other")
       }
     }
   }
