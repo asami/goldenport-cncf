@@ -13,10 +13,10 @@ This document is a progress dashboard, not a design journal.
 
 - Promote the CNCF Web Layer from journal notes into an implementation track.
 - Define CNCF as an operation-centric web integration surface.
-- Establish the first operational web surface for dashboard, management console,
-  and manual/documentation views.
+- Establish the Static Form App mechanism first, then place the operational
+  dashboard, management console, and manual/reference web apps on top of it.
 - Define REST/Form API exposure around existing Component / Service /
-  Operation metadata.
+  Operation metadata as the execution and validation backbone for that mechanism.
 - Define Web Descriptor responsibilities for exposure, security, form behavior,
   and application hosting.
 - Keep UI framework choices outside the CNCF core.
@@ -24,7 +24,7 @@ This document is a progress dashboard, not a design journal.
 ## 3. Non-Goals
 
 - No full frontend framework implementation in this phase.
-- No broad business UI generation beyond a minimal Form API/admin-console path.
+- No broad business UI generation beyond a minimal Static Form App path.
 - No replacement of existing CLI/meta projections.
 - No generalized external API gateway product in this phase.
 - No completion of advanced visualizations such as SVG assembly diagrams unless
@@ -32,11 +32,13 @@ This document is a progress dashboard, not a design journal.
 
 ## 4. Current Work Stack
 
-- A (ACTIVE): WEB-01 — Consolidate Web Layer scope and canonical design surface.
-- B (SUSPENDED): WEB-02 — Define operation-centric REST/Form API exposure.
+- A (DONE): WEB-01 — Consolidate Web Layer scope and canonical design surface.
+- B (ACTIVE): WEB-02 — Define operation-centric REST/Form API and Static Form App mechanism.
 - C (SUSPENDED): WEB-03 — Define Web Descriptor model and configuration path.
-- D (SUSPENDED): WEB-04 — Define dashboard / management console / manual baseline.
-- E (SUSPENDED): WEB-05 — Add executable specifications and minimal runtime hooks.
+- D (SUSPENDED): WEB-04 — Define read-only dashboard baseline.
+- E (SUSPENDED): WEB-05 — Define management console baseline.
+- F (SUSPENDED): WEB-06 — Define manual/reference baseline.
+- G (SUSPENDED): WEB-07 — Add executable specifications and minimal runtime hooks.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
@@ -44,14 +46,21 @@ Current note:
   wireframe generation.
 - This phase should promote only the minimal coherent runtime path first and
   leave broader UI generation as later work.
+- Development proceeds with `textus-sample-app` as the practical validation
+  driver in a separate working thread.
+- The first practical entry point is Dashboard, but implementation still follows
+  WEB-01 -> WEB-02 -> WEB-04: Dashboard must be placed on the shared Static Form
+  App / Form API mechanism rather than introduced as a special server route.
 
 ## 5. Development Items
 
-- [ ] WEB-01: Consolidate Web Layer scope and canonical design surface.
-- [ ] WEB-02: Define REST/Form API exposure for Component / Service / Operation.
+- [x] WEB-01: Consolidate Web Layer scope and canonical design surface.
+- [ ] WEB-02: Define REST/Form API exposure and Static Form App mechanism.
 - [ ] WEB-03: Define Web Descriptor model and configuration path.
-- [ ] WEB-04: Define dashboard / management console / manual baseline.
-- [ ] WEB-05: Add executable specifications and minimal runtime hooks.
+- [ ] WEB-04: Define read-only dashboard baseline.
+- [ ] WEB-05: Define management console baseline.
+- [ ] WEB-06: Define manual/reference baseline.
+- [ ] WEB-07: Add executable specifications and minimal runtime hooks.
 
 ## 6. Next Phase Candidates
 

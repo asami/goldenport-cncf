@@ -59,7 +59,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Apr. 11, 2026
+ * @version Apr. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -3046,7 +3046,7 @@ class CncfRuntime() extends GlobalObservable {
         case Some(pathArgument) =>
           Consequence.success((
             _normalize_path(pathArgument.value.toString),
-            parsed.properties ++ _http_tail_properties(parsed.arguments.drop(1))
+            _canonical_http_properties(params, parsed.properties) ++ _http_tail_properties(parsed.arguments.drop(1))
           ))
         case None =>
           Consequence.failure("client http path is required")
@@ -3066,6 +3066,23 @@ class CncfRuntime() extends GlobalObservable {
           Property(s"arg${index + 1}", text, None)
       }
     }
+
+  private def _canonical_http_properties(
+    params: Seq[String],
+    properties: List[Property]
+  ): List[Property] =
+    if (_has_short_http_body_option(params))
+      properties.map {
+        case Property("data", value, origin) => Property("http.body", value, origin)
+        case other => other
+      }
+    else
+      properties
+
+  private def _has_short_http_body_option(
+    params: Seq[String]
+  ): Boolean =
+    params.exists(p => p == "-d" || p.startsWith("-d="))
 
   private[cli] def _normalize_path(path: String): String = {
     val normalized = if (path.contains(".")) path.replace(".", "/") else path
@@ -3204,8 +3221,8 @@ class CncfRuntime() extends GlobalObservable {
     name != null &&
       name.nonEmpty &&
       name != "baseurl" &&
-      name != "body" &&
-      name != "data" &&
+      name != "http.body" &&
+      name != "http.data" &&
       name != "-d"
 
   private[cli] def _client_path_from_request(
@@ -3219,7 +3236,7 @@ class CncfRuntime() extends GlobalObservable {
   private[cli] def _client_mime_body_from_request(
     req: Request
   ): Consequence[Option[MimeBody]] =
-    _mime_body_from_property_names(req.properties, List("body", "data", "-d")).flatMap {
+    _mime_body_from_property_names(req.properties, List("http.body", "http.data", "-d")).flatMap {
       case Some(body) => Consequence.success(Some(body))
       case None =>
         _client_form_mime_body(req) match {
@@ -3231,7 +3248,7 @@ class CncfRuntime() extends GlobalObservable {
   private[cli] def _client_explicit_mime_body_from_request(
     req: Request
   ): Consequence[Option[MimeBody]] =
-    _mime_body_from_property_names(req.properties, List("body", "data", "-d")).flatMap {
+    _mime_body_from_property_names(req.properties, List("http.body", "http.data", "-d")).flatMap {
       case some @ Some(_) => Consequence.success(some)
       case None => Consequence.success(_mime_body_from_arguments(req.arguments))
     }

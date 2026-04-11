@@ -1,0 +1,559 @@
+package org.goldenport.cncf.http
+
+import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.naming.NamingConventions
+import org.goldenport.cncf.CncfVersion
+
+/*
+ * @since   Apr. 12, 2026
+ * @version Apr. 12, 2026
+ * @author  ASAMI, Tomoharu
+ */
+object StaticFormAppRenderer {
+  final case class Page(body: String)
+
+  def render(
+    subsystem: Subsystem,
+    app: String,
+    page: Vector[String] = Vector.empty
+  ): Option[Page] = {
+    page match {
+      case Vector("dashboard") =>
+        _find_component(subsystem, app).map(renderComponentDashboard)
+      case _ =>
+        None
+    }
+  }
+
+  def renderSubsystemDashboard(subsystem: Subsystem): Page =
+    Page(_dashboard_shell(
+      title = "CNCF Health",
+      subtitle = subsystem.name + subsystem.version.map(v => s" ${_escape(v)}").getOrElse(""),
+      statePath = "/web/system/dashboard/state"
+    ))
+
+  def renderComponentDashboard(component: Component): Page =
+    Page(_dashboard_shell(
+      title = s"${_escape(component.name)} Dashboard",
+      subtitle = "Component health",
+      statePath = s"/web/${NamingConventions.toNormalizedSegment(component.name)}/dashboard/state"
+    ))
+
+  def renderDashboardState(
+    subsystem: Subsystem,
+    componentName: Option[String]
+  ): Option[Page] =
+    componentName match {
+      case Some(name) =>
+        _find_component(subsystem, name).map(component =>
+          Page(_component_dashboard_state(component))
+        )
+      case None =>
+        Some(Page(_subsystem_dashboard_state(subsystem)))
+    }
+
+  def renderSystemAdmin(subsystem: Subsystem): Page =
+    Page(_admin_page(
+      title = "System Admin Configuration",
+      subtitle = "Current CNCF runtime configuration",
+      components = subsystem.components,
+      subsystemName = subsystem.name,
+      subsystemVersion = subsystem.version,
+      dashboardPath = "/web/system/dashboard",
+      performancePath = "/web/system/performance"
+    ))
+
+  def renderComponentAdmin(
+    subsystem: Subsystem,
+    componentName: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map(renderComponentAdmin)
+
+  def renderComponentAdmin(component: Component): Page = {
+    val name = NamingConventions.toNormalizedSegment(component.name)
+    Page(_admin_page(
+      title = s"${_escape(component.name)} Admin Configuration",
+      subtitle = "Current component runtime configuration",
+      components = Vector(component),
+      subsystemName = component.subsystem.map(_.name).getOrElse(component.name),
+      subsystemVersion = component.subsystem.flatMap(_.version),
+      dashboardPath = s"/web/${name}/dashboard",
+      performancePath = "/web/system/performance"
+    ))
+  }
+
+  def renderSystemPerformance(subsystem: Subsystem): Page =
+    Page(_performance_page(subsystem))
+
+  private def _find_component(
+    subsystem: Subsystem,
+    name: String
+  ): Option[Component] =
+    subsystem.components.find(x => NamingConventions.equivalentByNormalized(x.name, name))
+
+  private def _dashboard_shell(
+    title: String,
+    subtitle: String,
+    statePath: String
+  ): String =
+    StaticFormAppLayout.bootstrapPage(StaticFormAppLayout.Options(
+      title = title,
+      subtitle = subtitle,
+      extraHead =
+        """|    .status { display: flex; align-items: center; gap: 10px; color: #4d5662; }
+       |    .pulse { width: 10px; height: 10px; border-radius: 50%; background: #159947; box-shadow: 0 0 0 0 rgba(21,153,71,.55); animation: pulse 1s infinite; }
+       |    .metric strong { display: block; font-size: 30px; margin-top: 6px; }
+       |    .big { font-size: 34px; font-weight: 700; }
+       |    .bars { display: grid; gap: 10px; }
+       |    .bar { display: grid; grid-template-columns: minmax(120px, 220px) 1fr auto; gap: 10px; align-items: center; }
+       |    .track { height: 10px; background: #e6ebf0; border-radius: 6px; overflow: hidden; }
+       |    .fill { height: 100%; background: #2374ab; width: 0%; transition: width .25s ease; }
+       |    .spark { height: 120px; display: grid; grid-template-columns: repeat(60, 1fr); gap: 3px; align-items: end; border-bottom: 1px solid #d9dee5; }
+       |    .spark span { display: block; min-height: 2px; background: #2374ab; border-radius: 4px 4px 0 0; }
+       |    .spark span.error { background: #c65454; }
+       |    @keyframes pulse { 70% { box-shadow: 0 0 0 12px rgba(21,153,71,0); } 100% { box-shadow: 0 0 0 0 rgba(21,153,71,0); } }
+       |    @media (max-width: 720px) { .bar { grid-template-columns: 1fr; } }
+       |""".stripMargin,
+      body =
+        s"""|    <div class="status mb-3"><span class="pulse"></span><span id="statusText">Connecting</span></div>
+       |    <section class="row g-3 mb-3">
+       |      <div class="col-12 col-lg-4"><article id="healthPanel" class="card h-100 border-success"><div class="card-body"><h2 class="h5 card-title">Health</h2><div class="big" id="healthText">UP</div><p class="text-secondary mb-0" id="healthNote">Starting</p></div></article></div>
+       |      <div class="col-12 col-lg-4"><article class="card h-100"><div class="card-body"><h2 class="h5 card-title">Subsystem</h2><p class="mb-1"><strong id="subsystemName">-</strong></p><p class="text-secondary mb-0" id="subsystemVersion">-</p></div></article></div>
+       |      <div class="col-12 col-lg-4"><article class="card h-100"><div class="card-body"><h2 class="h5 card-title">CNCF</h2><p class="mb-1"><strong id="cncfVersion">-</strong></p><p class="mb-0"><a id="detailsLink" href="/web/system/admin">Admin details</a> · <a id="performanceLink" href="/web/system/performance">Performance details</a></p></div></article></div>
+       |    </section>
+       |    <section class="row g-3 mb-3">
+       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">Components</span><strong id="componentCount">0</strong></div></div></div>
+       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">Services</span><strong id="serviceCount">0</strong></div></div></div>
+       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">Operations</span><strong id="operationCount">0</strong></div></div></div>
+       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">HTML requests</span><strong id="requestCount">0</strong><small class="text-secondary" id="requestErrors">errors 0</small></div></div></div>
+       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">Jobs</span><strong id="jobCount">0</strong><small class="text-secondary" id="jobErrors">errors 0</small></div></div></div>
+       |    </section>
+       |    <section class="row g-3 mb-3">
+       |      <div class="col-12 col-xl-6"><article class="card h-100"><div class="card-body">
+       |        <h2 class="h5 card-title">Traffic</h2>
+       |        <div class="btn-group mb-3" id="graphTabs" role="group">
+       |          <button type="button" class="btn btn-outline-primary btn-sm" data-window="minute">1 minute</button>
+       |          <button type="button" class="btn btn-primary btn-sm active" data-window="hour">1 hour</button>
+       |          <button type="button" class="btn btn-outline-primary btn-sm" data-window="day">1 day</button>
+       |        </div>
+       |        <div class="spark" id="requestSpark"></div>
+       |      </div></article></div>
+       |      <div class="col-12 col-xl-6"><article class="card h-100"><div class="card-body">
+       |        <h2 class="h5 card-title">Activity counts</h2>
+       |        <div id="activityCounts"></div>
+       |      </div></article></div>
+       |    </section>
+       |    <section class="row g-3 mb-3">
+       |      <div class="col-12 col-xl-6"><article class="card h-100"><div class="card-body">
+       |        <h2 class="h5 card-title">ActionCall jobs</h2>
+       |        <div class="bars" id="jobBars"></div>
+       |      </div></article></div>
+       |      <div class="col-12 col-xl-6"><article class="card h-100"><div class="card-body">
+       |        <h2 class="h5 card-title">Components</h2>
+       |        <div class="bars" id="componentBars"></div>
+       |      </div></article></div>
+       |    </section>
+       |    <article class="card"><div class="card-body">
+       |      <h2 class="h5 card-title">Configuration summary</h2>
+       |      <div id="configSummary"></div>
+       |    </div></article>
+       |""".stripMargin,
+      extraScript =
+        s"""|  <script>
+       |    const statePath = "${statePath}";
+       |    const text = document.getElementById("statusText");
+       |    const healthPanel = document.getElementById("healthPanel");
+       |    const healthText = document.getElementById("healthText");
+       |    const healthNote = document.getElementById("healthNote");
+       |    const subsystemName = document.getElementById("subsystemName");
+       |    const subsystemVersion = document.getElementById("subsystemVersion");
+       |    const cncfVersion = document.getElementById("cncfVersion");
+       |    const detailsLink = document.getElementById("detailsLink");
+       |    const performanceLink = document.getElementById("performanceLink");
+       |    const componentCount = document.getElementById("componentCount");
+       |    const serviceCount = document.getElementById("serviceCount");
+       |    const operationCount = document.getElementById("operationCount");
+       |    const requestCount = document.getElementById("requestCount");
+       |    const requestErrors = document.getElementById("requestErrors");
+       |    const jobCount = document.getElementById("jobCount");
+       |    const jobErrors = document.getElementById("jobErrors");
+       |    const requestSpark = document.getElementById("requestSpark");
+       |    const activityCounts = document.getElementById("activityCounts");
+       |    const jobBars = document.getElementById("jobBars");
+       |    const componentBars = document.getElementById("componentBars");
+       |    const configSummary = document.getElementById("configSummary");
+       |    const graphTabs = document.getElementById("graphTabs");
+       |    let graphWindow = "hour";
+       |    let latestData = null;
+       |
+       |    function escapeHtml(value) {
+       |      return String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\\"":"&quot;","'":"&#39;"}[c]));
+       |    }
+       |
+       |    function render(data) {
+       |      latestData = data;
+       |      const failedJobs = data.actions.jobs.failed || 0;
+       |      const recentFailures = data.html.requests.summary.minute.errors || 0;
+       |      const health = (failedJobs > 0 || recentFailures > 0) ? "WARN" : data.status;
+       |      healthPanel.classList.toggle("border-success", health == "UP");
+       |      healthPanel.classList.toggle("border-warning", health != "UP");
+       |      healthText.textContent = health;
+       |      healthNote.textContent = `jobs failed: $${failedJobs}, recent failures: $${recentFailures}`;
+       |      subsystemName.textContent = data.subsystem.name;
+       |      subsystemVersion.textContent = "subsystem " + (data.subsystem.version || "unversioned");
+       |      cncfVersion.textContent = data.cncf.version;
+       |      detailsLink.href = data.links.admin;
+       |      performanceLink.href = data.links.performance;
+       |      componentCount.textContent = data.componentCount;
+       |      serviceCount.textContent = data.serviceCount;
+       |      operationCount.textContent = data.operationCount;
+       |      requestCount.textContent = data.html.requests.summary.cumulative.count;
+       |      requestErrors.textContent = "errors " + data.html.requests.summary.cumulative.errors;
+       |      jobCount.textContent = data.actions.jobs.total;
+       |      jobErrors.textContent = "errors " + data.actions.jobs.failed;
+       |      text.textContent = "UP · " + new Date(data.observedAt).toLocaleTimeString();
+       |      const maxOps = Math.max(1, ...data.components.map(c => c.operationCount));
+       |      componentBars.innerHTML = data.components.map(c => {
+       |        const width = Math.round((c.operationCount / maxOps) * 100);
+       |        return `<div class="bar"><span>$${escapeHtml(c.name)} $${escapeHtml(c.version || "")}</span><div class="track"><div class="fill" style="width:$${width}%"></div></div><span>$${c.operationCount}</span></div>`;
+       |      }).join("");
+       |      renderGraph();
+       |      activityCounts.innerHTML = countTable(data);
+       |      const jobTotal = Math.max(1, data.actions.jobs.total);
+       |      jobBars.innerHTML = ["running","queued","completed","failed"].map(name => {
+       |        const count = data.actions.jobs[name] || 0;
+       |        const width = Math.round((count / jobTotal) * 100);
+       |        return `<div class="bar"><span>$${name}</span><div class="track"><div class="fill" style="width:$${width}%"></div></div><span>$${count}</span></div>`;
+       |      }).join("");
+       |      configSummary.innerHTML = data.components.map(c => `<p><strong>$${escapeHtml(c.name)}</strong> $${escapeHtml(c.version || "unversioned")} · services $${c.serviceCount} · operations $${c.operationCount}</p>`).join("");
+       |    }
+       |
+       |    function countTable(data) {
+       |      const rows = [
+       |        ["HTML request", data.html.requests.summary],
+       |        ["ActionCall", data.actions.actionCalls.summary],
+       |        ["Jobs", data.actions.jobs.summary]
+       |      ];
+       |      const cells = rows.map(([name, summary]) => `<tr><td>$${name}</td><td>$${summary.cumulative.count}</td><td>$${summary.cumulative.errors}</td><td>$${summary.day.count}</td><td>$${summary.day.errors}</td><td>$${summary.hour.count}</td><td>$${summary.hour.errors}</td><td>$${summary.minute.count}</td><td>$${summary.minute.errors}</td></tr>`).join("");
+       |      return `<table class="table table-sm"><thead><tr><th>Level</th><th>Total</th><th>Total err</th><th>1d</th><th>1d err</th><th>1h</th><th>1h err</th><th>1m</th><th>1m err</th></tr></thead><tbody>$${cells}</tbody></table>`;
+       |    }
+       |
+       |    function renderGraph() {
+       |      if (!latestData) return;
+       |      const buckets = latestData.html.requests.series[graphWindow];
+       |      const maxReq = Math.max(1, ...buckets.map(b => b.count));
+       |      requestSpark.title = graphWindow + " / avg " + latestData.html.requests.recentAverageMillis + "ms";
+       |      requestSpark.innerHTML = buckets.map(b => `<span class="$${b.errors > 0 ? "error" : ""}" style="height:$${Math.max(2, Math.round((b.count / maxReq) * 110))}px"></span>`).join("");
+       |    }
+       |
+       |    graphTabs.addEventListener("click", event => {
+       |      if (event.target.tagName !== "BUTTON") return;
+       |      graphWindow = event.target.dataset.window;
+       |      graphTabs.querySelectorAll("button").forEach(b => {
+       |        const selected = b.dataset.window === graphWindow;
+       |        b.classList.toggle("active", selected);
+       |        b.classList.toggle("btn-primary", selected);
+       |        b.classList.toggle("btn-outline-primary", !selected);
+       |      });
+       |      renderGraph();
+       |    });
+       |
+       |    async function refresh() {
+       |      try {
+       |        const res = await fetch(statePath, { cache: "no-store" });
+       |        render(await res.json());
+       |      } catch (e) {
+       |        text.textContent = "Refresh failed";
+       |      }
+       |    }
+       |
+       |    refresh();
+       |    setInterval(refresh, 1000);
+       |  </script>
+       |""".stripMargin
+    ))
+
+  private def _subsystem_dashboard_state(subsystem: Subsystem): String =
+    _dashboard_state_json(subsystem.components, "subsystem", subsystem.name, subsystem.version, _job_metrics(subsystem), subsystem.name, subsystem.version)
+
+  private def _admin_page(
+    title: String,
+    subtitle: String,
+    components: Vector[Component],
+    subsystemName: String,
+    subsystemVersion: Option[String],
+    dashboardPath: String,
+    performancePath: String
+  ): String = {
+    val componentBlocks = components.map { component =>
+      val services = component.protocol.services.services.map { service =>
+        val operations = service.operations.operations.toVector.map { operation =>
+          val path = NamingConventions.toNormalizedPath(component.name, service.name, operation.name)
+          s"""<li>${_escape(operation.name)} <code>${_escape(path)}</code></li>"""
+        }.mkString("\n")
+        s"""<section><h3>${_escape(service.name)}</h3><ul>${operations}</ul></section>"""
+      }.mkString("\n")
+      val version = component.artifactMetadata.map(_.version).getOrElse("unversioned")
+      s"""<article>
+         |  <h2>${_escape(component.name)}</h2>
+         |  <p>Version ${_escape(version)}</p>
+         |  ${services}
+         |</article>""".stripMargin
+    }.mkString("\n")
+    _simple_page(
+      title = title,
+      subtitle = subtitle,
+      body =
+        s"""<article>
+           |  <h2>Runtime</h2>
+           |  <div class="table-responsive"><table class="table table-sm">
+           |    <tbody>
+           |      <tr><th>CNCF version</th><td>${_escape(CncfVersion.current)}</td></tr>
+           |      <tr><th>Subsystem</th><td>${_escape(subsystemName)}</td></tr>
+           |      <tr><th>Subsystem version</th><td>${_escape(subsystemVersion.getOrElse("unversioned"))}</td></tr>
+           |      <tr><th>Components</th><td>${components.size}</td></tr>
+           |    </tbody>
+           |  </table></div>
+           |</article>
+           |<article>
+           |  <h2>Navigation</h2>
+           |  <p><a href="${_escape(dashboardPath)}">Dashboard</a> · <a href="${_escape(performancePath)}">Performance details</a></p>
+           |</article>
+           |${componentBlocks}""".stripMargin
+    )
+  }
+
+  private def _performance_page(subsystem: Subsystem): String = {
+    val htmlRequests = RuntimeDashboardMetrics.htmlSnapshot
+    val actionCalls = RuntimeDashboardMetrics.actionCallSnapshot
+    val jobs = _job_metrics(subsystem)
+    _simple_page(
+      title = "System Performance",
+      subtitle = "HTML request, ActionCall, and Jobs detail",
+      body =
+        s"""<article>
+           |  <h2>Navigation</h2>
+           |  <p><a href="/web/system/dashboard">System dashboard</a> · <a href="/web/system/admin">Admin configuration</a></p>
+           |</article>
+           |<article>
+           |  <h2>HTML request</h2>
+           |  ${_summary_table(htmlRequests.summary)}
+           |</article>
+           |<article>
+           |  <h2>Latency</h2>
+           |  ${_latency_table(htmlRequests.recent)}
+           |</article>
+           |<article>
+           |  <h2>Recent requests</h2>
+           |  ${_recent_requests_table(htmlRequests.recent)}
+           |</article>
+           |<article>
+           |  <h2>Recent errors</h2>
+           |  ${_recent_errors_table(htmlRequests.recent)}
+           |</article>
+           |<article>
+           |  <h2>ActionCall</h2>
+           |  ${_summary_table(actionCalls.summary)}
+           |</article>
+           |<article>
+           |  <h2>Jobs</h2>
+           |  ${_jobs_table(jobs)}
+           |</article>""".stripMargin
+    )
+  }
+
+  private def _component_dashboard_state(component: Component): String =
+    _dashboard_state_json(Vector(component), "component", component.name, component.artifactMetadata.map(_.version), _job_metrics(component), component.subsystem.map(_.name).getOrElse(component.name), component.subsystem.flatMap(_.version))
+
+  private def _simple_page(
+    title: String,
+    subtitle: String,
+    body: String
+  ): String =
+    StaticFormAppLayout.bootstrapPage(StaticFormAppLayout.Options(
+      title = title,
+      subtitle = subtitle,
+      body = body,
+      extraHead =
+        """|    article { background: #ffffff; border: 1px solid #d9dee5; border-radius: 8px; padding: 20px; }
+           |    h2 { margin: 0 0 14px; font-size: 20px; }
+           |    h3 { margin: 16px 0 8px; font-size: 16px; }
+           |    p { margin: 0; color: #4d5662; }
+           |    li { margin: 6px 0; }
+           |""".stripMargin
+    ))
+
+  private def _dashboard_state_json(
+    components: Vector[Component],
+    scope: String,
+    name: String,
+    version: Option[String],
+    jobs: (Int, Int, Int, Int),
+    subsystemName: String,
+    subsystemVersion: Option[String]
+  ): String = {
+    val serviceCount = components.map(_.protocol.services.services.size).sum
+    val operationCount = components.flatMap(_.protocol.services.services).map(_.operations.operations.length).sum
+    val componentJson = components.map(_component_json).mkString("[", ",", "]")
+    val (running, queued, completed, failed) = jobs
+    val htmlRequests = RuntimeDashboardMetrics.htmlSnapshot
+    val actionCalls = RuntimeDashboardMetrics.actionCallSnapshot
+    val avgMillis =
+      if (htmlRequests.recent.isEmpty) 0L
+      else htmlRequests.recent.map(_.elapsedMillis).sum / htmlRequests.recent.size
+    val adminPath =
+      if (scope == "component") s"/web/${NamingConventions.toNormalizedSegment(name)}/admin"
+      else "/web/system/admin"
+    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance"},"components":${componentJson}}"""
+  }
+
+  private def _snapshot_json(
+    snapshot: RuntimeDashboardMetrics.Snapshot,
+    includeRecent: Boolean,
+    recentAverageMillis: Option[Long] = None
+  ): String = {
+    val recent =
+      if (includeRecent) {
+        val xs = snapshot.recent.map { x =>
+          s"""{"observedAt":${x.observedAt},"method":"${_json(x.method)}","path":"${_json(x.path)}","status":${x.status},"elapsedMillis":${x.elapsedMillis}}"""
+        }.mkString("[", ",", "]")
+        s""","recent":${xs}"""
+      } else {
+        ""
+      }
+    val avg = recentAverageMillis.map(x => s""","recentAverageMillis":${x}""").getOrElse("")
+    s"""{"summary":${_summary_json(snapshot.summary)},"series":{"minute":${_buckets_json(snapshot.bucketsByMinute)},"hour":${_buckets_json(snapshot.bucketsByHour)},"day":${_buckets_json(snapshot.bucketsByDay)}}${avg}${recent}}"""
+  }
+
+  private def _summary_json(summary: RuntimeDashboardMetrics.CountSummary): String =
+    s"""{"cumulative":${_window_json(summary.cumulative)},"day":${_window_json(summary.day)},"hour":${_window_json(summary.hour)},"minute":${_window_json(summary.minute)}}"""
+
+  private def _window_json(window: RuntimeDashboardMetrics.CountWindow): String =
+    s"""{"count":${window.total},"errors":${window.errors}}"""
+
+  private def _buckets_json(buckets: Vector[RuntimeDashboardMetrics.RequestBucket]): String =
+    buckets.map(x => s"""{"period":${x.period},"count":${x.count},"errors":${x.errors}}""").mkString("[", ",", "]")
+
+  private def _jobs_json(
+    running: Int,
+    queued: Int,
+    completed: Int,
+    failed: Int
+  ): String = {
+    val total = running + queued + completed + failed
+    val summary = RuntimeDashboardMetrics.CountSummary(
+      RuntimeDashboardMetrics.CountWindow(total, failed),
+      RuntimeDashboardMetrics.CountWindow(total, failed),
+      RuntimeDashboardMetrics.CountWindow(total, failed),
+      RuntimeDashboardMetrics.CountWindow(running + queued, failed)
+    )
+    s"""{"running":${running},"queued":${queued},"completed":${completed},"failed":${failed},"total":${total},"summary":${_summary_json(summary)}}"""
+  }
+
+  private def _summary_table(summary: RuntimeDashboardMetrics.CountSummary): String =
+    s"""<div class="table-responsive"><table class="table table-sm">
+       |  <thead><tr><th>Window</th><th>Count</th><th>Errors</th></tr></thead>
+       |  <tbody>
+       |    ${_summary_row("Total", summary.cumulative)}
+       |    ${_summary_row("1 day", summary.day)}
+       |    ${_summary_row("1 hour", summary.hour)}
+       |    ${_summary_row("1 minute", summary.minute)}
+       |  </tbody>
+       |</table></div>""".stripMargin
+
+  private def _summary_row(
+    label: String,
+    window: RuntimeDashboardMetrics.CountWindow
+  ): String =
+    s"<tr><td>${_escape(label)}</td><td>${window.total}</td><td>${window.errors}</td></tr>"
+
+  private def _jobs_table(jobs: (Int, Int, Int, Int)): String = {
+    val (running, queued, completed, failed) = jobs
+    s"""<div class="table-responsive"><table class="table table-sm">
+       |  <thead><tr><th>Status</th><th>Count</th></tr></thead>
+       |  <tbody>
+       |    <tr><td>Total</td><td>${running + queued + completed + failed}</td></tr>
+       |    <tr><td>Running</td><td>${running}</td></tr>
+       |    <tr><td>Queued</td><td>${queued}</td></tr>
+       |    <tr><td>Completed</td><td>${completed}</td></tr>
+       |    <tr><td>Failed</td><td>${failed}</td></tr>
+       |  </tbody>
+       |</table></div>""".stripMargin
+  }
+
+  private def _latency_table(recent: Vector[RuntimeDashboardMetrics.RequestEntry]): String = {
+    val count = recent.size
+    val average =
+      if (recent.isEmpty) 0L
+      else recent.map(_.elapsedMillis).sum / recent.size
+    val max =
+      if (recent.isEmpty) 0L
+      else recent.map(_.elapsedMillis).max
+    s"""<div class="table-responsive"><table class="table table-sm">
+       |  <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+       |  <tbody>
+       |    <tr><td>Recent samples</td><td>${count}</td></tr>
+       |    <tr><td>Average elapsed</td><td>${average} ms</td></tr>
+       |    <tr><td>Max elapsed</td><td>${max} ms</td></tr>
+       |  </tbody>
+       |</table></div>""".stripMargin
+  }
+
+  private def _recent_requests_table(recent: Vector[RuntimeDashboardMetrics.RequestEntry]): String =
+    _request_table(recent.reverse, "No recent requests")
+
+  private def _recent_errors_table(recent: Vector[RuntimeDashboardMetrics.RequestEntry]): String =
+    _request_table(recent.filter(_.status >= 400).reverse, "No recent errors")
+
+  private def _request_table(
+    requests: Vector[RuntimeDashboardMetrics.RequestEntry],
+    emptyMessage: String
+  ): String =
+    if (requests.isEmpty) {
+      s"<p>${_escape(emptyMessage)}</p>"
+    } else {
+      val rows = requests.map { x =>
+        s"""<tr><td>${_escape(_instant_text(x.observedAt))}</td><td>${_escape(x.method)}</td><td><code>${_escape(x.path)}</code></td><td>${x.status}</td><td>${x.elapsedMillis} ms</td></tr>"""
+      }.mkString("\n")
+      s"""<div class="table-responsive"><table class="table table-sm">
+         |  <thead><tr><th>Observed at</th><th>Method</th><th>Path</th><th>Status</th><th>Elapsed</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
+
+  private def _instant_text(epochMillis: Long): String =
+    java.time.Instant.ofEpochMilli(epochMillis).toString
+
+  private def _component_json(component: Component): String = {
+    val services = component.protocol.services.services.map { service =>
+      val operations = service.operations.operations.toVector.map { operation =>
+        val path = NamingConventions.toNormalizedPath(component.name, service.name, operation.name)
+        s"""{"name":"${_json(operation.name)}","path":"${_json(path)}"}"""
+      }.mkString("[", ",", "]")
+      s"""{"name":"${_json(service.name)}","operationCount":${service.operations.operations.length},"operations":${operations}}"""
+    }.mkString("[", ",", "]")
+    val operationCount = component.protocol.services.services.map(_.operations.operations.length).sum
+    s"""{"name":"${_json(component.name)}","version":${component.artifactMetadata.map(_.version).map(v => "\"" + _json(v) + "\"").getOrElse("null")},"serviceCount":${component.protocol.services.services.size},"operationCount":${operationCount},"services":${services}}"""
+  }
+
+  private def _job_metrics(subsystem: Subsystem): (Int, Int, Int, Int) =
+    subsystem.jobEngine.metrics.map(x => (x.running, x.queued, x.completed, x.failed)).getOrElse((0, 0, 0, 0))
+
+  private def _job_metrics(component: Component): (Int, Int, Int, Int) =
+    component.jobEngine.metrics.map(x => (x.running, x.queued, x.completed, x.failed)).getOrElse((0, 0, 0, 0))
+
+  private def _escape(value: String): String =
+    value
+      .replace("&", "&amp;")
+      .replace("<", "&lt;")
+      .replace(">", "&gt;")
+      .replace("\"", "&quot;")
+      .replace("'", "&#39;")
+
+  private def _json(value: String): String =
+    value
+      .replace("\\", "\\\\")
+      .replace("\"", "\\\"")
+      .replace("\n", "\\n")
+}

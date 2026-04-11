@@ -28,7 +28,7 @@ import org.goldenport.datatype.{ContentType, MimeBody}
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
- * @version Apr.  8, 2026
+ * @version Apr. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -62,15 +62,50 @@ final class Http4sHttpServer(
     def routes(wsb: WebSocketBuilder2[IO]) = HttpRoutes.of[IO] {
       case GET -> Root / "mcp" =>
         _mcp_websocket(wsb, mcp)
+      case GET -> Root / "web" / "assets" / "bootstrap.min.css" =>
+        _bootstrap_css()
+      case GET -> Root / "web" / "assets" / "bootstrap.bundle.min.js" =>
+        _bootstrap_bundle_js()
+      case GET -> Root / "web" / "system" / "dashboard" =>
+        _subsystem_dashboard()
+      case GET -> Root / "web" / "system" / "dashboard" / "state" =>
+        _dashboard_state(None)
+      case GET -> Root / "web" / "system" / "performance" =>
+        _system_performance()
+      case GET -> Root / "web" / "system" / "admin" =>
+        _system_admin()
+      case GET -> Root / "web" / app / "dashboard" / "state" =>
+        _dashboard_state(Some(app))
+      case GET -> Root / "web" / app / "admin" =>
+        _component_admin(app)
+      case GET -> Root / "web" / app =>
+        _static_form_app(app, Vector.empty)
+      case GET -> Root / "web" / app / page =>
+        _static_form_app(app, Vector(page))
       case req =>
         try {
+          val started = System.nanoTime()
           for {
             core <- _to_http_request(req)
             res <- _to_http_response(execute(core))
-          } yield res
+          } yield {
+            RuntimeDashboardMetrics.recordHtmlRequest(
+              req.method.name,
+              req.uri.path.renderString,
+              res.status.code,
+              (System.nanoTime() - started) / 1000000L
+            )
+            res
+          }
         } catch {
           case e: Throwable =>
             e.printStackTrace(Console.err)
+            RuntimeDashboardMetrics.recordHtmlRequest(
+              req.method.name,
+              req.uri.path.renderString,
+              HStatus.InternalServerError.code,
+              0L
+            )
             IO.pure(HResponse[IO](HStatus.InternalServerError))
         }
     }
@@ -99,6 +134,88 @@ final class Http4sHttpServer(
           IO.unit
       }
       wsb.build(send, receive)
+    }
+
+  private def _bootstrap_css(): IO[HResponse[IO]] =
+    IO.pure(
+      HResponse[IO](HStatus.Ok)
+        .withEntity(StaticFormAppAssets.bootstrapCss)
+        .withContentType(`Content-Type`(MediaType.text.css, Some(Charset.`UTF-8`)))
+    )
+
+  private def _bootstrap_bundle_js(): IO[HResponse[IO]] =
+    IO.pure(
+      HResponse[IO](HStatus.Ok)
+        .withEntity(StaticFormAppAssets.bootstrapBundleJs)
+        .withContentType(`Content-Type`(MediaType.application.javascript, Some(Charset.`UTF-8`)))
+    )
+
+  private def _subsystem_dashboard(): IO[HResponse[IO]] = {
+    val p = StaticFormAppRenderer.renderSubsystemDashboard(engine.runtimeSubsystem)
+    IO.pure(
+      HResponse[IO](HStatus.Ok)
+        .withEntity(p.body)
+        .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+    )
+  }
+
+  private def _dashboard_state(
+    componentName: Option[String]
+  ): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderDashboardState(engine.runtimeSubsystem, componentName) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.application.json, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("""{"error":{"code":"NOT_FOUND","message":"Dashboard target not found"}}"""))
+    }
+
+  private def _system_performance(): IO[HResponse[IO]] = {
+    val p = StaticFormAppRenderer.renderSystemPerformance(engine.runtimeSubsystem)
+    IO.pure(
+      HResponse[IO](HStatus.Ok)
+        .withEntity(p.body)
+        .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+    )
+  }
+
+  private def _system_admin(): IO[HResponse[IO]] = {
+    val p = StaticFormAppRenderer.renderSystemAdmin(engine.runtimeSubsystem)
+    IO.pure(
+      HResponse[IO](HStatus.Ok)
+        .withEntity(p.body)
+        .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+    )
+  }
+
+  private def _component_admin(app: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdmin(engine.runtimeSubsystem, app) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component admin not found"))
+    }
+
+  private def _static_form_app(
+    app: String,
+    page: Vector[String]
+  ): IO[HResponse[IO]] =
+    StaticFormAppRenderer.render(engine.runtimeSubsystem, app, page) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Static Form App not found"))
     }
 
   private def _to_http_request(

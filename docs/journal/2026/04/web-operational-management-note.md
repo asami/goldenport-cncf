@@ -23,12 +23,44 @@ The design is based on three pillars:
 Additionally, metrics visualization, performance tuning,
 and debugging are treated as first-class capabilities.
 
+Initial direction:
+
+- Build the Static Form App mechanism first.
+- Treat Static Form App as the application shape; internally, it uses Form API
+  for schema-driven form definition and validation.
+- Place Dashboard, Management Console, and Manual on top of that shared
+  mechanism as separate web applications.
+- Start from a read-only Dashboard as the first entry point.
+- Keep Management Console separate from Dashboard.
+- Keep Manual separate from Dashboard and Management Console.
+- Do not mix operation execution or configuration mutation into the first
+  Dashboard surface.
+- Treat Dashboard as an observation and navigation surface over existing
+  runtime/meta information.
+
 
 1. Dashboard (Observability)
 ----------------------------
 
 Purpose:
 Provide a real-time and historical view of system behavior.
+
+Baseline stance:
+
+The first Dashboard is read-only.
+It shows CNCF runtime state and links to related surfaces, but it does not
+execute operations, mutate configuration, control jobs, or edit components.
+Those capabilities belong to the Management Console.
+
+The Dashboard may link to Manual entries for explanation, but Manual content
+is not embedded as the main interaction model.
+
+Implementation stance:
+
+Dashboard should be implemented as a Static Form App instance with
+mutation paths disabled. It should reuse the same routing, page resolution,
+validation, and response presentation mechanism as the other operational web
+apps, rather than becoming a special-purpose dashboard-only subsystem.
 
 ### 1.1 System Overview
 
@@ -93,6 +125,17 @@ createOrder
 Purpose:
 Provide direct operational control over CNCF runtime.
 
+The Management Console is a separate surface from Dashboard.
+It owns active operation execution, runtime control, job control, and
+configuration mutation.
+Dashboard may link to Console actions, but the initial Dashboard must not
+perform those actions inline.
+
+The Console should be implemented as a separate Static Form App instance.
+Unlike Dashboard, it may expose controlled operation execution and job control
+forms, subject to the Web Tier exposure, authentication, and authorization
+rules.
+
 ### 2.1 Operation Execution UI
 
 - Selector-based invocation
@@ -137,6 +180,16 @@ Provide direct operational control over CNCF runtime.
 
 Purpose:
 Provide discoverability and understanding of the system.
+
+Manual is a separate surface from Dashboard and Management Console.
+It owns explanatory and reference-oriented views derived from CNCF meta
+capabilities. Dashboard may link to Manual entries for a component, service,
+operation, or warning, but the Dashboard should remain an operational
+read-only overview rather than a reference manual.
+
+Manual should be implemented as a separate Static Form App instance for
+read-only reference navigation. It should use existing meta/help/describe/schema
+projections as content sources rather than duplicating documentation logic.
 
 ### 3.1 Help (Human-readable)
 

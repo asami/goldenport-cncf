@@ -19,7 +19,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan. 10, 2026
- * @version Mar. 29, 2026
+ *  version Mar. 29, 2026
+ * @version Apr. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientRequestNormalizationSpec
@@ -65,13 +66,13 @@ class ClientRequestNormalizationSpec
             _property(req, "baseurl") shouldBe None
             body match {
               case Some(value) =>
-                val property = _property(req, "data")
-                property.map(_.name) shouldBe Some("data")
+                val property = _property(req, "http.body")
+                property.map(_.name) shouldBe Some("http.body")
                 property.foreach { p =>
                   _bag_text(p.value) shouldBe Some(value)
                 }
               case None =>
-                _property(req, "data") shouldBe None
+                _property(req, "http.body") shouldBe None
             }
           case _ =>
             fail("expected successful normalization")
@@ -120,11 +121,11 @@ class ClientRequestNormalizationSpec
         When("the arguments are normalized into a Request")
         request should be_success
 
-        Then("the data property is a Bag created from the file content")
+        Then("the http.body property is a Bag created from the file content")
         request match {
           case org.goldenport.Consequence.Success(req) =>
-          val property = _property(req, "data")
-          property.map(_.name) shouldBe Some("data")
+          val property = _property(req, "http.body")
+          property.map(_.name) shouldBe Some("http.body")
           property.foreach { p =>
             _bag_text(p.value) shouldBe Some("pong")
           }
@@ -153,6 +154,52 @@ class ClientRequestNormalizationSpec
           _property(req, "baseurl") shouldBe Some(
             Property("baseurl", "http://example.test", None)
           )
+        case _ =>
+          fail("expected successful normalization")
+      }
+    }
+
+    "separate operation body field from namespaced HTTP body options" in {
+      val subsystem = _subsystem_with_admin()
+      Given("client sugar arguments with a body field")
+      val request = CncfRuntime.parseClientArgs(
+        subsystem,
+        Array("admin.system.ping", "--body", "hello", "--http.body", "raw")
+      )
+
+      When("the arguments are normalized into a Request")
+      request should be_success
+
+      Then("body remains a form parameter and http.body remains the raw HTTP body parameter")
+      request match {
+        case org.goldenport.Consequence.Success(req) =>
+          _property(req, "body") shouldBe Some(Property("body", "hello", None))
+          _property(req, "http.body") shouldBe Some(Property("http.body", "raw", None))
+          CncfRuntime._client_form_encoded_payload(req).getOrElse("") should include ("body=hello")
+          CncfRuntime._client_form_encoded_payload(req).getOrElse("") should not include ("http.body=raw")
+          CncfRuntime._client_mime_body_from_request(req).toOption.flatten.flatMap(body => _bag_text(body.value)) shouldBe Some("raw")
+        case _ =>
+          fail("expected successful normalization")
+      }
+    }
+
+    "treat data as a normal client sugar form field" in {
+      val subsystem = _subsystem_with_admin()
+      Given("client sugar arguments with a data field")
+      val request = CncfRuntime.parseClientArgs(
+        subsystem,
+        Array("admin.system.ping", "--data", "normal")
+      )
+
+      When("the arguments are normalized into a Request")
+      request should be_success
+
+      Then("data remains a form parameter")
+      request match {
+        case org.goldenport.Consequence.Success(req) =>
+          _property(req, "data") shouldBe Some(Property("data", "normal", None))
+          CncfRuntime._client_form_encoded_payload(req).getOrElse("") should include ("data=normal")
+          CncfRuntime._client_mime_body_from_request(req).toOption.flatten shouldBe defined
         case _ =>
           fail("expected successful normalization")
       }

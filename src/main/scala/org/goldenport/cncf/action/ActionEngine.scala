@@ -14,6 +14,7 @@ import org.goldenport.cncf.observability.{CallTreeContext, ObservabilityEngine, 
 import org.goldenport.cncf.context.{ScopeContext, ScopeKind}
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.ResolvedParameters
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
 
 /*
  * @since   Apr. 11, 2025
@@ -24,7 +25,7 @@ import org.goldenport.cncf.config.ResolvedParameters
  *  version Jan. 29, 2026
  *  version Feb.  6, 2026
  *  version Mar. 13, 2026
- * @version Apr. 11, 2026
+ * @version Apr. 12, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -132,6 +133,7 @@ class ActionEngine(
             } finally {
               calltree.leave()
               executionOutcome.foreach { outcome =>
+                RuntimeDashboardMetrics.recordActionCall(outcome.isLeft)
                 ObservabilityEngine.recordActionExecution(
                   operation = call.action.name,
                   parameters = call.request.toRecord,
