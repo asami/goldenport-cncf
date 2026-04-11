@@ -144,6 +144,32 @@ Admin retrieval surfaces:
 - `admin.execution.history`: returns retained action execution records
 - `admin.execution.calltree`: returns the calltree projection from the latest retained action execution
 
+`admin.execution.history` returns a record with:
+
+- `recent_limit`
+- `filtered_limit`
+- `filter_count`
+- `operation_filter`
+- `count`
+- `executions`
+
+Each entry in `executions` uses:
+
+- `id`
+- `operation`
+- `parameters`
+- `parameters_text`
+- `outcome`
+- `result_type`
+- `result_summary`
+- `captured_at`
+- `calltree`, only when calltree capture was enabled for that action
+
+`admin.execution.calltree` returns the latest retained execution using the same
+entry fields and always includes `calltree`. If the latest execution was not
+captured with calltree enabled, `calltree` is an empty sequence. If no retained
+execution exists, it returns an empty-status record.
+
 History display should support filtering by operation name so dashboard and
 admin-console views can focus on the debugging target without dumping the full
 retention buffer.
