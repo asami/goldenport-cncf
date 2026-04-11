@@ -11,6 +11,7 @@ import org.goldenport.protocol.handler.ingress.{DefaultArgsIngress, IngressColle
 import org.goldenport.protocol.handler.egress.{Egress, EgressCollection}
 import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
+import org.goldenport.value.BaseContent
 import org.goldenport.test.matchers.ConsequenceMatchers
 import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, QueryAction, ResourceAccess}
 import org.goldenport.cncf.component.Component
@@ -34,7 +35,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  4, 2026
  *  version Feb. 27, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -215,7 +216,7 @@ private object TestCommandOperation extends spec.OperationDefinition {
       request = spec.RequestDefinition(
         parameters = List(
           spec.ParameterDefinition(
-            name = "value",
+            content = BaseContent.simple("value"),
             kind = spec.ParameterDefinition.Kind.Argument
           )
         )
@@ -261,7 +262,7 @@ private object TestCommandFailOperation extends spec.OperationDefinition {
       request = spec.RequestDefinition(
         parameters = List(
           spec.ParameterDefinition(
-            name = "value",
+            content = BaseContent.simple("value"),
             kind = spec.ParameterDefinition.Kind.Argument
           )
         )
@@ -307,7 +308,7 @@ private object TestQueryOperation extends spec.OperationDefinition {
       request = spec.RequestDefinition(
         parameters = List(
           spec.ParameterDefinition(
-            name = "value",
+            content = BaseContent.simple("value"),
             kind = spec.ParameterDefinition.Kind.Argument
           )
         )

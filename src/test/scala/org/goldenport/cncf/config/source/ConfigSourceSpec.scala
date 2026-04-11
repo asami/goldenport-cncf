@@ -1,6 +1,7 @@
 package org.goldenport.cncf.config.source
 
 import java.nio.file.Files
+import scala.annotation.nowarn
 import org.goldenport.Consequence
 import org.goldenport.cncf.config.trace.ConfigOrigin
 import org.scalatest.GivenWhenThen
@@ -10,9 +11,11 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Dec. 23, 2025
- * @version Mar. 22, 2026
+ *  version Mar. 22, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
+@nowarn("cat=deprecation")
 class ConfigSourceSpec
     extends AnyWordSpec
     with Matchers

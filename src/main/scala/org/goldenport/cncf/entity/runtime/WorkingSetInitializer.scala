@@ -10,7 +10,8 @@ package org.goldenport.cncf.entity.runtime
  * This supports the CNCF working-set entity runtime model.
  *
  * @since   Mar. 14, 2026
- * @version Mar. 15, 2026
+ *  version Mar. 15, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkingSetInitializer(
@@ -30,7 +31,7 @@ final class WorkingSetInitializer(
           // Future optimization may introduce a bulk preload API
           // (e.g., memory.bulkPut) to improve startup performance
           // when loading large working sets.
-          entities.foreach(memory.put)
+          entities.iterator.foreach(memory.put)
         }
     }
   }
@@ -39,7 +40,7 @@ final class WorkingSetInitializer(
     _storage[E](spec.entityName).foreach { storage =>
       storage.memoryRealm
         .foreach { memory =>
-          spec.entities.foreach(memory.put)
+          spec.entities.iterator.foreach(memory.put)
         }
     }
   }

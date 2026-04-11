@@ -1,6 +1,6 @@
 package org.goldenport.cncf.http
 
-import java.net.URL
+import java.net.{URI, URL}
 import java.nio.charset.{Charset, StandardCharsets}
 
 import org.goldenport.bag.Bag
@@ -10,7 +10,8 @@ import org.goldenport.http.{HttpRequest, HttpResponse}
 
 /*
  * @since   Jan. 20, 2026
- * @version Feb.  7, 2026
+ *  version Feb.  7, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class LoopbackHttpDriver(
@@ -51,11 +52,11 @@ final class LoopbackHttpDriver(
 
   private def _buildUrl(path: String): URL = {
     if (path.startsWith("http://") || path.startsWith("https://")) {
-      new URL(path)
+      URI.create(path).toURL
     } else {
       val base = if (baseurl.endsWith("/")) baseurl.dropRight(1) else baseurl
       val suffix = if (path.startsWith("/")) path else s"/${path}"
-      new URL(s"${base}${suffix}")
+      URI.create(s"${base}${suffix}").toURL
     }
   }
 }

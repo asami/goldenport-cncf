@@ -1,5 +1,6 @@
 package org.goldenport.cncf.config
 
+import scala.annotation.nowarn
 import org.goldenport.cncf.config.model.{Config, ConfigValue}
 import org.goldenport.cncf.config.trace.{ConfigTrace, ConfigResolution}
 import org.goldenport.cncf.config.source.ConfigSource
@@ -21,9 +22,10 @@ import org.goldenport.cncf.config.source.ConfigSource
  */
 /*
  * @since   Dec. 18, 2025
- * @version Dec. 18, 2025
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
+@nowarn("cat=deprecation")
 object MergePolicy {
 
   /**

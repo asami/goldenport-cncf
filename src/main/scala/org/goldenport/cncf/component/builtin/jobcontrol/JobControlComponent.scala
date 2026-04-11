@@ -14,11 +14,12 @@ import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
 import org.goldenport.schema.DataType
+import org.goldenport.value.BaseContent
 
 /*
  * @since   Mar. 28, 2026
  *  version Mar. 29, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
@@ -107,7 +108,7 @@ object JobControlComponent {
 
     private def _job_id_request: spec.RequestDefinition =
       spec.RequestDefinition(
-        parameters = List(spec.ParameterDefinition("id", spec.ParameterDefinition.Kind.Argument))
+        parameters = List(spec.ParameterDefinition(content = BaseContent.simple("id"), kind = spec.ParameterDefinition.Kind.Argument))
       )
   }
 
@@ -404,24 +405,26 @@ object JobControlComponent {
       core.component match {
         case Some(component) =>
           given org.goldenport.cncf.context.ExecutionContext = core.executionContext
-          val jobAdmin = component.port.get[JobAdminService].getOrElse {
-            return Consequence.failure("job admin service is not available")
-          }
-          val response = command match {
-            case JobControlCommand.Cancel => jobAdmin.cancelJob(jobId)
-            case JobControlCommand.Suspend => jobAdmin.suspendJob(jobId)
-            case JobControlCommand.Resume => jobAdmin.resumeJob(jobId)
-            case JobControlCommand.Retry => component.logic.controlJob(jobId, JobControlRequest(command))
-          }
-          response.map { response =>
-            OperationResponse.RecordResponse(
-              Record.data(
-                "job-id" -> response.jobId.value,
-                "status" -> response.status.toString,
-                "async" -> response.async,
-                "response" -> response.response.map(_.print).getOrElse("")
-              )
-            )
+          component.port.get[JobAdminService] match {
+            case Some(jobAdmin) =>
+              val response = command match {
+                case JobControlCommand.Cancel => jobAdmin.cancelJob(jobId)
+                case JobControlCommand.Suspend => jobAdmin.suspendJob(jobId)
+                case JobControlCommand.Resume => jobAdmin.resumeJob(jobId)
+                case JobControlCommand.Retry => component.logic.controlJob(jobId, JobControlRequest(command))
+              }
+              response.map { response =>
+                OperationResponse.RecordResponse(
+                  Record.data(
+                    "job-id" -> response.jobId.value,
+                    "status" -> response.status.toString,
+                    "async" -> response.async,
+                    "response" -> response.response.map(_.print).getOrElse("")
+                  )
+                )
+              }
+            case None =>
+              Consequence.failure("job admin service is not available")
           }
         case None =>
           Consequence.failure("component is not initialized")

@@ -16,7 +16,8 @@ import org.goldenport.cncf.observability.global.GlobalObservable
 /*
  * @since   Jan. 31, 2026
  *  version Feb.  1, 2026
- * @version Mar. 27, 2026
+ *  version Mar. 27, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class CliOperation extends GlobalObservable {
@@ -41,7 +42,7 @@ abstract class CliOperation extends GlobalObservable {
       _selector_and_arguments(clean).flatMap { case (selector, tail) =>
       val normalized = _normalize_meta_selector(selector, tail.toVector)
       val canonicalSelector = PathPreNormalizer.rewriteSelector(normalized._1, mode, _alias_resolver)
-      subsystem.resolver.resolve(canonicalSelector, allowPrefix = false, allowImplicit = false) match {
+      subsystem.resolver.resolve(canonicalSelector) match {
         case ResolutionResult.Resolved(_, component, service, operation) =>
           val arguments = _build_request_arguments(normalized._2)
           val properties = _runtime_properties(runtimeOptions)

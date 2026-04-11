@@ -1,5 +1,6 @@
 package org.goldenport.cncf.config
 
+import scala.annotation.nowarn
 import org.goldenport.cncf.config.model.Config
 import org.goldenport.cncf.config.trace.ConfigTrace
 
@@ -22,13 +23,14 @@ import org.goldenport.cncf.config.trace.ConfigTrace
  */
 /*
  * @since   Dec. 18, 2025
- * @version Dec. 18, 2025
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 @deprecated(
   "Use org.goldenport.configuration.* (Phase 2.8)",
   "Phase 2.8"
 )
+@nowarn("cat=deprecation")
 case class ResolvedConfig(
   config: Config,
   trace: ConfigTrace

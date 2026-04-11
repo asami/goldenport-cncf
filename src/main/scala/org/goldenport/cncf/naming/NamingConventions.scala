@@ -12,7 +12,8 @@ import org.goldenport.util.StringUtils
  */
 /*
  * @since   May. 24, 2025
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object NamingConventions {
@@ -80,7 +81,7 @@ object NamingConventions {
 
   private def _capitalize(value: String): String =
     value.headOption match {
-      case Some(head) => head.toUpper + value.drop(1)
+      case Some(head) => s"${head.toUpper}${value.drop(1)}"
       case None => value
     }
 }

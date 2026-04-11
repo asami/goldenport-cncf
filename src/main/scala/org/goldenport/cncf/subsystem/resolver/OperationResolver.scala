@@ -9,8 +9,9 @@ import OperationResolver._
 /*
  * @since   Jan. 15, 2026
  *  version Jan. 16, 2026
+ *  version Mar. 28, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
- * @version Mar. 28, 2026
  */
 final class OperationResolver private (
   val config: Config,
@@ -34,7 +35,7 @@ final class OperationResolver private (
       if (config.mode == Mode.OneOperation && dotCount < 2) {
         ResolutionResult.NotFound(ResolutionStage.Operation, trimmed)
       } else {
-        resolve(
+        _resolve_with_flags(
           trimmed,
           allowPrefix = config.mode != Mode.OneOperation && config.prefixMatchingEnabled,
           allowImplicit = false

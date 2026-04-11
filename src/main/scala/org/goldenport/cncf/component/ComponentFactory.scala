@@ -33,7 +33,7 @@ import scala.util.Try
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Mar. 31, 2026
- * @version Apr.  1, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -1020,7 +1020,7 @@ final class ComponentFactory(
     entities: IterableOnce[E]
   ): Unit = {
     entitySpace.entityOption[E](entityName).foreach { collection =>
-      entities.foreach { entity =>
+      entities.iterator.foreach { entity =>
         val id = collection.descriptor.persistent.id(entity)
         storesnapshot.put(id, entity)
         collection.storage.storeRealm.put(entity)
@@ -1288,7 +1288,7 @@ final class ComponentFactory(
       .split("-")
       .toVector
       .filter(_.nonEmpty)
-      .map(s => s.head.toUpper + s.drop(1))
+      .map(s => s"${s.head.toUpper}${s.drop(1)}")
       .mkString
   }
 

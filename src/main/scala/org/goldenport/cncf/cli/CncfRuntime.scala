@@ -1,6 +1,6 @@
 package org.goldenport.cncf.cli
 
-import java.net.{URL, URLEncoder}
+import java.net.{URI, URL, URLEncoder}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import java.net.URLClassLoader
@@ -59,7 +59,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -1749,7 +1749,7 @@ object CncfRuntime extends GlobalObservable {
     subsystem: Subsystem,
     selector: String
   ): Consequence[(String, String, String)] =
-    subsystem.resolver.resolve(selector, allowPrefix = false, allowImplicit = false) match {
+    subsystem.resolver.resolve(selector) match {
       case ResolutionResult.Resolved(_, component, service, operation) =>
         Consequence.success((component, service, operation))
       case ResolutionResult.NotFound(stage, input) =>
@@ -3124,7 +3124,7 @@ class CncfRuntime() extends GlobalObservable {
               // "system.ping", // TODO generic
               HttpRequest.fromUrl(
                 method = HttpRequest.POST,
-                url = new URL(url),
+                url = URI.create(url).toURL,
                 body = body.map(_.value)
               )
             )
@@ -3140,7 +3140,7 @@ class CncfRuntime() extends GlobalObservable {
                   // "system.ping",
                   HttpRequest.fromUrl(
                     method = HttpRequest.GET,
-                    url = new URL(url)
+                    url = URI.create(url).toURL
                   )
                 )
               )
@@ -3493,7 +3493,7 @@ class CncfRuntime() extends GlobalObservable {
     subsystem: Subsystem,
     selector: String
   ): Consequence[(String, String, String)] =
-    subsystem.resolver.resolve(selector, allowPrefix = false, allowImplicit = false) match {
+    subsystem.resolver.resolve(selector) match {
       case ResolutionResult.Resolved(_, component, service, operation) =>
         Consequence.success((component, service, operation))
       case ResolutionResult.NotFound(stage, input) =>

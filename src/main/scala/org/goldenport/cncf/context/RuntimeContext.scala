@@ -18,7 +18,7 @@ import org.goldenport.util.StringUtils
  * @since   Dec. 21, 2025
  *  version Jan. 18, 2026
  *  version Mar. 31, 2026
- * @version Apr.  5, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -227,7 +227,7 @@ object RuntimeContext {
     private def _to_camel(name: String): String = {
       val normalized = _normalize_to_camel(name)
       if (normalized.isEmpty) normalized
-      else normalized.head.toLower + normalized.tail
+      else s"${normalized.head.toLower}${normalized.tail}"
     }
 
     private def _normalize_to_camel(name: String): String = {
@@ -241,12 +241,12 @@ object RuntimeContext {
           .filter(_.nonEmpty)
           .zipWithIndex
           .map {
-            case (part, 0) => part.head.toLower + part.tail
-            case (part, _) => part.head.toUpper + part.tail
+            case (part, 0) => s"${part.head.toLower}${part.tail}"
+            case (part, _) => s"${part.head.toUpper}${part.tail}"
           }
           .mkString
       } else {
-        trimmed.head.toLower + trimmed.tail
+        s"${trimmed.head.toLower}${trimmed.tail}"
       }
     }
   }

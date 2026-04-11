@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 23, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateViewProjectionAlignmentSpec
@@ -44,7 +44,7 @@ final class AggregateViewProjectionAlignmentSpec
       _string_vector(_record(help("details")).asMap("aggregates")) shouldBe Vector("person_aggregate", "profile_aggregate")
       _string_vector(_record(help("details")).asMap("views")) shouldBe Vector("person_view", "summary_view")
       _string_vector(_record(help("details")).asMap("operationDefinitions")) shouldBe Vector("getPerson", "savePerson")
-      _string_vector(_record(help("details")).asMap("origin")).head should include("component-dir")
+      _string_vector(_record(help("details")).asMap("origin")) shouldBe Vector("active car projection-alignment@0.1.0")
       _string_vector(_record(help("details")).asMap("artifactName")) shouldBe Vector("projection-alignment")
       _string_vector(_record(help("details")).asMap("artifactVersion")) shouldBe Vector("0.1.0")
 
@@ -55,7 +55,7 @@ final class AggregateViewProjectionAlignmentSpec
       _records(_records(describe("views")).head.asMap("queries")).head.getString("expression") shouldBe Some("status == \"published\"")
       _string_vector(_records(describe("views")).head.asMap("sourceEvents")) shouldBe Vector("person.published")
       _records(describe("views")).head.getBoolean("rebuildable") shouldBe Some(true)
-      describe.get("origin").map(_.toString) shouldBe Some("component-dir:car:projection-alignment:0.1.0")
+      describe.get("origin").map(_.toString) shouldBe Some("active car projection-alignment@0.1.0")
       _record(describe("artifact")).getString("name") shouldBe Some("projection-alignment")
       _records(describe("operationDefinitions")).map(_.getString("name").getOrElse("")) shouldBe Vector("getPerson", "savePerson")
       _records(describe("operationDefinitions")).head.getString("kind") shouldBe Some("QUERY")
@@ -66,7 +66,7 @@ final class AggregateViewProjectionAlignmentSpec
 
       _records(schema("aggregateCollections")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_aggregate", "profile_aggregate")
       _records(schema("viewCollections")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_view", "summary_view")
-      schema.get("origin").map(_.toString) shouldBe Some("component-dir:car:projection-alignment:0.1.0")
+      schema.get("origin").map(_.toString) shouldBe Some("active car projection-alignment@0.1.0")
       _record(schema("artifact")).getString("version") shouldBe Some("0.1.0")
       _records(schema("operationDefinitions")).map(_.getString("name").getOrElse("")) shouldBe Vector("getPerson", "savePerson")
       _records(schema("operationDefinitions")).last.getString("kind") shouldBe Some("COMMAND")

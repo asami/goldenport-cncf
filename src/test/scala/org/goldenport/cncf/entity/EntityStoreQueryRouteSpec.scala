@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -309,8 +309,8 @@ final class EntityStoreQueryRouteSpec
       } yield rec
 
       Then("id/name and context-derived metadata are complemented")
-      created.map(_.id) shouldBe Consequence.success(created.take.id)
-      loaded.map(_.flatMap(_.getString("id"))) shouldBe Consequence.success(Some(created.take.id.print))
+      created.map(_.id) shouldBe Consequence.success(created.TAKE.id)
+      loaded.map(_.flatMap(_.getString("id"))) shouldBe Consequence.success(Some(created.TAKE.id.print))
       loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(Some("test-principal"))
       loaded.map(_.flatMap(_.getString("created_by"))) shouldBe Consequence.success(Some("test-principal"))
       loaded.map(_.flatMap(_.getString("post_status")).exists(_.toLowerCase.contains("draft"))) shouldBe Consequence.success(true)

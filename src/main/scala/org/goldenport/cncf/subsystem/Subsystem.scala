@@ -341,7 +341,7 @@ final class Subsystem(
     operationname: String
   ): Option[(Component, ServiceDefinition, OperationDefinition)] = {
     val selector = s"$componentname.$servicename.$operationname"
-    _resolver.resolve(selector, allowPrefix = false, allowImplicit = false) match {
+    _resolver.resolve(selector) match {
       case ResolutionResult.Resolved(_, component, service, operation) =>
         val locator = NameLocator(component)
         for {

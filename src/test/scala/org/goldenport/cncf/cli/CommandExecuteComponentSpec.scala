@@ -14,6 +14,7 @@ import org.goldenport.http.HttpRequest
 import org.goldenport.protocol.{Property, Request, Response}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.spec as spec
+import org.goldenport.value.BaseContent
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -21,8 +22,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  9, 2026
  *  version Jan. 18, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
- * @version Apr. 10, 2026
  */
 class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
 
@@ -408,7 +409,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
 
     "rewrite run command domain.entity.createPerson --help to command help selector" in {
       val op = spec.OperationDefinition(
-        name = "createPerson",
+        content = BaseContent.simple("createPerson"),
         request = spec.RequestDefinition(),
         response = spec.ResponseDefinition.void
       )
@@ -448,7 +449,7 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
 
     "rewrite run command help domain.entity to domain.entity.meta.help" in {
       val op = spec.OperationDefinition(
-        name = "createPerson",
+        content = BaseContent.simple("createPerson"),
         request = spec.RequestDefinition(),
         response = spec.ResponseDefinition.void
       )

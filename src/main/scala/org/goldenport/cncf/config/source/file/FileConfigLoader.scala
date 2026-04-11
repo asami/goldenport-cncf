@@ -1,6 +1,7 @@
 package org.goldenport.cncf.config.source.file
 
 import java.nio.file.{Files, Path}
+import scala.annotation.nowarn
 import scala.jdk.CollectionConverters.*
 
 import org.goldenport.Consequence
@@ -23,9 +24,10 @@ import org.goldenport.cncf.config.model.{Config, ConfigValue}
  */
 /*
  * @since   Dec. 18, 2025
- * @version Dec. 18, 2025
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
+@nowarn("cat=deprecation")
 trait FileConfigLoader {
   def load(
     path: Path
@@ -40,6 +42,7 @@ trait FileConfigLoader {
  *
  * Blank lines and lines starting with '#' are ignored.
  */
+@nowarn("cat=deprecation")
 final class SimpleFileConfigLoader
   extends FileConfigLoader {
 
@@ -73,4 +76,3 @@ final class SimpleFileConfigLoader
     }
   }
 }
-

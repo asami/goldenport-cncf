@@ -12,11 +12,11 @@ import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
 import org.goldenport.schema.DataType
+import org.goldenport.value.BaseContent
 
 /*
  * @since   Mar. 28, 2026
- *  version Mar. 28, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventComponent() extends Component {
@@ -85,12 +85,12 @@ object EventComponent {
 
     private def _event_id_request: spec.RequestDefinition =
       spec.RequestDefinition(
-        parameters = List(spec.ParameterDefinition("id", spec.ParameterDefinition.Kind.Argument))
+        parameters = List(spec.ParameterDefinition(content = BaseContent.simple("id"), kind = spec.ParameterDefinition.Kind.Argument))
       )
 
     private def _job_id_request: spec.RequestDefinition =
       spec.RequestDefinition(
-        parameters = List(spec.ParameterDefinition("id", spec.ParameterDefinition.Kind.Argument))
+        parameters = List(spec.ParameterDefinition(content = BaseContent.simple("id"), kind = spec.ParameterDefinition.Kind.Argument))
       )
   }
 

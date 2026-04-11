@@ -25,7 +25,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Jan. 29, 2026
  *  version Feb.  5, 2026
  *  version Mar. 22, 2026
- * @version Apr.  9, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -1037,44 +1037,44 @@ object ComponentRepository extends GlobalObservable {
     origin: ComponentOrigin,
     log: BootstrapLog,
     tolerant: Boolean
-  ): Consequence[Vector[ComponentSource]] = {
-    var acc = Vector.empty[ComponentSource]
-    classNames.foreach { className =>
-      log.info(s"candidate class=${className}")
-      ComponentFactory.build(Seq(className), loader, origin.label) match {
-        case Consequence.Success(sources) =>
-          sources.foreach {
-            case ComponentSource.ClassDef(_, _) =>
-              log.info(s"accepted component class=${className}")
-          }
-          acc = acc ++ sources
-        case Consequence.Failure(conclusion) =>
-          log.warn(s"failed to build source: ${className} cause=${conclusion.show}")
-          if (!tolerant) {
-            return Consequence.Failure(conclusion)
-          }
+  ): Consequence[Vector[ComponentSource]] =
+    classNames.foldLeft(Consequence.success(Vector.empty[ComponentSource])) { (result, className) =>
+      result.flatMap { acc =>
+        log.info(s"candidate class=${className}")
+        ComponentFactory.build(Seq(className), loader, origin.label) match {
+          case Consequence.Success(sources) =>
+            sources.foreach {
+              case ComponentSource.ClassDef(_, _) =>
+                log.info(s"accepted component class=${className}")
+            }
+            Consequence.success(acc ++ sources)
+          case Consequence.Failure(conclusion) =>
+            log.warn(s"failed to build source: ${className} cause=${conclusion.show}")
+            if (tolerant) {
+              Consequence.success(acc)
+            } else {
+              Consequence.Failure(conclusion)
+            }
+        }
       }
     }
-    Consequence.Success(acc)
-  }
 
   private def _provide_components(
     sources: Seq[ComponentSource],
     params: ComponentCreate,
     log: BootstrapLog
-  ): Consequence[Vector[Component]] = {
-    var acc = Vector.empty[Component]
-    sources.foreach { source =>
-      ComponentProvider.provide(source, params.subsystem, params.origin) match {
-        case Consequence.Success(component) =>
-          acc = acc :+ component
-        case Consequence.Failure(conclusion) =>
-          log.warn(s"failed to instantiate component cause=${conclusion.show}")
-          return Consequence.Failure(conclusion)
+  ): Consequence[Vector[Component]] =
+    sources.foldLeft(Consequence.success(Vector.empty[Component])) { (result, source) =>
+      result.flatMap { acc =>
+        ComponentProvider.provide(source, params.subsystem, params.origin) match {
+          case Consequence.Success(component) =>
+            Consequence.success(acc :+ component)
+          case Consequence.Failure(conclusion) =>
+            log.warn(s"failed to instantiate component cause=${conclusion.show}")
+            Consequence.Failure(conclusion)
+        }
       }
     }
-    Consequence.Success(acc)
-  }
 }
 
 sealed trait ComponentSource {

@@ -35,7 +35,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan. 10, 2026
  *  version Feb. 15, 2026
- * @version Mar. 29, 2026
+ *  version Mar. 29, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientAdminSystemPingSpec
@@ -233,7 +234,7 @@ class ClientAdminSystemPingSpec
                 Request.ofOperation("system.ping"),
                 HttpRequest.fromUrl(
                   method = HttpRequest.POST,
-                  url = new java.net.URL(url),
+                  url = java.net.URI.create(url).toURL,
                   body = body
                 )
               )
@@ -244,7 +245,7 @@ class ClientAdminSystemPingSpec
                 Request.ofOperation("system.ping"),
                 HttpRequest.fromUrl(
                   method = HttpRequest.GET,
-                  url = new java.net.URL(url)
+                  url = java.net.URI.create(url).toURL
                 )
               )
             )

@@ -17,7 +17,7 @@ import org.goldenport.http.HttpRequest
 import org.goldenport.protocol.{Argument, Property, Request}
 import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.protocol.spec as spec
-import java.net.URL
+import java.net.URI
 import java.nio.charset.StandardCharsets
 import org.goldenport.schema.DataType
 
@@ -25,7 +25,7 @@ import org.goldenport.schema.DataType
  * @since   Jan. 10, 2026
  *  version Jan. 21, 2026
  *  version Feb. 15, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ClientComponent() extends Component {
@@ -92,7 +92,7 @@ object ClientComponent {
         new GetQuery(
           req,
           // "system.ping",
-          HttpRequest.fromUrl(HttpRequest.GET, new URL(url))
+          HttpRequest.fromUrl(HttpRequest.GET, URI.create(url).toURL)
         )
       }
     }
@@ -121,7 +121,7 @@ object ClientComponent {
           // "system.ping",
           HttpRequest.fromUrl(
             method = HttpRequest.POST,
-            url = new URL(url),
+            url = URI.create(url).toURL,
             body = body
           )
         )

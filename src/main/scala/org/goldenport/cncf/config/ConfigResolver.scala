@@ -4,6 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.config.model.*
 import org.goldenport.cncf.config.trace.*
 import org.goldenport.cncf.config.source.{ConfigSource, ConfigSources}
+import scala.annotation.nowarn
 import scala.util.boundary
 import scala.util.boundary.break
 
@@ -24,7 +25,7 @@ import scala.util.boundary.break
  */
 /*
  * @since   Dec. 18, 2025
- * @version Dec. 18, 2025
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 @deprecated(
@@ -45,6 +46,7 @@ trait ConfigResolver {
 
 object ConfigResolver {
 
+  @nowarn("cat=deprecation")
   def default: ConfigResolver =
     new DefaultConfigResolver
 }

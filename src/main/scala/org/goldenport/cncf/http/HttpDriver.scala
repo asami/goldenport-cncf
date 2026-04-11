@@ -1,7 +1,7 @@
 package org.goldenport.cncf.http
 
 import java.io.{ByteArrayOutputStream, InputStream}
-import java.net.{HttpURLConnection, URL}
+import java.net.{HttpURLConnection, URI, URL}
 import java.nio.charset.{Charset, StandardCharsets}
 import org.goldenport.bag.Bag
 import org.goldenport.datatype.{ContentType, MimeType}
@@ -10,7 +10,8 @@ import org.slf4j.LoggerFactory
 
 /*
  * @since   Jan. 11, 2026
- * @version Feb.  7, 2026
+ *  version Feb.  7, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 trait HttpDriver {
@@ -66,11 +67,11 @@ final class UrlConnectionHttpDriver(
     path: String
   ): URL = {
     if (path.startsWith("http://") || path.startsWith("https://")) {
-      new URL(path)
+      URI.create(path).toURL
     } else {
       val base = if (baseurl.endsWith("/")) baseurl.dropRight(1) else baseurl
       val suffix = if (path.startsWith("/")) path else s"/${path}"
-      new URL(s"${base}${suffix}")
+      URI.create(s"${base}${suffix}").toURL
     }
   }
 

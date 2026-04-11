@@ -1,5 +1,7 @@
 package org.goldenport.cncf.config.model
 
+import scala.annotation.nowarn
+
 /**
  * Config represents a resolved configuration set.
  *
@@ -13,13 +15,14 @@ package org.goldenport.cncf.config.model
  */
 /*
  * @since   Dec. 18, 2025
- * @version Dec. 18, 2025
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 @deprecated(
   "Use org.goldenport.configuration.* (Phase 2.8)",
   "Phase 2.8"
 )
+@nowarn("cat=deprecation")
 case class Config(
   values: Map[String, ConfigValue]
 ) {
@@ -44,6 +47,7 @@ case class Config(
     values.get(key).collect { case ConfigValue.NumberValue(v) => v }
 }
 
+@nowarn("cat=deprecation")
 object Config {
   val empty: Config = Config(Map.empty)
 }

@@ -1,6 +1,6 @@
 package org.goldenport.cncf.cli
 
-import java.net.URL
+import java.net.URI
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import org.goldenport.Consequence
@@ -23,7 +23,7 @@ import org.goldenport.cncf.component.builtin.client.{GetQuery, PostCommand}
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  1, 2026
- * @version Apr.  3, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientOperation(val subsystem: Subsystem) extends CliOperation {
@@ -154,6 +154,8 @@ class ClientOperation(val subsystem: Subsystem) extends CliOperation {
       Consequence.failure("client path is required")
     } else {
       args.toVector match {
+        case Vector() =>
+          Consequence.failure("client path is required")
         case Vector(component, service, operation, rest @ _*) =>
           Consequence.success((_normalize_path(s"/${component}/${service}/${operation}"), rest))
         case Vector(single, rest @ _*) =>
@@ -239,7 +241,7 @@ class ClientOperation(val subsystem: Subsystem) extends CliOperation {
               // "system.ping", // TODO generic
               HttpRequest.fromUrl(
                 method = HttpRequest.POST,
-                url = new URL(url),
+                url = URI.create(url).toURL,
                 body = body.map(_.value)
               )
             )
@@ -255,7 +257,7 @@ class ClientOperation(val subsystem: Subsystem) extends CliOperation {
                   // "system.ping",
                   HttpRequest.fromUrl(
                     method = HttpRequest.GET,
-                    url = new URL(url)
+                    url = URI.create(url).toURL
                   )
                 )
               )

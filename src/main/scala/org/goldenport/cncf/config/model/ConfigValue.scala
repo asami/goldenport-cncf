@@ -1,5 +1,7 @@
 package org.goldenport.cncf.config.model
 
+import scala.annotation.nowarn
+
 /**
  * ConfigValue represents a raw configuration value.
  *
@@ -13,15 +15,17 @@ package org.goldenport.cncf.config.model
  */
 /*
  * @since   Dec. 18, 2025
- * @version Dec. 18, 2025
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 @deprecated(
   "Use org.goldenport.configuration.* (Phase 2.8)",
   "Phase 2.8"
 )
+@nowarn("cat=deprecation")
 sealed trait ConfigValue
 
+@nowarn("cat=deprecation")
 object ConfigValue {
 
   /** Primitive values */

@@ -8,7 +8,7 @@ import org.scalatest.GivenWhenThen
 
 /*
  * @since   Jan. 17, 2026
- * @version Jan. 17, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class PathResolutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -90,7 +90,7 @@ class PathResolutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
         Then("resolution fails due to ambiguous omission")
         result match {
           case PathResolutionResult.Failure(_) =>
-            succeed
+            succeed: Unit
           case other =>
             fail(s"Expected failure, got ${other}")
         }
@@ -106,7 +106,7 @@ class PathResolutionSpec extends AnyWordSpec with Matchers with GivenWhenThen {
         Then("resolution fails")
         result match {
           case PathResolutionResult.Failure(_) =>
-            succeed
+            succeed: Unit
           case other =>
             fail(s"Expected failure, got ${other}")
         }

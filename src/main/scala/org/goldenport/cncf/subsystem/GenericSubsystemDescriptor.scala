@@ -509,7 +509,6 @@ object GenericSubsystemDescriptor {
           val slot = groups.getOrElseUpdate(group, scala.collection.mutable.LinkedHashMap.empty[String, String])
           slot.update(leaf, value)
         }
-      case _ =>
     }
     groups.toVector.flatMap { case (group, values) =>
       group.split("/").toVector.filter(_.nonEmpty) match {
@@ -614,7 +613,6 @@ object GenericSubsystemDescriptor {
           val slot = groups.getOrElseUpdate(group, scala.collection.mutable.LinkedHashMap.empty[String, String])
           slot.update(leaf, value)
         }
-      case _ =>
     }
     groups.toVector.flatMap { case (group, values) =>
       group.split("/").toVector.filter(_.nonEmpty) match {

@@ -1,5 +1,6 @@
 package org.goldenport.cncf.config.trace
 
+import scala.annotation.nowarn
 import org.goldenport.cncf.config.model.ConfigValue
 
 /**
@@ -18,9 +19,10 @@ import org.goldenport.cncf.config.model.ConfigValue
  */
 /*
  * @since   Dec. 18, 2025
- * @version Dec. 18, 2025
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
+@nowarn("cat=deprecation")
 object ConfigTracePrinter {
 
   /**

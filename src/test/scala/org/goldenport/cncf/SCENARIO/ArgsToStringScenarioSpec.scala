@@ -16,6 +16,7 @@ import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.service.{Service => ProtocolService}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.logic.ProtocolLogic
+import org.goldenport.value.BaseContent
 import org.goldenport.test.matchers.ConsequenceMatchers
 import org.goldenport.cncf.action.{Action, ActionCall, QueryAction, ResourceAccess}
 import org.goldenport.cncf.component.Component
@@ -38,7 +39,7 @@ import org.scalatest.matchers.should.Matchers
  */
 /*
  * @since   Jan.  1, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
 class ArgsToStringScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -90,7 +91,7 @@ private object TestQueryOperation extends spec.OperationDefinition {
       request = spec.RequestDefinition(
         parameters = List(
           spec.ParameterDefinition(
-            name = "query",
+            content = BaseContent.simple("query"),
             kind = spec.ParameterDefinition.Kind.Argument
           )
         )

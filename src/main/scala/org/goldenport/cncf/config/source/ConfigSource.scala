@@ -2,6 +2,7 @@ package org.goldenport.cncf.config.source
 
 import java.nio.file.Path
 
+import scala.annotation.nowarn
 import org.goldenport.cncf.config.model.{Config, ConfigValue}
 import org.goldenport.cncf.config.trace.ConfigOrigin
 import org.goldenport.Consequence
@@ -17,9 +18,10 @@ import org.goldenport.cncf.config.source.file.SimpleFileConfigLoader
  */
 /*
  * @since   Dec. 18, 2025
- * @version Dec. 18, 2025
+ * @version Apr. 11, 2026
  * @author  ASAMI, Tomoharu
  */
+@nowarn("cat=deprecation")
 sealed trait ConfigSource {
   def origin: ConfigOrigin
   def rank: Int
@@ -35,6 +37,7 @@ sealed trait ConfigSource {
   def load(): Consequence[Config]
 }
 
+@nowarn("cat=deprecation")
 object ConfigSource {
 
   /**
