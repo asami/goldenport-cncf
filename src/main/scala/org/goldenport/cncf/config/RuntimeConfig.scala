@@ -122,11 +122,9 @@ object RuntimeConfig {
       _get_string(configuration, CommandExecutionModeKey)
         .flatMap(parseCommandExecutionMode)
     val logbackend: LogBackend = {
-      val name = _get_string(configuration, RuntimeLogBackendKey).
-        orElse(_get_string(configuration, LogBackendKey))
+      val name = _get_string(configuration, LogBackendKey)
       val logfile =
-        _get_string(configuration, RuntimeLogFilePathKey).
-          orElse(_get_string(configuration, LogFilePathKey)).
+        _get_string(configuration, LogFilePathKey).
           getOrElse(DefaultLogFilePath)
       name match {
         case Some("file") =>
@@ -138,8 +136,7 @@ object RuntimeConfig {
       }
     }
     val loglevel = {
-      val name = _get_string(configuration, RuntimeLogLevelKey).
-        orElse(_get_string(configuration, LogLevelKey))
+      val name = _get_string(configuration, LogLevelKey)
       name match {
         case Some(s) => LogLevel.from(s) getOrElse LogLevel.Warn
         case None => RuntimeDefaults.defaultLogLevel(mode)
@@ -240,6 +237,9 @@ object RuntimeConfig {
         case ComponentNameKey => Vector(RuntimeComponentNameKey)
         case SubsystemDescriptorKey => Vector(RuntimeSubsystemDescriptorKey)
         case SubsystemFileKey => Vector(RuntimeSubsystemFileKey)
+        case LogBackendKey => Vector(RuntimeLogBackendKey)
+        case LogLevelKey => Vector(RuntimeLogLevelKey)
+        case LogFilePathKey => Vector(RuntimeLogFilePathKey)
         case _ => Vector.empty
       }
     val cncfAliases =

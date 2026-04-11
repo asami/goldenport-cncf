@@ -87,7 +87,10 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers {
             "cncf.runtime.component-factory-class" -> ConfigurationValue.StringValue("example.Factory"),
             "cncf.runtime.workspace" -> ConfigurationValue.StringValue("/tmp/workspace"),
             "cncf.runtime.force-exit" -> ConfigurationValue.BooleanValue(true),
-            "cncf.runtime.no-exit" -> ConfigurationValue.BooleanValue(true)
+            "cncf.runtime.no-exit" -> ConfigurationValue.BooleanValue(true),
+            "cncf.runtime.logging.backend" -> ConfigurationValue.StringValue("stderr"),
+            "cncf.runtime.logging.level" -> ConfigurationValue.StringValue("debug"),
+            "cncf.runtime.logging.file.path" -> ConfigurationValue.StringValue("/tmp/cncf.log")
           )
         ),
         ConfigurationTrace.empty
@@ -98,6 +101,9 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers {
       RuntimeConfig.getString(configuration, RuntimeConfig.WorkspaceKey) shouldBe Some("/tmp/workspace")
       RuntimeConfig.getString(configuration, RuntimeConfig.ForceExitKey) shouldBe Some("true")
       RuntimeConfig.getString(configuration, RuntimeConfig.NoExitKey) shouldBe Some("true")
+      RuntimeConfig.getString(configuration, RuntimeConfig.LogBackendKey) shouldBe Some("stderr")
+      RuntimeConfig.getString(configuration, RuntimeConfig.LogLevelKey) shouldBe Some("debug")
+      RuntimeConfig.getString(configuration, RuntimeConfig.LogFilePathKey) shouldBe Some("/tmp/cncf.log")
     }
   }
 }

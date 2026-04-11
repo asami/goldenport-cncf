@@ -165,6 +165,10 @@ object CncfRuntime extends GlobalObservable {
     configuration: ResolvedConfiguration
   ): Unit = {
     val keys = Vector(
+      "textus.logging.backend",
+      "textus.logging.level",
+      "textus.runtime.logging.backend",
+      "textus.runtime.logging.level",
       "cncf.runtime.logging.backend",
       "cncf.logging.backend",
       "cncf.runtime.logging.level",
@@ -205,12 +209,12 @@ object CncfRuntime extends GlobalObservable {
       ConfigurationAccess.getString(configuration, key)
         .orElse(_legacy_framework_key(key).flatMap(ConfigurationAccess.getString(configuration, _)))
 
-    val logfile = get("textus.runtime.logging.slf4j.file.path")
-      .orElse(get("textus.logging.slf4j.file.path"))
+    val logfile = get("textus.logging.slf4j.file.path")
+      .orElse(get("textus.runtime.logging.slf4j.file.path"))
       .orElse(get("textus.logging.external.file.path"))
       .getOrElse("target/cncf.d/external.log")
-    val level = get("textus.runtime.logging.slf4j.level")
-      .orElse(get("textus.logging.slf4j.level"))
+    val level = get("textus.logging.slf4j.level")
+      .orElse(get("textus.runtime.logging.slf4j.level"))
       .orElse(get("textus.logging.level"))
       .getOrElse("warn")
     val hikarilevel = get("textus.logging.slf4j.hikari.level").getOrElse("warn")
@@ -1447,19 +1451,19 @@ object CncfRuntime extends GlobalObservable {
       } else if (current == "--log-backend" && i + 1 < args.length) { // experimental
         logBackendOption = Some(args(i + 1))
         i = i + 1
-      } else if (current.startsWith("--textus.runtime.logging.backend=")) { // experimental
+      } else if (current.startsWith("--textus.logging.backend=")) {
+        logBackendOption = Some(current.stripPrefix("--textus.logging.backend="))
+      } else if (current == "--textus.logging.backend" && i + 1 < args.length) {
+        logBackendOption = Some(args(i + 1))
+        i = i + 1
+      } else if (current.startsWith("--textus.runtime.logging.backend=")) { // legacy alias
         logBackendOption = Some(current.stripPrefix("--textus.runtime.logging.backend="))
-      } else if (current == "--textus.runtime.logging.backend" && i + 1 < args.length) { // experimental
+      } else if (current == "--textus.runtime.logging.backend" && i + 1 < args.length) { // legacy alias
         logBackendOption = Some(args(i + 1))
         i = i + 1
       } else if (current.startsWith("--cncf.runtime.logging.backend=")) { // legacy
         logBackendOption = Some(current.stripPrefix("--cncf.runtime.logging.backend="))
       } else if (current == "--cncf.runtime.logging.backend" && i + 1 < args.length) { // legacy
-        logBackendOption = Some(args(i + 1))
-        i = i + 1
-      } else if (current.startsWith("--textus.logging.backend=")) {
-        logBackendOption = Some(current.stripPrefix("--textus.logging.backend="))
-      } else if (current == "--textus.logging.backend" && i + 1 < args.length) {
         logBackendOption = Some(args(i + 1))
         i = i + 1
       } else if (current.startsWith("--cncf.logging.backend=")) {
@@ -1472,19 +1476,19 @@ object CncfRuntime extends GlobalObservable {
       } else if (current == "--log-level" && i + 1 < args.length) { // experimental
         logLevelOption = Some(args(i + 1))
         i = i + 1
-      } else if (current.startsWith("--textus.runtime.logging.level=")) { // experimental
+      } else if (current.startsWith("--textus.logging.level=")) {
+        logLevelOption = Some(current.stripPrefix("--textus.logging.level="))
+      } else if (current == "--textus.logging.level" && i + 1 < args.length) {
+        logLevelOption = Some(args(i + 1))
+        i = i + 1
+      } else if (current.startsWith("--textus.runtime.logging.level=")) { // legacy alias
         logLevelOption = Some(current.stripPrefix("--textus.runtime.logging.level="))
-      } else if (current == "--textus.runtime.logging.level" && i + 1 < args.length) { // experimental
+      } else if (current == "--textus.runtime.logging.level" && i + 1 < args.length) { // legacy alias
         logLevelOption = Some(args(i + 1))
         i = i + 1
       } else if (current.startsWith("--cncf.runtime.logging.level=")) { // legacy
         logLevelOption = Some(current.stripPrefix("--cncf.runtime.logging.level="))
       } else if (current == "--cncf.runtime.logging.level" && i + 1 < args.length) { // legacy
-        logLevelOption = Some(args(i + 1))
-        i = i + 1
-      } else if (current.startsWith("--textus.logging.level=")) {
-        logLevelOption = Some(current.stripPrefix("--textus.logging.level="))
-      } else if (current == "--textus.logging.level" && i + 1 < args.length) {
         logLevelOption = Some(args(i + 1))
         i = i + 1
       } else if (current.startsWith("--cncf.logging.level=")) {
@@ -1526,19 +1530,13 @@ object CncfRuntime extends GlobalObservable {
   private def _logging_backend_from_configuration(
     configuration: ResolvedConfiguration
   ): Option[String] = {
-    ConfigurationAccess.getString(configuration, "textus.runtime.logging.backend")
-      .orElse(ConfigurationAccess.getString(configuration, "textus.logging.backend"))
-      .orElse(ConfigurationAccess.getString(configuration, "cncf.runtime.logging.backend"))
-      .orElse(ConfigurationAccess.getString(configuration, "cncf.logging.backend"))
+    RuntimeConfig.getString(configuration, RuntimeConfig.LogBackendKey)
   }
 
   private def _log_level_from_configuration(
     configuration: ResolvedConfiguration
   ): Option[String] = {
-    ConfigurationAccess.getString(configuration, "textus.runtime.logging.level")
-      .orElse(ConfigurationAccess.getString(configuration, "textus.logging.level"))
-      .orElse(ConfigurationAccess.getString(configuration, "cncf.runtime.logging.level"))
-      .orElse(ConfigurationAccess.getString(configuration, "cncf.logging.level"))
+    RuntimeConfig.getString(configuration, RuntimeConfig.LogLevelKey)
   }
 
   private def _update_visibility_policy(

@@ -675,6 +675,7 @@ Prefer a concrete semantic owner:
 - `textus.execution.history.recent-limit`
 - `textus.execution.history.filtered-limit`
 - `textus.execution.history.filter.operation-contains`
+- `textus.logging.backend`
 - `textus.logging.level`
 - `textus.logging.file.path`
 
@@ -699,6 +700,8 @@ Examples to avoid for new primary keys:
 - `textus.runtime.execution.history.recent-limit`
 - `textus.runtime.execution.history.filtered-limit`
 - `textus.runtime.execution.history.filter.operation-contains`
+- `textus.runtime.logging.backend`
 - `textus.runtime.logging.level`
+- `textus.runtime.logging.file.path`
 
 Compatibility aliases may still accept older keys where they already exist.
