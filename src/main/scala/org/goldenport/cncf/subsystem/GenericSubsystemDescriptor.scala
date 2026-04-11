@@ -366,7 +366,9 @@ object GenericSubsystemDescriptor {
     rec: Record,
     assemblyDescriptor: Option[GenericSubsystemAssemblyDescriptorSource] = None
   ): Consequence[GenericSubsystemDescriptor] = {
-    val assemblyDescriptor0 = assemblyDescriptor.orElse(loadAdjacentAssemblyDescriptor(path))
+    val assemblyDescriptor0 =
+      if (_is_archive_file(path)) assemblyDescriptor
+      else assemblyDescriptor.orElse(loadAdjacentAssemblyDescriptor(path))
     summon[RecordDecoder[Shape]].fromRecord(rec).map { s =>
       GenericSubsystemDescriptor(
         path = path,
