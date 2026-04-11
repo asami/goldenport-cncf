@@ -142,7 +142,7 @@ Verification:
 
 ## CW-04: Sample-Facing Wiring Rules and Adapter Registration Path
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -155,14 +155,29 @@ Document and validate the minimal sample-facing path for:
 
 ### Detailed Tasks
 
-- [ ] Freeze sample-facing naming and registration steps.
-- [ ] Confirm the minimal wiring recipe against `cncf-samples`.
-- [ ] Record any framework gaps discovered from sample-first usage.
-- [ ] Close this phase only after sample-side wiring no longer requires redesign of framework abstractions.
+- [x] Freeze sample-facing naming and registration steps.
+- [x] Confirm the minimal wiring recipe against `cncf-samples`.
+- [x] Record any framework gaps discovered from sample-first usage.
+- [x] Close this phase only after sample-side wiring no longer requires redesign of framework abstractions.
+
+Decision:
+
+- Sample-facing wiring is fixed in `docs/design/component-port-wiring.md`.
+- `Port` remains a wiring-time model. Runtime execution remains on
+  `OperationCall` / action execution.
+- New sample code should use stable named bindings through
+  `withBinding(name, binding)` and `install_binding(name, req)`.
+- No additional framework abstraction redesign is required for the Phase 11
+  sample-facing path.
 
 ### Inputs
 
 - `/Users/asami/src/dev2026/cncf-samples/docs/journal/2026/04/port-wiring-guide-for-samples-2026-04-07.md`
+- `docs/design/component-port-wiring.md`
+
+Verification:
+
+- `sbt --batch "testOnly org.goldenport.cncf.component.PortBindingSpec org.goldenport.cncf.subsystem.GenericSubsystemFactorySpec"`
 
 ---
 
@@ -178,6 +193,6 @@ Document and validate the minimal sample-facing path for:
 
 Phase 11 is complete when:
 
-- CW-01 through CW-04 are marked DONE.
-- `phase-11.md` summary checkboxes are aligned.
-- No item remains ACTIVE or SUSPENDED.
+- [x] CW-01 through CW-04 are marked DONE.
+- [x] `phase-11.md` summary checkboxes are aligned.
+- [x] No item remains ACTIVE or SUSPENDED.
