@@ -667,6 +667,11 @@ Prefer a concrete semantic owner:
 - `textus.assembly.descriptor`
 - `textus.command.execution-mode`
 - `textus.calltree`
+- `textus.discover.classes`
+- `textus.component.factory-class`
+- `textus.workspace`
+- `textus.force-exit`
+- `textus.no-exit`
 - `textus.execution.history.recent-limit`
 - `textus.execution.history.filtered-limit`
 - `textus.execution.history.filter.operation-contains`
@@ -686,6 +691,11 @@ Examples to avoid for new primary keys:
 - `textus.runtime.assembly.descriptor`
 - `textus.runtime.command.execution-mode`
 - `textus.runtime.calltree`
+- `textus.runtime.discover.classes`
+- `textus.runtime.component-factory-class`
+- `textus.runtime.workspace`
+- `textus.runtime.force-exit`
+- `textus.runtime.no-exit`
 - `textus.runtime.execution.history.recent-limit`
 - `textus.runtime.execution.history.filtered-limit`
 - `textus.runtime.execution.history.filter.operation-contains`

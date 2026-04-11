@@ -78,5 +78,26 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers {
       config.executionHistoryConfig.filters.map(_.operationContains) shouldBe Vector(Some("foo"), Some("bar"))
       ObservabilityEngine.executionHistoryConfig shouldBe config.executionHistoryConfig
     }
+
+    "resolve legacy cncf runtime aliases through RuntimeConfig" in {
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            "cncf.runtime.discover.classes" -> ConfigurationValue.BooleanValue(true),
+            "cncf.runtime.component-factory-class" -> ConfigurationValue.StringValue("example.Factory"),
+            "cncf.runtime.workspace" -> ConfigurationValue.StringValue("/tmp/workspace"),
+            "cncf.runtime.force-exit" -> ConfigurationValue.BooleanValue(true),
+            "cncf.runtime.no-exit" -> ConfigurationValue.BooleanValue(true)
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+
+      RuntimeConfig.getString(configuration, RuntimeConfig.DiscoverClassesKey) shouldBe Some("true")
+      RuntimeConfig.getString(configuration, RuntimeConfig.ComponentFactoryClassKey) shouldBe Some("example.Factory")
+      RuntimeConfig.getString(configuration, RuntimeConfig.WorkspaceKey) shouldBe Some("/tmp/workspace")
+      RuntimeConfig.getString(configuration, RuntimeConfig.ForceExitKey) shouldBe Some("true")
+      RuntimeConfig.getString(configuration, RuntimeConfig.NoExitKey) shouldBe Some("true")
+    }
   }
 }
