@@ -1,4 +1,4 @@
-# Phase 12 — Event Mechanism Extension Checklist
+# Phase 12 — Web Layer Checklist
 
 This document contains detailed task tracking and execution decisions
 for Phase 12.
@@ -29,137 +29,154 @@ It complements the summary-level phase document (`phase-12.md`).
 
 Phase 12 implementation proceeds in this order:
 
-1. EM-01 (subsystem-level event wiring) must be fixed first.
-2. EM-02 (Component subscription bootstrap) is implemented on top of shared event facilities.
-3. EM-03 (dispatch and continuation/job semantics) is tightened after registration paths are stable.
-4. EM-04 (internal await support) is added after the canonical collaboration path exists.
-5. EM-05 (Executable Specifications and observability coverage) is expanded alongside EM-01 to EM-04 and finalized last.
+1. WEB-01 (scope and design surface) must be fixed first.
+2. WEB-02 (REST/Form API exposure) is implemented on top of the operation model.
+3. WEB-03 (Web Descriptor) is defined after the exposure surface is clear.
+4. WEB-04 (dashboard / console / manual) is defined from existing admin/meta
+   capabilities.
+5. WEB-05 (Executable Specifications and runtime hooks) is expanded alongside
+   WEB-02 to WEB-04 and finalized last.
 
-This order minimizes churn in event collaboration contracts and test infrastructure.
+This order minimizes churn between the API surface, descriptor model, and
+operator-facing web functions.
 
 ---
 
-## EM-01: Subsystem-Owned Event Wiring
+## WEB-01: Web Layer Scope and Canonical Design Surface
 
 Status: ACTIVE
 
 ### Objective
 
-Make subsystem-level ownership of shared event facilities explicit so
-Components in the same subsystem collaborate through a canonical shared
-event context.
+Promote the Web Layer from journal notes into a canonical Phase 12 development
+surface without over-committing to broad UI generation.
 
 ### Detailed Tasks
 
-- [ ] Define where subsystem-owned `EventBus` is held.
-- [ ] Define where subsystem-owned `EventReception` is held.
-- [ ] Clarify lifecycle and visibility of shared event facilities during subsystem bootstrap.
-- [ ] Ensure Component runtime can publish into subsystem-shared event context.
-- [ ] Ensure shared facilities are not recreated ad hoc per Component.
+- [ ] Consolidate the Web Layer architecture from journal notes.
+- [ ] Define CNCF Web Layer as an operation-centric integration surface.
+- [ ] Separate operational web functions from business application UI generation.
+- [ ] Define which journal notes become design/spec inputs for Phase 12.
+- [ ] Record explicit non-goals for SPA hosting, wireframe DSL, and SDK work.
 
 ### Inputs
 
-- `docs/journal/2026/04/event-mechanism-extension-work-items.md`
-- `src/main/scala/org/goldenport/cncf/event/EventBus.scala`
-- `src/main/scala/org/goldenport/cncf/event/EventReception.scala`
+- `docs/journal/2026/04/web-application-integration-note.md`
+- `docs/journal/2026/04/web-operational-management-note.md`
+- `docs/journal/2026/04/web-static-form-app-note.md`
+- `docs/journal/2026/04/web-integration-spa.md`
+- `docs/journal/2026/04/web-wireframe-dsl-note.md`
 
 ---
 
-## EM-02: Component Subscription Bootstrap
+## WEB-02: REST/Form API Exposure
 
 Status: PLANNED
 
 ### Objective
 
-Make subscription registration part of normal Component startup and subsystem assembly.
+Define operation-centric web API exposure for Component / Service / Operation
+without adding an intermediate API stub layer.
 
 ### Detailed Tasks
 
-- [ ] Define how Component descriptors or generated definitions contribute subscriptions.
-- [ ] Define handwritten registration path for custom Component factories.
-- [ ] Ensure duplicate registration behavior is deterministic.
-- [ ] Ensure registration order is deterministic.
-- [ ] Clarify authorization boundary for registration.
+- [ ] Define canonical selector-to-path mapping.
+- [ ] Define REST invocation request and response shape.
+- [ ] Define Form API definition endpoint.
+- [ ] Define Form API validation endpoint.
+- [ ] Define validation and error response shape.
+- [ ] Clarify relationship with existing CLI/meta projections.
 
 ### Inputs
 
-- `src/main/scala/org/goldenport/cncf/component/ComponentFactory.scala`
-- `src/main/scala/org/goldenport/cncf/event/EventReception.scala`
+- `docs/journal/2026/04/web-form-api-note.md`
+- `docs/journal/2026/04/web-api-response-note.md`
+- `docs/journal/2026/04/query-update-request-translation-rule-note.md`
+- `docs/journal/2026/04/record-v3-http-form-path-notation-note.md`
 
 ---
 
-## EM-03: Event-to-Action Dispatch and Continuation/Job Semantics
+## WEB-03: Web Descriptor Model
 
 Status: PLANNED
 
 ### Objective
 
-Stabilize the contract by which a received event triggers an action call
-and continues in the same job or a new job.
+Define the Web Descriptor as the deployment/configuration surface for web
+exposure, security, form behavior, traffic control, and application hosting.
 
 ### Detailed Tasks
 
-- [ ] Freeze canonical target resolution rules for same-Component and cross-Component dispatch.
-- [ ] Freeze payload-to-action input mapping rules.
-- [ ] Confirm selector behavior and deterministic mismatch handling.
-- [ ] Formalize `SameJob` versus `NewJob`.
-- [ ] Define propagation rules for correlation, causation, parent-job, and security metadata.
-- [ ] Define failure handling expectations for dispatch failure and authorization denial.
+- [ ] Define descriptor file location and loading precedence.
+- [ ] Define operation exposure levels: public, protected, internal.
+- [ ] Define authentication and authorization configuration keys.
+- [ ] Define Form API enable/disable controls.
+- [ ] Define application hosting entries without committing to a frontend framework.
+- [ ] Define how descriptor values can be overridden by configuration.
 
 ### Inputs
 
-- `src/main/scala/org/goldenport/cncf/event/EventReception.scala`
-- `src/main/scala/org/goldenport/cncf/security/IngressSecurityResolver.scala`
+- `docs/journal/2026/04/web-descriptor-note.md`
+- `docs/journal/2026/04/web-descriptor-packaging-model-note.md`
+- `docs/journal/2026/04/web-api-exposure-control-note.md`
+- `docs/journal/2026/04/web-authentication-authorization-note.md`
 
 ---
 
-## EM-04: Internal Await Support for Event Completion
+## WEB-04: Dashboard / Management Console / Manual Baseline
 
 Status: PLANNED
 
 ### Objective
 
-Replace ad hoc sleeps/polling in tests and demos with internal event-aware waiting support.
+Define the first operational web surface over existing CNCF runtime,
+observability, and meta capabilities.
 
 ### Detailed Tasks
 
-- [ ] Keep existing polling helpers internal only.
-- [ ] Add minimal internal await utility for event visibility or event-derived completion.
-- [ ] Apply the await utility first to tests, executable specs, and demos.
-- [ ] Avoid introducing a public application-facing async API in this phase.
+- [ ] Define dashboard minimum: components, services, operations, health, version.
+- [ ] Define management console minimum: operation execution and result display.
+- [ ] Define manual minimum: help, describe, schema, OpenAPI, MCP links.
+- [ ] Define calltree/action history visibility from existing observability design.
+- [ ] Define assembly warning visibility for dashboard/admin surfaces.
+- [ ] Defer advanced visualizations unless required for the baseline.
 
 ### Inputs
 
-- `docs/journal/2026/04/event-mechanism-extension-work-items.md`
-- existing importer/event demo test support as reference for internal waiting only
+- `docs/journal/2026/04/web-operational-management-note.md`
+- `docs/design/observability/calltree-runtime-result.md`
+- `docs/design/assembly-descriptor.md`
+- `docs/journal/2026/04/assembly-selection-and-observability-note.md`
 
 ---
 
-## EM-05: Executable Specifications and Observability Coverage
+## WEB-05: Executable Specifications and Minimal Runtime Hooks
 
 Status: PLANNED
 
 ### Objective
 
-Protect subsystem event collaboration as a framework capability with
-Executable Specifications and minimum operator-facing diagnostics.
+Protect the minimal Web Layer runtime path with executable specifications
+before broad UI work begins.
 
 ### Detailed Tasks
 
-- [ ] Add subsystem-level Component-to-Component event collaboration spec.
-- [ ] Add `SameJob` continuation spec.
-- [ ] Add `NewJob` continuation spec.
-- [ ] Add event-driven completion/wait spec without fixed sleep.
-- [ ] Add authorization and failure-path specs for event dispatch.
-- [ ] Add traces or diagnostics for subscription match and dispatch outcome.
+- [ ] Add spec for selector-to-web-path mapping.
+- [ ] Add spec for REST request-to-operation invocation mapping.
+- [ ] Add spec for Form API definition projection from operation schema.
+- [ ] Add spec for Web Descriptor exposure filtering.
+- [ ] Add spec for protected/internal operation visibility.
+- [ ] Add minimal runtime hook or adapter only after the contract is stable.
 
 ---
 
 ## Deferred / Next Phase Candidates
 
-- Inter-subsystem or external service-bus transport.
-- Public application-facing async abstraction.
-- Retry/dead-letter policy formalization.
+- SPA hosting and packaging.
+- Wireframe DSL and UI generation.
+- Public JavaScript SDK.
+- Advanced dashboard visualization and SVG rendering.
+- External API gateway integration.
 
 ---
 
@@ -167,6 +184,6 @@ Executable Specifications and minimum operator-facing diagnostics.
 
 Phase 12 is complete when:
 
-- EM-01 through EM-05 are marked DONE.
+- WEB-01 through WEB-05 are marked DONE.
 - `phase-12.md` summary checkboxes are aligned.
 - No item remains ACTIVE or SUSPENDED.

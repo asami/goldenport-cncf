@@ -306,32 +306,27 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 
 ## 8. Development Item Status
 
-This section lists promoted, active, and future development areas. Once a work
-area is promoted into a phase document, the phase document becomes authoritative
-and this section must not duplicate detailed progress tracking.
+This section lists active and future development areas. Once a work area is
+completed, it moves to the completed development item history below.
 
-### 8.1 Component Wiring and Subsystem Construction
-Completed in Phase 11.
-
-- Closed dashboard: `docs/phase/phase-11.md`
-- Closed checklist: `docs/phase/phase-11-checklist.md`
-- Completed scope:
-  - Component port/binding baseline
-  - subsystem construction via bound Components
-  - executable wiring and assembly specifications
-  - sample-facing wiring rules
-
-### 8.2 Event Mechanism Extension
+### 8.1 Web Layer
 Promoted to Phase 12.
 
 - Active dashboard: `docs/phase/phase-12.md`
 - Active checklist: `docs/phase/phase-12-checklist.md`
 - Current focus:
-  - subsystem-level shared event wiring
-  - Component subscription bootstrap
-  - event-to-action dispatch and continuation/job semantics
-  - internal await support
-  - executable specifications and observability coverage
+  - operation-centric web integration surface
+  - REST/Form API exposure
+  - Web Descriptor model
+  - dashboard / management console / manual baseline
+  - executable specifications and minimal runtime hooks
+
+### 8.2 Event Mechanism Extension
+- Subsystem-level shared event wiring
+- Component subscription bootstrap
+- Event-to-action dispatch and continuation/job semantics
+- Internal await support
+- Executable specifications and observability coverage
 
 ### 8.3 Security
 - Authentication
@@ -343,16 +338,23 @@ Promoted to Phase 12.
 - Observability integration
   - OpenTelemetry support
 
-### 8.5 Web Layer
-- Dashboard
-- Management Console
-- Documentation
-  - Manual
-
-### 8.6 Tagging and Knowledge Structure
+### 8.5 Tagging and Knowledge Structure
 - Hierarchical tagging model
 - Classification and navigation support
 
-### 8.7 RDF Integration
+### 8.6 RDF Integration
 - RDF-based data representation
 - External knowledge graph integration
+
+## 9. Completed Development Item History
+
+### 9.1 Component Wiring and Subsystem Construction
+Completed in Phase 11.
+
+- Closed dashboard: `docs/phase/phase-11.md`
+- Closed checklist: `docs/phase/phase-11-checklist.md`
+- Completed scope:
+  - Component port/binding baseline
+  - subsystem construction via bound Components
+  - executable wiring and assembly specifications
+  - sample-facing wiring rules
