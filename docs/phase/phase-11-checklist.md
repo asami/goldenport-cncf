@@ -40,7 +40,7 @@ This order minimizes churn in sample-side assembly and adapter realization.
 
 ## CW-01: Stabilize Component Port/Binding Baseline
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -53,12 +53,16 @@ Stabilize the wiring-time model for:
 
 ### Detailed Tasks
 
-- [ ] Remove remaining assumptions from the old runtime-shaped port skeleton.
-- [ ] Confirm `Port` metamodel shape (`api`, `spi`, `variation`) as the canonical framework baseline.
-- [ ] Confirm `ExtensionPoint` as adapter/provider realization boundary.
-- [ ] Confirm `Binding.install(...)` and named binding registry behavior.
-- [ ] Clarify legacy compatibility behavior for single default binding.
-- [ ] Add or update executable specs protecting the baseline semantics.
+- [x] Remove remaining assumptions from the old runtime-shaped port skeleton.
+- [x] Confirm `Port` metamodel shape (`api`, `spi`, `variation`) as the canonical framework baseline.
+- [x] Confirm `ExtensionPoint` as adapter/provider realization boundary.
+- [x] Confirm `Binding.install(...)` and named binding registry behavior.
+- [x] Clarify legacy compatibility behavior for single default binding.
+- [x] Add or update executable specs protecting the baseline semantics.
+
+Verification:
+
+- `sbt --batch "testOnly org.goldenport.cncf.component.PortBindingSpec"`
 
 ### Inputs
 
@@ -70,7 +74,7 @@ Stabilize the wiring-time model for:
 
 ## CW-02: Subsystem Construction via Bound Components
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 

@@ -269,8 +269,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Active phase dashboard: `docs/phase/phase-10.md`
-- Active phase checklist: `docs/phase/phase-10-checklist.md`
+- Active phase dashboard: `docs/phase/phase-11.md`
+- Active phase checklist: `docs/phase/phase-11-checklist.md`
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
 ## 6. Explicit Non-Goals
@@ -287,7 +287,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 7: closed (`docs/phase/phase-7.md`)
 - Phase 8: closed (`docs/phase/phase-8.md`)
 - Phase 9: closed (`docs/phase/phase-9.md`)
-- Phase 10: active/open (`docs/phase/phase-10.md`)
+- Phase 10: closed (`docs/phase/phase-10.md`)
+- Phase 11: active/open (`docs/phase/phase-11.md`)
 
 ## 8. Future Development Items
 
@@ -297,14 +298,15 @@ document becomes authoritative and this section must not duplicate detailed
 progress tracking.
 
 ### 8.1 Component Wiring and Subsystem Construction
-- Build subsystems via Component wiring
-- Define and stabilize Component ports
-- Define and stabilize `ComponentRepository` repository specifications
-- Add remote subsystem artifact resolution
-  - Resolve versioned subsystem artifacts such as `textus-identity-1.0.2`
-  - Support remote component repositories such as `component.simplemodeling.org`
-  - Keep `repository.d` as a local packaged search path
-  - Keep `component.d` as a local active packaged source
+Promoted to Phase 11.
+
+- Active dashboard: `docs/phase/phase-11.md`
+- Active checklist: `docs/phase/phase-11-checklist.md`
+- Current focus:
+  - Component port/binding baseline
+  - subsystem construction via bound Components
+  - executable wiring and assembly specifications
+  - sample-facing wiring rules
 
 ### 8.2 Security
 - Authentication
