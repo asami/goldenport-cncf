@@ -256,11 +256,23 @@ object CncfRuntime extends GlobalObservable {
       import cats.syntax.all.*
 
       val env =
-        _config_string(conf, "textus.runtime.environment", "cncf.runtime.environment")
+        _config_string(
+          conf,
+          "textus.environment",
+          "textus.runtime.environment",
+          "cncf.environment",
+          "cncf.runtime.environment"
+        )
           .map(_.getOrElse("default"))
 
       val obs =
-        _config_string(conf, "textus.runtime.observability", "cncf.runtime.observability")
+        _config_string(
+          conf,
+          "textus.observability",
+          "textus.runtime.observability",
+          "cncf.observability",
+          "cncf.runtime.observability"
+        )
           .map(_.map(v => Map("default" -> v)).getOrElse(Map.empty))
 
       (env, obs).mapN(Runtime.apply)
@@ -269,11 +281,17 @@ object CncfRuntime extends GlobalObservable {
     private def _config_string(
       conf: ResolvedConfiguration,
       primary: String,
-      legacy: String
+      aliases: String*
     ): org.goldenport.Consequence[Option[String]] =
       conf.get[String](primary) match {
         case success @ Consequence.Success(Some(_)) => success
-        case _ => conf.get[String](legacy)
+        case Consequence.Success(None) =>
+          aliases.foldLeft(Consequence.success(None): Consequence[Option[String]]) {
+            case (acc @ Consequence.Success(Some(_)), _) => acc
+            case (Consequence.Success(None), alias) => conf.get[String](alias)
+            case (failure @ Consequence.Failure(_), _) => failure
+          }
+        case failure @ Consequence.Failure(_) => failure
       }
   }
 
