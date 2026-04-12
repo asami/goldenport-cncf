@@ -99,6 +99,39 @@ The initial model is:
 The low-level `mode` and relation settings remain available, but they should be
 used after the high-level classification has been tried.
 
+### ABAC-Centered Hybrid Model
+
+The authorization model should be described as ABAC-centered.
+
+RBAC, ReBAC, and DAC-style permissions should not be treated as separate peer
+layers beside ABAC. They are specialized evaluation patterns connected through
+attributes:
+
+- RBAC-style evaluation uses subject role attributes;
+- ReBAC-style evaluation uses subject/entity relation attributes;
+- DAC-style permission evaluation uses entity owner/group/other permission
+  attributes.
+
+This means the intended model is:
+
+```text
+ABAC-centered model =
+  - ABAC natural evaluation
+      via subject/entity/operation/application/environment attributes
+  - RBAC-style role evaluation
+      via subject.roles
+  - ReBAC-style relation evaluation
+      via subject/entity relation attributes
+  - DAC-style permission evaluation
+      via entity.ownerId/groupId/permission
+```
+
+The current implementation has ABAC-based profile derivation, but the ABAC
+natural evaluation path is still a remaining item. Examples include publication
+time windows, visibility, tenant or organization boundaries, and operation
+exposure rules that are not simply role, relation, or owner/group/other
+permission checks.
+
 ## Resulting Implementation
 
 The implementation introduced:
@@ -149,6 +182,10 @@ Cross-component service-internal access needs an explicit service grant model.
 
 Audit/observability for authorization decisions needs to be strengthened,
 especially for `ServiceInternal` and `System`.
+
+ABAC natural evaluation needs to be added. The first concrete targets are
+publication visibility, publish/unpublish windows, tenant or organization
+boundaries, and operation exposure policies.
 
 ## Related Documents
 

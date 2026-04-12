@@ -6,7 +6,7 @@ import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext,
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.http.FakeHttpDriver
-import org.goldenport.cncf.security.{EntityAccessMode, EntityAccessRelation}
+import org.goldenport.cncf.security.{EntityAbacCondition, EntityAccessMode, EntityAccessRelation}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.scalatest.GivenWhenThen
@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr.  7, 2026
+ * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkTargetAuthorizationSpec
@@ -289,6 +289,74 @@ final class UnitOfWorkTargetAuthorizationSpec
 
       result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
     }
+
+    "reject read when explicit ABAC tenant condition does not match" in {
+      given ExecutionContext = _execution_context(
+        principalId = "tenant-user",
+        principalAttributes = Map("tenant_id" -> "tenant-a")
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val id = EntityId("test", "read_abac_tenant_denied", _cid)
+      _seed(PersonEntity(id, "tenant-record", "tenant-owner", tenantId = Some("tenant-b")))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+            UnitOfWorkOp.EntityStoreLoad(
+              id,
+              summon[EntityPersistent[PersonEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("Person"),
+                  targetId = Some(id),
+                  accessKind = "read",
+                  naturalConditions = Vector(EntityAbacCondition("tenantId", EntityAbacCondition.Value.SubjectAttribute("tenantId")))
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
+    "allow read when explicit ABAC tenant condition matches and permission allows" in {
+      given ExecutionContext = _execution_context(
+        principalId = "tenant-owner",
+        principalAttributes = Map("tenant_id" -> "tenant-a", "group_id" -> "team-a")
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val id = EntityId("test", "read_abac_tenant_allowed", _cid)
+      _seed(PersonEntity(id, "tenant-record", "tenant-owner", groupId = Some("team-a"), tenantId = Some("tenant-a")))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+            UnitOfWorkOp.EntityStoreLoad(
+              id,
+              summon[EntityPersistent[PersonEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("Person"),
+                  targetId = Some(id),
+                  accessKind = "read",
+                  naturalConditions = Vector(EntityAbacCondition("tenantId", EntityAbacCondition.Value.SubjectAttribute("tenantId")))
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+    }
   }
 
   private def _execution_context(
@@ -372,13 +440,15 @@ final class UnitOfWorkTargetAuthorizationSpec
     ownerId: String,
     groupId: Option[String] = None,
     privilegeId: Option[String] = None,
-    customerId: Option[String] = None
+    customerId: Option[String] = None,
+    tenantId: Option[String] = None
   ) {
     def toRecord(): Record =
       Record.dataAuto(
         "id" -> id,
         "name" -> name,
         "customerId" -> customerId,
+        "tenantId" -> tenantId,
         "security_attributes" -> Record.dataAuto(
           "owner_id" -> ownerId,
           "group_id" -> groupId,
@@ -433,10 +503,11 @@ final class UnitOfWorkTargetAuthorizationSpec
         r.getString(org.goldenport.datatype.PathName(Vector("security_attributes", "owner_id"))),
         r.getString(org.goldenport.datatype.PathName(Vector("security_attributes", "group_id"))),
         r.getString(org.goldenport.datatype.PathName(Vector("security_attributes", "privilege_id"))),
-        r.getString("customerId").orElse(r.getString("customer_id"))
+        r.getString("customerId").orElse(r.getString("customer_id")),
+        r.getString("tenantId").orElse(r.getString("tenant_id"))
       ) match
-        case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId, customerId) =>
-          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId, customerId))
+        case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId, customerId, tenantId) =>
+          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId, customerId, tenantId))
         case _ =>
           Consequence.failure("invalid person record")
   }

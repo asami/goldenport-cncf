@@ -21,7 +21,8 @@ final case class CmlOperationAccess(
   operationModel: Option[String] = None,
   entityUsage: Option[String] = None,
   entityOperationKind: Option[String] = None,
-  entityApplicationDomain: Option[String] = None
+  entityApplicationDomain: Option[String] = None,
+  condition: Option[String] = None
 )
 
 final case class CmlOperationDefinition(

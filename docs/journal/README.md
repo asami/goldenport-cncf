@@ -8,3 +8,4 @@ When a journal entry references other layers, cite docs/rules/document-lifecycle
 Current security/authorization journal entries:
 
 - `2026/04/entity-authorization-implementation-2026-04-13.md`
+- `2026/04/entity-authorization-remaining-checklist-2026-04-13.md`

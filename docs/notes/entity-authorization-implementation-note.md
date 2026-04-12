@@ -23,6 +23,20 @@ The current implementation introduced:
 The implementation is a baseline for business applications as well as CMS-style
 applications.
 
+The model should be understood as ABAC-centered. RBAC, ReBAC, and DAC-style
+permission checks are not intended to be separate peer layers. They are
+specialized evaluation patterns connected through ABAC attributes:
+
+- RBAC-style role evaluation uses subject role attributes;
+- ReBAC-style relation evaluation uses subject/entity relationship attributes;
+- DAC-style permission evaluation uses entity owner/group/other permission
+  attributes.
+
+The general ABAC natural evaluation path is still incomplete. The current
+implementation has ABAC-based classification and profile derivation, but it does
+not yet provide a general evaluator for non-role, non-relation, non-permission
+attribute conditions.
+
 ## Implemented Files
 
 Main implementation points:
@@ -80,6 +94,49 @@ customerId=subject.customerId:read,search/list
 ```
 
 The syntax is an implementation-level parser, not yet a finalized CML syntax.
+
+The current ABAC-centered behavior is primarily profile selection:
+
+- `EntityOperationKind`;
+- `EntityApplicationDomain`;
+- `ServiceOperationModel`;
+- optional explicit access mode;
+- optional relation rules.
+
+It does not yet perform natural ABAC checks such as publication time,
+visibility, tenant boundary, organization boundary, operation exposure, or
+environment-based conditions.
+
+The first natural ABAC hook is available as explicit
+`UnitOfWorkAuthorization.naturalConditions`. It is intentionally opt-in so that
+existing applications do not silently gain tenant/organization/publication
+constraints. The initial condition form supports direct entity attribute equality
+against a subject attribute or literal value, for example:
+
+```text
+tenantId=subject.tenantId:read,search/list
+postStatus=Published:read,search/list
+```
+
+These conditions are evaluated before relation rules and owner/group/other
+permissions for user-permission entity access.
+
+The first CML surface is operation-level `ACCESS` / `CONDITION`:
+
+```text
+### ACCESS
+
+#### POLICY
+public
+
+#### CONDITION
+postStatus=Published:read,search/list;visibility=Public:read,search/list
+```
+
+`CONDITION`, `ABAC`, `ABAC_CONDITION`, and `NATURAL_CONDITION` are currently
+accepted aliases. This is only the first carrier and evaluator; a richer
+authorization context and entity-level syntax remain future work.
+For multiple conditions in CML, use `;` as the stable delimiter for now.
 
 ## SalesOrder Example
 
@@ -175,6 +232,31 @@ Create default derivation is not fully tied to entity classification yet.
 The policy supports profile-based CMS/public-content defaults and
 collection-specific policies, but the higher-level descriptor classification
 should eventually derive create default profiles automatically.
+
+ABAC natural evaluation is only minimally implemented.
+
+The desired structure is:
+
+```text
+ABAC-centered model =
+  - ABAC natural evaluation
+      via subject/entity/operation/application/environment attributes
+  - RBAC-style role evaluation
+      via subject.roles
+  - ReBAC-style relation evaluation
+      via subject/entity relation attributes
+  - DAC-style permission evaluation
+      via entity.ownerId/groupId/permission
+```
+
+The first practical ABAC natural evaluators should cover:
+
+- publication status and visibility;
+- publish/unpublish time windows;
+- tenant/organization/account/customer boundaries when represented as direct
+  attributes;
+- operation exposure based on `operationModel`;
+- entity classification based on `operationKind` and `applicationDomain`.
 
 ## Relationship to Existing Documents
 

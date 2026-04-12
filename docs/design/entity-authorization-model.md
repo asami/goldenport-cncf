@@ -14,6 +14,12 @@ The model separates:
 - business relation based authorization;
 - coarse-grained entity and service classifications.
 
+Architecturally, the model is ABAC-centered. RBAC-style role checks,
+ReBAC-style relation checks, and DAC-style owner/group/other permission checks
+are treated as specialized evaluation patterns connected through subject,
+entity, operation, application, and environment attributes. They are not
+separate peer authorization layers beside ABAC.
+
 The model is implemented at the `UnitOfWork` / internal DSL boundary. Operation
 and descriptor metadata are inputs to that boundary, but application logic should
 not perform ad hoc entity authorization checks.
@@ -190,6 +196,51 @@ entity.customerId == subject.customerId
 
 Relation rules are evaluated before object-side owner/group/other permission
 checks for user-permission access.
+
+## ABAC Evaluation Perspective
+
+The implemented baseline uses ABAC attributes primarily for profile derivation
+and for connecting specialized authorization patterns.
+
+Current specialized patterns are:
+
+- RBAC-style role evaluation through subject roles;
+- ReBAC-style relation evaluation through subject/entity relation attributes;
+- DAC-style permission evaluation through entity `ownerId`, `groupId`, and
+  owner/group/other permissions.
+
+The natural ABAC evaluation path is an incremental extension. The baseline has
+an explicit `UnitOfWorkAuthorization.naturalConditions` carrier for direct
+entity-attribute equality conditions, but does not yet provide a full
+authorization context or general policy language. Natural ABAC covers conditions
+that are not simply role, relation, or owner/group/other permission checks, such
+as:
+
+- publication status and visibility;
+- publish/unpublish time windows;
+- tenant, organization, account, or customer boundaries represented as direct
+  attributes;
+- operation exposure based on service operation model;
+- entity behavior based on operation kind and application domain.
+
+Further extensions should preserve the same UnitOfWork/internal DSL boundary.
+
+The first CML surface for explicit natural ABAC is operation `ACCESS` /
+`CONDITION`:
+
+```text
+### ACCESS
+
+#### POLICY
+public
+
+#### CONDITION
+postStatus=Published:read,search/list;visibility=Public:read,search/list
+```
+
+This condition is carried into `CmlOperationAccess.condition` and then into
+`UnitOfWorkAuthorization.naturalConditions`.
+For multiple conditions in CML, use `;` as the stable delimiter for now.
 
 ## Variation Points
 

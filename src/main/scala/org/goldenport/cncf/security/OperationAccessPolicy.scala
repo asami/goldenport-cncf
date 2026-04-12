@@ -11,8 +11,7 @@ import org.simplemodeling.model.value.SecurityAttributes
 
 /*
  * @since   Apr.  6, 2026
- *  version Apr.  6, 2026
- * @version Apr.  7, 2026
+ * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationAccessPolicy {
@@ -138,7 +137,9 @@ object OperationAccessPolicy {
               case Some(id) =>
                 loadRecord(id).flatMap {
                   case Some(record) =>
-                    if (_matches_relation(record, authorization))
+                    if (!_matches_natural_conditions(record, authorization))
+                      Consequence.failure("ABAC natural condition is not satisfied.")
+                    else if (_matches_relation(record, authorization))
                       Consequence.unit
                     else
                       authorizeSimpleEntity(record, authorization.accessKind)
@@ -167,12 +168,22 @@ object OperationAccessPolicy {
     authorization: UnitOfWorkAuthorization
   )(using ctx: ExecutionContext): Boolean = {
     val record = tc.toRecord(entity)
-    if (_matches_relation(record, authorization))
+    if (!_matches_natural_conditions(record, authorization))
+      false
+    else if (_matches_relation(record, authorization))
       true
     else authorizeSimpleEntity(record, "read") match
       case Consequence.Success(_) => true
       case _ => false
   }
+
+  private def _matches_natural_conditions(
+    record: Record,
+    authorization: UnitOfWorkAuthorization
+  )(using ctx: ExecutionContext): Boolean =
+    authorization.naturalConditions
+      .filter(_.allows(authorization.accessKind))
+      .forall(_.matches(record, _subject))
 
   private def _matches_relation(
     record: Record,

@@ -14,7 +14,7 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkAuthorization}
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
-import org.goldenport.cncf.security.{EntityAccessMode, EntityAccessRelation, EntityApplicationDomain, EntityAuthorizationProfile, EntityOperationKind, EntityUsageKind, ServiceOperationModel}
+import org.goldenport.cncf.security.{EntityAbacCondition, EntityAccessMode, EntityAccessRelation, EntityApplicationDomain, EntityAuthorizationProfile, EntityOperationKind, EntityUsageKind, ServiceOperationModel}
 import org.goldenport.cncf.Program
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.datatype.EntityCollectionId
@@ -34,7 +34,7 @@ import org.goldenport.cncf.action.AggregateBehavior
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 30, 2026
- * @version Apr.  7, 2026
+ * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -744,6 +744,8 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         .map(_.entity_access_relations(action, entityname, accessKind, core))
         .getOrElse(Vector.empty) ++
       access.flatMap(_.relation).flatMap(EntityAccessRelation.parse).toVector
+    val naturalconditions =
+      access.flatMap(_.condition).map(EntityAbacCondition.parseList).getOrElse(Vector.empty)
     val derivedprofile = EntityAuthorizationProfile.derive(
       operationKind = entityoperationkind,
       applicationDomain = entityapplicationdomain,
@@ -765,7 +767,8 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         access = access,
         entityNames = entitynames,
         accessMode = accessmode,
-        relationRules = derivedprofile.relationRules
+        relationRules = derivedprofile.relationRules,
+        naturalConditions = naturalconditions
       )
     )
   }
