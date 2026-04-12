@@ -139,6 +139,8 @@ object OperationAccessPolicy {
                   case Some(record) =>
                     if (!_matches_natural_conditions(record, authorization))
                       Consequence.failure("ABAC natural condition is not satisfied.")
+                    else if (authorization.accessKind == "read" && _is_public_policy(authorization))
+                      Consequence.unit
                     else if (_matches_relation(record, authorization))
                       Consequence.unit
                     else
@@ -170,12 +172,22 @@ object OperationAccessPolicy {
     val record = tc.toRecord(entity)
     if (!_matches_natural_conditions(record, authorization))
       false
+    else if (_is_public_policy(authorization))
+      true
     else if (_matches_relation(record, authorization))
       true
     else authorizeSimpleEntity(record, "read") match
       case Consequence.Success(_) => true
       case _ => false
   }
+
+  private def _is_public_policy(
+    authorization: UnitOfWorkAuthorization
+  ): Boolean =
+    authorization.access
+      .flatMap(a => Option(a.policy))
+      .map(_.trim.toLowerCase(java.util.Locale.ROOT))
+      .contains("public")
 
   private def _matches_natural_conditions(
     record: Record,

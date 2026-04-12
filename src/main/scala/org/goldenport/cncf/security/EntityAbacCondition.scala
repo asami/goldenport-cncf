@@ -22,7 +22,9 @@ final case class EntityAbacCondition(
     record: Record,
     subject: SecuritySubject
   ): Boolean =
-    EntityAbacCondition.recordValue(record, entityAttribute).exists { actual =>
+    EntityAbacCondition.recordValue(record, entityAttribute)
+      .orElse(EntityAbacCondition.defaultRecordValue(entityAttribute))
+      .exists { actual =>
       expected.resolve(subject).exists(_ == EntityAbacCondition.normalizeValue(actual))
     }
 }
@@ -69,6 +71,12 @@ object EntityAbacCondition {
       .headOption
       .map(normalizeValue)
   }
+
+  def defaultRecordValue(name: String): Option[String] =
+    normalize(name) match
+      case "poststatus" | "post_status" => Some("Published")
+      case "aliveness" => Some("Alive")
+      case _ => None
 
   def normalize(value: String): String =
     Option(value).getOrElse("").trim.toLowerCase(java.util.Locale.ROOT)

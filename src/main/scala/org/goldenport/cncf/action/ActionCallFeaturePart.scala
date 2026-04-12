@@ -14,7 +14,7 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkAuthorization}
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
-import org.goldenport.cncf.security.{EntityAbacCondition, EntityAccessMode, EntityAccessRelation, EntityApplicationDomain, EntityAuthorizationProfile, EntityOperationKind, EntityUsageKind, ServiceOperationModel}
+import org.goldenport.cncf.security.{EntityAbacCondition, EntityAccessMode, EntityAccessRelation, EntityApplicationDomain, EntityAuthorizationProfile, EntityOperationKind, EntityUsageKind, OperationAccessPolicy, ServiceOperationModel}
 import org.goldenport.cncf.Program
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.datatype.EntityCollectionId
@@ -518,7 +518,14 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
             collection.storage.memoryRealm.exists(_.values.nonEmpty)
         if (hasresident) {
           _emit_entity_access("entity.search.hit.entity-space", _entity_search_attributes(query, "entity-space", "hit"))
-          exec_from(collection.search(query)(using execution_context))
+          val authorization = _entity_uow_authorization(Some(query.collection.name), None, "search/list")
+          exec_from(
+            collection.search(query)(using execution_context).flatMap { result =>
+              authorization
+                .map(OperationAccessPolicy.filterVisibleSearchResult(_, result, tc)(using execution_context))
+                .getOrElse(Consequence.success(result))
+            }
+          )
         } else {
           _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(query, "entity-store", "fallback"))
           ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EntityStoreSearchDirect(query, tc)))
@@ -692,7 +699,13 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   }
 
   private def _declared_operation_definition =
-    component.flatMap(_.operationDefinitions.find(x => _normalize_name(x.name) == _normalize_name(action.name)))
+    component.flatMap { c =>
+      val actionname = _normalize_name(action.name)
+      c.operationDefinitions.find { op =>
+        val opname = _normalize_name(op.name)
+        actionname == opname || actionname.endsWith(opname)
+      }
+    }
 
   private def _declared_access =
     _declared_operation_definition.flatMap(_.access)
