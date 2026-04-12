@@ -22,8 +22,8 @@ This checklist records remaining work after that baseline.
 - [ ] Define CML syntax for service-level `operationModel`.
 - [ ] Define CML syntax for operation-level `operationModel` override.
 - [ ] Define CML syntax for relation-based authorization.
-- [x] Define first CML syntax for operation-level ABAC natural condition as
-      `ACCESS` / `CONDITION`.
+- [x] Define first stable CML syntax for operation-level ABAC natural condition
+      as `ACCESS` / `CONDITION`, with `;` as the multi-condition delimiter.
 - [ ] Define CML syntax for explicit low-level `accessMode` override.
 - [ ] Decide whether relation rules belong under entity, service, operation, or a
       separate policy block.

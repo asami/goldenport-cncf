@@ -225,8 +225,8 @@ as:
 
 Further extensions should preserve the same UnitOfWork/internal DSL boundary.
 
-The first CML surface for explicit natural ABAC is operation `ACCESS` /
-`CONDITION`:
+The stable first CML surface for explicit natural ABAC is operation `ACCESS` /
+`CONDITION`. `CONDITION` is the canonical section name.
 
 ```text
 ### ACCESS
@@ -241,6 +241,9 @@ postStatus=Published:read,search/list;visibility=Public:read,search/list
 This condition is carried into `CmlOperationAccess.condition` and then into
 `UnitOfWorkAuthorization.naturalConditions`.
 For multiple conditions in CML, use `;` as the stable delimiter for now.
+`CONDITIONS`, `ABAC`, `ABAC_CONDITION`, `ABAC_CONDITIONS`,
+`NATURAL_CONDITION`, and `NATURAL_CONDITIONS` are accepted as compatibility
+aliases, but new CML should use `CONDITION`.
 
 ## Variation Points
 

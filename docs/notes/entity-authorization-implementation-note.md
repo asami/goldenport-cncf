@@ -121,7 +121,8 @@ postStatus=Published:read,search/list
 These conditions are evaluated before relation rules and owner/group/other
 permissions for user-permission entity access.
 
-The first CML surface is operation-level `ACCESS` / `CONDITION`:
+The first CML surface is operation-level `ACCESS` / `CONDITION`. `CONDITION` is
+the canonical section name:
 
 ```text
 ### ACCESS
@@ -133,9 +134,11 @@ public
 postStatus=Published:read,search/list;visibility=Public:read,search/list
 ```
 
-`CONDITION`, `ABAC`, `ABAC_CONDITION`, and `NATURAL_CONDITION` are currently
-accepted aliases. This is only the first carrier and evaluator; a richer
-authorization context and entity-level syntax remain future work.
+`CONDITIONS`, `ABAC`, `ABAC_CONDITION`, `ABAC_CONDITIONS`,
+`NATURAL_CONDITION`, and `NATURAL_CONDITIONS` are accepted as compatibility
+aliases, but new CML should use `CONDITION`. This is only the first carrier and
+evaluator; a richer authorization context and entity-level syntax remain future
+work.
 For multiple conditions in CML, use `;` as the stable delimiter for now.
 
 ## SalesOrder Example
