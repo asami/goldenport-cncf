@@ -78,6 +78,12 @@ abstract class Component() extends Component.Core.Holder {
   override def core: Component.Core =
     _core.getOrElse(throw new IllegalStateException("Component core is not initialized."))
 
+  def coreOption: Option[Component.Core] =
+    _core
+
+  def factoryOption: Option[Component.Factory] =
+    _core.flatMap(_.factory)
+
   def origin: ComponentOrigin =
     _origin.getOrElse(ComponentOrigin.Unknown)
 
@@ -636,6 +642,43 @@ object Component {
       authorization: org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization,
       uow: org.goldenport.cncf.unitofwork.UnitOfWork
     ): Option[Consequence[Unit]] = None
+
+    def entity_usage_kind(
+      action: Action,
+      entityName: String,
+      core: ActionCall.Core
+    ): Option[org.goldenport.cncf.security.EntityUsageKind] = None
+
+    def entity_operation_kind(
+      action: Action,
+      entityName: String,
+      core: ActionCall.Core
+    ): Option[org.goldenport.cncf.security.EntityOperationKind] = None
+
+    def entity_application_domain(
+      action: Action,
+      entityName: String,
+      core: ActionCall.Core
+    ): Option[org.goldenport.cncf.security.EntityApplicationDomain] = None
+
+    def service_operation_model(
+      action: Action,
+      core: ActionCall.Core
+    ): Option[org.goldenport.cncf.security.ServiceOperationModel] = None
+
+    def entity_access_mode(
+      action: Action,
+      entityName: String,
+      accessKind: String,
+      core: ActionCall.Core
+    ): Option[org.goldenport.cncf.security.EntityAccessMode] = None
+
+    def entity_access_relations(
+      action: Action,
+      entityName: String,
+      accessKind: String,
+      core: ActionCall.Core
+    ): Vector[org.goldenport.cncf.security.EntityAccessRelation] = Vector.empty
 
     final def create(params: ComponentCreate): Vector[Component] = {
       val xs = create_Components(params)

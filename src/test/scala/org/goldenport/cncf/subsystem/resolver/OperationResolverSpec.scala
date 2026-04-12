@@ -74,9 +74,21 @@ class OperationResolverSpec extends AnyWordSpec with Matchers {
         Seq("c1.s1.find", "c2.s2.findAll")
       )
       resolver.resolve("find") match {
+        case ResolutionResult.Resolved(fqn, _, _, _) =>
+          fqn shouldBe "c1.s1.find"
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+    }
+
+    "return Ambiguous for prefix-only 0-dot matching when multiple candidates exist" in {
+      val resolver = OperationResolver.fromFqns(
+        Seq("c1.s1.findOne", "c2.s2.findAll")
+      )
+      resolver.resolve("find") match {
         case ResolutionResult.Ambiguous(_, candidates) =>
           candidates.toSet shouldBe Set(
-            "c1.s1.find",
+            "c1.s1.findOne",
             "c2.s2.findAll"
           )
         case other =>
@@ -114,6 +126,23 @@ class OperationResolverSpec extends AnyWordSpec with Matchers {
         case ResolutionResult.Ambiguous(_, candidates) =>
           candidates.toSet shouldBe Set("c1.s1.op", "c2.s2.op")
         case other => fail(s"unexpected result: $other")
+      }
+    }
+
+    "prefer exact component match over component prefix matches in FQN selector" in {
+      val resolver = OperationResolver.fromFqns(
+        Seq(
+          "job_control.job.await_job_result",
+          "job_control.job_admin.cancel_job",
+          "job.job.get_job_status"
+        )
+      )
+
+      resolver.resolve("job_control.job.await_job_result") match {
+        case ResolutionResult.Resolved(fqn, _, _, _) =>
+          fqn shouldBe "job_control.job.await_job_result"
+        case other =>
+          fail(s"unexpected result: $other")
       }
     }
 

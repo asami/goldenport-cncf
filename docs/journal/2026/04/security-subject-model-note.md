@@ -191,3 +191,7 @@ The design direction is:
 - normalize the authorization subject representation
 - use it together with `SimpleEntity` security metadata
 - perform mediation at CNCF execution chokepoints
+
+Update on 2026-04-13: CNCF now has `SecuritySubject` as an internal normalized
+view used by the implemented entity authorization baseline. The implemented
+contract is documented in `docs/design/entity-authorization-model.md`.

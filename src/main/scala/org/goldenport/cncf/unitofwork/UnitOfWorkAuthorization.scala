@@ -2,6 +2,7 @@ package org.goldenport.cncf.unitofwork
 
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.operation.CmlOperationAccess
+import org.goldenport.cncf.security.{EntityAccessMode, EntityAccessRelation}
 
 /*
  * @since   Apr.  7, 2026
@@ -15,5 +16,7 @@ final case class UnitOfWorkAuthorization(
   targetId: Option[EntityId] = None,
   accessKind: String,
   access: Option[CmlOperationAccess] = None,
-  entityNames: Vector[String] = Vector.empty
+  entityNames: Vector[String] = Vector.empty,
+  accessMode: EntityAccessMode = EntityAccessMode.UserPermission,
+  relationRules: Vector[EntityAccessRelation] = Vector.empty
 )

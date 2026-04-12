@@ -26,6 +26,11 @@ final class EntityCollection[E](
     storage.memoryRealm.foreach(_.put(entity))
   }
 
+  def putRecord(record: Record): Consequence[Unit] =
+    descriptor.persistent.fromRecord(record).map { entity =>
+      put(entity)
+    }
+
   // Load-through resolution:
   // 1. Try MemoryRealm (working set cache)
   // 2. Fallback to StoreRealm

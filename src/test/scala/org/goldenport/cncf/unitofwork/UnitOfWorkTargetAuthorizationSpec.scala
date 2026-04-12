@@ -6,6 +6,7 @@ import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext,
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.http.FakeHttpDriver
+import org.goldenport.cncf.security.{EntityAccessMode, EntityAccessRelation}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.scalatest.GivenWhenThen
@@ -220,6 +221,74 @@ final class UnitOfWorkTargetAuthorizationSpec
       result shouldBe a[Consequence.Failure[_]]
       _load_name(id) shouldBe Consequence.success(Some("jiro"))
     }
+
+    "allow service-internal update without entity permission" in {
+      given ExecutionContext = _execution_context(
+        principalId = "service-principal"
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val id = EntityId("test", "update_service_internal", _cid)
+      _seed(PersonEntity(id, "order-1", "sales-org"))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Unit](
+            UnitOfWorkOp.EntityStoreUpdate(
+              entity = PersonEntity(id, "order-2", "sales-org"),
+              tc = summon[EntityPersistent[PersonEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("SalesOrder"),
+                  targetId = Some(id),
+                  accessKind = "update",
+                  accessMode = EntityAccessMode.ServiceInternal
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result shouldBe Consequence.unit
+      _load_name(id) shouldBe Consequence.success(Some("order-2"))
+    }
+
+    "allow relation-based read without granting other read permission" in {
+      given ExecutionContext = _execution_context(
+        principalId = "customer-user",
+        principalAttributes = Map("customer_id" -> "customer-123")
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val id = EntityId("test", "read_relation", _cid)
+      _seed(PersonEntity(id, "order-3", "sales-org", customerId = Some("customer-123")))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+            UnitOfWorkOp.EntityStoreLoad(
+              id,
+              summon[EntityPersistent[PersonEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("SalesOrder"),
+                  targetId = Some(id),
+                  accessKind = "read",
+                  relationRules = Vector(EntityAccessRelation("customerId", "customerId"))
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+    }
   }
 
   private def _execution_context(
@@ -302,12 +371,14 @@ final class UnitOfWorkTargetAuthorizationSpec
     name: String,
     ownerId: String,
     groupId: Option[String] = None,
-    privilegeId: Option[String] = None
+    privilegeId: Option[String] = None,
+    customerId: Option[String] = None
   ) {
     def toRecord(): Record =
       Record.dataAuto(
         "id" -> id,
         "name" -> name,
+        "customerId" -> customerId,
         "security_attributes" -> Record.dataAuto(
           "owner_id" -> ownerId,
           "group_id" -> groupId,
@@ -361,10 +432,11 @@ final class UnitOfWorkTargetAuthorizationSpec
         r.getString("name"),
         r.getString(org.goldenport.datatype.PathName(Vector("security_attributes", "owner_id"))),
         r.getString(org.goldenport.datatype.PathName(Vector("security_attributes", "group_id"))),
-        r.getString(org.goldenport.datatype.PathName(Vector("security_attributes", "privilege_id")))
+        r.getString(org.goldenport.datatype.PathName(Vector("security_attributes", "privilege_id"))),
+        r.getString("customerId").orElse(r.getString("customer_id"))
       ) match
-        case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId) =>
-          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId))
+        case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId, customerId) =>
+          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId, customerId))
         case _ =>
           Consequence.failure("invalid person record")
   }

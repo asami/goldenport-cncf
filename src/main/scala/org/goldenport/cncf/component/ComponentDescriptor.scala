@@ -5,6 +5,7 @@ import org.goldenport.record.Record
 import org.goldenport.record.RecordDecoder
 import org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, PartitionStrategy}
+import org.goldenport.cncf.security.{EntityApplicationDomain, EntityOperationKind, EntityUsageKind}
 import org.simplemodeling.model.datatype.EntityCollectionId
 
 /*
@@ -38,13 +39,19 @@ object ComponentDescriptor {
         partition = _partition_strategy(_string(rec, "partitionStrategy", "partition_strategy").getOrElse("byOrganizationMonthUTC"))
         maxPartitions = _int_value(rec, List("maxPartitions", "max_partitions"), 64)
         maxEntities = _int_value(rec, List("maxEntitiesPerPartition", "max_entities_per_partition"), 10000)
+        usageKind = _string(rec, "usageKind", "usage_kind", "entityUsage", "entity_usage").map(EntityUsageKind.parse).getOrElse(EntityUsageKind.default)
+        operationKind = _string(rec, "operationKind", "operation_kind", "entityOperationKind", "entity_operation_kind").map(EntityOperationKind.parse).getOrElse(EntityOperationKind.default)
+        applicationDomain = _string(rec, "applicationDomain", "application_domain", "entityApplicationDomain", "entity_application_domain").map(EntityApplicationDomain.parse).getOrElse(EntityApplicationDomain.default)
       } yield EntityRuntimeDescriptor(
         entityName = entityName,
         collectionId = EntityCollectionId(major, minor, name),
         memoryPolicy = memory,
         partitionStrategy = partition,
         maxPartitions = maxPartitions,
-        maxEntitiesPerPartition = maxEntities
+        maxEntitiesPerPartition = maxEntities,
+        usageKind = usageKind,
+        operationKind = operationKind,
+        applicationDomain = applicationDomain
       )
 
   given RecordDecoder[ComponentDescriptor] with

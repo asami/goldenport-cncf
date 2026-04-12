@@ -8,6 +8,7 @@ import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.config.ResolvedParameters
+import org.goldenport.cncf.entity.EntityCreateDefaultsPolicy
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, EntityStoreContext}
@@ -30,7 +31,8 @@ final class RuntimeContext(
   disposeAction: UnitOfWork => Unit,
   token: String,
   val context: RuntimeContext.Context = RuntimeContext.Context.default,
-  val transitionValidationHook: TransitionValidationHook = TransitionValidationHook.noop
+  val transitionValidationHook: TransitionValidationHook = TransitionValidationHook.noop,
+  val entityCreateDefaultsPolicy: EntityCreateDefaultsPolicy = EntityCreateDefaultsPolicy.default
 ) extends ScopeContext() {
   private var _resolved_parameters: Option[ResolvedParameters] = None
 

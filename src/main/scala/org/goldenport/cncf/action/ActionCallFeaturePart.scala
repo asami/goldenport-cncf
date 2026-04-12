@@ -14,6 +14,7 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkAuthorization}
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
+import org.goldenport.cncf.security.{EntityAccessMode, EntityAccessRelation, EntityApplicationDomain, EntityAuthorizationProfile, EntityOperationKind, EntityUsageKind, ServiceOperationModel}
 import org.goldenport.cncf.Program
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.datatype.EntityCollectionId
@@ -705,18 +706,69 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     resourceType: Option[String],
     targetId: Option[EntityId],
     accessKind: String
-  ): Option[UnitOfWorkAuthorization] =
+  ): Option[UnitOfWorkAuthorization] = {
+    val access = _declared_access
+    val entitynames = _declared_entities
+    val entityname = entitynames.headOption.orElse(resourceType).getOrElse("")
+    val factory = getFactory[org.goldenport.cncf.component.Component.Factory]
+    val entityusage =
+      factory
+        .flatMap(_.entity_usage_kind(action, entityname, core))
+        .orElse(access.flatMap(_.entityUsage).map(EntityUsageKind.parse))
+        .getOrElse(EntityUsageKind.default)
+    val entityoperationkind =
+      factory
+        .flatMap(_.entity_operation_kind(action, entityname, core))
+        .orElse(access.flatMap(_.entityOperationKind).map(EntityOperationKind.parse))
+        .getOrElse(
+          entityusage match
+            case EntityUsageKind.Executable => EntityOperationKind.Task
+            case _ => EntityOperationKind.default
+        )
+    val entityapplicationdomain =
+      factory
+        .flatMap(_.entity_application_domain(action, entityname, core))
+        .orElse(access.flatMap(_.entityApplicationDomain).map(EntityApplicationDomain.parse))
+        .getOrElse(
+          entityusage match
+            case EntityUsageKind.PublicContent => EntityApplicationDomain.Cms
+            case _ => EntityApplicationDomain.default
+        )
+    val operationmodel =
+      factory
+        .flatMap(_.service_operation_model(action, core))
+        .orElse(access.flatMap(_.operationModel).map(ServiceOperationModel.parse))
+        .getOrElse(ServiceOperationModel.default)
+    val explicitrelations =
+      factory
+        .map(_.entity_access_relations(action, entityname, accessKind, core))
+        .getOrElse(Vector.empty) ++
+      access.flatMap(_.relation).flatMap(EntityAccessRelation.parse).toVector
+    val derivedprofile = EntityAuthorizationProfile.derive(
+      operationKind = entityoperationkind,
+      applicationDomain = entityapplicationdomain,
+      operationModel = operationmodel,
+      explicitRelations = explicitrelations
+    )
+    val accessmode =
+      factory
+        .flatMap(_.entity_access_mode(action, entityname, accessKind, core))
+        .orElse(access.flatMap(_.mode).map(EntityAccessMode.parse))
+        .getOrElse(derivedprofile.accessMode)
     Some(
       UnitOfWorkAuthorization(
         resourceFamily = "domain",
-        resourceType = _declared_entities.headOption.orElse(resourceType),
+        resourceType = entitynames.headOption.orElse(resourceType),
         collectionName = targetId.map(_.collection.name).orElse(resourceType),
         targetId = targetId,
         accessKind = accessKind,
-        access = _declared_access,
-        entityNames = _declared_entities
+        access = access,
+        entityNames = entitynames,
+        accessMode = accessmode,
+        relationRules = derivedprofile.relationRules
       )
     )
+  }
 
   private def _normalize_name(p: String): String =
     Option(p).getOrElse("").toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]", "")

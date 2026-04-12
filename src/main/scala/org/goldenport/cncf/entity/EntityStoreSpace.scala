@@ -44,9 +44,14 @@ class EntityStoreSpace {
     val cid = op.tc.collection(op.entity)
     for {
       entitystore <- _by_collection(cid)
-      r <- entitystore.create(op.entity)
+      r <- entitystore.create(op.entity, _create_options(op))
     } yield r
   }
+
+  private def _create_options[T](
+    op: EntityStoreCreate[T]
+  ): EntityCreateOptions =
+    EntityCreateOptions.default
 
   def importSeed[T](
     seed: EntityStoreSeed[T]

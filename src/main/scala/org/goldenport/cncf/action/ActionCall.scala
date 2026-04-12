@@ -147,7 +147,7 @@ object ActionCall {
     correlationId: Option[CorrelationId]
   ) {
     def getFactory[A <: Component.Factory]: Option[A] =
-      component.flatMap(_.factory).map(_.asInstanceOf[A])
+      component.flatMap(_.factoryOption).map(_.asInstanceOf[A])
 
     def getCollaborator: Option[Collaborator] = component.flatMap {
       case m: CollaboratorComponent => Some(m.collaborator)

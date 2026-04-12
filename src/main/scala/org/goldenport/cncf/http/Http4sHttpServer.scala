@@ -4,6 +4,8 @@ import cats.effect.IO
 import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
+import java.util.UUID
+import scala.collection.concurrent.TrieMap
 import fs2.Pipe
 import fs2.Stream
 import com.comcast.ip4s.Host
@@ -36,6 +38,7 @@ final class Http4sHttpServer(
   port: Int = Http4sHttpServer.defaultPort
 ) extends HttpServer(engine) {
   private val _bind_host = Host.fromString("0.0.0.0").get
+  private val _form_continuations = TrieMap.empty[String, Http4sHttpServer.FormContinuation]
 
   def start(args: Array[String] = Array.empty): Unit = {
     val _ = args
@@ -82,6 +85,16 @@ final class Http4sHttpServer(
         _static_form_app(app, Vector.empty)
       case GET -> Root / "web" / app / page =>
         _static_form_app(app, Vector(page))
+      case GET -> Root / "form" / app =>
+        _form_index(app)
+      case GET -> Root / "form" / app / service / operation =>
+        _operation_form(app, service, operation)
+      case req @ GET -> Root / "form" / app / service / operation / "result" =>
+        _operation_form_result(req, app, service, operation)
+      case req @ GET -> Root / "form" / app / service / operation / "continue" / id =>
+        _operation_form_continue(req, app, service, operation, id)
+      case req @ POST -> Root / "form" / app / service / operation =>
+        _submit_operation_form(req, app, service, operation)
       case req =>
         try {
           val started = System.nanoTime()
@@ -218,6 +231,199 @@ final class Http4sHttpServer(
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Static Form App not found"))
     }
 
+  private def _form_index(app: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderFormIndex(engine.runtimeSubsystem, app) match {
+      case Some(p) =>
+        _html(p)
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Form App not found"))
+    }
+
+  private def _operation_form(
+    app: String,
+    service: String,
+    operation: String
+  ): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderOperationForm(engine.runtimeSubsystem, app, service, operation) match {
+      case Some(p) =>
+        _html(p)
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form not found"))
+    }
+
+  private def _submit_operation_form(
+    req: org.http4s.Request[IO],
+    app: String,
+    service: String,
+    operation: String
+  ): IO[HResponse[IO]] = {
+    val started = System.nanoTime()
+    for {
+      form <- _to_plain_form_record(req)
+      res = execute(HttpRequest.fromPath(
+        method = HttpRequest.POST,
+        path = s"/${app}/${service}/${operation}",
+        query = Record.create(req.uri.query.params.toVector),
+        header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value)),
+        form = form
+      ))
+      continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
+      properties = _form_result_properties(app, service, operation, res, _form_values(form) ++ _continuation_values(continuation))
+      page = StaticFormAppRenderer.renderFormResult(properties)
+      html <- _html(page)
+    } yield {
+      RuntimeDashboardMetrics.recordHtmlRequest(
+        req.method.name,
+        req.uri.path.renderString,
+        res.code,
+        (System.nanoTime() - started) / 1000000L
+      )
+      html
+    }
+  }
+
+  private def _operation_form_continue(
+    req: org.http4s.Request[IO],
+    app: String,
+    service: String,
+    operation: String,
+    id: String
+  ): IO[HResponse[IO]] =
+    _form_continuations.get(id) match {
+      case Some(continuation) if continuation.matches(app, service, operation) =>
+        val started = System.nanoTime()
+        val queryValues = req.uri.query.params.toMap
+        val pagingValues = queryValues.filter { case (k, _) => k == "page" || k == "pageSize" || k == "requireTotal" }
+        val res = continuation.response
+        val values = _continuation_values(continuation) ++ pagingValues.map { case (k, v) => s"paging.${k}" -> v }
+        val page = StaticFormAppRenderer.renderFormResult(
+          _form_result_properties(app, service, operation, res, values)
+        )
+        _html(page).map { html =>
+          RuntimeDashboardMetrics.recordHtmlRequest(
+            req.method.name,
+            req.uri.path.renderString,
+            res.code,
+            (System.nanoTime() - started) / 1000000L
+          )
+          html
+        }
+      case _ =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Form continuation not found"))
+    }
+
+  private def _operation_form_result(
+    req: org.http4s.Request[IO],
+    app: String,
+    service: String,
+    operation: String
+  ): IO[HResponse[IO]] = {
+    val started = System.nanoTime()
+    val query = Record.create(req.uri.query.params.toVector)
+    val values = req.uri.query.params.toMap
+    val res = execute(HttpRequest.fromPath(
+      method = HttpRequest.GET,
+      path = s"/${app}/${service}/${operation}",
+      query = query,
+      header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value))
+    ))
+    val page = StaticFormAppRenderer.renderFormResult(
+      _form_result_properties(app, service, operation, res, values)
+    )
+    _html(page).map { html =>
+      RuntimeDashboardMetrics.recordHtmlRequest(
+        req.method.name,
+        req.uri.path.renderString,
+        res.code,
+        (System.nanoTime() - started) / 1000000L
+      )
+      html
+    }
+  }
+
+  private def _form_result_properties(
+    app: String,
+    service: String,
+    operation: String,
+    response: HttpResponse,
+    values: Map[String, String]
+  ): StaticFormAppRenderer.FormResultProperties =
+    StaticFormAppRenderer.FormResultProperties(
+      StaticFormAppRenderer.FormPageProperties(app, service, operation, values),
+      response.code,
+      response.mime.value,
+      response.getString.getOrElse("")
+    )
+
+  private def _create_form_continuation(
+    app: String,
+    service: String,
+    operation: String,
+    form: Record,
+    response: HttpResponse,
+    chunkSize: Int
+  ): Http4sHttpServer.FormContinuation = {
+    val id = UUID.randomUUID().toString
+    val continuation = Http4sHttpServer.FormContinuation(id, app, service, operation, form, response, chunkSize)
+    _form_continuations.update(id, continuation)
+    continuation
+  }
+
+  private def _continuation_values(
+    continuation: Http4sHttpServer.FormContinuation
+  ): Map[String, String] =
+    Map(
+      "form.continuation" -> continuation.id,
+      "paging.chunkSize" -> continuation.chunkSize.toString,
+      "paging.href" -> s"/form/${continuation.app}/${continuation.service}/${continuation.operation}/continue/${continuation.id}?page={page}&pageSize={pageSize}"
+    )
+
+  private def _form_chunk_size(form: Record): Int =
+    form.getString("paging.chunkSize").flatMap(_.toIntOption).getOrElse(1000)
+
+  private def _form_values(form: Record): Map[String, String] =
+    form.asMap.map { case (k, v) => k -> v.toString }
+
+  private def _html(p: StaticFormAppRenderer.Page): IO[HResponse[IO]] =
+    IO.pure(
+      HResponse[IO](HStatus.Ok)
+        .withEntity(p.body)
+        .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+    )
+
+  private def _to_plain_form_record(
+    req: org.http4s.Request[IO]
+  ): IO[Record] =
+    req.body.compile.to(Array).map { bytes =>
+      val text = new String(bytes.toArray, java.nio.charset.StandardCharsets.UTF_8)
+      val base =
+        if (text.trim.isEmpty) Record.empty
+        else HttpRequest.parseQuery(text)
+      base.getString("fields").map(_fields_to_record).getOrElse(base)
+    }
+
+  private def _fields_to_record(text: String): Record = {
+    val trimmedText = text.trim
+    if (!trimmedText.contains("\n") && trimmedText.contains("&")) {
+      HttpRequest.parseQuery(trimmedText)
+    } else {
+      val pairs = text.linesIterator.toVector.flatMap { line =>
+        val trimmed = line.trim
+        if (trimmed.isEmpty) {
+          None
+        } else {
+          val i = trimmed.indexOf("=")
+          if (i < 0) {
+            Some(trimmed -> "")
+          } else {
+            Some(trimmed.take(i).trim -> trimmed.drop(i + 1).trim)
+          }
+        }
+      }
+      if (pairs.isEmpty) Record.empty else Record.create(pairs)
+    }
+  }
+
   private def _to_http_request(
     req: org.http4s.Request[IO]
   ): IO[HttpRequest] = {
@@ -347,6 +553,23 @@ final class Http4sHttpServer(
 
 object Http4sHttpServer {
   val PortPropertyKey = "cncf.server.port"
+
+  final case class FormContinuation(
+    id: String,
+    app: String,
+    service: String,
+    operation: String,
+    form: Record,
+    response: HttpResponse,
+    chunkSize: Int
+  ) {
+    def matches(
+      app: String,
+      service: String,
+      operation: String
+    ): Boolean =
+      this.app == app && this.service == service && this.operation == operation
+  }
 
   def defaultPort: Int =
     sys.props

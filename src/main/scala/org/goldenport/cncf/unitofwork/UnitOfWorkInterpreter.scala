@@ -104,9 +104,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     case m: (UnitOfWorkOp.EntityStoreCreate[t] @unchecked) =>
       withCallTree("uow:entitystore:create") {
         _authorize(m.authorization).flatMap(_ =>
-          _entity_store_space.create(m).map { r =>
-            _view_space_invalidate_all()
-            r
+          _entity_store_space.create(m).flatMap { r =>
+            _entity_space_put_record(r.id, r.record).map { _ =>
+              _view_space_invalidate_all()
+              r
+            }
           }
         )
       }
@@ -271,6 +273,17 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     _component_option
       .flatMap(_.entitySpace.entityOption[T](name))
       .foreach(_.put(entity))
+  }
+
+  private def _entity_space_put_record(
+    id: EntityId,
+    record: Option[org.goldenport.record.Record]
+  ): Consequence[Unit] = {
+    val name = id.collection.name
+    (for {
+      r <- record
+      collection <- _component_option.flatMap(_.entitySpace.entityOption[Any](name))
+    } yield collection.putRecord(r)).getOrElse(Consequence.unit)
   }
 
   private def _view_space_invalidate_all(): Unit =

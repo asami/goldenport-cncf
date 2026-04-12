@@ -87,6 +87,19 @@ HTML FORM submit is a browser-native execution layer:
 - the operation is executed through the REST execution backbone.
 - success and error outcomes resolve to Web HTML result pages.
 
+The first runtime hook provides a generic component operation entry:
+
+```text
+GET  /form/{component}
+GET  /form/{component}/{service}/{operation}
+POST /form/{component}/{service}/{operation}
+```
+
+The `GET` routes render a Bootstrap-backed operation index and operation form.
+The `POST` route converts submitted form data to operation input, invokes the
+matching REST execution path, and renders an HTML result page. This hook is
+generic CNCF behavior and does not contain sample-app-specific page content.
+
 JSON Form API is an input preparation layer:
 
 - `GET /form-api/...` returns form metadata for an operation.
@@ -171,6 +184,76 @@ Plain HTML FORM submit responses are HTML-oriented:
 - success resolves to a success page or redirects to a success page.
 - validation error resolves to an error page or redirects to an error page.
 - system error resolves to an error page or returns an error response.
+
+## Result Page Template And Widgets
+
+Static Form App result pages use a small property expansion syntax:
+
+```html
+${operation.label}
+${result.status}
+```
+
+The template language intentionally does not provide control structures.
+Structured views are rendered through `textus-*` widgets. The first widget
+contracts are:
+
+```html
+<textus-result-view source="result.body"></textus-result-view>
+<textus-result-table source="result.body" page="paging.page" page-size="paging.pageSize" total="paging.total" href="paging.href"></textus-result-table>
+<textus-property-list source="result"></textus-property-list>
+<textus-error-panel source="result"></textus-error-panel>
+```
+
+Paging is part of the initial table contract. A table widget reads the current
+page, page size, optional total count, and page navigation href template through
+property paths. The default property names are:
+
+```text
+paging.page
+paging.pageSize
+paging.chunkSize
+paging.total
+paging.href
+```
+
+Total count is not requested by default. Search/list operations may require an
+extra count query on DB-backed implementations, so the caller must explicitly
+request total count when it is needed. When total count is absent, the widget
+still renders the current page and previous/current/next navigation, but omits
+total-page navigation and page-number ranges. This keeps simple operation
+responses usable while allowing list/search operations to opt into total-count
+paging when needed.
+
+Display page size and continuation chunk size are separate. The default display
+page size is 20 rows. The default continuation chunk size is 1000 rows. A widget
+uses `paging.pageSize` for visible rows, while the Form continuation mechanism
+may use `paging.chunkSize` when retaining or fetching a larger in-memory result
+window.
+
+EntitySpace currently keeps many working sets in memory, so total count is
+often available with little or no additional work. That is best-effort behavior,
+not a hard guarantee across all storage backends.
+
+The `paging.href` value connects the HTML representation to the operation
+execution mechanism. It is a URL template with `{page}` and `{pageSize}` tokens:
+
+```text
+/form/{component}/{service}/{operation}/continue/{id}?page={page}&pageSize={pageSize}
+```
+
+The table widget renders page links by expanding this template. For plain HTML
+FORM pages, those links should re-enter the matching `/form/.../continue/{id}`
+route with the requested paging values. The continuation route preserves the
+operation result set server-side and returns the requested page from that result
+set without re-executing the search operation. This is a good fit for the
+current memory-resident working set model.
+
+Total count opt-in uses an explicit parameter, conventionally:
+
+```text
+paging.requireTotal=true
+```
 
 ## Runtime Hook Rule
 

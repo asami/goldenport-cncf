@@ -3,7 +3,7 @@ package org.goldenport.cncf.operation
 /*
  * @since   Mar. 22, 2026
  *  version Mar. 28, 2026
- * @version Apr.  1, 2026
+ * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CmlOperationField(
@@ -15,7 +15,13 @@ final case class CmlOperationField(
 final case class CmlOperationAccess(
   policy: String,
   resource: Option[String] = None,
-  target: Option[String] = None
+  target: Option[String] = None,
+  mode: Option[String] = None,
+  relation: Option[String] = None,
+  operationModel: Option[String] = None,
+  entityUsage: Option[String] = None,
+  entityOperationKind: Option[String] = None,
+  entityApplicationDomain: Option[String] = None
 )
 
 final case class CmlOperationDefinition(

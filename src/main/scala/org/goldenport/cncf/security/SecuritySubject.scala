@@ -4,7 +4,7 @@ import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr.  7, 2026
+ * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SecuritySubject(
@@ -16,7 +16,8 @@ final case class SecuritySubject(
   roles: Set[String],
   privileges: Set[String],
   capabilities: Set[String],
-  securityLevel: Set[String]
+  securityLevel: Set[String],
+  attributes: Map[String, String] = Map.empty
 ) {
   def isAuthenticated: Boolean =
     authenticationState == SecuritySubject.AuthenticationState.Authenticated
@@ -60,6 +61,13 @@ final case class SecuritySubject(
       roles.contains(target)
     }
   }
+
+  def attributeValues(name: String): Set[String] =
+    attributes
+      .get(name)
+      .orElse(attributes.get(SecuritySubject.snake(name)))
+      .toSet
+      .flatMap(SecuritySubject.splitTokens)
 }
 
 object SecuritySubject {
@@ -97,7 +105,8 @@ object SecuritySubject {
       roles = roleSet.map(normalize),
       privileges = privilegeSet.map(normalize),
       capabilities = capabilitySet,
-      securityLevel = levelSet
+      securityLevel = levelSet,
+      attributes = attributes
     )
   }
 
@@ -106,6 +115,12 @@ object SecuritySubject {
 
   def normalize(value: String): String =
     value.trim.toLowerCase.replace("_", "").replace("-", "")
+
+  def snake(text: String): String =
+    text.flatMap {
+      case c if c.isUpper => "_" + c.toLower
+      case c => c.toString
+    }.stripPrefix("_")
 
   def createGrantTargets(
     resourceType: Option[String],

@@ -210,13 +210,16 @@ final class OperationResolver private (
       return MatchOutcome.NotFound
     }
 
-    val prefix = items.filter(item => accessor(item).prefixMatches(selector))
-    val combined = (exact ++ prefix).distinct
+    if (exact.nonEmpty) {
+      if (exact.size == 1) return MatchOutcome.Found(exact)
+      return MatchOutcome.Ambiguous(exact)
+    }
 
-    combined.size match {
+    val prefix = items.filter(item => accessor(item).prefixMatches(selector))
+    prefix.distinct.size match {
       case 0 => MatchOutcome.NotFound
-      case 1 => MatchOutcome.Found(combined)
-      case _ => MatchOutcome.Ambiguous(combined)
+      case 1 => MatchOutcome.Found(prefix.distinct)
+      case _ => MatchOutcome.Ambiguous(prefix.distinct)
     }
   }
 }

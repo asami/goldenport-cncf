@@ -86,6 +86,33 @@ final class EntityStoreQueryRouteSpec
       result.map(r => (r.offset, r.limit, r.fetchedCount)) shouldBe Consequence.success((Some(1), Some(1), 1))
     }
 
+    "return empty result when collection has not been created yet" in {
+      Given("a searchable datastore with no entries for the collection")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      When("searching through EntityStoreSpace route")
+      val query = Query(
+        PersonQuery(
+          id = Condition.any[EntityId],
+          name = Condition.any[String],
+          age = Condition.any[Int]
+        )
+      )
+      val op = UnitOfWorkOp.EntityStoreSearch(
+        query = EntityQuery(_cid, query),
+        tc = summon[EntityPersistent[PersonEntity]]
+      )
+      val result = entitystorespace.search(op)
+
+      Then("an empty search result is returned instead of a datastore failure")
+      result.map(_.data) shouldBe Consequence.success(Vector.empty)
+      result.map(_.totalCount) shouldBe Consequence.success(Some(0))
+      result.map(_.fetchedCount) shouldBe Consequence.success(0)
+    }
+
     "apply default visibility for general user (published + alive)" in {
       Given("records with mixed postStatus/aliveness")
       val datastorespace = DataStoreSpace.default()

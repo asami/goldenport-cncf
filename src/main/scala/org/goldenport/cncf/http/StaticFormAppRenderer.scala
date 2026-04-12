@@ -4,6 +4,8 @@ import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.CncfVersion
+import io.circe.Json
+import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
@@ -12,6 +14,47 @@ import org.goldenport.cncf.CncfVersion
  */
 object StaticFormAppRenderer {
   final case class Page(body: String)
+  final case class FormPageProperties(
+    componentName: String,
+    serviceName: String,
+    operationName: String,
+    values: Map[String, String] = Map.empty
+  ) {
+    def operationLabel: String =
+      s"${componentName}.${serviceName}.${operationName}"
+
+    def withValue(name: String, value: String): FormPageProperties =
+      copy(values = values + (name -> value))
+
+    def value(name: String): String =
+      values.getOrElse(name, "")
+  }
+  final case class FormResultProperties(
+    page: FormPageProperties,
+    status: Int,
+    contentType: String,
+    body: String
+  ) {
+    def componentName: String = page.componentName
+    def serviceName: String = page.serviceName
+    def operationName: String = page.operationName
+
+    def operationLabel: String =
+      page.operationLabel
+
+    def nextPageProperties: FormPageProperties =
+      page
+        .withValue("result.status", status.toString)
+        .withValue("result.contentType", contentType)
+        .withValue("result.body", body)
+        .withValue("paging.page", page.values.getOrElse("paging.page", "1"))
+        .withValue("paging.pageSize", page.values.getOrElse("paging.pageSize", "20"))
+        .withValue("paging.chunkSize", page.values.getOrElse("paging.chunkSize", "1000"))
+        .withValue("paging.href", page.values.getOrElse("paging.href", _default_paging_href))
+
+    private def _default_paging_href: String =
+      s"/form/${componentName}/${serviceName}/${operationName}/result?page={page}&pageSize={pageSize}"
+  }
 
   def render(
     subsystem: Subsystem,
@@ -24,6 +67,84 @@ object StaticFormAppRenderer {
       case _ =>
         None
     }
+  }
+
+  def renderFormIndex(
+    subsystem: Subsystem,
+    componentName: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val services = component.protocol.services.services.map { service =>
+        val operations = service.operations.operations.toVector.map { operation =>
+          val path = s"/form/${componentPath}/${NamingConventions.toNormalizedSegment(service.name)}/${NamingConventions.toNormalizedSegment(operation.name)}"
+          s"""<li><a href="${_escape(path)}">${_escape(operation.name)}</a></li>"""
+        }.mkString("\n")
+        s"""<section><h2>${_escape(service.name)}</h2><ul>${operations}</ul></section>"""
+      }.mkString("\n")
+      Page(_simple_page(
+        title = s"${_escape(component.name)} Forms",
+        subtitle = "HTML form operations",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="/web/${componentPath}/dashboard">Dashboard</a> · <a href="/web/${componentPath}/admin">Admin configuration</a></p>
+             |</article>
+             |${services}""".stripMargin
+      ))
+    }
+
+  def renderOperationForm(
+    subsystem: Subsystem,
+    componentName: String,
+    serviceName: String,
+    operationName: String
+  ): Option[Page] =
+    for {
+      component <- _find_component(subsystem, componentName)
+      service <- component.protocol.services.services.find(x => NamingConventions.equivalentByNormalized(x.name, serviceName))
+      operation <- service.operations.operations.find(x => NamingConventions.equivalentByNormalized(x.name, operationName))
+    } yield {
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val servicePath = NamingConventions.toNormalizedSegment(service.name)
+      val operationPath = NamingConventions.toNormalizedSegment(operation.name)
+      val action = s"/form/${componentPath}/${servicePath}/${operationPath}"
+      Page(_simple_page(
+        title = s"${_escape(component.name)}.${_escape(service.name)}.${_escape(operation.name)}",
+        subtitle = "HTML form operation",
+        body =
+          s"""<article>
+             |  <form method="post" action="${_escape(action)}">
+             |    <div class="mb-3">
+             |      <label class="form-label" for="formFields">Fields</label>
+             |      <textarea class="form-control" id="formFields" name="fields" rows="6" placeholder="name=value&#10;keyword=sample"></textarea>
+             |      <div class="form-text">Use one name=value pair per line. Query-style values are also accepted.</div>
+             |    </div>
+             |    <button type="submit" class="btn btn-primary">Run</button>
+             |    <a class="btn btn-outline-secondary" href="/form/${componentPath}">Operations</a>
+             |  </form>
+             |</article>""".stripMargin
+      ))
+    }
+
+  def renderFormResult(
+    properties: FormResultProperties
+  ): Page = {
+    val pageProperties = properties.nextPageProperties
+    val template =
+      s"""<article>
+         |  <h2>Result</h2>
+         |  <p>Content-Type $${result.contentType}</p>
+         |  <textus-result-view source="result.body"></textus-result-view>
+         |  <textus-result-table source="result.body" page="paging.page" page-size="paging.pageSize" total="paging.total" href="paging.href"></textus-result-table>
+         |  <textus-property-list source="result"></textus-property-list>
+         |  <p><a href="/form/${_escape(NamingConventions.toNormalizedSegment(properties.componentName))}/${_escape(NamingConventions.toNormalizedSegment(properties.serviceName))}/${_escape(NamingConventions.toNormalizedSegment(properties.operationName))}">Run again</a> · <a href="/form/${_escape(NamingConventions.toNormalizedSegment(properties.componentName))}">Operations</a></p>
+         |</article>""".stripMargin
+    Page(_simple_page(
+      title = s"${_escape(properties.operationLabel)} Result",
+      subtitle = s"HTTP ${properties.status}",
+      body = _render_template(template, pageProperties)
+    ))
   }
 
   def renderSubsystemDashboard(subsystem: Subsystem): Page =
@@ -383,6 +504,185 @@ object StaticFormAppRenderer {
            |    li { margin: 6px 0; }
            |""".stripMargin
     ))
+
+  private def _property_rows(properties: Map[String, String]): String =
+    properties.toVector.sortBy(_._1).map { case (key, value) =>
+      s"""<dt class="col-sm-3">${_escape(key)}</dt><dd class="col-sm-9"><code>${_escape(value)}</code></dd>"""
+    }.mkString("\n")
+
+  private def _render_template(
+    template: String,
+    properties: FormPageProperties
+  ): String = {
+    val widgets = _render_widgets(template, properties)
+    _render_property_expansions(widgets, properties)
+  }
+
+  private def _render_property_expansions(
+    template: String,
+    properties: FormPageProperties
+  ): String =
+    """\$\{([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(template, m =>
+      java.util.regex.Matcher.quoteReplacement(_escape(properties.value(m.group(1))))
+    )
+
+  private def _render_widgets(
+    template: String,
+    properties: FormPageProperties
+  ): String = {
+    val resultView = """<textus-result-view\s+source="([^"]+)"\s*></textus-result-view>""".r
+    val resultTable = """<textus-result-table\s+source="([^"]+)"\s+page="([^"]+)"\s+page-size="([^"]+)"\s+total="([^"]+)"\s+href="([^"]+)"\s*></textus-result-table>""".r
+    val propertyList = """<textus-property-list\s+source="([^"]+)"\s*></textus-property-list>""".r
+    val errorPanel = """<textus-error-panel\s+source="([^"]+)"\s*></textus-error-panel>""".r
+    val a = resultView.replaceAllIn(template, m =>
+      java.util.regex.Matcher.quoteReplacement(_render_result_view(m.group(1), properties))
+    )
+    val b = resultTable.replaceAllIn(a, m =>
+      java.util.regex.Matcher.quoteReplacement(_render_result_table(m.group(1), m.group(2), m.group(3), m.group(4), m.group(5), properties))
+    )
+    val c = propertyList.replaceAllIn(b, m =>
+      java.util.regex.Matcher.quoteReplacement(_render_property_list(m.group(1), properties))
+    )
+    errorPanel.replaceAllIn(c, m =>
+      java.util.regex.Matcher.quoteReplacement(_render_error_panel(m.group(1), properties))
+    )
+  }
+
+  private def _render_result_view(
+    source: String,
+    properties: FormPageProperties
+  ): String = {
+    val value = properties.value(source)
+    s"""<pre class="mt-3 p-3 bg-light border rounded">${_escape(value)}</pre>"""
+  }
+
+  private def _render_result_table(
+    source: String,
+    pagePath: String,
+    pageSizePath: String,
+    totalPath: String,
+    hrefPath: String,
+    properties: FormPageProperties
+  ): String = {
+    val page = _int_property(properties, pagePath, 1)
+    val pageSize = _int_property(properties, pageSizePath, 20)
+    val total = _optional_int_property(properties, totalPath)
+    val href = properties.value(hrefPath)
+    val table = _json_table(properties.value(source), page, pageSize).getOrElse("")
+    s"""${table}<div class="mt-3">${_paging_nav(page, pageSize, total, href)}</div>"""
+  }
+
+  private def _render_property_list(
+    source: String,
+    properties: FormPageProperties
+  ): String = {
+    val prefix = if (source.endsWith(".")) source else source + "."
+    val xs = properties.values.collect {
+      case (key, value) if key == source || key.startsWith(prefix) => key -> value
+    }
+    s"""<dl class="row">${_property_rows(xs)}</dl>"""
+  }
+
+  private def _render_error_panel(
+    source: String,
+    properties: FormPageProperties
+  ): String = {
+    val prefix = if (source.endsWith(".")) source else source + "."
+    val xs = properties.values.collect {
+      case (key, value) if key == source || key.startsWith(prefix) => key -> value
+    }
+    if (xs.isEmpty) ""
+    else s"""<div class="alert alert-danger" role="alert">${_property_rows(xs)}</div>"""
+  }
+
+  private def _json_table(
+    body: String,
+    page: Int,
+    pageSize: Int
+  ): Option[String] =
+    parse(body).toOption.flatMap { json =>
+      val rows = json.asArray.orElse(json.hcursor.downField("result").focus.flatMap(_.asArray))
+      rows.flatMap(xs => _records_table(_page_rows(xs, page, pageSize)))
+    }
+
+  private def _page_rows(
+    rows: Vector[Json],
+    page: Int,
+    pageSize: Int
+  ): Vector[Json] = {
+    val offset = math.max(0, page - 1) * math.max(1, pageSize)
+    rows.slice(offset, offset + math.max(1, pageSize))
+  }
+
+  private def _records_table(rows: Vector[Json]): Option[String] = {
+    val objects = rows.flatMap(_.asObject)
+    if (objects.isEmpty) {
+      None
+    } else {
+      val headers = objects.flatMap(_.keys).distinct
+      val head = headers.map(h => s"<th>${_escape(h)}</th>").mkString
+      val body = objects.map { obj =>
+        val cells = headers.map { h =>
+          val value = obj(h).map(_json_cell).getOrElse("")
+          s"<td>${_escape(value)}</td>"
+        }.mkString
+        s"<tr>${cells}</tr>"
+      }.mkString("\n")
+      Some(s"""<div class="table-responsive mt-3"><table class="table table-sm table-striped"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>""")
+    }
+  }
+
+  private def _json_cell(json: Json): String =
+    json.asString
+      .orElse(json.asNumber.map(_.toString))
+      .orElse(json.asBoolean.map(_.toString))
+      .getOrElse(json.noSpaces)
+
+  private def _paging_nav(
+    page: Int,
+    pageSize: Int,
+    total: Option[Int],
+    href: String
+  ): String = {
+    val prev = math.max(1, page - 1)
+    val next = page + 1
+    val last = total.map(t => math.max(1, (t + pageSize - 1) / pageSize))
+    val prevDisabled = page <= 1
+    val nextDisabled = last.exists(page >= _)
+    val pages = last.map(l => (1 to math.min(l, 5)).toVector).getOrElse(Vector.empty)
+    val pageItems = pages.map { p =>
+      val active = if (p == page) " active" else ""
+      s"""<li class="page-item${active}"><a class="page-link" href="${_escape(_paging_href(href, p, pageSize))}">${p}</a></li>"""
+    }.mkString
+    val current =
+      if (last.isDefined) ""
+      else s"""<li class="page-item active"><span class="page-link">Page ${page}</span></li>"""
+    s"""<nav aria-label="Result pages"><ul class="pagination">
+       |<li class="page-item${if (prevDisabled) " disabled" else ""}"><a class="page-link" href="${_escape(_paging_href(href, prev, pageSize))}">Previous</a></li>
+       |${pageItems}${current}
+       |<li class="page-item${if (nextDisabled) " disabled" else ""}"><a class="page-link" href="${_escape(_paging_href(href, next, pageSize))}">Next</a></li>
+       |</ul></nav>""".stripMargin
+  }
+
+  private def _paging_href(
+    href: String,
+    page: Int,
+    pageSize: Int
+  ): String =
+    href.replace("{page}", page.toString).replace("{pageSize}", pageSize.toString)
+
+  private def _int_property(
+    properties: FormPageProperties,
+    name: String,
+    default: Int
+  ): Int =
+    _optional_int_property(properties, name).getOrElse(default)
+
+  private def _optional_int_property(
+    properties: FormPageProperties,
+    name: String
+  ): Option[Int] =
+    properties.value(name).toIntOption
 
   private def _dashboard_state_json(
     components: Vector[Component],

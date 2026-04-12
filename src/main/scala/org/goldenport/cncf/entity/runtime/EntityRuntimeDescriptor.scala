@@ -1,6 +1,7 @@
 package org.goldenport.cncf.entity.runtime
 
 import org.simplemodeling.model.datatype.EntityCollectionId
+import org.goldenport.cncf.security.{EntityApplicationDomain, EntityOperationKind, EntityUsageKind}
 
 /*
  * Static runtime metadata for an entity.
@@ -21,7 +22,10 @@ final case class EntityRuntimeDescriptor(
   maxEntitiesPerPartition: Int,
   workingSet: Option[WorkingSetDescriptor] = None,
   aggregateNames: Vector[String] = Vector.empty,
-  viewNames: Vector[String] = Vector.empty
+  viewNames: Vector[String] = Vector.empty,
+  usageKind: EntityUsageKind = EntityUsageKind.default,
+  operationKind: EntityOperationKind = EntityOperationKind.default,
+  applicationDomain: EntityApplicationDomain = EntityApplicationDomain.default
 ) {
   def toPlan: EntityRuntimePlan[Any] =
     EntityRuntimePlan(

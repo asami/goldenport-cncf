@@ -104,6 +104,89 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/system/admin")
     }
 
+    "render component HTML form operation index" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+
+      val html = StaticFormAppRenderer.renderFormIndex(subsystem, component.name).map(_.body).getOrElse(fail("form index is missing"))
+
+      html should include (s"${component.name} Forms")
+      html should include ("/web/assets/bootstrap.min.css")
+      html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/dashboard")
+      html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
+    }
+
+    "render component HTML operation form" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
+      val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
+
+      val html = StaticFormAppRenderer.renderOperationForm(subsystem, component.name, service.name, operation.name).map(_.body).getOrElse(fail("operation form is missing"))
+
+      html should include ("<form method=\"post\"")
+      html should include ("name=\"fields\"")
+      html should include ("class=\"form-control\"")
+      html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(service.name)}/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(operation.name)}")
+      html should not include ("cdn.jsdelivr")
+    }
+
+    "render textus result widgets with paging links" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices",
+          Map(
+            "paging.page" -> "2",
+            "paging.pageSize" -> "1",
+            "paging.total" -> "25",
+            "paging.href" -> "/form/notice-board/notice/search-notices/continue/test-id?page={page}&pageSize={pageSize}"
+          )
+        ),
+        200,
+        "application/json",
+        """[{"title":"Hello","author":"Taro"},{"title":"World","author":"Hanako"}]"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(properties).body
+
+      html should include ("<table")
+      html should include ("Hanako")
+      html should not include ("<td>Hello</td>")
+      html should include ("result.status")
+      html should include ("/form/notice-board/notice/search-notices/continue/test-id?page=1&amp;pageSize=1")
+      html should include ("/form/notice-board/notice/search-notices/continue/test-id?page=3&amp;pageSize=1")
+      html should not include ("<textus-result-table")
+      html should not include ("${result.contentType}")
+    }
+
+    "render textus result table without total count" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices",
+          Map(
+            "paging.page" -> "2",
+            "paging.pageSize" -> "10",
+            "paging.href" -> "/form/notice-board/notice/search-notices/continue/test-id?page={page}&pageSize={pageSize}"
+          )
+        ),
+        200,
+        "application/json",
+        """[{"title":"Hello"}]"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(properties).body
+
+      html should include ("Page 2")
+      html should include ("Previous")
+      html should include ("Next")
+      html should include ("/form/notice-board/notice/search-notices/continue/test-id?page=1&amp;pageSize=10")
+      html should include ("/form/notice-board/notice/search-notices/continue/test-id?page=3&amp;pageSize=10")
+    }
+
     "provide local Bootstrap 5 assets" in {
       StaticFormAppAssets.bootstrapVersion shouldBe "5.3.3"
       StaticFormAppAssets.bootstrapCss should include ("Bootstrap")

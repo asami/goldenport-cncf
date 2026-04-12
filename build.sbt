@@ -67,6 +67,7 @@ lazy val root = project
     },
 
     publishMavenStyle := true,
+    Compile / packageDoc / publishArtifact := false,
 
     Test / fork := false,
     (Test / test / testOptions) += Tests.Argument(TestFrameworks.ScalaTest, "-l", "org.goldenport.tags.ManualSpec"),

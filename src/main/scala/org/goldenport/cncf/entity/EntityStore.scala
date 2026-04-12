@@ -31,7 +31,8 @@ abstract class EntityStore {
   def isAccept(cid: EntityCollectionId): Boolean = true
 
   def create[T](
-    entity: T
+    entity: T,
+    options: EntityCreateOptions = EntityCreateOptions.default
   )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]]
 
   def load[T](
@@ -99,7 +100,21 @@ object EntityStore {
   // }
 }
 
-case class CreateResult[T](id: EntityId) {
+final case class EntityCreateOptions(
+  defaultProfiles: Set[String] = Set.empty,
+  defaultValues: Record = Record.empty
+) {
+  def hasDefaultProfile(name: String): Boolean =
+    defaultProfiles.contains(name.trim.toLowerCase(java.util.Locale.ROOT))
+}
+object EntityCreateOptions {
+  val default: EntityCreateOptions = EntityCreateOptions()
+}
+
+case class CreateResult[T](
+  id: EntityId,
+  record: Option[Record] = None
+) {
   def toRecord: Record = Record.data(
     "id" -> id.print
   )
@@ -110,7 +125,7 @@ case class DeleteResult[T]()
 
 class NoopEntityStore() extends EntityStore {
   def name: String = "noop"
-  def create[T](entity: T)(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = ???
+  def create[T](entity: T, options: EntityCreateOptions = EntityCreateOptions.default)(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = ???
   def load[T](id: EntityId)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[T]] = ???
   def save[T](entity: T)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = ???
   def update[T](changes: T)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = ???
@@ -132,16 +147,17 @@ class StandardEntityStore(
     }
 
   def create[T](
-    entity: T
+    entity: T,
+    options: EntityCreateOptions = EntityCreateOptions.default
   )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = {
     val id = tc.id(entity) getOrElse createId(entity)
-    val rec = _complement_create_record(tc.toRecord(entity), id)
+    val rec = _complement_create_record(tc.toRecord(entity), id, options)
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
       _ <- ds.create(cid, dsid, rec)
-    } yield CreateResult(id)
+    } yield CreateResult(id, Some(rec))
   }
 
   def load[T](
@@ -516,16 +532,15 @@ class StandardEntityStore(
         QueryOrder.None
     }
 
-  private def _complement_create_record(
+  private def _complement_create_record[T](
     record: Record,
-    id: EntityId
-  )(using ctx: ExecutionContext): Record =
-    _complement_record(
+    id: EntityId,
+    options: EntityCreateOptions
+  )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Record =
+    ctx.runtime.entityCreateDefaultsPolicy.complementCreateRecord(
       record = record,
       id = id,
-      existing = None,
-      includesCreationDefaults = true,
-      includesStateDefaults = true
+      options = options
     )
 
   private def _complement_save_record(
@@ -538,7 +553,8 @@ class StandardEntityStore(
       id = id,
       existing = existing,
       includesCreationDefaults = true,
-      includesStateDefaults = true
+      includesStateDefaults = true,
+      createOptions = EntityCreateOptions.default
     )
 
   private def _complement_update_record(
@@ -550,7 +566,8 @@ class StandardEntityStore(
       id = id,
       existing = None,
       includesCreationDefaults = false,
-      includesStateDefaults = false
+      includesStateDefaults = false,
+      createOptions = EntityCreateOptions.default
     )
 
   private def _complement_record(
@@ -558,7 +575,8 @@ class StandardEntityStore(
     id: EntityId,
     existing: Option[Record],
     includesCreationDefaults: Boolean,
-    includesStateDefaults: Boolean
+    includesStateDefaults: Boolean,
+    createOptions: EntityCreateOptions
   )(using ctx: ExecutionContext): Record = {
     val now = java.time.ZonedDateTime.now(ctx.clock.withZone(ctx.timezone))
     val principalid = ctx.security.principal.id.value
@@ -588,8 +606,14 @@ class StandardEntityStore(
     add_if_missing("updatedAt", Some(now))
     add_if_missing("updatedBy", Some(principal))
     if (includesStateDefaults) {
-      add_if_missing("postStatus", existing_value("postStatus").orElse(Some(PostStatus.default)))
+      add_if_missing("postStatus", existing_value("postStatus").orElse(Some(_default_post_status(createOptions))))
       add_if_missing("aliveness", existing_value("aliveness").orElse(Some(Aliveness.default)))
+    }
+    if (includesCreationDefaults && createOptions.hasDefaultProfile("publication")) {
+      add_if_missing("publishAt", existing_value("publishAt").orElse(Some(now)))
+      add_if_missing("publicAt", existing_value("publicAt").orElse(Some(now)))
+      add_if_missing("publishedBy", existing_value("publishedBy").orElse(Some(principal)))
+      add_if_missing("securityAttributes", existing_value("securityAttributes").orElse(Some(_public_security_attributes(principal))))
     }
     add_if_missing("traceId", Some(ctx.observability.traceId.value))
     add_if_missing("correlationId", ctx.observability.correlationId.map(_.value))
@@ -597,6 +621,19 @@ class StandardEntityStore(
     val complement = Record.dataAuto(defaults.result()*)
     record ++ complement
   }
+
+  private def _default_post_status(
+    options: EntityCreateOptions
+  ): Any =
+    if (options.hasDefaultProfile("publication"))
+      PostStatus.Published
+    else
+      PostStatus.default
+
+  private def _public_security_attributes(
+    principal: String
+  ): Record =
+    org.simplemodeling.model.value.SecurityAttributes.publicOwnedBy(principal).toRecord
 
   private def _soft_delete_record(
     existing: Record

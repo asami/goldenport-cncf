@@ -8,11 +8,13 @@ import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext,
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.directive.{Query, SearchResult}
 import org.goldenport.cncf.entity.runtime.*
-import org.goldenport.cncf.entity.{EntityPersistent, EntityQuery, EntityStore, EntityStoreSpace}
+import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
+import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.record.Record
+import org.goldenport.protocol.Protocol
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -126,6 +128,53 @@ final class ActionCallEntityAccessMetricsSpec
         _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 0L
       }
     }
+
+    "make a created entity visible to the next entity-space search" in {
+      EntityAccessMetricsRegistry.shared.synchronized {
+        Given("an empty resident entity collection and a create DTO distinct from the read entity")
+        EntityAccessMetricsRegistry.shared.clear()
+        given EntityPersistent[TestPerson] = _persistent
+        given EntityPersistentCreate[TestPersonCreate] = _create_persistent
+
+        val datastorespace = DataStoreSpace.default()
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        val ctx = _execution_context(datastorespace, entitystorespace)
+        val cid = _cid("person_metrics_create_search")
+        val component = TestComponentFactory.create("create_search", Protocol.empty)
+        component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
+        val probe = _component_scoped_probe(component, ctx)
+
+        When("creating through the unit-of-work entity-store path")
+        val created = probe.createPublic[TestPersonCreate](TestPersonCreate("created-from-dto", 42, cid))
+
+        Then("the stored record is decoded into the entity-space working set")
+        val createdId = created match {
+          case Consequence.Success(result) => result.id
+          case other => fail(s"create failed: $other")
+        }
+        val workingSet = component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values
+        workingSet.map(_.id) should contain(createdId)
+        val createdEntity = workingSet.find(_.id == createdId).get
+        createdEntity.postStatus.map(_.toLowerCase(java.util.Locale.ROOT).contains("published")) should contain(true)
+        createdEntity.aliveness.map(_.toLowerCase(java.util.Locale.ROOT).contains("alive")) should contain(true)
+        createdEntity.securityAttributes
+          .flatMap(_.getRecord("rights"))
+          .flatMap(_.getRecord("other"))
+          .flatMap(_.getBoolean("read")) should contain(false)
+
+        And("a following search can find the entity without falling back to the datastore")
+        EntityAccessMetricsRegistry.shared.clear()
+        val query: EntityQuery[TestPerson] = EntityQuery(cid, Query(TestPersonQuery(
+          id = Condition.any[EntityId],
+          name = Condition.is("created-from-dto"),
+          age = Condition.any[Int]
+        )))
+        val result = probe.search[TestPerson](query)
+        result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(createdId))
+        _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 1L
+        _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 0L
+      }
+    }
   }
 
   private def _probe(
@@ -140,6 +189,21 @@ final class ActionCallEntityAccessMetricsSpec
         correlationId = ctx.observability.correlationId
       )
     )
+
+  private def _component_scoped_probe(
+    component: org.goldenport.cncf.component.Component,
+    ctx: ExecutionContext
+  ): _EntityAccessProbe = {
+    component.withScopeContext(ctx.cncfCore.scope)
+    new _EntityAccessProbe(
+      ActionCall.Core(
+        action = _TestQueryAction(),
+        executionContext = ctx.withScope(component.scopeContext),
+        component = Some(component),
+        correlationId = ctx.observability.correlationId
+      )
+    )
+  }
 
   private def _execution_context(
     datastorespace: DataStoreSpace,
@@ -302,23 +366,60 @@ final class ActionCallEntityAccessMetricsSpec
             }
           case None => Consequence.failure("missing age")
         }
+        val poststatus = r.getString("postStatus").orElse(r.getString("post_status"))
+        val aliveness = r.getString("aliveness")
+        val publishat = r.getString("publishAt").orElse(r.getString("publish_at"))
+        val publicat = r.getString("publicAt").orElse(r.getString("public_at"))
+        val publishedby = r.getString("publishedBy").orElse(r.getString("published_by"))
+        val securityattributes = r.getRecord("securityAttributes").orElse(r.getRecord("security_attributes"))
         for {
           id <- pid
           name <- pname
           age <- page
-        } yield TestPerson(id, name, age)
+        } yield TestPerson(id, name, age, poststatus, aliveness, publishat, publicat, publishedby, securityattributes)
       }
+    }
+
+  private def _create_persistent: EntityPersistentCreate[TestPersonCreate] =
+    new EntityPersistentCreate[TestPersonCreate] {
+      def id(e: TestPersonCreate): Option[EntityId] = None
+      def collection(e: TestPersonCreate): EntityCollectionId = e.collectionId
+      def toRecord(e: TestPersonCreate): Record = e.toRecord()
     }
 }
 
 private final case class TestPerson(
   id: EntityId,
   name: String,
-  age: Int
+  age: Int,
+  postStatus: Option[String] = None,
+  aliveness: Option[String] = None,
+  publishAt: Option[String] = None,
+  publicAt: Option[String] = None,
+  publishedBy: Option[String] = None,
+  securityAttributes: Option[Record] = None
 ) extends org.goldenport.cncf.entity.EntityPersistable {
   def toRecord(): Record =
     Record.dataAuto(
       "id" -> id,
+      "name" -> name,
+      "age" -> age,
+      "postStatus" -> postStatus,
+      "aliveness" -> aliveness,
+      "publishAt" -> publishAt,
+      "publicAt" -> publicAt,
+      "publishedBy" -> publishedBy,
+      "securityAttributes" -> securityAttributes
+    )
+}
+
+private final case class TestPersonCreate(
+  name: String,
+  age: Int,
+  collectionId: EntityCollectionId
+) {
+  def toRecord(): Record =
+    Record.dataAuto(
       "name" -> name,
       "age" -> age
     )
@@ -339,6 +440,30 @@ private final case class _TestQueryAction() extends QueryAction {
 private final class _EntityAccessProbe(
   val core: ActionCall.Core
 ) extends ActionCall.Core.Holder with ActionCallEntityStorePart {
+  def create[T](entity: T)(using tc: EntityPersistentCreate[T]): Consequence[org.goldenport.cncf.entity.CreateResult[T]] =
+    new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(entity_create[T](entity))
+
+  def createPublic[T](entity: T)(using tc: EntityPersistentCreate[T]): Consequence[org.goldenport.cncf.entity.CreateResult[T]] =
+    new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(
+      org.goldenport.ConsequenceT.liftF(
+        cats.free.Free.liftF[UnitOfWorkOp, org.goldenport.cncf.entity.CreateResult[T]](
+          UnitOfWorkOp.EntityStoreCreate(
+            entity = entity,
+            tc = tc,
+            authorization = Some(
+              org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization(
+                resourceFamily = "domain",
+                resourceType = Some("TestPerson"),
+                collectionName = Some(tc.collection(entity).name),
+                accessKind = "create",
+                access = Some(org.goldenport.cncf.operation.CmlOperationAccess(policy = "public"))
+              )
+            )
+          )
+        )
+      )
+    )
+
   def load[T](id: EntityId)(using tc: EntityPersistent[T]): Consequence[Option[T]] =
     new UnitOfWorkInterpreter(new UnitOfWork(executionContext)).run(entity_load_option[T](id))
 

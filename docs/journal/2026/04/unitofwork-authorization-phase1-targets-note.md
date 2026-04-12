@@ -165,3 +165,8 @@ The next implementation step should be:
 2. interpret that metadata in `UnitOfWorkInterpreter`;
 3. keep `ENTITY` / `ACCESS` and action-level metadata as inputs and fallback
    mechanisms during transition.
+
+Update on 2026-04-13: the baseline metadata and policy path is implemented for
+entity store UoW operations. The implemented contract is documented in
+`docs/design/entity-authorization-model.md`, with remaining work in
+`docs/notes/entity-authorization-implementation-note.md`.

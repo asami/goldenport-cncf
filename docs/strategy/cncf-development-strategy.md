@@ -346,6 +346,38 @@ Promoted to Phase 12.
 - RDF-based data representation
 - External knowledge graph integration
 
+### 8.7 SimpleEntity Storage Shape
+- Treat `EntityPersistent` as the entity storage boundary and tighten
+  purpose-specific record projection handling.
+- Consider migrating `EntityPersistent.toRecord` toward an explicit
+  `toStorageRecord` API to avoid mixing storage, request, presentation, and
+  diagnostic record purposes.
+- Define SimpleEntity DB storage rules:
+  - expand management-oriented value objects into DB columns;
+  - keep policy/security handling out of ad hoc `Record` path semantics;
+  - store `permission` as a compact encoded field, with typed security access;
+  - encode semantically independent value objects by default;
+  - encode repeated value objects unless promoted to independent entities or
+    collections.
+- Source note: `docs/journal/2026/04/simpleentity-db-storage-shape-note.md`.
+
+### 8.8 Builtin Blob Management Component
+- Add builtin Blob management component independent of the SimpleEntity storage
+  shape work.
+- Blob metadata is represented as an Entity.
+- Blob payload is stored in an S3-like storage backend abstraction.
+- Image, Video, and Attachment use cases are supported through Blob-managed
+  assets.
+- Product-like and other domain entities can associate with Blob entities.
+- Aggregate/View projections can gather associated media without embedding
+  payloads in parent entity storage records.
+- Open design item: define the association management model between Blob
+  objects and arbitrary entities.
+- Open design item: decide whether Blob-object association records are owned by
+  the Blob component, the domain entity component, or a generic association
+  component.
+- Source note: `docs/journal/2026/04/blob-management-component-specification-note.md`.
+
 ## 9. Completed Development Item History
 
 ### 9.1 Component Wiring and Subsystem Construction

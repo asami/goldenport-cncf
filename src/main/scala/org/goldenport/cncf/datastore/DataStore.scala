@@ -214,7 +214,7 @@ object DataStore {
           s"entity:${id.major}:${id.minor}:${id.name}"
       }
 
-    private def _ensure_collection(collection: CollectionId): Consequence[InMemoryDataStore.Collection] =
+    protected def _ensure_collection(collection: CollectionId): Consequence[InMemoryDataStore.Collection] =
       _collections.get(collectionKey(collection)) match {
         case Some(c) =>
           Consequence.success(c)
@@ -403,7 +403,7 @@ object DataStore {
       collection: CollectionId,
       directive: QueryDirective
     ): Consequence[SearchResult] = 
-      take_collection(collection).flatMap(_.search(directive))
+      _ensure_collection(collection).flatMap(_.search(directive))
 
   //   def prepare(tx: TransactionContext): PrepareResult = {
   //     recorder.record("DataStore.prepare")

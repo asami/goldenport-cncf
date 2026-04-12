@@ -154,3 +154,7 @@ The current implementation is still in a transitional state:
 - `ENTITY` and `ACCESS` metadata are available;
 - `SimpleEntity` owner-oriented helpers exist;
 - full internal DSL-centered enforcement is not yet complete.
+
+Update on 2026-04-13: the first implemented baseline is documented in
+`docs/design/entity-authorization-model.md`. Implementation details and remaining
+work are tracked in `docs/notes/entity-authorization-implementation-note.md`.
