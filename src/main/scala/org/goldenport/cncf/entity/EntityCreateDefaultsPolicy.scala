@@ -52,13 +52,26 @@ object EntityCreateDefaultsPolicy {
         if (!propertyname.aliases(canonical).exists(record.keySet.contains))
           value.foreach(v => defaults += (key(canonical) -> v))
 
+      def add_or_replace_generated_default(
+        canonical: String,
+        value: => Option[Any],
+        isGeneratedDefault: Any => Boolean
+      ): Unit = {
+        val current = propertyname.aliases(canonical).iterator.flatMap(record.getAny).map(_single_value).toVector.headOption
+        if (current.forall(isGeneratedDefault))
+          value.foreach(v => defaults += (key(canonical) -> v))
+      }
+
+      def add_or_replace(canonical: String, value: => Option[Any]): Unit =
+        value.foreach(v => defaults += (key(canonical) -> v))
+
       add_if_missing("id", Some(id.print))
-      add_if_missing("name", Some(principalid))
-      add_if_missing("createdAt", Some(now))
-      add_if_missing("createdBy", Some(principal))
-      add_if_missing("updatedAt", Some(now))
-      add_if_missing("updatedBy", Some(principal))
-      add_if_missing("postStatus", Some(PostStatus.Published))
+      add_or_replace("name", Some(principalid))
+      add_or_replace("createdAt", Some(now))
+      add_or_replace("createdBy", Some(principal))
+      add_or_replace("updatedAt", Some(now))
+      add_or_replace("updatedBy", Some(principal))
+      add_or_replace("postStatus", Some(PostStatus.Published))
       add_if_missing("aliveness", Some(Aliveness.default))
       add_if_missing("securityAttributes", Some(_default_security_attributes(principal, options)))
       options.defaultValues.fields.foreach { field =>
@@ -72,7 +85,8 @@ object EntityCreateDefaultsPolicy {
       add_if_missing("traceId", Some(ctx.observability.traceId.value))
       add_if_missing("correlationId", ctx.observability.correlationId.map(_.value))
 
-      record ++ Record.dataAuto(defaults.result()*)
+      val defaultvalues = defaults.result()
+      Record.dataAuto((record.asMap ++ defaultvalues.toMap).toSeq*)
     }
 
     private def _default_security_attributes(
@@ -88,6 +102,29 @@ object EntityCreateDefaultsPolicy {
         SecurityAttributes.publicOwnedBy(principal).toRecord
       else
         SecurityAttributes.privateOwnedBy(principal).toRecord
+
+    private def _is_system_or_unknown(p: Any): Boolean =
+      _is_system(p) || Option(p).exists(_.toString.equalsIgnoreCase("unknown"))
+
+    private def _is_system(p: Any): Boolean =
+      Option(p).exists(_.toString.equalsIgnoreCase("system"))
+
+    private def _is_epoch(p: Any): Boolean =
+      Option(p).exists(_.toString.startsWith("1970-01-01T00:00"))
+
+    private def _is_draft(p: Any): Boolean =
+      p match
+        case PostStatus.Draft => true
+        case m: String => m.equalsIgnoreCase("draft") || m.equalsIgnoreCase("PostStatus.Draft") || m == "1"
+        case n: Int => n == PostStatus.Draft.dbValue
+        case n: Long => n == PostStatus.Draft.dbValue.toLong
+        case m => Option(m).exists(_.toString.equalsIgnoreCase("draft"))
+
+    private def _single_value(p: Any): Any =
+      p match
+        case Some(v) => _single_value(v)
+        case None => ""
+        case m => m
   }
 
   final case class ByCollectionName(

@@ -14,7 +14,8 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
 /*
  * @since   Feb. 24, 2026
  *  version Feb. 25, 2026
- * @version Mar. 27, 2026
+ *  version Mar. 27, 2026
+ * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {
@@ -51,7 +52,7 @@ class EntityStoreSpace {
   private def _create_options[T](
     op: EntityStoreCreate[T]
   ): EntityCreateOptions =
-    EntityCreateOptions.default
+    op.options
 
   def importSeed[T](
     seed: EntityStoreSeed[T]

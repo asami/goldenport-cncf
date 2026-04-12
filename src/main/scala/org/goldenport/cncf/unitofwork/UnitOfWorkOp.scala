@@ -19,7 +19,8 @@ import org.goldenport.cncf.directive.*
  *
  * @since   Jan. 10, 2026
  *  version Feb. 25, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -72,6 +73,7 @@ object UnitOfWorkOp {
   final case class EntityStoreCreate[T](
     entity: T,
     tc: EntityPersistentCreate[T],
+    options: EntityCreateOptions = EntityCreateOptions.default,
     authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[CreateResult[T]]
 

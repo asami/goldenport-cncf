@@ -23,6 +23,7 @@ import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.EntityPersistentCreate
 import org.goldenport.cncf.entity.EntityPersistentUpdate
 import org.goldenport.cncf.entity.EntityQuery
+import org.goldenport.cncf.entity.EntityCreateOptions
 import org.goldenport.cncf.entity.CreateResult
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.directive.SearchResult
@@ -414,6 +415,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     val op = UnitOfWorkOp.EntityStoreCreate(
       entity,
       tc,
+      _entity_create_options(Some(tc.collection(entity).name)),
       _entity_uow_authorization(Some(tc.collection(entity).name), None, "create")
     )
     ConsequenceT.liftF(Free.liftF(op))
@@ -784,6 +786,39 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         naturalConditions = naturalconditions
       )
     )
+  }
+
+  private def _entity_create_options(
+    resourceType: Option[String]
+  ): EntityCreateOptions = {
+    val access = _declared_access
+    val entitynames = _declared_entities
+    val entityname = entitynames.headOption.orElse(resourceType).getOrElse("")
+    val factory = getFactory[org.goldenport.cncf.component.Component.Factory]
+    val entityusage =
+      factory
+        .flatMap(_.entity_usage_kind(action, entityname, core))
+        .orElse(access.flatMap(_.entityUsage).map(EntityUsageKind.parse))
+        .getOrElse(EntityUsageKind.default)
+    val entityapplicationdomain =
+      factory
+        .flatMap(_.entity_application_domain(action, entityname, core))
+        .orElse(access.flatMap(_.entityApplicationDomain).map(EntityApplicationDomain.parse))
+        .getOrElse(
+          entityusage match
+            case EntityUsageKind.PublicContent => EntityApplicationDomain.Cms
+            case _ => EntityApplicationDomain.default
+        )
+    val profiles =
+      if (
+        entityapplicationdomain == EntityApplicationDomain.Cms ||
+        entityusage == EntityUsageKind.PublicContent ||
+        access.exists(_.policy.equalsIgnoreCase("public"))
+      )
+        Set("cms", "publication", "public-content", "public-read")
+      else
+        Set.empty[String]
+    EntityCreateOptions(defaultProfiles = profiles)
   }
 
   private def _normalize_name(p: String): String =
