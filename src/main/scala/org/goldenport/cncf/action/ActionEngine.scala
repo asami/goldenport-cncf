@@ -25,7 +25,8 @@ import org.goldenport.cncf.http.RuntimeDashboardMetrics
  *  version Jan. 29, 2026
  *  version Feb.  6, 2026
  *  version Mar. 13, 2026
- * @version Apr. 12, 2026
+ *  version Apr. 12, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -162,7 +163,7 @@ class ActionEngine(
         val call = buildCall
         execute(call)
       case AuthorizationDecision.Deny =>
-        val reason = "authorization denied" // TODO Observation or Conclusion
+        val reason = "authorization denied"
         val event = ActionEvent.authorizationFailed(
           ExecutionContextId.generate(),
           actionName,
@@ -170,7 +171,7 @@ class ActionEngine(
           Instant.now()
         )
         ec.runtime.unitOfWork.commit(Seq(event)).flatMap { _ =>
-          Consequence.failure(reason)
+          Consequence.securityPermissionDenied(reason)
         }
     }
 

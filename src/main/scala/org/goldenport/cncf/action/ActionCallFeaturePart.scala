@@ -35,7 +35,7 @@ import org.goldenport.cncf.action.AggregateBehavior
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 30, 2026
- * @version Apr. 13, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -431,7 +431,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         collection.resolve(id) match {
           case Consequence.Success(entity) =>
             _emit_entity_access("entity.load.hit.entity-space", _entity_load_attributes(id, "entity-space", "hit"))
-            exec_from(Consequence.success(Some(entity)))
+            exec_from(_authorize_entity_load_hit(id, entity, tc))
           case Consequence.Failure(conclusion) if _is_entity_not_found(conclusion) =>
             _emit_entity_access("entity.load.fallback.entity-store", _entity_load_attributes(id, "entity-store", "fallback"))
             val op = UnitOfWorkOp.EntityStoreLoad(
@@ -451,6 +451,23 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
           _entity_uow_authorization(Some(id.collection.name), Some(id), "read")
         )
         ConsequenceT.liftF(Free.liftF(op))
+    }
+  }
+
+  private def _authorize_entity_load_hit[T](
+    id: EntityId,
+    entity: T,
+    tc: EntityPersistent[T]
+  ): Consequence[Option[T]] = {
+    given ExecutionContext = execution_context
+    _entity_uow_authorization(Some(id.collection.name), Some(id), "read") match {
+      case Some(authorization) =>
+        OperationAccessPolicy.authorizeUnitOfWorkDefault(
+          authorization,
+          _ => Consequence.success(Some(tc.toRecord(entity)))
+        ).map(_ => Some(entity))
+      case None =>
+        Consequence.success(Some(entity))
     }
   }
 

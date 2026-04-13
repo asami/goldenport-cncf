@@ -1,7 +1,7 @@
 package org.goldenport.cncf.subsystem
 
 import org.goldenport.Consequence
-import org.goldenport.http.{HttpRequest, HttpResponse}
+import org.goldenport.http.{HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.protocol.handler.egress.Egress
 import org.goldenport.protocol.spec.{OperationDefinition, ServiceDefinition}
 import org.goldenport.record.Record
@@ -36,7 +36,8 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -497,8 +498,8 @@ final class Subsystem(
     r match {
       case Consequence.Success(res) =>
         _egress(component).encode(operation, res)
-      case Consequence.Failure(_) =>
-        _internal_error()
+      case Consequence.Failure(c) =>
+        _failure_response(c)
     }
   }
 
@@ -516,6 +517,12 @@ final class Subsystem(
 
   private def _internal_error(): HttpResponse =
     HttpResponse.internalServerError()
+
+  private def _failure_response(c: org.goldenport.Conclusion): HttpResponse =
+    HttpResponse.text(_http_status(c), c.displayMessage)
+
+  private def _http_status(c: org.goldenport.Conclusion): HttpStatus =
+    HttpStatus.fromInt(c.status.webCode.code).getOrElse(HttpStatus.InternalServerError)
 
   private val _alias_resolver: AliasResolver = aliasResolver
   private val _http_run_mode: RunMode = runMode

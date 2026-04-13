@@ -26,7 +26,7 @@ import org.simplemodeling.model.directive.Condition
 /*
  * @since   Mar. 29, 2026
  *  version Apr. 10, 2026
- * @version Apr. 13, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallEntityAccessMetricsSpec
@@ -54,6 +54,30 @@ final class ActionCallEntityAccessMetricsSpec
 
         Then("the result comes from entity-space and metrics reflect the cache hit")
         result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+        _metric_count("entity.load.try.entity-space", "entity-space") shouldBe 1L
+        _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 1L
+        _metric_count("entity.load.hit.data-store", "data-store") shouldBe 0L
+      }
+    }
+
+    "enforce authorization when entity-space load hits the resident cache" in {
+      EntityAccessMetricsRegistry.shared.synchronized {
+        Given("a non-owner principal and a resident private entity owned by another subject")
+        EntityAccessMetricsRegistry.shared.clear()
+        given EntityPersistent[TestPerson] = _persistent
+
+        val cid = _cid("person_metrics_authz_cache_load")
+        val id = EntityId("test", "authz_cache_load", cid)
+        val entity = TestPerson.privateOwnedBy(id, "private-cache-load", 30, "other-owner")
+        val component = TestComponentFactory.create("metrics_authz_cache_load", Protocol.empty)
+        component.entitySpace.registerEntity(cid.name, _resident_collection(cid, entity))
+        val ctx = _execution_context(DataStoreSpace.default(), new EntityStoreSpace().addEntityStore(EntityStore.standard()), manager = false)
+
+        When("loading through the normal ActionCall entity API")
+        val result = _probe(component, ctx).load[TestPerson](id)
+
+        Then("the entity-space hit is still denied by UnitOfWork authorization")
+        result shouldBe a[Consequence.Failure[_]]
         _metric_count("entity.load.try.entity-space", "entity-space") shouldBe 1L
         _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 1L
         _metric_count("entity.load.hit.data-store", "data-store") shouldBe 0L

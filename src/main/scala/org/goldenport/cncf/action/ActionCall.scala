@@ -23,7 +23,8 @@ import org.goldenport.cncf.security.SecuritySubject
  *  version Jan.  2, 2026
  *  version Jan. 22, 2026
  *  version Feb. 21, 2026
- * @version Apr.  7, 2026
+ *  version Apr.  7, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
@@ -105,12 +106,12 @@ abstract class ActionCall()
         if (SecuritySubject.current.isAuthenticated)
           Consequence.unit
         else
-          Consequence.failure(s"Authenticated user is required: ${action.name}")
+          Consequence.securityAuthenticationRequired(s"Authenticated user is required: ${action.name}")
       case Some("anonymous_only") | Some("anonymous-only") =>
         if (SecuritySubject.current.isAnonymous)
           Consequence.unit
         else
-          Consequence.failure(s"Anonymous user is required: ${action.name}")
+          Consequence.securityPermissionDenied(s"Anonymous user is required: ${action.name}")
       case _ =>
         Consequence.unit
 

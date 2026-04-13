@@ -1,6 +1,7 @@
 package org.goldenport.cncf.security
 
 import org.goldenport.Consequence
+import org.goldenport.observation.Descriptor
 import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.SearchResult
@@ -13,7 +14,8 @@ import org.simplemodeling.model.value.SecurityAttributes
 
 /*
  * @since   Apr.  6, 2026
- * @version Apr. 13, 2026
+ *  version Apr. 13, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationAccessPolicy {
@@ -34,16 +36,16 @@ object OperationAccessPolicy {
         case Some(owner) if owner == _subject.subjectId =>
           Consequence.unit
         case Some(_) =>
-          Consequence.failure("Owner or manager privilege is required.")
+          _permission_denied("Owner or manager privilege is required.", "owner-or-manager")
         case None =>
-          Consequence.failure("Owner information is not available for authorization.")
+          _permission_denied("Owner information is not available for authorization.", "owner-missing")
       }
 
   def authorizeManagerOnly()(using ctx: ExecutionContext): Consequence[Unit] =
     if (_is_manager)
       Consequence.unit
     else
-      Consequence.failure("Management privilege is required.")
+      _permission_denied("Management privilege is required.", "manager-only")
 
   def authorizeSimpleEntityOwnerOrManager(
     entityId: EntityId,
@@ -75,11 +77,11 @@ object OperationAccessPolicy {
         case Some("owner") if _permission_for(record, "owner", accessKind) => Consequence.unit
         case Some("group") if _permission_for(record, "group", accessKind) => Consequence.unit
         case Some("other") if _permission_for(record, "other", accessKind) => Consequence.unit
-        case Some("owner") => Consequence.failure(s"Owner permission is insufficient for $accessKind.")
-        case Some("group") => Consequence.failure(s"Group permission is insufficient for $accessKind.")
-        case Some("other") => Consequence.failure(s"Permission is insufficient for $accessKind.")
-        case Some(_) => Consequence.failure(s"Permission is insufficient for $accessKind.")
-        case None => Consequence.failure("Security attributes are not available for authorization.")
+        case Some("owner") => _permission_denied(s"Owner permission is insufficient for $accessKind.", "owner", accessKind)
+        case Some("group") => _permission_denied(s"Group permission is insufficient for $accessKind.", "group", accessKind)
+        case Some("other") => _permission_denied(s"Permission is insufficient for $accessKind.", "other", accessKind)
+        case Some(role) => _permission_denied(s"Permission is insufficient for $accessKind.", role, accessKind)
+        case None => _permission_denied("Security attributes are not available for authorization.", "security-attributes-missing", accessKind)
 
   def authorizeUnitOfWorkDefault(
     authorization: UnitOfWorkAuthorization,
@@ -88,7 +90,7 @@ object OperationAccessPolicy {
     _with_decision_event(authorization, "unit-of-work") {
       authorization.accessMode match
       case EntityAccessMode.ServiceInternal if _is_cross_component(authorization) && !_subject.hasServiceGrant(authorization.sourceComponentName, authorization.targetComponentName) =>
-        Consequence.failure(s"Cross-component service grant is required: ${authorization.sourceComponentName.getOrElse("<unknown>")} -> ${authorization.targetComponentName.getOrElse("<unknown>")}.")
+        _cross_component_grant_required(authorization)
       case EntityAccessMode.System | EntityAccessMode.ServiceInternal =>
         _emit_permission_bypass(authorization, "unit-of-work")
         Consequence.unit
@@ -108,7 +110,7 @@ object OperationAccessPolicy {
     _with_decision_event(authorization, "search/list") {
       authorization.accessMode match
       case EntityAccessMode.ServiceInternal if _is_cross_component(authorization) && !_subject.hasServiceGrant(authorization.sourceComponentName, authorization.targetComponentName) =>
-        Consequence.failure(s"Cross-component service grant is required: ${authorization.sourceComponentName.getOrElse("<unknown>")} -> ${authorization.targetComponentName.getOrElse("<unknown>")}.")
+        _cross_component_grant_required(authorization)
       case EntityAccessMode.System | EntityAccessMode.ServiceInternal =>
         _emit_permission_bypass(authorization, "search/list")
         Consequence.success(result)
@@ -135,6 +137,36 @@ object OperationAccessPolicy {
                 Consequence.success(result)
     }
 
+  private def _permission_denied[A](
+    message: String,
+    reason: String
+  )(using ctx: ExecutionContext): Consequence[A] =
+    _permission_denied(message, reason, "unknown")
+
+  private def _permission_denied[A](
+    message: String,
+    reason: String,
+    accessKind: String
+  )(using ctx: ExecutionContext): Consequence[A] =
+    Consequence.securityPermissionDenied(
+      message,
+      Seq(
+        Descriptor.Facet.Name(reason),
+        Descriptor.Facet.Parameter.argument("access-kind"),
+        Descriptor.Facet.Value(accessKind),
+        Descriptor.Facet.Id(_subject.subjectId)
+      )
+    )
+
+  private def _cross_component_grant_required[A](
+    authorization: UnitOfWorkAuthorization
+  )(using ctx: ExecutionContext): Consequence[A] =
+    _permission_denied(
+      s"Cross-component service grant is required: ${authorization.sourceComponentName.getOrElse("<unknown>")} -> ${authorization.targetComponentName.getOrElse("<unknown>")}.",
+      "cross-component-service-grant",
+      authorization.accessKind
+    )
+
   private def _is_manager(using ctx: ExecutionContext): Boolean = {
     (_subject.roles ++ _subject.capabilities ++ _subject.securityLevel).exists(_manager_aliases.contains)
   }
@@ -155,7 +187,7 @@ object OperationAccessPolicy {
                   case Some(record) =>
                     _natural_condition_miss(record, authorization) match
                       case Some(miss) =>
-                        Consequence.failure(miss.message)
+                        _permission_denied(miss.message, "abac-condition", authorization.accessKind)
                       case None if (authorization.accessKind == "read" && _is_public_policy(authorization)) =>
                         Consequence.unit
                       case None if _matches_relation(record, authorization) =>

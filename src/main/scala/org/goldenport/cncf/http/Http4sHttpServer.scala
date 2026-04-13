@@ -30,7 +30,8 @@ import org.goldenport.datatype.{ContentType, MimeBody}
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
- * @version Apr. 12, 2026
+ *  version Apr. 12, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -536,6 +537,8 @@ final class Http4sHttpServer(
     val status = res.code match {
       case 200 => HStatus.Ok
       case 400 => HStatus.BadRequest
+      case 401 => HStatus.Unauthorized
+      case 403 => HStatus.Forbidden
       case 404 => HStatus.NotFound
       case _ => HStatus.InternalServerError
     }
