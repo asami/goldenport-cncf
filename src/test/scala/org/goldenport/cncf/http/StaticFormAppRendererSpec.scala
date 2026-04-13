@@ -37,8 +37,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       c.downField("authorization").downField("decisions").downField("summary").downField("cumulative").get[Long]("count").isRight shouldBe true
       c.downField("authorization").downField("decisions").downField("summary").downField("cumulative").get[Long]("errors").isRight shouldBe true
       c.downField("authorization").downField("decisions").downField("series").downField("hour").focus.flatMap(_.asArray).exists(_.nonEmpty) shouldBe true
+      c.downField("assembly").downField("warnings").get[Int]("count").isRight shouldBe true
       c.downField("links").get[String]("admin") shouldBe Right("/web/system/admin")
       c.downField("links").get[String]("performance") shouldBe Right("/web/system/performance")
+      c.downField("links").get[String]("assemblyWarnings") shouldBe Right("/form/admin/assembly/warnings")
     }
 
     "render component dashboard state contract" in {
@@ -103,6 +105,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("ActionCall")
       html should include ("Authorization")
       html should include ("Jobs")
+      html should include ("Assembly warnings")
+      html should include ("/form/admin/assembly/warnings")
+      html should include ("/form/admin/assembly/report")
       html should include ("/form/admin/execution/history")
       html should include ("/form/admin/execution/calltree")
       html should include ("/web/system/dashboard")

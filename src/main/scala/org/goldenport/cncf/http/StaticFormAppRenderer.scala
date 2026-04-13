@@ -249,6 +249,7 @@ object StaticFormAppRenderer {
        |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">Operations</span><strong id="operationCount">0</strong></div></div></div>
        |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">HTML requests</span><strong id="requestCount">0</strong><small class="text-secondary" id="requestErrors">errors 0</small></div></div></div>
        |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">Jobs</span><strong id="jobCount">0</strong><small class="text-secondary" id="jobErrors">errors 0</small></div></div></div>
+       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">Assembly warnings</span><strong id="assemblyWarningCount">0</strong><small><a id="assemblyWarningsLink" href="/form/admin/assembly/warnings">details</a></small></div></div></div>
        |    </section>
        |    <section class="row g-3 mb-3">
        |      <div class="col-12 col-xl-6"><article class="card h-100"><div class="card-body">
@@ -299,6 +300,8 @@ object StaticFormAppRenderer {
        |    const requestErrors = document.getElementById("requestErrors");
        |    const jobCount = document.getElementById("jobCount");
        |    const jobErrors = document.getElementById("jobErrors");
+       |    const assemblyWarningCount = document.getElementById("assemblyWarningCount");
+       |    const assemblyWarningsLink = document.getElementById("assemblyWarningsLink");
        |    const requestSpark = document.getElementById("requestSpark");
        |    const activityCounts = document.getElementById("activityCounts");
        |    const jobBars = document.getElementById("jobBars");
@@ -317,11 +320,12 @@ object StaticFormAppRenderer {
        |      const failedJobs = data.actions.jobs.failed || 0;
        |      const recentFailures = data.html.requests.summary.minute.errors || 0;
        |      const recentDenials = data.authorization.decisions.summary.minute.errors || 0;
-       |      const health = (failedJobs > 0 || recentFailures > 0 || recentDenials > 0) ? "WARN" : data.status;
+       |      const assemblyWarnings = data.assembly.warnings.count || 0;
+       |      const health = (failedJobs > 0 || recentFailures > 0 || recentDenials > 0 || assemblyWarnings > 0) ? "WARN" : data.status;
        |      healthPanel.classList.toggle("border-success", health == "UP");
        |      healthPanel.classList.toggle("border-warning", health != "UP");
        |      healthText.textContent = health;
-       |      healthNote.textContent = `jobs failed: $${failedJobs}, recent failures: $${recentFailures}, recent denials: $${recentDenials}`;
+       |      healthNote.textContent = `jobs failed: $${failedJobs}, recent failures: $${recentFailures}, recent denials: $${recentDenials}, assembly warnings: $${assemblyWarnings}`;
        |      subsystemName.textContent = data.subsystem.name;
        |      subsystemVersion.textContent = "subsystem " + (data.subsystem.version || "unversioned");
        |      cncfVersion.textContent = data.cncf.version;
@@ -334,6 +338,8 @@ object StaticFormAppRenderer {
        |      requestErrors.textContent = "errors " + data.html.requests.summary.cumulative.errors;
        |      jobCount.textContent = data.actions.jobs.total;
        |      jobErrors.textContent = "errors " + data.actions.jobs.failed;
+       |      assemblyWarningCount.textContent = assemblyWarnings;
+       |      assemblyWarningsLink.href = data.links.assemblyWarnings;
        |      text.textContent = "UP · " + new Date(data.observedAt).toLocaleTimeString();
        |      const maxOps = Math.max(1, ...data.components.map(c => c.operationCount));
        |      componentBars.innerHTML = data.components.map(c => {
@@ -398,7 +404,7 @@ object StaticFormAppRenderer {
     ))
 
   private def _subsystem_dashboard_state(subsystem: Subsystem): String =
-    _dashboard_state_json(subsystem.components, "subsystem", subsystem.name, subsystem.version, _job_metrics(subsystem), subsystem.name, subsystem.version)
+    _dashboard_state_json(subsystem.components, "subsystem", subsystem.name, subsystem.version, _job_metrics(subsystem), subsystem.name, subsystem.version, _assembly_warning_count(subsystem))
 
   private def _admin_page(
     title: String,
@@ -461,6 +467,10 @@ object StaticFormAppRenderer {
            |  <p><a href="/web/system/dashboard">System dashboard</a> · <a href="/web/system/admin">Admin configuration</a></p>
            |</article>
            |<article>
+           |  <h2>Assembly warnings</h2>
+           |  <p>${_assembly_warning_count(subsystem)} warning(s). <a href="/form/admin/assembly/warnings">Warning detail</a> · <a href="/form/admin/assembly/report">Assembly report</a></p>
+           |</article>
+           |<article>
            |  <h2>HTML request</h2>
            |  ${_summary_table(htmlRequests.summary)}
            |</article>
@@ -493,7 +503,7 @@ object StaticFormAppRenderer {
   }
 
   private def _component_dashboard_state(component: Component): String =
-    _dashboard_state_json(Vector(component), "component", component.name, component.artifactMetadata.map(_.version), _job_metrics(component), component.subsystem.map(_.name).getOrElse(component.name), component.subsystem.flatMap(_.version))
+    _dashboard_state_json(Vector(component), "component", component.name, component.artifactMetadata.map(_.version), _job_metrics(component), component.subsystem.map(_.name).getOrElse(component.name), component.subsystem.flatMap(_.version), component.subsystem.map(_assembly_warning_count).getOrElse(0))
 
   private def _simple_page(
     title: String,
@@ -699,7 +709,8 @@ object StaticFormAppRenderer {
     version: Option[String],
     jobs: (Int, Int, Int, Int),
     subsystemName: String,
-    subsystemVersion: Option[String]
+    subsystemVersion: Option[String],
+    assemblyWarningCount: Int
   ): String = {
     val serviceCount = components.map(_.protocol.services.services.size).sum
     val operationCount = components.flatMap(_.protocol.services.services).map(_.operations.operations.length).sum
@@ -714,7 +725,7 @@ object StaticFormAppRenderer {
     val adminPath =
       if (scope == "component") s"/web/${NamingConventions.toNormalizedSegment(name)}/admin"
       else "/web/system/admin"
-    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance"},"components":${componentJson}}"""
+    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance","assemblyWarnings":"/form/admin/assembly/warnings"},"components":${componentJson}}"""
   }
 
   private def _snapshot_json(
@@ -851,6 +862,12 @@ object StaticFormAppRenderer {
 
   private def _job_metrics(component: Component): (Int, Int, Int, Int) =
     component.jobEngine.metrics.map(x => (x.running, x.queued, x.completed, x.failed)).getOrElse((0, 0, 0, 0))
+
+  private def _assembly_warning_count(subsystem: Subsystem): Int =
+    org.goldenport.cncf.context.GlobalRuntimeContext.current
+      .orElse(scala.util.Try(subsystem.globalRuntimeContext).toOption)
+      .map(_.assemblyReport.warnings.size)
+      .getOrElse(0)
 
   private def _escape(value: String): String =
     value

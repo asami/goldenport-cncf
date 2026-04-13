@@ -107,6 +107,7 @@ Dashboard emphasizes at-a-glance health. It should show overview-level data only
 - ActionCall-level job counts such as completed, running, queued, and failed
 - HTML request, ActionCall, and Job count/error summaries for cumulative, one-day,
   one-hour, and one-minute windows
+- assembly warning count with a link to the structured admin warning surface
 - traffic graph tabs for one-minute, one-hour, and one-day bucket views; the
   default graph view is one hour
 
@@ -123,6 +124,18 @@ System Performance page links to the existing admin execution operations:
 
 Those operations reuse the calltree event semantics defined by the core
 observability design and do not introduce a Web-specific calltree vocabulary.
+
+Assembly warnings are operational health signals. The Dashboard should expose
+the warning count and link to the existing admin assembly warning operation:
+
+- `/form/admin/assembly/warnings`
+
+The System Performance page may also link to:
+
+- `/form/admin/assembly/report`
+
+The Web surface must reuse the structured assembly warning/report operations
+instead of defining a dashboard-only warning record.
 
 The baseline Subsystem Dashboard must be able to show:
 

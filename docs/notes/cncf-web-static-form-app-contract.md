@@ -87,6 +87,22 @@ Performance page links to the existing admin execution operations:
 Web pages must reuse the existing retained execution history and calltree
 semantics instead of defining a separate dashboard-only vocabulary.
 
+Assembly warnings are also visible at the overview level. Dashboard state
+exposes only the warning count and link:
+
+```text
+assembly.warnings.count
+links.assemblyWarnings = /form/admin/assembly/warnings
+```
+
+Detailed warning records and the resolved assembly report remain existing admin
+operation surfaces:
+
+```text
+/form/admin/assembly/warnings
+/form/admin/assembly/report
+```
+
 ## Execution Model
 
 REST operation execution remains the only business execution path.
