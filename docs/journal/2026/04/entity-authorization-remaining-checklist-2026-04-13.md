@@ -186,7 +186,7 @@ Status update on 2026-04-13:
 - [ ] Add sample app scenario exercising business/private entity defaults.
 - [x] Add sample app scenario exercising CMS/public-content defaults.
 - [ ] Add sample app scenario exercising relation-based customer read.
-- [ ] Add regression test that `--` or low-level CLI paths cannot bypass UoW
+- [x] Add regression test that `--` or low-level CLI paths cannot bypass UoW
       authorization for entity access.
 
 ## Current Baseline Verification

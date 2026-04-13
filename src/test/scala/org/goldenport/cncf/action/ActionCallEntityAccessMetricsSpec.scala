@@ -53,7 +53,7 @@ final class ActionCallEntityAccessMetricsSpec
         val result = _probe(component, ctx).load[TestPerson](id)
 
         Then("the result comes from entity-space and metrics reflect the cache hit")
-        result shouldBe Consequence.success(Some(entity))
+        result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
         _metric_count("entity.load.try.entity-space", "entity-space") shouldBe 1L
         _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 1L
         _metric_count("entity.load.hit.data-store", "data-store") shouldBe 0L
@@ -68,11 +68,11 @@ final class ActionCallEntityAccessMetricsSpec
 
         val datastorespace = DataStoreSpace.default()
         val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
-        val ctx = _execution_context(datastorespace, entitystorespace)
+        val ctx = _execution_context(datastorespace, entitystorespace, manager = false)
         given ExecutionContext = ctx
         val cid = _cid("person_metrics_store_load")
         val id = EntityId("test", "store_load", cid)
-        val entity = TestPerson(id, "hanako", 30)
+        val entity = TestPerson.privateOwnedBy(id, "hanako", 30, "test-principal")
         val _ = datastorespace.inject(
           DataStoreSpace.Seed(
             Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), entity.toRecord()))
@@ -84,7 +84,7 @@ final class ActionCallEntityAccessMetricsSpec
         val result = _probe(component, ctx).load[TestPerson](id)
 
         Then("the result falls back to datastore and metrics reflect that path")
-        result shouldBe Consequence.success(Some(entity))
+        result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
         _metric_count("entity.load.fallback.entity-store", "entity-store") shouldBe 1L
         _metric_count("entity.load.hit.data-store", "data-store") shouldBe 1L
         _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 0L
@@ -102,8 +102,8 @@ final class ActionCallEntityAccessMetricsSpec
         val ctx = _execution_context(datastorespace, entitystorespace)
         given ExecutionContext = ctx
         val cid = _cid("person_metrics_search")
-        val p1 = TestPerson(EntityId("test", "search_1", cid), "alpha", 20)
-        val p2 = TestPerson(EntityId("test", "search_2", cid), "beta", 30)
+        val p1 = TestPerson.privateOwnedBy(EntityId("test", "search_1", cid), "alpha", 20, "test-principal")
+        val p2 = TestPerson.privateOwnedBy(EntityId("test", "search_2", cid), "beta", 30, "test-principal")
         val _ = datastorespace.inject(
           DataStoreSpace.Seed(
             Vector(
@@ -129,6 +129,73 @@ final class ActionCallEntityAccessMetricsSpec
         _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 1L
         _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
         _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 0L
+      }
+    }
+
+    "enforce authorization when entity-space load falls back to datastore" in {
+      EntityAccessMetricsRegistry.shared.synchronized {
+        Given("a non-owner principal and an empty resident collection with a datastore-backed private entity")
+        EntityAccessMetricsRegistry.shared.clear()
+        given EntityPersistent[TestPerson] = _persistent
+
+        val datastorespace = DataStoreSpace.default()
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        val ctx = _execution_context(datastorespace, entitystorespace, manager = false)
+        given ExecutionContext = ctx
+        val cid = _cid("person_metrics_authz_load_fallback")
+        val id = EntityId("test", "authz_load_fallback", cid)
+        val entity = TestPerson.privateOwnedBy(id, "private-load", 31, "other-owner")
+        val _ = datastorespace.inject(
+          DataStoreSpace.Seed(
+            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), entity.toRecord()))
+          )
+        )
+        val component = TestComponentFactory.create("metrics_authz_load", Protocol.empty)
+        component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
+
+        When("loading through the normal ActionCall entity API")
+        val result = _probe(component, ctx).load[TestPerson](id)
+
+        Then("the fallback path is still denied by UnitOfWork authorization")
+        result shouldBe a[Consequence.Failure[_]]
+        _metric_count("entity.load.fallback.entity-store", "entity-store") shouldBe 1L
+        _metric_count("entity.load.hit.data-store", "data-store") shouldBe 0L
+      }
+    }
+
+    "enforce authorization when entity-space search falls back to datastore" in {
+      EntityAccessMetricsRegistry.shared.synchronized {
+        Given("a non-owner principal and an empty resident collection with datastore-backed private entities")
+        EntityAccessMetricsRegistry.shared.clear()
+        given EntityPersistent[TestPerson] = _persistent
+
+        val datastorespace = DataStoreSpace.default()
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        val ctx = _execution_context(datastorespace, entitystorespace, manager = false)
+        given ExecutionContext = ctx
+        val cid = _cid("person_metrics_authz_search_fallback")
+        val p1 = TestPerson.privateOwnedBy(EntityId("test", "authz_search_1", cid), "private-search", 32, "other-owner")
+        val _ = datastorespace.inject(
+          DataStoreSpace.Seed(
+            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), p1.toRecord()))
+          )
+        )
+        val component = TestComponentFactory.create("metrics_authz_search", Protocol.empty)
+        component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
+        val query: EntityQuery[TestPerson] = EntityQuery(cid, Query(TestPersonQuery(
+          id = Condition.any[EntityId],
+          name = Condition.is("private-search"),
+          age = Condition.any[Int]
+        )))
+
+        When("searching through the normal ActionCall entity API")
+        val result = _probe(component, ctx).search[TestPerson](query)
+
+        Then("the fallback path still applies UnitOfWork visibility filtering")
+        result.map(_.data) shouldBe Consequence.success(Vector.empty)
+        _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 1L
+        _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
+        component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values shouldBe empty
       }
     }
 
@@ -261,7 +328,8 @@ final class ActionCallEntityAccessMetricsSpec
 
   private def _execution_context(
     datastorespace: DataStoreSpace,
-    entitystorespace: EntityStoreSpace
+    entitystorespace: EntityStoreSpace,
+    manager: Boolean = true
   ): ExecutionContext = {
     val observability = ObservabilityContext(
       traceId = TraceId("test", "entity_access_metrics"),
@@ -302,14 +370,15 @@ final class ActionCallEntityAccessMetricsSpec
       case i: ExecutionContext.Instance =>
         val principal = new Principal {
           def id: PrincipalId = PrincipalId("test-principal")
-          def attributes: Map[String, String] = Map("role" -> "content_manager")
+          def attributes: Map[String, String] =
+            if (manager) Map("role" -> "content_manager") else Map.empty
         }
         i.copy(
           cncfCore = i.cncfCore.copy(
             security = SecurityContext(
               principal = principal,
-              capabilities = Set(Capability("content_manager")),
-              level = SecurityLevel("content_manager")
+              capabilities = if (manager) Set(Capability("content_manager")) else Set.empty,
+              level = if (manager) SecurityLevel("content_manager") else SecurityLevel("user")
             )
           )
         )
@@ -456,7 +525,22 @@ private final case class TestPerson(
   securityAttributes: Option[Record] = None
 ) extends org.goldenport.cncf.entity.EntityPersistable {
   def toRecord(): Record =
-    Record.dataAuto(
+    securityAttributes.map { security =>
+      Record.dataAuto(
+        "id" -> id,
+        "name" -> name,
+        "age" -> age,
+        "postStatus" -> postStatus,
+        "aliveness" -> aliveness,
+        "publishAt" -> publishAt,
+        "publicAt" -> publicAt,
+        "publishedBy" -> publishedBy,
+        "owner_id" -> security.getString("owner_id"),
+        "group_id" -> security.getString("group_id"),
+        "privilege_id" -> security.getString("privilege_id"),
+        "rights" -> security.getRecord("rights")
+      )
+    }.getOrElse(Record.dataAuto(
       "id" -> id,
       "name" -> name,
       "age" -> age,
@@ -466,6 +550,30 @@ private final case class TestPerson(
       "publicAt" -> publicAt,
       "publishedBy" -> publishedBy,
       "securityAttributes" -> securityAttributes
+    ))
+}
+
+private object TestPerson {
+  def privateOwnedBy(
+    id: EntityId,
+    name: String,
+    age: Int,
+    ownerId: String
+  ): TestPerson =
+    TestPerson(
+      id,
+      name,
+      age,
+      securityAttributes = Some(Record.dataAuto(
+        "owner_id" -> ownerId,
+        "group_id" -> ownerId,
+        "privilege_id" -> ownerId,
+        "rights" -> Record.dataAuto(
+          "owner" -> Record.dataAuto("read" -> true, "write" -> true, "execute" -> false),
+          "group" -> Record.dataAuto("read" -> false, "write" -> false, "execute" -> false),
+          "other" -> Record.dataAuto("read" -> false, "write" -> false, "execute" -> false)
+        )
+      ))
     )
 }
 

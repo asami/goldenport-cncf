@@ -27,7 +27,8 @@ import org.goldenport.cncf.security.OperationAccessPolicy
  *  version Feb. 25, 2026
  *  version Mar. 29, 2026
  *  version Apr.  4, 2026
- * @version Apr.  7, 2026
+ *  version Apr.  7, 2026
+ * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -247,8 +248,10 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
             _filter_search_result(op, result)
           else
             _entity_store_space.search(op).flatMap { loaded =>
-              loaded.data.foreach(collection.put)
-              _filter_search_result(op, loaded)
+              _filter_search_result(op, loaded).map { visible =>
+                visible.data.foreach(collection.put)
+                visible
+              }
             }
         }
       case None =>

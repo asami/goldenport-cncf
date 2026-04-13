@@ -434,7 +434,12 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
             exec_from(Consequence.success(Some(entity)))
           case Consequence.Failure(conclusion) if _is_entity_not_found(conclusion) =>
             _emit_entity_access("entity.load.fallback.entity-store", _entity_load_attributes(id, "entity-store", "fallback"))
-            ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EntityStoreLoadDirect(id, tc)))
+            val op = UnitOfWorkOp.EntityStoreLoad(
+              id,
+              tc,
+              _entity_uow_authorization(Some(id.collection.name), Some(id), "read")
+            )
+            ConsequenceT.liftF(Free.liftF(op))
           case Consequence.Failure(conclusion) =>
             exec_from(Consequence.Failure(conclusion))
         }
@@ -530,7 +535,12 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
           )
         } else {
           _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(query, "entity-store", "fallback"))
-          ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EntityStoreSearchDirect(query, tc)))
+          val op = UnitOfWorkOp.EntityStoreSearch(
+            query,
+            tc,
+            _entity_uow_authorization(Some(query.collection.name), None, "search/list")
+          )
+          ConsequenceT.liftF(Free.liftF(op))
         }
       case None =>
         _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(query, "entity-store", "fallback"))
