@@ -14,6 +14,16 @@ Baseline documents:
 
 This checklist records remaining work after that baseline.
 
+Status update on 2026-04-13:
+
+- SimpleEntity datastore output is now flat for `SimpleEntity` and
+  `SimpleEntityCreate`.
+- Entity create defaults now write flat security fields instead of a nested
+  `security_attributes` implementation structure.
+- `SecurityAttributes` can read flat `rights.owner/group/other` records.
+- The notice-board sample verifies the first CMS/public-content scenario with
+  operation-level `ACCESS` / `CONDITION`.
+
 ## CML Surface
 
 - [ ] Define CML syntax for entity `operationKind`.
@@ -43,7 +53,7 @@ This checklist records remaining work after that baseline.
 
 ## Create Defaults
 
-- [ ] Derive create default profiles from `applicationDomain` by default.
+- [x] Derive create default profiles from `applicationDomain` by default.
 - [ ] Derive executable permissions from `operationKind = task` only when the
       entity is genuinely executable.
 - [ ] Add an application-level policy for owner id selection.
@@ -51,6 +61,8 @@ This checklist records remaining work after that baseline.
 - [ ] Add group id default policy.
 - [ ] Add tenant/organization default policy.
 - [ ] Add tests for business default owner/group/other permissions.
+- [x] Add sample-app verification for CMS/public-content default read
+      visibility.
 - [ ] Add tests for CMS/public-content default read visibility.
 
 ## Relation-Based Authorization
@@ -68,17 +80,22 @@ This checklist records remaining work after that baseline.
 
 ## ABAC Natural Evaluation
 
-- [ ] Document the authorization model as an ABAC-centered model that connects
+- [x] Document the authorization model as an ABAC-centered model that connects
       RBAC-style role evaluation, ReBAC-style relation evaluation, and
       DAC-style owner/group/other permission evaluation.
-- [ ] Define the ABAC natural evaluation scope that is not reducible to role,
+- [x] Define the ABAC natural evaluation scope that is not reducible to role,
       relation, or owner/group/other permission checks.
 - [x] Add a minimal explicit ABAC natural condition carrier to
       `UnitOfWorkAuthorization`.
 - [ ] Add a full authorization context structure that clearly exposes subject,
       entity, operation, application, and environment attributes.
-- [ ] Add natural ABAC checks for CMS publication attributes such as
-      `postStatus`, `visibility`, `publishAt`, and `unpublishAt`.
+- [x] Add the first natural ABAC check for CMS publication status
+      (`postStatus`) through explicit operation `ACCESS` / `CONDITION`.
+- [x] Add the first natural ABAC time-window checks for CMS publication windows
+      (`publishAt<=now`, `closeAt>now`) through explicit operation `ACCESS` /
+      `CONDITION`.
+- [ ] Add full natural ABAC checks for CMS publication attributes such as
+      `visibility`, `publicAt`, `startAt`, `endAt`, and `unpublishAt`.
 - [ ] Add natural ABAC checks for business boundaries such as tenant,
       organization, account, or customer scope where they are direct attributes.
 - [ ] Add operation/application attribute checks for `operationModel`,
@@ -90,6 +107,7 @@ This checklist records remaining work after that baseline.
 - [ ] Add diagnostics explaining which ABAC natural condition matched or missed.
 - [x] Add a first tenant boundary test for explicit ABAC natural conditions.
 - [x] Add parser tests for explicit ABAC natural conditions.
+- [x] Add tests for publication status and publication time-window policies.
 - [ ] Add tests for publication visibility, tenant boundary, and operation
       exposure policies.
 
@@ -119,9 +137,9 @@ This checklist records remaining work after that baseline.
 
 ## Object Model
 
-- [ ] Keep CNCF dependent behavior outside simplemodeling-model.
-- [ ] Keep `SecurityAttributes` as the canonical object-side value type.
-- [ ] Avoid overloading `execute` with special behavior.
+- [x] Keep CNCF dependent behavior outside simplemodeling-model.
+- [x] Keep `SecurityAttributes` as the canonical object-side value type.
+- [x] Avoid overloading `execute` with special behavior.
 - [ ] Define explicit fields/policies if future setuid-like behavior is needed.
 - [ ] Decide whether compact `permission` text should remain a compatibility
       parser only.
@@ -155,7 +173,7 @@ This checklist records remaining work after that baseline.
 
 - [ ] Add full test suite target for entity authorization.
 - [ ] Add sample app scenario exercising business/private entity defaults.
-- [ ] Add sample app scenario exercising CMS/public-content defaults.
+- [x] Add sample app scenario exercising CMS/public-content defaults.
 - [ ] Add sample app scenario exercising relation-based customer read.
 - [ ] Add regression test that `--` or low-level CLI paths cannot bypass UoW
       authorization for entity access.
@@ -167,3 +185,15 @@ The baseline implementation was verified with:
 - `sbt 'testOnly org.goldenport.cncf.entity.EntityCreateDefaultsPolicySpec org.goldenport.cncf.unitofwork.UnitOfWorkTargetAuthorizationSpec org.goldenport.cncf.action.ActionCallEntityAccessMetricsSpec'`
 - `sbt publishLocal`
 - sample app `sbt compile`
+
+The 2026-04-13 flat datastore/security update was verified with:
+
+- `simple-modeler`: `sbt compile publishLocal`
+- `simplemodeling-model`: `sbt compile publishLocal`
+- `cloud-native-component-framework`: `sbt compile publishLocal`
+- sample app `sbt compile`
+- sample app `./scripts/update-runtime-classpath.sh`
+- sample app `./scripts/run-demo.sh`
+- manual sample app flow: `postNotice` -> `await_job_result` -> `getNotice` ->
+  `searchNotices`, including recipient-specific, text search, and recipientless
+  broadcast notice cases.

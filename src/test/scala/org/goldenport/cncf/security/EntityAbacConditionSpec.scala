@@ -1,5 +1,6 @@
 package org.goldenport.cncf.security
 
+import java.time.Instant
 import org.goldenport.record.Record
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -18,6 +19,7 @@ final class EntityAbacConditionSpec
       val condition = EntityAbacCondition.parse("tenantId=subject.tenantId:read,search/list")
 
       condition.map(_.entityAttribute) shouldBe Some("tenantId")
+      condition.map(_.operator) shouldBe Some(EntityAbacCondition.Operator.Eq)
       condition.exists(_.allows("read")) shouldBe true
       condition.exists(_.allows("search/list")) shouldBe true
       condition.exists(_.allows("update")) shouldBe false
@@ -66,6 +68,40 @@ final class EntityAbacConditionSpec
       )
 
       conditions.map(_.entityAttribute) shouldBe Vector("tenantId", "postStatus", "visibility")
+    }
+
+    "parse publication time window comparisons" in {
+      val publish = EntityAbacCondition.parse("publishAt<=now:read").get
+      val close = EntityAbacCondition.parse("closeAt>now:read,search/list").get
+
+      publish.entityAttribute shouldBe "publishAt"
+      publish.operator shouldBe EntityAbacCondition.Operator.Lte
+      publish.allows("read") shouldBe true
+      close.entityAttribute shouldBe "closeAt"
+      close.operator shouldBe EntityAbacCondition.Operator.Gt
+      close.allows("search/list") shouldBe true
+    }
+
+    "match publication time windows against now" in {
+      val subject = SecuritySubject(
+        subjectId = "u1",
+        authenticationState = SecuritySubject.AuthenticationState.Anonymous,
+        accessTokenPresent = false,
+        primaryGroup = None,
+        groups = Set.empty,
+        roles = Set.empty,
+        privileges = Set.empty,
+        capabilities = Set.empty,
+        securityLevel = Set.empty
+      )
+      val record = Record.dataAuto(
+        "publishAt" -> Instant.parse("2026-04-13T00:00:00Z").toString,
+        "closeAt" -> Instant.parse("2999-01-01T00:00:00Z").toString
+      )
+
+      EntityAbacCondition.parse("publishAt<=now:read").get.matches(record, subject) shouldBe true
+      EntityAbacCondition.parse("closeAt>now:read").get.matches(record, subject) shouldBe true
+      EntityAbacCondition.parse("publishAt>now:read").get.matches(record, subject) shouldBe false
     }
   }
 }

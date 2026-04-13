@@ -111,11 +111,14 @@ The first natural ABAC hook is available as explicit
 `UnitOfWorkAuthorization.naturalConditions`. It is intentionally opt-in so that
 existing applications do not silently gain tenant/organization/publication
 constraints. The initial condition form supports direct entity attribute equality
-against a subject attribute or literal value, for example:
+against a subject attribute or literal value, plus basic time-window comparison
+against `now`, for example:
 
 ```text
 tenantId=subject.tenantId:read,search/list
 postStatus=Published:read,search/list
+publishAt<=now:read,search/list
+closeAt>now:read,search/list
 ```
 
 These conditions are evaluated before relation rules and owner/group/other
@@ -137,8 +140,8 @@ postStatus=Published:read,search/list;visibility=Public:read,search/list
 `CONDITIONS`, `ABAC`, `ABAC_CONDITION`, `ABAC_CONDITIONS`,
 `NATURAL_CONDITION`, and `NATURAL_CONDITIONS` are accepted as compatibility
 aliases, but new CML should use `CONDITION`. This is only the first carrier and
-evaluator; a richer authorization context and entity-level syntax remain future
-work.
+evaluator. The `now` value is currently the first environment attribute. A richer
+authorization context and entity-level syntax remain future work.
 For multiple conditions in CML, use `;` as the stable delimiter for now.
 
 ## SalesOrder Example

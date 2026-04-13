@@ -357,6 +357,72 @@ final class UnitOfWorkTargetAuthorizationSpec
 
       result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
     }
+
+    "allow read when explicit ABAC publication window matches" in {
+      given ExecutionContext = _execution_context(
+        principalId = "reader"
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val id = EntityId("test", "read_abac_publication_allowed", _cid)
+      _seed(PersonEntity(id, "published-record", "reader", publishAt = Some("2000-01-01T00:00:00Z"), closeAt = Some("2999-01-01T00:00:00Z")))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+            UnitOfWorkOp.EntityStoreLoad(
+              id,
+              summon[EntityPersistent[PersonEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("Person"),
+                  targetId = Some(id),
+                  accessKind = "read",
+                  naturalConditions = EntityAbacCondition.parseList("publishAt<=now:read;closeAt>now:read")
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+    }
+
+    "reject read when explicit ABAC publication window does not match" in {
+      given ExecutionContext = _execution_context(
+        principalId = "reader"
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val id = EntityId("test", "read_abac_publication_denied", _cid)
+      _seed(PersonEntity(id, "future-record", "reader", publishAt = Some("2999-01-01T00:00:00Z")))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+            UnitOfWorkOp.EntityStoreLoad(
+              id,
+              summon[EntityPersistent[PersonEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("Person"),
+                  targetId = Some(id),
+                  accessKind = "read",
+                  naturalConditions = EntityAbacCondition.parseList("publishAt<=now:read")
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result shouldBe a[Consequence.Failure[_]]
+    }
   }
 
   private def _execution_context(
@@ -441,7 +507,9 @@ final class UnitOfWorkTargetAuthorizationSpec
     groupId: Option[String] = None,
     privilegeId: Option[String] = None,
     customerId: Option[String] = None,
-    tenantId: Option[String] = None
+    tenantId: Option[String] = None,
+    publishAt: Option[String] = None,
+    closeAt: Option[String] = None
   ) {
     def toRecord(): Record =
       Record.dataAuto(
@@ -449,6 +517,8 @@ final class UnitOfWorkTargetAuthorizationSpec
         "name" -> name,
         "customerId" -> customerId,
         "tenantId" -> tenantId,
+        "publishAt" -> publishAt,
+        "closeAt" -> closeAt,
         "security_attributes" -> Record.dataAuto(
           "owner_id" -> ownerId,
           "group_id" -> groupId,
@@ -504,10 +574,12 @@ final class UnitOfWorkTargetAuthorizationSpec
         r.getString(org.goldenport.datatype.PathName(Vector("security_attributes", "group_id"))),
         r.getString(org.goldenport.datatype.PathName(Vector("security_attributes", "privilege_id"))),
         r.getString("customerId").orElse(r.getString("customer_id")),
-        r.getString("tenantId").orElse(r.getString("tenant_id"))
+        r.getString("tenantId").orElse(r.getString("tenant_id")),
+        r.getString("publishAt").orElse(r.getString("publish_at")),
+        r.getString("closeAt").orElse(r.getString("close_at"))
       ) match
-        case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId, customerId, tenantId) =>
-          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId, customerId, tenantId))
+        case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId, customerId, tenantId, publishAt, closeAt) =>
+          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId, customerId, tenantId, publishAt, closeAt))
         case _ =>
           Consequence.failure("invalid person record")
   }

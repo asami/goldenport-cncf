@@ -236,6 +236,7 @@ public
 
 #### CONDITION
 postStatus=Published:read,search/list;visibility=Public:read,search/list
+publishAt<=now:read,search/list;closeAt>now:read,search/list
 ```
 
 This condition is carried into `CmlOperationAccess.condition` and then into
