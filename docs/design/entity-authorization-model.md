@@ -70,8 +70,9 @@ Formally, it is derived from `ServiceOperationModel.InternalService`, not from a
 entity's operation kind. In the current implementation it bypasses object-side
 owner/group/other permission checks and search/list visibility filtering for
 same-service internal work. Cross-component service access is not yet granted by
-this mode alone; the future model must require an explicit service grant or
-capability for that case.
+this mode alone; it requires an explicit service grant capability. The initial
+grant target accepts normalized capability forms such as
+`service-grant:{sourceComponent}:{targetComponent}`.
 
 `System` is for framework/system work such as migration, indexing, projection, or
 administration tasks. It also bypasses owner/group/other permissions.
@@ -83,6 +84,11 @@ mode for ordinary domain operations.
 
 Neither `ServiceInternal` nor `System` gives special meaning to the entity
 `execute` permission bit.
+
+When `sourceComponentName` and `targetComponentName` are both present and differ,
+`ServiceInternal` is treated as cross-component access. When either side is
+missing, the current implementation preserves the earlier same-boundary behavior
+for compatibility.
 
 ## Object-Side Permissions
 

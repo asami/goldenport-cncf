@@ -785,6 +785,8 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         targetId = targetId,
         accessKind = accessKind,
         access = access,
+        sourceComponentName = component.map(_.name),
+        targetComponentName = component.map(_.name),
         entityNames = entitynames,
         accessMode = accessmode,
         operationModel = Some(operationmodel),

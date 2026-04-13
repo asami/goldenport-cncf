@@ -296,11 +296,13 @@ operations over `task` entities remain `UserPermission`. Entity `operationKind`
 controls resource/task operational classification and does not grant internal or
 system access by itself.
 
-Cross-component grants are not yet complete.
+Cross-component grants now have an initial runtime check. `UnitOfWorkAuthorization`
+can carry `sourceComponentName` and `targetComponentName`. If both are present
+and differ, `ServiceInternal` requires a service grant capability such as
+`service-grant:sales:inventory`. If either side is missing, the implementation
+preserves the earlier same-boundary behavior for compatibility.
 
-`ServiceInternal` is appropriate inside a service boundary. When a service touches
-another component's entity, the model should require an explicit service grant or
-capability.
+The descriptor/CML syntax for declaring these grants is not finalized yet.
 
 Create default derivation is not fully tied to entity classification yet.
 

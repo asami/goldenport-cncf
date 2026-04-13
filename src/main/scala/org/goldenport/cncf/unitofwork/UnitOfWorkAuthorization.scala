@@ -16,6 +16,8 @@ final case class UnitOfWorkAuthorization(
   targetId: Option[EntityId] = None,
   accessKind: String,
   access: Option[CmlOperationAccess] = None,
+  sourceComponentName: Option[String] = None,
+  targetComponentName: Option[String] = None,
   entityNames: Vector[String] = Vector.empty,
   accessMode: EntityAccessMode = EntityAccessMode.UserPermission,
   operationModel: Option[ServiceOperationModel] = None,

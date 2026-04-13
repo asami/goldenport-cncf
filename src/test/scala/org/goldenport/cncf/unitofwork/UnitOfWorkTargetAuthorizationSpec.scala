@@ -374,6 +374,115 @@ final class UnitOfWorkTargetAuthorizationSpec
       }
     }
 
+    "allow same-component service-internal update without service grant" in {
+      given ExecutionContext = _execution_context(
+        principalId = "service-principal"
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val id = EntityId("test", "update_same_component_internal", _cid)
+      _seed(PersonEntity(id, "order-1", "sales-org"))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Unit](
+            UnitOfWorkOp.EntityStoreUpdate(
+              entity = PersonEntity(id, "order-2", "sales-org"),
+              tc = summon[EntityPersistent[PersonEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("SalesOrder"),
+                  targetId = Some(id),
+                  accessKind = "update",
+                  accessMode = EntityAccessMode.ServiceInternal,
+                  sourceComponentName = Some("sales"),
+                  targetComponentName = Some("sales")
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result shouldBe Consequence.unit
+      _load_name(id) shouldBe Consequence.success(Some("order-2"))
+    }
+
+    "reject cross-component service-internal update without service grant" in {
+      given ExecutionContext = _execution_context(
+        principalId = "service-principal"
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val id = EntityId("test", "update_cross_component_internal_denied", _cid)
+      _seed(PersonEntity(id, "stock-1", "inventory-org"))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Unit](
+            UnitOfWorkOp.EntityStoreUpdate(
+              entity = PersonEntity(id, "stock-2", "inventory-org"),
+              tc = summon[EntityPersistent[PersonEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("Inventory"),
+                  targetId = Some(id),
+                  accessKind = "update",
+                  accessMode = EntityAccessMode.ServiceInternal,
+                  sourceComponentName = Some("sales"),
+                  targetComponentName = Some("inventory")
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result shouldBe a[Consequence.Failure[_]]
+      _load_name(id) shouldBe Consequence.success(Some("stock-1"))
+    }
+
+    "allow cross-component service-internal update with service grant" in {
+      given ExecutionContext = _execution_context(
+        principalId = "service-principal",
+        capabilities = Vector(Capability("service-grant:sales:inventory"))
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val id = EntityId("test", "update_cross_component_internal_allowed", _cid)
+      _seed(PersonEntity(id, "stock-1", "inventory-org"))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Unit](
+            UnitOfWorkOp.EntityStoreUpdate(
+              entity = PersonEntity(id, "stock-2", "inventory-org"),
+              tc = summon[EntityPersistent[PersonEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("Inventory"),
+                  targetId = Some(id),
+                  accessKind = "update",
+                  accessMode = EntityAccessMode.ServiceInternal,
+                  sourceComponentName = Some("sales"),
+                  targetComponentName = Some("inventory")
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result shouldBe Consequence.unit
+      _load_name(id) shouldBe Consequence.success(Some("stock-2"))
+    }
+
     "allow relation-based read without granting other read permission" in {
       given ExecutionContext = _execution_context(
         principalId = "customer-user",

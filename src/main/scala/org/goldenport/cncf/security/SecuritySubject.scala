@@ -62,6 +62,18 @@ final case class SecuritySubject(
     }
   }
 
+  def hasServiceGrant(
+    sourceComponentName: Option[String],
+    targetComponentName: Option[String]
+  ): Boolean = {
+    val targets = SecuritySubject.serviceGrantTargets(sourceComponentName, targetComponentName)
+    targets.exists { target =>
+      capabilities.contains(target) ||
+      privileges.contains(target) ||
+      roles.contains(target)
+    }
+  }
+
   def attributeValues(name: String): Set[String] =
     attributes
       .get(name)
@@ -156,6 +168,25 @@ object SecuritySubject {
       normalize(s"$name.$act"),
       normalize(s"${name}_${act}")
     )
+  }
+
+  def serviceGrantTargets(
+    sourceComponentName: Option[String],
+    targetComponentName: Option[String]
+  ): Set[String] = {
+    val source = sourceComponentName.map(normalize).filter(_.nonEmpty)
+    val target = targetComponentName.map(normalize).filter(_.nonEmpty)
+    (source, target) match
+      case (Some(s), Some(t)) =>
+        Set(
+          normalize(s"service-grant:$s:$t"),
+          normalize(s"service.grant.$s.$t"),
+          normalize(s"service_grant_${s}_$t"),
+          normalize(s"$s:$t:service-grant"),
+          normalize(s"$s.$t.service-grant")
+        )
+      case _ =>
+        Set.empty
   }
 
   private def _tokens(attributes: Map[String, String], keys: String*): Set[String] =

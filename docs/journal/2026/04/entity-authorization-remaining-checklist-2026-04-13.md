@@ -127,12 +127,12 @@ Status update on 2026-04-13:
 - [x] Define formal semantics for `System`.
 - [x] Add audit records for `ServiceInternal` permission bypass.
 - [x] Add audit records for `System` permission bypass.
-- [ ] Add cross-component service grant model.
-- [ ] Require explicit grant/capability when `ServiceInternal` touches another
+- [x] Add cross-component service grant model.
+- [x] Require explicit grant/capability when `ServiceInternal` touches another
       component's entity.
-- [ ] Add tests for same-component internal access.
-- [ ] Add tests for cross-component internal access denial.
-- [ ] Add tests for cross-component internal access with explicit grant.
+- [x] Add tests for same-component internal access.
+- [x] Add tests for cross-component internal access denial.
+- [x] Add tests for cross-component internal access with explicit grant.
 
 ## Subject Model
 

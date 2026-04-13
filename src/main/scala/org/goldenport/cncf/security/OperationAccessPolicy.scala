@@ -84,6 +84,8 @@ object OperationAccessPolicy {
     loadRecord: EntityId => Consequence[Option[Record]] = _ => Consequence.success(None)
   )(using ctx: ExecutionContext): Consequence[Unit] =
     authorization.accessMode match
+      case EntityAccessMode.ServiceInternal if _is_cross_component(authorization) && !_subject.hasServiceGrant(authorization.sourceComponentName, authorization.targetComponentName) =>
+        Consequence.failure(s"Cross-component service grant is required: ${authorization.sourceComponentName.getOrElse("<unknown>")} -> ${authorization.targetComponentName.getOrElse("<unknown>")}.")
       case EntityAccessMode.System | EntityAccessMode.ServiceInternal =>
         _emit_permission_bypass(authorization, "unit-of-work")
         Consequence.unit
@@ -100,6 +102,8 @@ object OperationAccessPolicy {
     tc: EntityPersistent[T]
   )(using ctx: ExecutionContext): Consequence[SearchResult[T]] =
     authorization.accessMode match
+      case EntityAccessMode.ServiceInternal if _is_cross_component(authorization) && !_subject.hasServiceGrant(authorization.sourceComponentName, authorization.targetComponentName) =>
+        Consequence.failure(s"Cross-component service grant is required: ${authorization.sourceComponentName.getOrElse("<unknown>")} -> ${authorization.targetComponentName.getOrElse("<unknown>")}.")
       case EntityAccessMode.System | EntityAccessMode.ServiceInternal =>
         _emit_permission_bypass(authorization, "search/list")
         Consequence.success(result)
@@ -261,6 +265,15 @@ object OperationAccessPolicy {
       .flatMap(a => Option(a.policy))
       .map(_.trim.toLowerCase(java.util.Locale.ROOT))
       .contains("public")
+
+  private def _is_cross_component(
+    authorization: UnitOfWorkAuthorization
+  ): Boolean =
+    (authorization.sourceComponentName, authorization.targetComponentName) match
+      case (Some(source), Some(target)) =>
+        SecuritySubject.normalize(source) != SecuritySubject.normalize(target)
+      case _ =>
+        false
 
   private def _natural_condition_miss(
     record: Record,
