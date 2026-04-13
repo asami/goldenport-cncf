@@ -23,7 +23,8 @@ import org.goldenport.cncf.component.builtin.client.{GetQuery, PostCommand}
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  1, 2026
- * @version Apr. 12, 2026
+ *  version Apr. 12, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientOperation(val subsystem: Subsystem) extends CliOperation {
@@ -83,14 +84,14 @@ class ClientOperation(val subsystem: Subsystem) extends CliOperation {
         Consequence.success(component)
       case None =>
         observe_trace("[client:trace] client component not available")
-        Consequence.failure("client component not available")
+        Consequence.operationNotFound("client component")
     }
 
   private def _parse_client_args(
     args: Array[String]
   ): Consequence[Request] = {
     if (args.isEmpty) {
-      Consequence.failure("client command is required")
+      Consequence.argumentMissing("client command")
     } else {
       _parse_client_command(args.toIndexedSeq).map {
         case (operation, path, extraArgs, clientProperties) =>
@@ -123,7 +124,7 @@ class ClientOperation(val subsystem: Subsystem) extends CliOperation {
       case Vector("http", operation, rest @ _*) =>
         _parse_http_operation(operation).flatMap { op =>
           if (rest.isEmpty) {
-            Consequence.failure("client http path is required")
+            Consequence.argumentMissing("client http path")
           } else {
             _parse_client_http(op, rest).map { case (path, properties) =>
               (op, path, Seq.empty, properties)
@@ -131,7 +132,7 @@ class ClientOperation(val subsystem: Subsystem) extends CliOperation {
           }
         }
       case Vector("http") =>
-        Consequence.failure("client http requires operation and path")
+        Consequence.argumentMissing("client http operation/path")
       case _ =>
         _parse_client_path(args).map { case (path, extra) =>
           ("get", path, extra, Nil)
@@ -144,18 +145,18 @@ class ClientOperation(val subsystem: Subsystem) extends CliOperation {
   ): Consequence[String] =
     req.arguments.find(_.name == "path").map(_.value.toString) match {
       case Some(path) => Consequence.success(path)
-      case None => Consequence.failure("client http path is required")
+      case None => Consequence.argumentMissing("client http path")
     }
 
   private def _parse_client_path(
     args: Seq[String]
   ): Consequence[(String, Seq[String])] = {
     if (args.isEmpty) {
-      Consequence.failure("client path is required")
+      Consequence.argumentMissing("client path")
     } else {
       args.toVector match {
         case Vector() =>
-          Consequence.failure("client path is required")
+          Consequence.argumentMissing("client path")
         case Vector(component, service, operation, rest @ _*) =>
           Consequence.success((_normalize_path(s"/${component}/${service}/${operation}"), rest))
         case Vector(single, rest @ _*) =>
@@ -177,7 +178,7 @@ class ClientOperation(val subsystem: Subsystem) extends CliOperation {
     val lower = operation.toLowerCase
     lower match {
       case "get" | "post" => Consequence.success(lower)
-      case _ => Consequence.failure("client http operation must be get or post")
+      case _ => Consequence.argumentInvalid("client http operation must be get or post")
     }
   }
 
@@ -194,7 +195,7 @@ class ClientOperation(val subsystem: Subsystem) extends CliOperation {
             _canonical_http_properties(params, parsed.properties) ++ _http_tail_properties(parsed.arguments.drop(1))
           ))
         case None =>
-          Consequence.failure("client http path is required")
+          Consequence.argumentMissing("client http path")
       }
     }
   }
@@ -266,7 +267,7 @@ class ClientOperation(val subsystem: Subsystem) extends CliOperation {
         case "get" =>
           _client_explicit_mime_body_from_request(req).flatMap {
             case Some(_) =>
-              Consequence.failure("client http get does not accept a body")
+              Consequence.argumentInvalid("client http get does not accept a body")
             case None =>
               Consequence.success(
                 new GetQuery(
@@ -280,11 +281,11 @@ class ClientOperation(val subsystem: Subsystem) extends CliOperation {
               )
           }
         case other =>
-          Consequence.failure(s"client http operation not supported: ${other}")
+          Consequence.argumentInvalid(s"client http operation not supported: ${other}")
       }
       }
     } else {
-      Consequence.failure("client http request is required")
+      Consequence.argumentMissing("client http request")
     }
   }
 
@@ -353,7 +354,7 @@ class ClientOperation(val subsystem: Subsystem) extends CliOperation {
           MimeBody(ContentType.APPLICATION_OCTET_STREAM, Bag.text(text, StandardCharsets.UTF_8))
         )
       case _ =>
-        Consequence.failure("client request body must be a MimeBody, Bag, or String")
+        Consequence.argumentInvalid("client request body must be a MimeBody, Bag, or String")
     }
 
   private def _mime_body_from_arguments(

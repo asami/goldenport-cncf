@@ -25,7 +25,8 @@ import org.goldenport.schema.DataType
  * @since   Jan. 10, 2026
  *  version Jan. 21, 2026
  *  version Feb. 15, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ClientComponent() extends Component {
@@ -146,7 +147,10 @@ object ClientComponent {
   }
 
   private def _body(req: Request): Option[Bag] =
-    req.properties.find(_.name == "-d").flatMap(_body_from_property_)
+    req.properties.find(p => _is_http_body_property(p.name)).flatMap(_body_from_property_)
+
+  private def _is_http_body_property(name: String): Boolean =
+    name == "http.body" || name == "http.data" || name == "-d"
 
   private def _body_from_property_(p: Property): Option[Bag] = {
     val charset = StandardCharsets.UTF_8

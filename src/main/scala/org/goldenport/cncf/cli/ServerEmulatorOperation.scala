@@ -10,7 +10,8 @@ import org.goldenport.cncf.http.HttpExecutionEngine
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
- * @version Feb.  1, 2026
+ *  version Feb.  1, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class ServerEmulatorOperation(val subsystem: Subsystem) extends CliOperation {
@@ -62,7 +63,7 @@ class ServerEmulatorOperation(val subsystem: Subsystem) extends CliOperation {
     baseUrl: String
   ): Consequence[Seq[String]] = {
     if (args.isEmpty) {
-      Consequence.failure("server-emulator requires a path or URL")
+      Consequence.argumentMissing("server-emulator path/url")
     } else if (args.exists(_.contains("://"))) {
       Consequence.success(args)
     } else {
@@ -92,7 +93,7 @@ class ServerEmulatorOperation(val subsystem: Subsystem) extends CliOperation {
       case Vector(single) if single.contains("/") || single.contains(".") =>
         parse_component_service_operation_string(single)
       case _ =>
-        Consequence.failure("command must be component service operation or component.service.operation")
+        Consequence.argumentInvalid("command must be component service operation or component.service.operation")
     }
   }
 

@@ -17,7 +17,8 @@ import org.goldenport.cncf.observability.global.GlobalObservable
  * @since   Jan. 31, 2026
  *  version Feb.  1, 2026
  *  version Mar. 27, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class CliOperation extends GlobalObservable {
@@ -57,11 +58,11 @@ abstract class CliOperation extends GlobalObservable {
             )
           )
         case ResolutionResult.NotFound(stage, input) =>
-          Consequence.failure(s"${stage.toString.toLowerCase} not found: $input")
+          Consequence.operationNotFound(s"${stage.toString.toLowerCase}:$input")
         case ResolutionResult.Ambiguous(input, candidates) =>
-          Consequence.failure(s"ambiguous selector '$input': ${candidates.mkString(", ")}")
+          Consequence.argumentInvalid(s"ambiguous selector '$input': ${candidates.mkString(", ")}")
         case ResolutionResult.Invalid(reason) =>
-          Consequence.failure(s"invalid selector: $reason")
+          Consequence.argumentInvalid(s"invalid selector: $reason")
       }
     }}
 
@@ -140,7 +141,7 @@ abstract class CliOperation extends GlobalObservable {
   ): Consequence[(String, Seq[String])] = {
     args.toVector match {
       case Vector() =>
-        Consequence.failure("command name is required")
+        Consequence.argumentMissing("command")
       case Vector(single, rest @ _*) if single.contains("/") =>
         _selector_from_path(single, "/").map(_ -> rest.toVector)
       case Vector(single, rest @ _*) if single.contains(".") =>
@@ -161,9 +162,9 @@ abstract class CliOperation extends GlobalObservable {
       Consequence.success(segments.mkString("."))
     } else {
       delimiter match {
-        case "/" => Consequence.failure("command path must be /component/service/operation")
-        case "." => Consequence.failure("command must be component.service.operation")
-        case _ => Consequence.failure("command selector is invalid")
+        case "/" => Consequence.argumentInvalid("command path must be /component/service/operation")
+        case "." => Consequence.argumentInvalid("command must be component.service.operation")
+        case _ => Consequence.argumentInvalid("command selector is invalid")
       }
     }
   }
@@ -208,14 +209,14 @@ abstract class CliOperation extends GlobalObservable {
         case Vector(component, service, operation) =>
           Consequence.success((component, service, operation))
         case _ =>
-          Consequence.failure("command path must be /component/service/operation")
+          Consequence.argumentInvalid("command path must be /component/service/operation")
       }
     } else {
       s.split("\\.") match {
         case Array(component, service, operation) =>
           Consequence.success((component, service, operation))
         case _ =>
-          Consequence.failure("command must be component.service.operation")
+          Consequence.argumentInvalid("command must be component.service.operation")
       }
     }
   }

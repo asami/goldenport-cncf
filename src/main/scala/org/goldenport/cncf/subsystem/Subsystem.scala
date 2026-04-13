@@ -192,7 +192,7 @@ final class Subsystem(
         case Some(r) =>
           Consequence.success(r)
         case None =>
-          Consequence.failure("Operation route not found")
+          Consequence.operationNotFound("operation route")
       }
       response <- {
         val (component, _, _) = route
@@ -205,7 +205,7 @@ final class Subsystem(
                 Consequence.success(rendered)
               }
             case _ =>
-              Consequence.failure("OperationRequest must be Action")
+              Consequence.argumentInvalid("OperationRequest must be Action")
           }
         }
         }
@@ -249,7 +249,7 @@ final class Subsystem(
           component.logic.executeAction(action, security.executionContext)
         }
       case None =>
-        Consequence.failure("Operation route not found")
+        Consequence.operationNotFound("operation route")
     }
 
   private def _to_response(

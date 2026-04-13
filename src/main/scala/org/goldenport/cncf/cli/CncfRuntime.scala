@@ -59,7 +59,8 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Apr. 12, 2026
+ *  version Apr. 12, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -1622,7 +1623,7 @@ object CncfRuntime extends GlobalObservable {
         Consequence.success(component)
       case None =>
         observe_trace("[client:trace] client component not available")
-        Consequence.failure("client component not available")
+        Consequence.operationNotFound("client component")
     }
 
   private def _to_request(
@@ -1741,7 +1742,7 @@ object CncfRuntime extends GlobalObservable {
       case PathResolutionResult.Success(path) =>
         Consequence.success((path.component, path.service, path.operation))
       case PathResolutionResult.Failure(reason) =>
-        Consequence.failure(s"path-resolution failed: $reason")
+        Consequence.argumentInvalid(s"path-resolution failed: $reason")
     }
   }
 
@@ -1772,9 +1773,9 @@ object CncfRuntime extends GlobalObservable {
             )
         }
       case ResolutionResult.Ambiguous(input, candidates) =>
-        Consequence.failure(s"ambiguous selector '$input': ${candidates.mkString(", ")}")
+        Consequence.argumentInvalid(s"ambiguous selector '$input': ${candidates.mkString(", ")}")
       case ResolutionResult.Invalid(reason) =>
-        Consequence.failure(s"invalid selector: $reason")
+        Consequence.argumentInvalid(s"invalid selector: $reason")
     }
 
   private def _extract_selector_format(
@@ -1879,7 +1880,7 @@ object CncfRuntime extends GlobalObservable {
   ): Consequence[(String, Seq[String])] = {
     args.toVector match {
       case Vector() =>
-        Consequence.failure("command name is required")
+        Consequence.argumentMissing("command")
       case Vector(single, rest @ _*) if single.contains("/") =>
         _selectorFromPath(single, "/").map(_ -> rest.toVector)
       case Vector(single, rest @ _*) if single.contains(".") =>
@@ -1906,9 +1907,9 @@ object CncfRuntime extends GlobalObservable {
       Consequence.success(segments.mkString("."))
     } else {
       delimiter match {
-        case "/" => Consequence.failure("command path must be /component/service/operation")
-        case "." => Consequence.failure("command must be component.service.operation")
-        case _ => Consequence.failure("command selector is invalid")
+        case "/" => Consequence.argumentInvalid("command path must be /component/service/operation")
+        case "." => Consequence.argumentInvalid("command must be component.service.operation")
+        case _ => Consequence.argumentInvalid("command selector is invalid")
       }
     }
   }
@@ -1945,7 +1946,7 @@ object CncfRuntime extends GlobalObservable {
       case Vector(single) if single.contains("/") || single.contains(".") =>
         _parse_component_service_operation_string(single)
       case _ =>
-        Consequence.failure("command must be component service operation or component.service.operation")
+        Consequence.argumentInvalid("command must be component service operation or component.service.operation")
     }
   }
 
@@ -1957,14 +1958,14 @@ object CncfRuntime extends GlobalObservable {
         case Vector(component, service, operation) =>
           Consequence.success((component, service, operation))
         case _ =>
-          Consequence.failure("command path must be /component/service/operation")
+          Consequence.argumentInvalid("command path must be /component/service/operation")
       }
     } else {
       s.split("\\.") match {
         case Array(component, service, operation) =>
           Consequence.success((component, service, operation))
         case _ =>
-          Consequence.failure("command must be component.service.operation")
+          Consequence.argumentInvalid("command must be component.service.operation")
       }
     }
   }
@@ -2083,7 +2084,7 @@ object CncfRuntime extends GlobalObservable {
     baseUrl: String
   ): Consequence[Seq[String]] = {
     if (args.isEmpty) {
-      Consequence.failure("server-emulator requires a path or URL")
+      Consequence.argumentMissing("server-emulator path/url")
     } else if (args.exists(_.contains("://"))) {
       Consequence.success(args)
     } else {
@@ -2926,7 +2927,7 @@ class CncfRuntime() extends GlobalObservable {
         Consequence.success(component)
       case None =>
         observe_trace("[client:trace] client component not available")
-        Consequence.failure("client component not available")
+        Consequence.operationNotFound("client component")
     }
 
   def parseClientArgs(
@@ -2934,7 +2935,7 @@ class CncfRuntime() extends GlobalObservable {
     args: Array[String]
   ): Consequence[Request] = {
     if (args.isEmpty) {
-      Consequence.failure("client command is required")
+      Consequence.argumentMissing("client command")
     } else {
       _parse_client_command(subsystem, args.toIndexedSeq)
     }
@@ -2948,7 +2949,7 @@ class CncfRuntime() extends GlobalObservable {
       case Vector("http", operation, rest @ _*) =>
         _parse_http_operation(operation).flatMap { op =>
           if (rest.isEmpty) {
-            Consequence.failure("client http path is required")
+            Consequence.argumentMissing("client http path")
           } else {
             _parse_client_http(op, rest).map { case (path, properties) =>
               Request.of(
@@ -2963,7 +2964,7 @@ class CncfRuntime() extends GlobalObservable {
           }
         }
       case Vector("http") =>
-        Consequence.failure("client http requires operation and path")
+        Consequence.argumentMissing("client http operation/path")
       case _ =>
         _to_request(subsystem, args.toArray, RunMode.Command).flatMap(_command_request_to_client_request(subsystem, _))
     }
@@ -3012,7 +3013,7 @@ class CncfRuntime() extends GlobalObservable {
       operation <- service.operations.operations.find(_.name == req.operation)
     } yield operation) match {
       case Some(op) => Consequence.success(op)
-      case None => Consequence.failure(s"client target operation not found: ${req.name}")
+      case None => Consequence.operationNotFound(s"client target operation:${req.name}")
     }
 
   private[cli] def _framework_option_passthrough(
@@ -3032,7 +3033,7 @@ class CncfRuntime() extends GlobalObservable {
     val lower = operation.toLowerCase
     lower match {
       case "get" | "post" => Consequence.success(lower)
-      case _ => Consequence.failure("client http operation must be get or post")
+      case _ => Consequence.argumentInvalid("client http operation must be get or post")
     }
   }
 
@@ -3049,7 +3050,7 @@ class CncfRuntime() extends GlobalObservable {
             _canonical_http_properties(params, parsed.properties) ++ _http_tail_properties(parsed.arguments.drop(1))
           ))
         case None =>
-          Consequence.failure("client http path is required")
+          Consequence.argumentMissing("client http path")
       }
     }
   }
@@ -3093,7 +3094,7 @@ class CncfRuntime() extends GlobalObservable {
     args: Seq[String]
   ): Consequence[(String, Seq[String])] = {
     if (args.isEmpty) {
-      Consequence.failure("client path is required")
+      Consequence.argumentMissing("client path")
     } else {
       val xs = args.toVector
       if (xs.length >= 3) {
@@ -3149,7 +3150,7 @@ class CncfRuntime() extends GlobalObservable {
         case "get" =>
           _client_explicit_mime_body_from_request(req).flatMap {
             case Some(_) =>
-              Consequence.failure("client http get does not accept a body")
+              Consequence.argumentInvalid("client http get does not accept a body")
             case None =>
               Consequence.success(
                 new GetQuery(
@@ -3163,11 +3164,11 @@ class CncfRuntime() extends GlobalObservable {
               )
           }
         case other =>
-          Consequence.failure(s"client http operation not supported: ${other}")
+          Consequence.argumentInvalid(s"client http operation not supported: ${other}")
       }
       }
     } else {
-      Consequence.failure("client http request is required")
+      Consequence.argumentMissing("client http request")
     }
   }
 
@@ -3230,7 +3231,7 @@ class CncfRuntime() extends GlobalObservable {
   ): Consequence[String] =
     req.arguments.find(_.name == "path").map(_.value.toString) match {
       case Some(path) => Consequence.success(path)
-      case None => Consequence.failure("client http path is required")
+      case None => Consequence.argumentMissing("client http path")
     }
 
   private[cli] def _client_mime_body_from_request(
@@ -3327,7 +3328,7 @@ class CncfRuntime() extends GlobalObservable {
           MimeBody(ContentType.APPLICATION_OCTET_STREAM, Bag.text(text, StandardCharsets.UTF_8))
         )
       case _ =>
-        Consequence.failure("client request body must be a MimeBody, Bag, or String")
+        Consequence.argumentInvalid("client request body must be a MimeBody, Bag, or String")
     }
 
   private[cli] def _mime_body_from_arguments(
@@ -3502,7 +3503,7 @@ class CncfRuntime() extends GlobalObservable {
       case PathResolutionResult.Success(path) =>
         Consequence.success((path.component, path.service, path.operation))
       case PathResolutionResult.Failure(reason) =>
-        Consequence.failure(s"path-resolution failed: $reason")
+        Consequence.argumentInvalid(s"path-resolution failed: $reason")
     }
   }
 
@@ -3514,11 +3515,11 @@ class CncfRuntime() extends GlobalObservable {
       case ResolutionResult.Resolved(_, component, service, operation) =>
         Consequence.success((component, service, operation))
       case ResolutionResult.NotFound(stage, input) =>
-        Consequence.failure(s"${stage.toString.toLowerCase} not found: $input")
+        Consequence.operationNotFound(s"${stage.toString.toLowerCase}:$input")
       case ResolutionResult.Ambiguous(input, candidates) =>
-        Consequence.failure(s"ambiguous selector '$input': ${candidates.mkString(", ")}")
+        Consequence.argumentInvalid(s"ambiguous selector '$input': ${candidates.mkString(", ")}")
       case ResolutionResult.Invalid(reason) =>
-        Consequence.failure(s"invalid selector: $reason")
+        Consequence.argumentInvalid(s"invalid selector: $reason")
     }
 
   private def _extract_selector_format(
@@ -3617,7 +3618,7 @@ class CncfRuntime() extends GlobalObservable {
   ): Consequence[(String, Seq[String])] = {
     args.toVector match {
       case Vector() =>
-        Consequence.failure("command name is required")
+        Consequence.argumentMissing("command")
       case Vector(single, rest @ _*) if single.contains("/") =>
         _selectorFromPath(single, "/").map(_ -> rest.toVector)
       case Vector(single, rest @ _*) if single.contains(".") =>
@@ -3638,9 +3639,9 @@ class CncfRuntime() extends GlobalObservable {
       Consequence.success(segments.mkString("."))
     } else {
       delimiter match {
-        case "/" => Consequence.failure("command path must be /component/service/operation")
-        case "." => Consequence.failure("command must be component.service.operation")
-        case _ => Consequence.failure("command selector is invalid")
+        case "/" => Consequence.argumentInvalid("command path must be /component/service/operation")
+        case "." => Consequence.argumentInvalid("command must be component.service.operation")
+        case _ => Consequence.argumentInvalid("command selector is invalid")
       }
     }
   }
@@ -3695,7 +3696,7 @@ class CncfRuntime() extends GlobalObservable {
     baseUrl: String
   ): Consequence[Seq[String]] = {
     if (args.isEmpty) {
-      Consequence.failure("server-emulator requires a path or URL")
+      Consequence.argumentMissing("server-emulator path/url")
     } else if (args.exists(_.contains("://"))) {
       Consequence.success(args)
     } else {
@@ -3725,7 +3726,7 @@ class CncfRuntime() extends GlobalObservable {
       case Vector(single) if single.contains("/") || single.contains(".") =>
         _parse_component_service_operation_string(single)
       case _ =>
-        Consequence.failure("command must be component service operation or component.service.operation")
+        Consequence.argumentInvalid("command must be component service operation or component.service.operation")
     }
   }
 
@@ -3737,14 +3738,14 @@ class CncfRuntime() extends GlobalObservable {
         case Vector(component, service, operation) =>
           Consequence.success((component, service, operation))
         case _ =>
-          Consequence.failure("command path must be /component/service/operation")
+          Consequence.argumentInvalid("command path must be /component/service/operation")
       }
     } else {
       s.split("\\.") match {
         case Array(component, service, operation) =>
           Consequence.success((component, service, operation))
         case _ =>
-          Consequence.failure("command must be component.service.operation")
+          Consequence.argumentInvalid("command must be component.service.operation")
       }
     }
   }

@@ -36,7 +36,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Jan. 10, 2026
  *  version Feb. 15, 2026
  *  version Mar. 29, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientAdminSystemPingSpec
@@ -273,7 +274,7 @@ class ClientAdminSystemPingSpec
   private def _body_property(
     req: Request
   ): Option[Property] =
-    List("body", "data", "-d").iterator
+    List("http.body", "http.data", "-d").iterator
       .flatMap(name => req.properties.find(_.name == name))
       .toList
       .headOption
@@ -312,8 +313,8 @@ class ClientAdminSystemPingSpec
     name != null &&
       name.nonEmpty &&
       name != "baseurl" &&
-      name != "body" &&
-      name != "data" &&
+      name != "http.body" &&
+      name != "http.data" &&
       name != "-d"
 
   private final case class TestHarness(
