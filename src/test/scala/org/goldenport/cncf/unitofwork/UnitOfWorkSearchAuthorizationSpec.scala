@@ -307,6 +307,50 @@ final class UnitOfWorkSearchAuthorizationSpec
       result.totalCount shouldBe Some(1)
       result.fetchedCount shouldBe 1
     }
+
+    "ignore relation rule whose access kinds do not include search list" in {
+      Given("a relation rule that only grants read")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(
+        datastorespace,
+        entitystorespace,
+        principalId = "customer-user",
+        principalAttributes = Map("customer_id" -> "customer-a")
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val p1 = PersonEntity(EntityId("test", "rk1", _cid), "customer-a-record", "owner-x", customerId = Some("customer-a"))
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord())
+          )
+        )
+      )
+      val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(summon[ExecutionContext]))
+
+      When("searching with a read-only relation rule")
+      val result = interpreter.execute(
+        UnitOfWorkOp.EntityStoreSearch(
+          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          tc = summon[EntityPersistent[PersonEntity]],
+          authorization = Some(
+            UnitOfWorkAuthorization(
+              resourceFamily = "domain",
+              resourceType = Some("Person"),
+              accessKind = "search/list",
+              relationRules = Vector(EntityAccessRelation("customerId", "customerId", Set("read")))
+            )
+          )
+        )
+      )
+
+      Then("the relation rule does not make the entity visible for search")
+      result.data shouldBe Vector.empty
+      result.totalCount shouldBe Some(0)
+      result.fetchedCount shouldBe 0
+    }
   }
 
   private def _execution_context(

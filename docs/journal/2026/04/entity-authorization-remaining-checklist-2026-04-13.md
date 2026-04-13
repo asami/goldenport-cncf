@@ -68,7 +68,7 @@ Status update on 2026-04-13:
 ## Relation-Based Authorization
 
 - [ ] Support multiple relation rules per entity/operation.
-- [ ] Support relation rules with explicit access kinds.
+- [x] Support relation rules with explicit access kinds.
 - [ ] Support relation rules based on principal id.
 - [ ] Support relation rules based on subject attributes.
 - [ ] Support tenant/organization relation rules.
