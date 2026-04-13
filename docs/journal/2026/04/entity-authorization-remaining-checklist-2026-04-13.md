@@ -72,7 +72,7 @@ Status update on 2026-04-13:
 - [x] Support relation rules based on principal id.
 - [x] Support relation rules based on subject attributes.
 - [x] Support tenant/organization relation rules.
-- [ ] Support customer/account relation rules.
+- [x] Support customer/account relation rules.
 - [ ] Support assignee/participant relation rules.
 - [ ] Decide denial precedence when ACL and relation rules disagree.
 - [x] Add result filtering tests for relation-based search/list.
