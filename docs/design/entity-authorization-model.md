@@ -384,6 +384,58 @@ owner_or_manager
 business-service
 ```
 
+Relation-based authorization and explicit low-level access mode overrides use
+the same operation-level `ACCESS` surface. This keeps the effective
+authorization input next to the operation that triggers entity access and avoids
+splitting one `UnitOfWorkAuthorization` carrier across unrelated CML blocks.
+
+```text
+### ACCESS
+
+#### POLICY
+owner_or_manager
+
+#### MODE
+user-permission
+
+#### RELATION
+customerId=subject.customerId:read,search/list
+```
+
+`MODE` is optional and maps to `CmlOperationAccess.mode`. It accepts:
+
+- `user-permission`;
+- `service-internal`;
+- `system`.
+
+Most CML should omit `MODE` and allow the framework to derive access mode from
+`ServiceOperationModel`. `MODE` exists as a low-level override for framework or
+application cases where the derived model is intentionally insufficient.
+
+`RELATION` is optional and maps to `CmlOperationAccess.relation`. Each relation
+uses this stable form:
+
+```text
+entityField=subject.subjectField:access-kind[,access-kind]
+```
+
+The subject prefix may also be written as `principal.`. If access kinds are
+omitted, the default is `read,search/list`. Multiple relation declarations are
+written in the same `RELATION` section with `;` or newline separators:
+
+```text
+customerId=subject.customerId:read,search/list;
+accountId=subject.accountId:read,search/list
+```
+
+The stable CML location decision is:
+
+- relation rules are declared at operation `ACCESS` for the current supported
+  user-level syntax;
+- service-level declarations are reserved for coarse `operationModel` defaults;
+- entity-level declarations and separate policy blocks are future reuse/default
+  mechanisms, not the first stable relation syntax.
+
 ## Variation Points
 
 Component factories can provide coarse and fine-grained entity authorization

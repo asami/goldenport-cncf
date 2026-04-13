@@ -102,7 +102,36 @@ The current relation rule supports simple field equality such as:
 customerId=subject.customerId:read,search/list
 ```
 
-The syntax is an implementation-level parser, not yet a finalized CML syntax.
+This is also the first stable operation-level CML syntax for relation-based
+authorization. In CML it is carried by operation `ACCESS` / `RELATION`:
+
+```text
+### ACCESS
+#### POLICY
+owner_or_manager
+#### RELATION
+customerId=subject.customerId:read,search/list;
+accountId=subject.accountId:read,search/list
+```
+
+The current operation `ACCESS` relation syntax intentionally stays
+operation-scoped. The runtime carrier is `UnitOfWorkAuthorization`, and the
+relation rule's meaning depends on the operation's access kind. Entity-level
+defaults, service-level defaults, or separate reusable policy blocks may be
+added later, but they should compile down to the same operation-level carrier.
+
+Explicit low-level access mode overrides use operation `ACCESS` / `MODE`:
+
+```text
+### ACCESS
+#### MODE
+service-internal
+```
+
+Valid user-level values are `user-permission`, `service-internal`, and
+`system`. Most CML should omit `MODE` and rely on derived access mode from
+`ServiceOperationModel`; explicit `MODE` is for framework or application cases
+where that derivation is intentionally not enough.
 
 The current ABAC-centered behavior is primarily profile selection:
 
@@ -291,9 +320,11 @@ files consistently include them.
 Relation rules are minimal.
 
 The implementation currently supports simple equality between an entity field and
-a subject field. Future likely needs include:
+a subject field. The first CML location is operation `ACCESS` / `RELATION`;
+multiple relation declarations in that section use `;` or newline separators.
+Component factory hooks can also supply multiple runtime rules. Future likely
+needs include:
 
-- multiple relations per entity/operation;
 - subject group/account expansion;
 - relation lookup through another component;
 - scoped relation kinds such as customer, tenant, organization, assignee;

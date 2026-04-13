@@ -31,12 +31,15 @@ Status update on 2026-04-13:
 - [x] Keep `usageKind` available as a separate classification axis.
 - [x] Define CML syntax for service-level `operationModel`.
 - [x] Define CML syntax for operation-level `operationModel` override.
-- [ ] Define CML syntax for relation-based authorization.
+- [x] Define CML syntax for relation-based authorization as operation-level
+      `ACCESS` / `RELATION`.
 - [x] Define first stable CML syntax for operation-level ABAC natural condition
       as `ACCESS` / `CONDITION`, with `;` as the multi-condition delimiter.
-- [ ] Define CML syntax for explicit low-level `accessMode` override.
-- [ ] Decide whether relation rules belong under entity, service, operation, or a
-      separate policy block.
+- [x] Define CML syntax for explicit low-level `accessMode` override as
+      operation-level `ACCESS` / `MODE`.
+- [x] Decide relation rules belong under operation `ACCESS` for the first stable
+      CML surface; entity/service/policy blocks are future default/reuse
+      mechanisms.
 - [x] Update cozy parser/model for the selected operation `ACCESS` syntax.
 - [x] Update cozy code generation so generated `CmlOperationAccess` carries the
       new fields.
@@ -175,7 +178,7 @@ Status update on 2026-04-13:
       UoW authorization carrier.
 - [x] Update `docs/notes/entity-runtime-architecture.md` with authorization
       boundary references.
-- [ ] Add CML examples once syntax is finalized.
+- [x] Add CML examples once syntax is finalized.
 - [ ] Add SalesOrder business example once generator support exists.
 - [x] Add first CMS content example using operation `ACCESS` / `CONDITION` in
       the notice-board sample app.

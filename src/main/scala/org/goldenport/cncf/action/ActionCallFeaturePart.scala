@@ -773,7 +773,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       factory
         .map(_.entity_access_relations(action, entityname, accessKind, core))
         .getOrElse(Vector.empty) ++
-      access.flatMap(_.relation).flatMap(EntityAccessRelation.parse).toVector
+      access.flatMap(_.relation).map(EntityAccessRelation.parseList).getOrElse(Vector.empty)
     val naturalconditions =
       access.flatMap(_.condition).map(EntityAbacCondition.parseList).getOrElse(Vector.empty)
     val derivedprofile = EntityAuthorizationProfile.derive(

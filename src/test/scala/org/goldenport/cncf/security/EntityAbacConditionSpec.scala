@@ -217,4 +217,18 @@ final class EntityAbacConditionSpec
       evaluation.message should include("actual=2999-01-01T00:00:00Z")
     }
   }
+
+  "EntityAccessRelation" should {
+    "parse multiple relations separated by semicolon or newline" in {
+      val relations = EntityAccessRelation.parseList(
+        "customerId=subject.customerId:read,search/list;accountId=subject.accountId:read\nownerId=subject.subjectId:update"
+      )
+
+      relations.map(_.entityField) shouldBe Vector("customerId", "accountId", "ownerId")
+      relations.map(_.subjectAttribute) shouldBe Vector("customerId", "accountId", "subjectId")
+      relations(0).allows("search/list") shouldBe true
+      relations(1).allows("update") shouldBe false
+      relations(2).allows("update") shouldBe true
+    }
+  }
 }

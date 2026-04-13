@@ -53,6 +53,14 @@ final case class EntityAccessRelation(
 }
 
 object EntityAccessRelation {
+  def parseList(text: String): Vector[EntityAccessRelation] =
+    text
+      .split("[;\\n]+")
+      .toVector
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .flatMap(parse)
+
   def parse(text: String): Option[EntityAccessRelation] = {
     val parts = text.split(":", 2).toVector.map(_.trim).filter(_.nonEmpty)
     val (relation, kinds) =
