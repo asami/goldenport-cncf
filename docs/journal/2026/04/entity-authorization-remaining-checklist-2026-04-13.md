@@ -75,7 +75,7 @@ Status update on 2026-04-13:
 - [ ] Support customer/account relation rules.
 - [ ] Support assignee/participant relation rules.
 - [ ] Decide denial precedence when ACL and relation rules disagree.
-- [ ] Add result filtering tests for relation-based search/list.
+- [x] Add result filtering tests for relation-based search/list.
 - [ ] Add tests for relation-based update denial unless explicitly allowed.
 
 ## ABAC Natural Evaluation

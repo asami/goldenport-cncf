@@ -9,7 +9,7 @@ import org.goldenport.cncf.directive.{Query, SearchResult}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityQuery, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
-import org.goldenport.cncf.security.EntityAbacCondition
+import org.goldenport.cncf.security.{EntityAbacCondition, EntityAccessRelation}
 import org.goldenport.datatype.PathName
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -259,6 +259,54 @@ final class UnitOfWorkSearchAuthorizationSpec
         LogBackendHolder.reset()
       }
     }
+
+    "filter search results by relation rule" in {
+      Given("a principal whose customer relation matches only one entity")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(
+        datastorespace,
+        entitystorespace,
+        principalId = "customer-user",
+        principalAttributes = Map("customer_id" -> "customer-a")
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val p1 = PersonEntity(EntityId("test", "r1", _cid), "customer-a-record", "owner-x", customerId = Some("customer-a"))
+      val p2 = PersonEntity(EntityId("test", "r2", _cid), "customer-b-record", "owner-y", customerId = Some("customer-b"))
+      val p3 = PersonEntity(EntityId("test", "r3", _cid), "unrelated-record", "owner-z")
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord()),
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p3.toRecord())
+          )
+        )
+      )
+      val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(summon[ExecutionContext]))
+
+      When("searching with a customer relation rule")
+      val result = interpreter.execute(
+        UnitOfWorkOp.EntityStoreSearch(
+          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          tc = summon[EntityPersistent[PersonEntity]],
+          authorization = Some(
+            UnitOfWorkAuthorization(
+              resourceFamily = "domain",
+              resourceType = Some("Person"),
+              accessKind = "search/list",
+              relationRules = Vector(EntityAccessRelation("customerId", "customerId", Set("search/list")))
+            )
+          )
+        )
+      )
+
+      Then("only the relation-visible entity remains")
+      result.data.map(_.id) shouldBe Vector(p1.id)
+      result.totalCount shouldBe Some(1)
+      result.fetchedCount shouldBe 1
+    }
   }
 
   private def _execution_context(
@@ -327,13 +375,15 @@ final class UnitOfWorkSearchAuthorizationSpec
     ownerId: String,
     groupId: Option[String] = None,
     privilegeId: Option[String] = None,
-    publishAt: Option[String] = None
+    publishAt: Option[String] = None,
+    customerId: Option[String] = None
   ) {
     def toRecord(): Record =
       Record.dataAuto(
         "id" -> id,
         "name" -> name,
         "publishAt" -> publishAt,
+        "customerId" -> customerId,
         "security_attributes" -> Record.dataAuto(
           "owner_id" -> ownerId,
           "group_id" -> groupId,
@@ -375,10 +425,11 @@ final class UnitOfWorkSearchAuthorizationSpec
         r.getString(PathName(Vector("security_attributes", "owner_id"))),
         r.getString(PathName(Vector("security_attributes", "group_id"))),
         r.getString(PathName(Vector("security_attributes", "privilege_id"))),
-        r.getString("publishAt").orElse(r.getString("publish_at"))
+        r.getString("publishAt").orElse(r.getString("publish_at")),
+        r.getString("customerId").orElse(r.getString("customer_id"))
       ) match
-        case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId, publishAt) =>
-          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId, publishAt))
+        case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId, publishAt, customerId) =>
+          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId, publishAt, customerId))
         case _ =>
           Consequence.failure("invalid person record")
   }
