@@ -66,9 +66,20 @@ Entity authorization distinguishes these modes:
 `ServiceInternal` is for operations performed inside a service boundary. It does
 not reinterpret entity owner/group/other permissions. It is intended for cases
 such as `SalesOrderService` updating `SalesOrder` records it manages.
+Formally, it is derived from `ServiceOperationModel.InternalService`, not from an
+entity's operation kind. In the current implementation it bypasses object-side
+owner/group/other permission checks and search/list visibility filtering for
+same-service internal work. Cross-component service access is not yet granted by
+this mode alone; the future model must require an explicit service grant or
+capability for that case.
 
 `System` is for framework/system work such as migration, indexing, projection, or
 administration tasks. It also bypasses owner/group/other permissions.
+Formally, it is derived from `ServiceOperationModel.SystemTask`, not from an
+entity's operation kind. In the current implementation it bypasses object-side
+owner/group/other permission checks and search/list visibility filtering for
+framework-controlled work. Application business services should not use this
+mode for ordinary domain operations.
 
 Neither `ServiceInternal` nor `System` gives special meaning to the entity
 `execute` permission bit.

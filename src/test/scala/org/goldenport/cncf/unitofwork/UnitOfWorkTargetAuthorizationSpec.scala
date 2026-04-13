@@ -256,6 +256,40 @@ final class UnitOfWorkTargetAuthorizationSpec
       _load_name(id) shouldBe Consequence.success(Some("order-2"))
     }
 
+    "allow system update without entity permission" in {
+      given ExecutionContext = _execution_context(
+        principalId = "system-principal"
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val id = EntityId("test", "update_system", _cid)
+      _seed(PersonEntity(id, "projection-1", "business-owner"))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Unit](
+            UnitOfWorkOp.EntityStoreUpdate(
+              entity = PersonEntity(id, "projection-2", "business-owner"),
+              tc = summon[EntityPersistent[PersonEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("Projection"),
+                  targetId = Some(id),
+                  accessKind = "update",
+                  accessMode = EntityAccessMode.System
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result shouldBe Consequence.unit
+      _load_name(id) shouldBe Consequence.success(Some("projection-2"))
+    }
+
     "allow relation-based read without granting other read permission" in {
       given ExecutionContext = _execution_context(
         principalId = "customer-user",

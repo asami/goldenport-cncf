@@ -123,8 +123,8 @@ Status update on 2026-04-13:
 
 ## Service/Internal Authorization
 
-- [ ] Define formal semantics for `ServiceInternal`.
-- [ ] Define formal semantics for `System`.
+- [x] Define formal semantics for `ServiceInternal`.
+- [x] Define formal semantics for `System`.
 - [ ] Add audit records for `ServiceInternal` permission bypass.
 - [ ] Add audit records for `System` permission bypass.
 - [ ] Add cross-component service grant model.

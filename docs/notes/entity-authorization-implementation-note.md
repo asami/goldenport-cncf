@@ -289,6 +289,12 @@ Audit and observability are incomplete.
 `ServiceInternal` and `System` bypass object permissions by design, but the
 authorization decision should become visible in audit/security telemetry.
 
+The implemented derivation is operation-model based: `InternalService` derives
+`ServiceInternal`, `SystemTask` derives `System`, and ordinary business
+operations over `task` entities remain `UserPermission`. Entity `operationKind`
+controls resource/task operational classification and does not grant internal or
+system access by itself.
+
 Cross-component grants are not yet complete.
 
 `ServiceInternal` is appropriate inside a service boundary. When a service touches
