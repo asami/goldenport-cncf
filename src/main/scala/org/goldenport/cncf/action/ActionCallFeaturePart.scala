@@ -726,15 +726,19 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     val entitynames = _declared_entities
     val entityname = entitynames.headOption.orElse(resourceType).getOrElse("")
     val factory = getFactory[org.goldenport.cncf.component.Component.Factory]
+    val runtimeentitydescriptor =
+      component.flatMap(_.entityRuntimeDescriptor(entityname))
     val entityusage =
       factory
         .flatMap(_.entity_usage_kind(action, entityname, core))
         .orElse(access.flatMap(_.entityUsage).map(EntityUsageKind.parse))
+        .orElse(runtimeentitydescriptor.map(_.usageKind))
         .getOrElse(EntityUsageKind.default)
     val entityoperationkind =
       factory
         .flatMap(_.entity_operation_kind(action, entityname, core))
         .orElse(access.flatMap(_.entityOperationKind).map(EntityOperationKind.parse))
+        .orElse(runtimeentitydescriptor.map(_.operationKind))
         .getOrElse(
           entityusage match
             case EntityUsageKind.Executable => EntityOperationKind.Task
@@ -744,6 +748,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       factory
         .flatMap(_.entity_application_domain(action, entityname, core))
         .orElse(access.flatMap(_.entityApplicationDomain).map(EntityApplicationDomain.parse))
+        .orElse(runtimeentitydescriptor.map(_.applicationDomain))
         .getOrElse(
           entityusage match
             case EntityUsageKind.PublicContent => EntityApplicationDomain.Cms
@@ -798,15 +803,19 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     val entitynames = _declared_entities
     val entityname = entitynames.headOption.orElse(resourceType).getOrElse("")
     val factory = getFactory[org.goldenport.cncf.component.Component.Factory]
+    val runtimeentitydescriptor =
+      component.flatMap(_.entityRuntimeDescriptor(entityname))
     val entityusage =
       factory
         .flatMap(_.entity_usage_kind(action, entityname, core))
         .orElse(access.flatMap(_.entityUsage).map(EntityUsageKind.parse))
+        .orElse(runtimeentitydescriptor.map(_.usageKind))
         .getOrElse(EntityUsageKind.default)
     val entityapplicationdomain =
       factory
         .flatMap(_.entity_application_domain(action, entityname, core))
         .orElse(access.flatMap(_.entityApplicationDomain).map(EntityApplicationDomain.parse))
+        .orElse(runtimeentitydescriptor.map(_.applicationDomain))
         .getOrElse(
           entityusage match
             case EntityUsageKind.PublicContent => EntityApplicationDomain.Cms

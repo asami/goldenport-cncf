@@ -11,6 +11,8 @@ import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
+import org.goldenport.cncf.component.ComponentDescriptor
+import org.goldenport.cncf.security.{EntityApplicationDomain, EntityOperationKind, EntityUsageKind}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.record.Record
@@ -23,7 +25,8 @@ import org.simplemodeling.model.directive.Condition
 
 /*
  * @since   Mar. 29, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallEntityAccessMetricsSpec
@@ -166,13 +169,62 @@ final class ActionCallEntityAccessMetricsSpec
         EntityAccessMetricsRegistry.shared.clear()
         val query: EntityQuery[TestPerson] = EntityQuery(cid, Query(TestPersonQuery(
           id = Condition.any[EntityId],
-          name = Condition.is("created-from-dto"),
+          name = Condition.any[String],
           age = Condition.any[Int]
         )))
         val result = probe.search[TestPerson](query)
         result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(createdId))
         _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 1L
         _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 0L
+      }
+    }
+
+    "derive create defaults from component descriptor entity classification" in {
+      EntityAccessMetricsRegistry.shared.synchronized {
+        Given("a component descriptor declares the entity as CMS public content")
+        EntityAccessMetricsRegistry.shared.clear()
+        given EntityPersistent[TestPerson] = _persistent
+        given EntityPersistentCreate[TestPersonCreate] = _create_persistent
+
+        val datastorespace = DataStoreSpace.default()
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        val ctx = _execution_context(datastorespace, entitystorespace)
+        val cid = _cid("person_metrics_descriptor_cms_create")
+        val component = TestComponentFactory.create("descriptor_cms_create", Protocol.empty)
+          .withComponentDescriptors(Vector(ComponentDescriptor(
+            name = Some("descriptor-cms-create"),
+            componentName = Some("descriptor-cms-create"),
+            entityRuntimeDescriptors = Vector(EntityRuntimeDescriptor(
+              entityName = "TestPerson",
+              collectionId = cid,
+              memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+              partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+              maxPartitions = 4,
+              maxEntitiesPerPartition = 16,
+              usageKind = EntityUsageKind.PublicContent,
+              operationKind = EntityOperationKind.Resource,
+              applicationDomain = EntityApplicationDomain.Cms
+            ))
+          )))
+        component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
+        val probe = _component_scoped_probe(component, ctx)
+
+        When("creating through ActionCallEntityStorePart without operation-level ACCESS")
+        val created = probe.create[TestPersonCreate](TestPersonCreate("descriptor-cms-default", 41, cid))
+
+        Then("the descriptor classification activates CMS/public-read defaults")
+        val createdId = created match {
+          case Consequence.Success(result) => result.id
+          case other => fail(s"create failed: $other")
+        }
+        val createdEntity = component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values.find(_.id == createdId).get
+        createdEntity.securityAttributes
+          .flatMap(_.getRecord("rights"))
+          .flatMap(_.getRecord("other"))
+          .flatMap(_.getBoolean("read")) should contain(true)
+        createdEntity.publishAt should not be empty
+        createdEntity.publicAt should not be empty
+        createdEntity.publishedBy should not be empty
       }
     }
   }
@@ -371,7 +423,9 @@ final class ActionCallEntityAccessMetricsSpec
         val publishat = r.getString("publishAt").orElse(r.getString("publish_at"))
         val publicat = r.getString("publicAt").orElse(r.getString("public_at"))
         val publishedby = r.getString("publishedBy").orElse(r.getString("published_by"))
-        val securityattributes = r.getRecord("securityAttributes").orElse(r.getRecord("security_attributes"))
+        val securityattributes = r.getRecord("securityAttributes")
+          .orElse(r.getRecord("security_attributes"))
+          .orElse(r.getRecord("rights").map(_ => r))
         for {
           id <- pid
           name <- pname

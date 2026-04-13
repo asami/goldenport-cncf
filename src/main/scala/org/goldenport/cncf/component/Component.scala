@@ -48,7 +48,8 @@ import org.goldenport.schema.{DataType, XString}
  *  version Feb. 17, 2026
  *  version Mar. 30, 2026
  *  version Apr.  9, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -71,6 +72,7 @@ abstract class Component() extends Component.Core.Holder {
   private var _port: Component.Port = Component.Port.empty
   private var _bindings: Map[String, Component.Binding[?, ?]] = Map.empty
   private var _event_effect_record: Record = Record.empty
+  private var _component_descriptors: Vector[ComponentDescriptor] = Vector.empty
   val entitySpace: EntitySpace = new EntitySpace()
   val aggregateSpace: AggregateSpace = new AggregateSpace()
   val viewSpace: ViewSpace = new ViewSpace()
@@ -87,6 +89,26 @@ abstract class Component() extends Component.Core.Holder {
   def origin: ComponentOrigin =
     _origin.getOrElse(ComponentOrigin.Unknown)
 
+  def componentDescriptors: Vector[ComponentDescriptor] =
+    _component_descriptors
+
+  def entityRuntimeDescriptor(
+    entityName: String
+  ): Option[org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor] = {
+    val normalized = Option(entityName).getOrElse("").trim.toLowerCase(java.util.Locale.ROOT)
+    _component_descriptors.iterator.flatMap(_.entityRuntimeDescriptors).find { d =>
+      d.entityName.trim.toLowerCase(java.util.Locale.ROOT) == normalized ||
+      d.collectionId.name.trim.toLowerCase(java.util.Locale.ROOT) == normalized
+    }
+  }
+
+  def withComponentDescriptors(
+    descriptors: Vector[ComponentDescriptor]
+  ): Component = {
+    _component_descriptors = descriptors
+    this
+  }
+
   def services: ServiceGroup = _services.getOrElse {
     throw new IllegalStateException("Component does not initialized.")
   }
@@ -99,6 +121,7 @@ abstract class Component() extends Component.Core.Holder {
     _core = Some(params.core)
     _origin = Some(params.origin)
     _subsystem = Some(params.subsystem)
+    _component_descriptors = params.componentDescriptors
     _inherit_http_driver_(params)
     _event_store = Some(params.subsystem.eventStore)
     jobEngine match {
@@ -1778,13 +1801,14 @@ final case class ComponentCreate(
     copy(componentDescriptors = p)
 
   def toInit(core: Component.Core): ComponentInit =
-    ComponentInit(subsystem, core, origin)
+    ComponentInit(subsystem, core, origin, componentDescriptors)
 }
 
 final case class ComponentInit( // TODO use config
   subsystem: Subsystem,
   core: Component.Core,
-  origin: ComponentOrigin
+  origin: ComponentOrigin,
+  componentDescriptors: Vector[ComponentDescriptor] = Vector.empty
 )
 
 sealed trait ComponentOrigin {

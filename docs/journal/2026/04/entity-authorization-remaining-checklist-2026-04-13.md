@@ -46,7 +46,7 @@ Status update on 2026-04-13:
 - [x] Ensure generated CAR/component descriptors emit `operationKind`.
 - [x] Ensure generated CAR/component descriptors emit `applicationDomain`.
 - [x] Decide whether generated descriptors should also emit `usageKind`.
-- [ ] Wire descriptor entity classification into runtime create default profile
+- [x] Wire descriptor entity classification into runtime create default profile
       derivation.
 - [x] Add descriptor tests for camelCase and snake_case field names.
 - [ ] Add generated sample descriptor examples for business and CMS entities.
