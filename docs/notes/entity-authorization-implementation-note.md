@@ -297,7 +297,9 @@ Audit and observability are partially implemented. The runtime emits
 visibility checks. The event includes outcome, access mode, resource
 family/type, collection, target id, entity names, source/target component,
 subject id, and normalized role/group/capability/security-level summaries.
-Relation rule match/miss diagnostics are still incomplete.
+Relation rule diagnostics are emitted as `authorization.relation.diagnostics`
+debug events when relation rules are evaluated. They summarize applicable,
+matched, missed, and not-applicable rules.
 
 `ServiceInternal` and `System` bypass object permissions by design. The current
 implementation emits an `authorization.permission.bypass` observability event

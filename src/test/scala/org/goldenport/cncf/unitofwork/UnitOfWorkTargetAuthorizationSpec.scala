@@ -493,37 +493,45 @@ final class UnitOfWorkTargetAuthorizationSpec
     }
 
     "allow relation-based read without granting other read permission" in {
-      given ExecutionContext = _execution_context(
-        principalId = "customer-user",
-        principalAttributes = Map("customer_id" -> "customer-123")
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
+      val backend = new MemoryBackend
+      LogBackendHolder.reset()
+      LogBackendHolder.install(backend)
+      try {
+        given ExecutionContext = _execution_context(
+          principalId = "customer-user",
+          principalAttributes = Map("customer_id" -> "customer-123")
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
 
-      val id = EntityId("test", "read_relation", _cid)
-      _seed(PersonEntity(id, "order-3", "sales-org", customerId = Some("customer-123")))
-      val uow = new UnitOfWork(summon[ExecutionContext])
+        val id = EntityId("test", "read_relation", _cid)
+        _seed(PersonEntity(id, "order-3", "sales-org", customerId = Some("customer-123")))
+        val uow = new UnitOfWork(summon[ExecutionContext])
 
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
-            UnitOfWorkOp.EntityStoreLoad(
-              id,
-              summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("SalesOrder"),
-                  targetId = Some(id),
-                  accessKind = "read",
-                  relationRules = Vector(EntityAccessRelation("customerId", "customerId"))
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+              UnitOfWorkOp.EntityStoreLoad(
+                id,
+                summon[EntityPersistent[PersonEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("SalesOrder"),
+                    targetId = Some(id),
+                    accessKind = "read",
+                    relationRules = Vector(EntityAccessRelation("customerId", "customerId"))
+                  )
                 )
               )
             )
           )
         )
-      )
 
-      result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+        result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+        backend.lines.exists(_.contains("authorization.relation.diagnostics")) shouldBe true
+      } finally {
+        LogBackendHolder.reset()
+      }
     }
 
     "reject relation-based update unless update access is explicitly allowed" in {

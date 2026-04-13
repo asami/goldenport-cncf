@@ -5,6 +5,7 @@ import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.entity.EntityPersistent
+import org.goldenport.cncf.observability.ObservabilityEngine
 import org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.value.SecurityAttributes
@@ -338,9 +339,41 @@ object OperationAccessPolicy {
   private def _matches_relation(
     record: Record,
     authorization: UnitOfWorkAuthorization
-  )(using ctx: ExecutionContext): Boolean =
-    authorization.relationRules.exists { rule =>
-      rule.allows(authorization.accessKind) && rule.matches(record, _subject)
+  )(using ctx: ExecutionContext): Boolean = {
+    val evaluations = authorization.relationRules.map { rule =>
+      val applicable = rule.allows(authorization.accessKind)
+      val matched = applicable && rule.matches(record, _subject)
+      (rule, applicable, matched)
+    }
+    _emit_relation_diagnostics(authorization, evaluations)
+    evaluations.exists(_._3)
+  }
+
+  private def _emit_relation_diagnostics(
+    authorization: UnitOfWorkAuthorization,
+    evaluations: Vector[(EntityAccessRelation, Boolean, Boolean)]
+  )(using ctx: ExecutionContext): Unit =
+    if (evaluations.nonEmpty) {
+      val details = evaluations.map {
+        case (rule, applicable, matched) =>
+          s"${rule.entityField}=subject.${rule.subjectAttribute}:${if (applicable) "applicable" else "not-applicable"}:${if (matched) "matched" else "missed"}"
+      }
+      val _ = ObservabilityEngine.emitDebug(
+        ctx.observability,
+        ctx.cncfCore.scope,
+        "authorization.relation.diagnostics",
+        Record.dataAuto(
+          "resource-family" -> authorization.resourceFamily,
+          "resource-type" -> authorization.resourceType,
+          "collection" -> authorization.collectionName,
+          "target-id" -> authorization.targetId.map(_.print),
+          "access-kind" -> authorization.accessKind,
+          "match-count" -> evaluations.count(_._3),
+          "miss-count" -> evaluations.count(x => x._2 && !x._3),
+          "not-applicable-count" -> evaluations.count(x => !x._2),
+          "details" -> details.mkString(";")
+        )
+      )
     }
 
   private def _label(value: EntityAccessMode): String =

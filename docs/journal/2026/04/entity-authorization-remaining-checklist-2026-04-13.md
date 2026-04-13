@@ -160,7 +160,7 @@ Status update on 2026-04-13:
 
 - [x] Emit authorization decision events.
 - [x] Include access mode in authorization observability records.
-- [ ] Include relation rule match/miss information in debug-level diagnostics.
+- [x] Include relation rule match/miss information in debug-level diagnostics.
 - [x] Include target entity collection/name in audit records.
 - [x] Include subject id and normalized role/group/capability summary.
 - [ ] Ensure denied authorization does not emit action execution enter/leave
