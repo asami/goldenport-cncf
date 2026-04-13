@@ -134,7 +134,7 @@ then invokes operations through the REST execution backbone.
 
 ## WEB-03: Web Descriptor Model
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -143,12 +143,14 @@ exposure, security, form behavior, traffic control, and application hosting.
 
 ### Detailed Tasks
 
-- [ ] Define descriptor file location and loading precedence.
-- [ ] Define operation exposure levels: public, protected, internal.
-- [ ] Define authentication and authorization configuration keys.
-- [ ] Define Form API enable/disable controls.
-- [ ] Define application hosting entries without committing to a frontend framework.
-- [ ] Define how descriptor values can be overridden by configuration.
+- [x] Define descriptor file location and loading precedence.
+- [x] Define operation exposure levels: public, protected, internal.
+- [x] Define authentication configuration keys.
+- [x] Define Form API enable/disable controls.
+- [x] Define application hosting entries without committing to a frontend framework.
+- [x] Define how descriptor values can be overridden by configuration.
+- [x] Define authorization configuration keys.
+- [x] Decide minimum runtime loading hook for descriptor discovery.
 
 ### Inputs
 
@@ -156,6 +158,7 @@ exposure, security, form behavior, traffic control, and application hosting.
 - `docs/journal/2026/04/web-descriptor-packaging-model-note.md`
 - `docs/journal/2026/04/web-api-exposure-control-note.md`
 - `docs/journal/2026/04/web-authentication-authorization-note.md`
+- `docs/notes/cncf-web-descriptor-minimum-schema.md`
 
 ---
 

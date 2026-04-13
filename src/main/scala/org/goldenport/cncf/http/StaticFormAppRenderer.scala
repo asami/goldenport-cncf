@@ -59,8 +59,11 @@ object StaticFormAppRenderer {
   def render(
     subsystem: Subsystem,
     app: String,
-    page: Vector[String] = Vector.empty
+    page: Vector[String] = Vector.empty,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] = {
+    if (!webDescriptor.isAppEnabled(app, page))
+      return None
     page match {
       case Vector() if app == "manual" =>
         Some(renderSystemManual(subsystem))
@@ -75,12 +78,15 @@ object StaticFormAppRenderer {
 
   def renderFormIndex(
     subsystem: Subsystem,
-    componentName: String
+    componentName: String,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val services = component.protocol.services.services.map { service =>
-        val operations = service.operations.operations.toVector.map { operation =>
+        val operations = service.operations.operations.toVector.filter { operation =>
+          webDescriptor.isFormEnabled(_operation_selector(component.name, service.name, operation.name))
+        }.map { operation =>
           val path = s"/form/${componentPath}/${NamingConventions.toNormalizedSegment(service.name)}/${NamingConventions.toNormalizedSegment(operation.name)}"
           s"""<li><a href="${_escape(path)}">${_escape(operation.name)}</a></li>"""
         }.mkString("\n")
@@ -102,12 +108,14 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     componentName: String,
     serviceName: String,
-    operationName: String
+    operationName: String,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     for {
       component <- _find_component(subsystem, componentName)
       service <- component.protocol.services.services.find(x => NamingConventions.equivalentByNormalized(x.name, serviceName))
       operation <- service.operations.operations.find(x => NamingConventions.equivalentByNormalized(x.name, operationName))
+      if webDescriptor.isFormEnabled(_operation_selector(component.name, service.name, operation.name))
     } yield {
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val servicePath = NamingConventions.toNormalizedSegment(service.name)
@@ -246,6 +254,15 @@ object StaticFormAppRenderer {
     name: String
   ): Option[Component] =
     subsystem.components.find(x => NamingConventions.equivalentByNormalized(x.name, name))
+
+  private def _operation_selector(
+    componentName: String,
+    serviceName: String,
+    operationName: String
+  ): String =
+    Vector(componentName, serviceName, operationName)
+      .map(NamingConventions.toNormalizedSegment)
+      .mkString(".")
 
   private def _dashboard_shell(
     title: String,

@@ -30,7 +30,6 @@ import org.goldenport.datatype.{ContentType, MimeBody}
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
- *  version Apr. 12, 2026
  * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -88,8 +87,8 @@ final class Http4sHttpServer(
         _static_form_app(app, Vector(page))
       case GET -> Root / "form" / app =>
         _form_index(app)
-      case GET -> Root / "form" / app / service / operation =>
-        _operation_form(app, service, operation)
+      case req @ GET -> Root / "form" / app / service / operation =>
+        _operation_form(req, app, service, operation)
       case req @ GET -> Root / "form" / app / service / operation / "result" =>
         _operation_form_result(req, app, service, operation)
       case req @ GET -> Root / "form" / app / service / operation / "continue" / id =>
@@ -221,7 +220,7 @@ final class Http4sHttpServer(
     app: String,
     page: Vector[String]
   ): IO[HResponse[IO]] =
-    StaticFormAppRenderer.render(engine.runtimeSubsystem, app, page) match {
+    StaticFormAppRenderer.render(engine.runtimeSubsystem, app, page, engine.webDescriptor) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
@@ -233,7 +232,7 @@ final class Http4sHttpServer(
     }
 
   private def _form_index(app: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderFormIndex(engine.runtimeSubsystem, app) match {
+    StaticFormAppRenderer.renderFormIndex(engine.runtimeSubsystem, app, engine.webDescriptor) match {
       case Some(p) =>
         _html(p)
       case None =>
@@ -241,11 +240,14 @@ final class Http4sHttpServer(
     }
 
   private def _operation_form(
+    req: org.http4s.Request[IO],
     app: String,
     service: String,
     operation: String
   ): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderOperationForm(engine.runtimeSubsystem, app, service, operation) match {
+    if (!_is_web_authorized(app, service, operation, Some(req)))
+      _forbidden()
+    else StaticFormAppRenderer.renderOperationForm(engine.runtimeSubsystem, app, service, operation, engine.webDescriptor) match {
       case Some(p) =>
         _html(p)
       case None =>
@@ -257,7 +259,12 @@ final class Http4sHttpServer(
     app: String,
     service: String,
     operation: String
-  ): IO[HResponse[IO]] = {
+  ): IO[HResponse[IO]] =
+    if (!_is_form_enabled(app, service, operation)) {
+      IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form not found"))
+    } else if (!_is_web_authorized(app, service, operation, Some(req))) {
+      _forbidden()
+    } else {
     val started = System.nanoTime()
     for {
       form <- _to_plain_form_record(req)
@@ -290,6 +297,11 @@ final class Http4sHttpServer(
     operation: String,
     id: String
   ): IO[HResponse[IO]] =
+    if (!_is_form_enabled(app, service, operation))
+      IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Form continuation not found"))
+    else if (!_is_web_authorized(app, service, operation, Some(req)))
+      _forbidden()
+    else
     _form_continuations.get(id) match {
       case Some(continuation) if continuation.matches(app, service, operation) =>
         val started = System.nanoTime()
@@ -318,7 +330,12 @@ final class Http4sHttpServer(
     app: String,
     service: String,
     operation: String
-  ): IO[HResponse[IO]] = {
+  ): IO[HResponse[IO]] =
+    if (!_is_form_enabled(app, service, operation)) {
+      IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form not found"))
+    } else if (!_is_web_authorized(app, service, operation, Some(req))) {
+      _forbidden()
+    } else {
     val started = System.nanoTime()
     val query = Record.create(req.uri.query.params.toVector)
     val values = req.uri.query.params.toMap
@@ -355,6 +372,60 @@ final class Http4sHttpServer(
       response.mime.value,
       response.getString.getOrElse("")
     )
+
+  private def _is_form_enabled(
+    app: String,
+    service: String,
+    operation: String
+  ): Boolean =
+    engine.webDescriptor.isFormEnabled(Vector(app, service, operation).mkString("."))
+
+  private def _is_web_authorized(
+    app: String,
+    service: String,
+    operation: String,
+    req: Option[org.http4s.Request[IO]]
+  ): Boolean = {
+    val selector = Vector(app, service, operation).mkString(".")
+    if (!engine.webDescriptor.authorization.contains(selector)) {
+      true
+    } else {
+      val allowed = WebDescriptorAuthorization.isAllowed(
+        engine.webDescriptor,
+        selector,
+        _web_authorization_subject(req)
+      )
+      RuntimeDashboardMetrics.recordAuthorizationDecision(!allowed)
+      allowed
+    }
+  }
+
+  private def _web_authorization_subject(
+    req: Option[org.http4s.Request[IO]]
+  ): WebDescriptorAuthorization.Subject = {
+    val headerValues = req.toVector.flatMap(_.headers.headers.map(h => h.name.toString -> h.value))
+    val queryValues = req.toVector.flatMap(_.uri.query.params.toVector)
+    def tokens(keys: String*): Set[String] = {
+      val normalizedKeys = keys.map(_.toLowerCase).toSet
+      (headerValues ++ queryValues)
+        .collect {
+          case (key, value) if normalizedKeys.contains(key.toLowerCase) => value
+        }
+        .flatMap(_split_tokens)
+        .toSet
+    }
+    WebDescriptorAuthorization.Subject(
+      roles = tokens("role", "roles", "x-cncf-role", "x-cncf-roles", "x-textus-role", "x-textus-roles"),
+      scopes = tokens("scope", "scopes", "x-cncf-scope", "x-cncf-scopes", "x-textus-scope", "x-textus-scopes"),
+      capabilities = tokens("capability", "capabilities", "x-cncf-capability", "x-cncf-capabilities", "x-textus-capability", "x-textus-capabilities")
+    )
+  }
+
+  private def _split_tokens(value: String): Vector[String] =
+    value.split("[,\\s|]+").toVector.map(_.trim).filter(_.nonEmpty)
+
+  private def _forbidden(): IO[HResponse[IO]] =
+    IO.pure(HResponse[IO](HStatus.Forbidden).withEntity("Forbidden"))
 
   private def _create_form_continuation(
     app: String,

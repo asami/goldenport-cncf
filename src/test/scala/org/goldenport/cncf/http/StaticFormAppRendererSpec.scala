@@ -141,6 +141,32 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       console should not include ("<form method=\"post\"")
     }
 
+    "filter Web HTML app entries by WebDescriptor apps" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val descriptor = WebDescriptor(
+        apps = Vector(WebDescriptor.App("manual", "/web/manual", "manual"))
+      )
+
+      val manual = StaticFormAppRenderer.render(subsystem, "manual", webDescriptor = descriptor)
+      val console = StaticFormAppRenderer.render(subsystem, "console", webDescriptor = descriptor)
+
+      manual.map(_.body).getOrElse(fail("manual is missing")) should include ("System Manual")
+      console shouldBe None
+    }
+
+    "allow component dashboard app entries by descriptor path" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      val descriptor = WebDescriptor(
+        apps = Vector(WebDescriptor.App("component-dashboard", s"/web/${componentPath}/dashboard", "dashboard"))
+      )
+
+      val page = StaticFormAppRenderer.render(subsystem, componentPath, Vector("dashboard"), descriptor)
+
+      page.map(_.body).getOrElse(fail("dashboard is missing")) should include (s"${component.name} Dashboard")
+    }
+
     "render component HTML form operation index" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
@@ -166,6 +192,46 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("class=\"form-control\"")
       html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(service.name)}/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(operation.name)}")
       html should not include ("cdn.jsdelivr")
+    }
+
+    "filter HTML form operations by WebDescriptor form controls" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
+      val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      val servicePath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(service.name)
+      val operationPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(operation.name)
+      val selector = Vector(componentPath, servicePath, operationPath).mkString(".")
+      val path = s"/form/${componentPath}/${servicePath}/${operationPath}"
+      val descriptor = WebDescriptor(
+        expose = Map(selector -> WebDescriptor.Exposure.Public),
+        form = Map(selector -> WebDescriptor.Form(enabled = Some(false)))
+      )
+
+      val index = StaticFormAppRenderer.renderFormIndex(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("form index is missing"))
+      val form = StaticFormAppRenderer.renderOperationForm(subsystem, component.name, service.name, operation.name, descriptor)
+
+      index should not include (path)
+      form shouldBe None
+    }
+
+    "allow exposed HTML form operations when no explicit form control exists" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
+      val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      val servicePath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(service.name)
+      val operationPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(operation.name)
+      val selector = Vector(componentPath, servicePath, operationPath).mkString(".")
+      val descriptor = WebDescriptor(
+        expose = Map(selector -> WebDescriptor.Exposure.Protected)
+      )
+
+      val form = StaticFormAppRenderer.renderOperationForm(subsystem, component.name, service.name, operation.name, descriptor)
+
+      form.map(_.body).getOrElse(fail("operation form is missing")) should include (s"/form/${componentPath}/${servicePath}/${operationPath}")
     }
 
     "render textus result widgets with paging links" in {

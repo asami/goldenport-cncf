@@ -8,12 +8,19 @@ import org.goldenport.cncf.subsystem.Subsystem
 /*
  * @since   Jan.  8, 2026
  *  version Jan.  9, 2026
- * @version Mar. 19, 2026
+ *  version Mar. 19, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class HttpExecutionEngine(
   subsystem: Subsystem
 ) {
+  lazy val webDescriptor: WebDescriptor =
+    WebDescriptorResolver
+      .resolve(subsystem)
+      .toOption
+      .getOrElse(WebDescriptor.empty)
+
   def execute(req: HttpRequest): HttpResponse =
     subsystem.executeHttp(req)
 

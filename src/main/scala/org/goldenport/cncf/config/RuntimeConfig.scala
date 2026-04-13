@@ -18,8 +18,7 @@ import org.goldenport.cncf.observability.ObservabilityEngine
  *  version Jan. 30, 2026
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
- *  version Apr. 11, 2026
- * @version Apr. 11, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -71,6 +70,7 @@ object RuntimeConfig {
   val RuntimeSubsystemDescriptorKey = "textus.runtime.subsystem.descriptor"
   val RuntimeSubsystemFileKey = "textus.runtime.subsystem.file"
   val AssemblyDescriptorKey = "textus.assembly.descriptor"
+  val WebDescriptorKey = "textus.web.descriptor"
   val RepositoryDirKey = "textus.repository.dir"
   val ComponentDirKey = "textus.component.dir"
   val LogBackendKey = "textus.logging.backend"
