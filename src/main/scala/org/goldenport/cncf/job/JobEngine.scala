@@ -15,7 +15,8 @@ import org.goldenport.provisional.observation.Taxonomy
 
 /*
  * @since   Jan.  4, 2026
- * @version Mar. 30, 2026
+ *  version Mar. 30, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -141,10 +142,9 @@ object JobControlPolicy {
       if (ctx.security.hasAnyCapability(_control_caps))
         Consequence.unit
       else
-        Consequence.fail(
-          Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Illegal),
-          Facet.Operation("job.control"),
-          Facet.Message(s"required capability: ${_control_caps.toVector.sorted.mkString("|")}")
+        Consequence.operationIllegal(
+          "job.control",
+          Seq(Facet.Message(s"required capability: ${_control_caps.toVector.sorted.mkString("|")}"))
         )
     }
   }
@@ -321,10 +321,9 @@ object JobQueryPolicy {
       if (ctx.security.hasAnyCapability(_read_caps))
         Consequence.unit
       else
-        Consequence.fail(
-          Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Illegal),
-          Facet.Operation("job.query"),
-          Facet.Message(s"required capability: ${_read_caps.toVector.sorted.mkString("|")}")
+        Consequence.operationIllegal(
+          "job.query",
+          Seq(Facet.Message(s"required capability: ${_read_caps.toVector.sorted.mkString("|")}"))
         )
   }
 }
@@ -791,25 +790,15 @@ final class InMemoryJobEngine(
     command: JobControlCommand,
     status: JobStatus
   ): Consequence[A] =
-    Consequence.fail(
-      Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Invalid),
-      Facet.Operation(s"job.control.${command.toString.toLowerCase}"),
-      Facet.Message(s"invalid transition: status=${status.toString.toLowerCase}")
+    Consequence.operationInvalid(
+      s"job.control.${command.toString.toLowerCase}: invalid transition: status=${status.toString.toLowerCase}"
     )
 
   private def _control_failure[A](message: String): Consequence[A] =
-    Consequence.fail(
-      Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Invalid),
-      Facet.Operation("job.control"),
-      Facet.Message(message)
-    )
+    Consequence.operationInvalid(s"job.control: $message")
 
   private def _control_timeout[A](message: String): Consequence[A] =
-    Consequence.fail(
-      Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Unavailable),
-      Facet.Operation("job.control"),
-      Facet.Message(message)
-    )
+    Consequence.serviceUnavailable(s"job.control: $message")
 
   private def _append_task_running_(
     jobid: JobId,

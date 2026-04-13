@@ -1754,23 +1754,13 @@ object CncfRuntime extends GlobalObservable {
       case ResolutionResult.Resolved(_, component, service, operation) =>
         Consequence.success((component, service, operation))
       case ResolutionResult.NotFound(stage, input) =>
-        val symptom = Taxonomy.Symptom.NotFound
         stage match {
           case ResolutionStage.Component =>
-            Consequence.fail(
-              Taxonomy(Taxonomy.Category.Component, symptom),
-              Facet.Component(input)
-            )
+            Consequence.componentNotFound(input)
           case ResolutionStage.Service =>
-            Consequence.fail(
-              Taxonomy(Taxonomy.Category.Service, symptom),
-              Facet.Service(input)
-            )
+            Consequence.serviceNotFound(input)
           case ResolutionStage.Operation =>
-            Consequence.fail(
-              Taxonomy(Taxonomy.Category.Operation, symptom),
-              Facet.Operation(input)
-            )
+            Consequence.operationNotFound(input)
         }
       case ResolutionResult.Ambiguous(input, candidates) =>
         Consequence.argumentInvalid(s"ambiguous selector '$input': ${candidates.mkString(", ")}")

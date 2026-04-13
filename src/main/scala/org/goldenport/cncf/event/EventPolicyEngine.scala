@@ -15,7 +15,8 @@ import org.goldenport.provisional.observation.Taxonomy
  * Content-manager-level capabilities are treated as baseline allow.
  *
  * @since   Mar. 20, 2026
- * @version Mar. 20, 2026
+ *  version Mar. 20, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EventPolicyEngine {
@@ -53,10 +54,9 @@ object EventPolicyEngine {
       if (_has_any_capability(requiredCaps))
         Consequence.unit
       else
-        Consequence.fail(
-          Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Illegal),
-          Facet.Operation(operation),
-          Facet.Message(s"required capability: ${requiredCaps.toVector.sorted.mkString("|")}")
+        Consequence.operationIllegal(
+          operation,
+          Seq(Facet.Message(s"required capability: ${requiredCaps.toVector.sorted.mkString("|")}"))
         )
 
     private def _has_any_capability(

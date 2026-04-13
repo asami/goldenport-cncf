@@ -17,7 +17,8 @@ import org.goldenport.provisional.observation.Taxonomy
  * Async/job execution is an extension point and is intentionally out of scope in EV-03.
  *
  * @since   Mar. 20, 2026
- * @version Mar. 20, 2026
+ *  version Mar. 20, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EventDispatchHandler {
@@ -226,10 +227,7 @@ final class DefaultEventBus(
     eventKind: String,
     cause: org.goldenport.Conclusion
   ): Consequence[A] =
-    Consequence.fail(
-      Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Invalid),
-      Facet.Operation("event.dispatch"),
-      Facet.Name(subscription.name),
-      Facet.Message(s"event=$eventName kind=$eventKind cause=${cause.show}")
+    Consequence.operationInvalid(
+      s"event.dispatch: subscription=${subscription.name} event=$eventName kind=$eventKind cause=${cause.show}"
     )
 }

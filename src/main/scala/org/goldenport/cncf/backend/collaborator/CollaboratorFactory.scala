@@ -11,6 +11,7 @@ import scala.util.control.NonFatal
 import java.nio.charset.StandardCharsets
 
 import org.goldenport.Consequence
+import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.provisional.observation.Taxonomy
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.backend.collaborator.Collaborator
@@ -65,7 +66,7 @@ object CollaboratorFactory {
       _validateAndWrap(cls)
     } catch {
       case NonFatal(e) =>
-        Consequence.fail(Taxonomy.componentInvalid, e)
+        Consequence.componentInvalid(Seq(Facet.Exception(e)))
     }
   }
 
@@ -83,10 +84,10 @@ object CollaboratorFactory {
         Consequence.success(Collaborator(apiInstance))
       } catch {
         case NonFatal(e) =>
-          Consequence.fail(Taxonomy.componentInvalid, e)
+          Consequence.componentInvalid(Seq(Facet.Exception(e)))
       }
     } else {
-      Consequence.fail(Taxonomy.componentInvalid, s"invalid collaborator class: ${cls.getName}")
+      Consequence.componentInvalid(Seq(Facet.Message(s"invalid collaborator class: ${cls.getName}")))
     }
   }
 
@@ -102,7 +103,7 @@ object CollaboratorFactory {
       candidates.distinct match {
         case Vector(cls) => _validateAndWrap(cls)
         case Vector() => Consequence.resourceNotFound("no collaborator implementations found by scanning")
-        case _ => Consequence.fail(Taxonomy.componentInvalid, "multiple collaborator implementations found by scanning")
+        case _ => Consequence.componentInvalid(Seq(Facet.Message("multiple collaborator implementations found by scanning")))
       }
     }
   }

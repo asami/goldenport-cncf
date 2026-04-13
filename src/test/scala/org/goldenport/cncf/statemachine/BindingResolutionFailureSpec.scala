@@ -10,7 +10,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- * @version Mar. 20, 2026
+ *  version Mar. 20, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BindingResolutionFailureSpec
@@ -124,17 +125,17 @@ final class BindingResolutionFailureSpec
       values.get(name).map(_.toVector).getOrElse(Vector.empty) match {
         case Vector(single) => Consequence.success(single)
         case Vector() =>
-          Consequence.fail(
-            Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.NotFound),
-            Facet.Operation(name),
-            Facet.Message("action-binding-not-found")
+          Consequence.operationNotFound(
+            name,
+            Seq(Facet.Message("action-binding-not-found"))
           )
         case many =>
-          Consequence.fail(
-            Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Conflict),
-            Facet.Operation(name),
-            Facet.Value(many.size),
-            Facet.Message("action-binding-ambiguous")
+          Consequence.operationConflict(
+            name,
+            Seq(
+              Facet.Value(many.size),
+              Facet.Message("action-binding-ambiguous")
+            )
           )
       }
   }
@@ -146,17 +147,17 @@ final class BindingResolutionFailureSpec
       values.get(name).map(_.toVector).getOrElse(Vector.empty) match {
         case Vector(single) => Consequence.success(single)
         case Vector() =>
-          Consequence.fail(
-            Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.NotFound),
-            Facet.Operation(name),
-            Facet.Message("guard-binding-not-found")
+          Consequence.operationNotFound(
+            name,
+            Seq(Facet.Message("guard-binding-not-found"))
           )
         case many =>
-          Consequence.fail(
-            Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Conflict),
-            Facet.Operation(name),
-            Facet.Value(many.size),
-            Facet.Message("guard-binding-ambiguous")
+          Consequence.operationConflict(
+            name,
+            Seq(
+              Facet.Value(many.size),
+              Facet.Message("guard-binding-ambiguous")
+            )
           )
       }
   }

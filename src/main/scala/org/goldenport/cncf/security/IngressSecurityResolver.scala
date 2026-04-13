@@ -105,10 +105,9 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
         Consequence.success(ResolvedIngressSecurity(ctx, p, caps))
       else
-        Consequence.fail(
-          Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Illegal),
-          Facet.Operation("security.resolve"),
-          Facet.Message(s"required capability: ${caps.toVector.sorted.mkString("|")}")
+        Consequence.operationIllegal(
+          "security.resolve",
+          Seq(Facet.Message(s"required capability: ${caps.toVector.sorted.mkString("|")}"))
         )
     }
   }
@@ -135,10 +134,9 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
         Consequence.success(ResolvedIngressSecurity(ctx, privilege, caps))
       else
-        Consequence.fail(
-          Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Illegal),
-          Facet.Operation("security.resolve"),
-          Facet.Message(s"required capability: ${caps.toVector.sorted.mkString("|")}")
+        Consequence.operationIllegal(
+          "security.resolve",
+          Seq(Facet.Message(s"required capability: ${caps.toVector.sorted.mkString("|")}"))
         )
     }
   }
@@ -412,10 +410,9 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       case Some("applicationcontentmanager") | Some("contentmanager") | Some("contentadmin") =>
         Consequence.success(SecurityContext.Privilege.ApplicationContentManager)
       case Some(other) =>
-        Consequence.fail(
-          Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Invalid),
-          Facet.Operation("security.resolve"),
-          Facet.Message(s"invalid privilege: $other")
+        Consequence.operationInvalid(
+          "security.resolve",
+          Seq(Facet.Message(s"invalid privilege: $other"))
         )
     }
   }

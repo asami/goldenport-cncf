@@ -19,7 +19,8 @@ import org.goldenport.provisional.observation.Taxonomy
  * - selective routing -> ActionCall dispatcher via EventBus subscription
  *
  * @since   Mar. 21, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 enum CmlEventCategory {
@@ -589,11 +590,7 @@ object EventReception {
     }
 
     private def _failure[A](message: String): Consequence[A] =
-      Consequence.fail(
-        Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Invalid),
-        Facet.Operation("event.reception"),
-        Facet.Message(message)
-      )
+      Consequence.operationInvalid(s"event.reception: $message")
 
     private def _dispatch_to_listeners(
       event: ReceptionDomainEvent,
