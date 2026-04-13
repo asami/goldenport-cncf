@@ -401,6 +401,7 @@ Responsibilities:
 - track modified entities
 - manage commit boundaries
 - coordinate persistence
+- carry entity access authorization intent into the interpreter
 
 Commit flow:
 
@@ -408,6 +409,30 @@ UnitOfWork
 → EntityRealm
 → EntityStore
 → DataStore
+
+---
+
+# Entity Authorization Boundary
+
+Entity authorization is enforced at the UnitOfWork interpreter boundary.
+Application actions and repositories describe requested entity access; the
+runtime evaluates the corresponding authorization metadata before touching the
+working set or datastore.
+
+The current authorization carrier is `UnitOfWorkAuthorization`. It carries
+resource identity, access kind, optional target id, access mode, relation rules,
+natural ABAC conditions, and source/target component information. The
+implemented policy is documented in `docs/design/entity-authorization-model.md`.
+
+This boundary is important for the working-set model. Defaults such as
+publication attributes, security attributes, owner/group/tenant/organization
+ids, and audit trace values are applied before records enter the working set.
+Authorization then controls whether user-permission, service-internal, or system
+access may read, search, update, delete, or create the entity state.
+
+The model is ABAC-centered. RBAC-style role checks, ReBAC-style relation checks,
+and DAC-style owner/group/other permissions are runtime policy patterns, not
+separate access paths that bypass UnitOfWork.
 
 ---
 

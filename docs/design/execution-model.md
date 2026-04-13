@@ -119,6 +119,24 @@ Phase 1: Authorization (Pre-Execution)
 Authorization failure is not an action failure.
 observe_enter / observe_leave MUST NOT be emitted on authorization failure.
 
+Entity Authorization Model
+--------------------------
+
+Entity-level authorization is defined in
+`docs/design/entity-authorization-model.md`.
+
+The implemented entity authorization chokepoint is the
+`UnitOfWork` / internal DSL boundary. `UnitOfWorkAuthorization` carries the
+resource family/type, collection, target id, access kind, access mode, relation
+rules, and natural ABAC conditions needed by `UnitOfWorkInterpreter` and
+`OperationAccessPolicy`.
+
+This model is ABAC-centered. RBAC-style role evaluation, ReBAC-style relation
+evaluation, and DAC-style owner/group/other permission evaluation are connected
+through subject, entity, operation, application, and environment attributes.
+Application logic MUST NOT bypass this boundary with ad hoc entity access
+checks.
+
 Design Notes (Security)
 -----------------------
 - Security decisions can occur before execution and during execution.

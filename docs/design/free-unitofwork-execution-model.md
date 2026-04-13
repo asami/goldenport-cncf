@@ -184,6 +184,34 @@ This turns CQRS from a guideline into an enforced contract.
 
 ----------------------------------------------------------------------
 
+11.1. UnitOfWork Authorization Carrier
+----------------------------------------------------------------------
+
+Entity authorization is carried through `UnitOfWorkAuthorization`, not through
+ad hoc repository or action checks.
+
+The carrier records the execution intent needed by the interpreter:
+
+- resource family/type and collection;
+- optional target id;
+- access kind such as create, read, update, delete, or search/list;
+- operation access metadata;
+- entity names;
+- derived or explicit access mode;
+- relation rules;
+- natural ABAC conditions;
+- source and target component names for service-internal access.
+
+`UnitOfWorkInterpreter` applies this carrier before entity load/save/update,
+delete, create, and search/list effects. Search/list also applies visibility
+filtering for user-permission access. The implemented policy is described in
+`docs/design/entity-authorization-model.md`.
+
+Authorization remains an interpreter concern. Actions describe intent; they do
+not enforce object permissions directly.
+
+----------------------------------------------------------------------
+
 12. Conclusion: Execution as Intent
 ----------------------------------------------------------------------
 

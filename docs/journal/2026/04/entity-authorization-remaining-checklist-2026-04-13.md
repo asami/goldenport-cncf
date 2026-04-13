@@ -169,11 +169,11 @@ Status update on 2026-04-13:
 
 ## Documentation
 
-- [ ] Update `docs/design/execution-model.md` with a pointer to the implemented
+- [x] Update `docs/design/execution-model.md` with a pointer to the implemented
       entity authorization model.
-- [ ] Update `docs/design/free-unitofwork-execution-model.md` with the current
+- [x] Update `docs/design/free-unitofwork-execution-model.md` with the current
       UoW authorization carrier.
-- [ ] Update `docs/notes/entity-runtime-architecture.md` with authorization
+- [x] Update `docs/notes/entity-runtime-architecture.md` with authorization
       boundary references.
 - [ ] Add CML examples once syntax is finalized.
 - [ ] Add SalesOrder business example once generator support exists.
