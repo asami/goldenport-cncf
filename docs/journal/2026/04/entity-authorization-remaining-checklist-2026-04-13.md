@@ -150,8 +150,8 @@ Status update on 2026-04-13:
 - [x] Keep CNCF dependent behavior outside simplemodeling-model.
 - [x] Keep `SecurityAttributes` as the canonical object-side value type.
 - [x] Avoid overloading `execute` with special behavior.
-- [ ] Define explicit fields/policies if future setuid-like behavior is needed.
-- [ ] Decide whether compact `permission` text should remain a compatibility
+- [x] Define explicit fields/policies if future setuid-like behavior is needed.
+- [x] Decide whether compact `permission` text should remain a compatibility
       parser only.
 - [x] Add tests for `execute=false` default on ordinary resource entities.
 - [x] Add tests for `execute=false` default on task-like entities.

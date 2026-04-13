@@ -135,6 +135,15 @@ The rights model is:
 for Unix-like special behavior such as setuid, setgid, or sticky-bit semantics.
 Special behavior must be added as explicit model/policy fields when needed.
 
+If a future application needs setuid-like, setgid-like, sticky, delegation,
+impersonation, or ownership-transfer behavior, it MUST introduce an explicit
+attribute or policy name for that behavior. The `execute` bit MUST remain only
+an execute permission for executable entity operations.
+
+Compact textual permission forms, if accepted by loaders or compatibility
+adapters, are compatibility input only. The canonical runtime representation is
+the structured owner/group/other rights carried by `SecurityAttributes`.
+
 Default owner permissions use read/write without execute for ordinary data:
 
 ```text

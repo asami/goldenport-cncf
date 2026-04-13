@@ -249,6 +249,13 @@ service-internal access. Execute permission is reserved for a future
 entity-provided operation invocation model and remains false by default for both
 resource and task entities.
 
+Unix-like special semantics are intentionally not encoded into `execute`. Future
+setuid-like, setgid-like, sticky, delegation, impersonation, or
+ownership-transfer behavior should be modeled with explicit fields or policy
+names. Compact textual permission forms should remain compatibility input; the
+runtime canonical form is structured owner/group/other rights in
+`SecurityAttributes`.
+
 Create defaults now have minimal owner-id, group-id, tenant-id, and
 organization-id selector hooks. The built-in default keeps the previous behavior:
 it derives owner id from the current principal, uses the owner id as the default
