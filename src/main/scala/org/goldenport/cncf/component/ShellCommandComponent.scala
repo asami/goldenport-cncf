@@ -10,7 +10,8 @@ import org.goldenport.bag.Bag
 
 /*
  * @since   Feb.  5, 2026
- * @version Feb.  6, 2026
+ *  version Feb.  6, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ShellCommandComponent(
@@ -82,14 +83,14 @@ object CommandParameterMappingRule {
 
         private def _add_value(name: String, v: Any) = {
           v match {
-            case m: Bag => Consequence.failNotImplemented.RAISE
+            case m: Bag => Consequence.notImplemented.RAISE
             case m => copy(params = params :+ _print_value(name, v))
           }
         }
 
         private def _add_prop(name: String, v: Any) = {
           v match {
-            case m: Bag => Consequence.failNotImplemented.RAISE
+            case m: Bag => Consequence.notImplemented.RAISE
             case m => copy(params = params :+ s"-$name" :+ _print_value(name, v))
           }
         }
@@ -97,7 +98,7 @@ object CommandParameterMappingRule {
         private def _add_switch(name: String, v: Any) = {
           v match {
             case false => this
-            case m: Bag => Consequence.failNotImplemented.RAISE
+            case m: Bag => Consequence.notImplemented.RAISE
             case m => copy(params = params :+ s"-$name")
           }
         }

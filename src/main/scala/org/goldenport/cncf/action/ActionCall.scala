@@ -156,7 +156,7 @@ object ActionCall {
     }
 
     inline def collaborator: Collaborator = getCollaborator getOrElse {
-      Consequence.failUninitializedState.RAISE
+      Consequence.uninitializedState.RAISE
     }
 
     def createCollaboratorActionCallCore(opname: String): CollaboratorActionCall.Core =

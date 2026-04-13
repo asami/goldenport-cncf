@@ -91,7 +91,7 @@ trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
 
 trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
   protected final def repo =
-    component.map(_.aggregateSpace).getOrElse(Consequence.failUninitializedState.RAISE)
+    component.map(_.aggregateSpace).getOrElse(Consequence.uninitializedState.RAISE)
 
   protected final def aggregate_load[A](id: EntityId): ExecUowM[A] =
     exec_from(aggregate_load_c[A](id))
@@ -101,7 +101,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   protected final def aggregate_load_c[A](id: EntityId): Consequence[A] =
     component
       .map(_.aggregateSpace)
-      .getOrElse(Consequence.failUninitializedState.RAISE)
+      .getOrElse(Consequence.uninitializedState.RAISE)
       .resolve_with_context[A](id)(using execution_context)
 
   protected final def aggregate_load_or_throw[A](id: EntityId): A =
@@ -117,7 +117,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   ): Consequence[Option[A]] =
     component
       .map(_.aggregateSpace)
-      .getOrElse(Consequence.failUninitializedState.RAISE)
+      .getOrElse(Consequence.uninitializedState.RAISE)
       .resolveOption[A](targetid)(using execution_context)
 
   protected final def aggregate_load_option_or_throw[A](targetid: EntityId): Option[A] =
@@ -135,7 +135,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   ): Consequence[A] =
     component
       .map(_.aggregate[A](collectionname))
-      .getOrElse(Consequence.failUninitializedState.RAISE)
+      .getOrElse(Consequence.uninitializedState.RAISE)
       .resolve_with_context(id)(using execution_context)
 
   protected final def aggregate_load_or_throw[A](
@@ -156,7 +156,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   ): Consequence[SearchResult[A]] =
     component
       .map(_.aggregateSpace)
-      .getOrElse(Consequence.failUninitializedState.RAISE)
+      .getOrElse(Consequence.uninitializedState.RAISE)
       .query_with_context[A](collectionname, q)(using execution_context)
       .map { xs =>
         SearchResult(
@@ -178,7 +178,7 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
 
 trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
   protected final def browser =
-    component.map(_.viewSpace).getOrElse(Consequence.failUninitializedState.RAISE)
+    component.map(_.viewSpace).getOrElse(Consequence.uninitializedState.RAISE)
 
   protected final def view_load[A](
     collectionname: String,

@@ -7,7 +7,8 @@ import org.goldenport.schema.XString
 
 /*
  * @since   Apr. 11, 2025
- * @version Feb. 22, 2026
+ *  version Feb. 22, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 // abstract class EntityId {
@@ -16,7 +17,7 @@ import org.goldenport.schema.XString
 // object EntityId {
 //   def readC(v: Any): Consequence[EntityId] = v match {
 //     case s: String => Consequence.success(Instance(s))
-//     case _ => Consequence.failValueInvalid(v, XString) // TODO
+//     case _ => Consequence.valueInvalid(v, XString) // TODO
 //   }
 
 //   given ValueReader[EntityId] with

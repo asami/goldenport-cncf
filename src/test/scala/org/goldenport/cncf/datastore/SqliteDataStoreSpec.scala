@@ -15,7 +15,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 12, 2026
  *  version Mar. 12, 2026
- * @version Apr.  3, 2026
+ *  version Apr.  3, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqliteDataStoreSpec
@@ -173,13 +174,13 @@ object SqliteDataStoreSpec {
     given ValueReader[CountryCode] with {
       def readC(v: Any): Consequence[CountryCode] = v match {
         case n: Int =>
-          fromDbValue(n).map(Consequence.success).getOrElse(Consequence.failValueInvalid(v, org.goldenport.schema.XInt))
+          fromDbValue(n).map(Consequence.success).getOrElse(Consequence.valueInvalid(v, org.goldenport.schema.XInt))
         case n: Long if n.isValidInt =>
-          fromDbValue(n.toInt).map(Consequence.success).getOrElse(Consequence.failValueInvalid(v, org.goldenport.schema.XInt))
+          fromDbValue(n.toInt).map(Consequence.success).getOrElse(Consequence.valueInvalid(v, org.goldenport.schema.XInt))
         case s: String =>
-          from(s).orElse(s.trim.toIntOption.flatMap(fromDbValue)).map(Consequence.success).getOrElse(Consequence.failValueInvalid(v, org.goldenport.schema.XString))
+          from(s).orElse(s.trim.toIntOption.flatMap(fromDbValue)).map(Consequence.success).getOrElse(Consequence.valueInvalid(v, org.goldenport.schema.XString))
         case _ =>
-          Consequence.failValueInvalid(v, org.goldenport.schema.XString)
+          Consequence.valueInvalid(v, org.goldenport.schema.XString)
       }
     }
   }

@@ -8,7 +8,8 @@ import org.goldenport.cncf.action.Action
 
 /*
  * @since   Jan. 14, 2026
- * @version Feb.  6, 2026
+ *  version Feb.  6, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ComponentOperationDefinition() extends OperationDefinition {
@@ -21,7 +22,7 @@ abstract class ComponentOperationDefinition() extends OperationDefinition {
 object ComponentOperationDefinition {
   case class Instance(specification: OperationDefinition.Specification) extends ComponentOperationDefinition {
     def createOperationRequest(req: Request): Consequence[Action] = {
-      Consequence.failNotImplemented
+      Consequence.notImplemented
     }
   }
 
