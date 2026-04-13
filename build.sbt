@@ -82,6 +82,10 @@ addCommandAlias("fmt",      ";scalafmtAll;scalafmtSbt")
 addCommandAlias("fmtCheck", ";scalafmtCheckAll;scalafmtSbtCheck")
 addCommandAlias("fix",      ";scalafixAll")
 addCommandAlias("fixCheck", ";scalafixAll --check")
+addCommandAlias(
+  "testEntityAuthorization",
+  "testOnly org.goldenport.cncf.entity.EntityCreateDefaultsPolicySpec org.goldenport.cncf.security.EntityAuthorizationProfileSpec org.goldenport.cncf.security.SecuritySubjectSpec org.goldenport.cncf.unitofwork.UnitOfWorkTargetAuthorizationSpec org.goldenport.cncf.unitofwork.UnitOfWorkSearchAuthorizationSpec org.goldenport.cncf.action.ActionEngineAuthorizationFailureCommitSpec org.goldenport.cncf.action.ActionCallEntityAccessMetricsSpec org.goldenport.cncf.http.StaticFormAppRendererSpec"
+)
 
 assembly / assemblyJarName := "goldenport-cncf.jar"
 

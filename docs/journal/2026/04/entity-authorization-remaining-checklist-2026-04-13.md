@@ -182,7 +182,7 @@ Status update on 2026-04-13:
 
 ## Verification
 
-- [ ] Add full test suite target for entity authorization.
+- [x] Add full test suite target for entity authorization.
 - [ ] Add sample app scenario exercising business/private entity defaults.
 - [x] Add sample app scenario exercising CMS/public-content defaults.
 - [ ] Add sample app scenario exercising relation-based customer read.

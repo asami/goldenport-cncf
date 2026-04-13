@@ -45,7 +45,7 @@ final class ActionCallEntityAccessMetricsSpec
         val cid = _cid("person_metrics_cache_load")
         val id = EntityId("test", "cache_load", cid)
         val entity = TestPerson(id, "taro", 20)
-        val component = new org.goldenport.cncf.component.Component() {}
+        val component = TestComponentFactory.create("metrics_cache_load", Protocol.empty)
         component.entitySpace.registerEntity(cid.name, _resident_collection(cid, entity))
         val ctx = _execution_context(DataStoreSpace.default(), new EntityStoreSpace().addEntityStore(EntityStore.standard()))
 
@@ -78,7 +78,7 @@ final class ActionCallEntityAccessMetricsSpec
             Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), entity.toRecord()))
           )
         )
-        val component = new org.goldenport.cncf.component.Component() {}
+        val component = TestComponentFactory.create("metrics_store_load", Protocol.empty)
 
         When("loading through ActionCallEntityStorePart")
         val result = _probe(component, ctx).load[TestPerson](id)
@@ -112,7 +112,7 @@ final class ActionCallEntityAccessMetricsSpec
             )
           )
         )
-        val component = new org.goldenport.cncf.component.Component() {}
+        val component = TestComponentFactory.create("metrics_search", Protocol.empty)
         component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
         val query: EntityQuery[TestPerson] = EntityQuery(cid, Query(TestPersonQuery(
           id = Condition.any[EntityId],
@@ -232,15 +232,17 @@ final class ActionCallEntityAccessMetricsSpec
   private def _probe(
     component: org.goldenport.cncf.component.Component,
     ctx: ExecutionContext
-  ): _EntityAccessProbe =
+  ): _EntityAccessProbe = {
+    component.withScopeContext(ctx.cncfCore.scope)
     new _EntityAccessProbe(
       ActionCall.Core(
         action = _TestQueryAction(),
-        executionContext = ctx,
+        executionContext = ctx.withScope(component.scopeContext),
         component = Some(component),
         correlationId = ctx.observability.correlationId
       )
     )
+  }
 
   private def _component_scoped_probe(
     component: org.goldenport.cncf.component.Component,
