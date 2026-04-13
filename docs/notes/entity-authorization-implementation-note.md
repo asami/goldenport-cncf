@@ -300,6 +300,10 @@ subject id, and normalized role/group/capability/security-level summaries.
 Relation rule diagnostics are emitted as `authorization.relation.diagnostics`
 debug events when relation rules are evaluated. They summarize applicable,
 matched, missed, and not-applicable rules.
+Natural ABAC diagnostics are emitted as `authorization.abac.diagnostics` debug
+events when explicit natural conditions are evaluated. They summarize matched,
+missed, and not-applicable conditions and include per-condition actual and
+expected values.
 
 Action-level authorization denial is separated from action execution
 observability. `ActionEngine.executeAuthorized` commits an authorization-failed

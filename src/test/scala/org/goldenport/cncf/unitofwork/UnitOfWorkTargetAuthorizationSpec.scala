@@ -672,6 +672,48 @@ final class UnitOfWorkTargetAuthorizationSpec
       result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
     }
 
+    "emit diagnostics for matched ABAC natural conditions" in {
+      val backend = new MemoryBackend
+      LogBackendHolder.reset()
+      LogBackendHolder.install(backend)
+      try {
+        given ExecutionContext = _execution_context(
+          principalId = "tenant-owner",
+          principalAttributes = Map("tenant_id" -> "tenant-a")
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
+
+        val id = EntityId("test", "read_abac_diagnostics", _cid)
+        _seed(PersonEntity(id, "tenant-record", "tenant-owner", tenantId = Some("tenant-a")))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+              UnitOfWorkOp.EntityStoreLoad(
+                id,
+                summon[EntityPersistent[PersonEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("Person"),
+                    targetId = Some(id),
+                    accessKind = "read",
+                    naturalConditions = Vector(EntityAbacCondition("tenantId", EntityAbacCondition.Value.SubjectAttribute("tenantId")))
+                  )
+                )
+              )
+            )
+          )
+        )
+
+        result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+        backend.lines.exists(_.contains("authorization.abac.diagnostics")) shouldBe true
+      } finally {
+        LogBackendHolder.reset()
+      }
+    }
+
     "allow read when explicit ABAC publication window matches" in {
       given ExecutionContext = _execution_context(
         principalId = "reader"

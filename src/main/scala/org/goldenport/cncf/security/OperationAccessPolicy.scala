@@ -330,13 +330,53 @@ object OperationAccessPolicy {
     record: Record,
     authorization: UnitOfWorkAuthorization
   )(using ctx: ExecutionContext): Option[EntityAbacCondition.Evaluation] = {
-    val context = EntityAuthorizationContext(record, authorization)
-    authorization.naturalConditions
-      .filter(_.allows(authorization.accessKind))
-      .iterator
-      .map(_.evaluate(context))
-      .find(!_.matched)
+    val evaluations = _natural_condition_evaluations(record, authorization)
+    _emit_abac_diagnostics(authorization, evaluations)
+    evaluations.collectFirst {
+      case (_, true, evaluation) if !evaluation.matched => evaluation
+    }
   }
+
+  private def _natural_condition_evaluations(
+    record: Record,
+    authorization: UnitOfWorkAuthorization
+  )(using ctx: ExecutionContext): Vector[(EntityAbacCondition, Boolean, EntityAbacCondition.Evaluation)] = {
+    val context = EntityAuthorizationContext(record, authorization)
+    authorization.naturalConditions.map { condition =>
+      val applicable = condition.allows(authorization.accessKind)
+      (condition, applicable, condition.evaluate(context))
+    }
+  }
+
+  private def _emit_abac_diagnostics(
+    authorization: UnitOfWorkAuthorization,
+    evaluations: Vector[(EntityAbacCondition, Boolean, EntityAbacCondition.Evaluation)]
+  )(using ctx: ExecutionContext): Unit =
+    if (evaluations.nonEmpty) {
+      val details = evaluations.map {
+        case (_, applicable, evaluation) =>
+          val actual = evaluation.actual.getOrElse("<missing>")
+          val expected = evaluation.expected.getOrElse("<missing>")
+          s"${evaluation.conditionText}:${if (applicable) "applicable" else "not-applicable"}:${if (evaluation.matched) "matched" else "missed"}:actual=${actual}:expected=${expected}"
+      }
+      val applicableEvaluations = evaluations.filter(_._2)
+      val _ = ObservabilityEngine.emitDebug(
+        ctx.observability,
+        ctx.cncfCore.scope,
+        "authorization.abac.diagnostics",
+        Record.dataAuto(
+          "resource-family" -> authorization.resourceFamily,
+          "resource-type" -> authorization.resourceType,
+          "collection" -> authorization.collectionName,
+          "target-id" -> authorization.targetId.map(_.print),
+          "access-kind" -> authorization.accessKind,
+          "match-count" -> applicableEvaluations.count(_._3.matched),
+          "miss-count" -> applicableEvaluations.count(x => !x._3.matched),
+          "not-applicable-count" -> evaluations.count(x => !x._2),
+          "details" -> details.mkString(";")
+        )
+      )
+    }
 
   private def _matches_relation(
     record: Record,
