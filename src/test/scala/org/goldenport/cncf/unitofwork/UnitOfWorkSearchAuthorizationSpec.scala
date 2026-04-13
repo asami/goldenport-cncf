@@ -506,6 +506,61 @@ final class UnitOfWorkSearchAuthorizationSpec
       result.totalCount shouldBe Some(2)
       result.fetchedCount shouldBe 2
     }
+
+    "filter search results by business boundary natural conditions" in {
+      Given("a principal whose business boundary attributes match only one entity")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(
+        datastorespace,
+        entitystorespace,
+        principalId = "boundary-user",
+        principalAttributes = Map(
+          "tenant_id" -> "tenant-a",
+          "organization_id" -> "org-a",
+          "account_id" -> "account-a",
+          "customer_id" -> "customer-a"
+        )
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val p1 = PersonEntity(EntityId("test", "bn1", _cid), "boundary-record", "boundary-user", customerId = Some("customer-a"), accountId = Some("account-a"), tenantId = Some("tenant-a"), organizationId = Some("org-a"))
+      val p2 = PersonEntity(EntityId("test", "bn2", _cid), "wrong-customer-record", "boundary-user", customerId = Some("customer-b"), accountId = Some("account-a"), tenantId = Some("tenant-a"), organizationId = Some("org-a"))
+      val p3 = PersonEntity(EntityId("test", "bn3", _cid), "wrong-tenant-record", "boundary-user", customerId = Some("customer-a"), accountId = Some("account-a"), tenantId = Some("tenant-b"), organizationId = Some("org-a"))
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord()),
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p3.toRecord())
+          )
+        )
+      )
+      val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(summon[ExecutionContext]))
+
+      When("searching with business boundary natural conditions")
+      val result = interpreter.execute(
+        UnitOfWorkOp.EntityStoreSearch(
+          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          tc = summon[EntityPersistent[PersonEntity]],
+          authorization = Some(
+            UnitOfWorkAuthorization(
+              resourceFamily = "domain",
+              resourceType = Some("Person"),
+              accessKind = "search/list",
+              naturalConditions = EntityAbacCondition.parseList(
+                "tenantId=subject.tenantId:search/list;organizationId=subject.organizationId:search/list;accountId=subject.accountId:search/list;customerId=subject.customerId:search/list"
+              )
+            )
+          )
+        )
+      )
+
+      Then("only the entity matching every boundary remains visible")
+      result.data.map(_.id) shouldBe Vector(p1.id)
+      result.totalCount shouldBe Some(1)
+      result.fetchedCount shouldBe 1
+    }
   }
 
   private def _execution_context(

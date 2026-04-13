@@ -96,7 +96,7 @@ Status update on 2026-04-13:
       `CONDITION`.
 - [ ] Add full natural ABAC checks for CMS publication attributes such as
       `visibility`, `publicAt`, `startAt`, `endAt`, and `unpublishAt`.
-- [ ] Add natural ABAC checks for business boundaries such as tenant,
+- [x] Add natural ABAC checks for business boundaries such as tenant,
       organization, account, or customer scope where they are direct attributes.
 - [ ] Add operation/application attribute checks for `operationModel`,
       `entityOperationKind`, and `entityApplicationDomain`.
