@@ -124,12 +124,13 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
       rights.flatMap(_.getRecord("other")).flatMap(_.getBoolean("execute")) shouldBe Some(false)
     }
 
-    "select owner id with an owner id policy" in {
+    "select owner and group ids with selector policies" in {
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create
       val target = EntityCollectionId("test", "a", "sales_order")
-      val policy = EntityCreateDefaultsPolicy.withOwnerIdSelector(
-        EntityCreateDefaultsPolicy.OwnerIdSelector.constant("seller_organization")
+      val policy = EntityCreateDefaultsPolicy.withOwnerAndGroupIdSelectors(
+        EntityCreateDefaultsPolicy.OwnerIdSelector.constant("seller_organization"),
+        EntityCreateDefaultsPolicy.GroupIdSelector.constant("sales_ops")
       )
 
       val targetRecord = policy.complementCreateRecord(
@@ -139,7 +140,102 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
       )
 
       targetRecord.getString("owner_id").orElse(targetRecord.getString("ownerId")) shouldBe Some("seller_organization")
-      targetRecord.getString("group_id").orElse(targetRecord.getString("groupId")) shouldBe Some("seller_organization")
+      targetRecord.getString("group_id").orElse(targetRecord.getString("groupId")) shouldBe Some("sales_ops")
+    }
+
+    "select tenant and organization ids with selector policies" in {
+      given ExecutionContext = ExecutionContext.test()
+      given EntityPersistentCreate[TestCreate] = _persistent_create
+      val target = EntityCollectionId("test", "a", "sales_order")
+      val policy = EntityCreateDefaultsPolicy.withSelectors(
+        ownerIdSelector = EntityCreateDefaultsPolicy.OwnerIdSelector.constant("seller_organization"),
+        groupIdSelector = EntityCreateDefaultsPolicy.GroupIdSelector.constant("sales_ops"),
+        tenantIdSelector = EntityCreateDefaultsPolicy.TenantIdSelector.constant("tenant_a"),
+        organizationIdSelector = EntityCreateDefaultsPolicy.OrganizationIdSelector.constant("seller_org")
+      )
+
+      val targetRecord = policy.complementCreateRecord(
+        Record.dataAuto("name" -> "target"),
+        EntityId("test", "target", target),
+        EntityCreateOptions.default
+      )
+
+      targetRecord.getString("tenant_id").orElse(targetRecord.getString("tenantId")) shouldBe Some("tenant_a")
+      targetRecord.getString("organization_id").orElse(targetRecord.getString("organizationId")) shouldBe Some("seller_org")
+    }
+
+    "select entity-level create defaults by entity name" in {
+      given ExecutionContext = ExecutionContext.test()
+      given EntityPersistentCreate[TestCreate] = _persistent_create
+      val salesOrder = EntityCollectionId("test", "a", "sales_order")
+      val invoice = EntityCollectionId("test", "a", "invoice")
+      val salesOrderPolicy = EntityCreateDefaultsPolicy.withSelectors(
+        ownerIdSelector = EntityCreateDefaultsPolicy.OwnerIdSelector.constant("seller_organization"),
+        groupIdSelector = EntityCreateDefaultsPolicy.GroupIdSelector.constant("sales_ops"),
+        tenantIdSelector = EntityCreateDefaultsPolicy.TenantIdSelector.constant("tenant_a"),
+        organizationIdSelector = EntityCreateDefaultsPolicy.OrganizationIdSelector.constant("seller_org")
+      )
+      val policy = EntityCreateDefaultsPolicy.byEntityName(
+        Map("sales_order" -> salesOrderPolicy)
+      )
+
+      val salesOrderRecord = policy.complementCreateRecord(
+        Record.dataAuto("name" -> "sales-order"),
+        EntityId("test", "sales_order", salesOrder),
+        EntityCreateOptions.default
+      )
+      val invoiceRecord = policy.complementCreateRecord(
+        Record.dataAuto("name" -> "invoice"),
+        EntityId("test", "invoice", invoice),
+        EntityCreateOptions.default
+      )
+
+      salesOrderRecord.getString("owner_id").orElse(salesOrderRecord.getString("ownerId")) shouldBe Some("seller_organization")
+      salesOrderRecord.getString("group_id").orElse(salesOrderRecord.getString("groupId")) shouldBe Some("sales_ops")
+      salesOrderRecord.getString("tenant_id").orElse(salesOrderRecord.getString("tenantId")) shouldBe Some("tenant_a")
+      salesOrderRecord.getString("organization_id").orElse(salesOrderRecord.getString("organizationId")) shouldBe Some("seller_org")
+      invoiceRecord.getString("owner_id").orElse(invoiceRecord.getString("ownerId")) shouldBe Some("test_user_principal")
+      invoiceRecord.getString("tenant_id").orElse(invoiceRecord.getString("tenantId")) shouldBe None
+      invoiceRecord.getString("organization_id").orElse(invoiceRecord.getString("organizationId")) shouldBe None
+    }
+
+    "use application-level create defaults with entity-level overrides" in {
+      given ExecutionContext = ExecutionContext.test()
+      given EntityPersistentCreate[TestCreate] = _persistent_create
+      val customer = EntityCollectionId("test", "a", "customer")
+      val salesOrder = EntityCollectionId("test", "a", "sales_order")
+      val applicationDefault = EntityCreateDefaultsPolicy.withSelectors(
+        ownerIdSelector = EntityCreateDefaultsPolicy.OwnerIdSelector.constant("application_owner"),
+        groupIdSelector = EntityCreateDefaultsPolicy.GroupIdSelector.constant("application_group"),
+        tenantIdSelector = EntityCreateDefaultsPolicy.TenantIdSelector.constant("tenant_a")
+      )
+      val salesOrderPolicy = EntityCreateDefaultsPolicy.withSelectors(
+        ownerIdSelector = EntityCreateDefaultsPolicy.OwnerIdSelector.constant("seller_organization"),
+        groupIdSelector = EntityCreateDefaultsPolicy.GroupIdSelector.constant("sales_ops"),
+        tenantIdSelector = EntityCreateDefaultsPolicy.TenantIdSelector.constant("tenant_b")
+      )
+      val policy = EntityCreateDefaultsPolicy.withApplicationDefault(
+        applicationDefault,
+        Map("sales_order" -> salesOrderPolicy)
+      )
+
+      val customerRecord = policy.complementCreateRecord(
+        Record.dataAuto("name" -> "customer"),
+        EntityId("test", "customer", customer),
+        EntityCreateOptions.default
+      )
+      val salesOrderRecord = policy.complementCreateRecord(
+        Record.dataAuto("name" -> "sales-order"),
+        EntityId("test", "sales_order", salesOrder),
+        EntityCreateOptions.default
+      )
+
+      customerRecord.getString("owner_id").orElse(customerRecord.getString("ownerId")) shouldBe Some("application_owner")
+      customerRecord.getString("group_id").orElse(customerRecord.getString("groupId")) shouldBe Some("application_group")
+      customerRecord.getString("tenant_id").orElse(customerRecord.getString("tenantId")) shouldBe Some("tenant_a")
+      salesOrderRecord.getString("owner_id").orElse(salesOrderRecord.getString("ownerId")) shouldBe Some("seller_organization")
+      salesOrderRecord.getString("group_id").orElse(salesOrderRecord.getString("groupId")) shouldBe Some("sales_ops")
+      salesOrderRecord.getString("tenant_id").orElse(salesOrderRecord.getString("tenantId")) shouldBe Some("tenant_b")
     }
   }
 

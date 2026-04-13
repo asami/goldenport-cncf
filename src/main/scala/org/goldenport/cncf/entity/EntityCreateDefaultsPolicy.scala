@@ -5,6 +5,7 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
 import org.simplemodeling.model.value.SecurityAttributes
+import org.goldenport.datatype.{Identifier, ObjectId}
 
 /*
  * Entity create default variation point.
@@ -38,6 +39,18 @@ object EntityCreateDefaultsPolicy {
     def ownerId(context: Context)(using ExecutionContext): String
   }
 
+  trait GroupIdSelector {
+    def groupId(context: Context, ownerId: String)(using ExecutionContext): String
+  }
+
+  trait TenantIdSelector {
+    def tenantId(context: Context)(using ExecutionContext): Option[String]
+  }
+
+  trait OrganizationIdSelector {
+    def organizationId(context: Context)(using ExecutionContext): Option[String]
+  }
+
   object OwnerIdSelector {
     val principal: OwnerIdSelector = new OwnerIdSelector {
       def ownerId(context: Context)(using ExecutionContext): String =
@@ -50,21 +63,91 @@ object EntityCreateDefaultsPolicy {
     }
   }
 
+  object GroupIdSelector {
+    val owner: GroupIdSelector = new GroupIdSelector {
+      def groupId(context: Context, ownerId: String)(using ExecutionContext): String =
+        ownerId
+    }
+
+    def constant(value: String): GroupIdSelector = new GroupIdSelector {
+      def groupId(context: Context, ownerId: String)(using ExecutionContext): String =
+        value
+    }
+  }
+
+  object TenantIdSelector {
+    val none: TenantIdSelector = new TenantIdSelector {
+      def tenantId(context: Context)(using ExecutionContext): Option[String] =
+        None
+    }
+
+    def constant(value: String): TenantIdSelector = new TenantIdSelector {
+      def tenantId(context: Context)(using ExecutionContext): Option[String] =
+        Some(value)
+    }
+  }
+
+  object OrganizationIdSelector {
+    val none: OrganizationIdSelector = new OrganizationIdSelector {
+      def organizationId(context: Context)(using ExecutionContext): Option[String] =
+        None
+    }
+
+    def constant(value: String): OrganizationIdSelector = new OrganizationIdSelector {
+      def organizationId(context: Context)(using ExecutionContext): Option[String] =
+        Some(value)
+    }
+  }
+
   def byCollectionName(
     overrides: Map[String, EntityCreateDefaultsPolicy],
     fallback: EntityCreateDefaultsPolicy = default
   ): EntityCreateDefaultsPolicy =
     ByCollectionName(overrides, fallback)
 
-  object Default extends DefaultPolicy(OwnerIdSelector.principal)
+  def byEntityName(
+    overrides: Map[String, EntityCreateDefaultsPolicy],
+    fallback: EntityCreateDefaultsPolicy = default
+  ): EntityCreateDefaultsPolicy =
+    byCollectionName(overrides, fallback)
+
+  def withApplicationDefault(
+    applicationDefault: EntityCreateDefaultsPolicy,
+    entityOverrides: Map[String, EntityCreateDefaultsPolicy] = Map.empty
+  ): EntityCreateDefaultsPolicy =
+    byEntityName(entityOverrides, applicationDefault)
+
+  object Default extends DefaultPolicy(
+    OwnerIdSelector.principal,
+    GroupIdSelector.owner,
+    TenantIdSelector.none,
+    OrganizationIdSelector.none
+  )
 
   def withOwnerIdSelector(
     selector: OwnerIdSelector
   ): EntityCreateDefaultsPolicy =
-    DefaultPolicy(selector)
+    DefaultPolicy(selector, GroupIdSelector.owner, TenantIdSelector.none, OrganizationIdSelector.none)
+
+  def withOwnerAndGroupIdSelectors(
+    ownerIdSelector: OwnerIdSelector,
+    groupIdSelector: GroupIdSelector
+  ): EntityCreateDefaultsPolicy =
+    DefaultPolicy(ownerIdSelector, groupIdSelector, TenantIdSelector.none, OrganizationIdSelector.none)
+
+  def withSelectors(
+    ownerIdSelector: OwnerIdSelector = OwnerIdSelector.principal,
+    groupIdSelector: GroupIdSelector = GroupIdSelector.owner,
+    tenantIdSelector: TenantIdSelector = TenantIdSelector.none,
+    organizationIdSelector: OrganizationIdSelector = OrganizationIdSelector.none
+  ): EntityCreateDefaultsPolicy =
+    DefaultPolicy(ownerIdSelector, groupIdSelector, tenantIdSelector, organizationIdSelector)
 
   case class DefaultPolicy(
-    ownerIdSelector: OwnerIdSelector
+    ownerIdSelector: OwnerIdSelector,
+    groupIdSelector: GroupIdSelector,
+    tenantIdSelector: TenantIdSelector,
+    organizationIdSelector: OrganizationIdSelector
   ) extends EntityCreateDefaultsPolicy {
     def complementCreateRecord[T](
       record: Record,
@@ -76,6 +159,9 @@ object EntityCreateDefaultsPolicy {
       val principal = _identifier_text(principalid)
       val defaultscontext = Context(record, id, options, principalid, principal)
       val ownerid = ownerIdSelector.ownerId(defaultscontext)
+      val groupid = groupIdSelector.groupId(defaultscontext, ownerid)
+      val tenantid = tenantIdSelector.tenantId(defaultscontext)
+      val organizationid = organizationIdSelector.organizationId(defaultscontext)
       val propertyname = ctx.runtime.context.propertyName
       val defaults = Vector.newBuilder[(String, Any)]
       val knownkeys = record.keySet
@@ -108,9 +194,11 @@ object EntityCreateDefaultsPolicy {
       add_or_replace("updatedBy", Some(principal))
       add_or_replace("postStatus", Some(PostStatus.Published))
       add_if_missing("aliveness", Some(Aliveness.default))
-      val security = _default_security_attributes(ownerid, options)
+      val security = _default_security_attributes(ownerid, groupid, options)
       add_if_missing("ownerId", Some(security.ownerId.id.value))
       add_if_missing("groupId", Some(security.groupId.id.value))
+      add_if_missing("tenantId", tenantid)
+      add_if_missing("organizationId", organizationid)
       add_if_missing("rights", Some(security.rights.toRecord))
       add_if_missing("privilegeId", Some(security.privilegeId.id.value))
       options.defaultValues.fields.foreach { field =>
@@ -129,18 +217,30 @@ object EntityCreateDefaultsPolicy {
     }
 
     private def _default_security_attributes(
-      principal: String,
+      ownerId: String,
+      groupId: String,
       options: EntityCreateOptions
-    ): SecurityAttributes =
-      if (
+    ): SecurityAttributes = {
+      val rights =
+        if (
         options.hasDefaultProfile("public-read") ||
         options.hasDefaultProfile("publication") ||
         options.hasDefaultProfile("cms") ||
         options.hasDefaultProfile("public-content")
       )
-        SecurityAttributes.publicOwnedBy(principal)
-      else
-        SecurityAttributes.privateOwnedBy(principal)
+          SecurityAttributes.publicOwnedBy(ownerId).rights
+        else
+          SecurityAttributes.privateOwnedBy(ownerId).rights
+      SecurityAttributes(
+        ownerId = _object_id(ownerId),
+        groupId = _object_id(groupId),
+        rights = rights,
+        privilegeId = _object_id(ownerId)
+      )
+    }
+
+    private def _object_id(text: String): ObjectId =
+      ObjectId(Identifier(_identifier_text(text)))
 
     private def _is_system_or_unknown(p: Any): Boolean =
       _is_system(p) || Option(p).exists(_.toString.equalsIgnoreCase("unknown"))

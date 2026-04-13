@@ -241,11 +241,18 @@ service-internal access. Execute permission is reserved for a future
 entity-provided operation invocation model and remains false by default for both
 resource and task entities.
 
-Create defaults now have a minimal owner-id selector hook. The built-in default
-keeps the previous behavior and derives owner id from the current principal. A
-custom default policy can replace the selector, for example to make a
-`SalesOrder` owner id point at a seller organization rather than the individual
-caller. Group, tenant, and organization selection remain future policy hooks.
+Create defaults now have minimal owner-id, group-id, tenant-id, and
+organization-id selector hooks. The built-in default keeps the previous behavior:
+it derives owner id from the current principal, uses the owner id as the default
+group id, and does not add tenant or organization ids. A custom default policy
+can replace the selectors, for example to make a `SalesOrder` owner id point at a
+seller organization, group id point at a sales operations group, and tenant or
+organization ids point at the current business boundary. Entity-level
+registration can use `EntityCreateDefaultsPolicy.byEntityName`; it resolves the
+same runtime collection identity as the collection-name registry while keeping
+the CML entity-name intent visible at the call site. Application-level defaults
+can use `EntityCreateDefaultsPolicy.withApplicationDefault`, with entity-level
+overrides applied on top of the application default.
 
 ## Unimplemented or Incomplete Areas
 

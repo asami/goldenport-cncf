@@ -114,10 +114,13 @@ other.execute = false
 For CMS/public-content entities, `other.read` can be enabled through a profile or
 application policy.
 
-Owner id selection is a create-default variation point. The built-in default
-uses the current principal, while a custom owner selector can choose an
-application-specific owner such as a seller organization for `SalesOrder`.
-`operationKind` does not affect owner id selection.
+Owner, group, tenant, and organization id selection are create-default variation
+points. The built-in default uses the current principal as owner id, uses that
+owner id as the default group id, and leaves tenant and organization ids unset,
+preserving the earlier behavior. Custom selectors can choose
+application-specific values such as `ownerId = seller organization`,
+`groupId = sales operations group`, and `tenantId` or `organizationId` for
+`SalesOrder`. `operationKind` does not affect these selections.
 
 ## Create Defaults
 
@@ -148,7 +151,12 @@ Supported public-read profiles include:
 Without those profiles, the default security attributes are private-owned.
 
 Collection-specific defaults can be installed through
-`EntityCreateDefaultsPolicy.byCollectionName`.
+`EntityCreateDefaultsPolicy.byCollectionName`. Entity-name-oriented defaults
+can use `EntityCreateDefaultsPolicy.byEntityName`, which resolves the same
+runtime collection identity while keeping the CML entity name intent explicit.
+Application-level defaults can use
+`EntityCreateDefaultsPolicy.withApplicationDefault`; entity-level overrides win
+over the application default.
 
 ## Classification Axes
 

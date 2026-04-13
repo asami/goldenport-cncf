@@ -61,10 +61,10 @@ Status update on 2026-04-13:
 - [x] Do not derive `execute=true` from `operationKind = task`; reserve execute
       permission for a future entity-provided operation invocation model.
 - [x] Add a minimal owner id selection policy hook.
-- [ ] Add an application-level policy for owner id selection.
-- [ ] Add an entity-level policy for owner id selection.
-- [ ] Add group id default policy.
-- [ ] Add tenant/organization default policy.
+- [x] Add an application-level policy for owner id selection.
+- [x] Add an entity-level policy for owner id selection.
+- [x] Add group id default policy.
+- [x] Add tenant/organization default policy.
 - [x] Add tests for business default owner/group/other permissions.
 - [x] Add sample-app verification for CMS/public-content default read
       visibility.
