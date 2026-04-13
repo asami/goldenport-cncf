@@ -9,8 +9,7 @@ import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- *  version Apr. 12, 2026
- * @version Apr. 13, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -480,6 +479,7 @@ object StaticFormAppRenderer {
            |<article>
            |  <h2>ActionCall</h2>
            |  ${_summary_table(actionCalls.summary)}
+           |  <p class="mt-3"><a href="/form/admin/execution/history">Execution history</a> · <a href="/form/admin/execution/calltree">Latest calltree</a></p>
            |</article>
            |<article>
            |  <h2>Authorization</h2>

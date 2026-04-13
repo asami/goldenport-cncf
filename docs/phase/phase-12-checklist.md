@@ -94,7 +94,7 @@ surface without over-committing to broad UI generation.
 
 ## WEB-02: REST/Form API and Static Form App Mechanism
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -116,7 +116,7 @@ then invokes operations through the REST execution backbone.
 - [x] Define how a Static Form App uses Form API internally and invokes operations through the REST backbone.
 - [x] Define the shared mechanism used by Dashboard, Management Console, and Manual web apps.
 - [x] Define validation and error response shape.
-- [ ] Clarify relationship with existing CLI/meta projections.
+- [x] Clarify relationship with existing CLI/meta projections.
 - [x] Add the first runtime hook for a read-only Static Form App entry point
       that can later host Dashboard, Management Console, and Manual without
       hard-coding dashboard-specific routes.
@@ -174,7 +174,7 @@ CNCF runtime, observability, and meta capabilities.
 - [x] Define dashboard as a Static Form App instance with no mutation actions.
 - [x] Validate the minimum Dashboard against `textus-sample-app` first.
 - [x] Add Dashboard state contract tests for subsystem and component scopes.
-- [ ] Define calltree/action history visibility from existing observability design.
+- [x] Define calltree/action history visibility from existing observability design.
 - [ ] Define assembly warning visibility for dashboard/admin surfaces.
 - [ ] Define navigation links from dashboard to management console and manual without inline control actions.
 - [ ] Defer advanced visualizations unless required for the baseline.

@@ -75,6 +75,18 @@ information, but with different data scopes and screen composition:
   configuration and performance analysis are linked to dedicated admin or
   performance pages instead of being embedded inline.
 
+Calltree and retained execution history are detailed performance-analysis
+surfaces. Dashboard state exposes ActionCall count/error summaries; the System
+Performance page links to the existing admin execution operations:
+
+```text
+/form/admin/execution/history
+/form/admin/execution/calltree
+```
+
+Web pages must reuse the existing retained execution history and calltree
+semantics instead of defining a separate dashboard-only vocabulary.
+
 ## Execution Model
 
 REST operation execution remains the only business execution path.
@@ -184,6 +196,33 @@ Plain HTML FORM submit responses are HTML-oriented:
 - success resolves to a success page or redirects to a success page.
 - validation error resolves to an error page or redirects to an error page.
 - system error resolves to an error page or returns an error response.
+
+## Relationship With CLI And Meta Projections
+
+Static Form App, REST execution, and JSON Form API do not replace existing CLI
+or meta projections.
+
+The boundary is:
+
+- CLI remains the command-line projection of Component / Service / Operation
+  metadata and execution results.
+- Meta projections such as help, describe, schema, and OpenAPI remain
+  reference/projection surfaces.
+- Static Form App is the browser-native HTML projection for form entry,
+  result pages, dashboard, console, and manual pages.
+- REST remains the operation execution backbone shared by browser and
+  non-browser clients.
+- JSON Form API is an input-preparation API for web/form clients and must not
+  become a separate execution path.
+
+These surfaces may share the same normalized component/service/operation
+metadata, but they must not share presentation-specific response contracts.
+For example, a CLI result uses the CLI `Presentable` stdout/stderr policy, a
+REST call uses the JSON response envelope, and a plain HTML FORM submit resolves
+to an HTML result page.
+
+Manual/reference web pages may link to existing meta projections such as schema
+or OpenAPI views, but WEB-02 does not redefine those projections.
 
 ## Result Page Template And Widgets
 

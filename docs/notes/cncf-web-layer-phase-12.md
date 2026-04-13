@@ -114,6 +114,16 @@ Detailed configuration and performance analysis belong to dedicated pages, for
 example an admin configuration page and a system performance page. Dashboard
 should link to those pages rather than embedding the full detail surface inline.
 
+Calltree and retained action execution history are performance-analysis
+details. The Dashboard should show ActionCall count/error summaries only. The
+System Performance page links to the existing admin execution operations:
+
+- `/form/admin/execution/history`
+- `/form/admin/execution/calltree`
+
+Those operations reuse the calltree event semantics defined by the core
+observability design and do not introduce a Web-specific calltree vocabulary.
+
 The baseline Subsystem Dashboard must be able to show:
 
 - runtime health
@@ -151,6 +161,17 @@ JSON Form API is the input preparation layer. It provides:
 
 The Form API must not execute business logic by itself. Execution goes through
 the REST API.
+
+CLI and meta projections remain separate surfaces. Phase 12 Web does not
+replace command-line help, describe/schema output, OpenAPI projection, or the
+CLI `Presentable` result rendering policy. Web paths share operation metadata
+with those projections, but define browser-specific contracts:
+
+- `/web/...` returns HTML pages.
+- `/form/...` accepts plain HTML FORM submission and resolves to HTML result
+  pages.
+- `/form-api/...` returns JSON form metadata or validation results.
+- REST operation paths return the JSON execution envelope.
 
 ## Non-Goals
 

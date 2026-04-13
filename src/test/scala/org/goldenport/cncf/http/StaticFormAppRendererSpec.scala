@@ -8,8 +8,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- *  version Apr. 12, 2026
- * @version Apr. 13, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -104,6 +103,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("ActionCall")
       html should include ("Authorization")
       html should include ("Jobs")
+      html should include ("/form/admin/execution/history")
+      html should include ("/form/admin/execution/calltree")
       html should include ("/web/system/dashboard")
       html should include ("/missing")
       html should include ("34 ms")

@@ -33,9 +33,9 @@ This document is a progress dashboard, not a design journal.
 ## 4. Current Work Stack
 
 - A (DONE): WEB-01 — Consolidate Web Layer scope and canonical design surface.
-- B (ACTIVE): WEB-02 — Define operation-centric REST/Form API and Static Form App mechanism.
+- B (DONE): WEB-02 — Define operation-centric REST/Form API and Static Form App mechanism.
 - C (SUSPENDED): WEB-03 — Define Web Descriptor model and configuration path.
-- D (SUSPENDED): WEB-04 — Define read-only dashboard baseline.
+- D (ACTIVE): WEB-04 — Define read-only dashboard baseline.
 - E (SUSPENDED): WEB-05 — Define management console baseline.
 - F (SUSPENDED): WEB-06 — Define manual/reference baseline.
 - G (SUSPENDED): WEB-07 — Add executable specifications and minimal runtime hooks.
@@ -55,7 +55,7 @@ Current note:
 ## 5. Development Items
 
 - [x] WEB-01: Consolidate Web Layer scope and canonical design surface.
-- [ ] WEB-02: Define REST/Form API exposure and Static Form App mechanism.
+- [x] WEB-02: Define REST/Form API exposure and Static Form App mechanism.
 - [ ] WEB-03: Define Web Descriptor model and configuration path.
 - [ ] WEB-04: Define read-only dashboard baseline.
 - [ ] WEB-05: Define management console baseline.
