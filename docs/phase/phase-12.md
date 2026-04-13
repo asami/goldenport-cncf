@@ -36,7 +36,7 @@ This document is a progress dashboard, not a design journal.
 - B (DONE): WEB-02 — Define operation-centric REST/Form API and Static Form App mechanism.
 - C (DONE): WEB-03 — Define Web Descriptor model and configuration path.
 - D (DONE): WEB-04 — Define read-only dashboard baseline.
-- E (SUSPENDED): WEB-05 — Define management console baseline.
+- E (ACTIVE): WEB-05 — Define management console baseline.
 - F (SUSPENDED): WEB-06 — Define manual/reference baseline.
 - G (SUSPENDED): WEB-07 — Add executable specifications and minimal runtime hooks.
 

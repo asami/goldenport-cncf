@@ -2,7 +2,9 @@ package org.goldenport.cncf.http
 
 import io.circe.Json
 import io.circe.parser.parse
+import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -78,6 +80,49 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/console")
       html should include ("Web Descriptor")
       html should include ("Using built-in Web HTML app defaults.")
+      html should include ("/web/system/admin/descriptor")
+      html should include ("Runtime Configuration")
+      html should include ("Configuration mutation must use a separate admin action surface")
+      html should include ("audit logging")
+      html should include ("Job Control")
+      html should include ("read-only")
+      html should include ("cancel, retry, or force-complete")
+      html should include ("explicit admin authorization")
+      html should include ("Operational Details")
+      html should include ("Assembly")
+      html should include ("/form/admin/assembly/warnings")
+      html should include ("/form/admin/assembly/report")
+      html should include ("Execution")
+      html should include ("/form/admin/execution/history")
+      html should include ("/form/admin/execution/calltree")
+    }
+
+    "render resolved runtime configuration with masking rules on system admin page" in {
+      val subsystem = new Subsystem(
+        name = "masked-system",
+        version = Some("1.0.0"),
+        configuration = ResolvedConfiguration(
+          Configuration(
+            Map(
+              "textus.runtime.mode" -> ConfigurationValue.StringValue("server"),
+              "textus.auth.secret" -> ConfigurationValue.StringValue("open-sesame"),
+              "other.value" -> ConfigurationValue.StringValue("hidden-by-scope")
+            )
+          ),
+          ConfigurationTrace.empty
+        )
+      )
+
+      val html = StaticFormAppRenderer.renderSystemAdmin(subsystem).body
+
+      html should include ("Runtime Configuration")
+      html should include ("textus.runtime.mode")
+      html should include ("server")
+      html should include ("textus.auth.secret")
+      html should include ("********")
+      html should include ("masked")
+      html should not include ("open-sesame")
+      html should not include ("other.value")
     }
 
     "render resolved Web Descriptor summary on system admin page" in {
@@ -99,6 +144,27 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/manual")
     }
 
+    "render resolved Web Descriptor drill-down page" in {
+      val descriptor = WebDescriptor(
+        expose = Map("notice-board.notice.search-notices" -> WebDescriptor.Exposure.Public),
+        authorization = Map("notice-board.notice.search-notices" -> WebDescriptor.Authorization(roles = Vector("reader"))),
+        form = Map("notice-board.notice.search-notices" -> WebDescriptor.Form(enabled = Some(true))),
+        apps = Vector(WebDescriptor.App("manual", "/web/manual", "manual"))
+      )
+
+      val html = StaticFormAppRenderer.renderSystemAdminDescriptor(descriptor).body
+
+      html should include ("System Web Descriptor")
+      html should include ("Resolved Descriptor")
+      html should include ("/web/system/admin")
+      html should include ("&quot;status&quot; : &quot;configured&quot;")
+      html should include ("&quot;notice-board.notice.search-notices&quot; : &quot;public&quot;")
+      html should include ("&quot;roles&quot;")
+      html should include ("&quot;reader&quot;")
+      html should include ("&quot;enabled&quot; : true")
+      html should include ("&quot;path&quot; : &quot;/web/manual&quot;")
+    }
+
     "render component admin configuration detail page" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
@@ -112,6 +178,72 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/system/performance")
       html should include ("/web/manual")
       html should include ("/web/console")
+      html should include ("Component Operations")
+      html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
+      html should include ("Managed Data")
+      html should include ("Entity CRUD")
+      html should include ("Data CRUD")
+      html should include ("Aggregate CRUD")
+      html should include ("View read")
+      html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin/entities")
+      html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin/data")
+      html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin/aggregates")
+      html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin/views")
+      html should not include ("Operational Details")
+      html should not include ("/form/admin/assembly/warnings")
+      html should not include ("/form/admin/execution/history")
+    }
+
+    "render component entity administration page" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+
+      val html = StaticFormAppRenderer.renderComponentAdminEntities(subsystem, component.name).map(_.body).getOrElse(fail("component entity admin is missing"))
+
+      html should include (s"${component.name} Entity Administration")
+      html should include ("Entity CRUD")
+      html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin")
+      html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
+      html should include ("entity runtime descriptors")
+    }
+
+    "render component data administration page" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+
+      val html = StaticFormAppRenderer.renderComponentAdminData(subsystem, component.name).map(_.body).getOrElse(fail("component data admin is missing"))
+
+      html should include (s"${component.name} Data Administration")
+      html should include ("Data CRUD")
+      html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin")
+      html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
+      html should include ("not enabled in this baseline")
+    }
+
+    "render component view administration page" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+
+      val html = StaticFormAppRenderer.renderComponentAdminViews(subsystem, component.name).map(_.body).getOrElse(fail("component view admin is missing"))
+
+      html should include (s"${component.name} View Administration")
+      html should include ("View read")
+      html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin")
+      html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
+      html should include ("view definitions")
+    }
+
+    "render component aggregate administration page" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+
+      val html = StaticFormAppRenderer.renderComponentAdminAggregates(subsystem, component.name).map(_.body).getOrElse(fail("component aggregate admin is missing"))
+
+      html should include (s"${component.name} Aggregate Administration")
+      html should include ("Aggregate CRUD")
+      html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin")
+      html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
+      html should include ("aggregate definitions")
     }
 
     "render resolved Web Descriptor summary on component admin page" in {
@@ -173,10 +305,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       manual should include ("System Manual")
       manual should include ("/web/system/dashboard")
       manual should include ("/web/console")
+      manual should include ("Console handoff")
+      manual should include ("Manual pages remain read-only")
+      manual should include ("do not inline operation actions")
       console should include ("System Console")
       console should include ("/web/system/dashboard")
       console should include ("/web/manual")
       console should include ("/form/")
+      console should include ("Console links to operation forms")
+      console should include ("does not execute operations inline")
       console should not include ("<form method=\"post\"")
     }
 

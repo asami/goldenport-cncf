@@ -1,6 +1,6 @@
 # CNCF Static Form App Contract
 
-status = draft
+status = implemented
 
 ## Purpose
 
@@ -108,6 +108,54 @@ graphs are not part of the WEB-04 baseline. They should remain projections of
 the existing assembly/admin data and may be added later without changing the
 Dashboard state contract.
 
+The System Admin page groups operational drill-down links by concern:
+
+- Assembly: `/form/admin/assembly/warnings` and `/form/admin/assembly/report`.
+- Execution: `/form/admin/execution/history` and `/form/admin/execution/calltree`.
+
+These links remain existing admin operation surfaces. The WEB-05 baseline only
+organizes their navigation from `/web/system/admin`.
+
+The System Admin page also links to the resolved Web Descriptor drill-down:
+
+```text
+/web/system/admin/descriptor
+```
+
+This page renders the effective descriptor as read-only JSON for operator
+inspection. It is an HTML admin page, not a business execution endpoint.
+
+The System Admin page may expose resolved runtime configuration values for
+operator inspection. The WEB-05 baseline applies these rules:
+
+- Show only CNCF/Textus runtime-scoped keys, currently keys under `textus.*`
+  and `cncf.*`.
+- Render configuration as read-only information.
+- Mask sensitive values when the key name indicates secrets, passwords,
+  tokens, credentials, API keys, or private keys.
+- Do not expose unrelated application configuration by default.
+
+Runtime configuration display and mutation are separate concerns:
+
+- `/web/system/admin` may show resolved configuration in a read-only form.
+- Configuration mutation must use a separate admin action surface.
+- Mutation actions must require explicit admin authorization and audit logging.
+- Destructive or service-affecting mutations must also require confirmation.
+- The WEB-05 baseline does not enable browser-side configuration mutation.
+
+Job control entry points belong to the System Admin surface. The WEB-05
+baseline keeps them read-only and links to the existing execution observation
+surfaces:
+
+```text
+/form/admin/execution/history
+/form/admin/execution/calltree
+```
+
+Browser-side job mutations such as cancel, retry, and force-complete are not
+enabled in the baseline. Before they are added, they must require explicit
+admin authorization, confirmation for destructive actions, and audit logging.
+
 ## Execution Model
 
 REST operation execution remains the only business execution path.
@@ -183,6 +231,26 @@ Dashboard may link to these pages, but it must not inline Console actions.
 The Manual remains read-only reference navigation. The Console may link to
 operation forms, but operation execution remains on the existing `/form/...`
 submission path.
+
+Dashboard and Manual may hand off to Console by linking to `/web/console`.
+They must not embed operation forms or action buttons inline. Console itself is
+also an entry/navigation surface: it links to `/form/{component}` indexes and
+does not execute operations inline.
+
+The implemented baseline keeps `/web/console` as a controlled operation entry
+page. It does not execute operations inline. It links to component operation
+form indexes under `/form/{component}`, and result rendering is handled by the
+shared HTML result page and `textus-*` result widgets.
+
+Component admin pages also expose managed-data entry points for entity CRUD,
+data CRUD, aggregate CRUD, and view read. These are component-scoped management
+links; the first baseline defines the navigation contract before enabling
+write-side CRUD behavior.
+
+The first managed-data pages are intentionally read-only or placeholder
+surfaces. Entity, aggregate, and view pages expose registered runtime metadata.
+The data page reserves the datastore-record management entry point until the
+write-side CRUD contract is defined.
 
 Phase 12 implements the shared web route first. Subsystem Dashboard and
 Component Dashboard are separate read-only operational surfaces backed by the

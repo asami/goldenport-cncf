@@ -193,7 +193,7 @@ CNCF runtime, observability, and meta capabilities.
 
 ## WEB-05: Management Console Baseline
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 
@@ -201,16 +201,31 @@ Define the active control web app separately from the read-only Dashboard.
 
 ### Detailed Tasks
 
-- [ ] Define operation execution and result display.
-- [ ] Define console as a Static Form App instance that permits controlled operation execution.
-- [ ] Define job control entry points and minimum safety boundaries.
-- [ ] Define configuration mutation/view split and required authorization boundary.
-- [ ] Define links from dashboard/manual into console actions without making them inline dashboard/manual behavior.
+- [x] Surface resolved Web Descriptor summary from system and component admin pages.
+- [x] Define system admin as a configuration and operational-detail hub, not a dashboard clone.
+- [x] Define component admin as component-scoped configuration and operation metadata view.
+- [x] Define component admin managed-data entries: entity CRUD, data CRUD, aggregate CRUD, and view read.
+- [x] Add read-only component entity administration page.
+- [x] Add component data administration placeholder page.
+- [x] Add read-only component aggregate administration page.
+- [x] Add read-only component view administration page.
+- [x] Define operation execution and result display.
+- [x] Define console as a Static Form App instance that permits controlled operation execution.
+- [x] Define resolved runtime configuration visibility and masking rules.
+- [x] Define assembly report / warning drill-down links from admin pages.
+- [x] Define execution history and calltree drill-down links from admin pages.
+- [x] Define Web Descriptor drill-down or resolved descriptor JSON view.
+- [x] Define job control entry points and minimum safety boundaries.
+- [x] Define configuration mutation/view split and required authorization boundary.
+- [x] Define links from dashboard/manual into console actions without making them inline dashboard/manual behavior.
 
 ### Inputs
 
 - `docs/journal/2026/04/web-operational-management-note.md`
 - `docs/journal/2026/04/web-form-api-note.md`
+- `docs/journal/2026/04/web-descriptor-note.md`
+- `docs/notes/cncf-web-descriptor-minimum-schema.md`
+- `docs/notes/cncf-web-static-form-app-contract.md`
 - `docs/spec/admin-system-status.md`
 
 ---

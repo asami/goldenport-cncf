@@ -77,10 +77,20 @@ final class Http4sHttpServer(
         _system_performance()
       case GET -> Root / "web" / "system" / "admin" =>
         _system_admin()
+      case GET -> Root / "web" / "system" / "admin" / "descriptor" =>
+        _system_admin_descriptor()
       case GET -> Root / "web" / app / "dashboard" / "state" =>
         _dashboard_state(Some(app))
       case GET -> Root / "web" / app / "admin" =>
         _component_admin(app)
+      case GET -> Root / "web" / app / "admin" / "entities" =>
+        _component_admin_entities(app)
+      case GET -> Root / "web" / app / "admin" / "data" =>
+        _component_admin_data(app)
+      case GET -> Root / "web" / app / "admin" / "aggregates" =>
+        _component_admin_aggregates(app)
+      case GET -> Root / "web" / app / "admin" / "views" =>
+        _component_admin_views(app)
       case GET -> Root / "web" / app =>
         _static_form_app(app, Vector.empty)
       case GET -> Root / "web" / app / page =>
@@ -204,6 +214,15 @@ final class Http4sHttpServer(
     )
   }
 
+  private def _system_admin_descriptor(): IO[HResponse[IO]] = {
+    val p = StaticFormAppRenderer.renderSystemAdminDescriptor(engine.webDescriptor)
+    IO.pure(
+      HResponse[IO](HStatus.Ok)
+        .withEntity(p.body)
+        .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+    )
+  }
+
   private def _component_admin(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdmin(engine.runtimeSubsystem, app, engine.webDescriptor) match {
       case Some(p) =>
@@ -214,6 +233,54 @@ final class Http4sHttpServer(
         )
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component admin not found"))
+    }
+
+  private def _component_admin_entities(app: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminEntities(engine.runtimeSubsystem, app) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity admin not found"))
+    }
+
+  private def _component_admin_data(app: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminData(engine.runtimeSubsystem, app) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data admin not found"))
+    }
+
+  private def _component_admin_views(app: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminViews(engine.runtimeSubsystem, app) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component view admin not found"))
+    }
+
+  private def _component_admin_aggregates(app: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminAggregates(engine.runtimeSubsystem, app) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component aggregate admin not found"))
     }
 
   private def _static_form_app(

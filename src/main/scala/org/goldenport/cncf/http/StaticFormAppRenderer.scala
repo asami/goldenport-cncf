@@ -4,6 +4,7 @@ import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.CncfVersion
+import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 import io.circe.Json
 import io.circe.parser.parse
 
@@ -198,7 +199,27 @@ object StaticFormAppRenderer {
       subsystemVersion = subsystem.version,
       dashboardPath = "/web/system/dashboard",
       performancePath = "/web/system/performance",
-      webDescriptor = webDescriptor
+      webDescriptor = webDescriptor,
+      runtimeConfiguration = Some(subsystem.configuration),
+      operationalDetails = Some(_system_admin_operational_details),
+      componentFormsPath = None
+    ))
+
+  def renderSystemAdminDescriptor(
+    webDescriptor: WebDescriptor = WebDescriptor.empty
+  ): Page =
+    Page(_simple_page(
+      title = "System Web Descriptor",
+      subtitle = "Resolved Web Descriptor JSON view",
+      body =
+        s"""<article>
+           |  <h2>Navigation</h2>
+           |  <p><a href="/web/system/admin">System admin</a> · <a href="/web/system/dashboard">System dashboard</a></p>
+           |</article>
+           |<article>
+           |  <h2>Resolved Descriptor</h2>
+           |  <pre class="bg-light border rounded p-3"><code>${_escape(_web_descriptor_json(webDescriptor))}</code></pre>
+           |</article>""".stripMargin
     ))
 
   def renderComponentAdmin(
@@ -207,6 +228,168 @@ object StaticFormAppRenderer {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map(renderComponentAdmin(_, webDescriptor))
+
+  def renderComponentAdminEntities(
+    subsystem: Subsystem,
+    componentName: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val rows = component.componentDescriptors.flatMap(_.entityRuntimeDescriptors).map { descriptor =>
+        s"""<tr>
+           |  <td>${_escape(descriptor.entityName)}</td>
+           |  <td><code>${_escape(descriptor.collectionId.name)}</code></td>
+           |  <td>${_escape(descriptor.usageKind.toString)}</td>
+           |  <td>${_escape(descriptor.operationKind.toString)}</td>
+           |  <td>${_escape(descriptor.applicationDomain.toString)}</td>
+           |  <td>${descriptor.workingSet.map(_.entityIds.size.toString).getOrElse("none")}</td>
+           |</tr>""".stripMargin
+      }.mkString("\n")
+      val body =
+        if (rows.isEmpty) {
+          "<p>No entity runtime descriptors are registered for this component.</p>"
+        } else {
+          s"""<div class="table-responsive"><table class="table table-sm">
+             |  <thead><tr><th>Entity</th><th>Collection</th><th>Usage</th><th>Operation</th><th>Domain</th><th>Working set</th></tr></thead>
+             |  <tbody>${rows}</tbody>
+             |</table></div>""".stripMargin
+        }
+      Page(_simple_page(
+        title = s"${_escape(component.name)} Entity Administration",
+        subtitle = "Entity CRUD management baseline",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/form/${componentPath}">Operation forms</a></p>
+             |</article>
+             |<article>
+             |  <h2>Entity CRUD</h2>
+             |  ${body}
+             |</article>""".stripMargin
+      ))
+    }
+
+  def renderComponentAdminViews(
+    subsystem: Subsystem,
+    componentName: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val rows = component.viewDefinitions.map { definition =>
+        val viewNames =
+          if (definition.viewNames.isEmpty) "default"
+          else definition.viewNames.map(_escape).mkString(", ")
+        val queries =
+          if (definition.queries.isEmpty) "none"
+          else definition.queries.map(q => _escape(q.name)).mkString(", ")
+        val sourceEvents =
+          if (definition.sourceEvents.isEmpty) "none"
+          else definition.sourceEvents.map(_escape).mkString(", ")
+        s"""<tr>
+           |  <td>${_escape(definition.name)}</td>
+           |  <td>${_escape(definition.entityName)}</td>
+           |  <td>${viewNames}</td>
+           |  <td>${queries}</td>
+           |  <td>${sourceEvents}</td>
+           |  <td>${definition.rebuildable.map(_.toString).getOrElse("unspecified")}</td>
+           |</tr>""".stripMargin
+      }.mkString("\n")
+      val body =
+        if (rows.isEmpty) {
+          "<p>No view definitions are registered for this component.</p>"
+        } else {
+          s"""<div class="table-responsive"><table class="table table-sm">
+             |  <thead><tr><th>View</th><th>Entity</th><th>Names</th><th>Queries</th><th>Source events</th><th>Rebuildable</th></tr></thead>
+             |  <tbody>${rows}</tbody>
+             |</table></div>""".stripMargin
+        }
+      Page(_simple_page(
+        title = s"${_escape(component.name)} View Administration",
+        subtitle = "View read management baseline",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/form/${componentPath}">Operation forms</a></p>
+             |</article>
+             |<article>
+             |  <h2>View read</h2>
+             |  ${body}
+             |</article>""".stripMargin
+      ))
+    }
+
+  def renderComponentAdminAggregates(
+    subsystem: Subsystem,
+    componentName: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val rows = component.aggregateDefinitions.map { definition =>
+        val members =
+          if (definition.members.isEmpty) "none"
+          else definition.members.map(m => _escape(s"${m.name}:${m.entityName}")).mkString(", ")
+        val commands =
+          if (definition.commands.isEmpty) "none"
+          else definition.commands.map(c => _escape(c.name)).mkString(", ")
+        val state =
+          if (definition.state.isEmpty) "none"
+          else definition.state.map(s => _escape(s.name)).mkString(", ")
+        val invariants =
+          if (definition.invariants.isEmpty) "none"
+          else definition.invariants.map(i => _escape(i.name)).mkString(", ")
+        s"""<tr>
+           |  <td>${_escape(definition.name)}</td>
+           |  <td>${_escape(definition.entityName)}</td>
+           |  <td>${members}</td>
+           |  <td>${commands}</td>
+           |  <td>${state}</td>
+           |  <td>${invariants}</td>
+           |</tr>""".stripMargin
+      }.mkString("\n")
+      val body =
+        if (rows.isEmpty) {
+          "<p>No aggregate definitions are registered for this component.</p>"
+        } else {
+          s"""<div class="table-responsive"><table class="table table-sm">
+             |  <thead><tr><th>Aggregate</th><th>Entity</th><th>Members</th><th>Commands</th><th>State</th><th>Invariants</th></tr></thead>
+             |  <tbody>${rows}</tbody>
+             |</table></div>""".stripMargin
+        }
+      Page(_simple_page(
+        title = s"${_escape(component.name)} Aggregate Administration",
+        subtitle = "Aggregate CRUD management baseline",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/form/${componentPath}">Operation forms</a></p>
+             |</article>
+             |<article>
+             |  <h2>Aggregate CRUD</h2>
+             |  ${body}
+             |</article>""".stripMargin
+      ))
+    }
+
+  def renderComponentAdminData(
+    subsystem: Subsystem,
+    componentName: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      Page(_simple_page(
+        title = s"${_escape(component.name)} Data Administration",
+        subtitle = "Data CRUD management baseline",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/form/${componentPath}">Operation forms</a></p>
+             |</article>
+             |<article>
+             |  <h2>Data CRUD</h2>
+             |  <p>Data CRUD execution is not enabled in this baseline. This page reserves the component-scoped management entry point for datastore records and document-level data operations.</p>
+             |</article>""".stripMargin
+      ))
+    }
 
   def renderComponentAdmin(
     component: Component,
@@ -221,7 +404,10 @@ object StaticFormAppRenderer {
       subsystemVersion = component.subsystem.flatMap(_.version),
       dashboardPath = s"/web/${name}/dashboard",
       performancePath = "/web/system/performance",
-      webDescriptor = webDescriptor
+      webDescriptor = webDescriptor,
+      runtimeConfiguration = None,
+      operationalDetails = None,
+      componentFormsPath = Some(s"/form/${name}")
     ))
   }
 
@@ -240,6 +426,10 @@ object StaticFormAppRenderer {
            |<article>
            |  <h2>Components</h2>
            |  ${_component_reference_list(subsystem.components)}
+           |</article>
+           |<article>
+           |  <h2>Console handoff</h2>
+           |  <p>Use <a href="/web/console">System Console</a> for controlled operation entry. Manual pages remain read-only and do not inline operation actions.</p>
            |</article>""".stripMargin
     ))
 
@@ -254,6 +444,7 @@ object StaticFormAppRenderer {
            |</article>
            |<article>
            |  <h2>Operation forms</h2>
+           |  <p>Console links to operation forms. It does not execute operations inline.</p>
            |  ${_component_form_list(subsystem.components)}
            |</article>""".stripMargin
     ))
@@ -478,7 +669,10 @@ object StaticFormAppRenderer {
     subsystemVersion: Option[String],
     dashboardPath: String,
     performancePath: String,
-    webDescriptor: WebDescriptor
+    webDescriptor: WebDescriptor,
+    runtimeConfiguration: Option[ResolvedConfiguration],
+    operationalDetails: Option[String],
+    componentFormsPath: Option[String]
   ): String = {
     val componentBlocks = components.map { component =>
       val services = component.protocol.services.services.map { service =>
@@ -514,12 +708,140 @@ object StaticFormAppRenderer {
            |  <h2>Navigation</h2>
            |  <p><a href="${_escape(dashboardPath)}">Dashboard</a> · <a href="${_escape(performancePath)}">Performance details</a> · <a href="/web/manual">Manual</a> · <a href="/web/console">Console</a></p>
            |</article>
+           |${_admin_operational_details(operationalDetails)}
+           |${_component_admin_actions(componentFormsPath)}
            |<article>
            |  <h2>Web Descriptor</h2>
            |  ${_web_descriptor_summary(webDescriptor)}
            |</article>
+           |${_admin_runtime_configuration(runtimeConfiguration)}
+           |${_admin_job_control(runtimeConfiguration)}
            |${componentBlocks}""".stripMargin
     )
+  }
+
+  private def _admin_job_control(
+    configuration: Option[ResolvedConfiguration]
+  ): String =
+    configuration.map { _ =>
+      """<article>
+        |  <h2>Job Control</h2>
+        |  <p>Job control entry points are reserved for system admin operations. The WEB-05 baseline is read-only and does not expose browser-side cancel, retry, or force-complete actions.</p>
+        |  <ul>
+        |    <li><a href="/form/admin/execution/history">Execution history</a></li>
+        |    <li><a href="/form/admin/execution/calltree">Latest calltree</a></li>
+        |  </ul>
+        |  <p>Mutation actions must require explicit admin authorization, confirmation for destructive actions, and audit logging before they are enabled.</p>
+        |</article>""".stripMargin
+    }.getOrElse("")
+
+  private def _admin_runtime_configuration(
+    configuration: Option[ResolvedConfiguration]
+  ): String =
+    configuration.map { config =>
+      s"""<article>
+         |  <h2>Runtime Configuration</h2>
+         |  <p>Resolved runtime configuration values are read-only. Sensitive values are masked.</p>
+         |  <p>Configuration mutation must use a separate admin action surface with explicit admin authorization and audit logging.</p>
+         |  ${_runtime_configuration_table(config)}
+         |</article>""".stripMargin
+    }.getOrElse("")
+
+  private def _runtime_configuration_table(
+    config: ResolvedConfiguration
+  ): String = {
+    val rows = config.configuration.values.toVector
+      .filter { case (key, _) => _is_runtime_configuration_key(key) }
+      .sortBy(_._1)
+      .map {
+        case (key, value) =>
+          val sensitive = _is_sensitive_configuration_key(key)
+          val rendered = if (sensitive) "********" else _configuration_value_text(value)
+          val visibility = if (sensitive) "masked" else "visible"
+          s"""<tr><td><code>${_escape(key)}</code></td><td>${_escape(rendered)}</td><td>${visibility}</td></tr>"""
+      }
+    if (rows.isEmpty) {
+      "<p>No explicit runtime configuration values are resolved.</p>"
+    } else {
+      s"""<div class="table-responsive"><table class="table table-sm">
+         |  <thead><tr><th>Key</th><th>Value</th><th>Visibility</th></tr></thead>
+         |  <tbody>${rows.mkString("\n")}</tbody>
+         |</table></div>""".stripMargin
+    }
+  }
+
+  private def _is_runtime_configuration_key(key: String): Boolean =
+    key.startsWith("textus.") || key.startsWith("cncf.")
+
+  private def _is_sensitive_configuration_key(key: String): Boolean = {
+    val normalized = key.toLowerCase
+    Vector("password", "passwd", "secret", "token", "credential", "apikey", "api-key", "private-key")
+      .exists(normalized.contains)
+  }
+
+  private def _configuration_value_text(
+    value: ConfigurationValue
+  ): String =
+    value match {
+      case ConfigurationValue.StringValue(v) => v
+      case ConfigurationValue.NumberValue(v) => v.toString
+      case ConfigurationValue.BooleanValue(v) => v.toString
+      case ConfigurationValue.ListValue(vs) => vs.map(_configuration_value_text).mkString("[", ", ", "]")
+      case ConfigurationValue.ObjectValue(vs) =>
+        vs.toVector.sortBy(_._1).map {
+          case (key, value) => s"${key}: ${_configuration_value_text(value)}"
+        }.mkString("{", ", ", "}")
+      case ConfigurationValue.NullValue => "null"
+    }
+
+  private def _admin_operational_details(
+    html: Option[String]
+  ): String =
+    html.map { body =>
+      s"""<article>
+         |  <h2>Operational Details</h2>
+         |  ${body}
+         |</article>""".stripMargin
+    }.getOrElse("")
+
+  private def _system_admin_operational_details: String =
+    """<div class="row g-3">
+      |  <div class="col-12 col-lg-6">
+      |    <section>
+      |      <h3>Assembly</h3>
+      |      <p><a href="/form/admin/assembly/warnings">Assembly warnings</a> · <a href="/form/admin/assembly/report">Assembly report</a></p>
+      |    </section>
+      |  </div>
+      |  <div class="col-12 col-lg-6">
+      |    <section>
+      |      <h3>Execution</h3>
+      |      <p><a href="/form/admin/execution/history">Execution history</a> · <a href="/form/admin/execution/calltree">Latest calltree</a></p>
+      |    </section>
+      |  </div>
+      |</div>""".stripMargin
+
+  private def _component_admin_actions(
+    formsPath: Option[String]
+  ): String =
+    formsPath.map { path =>
+      s"""<article>
+         |  <h2>Component Operations</h2>
+         |  <p><a href="${_escape(path)}">Operation forms</a></p>
+         |  ${_component_admin_management_links(path)}
+         |</article>""".stripMargin
+    }.getOrElse("")
+
+  private def _component_admin_management_links(
+    formsPath: String
+  ): String = {
+    val componentPath = formsPath.stripPrefix("/form/")
+    s"""<h3>Managed Data</h3>
+       |<ul>
+       |  <li><a href="/web/${_escape(componentPath)}/admin/entities">Entity CRUD</a></li>
+       |  <li><a href="/web/${_escape(componentPath)}/admin/data">Data CRUD</a></li>
+       |  <li><a href="/web/${_escape(componentPath)}/admin/aggregates">Aggregate CRUD</a></li>
+       |  <li><a href="/web/${_escape(componentPath)}/admin/views">View read</a></li>
+       |</ul>""".stripMargin
   }
 
   private def _web_descriptor_summary(
@@ -535,8 +857,51 @@ object StaticFormAppRenderer {
        |    <tr><th>App entries</th><td>${descriptor.apps.size}</td></tr>
        |  </tbody>
        |</table></div>
+       |<p><a href="/web/system/admin/descriptor">Resolved descriptor JSON</a></p>
        |${_web_descriptor_app_list(descriptor)}
        |${_web_descriptor_exposure_list(descriptor)}""".stripMargin
+
+  private def _web_descriptor_json(
+    descriptor: WebDescriptor
+  ): String =
+    Json.obj(
+      "status" -> Json.fromString(if (descriptor.hasControls) "configured" else "default"),
+      "auth" -> Json.obj(
+        "mode" -> Json.fromString(descriptor.auth.mode)
+      ),
+      "expose" -> Json.fromFields(
+        descriptor.expose.toVector.sortBy(_._1).map {
+          case (selector, exposure) => selector -> Json.fromString(exposure.name)
+        }
+      ),
+      "authorization" -> Json.fromFields(
+        descriptor.authorization.toVector.sortBy(_._1).map {
+          case (selector, authorization) =>
+            selector -> Json.obj(
+              "roles" -> Json.arr(authorization.roles.map(Json.fromString)*),
+              "scopes" -> Json.arr(authorization.scopes.map(Json.fromString)*),
+              "capabilities" -> Json.arr(authorization.capabilities.map(Json.fromString)*)
+            )
+        }
+      ),
+      "form" -> Json.fromFields(
+        descriptor.form.toVector.sortBy(_._1).map {
+          case (selector, form) =>
+            selector -> Json.obj(
+              "enabled" -> form.enabled.map(Json.fromBoolean).getOrElse(Json.Null)
+            )
+        }
+      ),
+      "apps" -> Json.arr(
+        descriptor.apps.map { app =>
+          Json.obj(
+            "name" -> Json.fromString(app.name),
+            "path" -> Json.fromString(app.path),
+            "kind" -> Json.fromString(app.kind)
+          )
+        }*
+      )
+    ).spaces2
 
   private def _web_descriptor_app_list(
     descriptor: WebDescriptor
