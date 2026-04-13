@@ -39,10 +39,7 @@ object EntityAuthorizationProfile {
     val mode = operationModel match
       case ServiceOperationModel.InternalService => EntityAccessMode.ServiceInternal
       case ServiceOperationModel.SystemTask => EntityAccessMode.System
-      case _ =>
-        operationKind match
-          case EntityOperationKind.Task => EntityAccessMode.ServiceInternal
-          case _ => EntityAccessMode.UserPermission
+      case _ => EntityAccessMode.UserPermission
     EntityAuthorizationProfile(mode, explicitRelations)
   }
 }

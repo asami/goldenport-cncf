@@ -26,13 +26,46 @@ trait EntityCreateDefaultsPolicy {
 object EntityCreateDefaultsPolicy {
   val default: EntityCreateDefaultsPolicy = Default
 
+  final case class Context(
+    record: Record,
+    id: EntityId,
+    options: EntityCreateOptions,
+    principalId: String,
+    principal: String
+  )
+
+  trait OwnerIdSelector {
+    def ownerId(context: Context)(using ExecutionContext): String
+  }
+
+  object OwnerIdSelector {
+    val principal: OwnerIdSelector = new OwnerIdSelector {
+      def ownerId(context: Context)(using ExecutionContext): String =
+        context.principal
+    }
+
+    def constant(value: String): OwnerIdSelector = new OwnerIdSelector {
+      def ownerId(context: Context)(using ExecutionContext): String =
+        value
+    }
+  }
+
   def byCollectionName(
     overrides: Map[String, EntityCreateDefaultsPolicy],
     fallback: EntityCreateDefaultsPolicy = default
   ): EntityCreateDefaultsPolicy =
     ByCollectionName(overrides, fallback)
 
-  object Default extends EntityCreateDefaultsPolicy {
+  object Default extends DefaultPolicy(OwnerIdSelector.principal)
+
+  def withOwnerIdSelector(
+    selector: OwnerIdSelector
+  ): EntityCreateDefaultsPolicy =
+    DefaultPolicy(selector)
+
+  case class DefaultPolicy(
+    ownerIdSelector: OwnerIdSelector
+  ) extends EntityCreateDefaultsPolicy {
     def complementCreateRecord[T](
       record: Record,
       id: EntityId,
@@ -41,6 +74,8 @@ object EntityCreateDefaultsPolicy {
       val now = java.time.ZonedDateTime.now(ctx.clock.withZone(ctx.timezone))
       val principalid = ctx.security.principal.id.value
       val principal = _identifier_text(principalid)
+      val defaultscontext = Context(record, id, options, principalid, principal)
+      val ownerid = ownerIdSelector.ownerId(defaultscontext)
       val propertyname = ctx.runtime.context.propertyName
       val defaults = Vector.newBuilder[(String, Any)]
       val knownkeys = record.keySet
@@ -73,7 +108,7 @@ object EntityCreateDefaultsPolicy {
       add_or_replace("updatedBy", Some(principal))
       add_or_replace("postStatus", Some(PostStatus.Published))
       add_if_missing("aliveness", Some(Aliveness.default))
-      val security = _default_security_attributes(principal, options)
+      val security = _default_security_attributes(ownerid, options)
       add_if_missing("ownerId", Some(security.ownerId.id.value))
       add_if_missing("groupId", Some(security.groupId.id.value))
       add_if_missing("rights", Some(security.rights.toRecord))

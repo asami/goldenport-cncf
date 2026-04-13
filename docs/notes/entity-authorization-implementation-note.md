@@ -216,7 +216,9 @@ whether the operation is still caller-permission based or service-internal.
 
 Entity classification has two primary axes:
 
-- `operationKind`: `resource` or `task`;
+- `operationKind`: `resource` for master/reference data suited to memory
+  residency, or `task` for transactional data that should leave memory after it
+  becomes inactive;
 - `applicationDomain`: `business`, `cms`, or `generic`.
 
 `usageKind` remains present for other classification purposes and compatibility.
@@ -230,10 +232,20 @@ Service/operation classification currently uses:
 
 The derivation policy is intentionally conservative:
 
-- task entities derive service-internal handling unless explicitly overridden;
 - internal services derive service-internal mode;
 - system tasks derive system mode;
 - business/public APIs remain user-permission based unless overridden.
+
+`operationKind=task` does not imply `execute=true` and does not by itself imply
+service-internal access. Execute permission is reserved for a future
+entity-provided operation invocation model and remains false by default for both
+resource and task entities.
+
+Create defaults now have a minimal owner-id selector hook. The built-in default
+keeps the previous behavior and derives owner id from the current principal. A
+custom default policy can replace the selector, for example to make a
+`SalesOrder` owner id point at a seller organization rather than the individual
+caller. Group, tenant, and organization selection remain future policy hooks.
 
 ## Unimplemented or Incomplete Areas
 

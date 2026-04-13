@@ -114,6 +114,11 @@ other.execute = false
 For CMS/public-content entities, `other.read` can be enabled through a profile or
 application policy.
 
+Owner id selection is a create-default variation point. The built-in default
+uses the current principal, while a custom owner selector can choose an
+application-specific owner such as a seller organization for `SalesOrder`.
+`operationKind` does not affect owner id selection.
+
 ## Create Defaults
 
 Entity creation defaults are supplied through `EntityCreateDefaultsPolicy`,
@@ -152,8 +157,9 @@ rules are specified.
 
 Entity operation kind:
 
-- `resource`;
-- `task`.
+- `resource`: master/reference data that is suitable for memory residency;
+- `task`: transactional data that should not remain resident after it becomes
+  inactive.
 
 Entity application domain:
 
@@ -173,6 +179,9 @@ axis. It is not the primary replacement for operation kind or application domain
 
 These classifications are used to derive an `EntityAuthorizationProfile`.
 Explicit low-level `mode` and relation settings still override derived defaults.
+`operationKind` does not derive `execute=true`. Execute permission is reserved
+for a future entity-provided operation invocation model and remains false by
+default for both resource and task entities.
 
 ## Relation-Based Authorization
 

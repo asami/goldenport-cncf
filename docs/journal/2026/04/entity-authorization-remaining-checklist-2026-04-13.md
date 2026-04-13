@@ -49,21 +49,26 @@ Status update on 2026-04-13:
 - [x] Wire descriptor entity classification into runtime create default profile
       derivation.
 - [x] Add descriptor tests for camelCase and snake_case field names.
-- [ ] Add generated sample descriptor examples for business and CMS entities.
+- [x] Add generated sample descriptor examples for business and CMS entities.
 
 ## Create Defaults
 
 - [x] Derive create default profiles from `applicationDomain` by default.
-- [ ] Derive executable permissions from `operationKind = task` only when the
-      entity is genuinely executable.
+- [x] Keep `operationKind` as an entity operational classification:
+      `resource` for master/reference data suited to memory residency and
+      `task` for transactional data that should leave memory after it becomes
+      inactive.
+- [x] Do not derive `execute=true` from `operationKind = task`; reserve execute
+      permission for a future entity-provided operation invocation model.
+- [x] Add a minimal owner id selection policy hook.
 - [ ] Add an application-level policy for owner id selection.
 - [ ] Add an entity-level policy for owner id selection.
 - [ ] Add group id default policy.
 - [ ] Add tenant/organization default policy.
-- [ ] Add tests for business default owner/group/other permissions.
+- [x] Add tests for business default owner/group/other permissions.
 - [x] Add sample-app verification for CMS/public-content default read
       visibility.
-- [ ] Add tests for CMS/public-content default read visibility.
+- [x] Add tests for CMS/public-content default read visibility.
 
 ## Relation-Based Authorization
 
@@ -148,7 +153,8 @@ Status update on 2026-04-13:
 - [ ] Define explicit fields/policies if future setuid-like behavior is needed.
 - [ ] Decide whether compact `permission` text should remain a compatibility
       parser only.
-- [ ] Add tests for `execute=false` default on ordinary resource entities.
+- [x] Add tests for `execute=false` default on ordinary resource entities.
+- [x] Add tests for `execute=false` default on task-like entities.
 
 ## Observability and Audit
 
