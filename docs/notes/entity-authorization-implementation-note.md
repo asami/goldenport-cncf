@@ -154,7 +154,10 @@ For multiple conditions in CML, use `;` as the stable delimiter for now.
 Natural condition evaluation now produces a minimal diagnostic result. When a
 direct read/update/delete authorization path is denied by a missed ABAC natural
 condition, the failure message includes the condition text plus actual and
-expected values. This is not yet full audit or observability telemetry.
+expected values. Search/list filtering also emits an `authorization.abac.filter`
+observability event when ABAC natural conditions hide one or more records. The
+event records a summary count and the first missed condition. This is not yet
+full audit telemetry for every condition evaluation.
 
 ## SalesOrder Example
 

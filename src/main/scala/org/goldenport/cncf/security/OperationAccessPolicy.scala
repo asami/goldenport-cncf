@@ -108,7 +108,11 @@ object OperationAccessPolicy {
           case _ =>
             authorization.resourceFamily.trim.toLowerCase(java.util.Locale.ROOT) match
               case "domain" if authorization.accessKind == "search/list" && !_is_manager =>
-                val visible = result.data.filter(_is_visible_simple_entity(_, tc, authorization))
+                val visibility = result.data.map(_visibility_evaluation(_, tc, authorization))
+                val visible = visibility.collect {
+                  case (entity, true, _) => entity
+                }
+                _emit_abac_filter_diagnostics(authorization, visibility)
                 Consequence.success(
                   result.copy(
                     data = visible,
@@ -171,7 +175,7 @@ object OperationAccessPolicy {
     authorization: UnitOfWorkAuthorization
   )(using ctx: ExecutionContext): Boolean = {
     val record = tc.toRecord(entity)
-    if (!_matches_natural_conditions(record, authorization))
+    if (_natural_condition_miss(record, authorization).isDefined)
       false
     else if (_is_public_policy(authorization))
       true
@@ -180,6 +184,52 @@ object OperationAccessPolicy {
     else authorizeSimpleEntity(record, "read") match
       case Consequence.Success(_) => true
       case _ => false
+  }
+
+  private def _visibility_evaluation[T](
+    entity: T,
+    tc: EntityPersistent[T],
+    authorization: UnitOfWorkAuthorization
+  )(using ctx: ExecutionContext): (T, Boolean, Option[EntityAbacCondition.Evaluation]) = {
+    val record = tc.toRecord(entity)
+    _natural_condition_miss(record, authorization) match
+      case Some(miss) =>
+        (entity, false, Some(miss))
+      case None if _is_public_policy(authorization) =>
+        (entity, true, None)
+      case None if _matches_relation(record, authorization) =>
+        (entity, true, None)
+      case None =>
+        authorizeSimpleEntity(record, "read") match
+          case Consequence.Success(_) => (entity, true, None)
+          case _ => (entity, false, None)
+        }
+  }
+
+  private def _emit_abac_filter_diagnostics[T](
+    authorization: UnitOfWorkAuthorization,
+    visibility: Seq[(T, Boolean, Option[EntityAbacCondition.Evaluation])]
+  )(using ctx: ExecutionContext): Unit = {
+    val misses = visibility.flatMap(_._3)
+    if (misses.nonEmpty) {
+      val first = misses.head
+      val _ = ctx.observability.emitInfo(
+        ctx.cncfCore.scope,
+        "authorization.abac.filter",
+        Record.dataAuto(
+          "resource-family" -> authorization.resourceFamily,
+          "resource-type" -> authorization.resourceType,
+          "collection" -> authorization.collectionName,
+          "access-kind" -> authorization.accessKind,
+          "total-count" -> visibility.size,
+          "visible-count" -> visibility.count(_._2),
+          "filtered-count" -> misses.size,
+          "first-miss-condition" -> first.conditionText,
+          "first-miss-actual" -> first.actual,
+          "first-miss-expected" -> first.expected
+        )
+      )
+    }
   }
 
   private def _is_public_policy(
@@ -250,4 +300,3 @@ object OperationAccessPolicy {
 
   private def _subject(using ctx: ExecutionContext): SecuritySubject =
     SecuritySubject.current
-}

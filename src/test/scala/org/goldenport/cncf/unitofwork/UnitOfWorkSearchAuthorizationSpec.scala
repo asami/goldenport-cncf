@@ -1,12 +1,15 @@
 package org.goldenport.cncf.unitofwork
 
 import cats.~>
+import scala.collection.mutable.ListBuffer
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, TraceId}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.directive.{Query, SearchResult}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityQuery, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.http.FakeHttpDriver
+import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
+import org.goldenport.cncf.security.EntityAbacCondition
 import org.goldenport.datatype.PathName
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -17,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkSearchAuthorizationSpec
@@ -204,6 +207,58 @@ final class UnitOfWorkSearchAuthorizationSpec
       result.data.map(_.id) shouldBe Vector(p1.id)
       result.totalCount shouldBe Some(1)
     }
+
+    "emit diagnostics when natural condition filters search results" in {
+      Given("a search/list authorization with a publication window condition")
+      val backend = new MemoryBackend
+      LogBackendHolder.reset()
+      LogBackendHolder.install(backend)
+      try {
+        val datastorespace = DataStoreSpace.default()
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        given ExecutionContext = _execution_context(
+          datastorespace,
+          entitystorespace,
+          principalId = "reader"
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
+
+        val p1 = PersonEntity(EntityId("test", "n1", _cid), "published", "reader", publishAt = Some("2000-01-01T00:00:00Z"))
+        val p2 = PersonEntity(EntityId("test", "n2", _cid), "future", "reader", publishAt = Some("2999-01-01T00:00:00Z"))
+        val _ = datastorespace.inject(
+          DataStoreSpace.Seed(
+            Vector(
+              DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+              DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
+            )
+          )
+        )
+        val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(summon[ExecutionContext]))
+
+        When("searching through UnitOfWorkInterpreter")
+        val result = interpreter.execute(
+          UnitOfWorkOp.EntityStoreSearch(
+            query = EntityQuery(_cid, Query(PersonQuery.any)),
+            tc = summon[EntityPersistent[PersonEntity]],
+            authorization = Some(
+              UnitOfWorkAuthorization(
+                resourceFamily = "domain",
+                resourceType = Some("Person"),
+                accessKind = "search/list",
+                naturalConditions = EntityAbacCondition.parseList("publishAt<=now:search/list")
+              )
+            )
+          )
+        )
+
+        Then("the future entity is filtered and an ABAC filter event is emitted")
+        result.data.map(_.id) shouldBe Vector(p1.id)
+        result.totalCount shouldBe Some(1)
+        backend.lines.exists(_.contains("authorization.abac.filter")) shouldBe true
+      } finally {
+        LogBackendHolder.reset()
+      }
+    }
   }
 
   private def _execution_context(
@@ -271,12 +326,14 @@ final class UnitOfWorkSearchAuthorizationSpec
     name: String,
     ownerId: String,
     groupId: Option[String] = None,
-    privilegeId: Option[String] = None
+    privilegeId: Option[String] = None,
+    publishAt: Option[String] = None
   ) {
     def toRecord(): Record =
       Record.dataAuto(
         "id" -> id,
         "name" -> name,
+        "publishAt" -> publishAt,
         "security_attributes" -> Record.dataAuto(
           "owner_id" -> ownerId,
           "group_id" -> groupId,
@@ -317,11 +374,24 @@ final class UnitOfWorkSearchAuthorizationSpec
         r.getString("name"),
         r.getString(PathName(Vector("security_attributes", "owner_id"))),
         r.getString(PathName(Vector("security_attributes", "group_id"))),
-        r.getString(PathName(Vector("security_attributes", "privilege_id")))
+        r.getString(PathName(Vector("security_attributes", "privilege_id"))),
+        r.getString("publishAt").orElse(r.getString("publish_at"))
       ) match
-        case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId) =>
-          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId))
+        case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId, publishAt) =>
+          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId, publishAt))
         case _ =>
           Consequence.failure("invalid person record")
+  }
+
+  private final class MemoryBackend extends LogBackend {
+    private val _lines = ListBuffer.empty[String]
+
+    def lines: Vector[String] = _lines.synchronized {
+      _lines.toVector
+    }
+
+    override def writeLine(line: String): Unit = _lines.synchronized {
+      _lines += line
+    }
   }
 }

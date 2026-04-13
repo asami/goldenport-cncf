@@ -106,8 +106,10 @@ Status update on 2026-04-13:
       and DAC-style checks.
 - [x] Add minimal diagnostics explaining which ABAC natural condition missed on
       direct authorization denial.
+- [x] Add minimal search/list diagnostics that summarize ABAC natural-condition
+      filtering and report the first missed condition.
 - [ ] Add full diagnostics explaining all ABAC natural conditions that matched
-      or missed, including search/list filtering.
+      or missed for each candidate entity.
 - [x] Add a first tenant boundary test for explicit ABAC natural conditions.
 - [x] Add parser tests for explicit ABAC natural conditions.
 - [x] Add tests for publication status and publication time-window policies.
