@@ -61,7 +61,7 @@ final class EntityAbacConditionSpec
       val context = EntityAuthorizationContext(
         subject = subject,
         entity = Record.dataAuto("tenantId" -> "tenant-a"),
-        operation = EntityAuthorizationContext.Operation("read", "domain", Some("Person"), Some("person"), EntityAccessMode.UserPermission),
+        operation = EntityAuthorizationContext.Operation("read", "domain", Some("Person"), Some("person"), EntityAccessMode.UserPermission, None, None, None),
         application = EntityAuthorizationContext.Application(Vector("Person")),
         environment = EntityAuthorizationContext.Environment("trace-1", Some("correlation-1"))
       )
@@ -69,6 +69,39 @@ final class EntityAbacConditionSpec
       condition.matches(context) shouldBe true
       context.operation.resourceType shouldBe Some("Person")
       context.environment.correlationId shouldBe Some("correlation-1")
+    }
+
+    "match operation and application attributes from authorization context" in {
+      val context = EntityAuthorizationContext(
+        subject = SecuritySubject(
+          subjectId = "u1",
+          authenticationState = SecuritySubject.AuthenticationState.Authenticated,
+          accessTokenPresent = false,
+          primaryGroup = None,
+          groups = Set.empty,
+          roles = Set.empty,
+          privileges = Set.empty,
+          capabilities = Set.empty,
+          securityLevel = Set.empty
+        ),
+        entity = Record.empty,
+        operation = EntityAuthorizationContext.Operation(
+          accessKind = "read",
+          resourceFamily = "domain",
+          resourceType = Some("Person"),
+          collectionName = Some("person"),
+          accessMode = EntityAccessMode.UserPermission,
+          operationModel = Some(ServiceOperationModel.BusinessService),
+          entityOperationKind = Some(EntityOperationKind.Resource),
+          entityApplicationDomain = Some(EntityApplicationDomain.Business)
+        ),
+        application = EntityAuthorizationContext.Application(Vector("Person")),
+        environment = EntityAuthorizationContext.Environment("trace-1", None)
+      )
+
+      EntityAbacCondition.parse("operation.operationModel=business-service:read").get.matches(context) shouldBe true
+      EntityAbacCondition.parse("application.entityOperationKind=resource:read").get.matches(context) shouldBe true
+      EntityAbacCondition.parse("application.entityApplicationDomain=business:read").get.matches(context) shouldBe true
     }
 
     "match literal values" in {

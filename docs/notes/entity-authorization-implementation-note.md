@@ -295,9 +295,11 @@ explicit deny rules.
 
 `EntityAuthorizationContext` is the first explicit context carrier for natural
 ABAC evaluation. It exposes subject, entity, operation, application, and
-environment attributes in one structure. The current evaluator still only uses
-subject and entity attributes, but the structure is now in place for
-operation/application/environment conditions.
+environment attributes in one structure. The current evaluator can now use
+subject/entity attributes and operation/application attributes such as
+`operation.operationModel`, `application.entityOperationKind`, and
+`application.entityApplicationDomain`. Environment-specific conditions remain
+future work.
 
 The first practical ABAC natural evaluators should cover:
 

@@ -25,7 +25,10 @@ object EntityAuthorizationContext {
     resourceFamily: String,
     resourceType: Option[String],
     collectionName: Option[String],
-    accessMode: EntityAccessMode
+    accessMode: EntityAccessMode,
+    operationModel: Option[ServiceOperationModel],
+    entityOperationKind: Option[EntityOperationKind],
+    entityApplicationDomain: Option[EntityApplicationDomain]
   )
 
   final case class Application(
@@ -49,7 +52,10 @@ object EntityAuthorizationContext {
         resourceFamily = authorization.resourceFamily,
         resourceType = authorization.resourceType,
         collectionName = authorization.collectionName,
-        accessMode = authorization.accessMode
+        accessMode = authorization.accessMode,
+        operationModel = authorization.operationModel,
+        entityOperationKind = authorization.entityOperationKind,
+        entityApplicationDomain = authorization.entityApplicationDomain
       ),
       application = Application(
         entityNames = authorization.entityNames

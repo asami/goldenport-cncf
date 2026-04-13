@@ -39,7 +39,7 @@ final case class EntityAbacCondition(
     evaluate(EntityAuthorizationContext(
       subject = subject,
       entity = record,
-      operation = EntityAuthorizationContext.Operation("", "", None, None, EntityAccessMode.UserPermission),
+      operation = EntityAuthorizationContext.Operation("", "", None, None, EntityAccessMode.UserPermission, None, None, None),
       application = EntityAuthorizationContext.Application(Vector.empty),
       environment = EntityAuthorizationContext.Environment("", None)
     ))
@@ -47,7 +47,7 @@ final case class EntityAbacCondition(
   def evaluate(
     context: EntityAuthorizationContext
   ): EntityAbacCondition.Evaluation = {
-    val actual = EntityAbacCondition.recordValue(context.entity, entityAttribute)
+    val actual = EntityAbacCondition.contextValue(context, entityAttribute)
       .orElse(EntityAbacCondition.defaultRecordValue(entityAttribute))
     val expectedvalue = expected.resolve(context)
     val matched = (actual, expectedvalue) match
@@ -168,6 +168,13 @@ object EntityAbacCondition {
       .map(rawValue)
   }
 
+  def contextValue(
+    context: EntityAuthorizationContext,
+    name: String
+  ): Option[String] =
+    _context_value(context, name)
+      .orElse(recordValue(context.entity, name))
+
   def defaultRecordValue(name: String): Option[String] =
     normalize(name) match
       case "poststatus" | "post_status" => Some("Published")
@@ -250,4 +257,57 @@ object EntityAbacCondition {
     val snake = SecuritySubject.snake(n)
     Vector(n, snake).filter(_.nonEmpty).distinct
   }
+
+  private def _context_value(
+    context: EntityAuthorizationContext,
+    name: String
+  ): Option[String] =
+    normalize(name) match
+      case "operation.accesskind" | "operation.access_kind" =>
+        Some(context.operation.accessKind)
+      case "operation.resourcefamily" | "operation.resource_family" =>
+        Some(context.operation.resourceFamily)
+      case "operation.resourcetype" | "operation.resource_type" =>
+        context.operation.resourceType
+      case "operation.collectionname" | "operation.collection_name" =>
+        context.operation.collectionName
+      case "operation.accessmode" | "operation.access_mode" =>
+        Some(_label(context.operation.accessMode))
+      case "operation.operationmodel" | "operation.operation_model" =>
+        context.operation.operationModel.map(_label)
+      case "application.entityoperationkind" | "application.entity_operation_kind" =>
+        context.operation.entityOperationKind.map(_label)
+      case "application.entityapplicationdomain" | "application.entity_application_domain" =>
+        context.operation.entityApplicationDomain.map(_label)
+      case "application.entitynames" | "application.entity_names" =>
+        if (context.application.entityNames.nonEmpty)
+          Some(context.application.entityNames.mkString(","))
+        else
+          None
+      case _ =>
+        None
+
+  private def _label(value: EntityAccessMode): String =
+    value.toString.flatMap {
+      case c if c.isUpper => "-" + c.toLower
+      case c => c.toString
+    }.stripPrefix("-")
+
+  private def _label(value: ServiceOperationModel): String =
+    value.toString.flatMap {
+      case c if c.isUpper => "-" + c.toLower
+      case c => c.toString
+    }.stripPrefix("-")
+
+  private def _label(value: EntityOperationKind): String =
+    value.toString.flatMap {
+      case c if c.isUpper => "-" + c.toLower
+      case c => c.toString
+    }.stripPrefix("-")
+
+  private def _label(value: EntityApplicationDomain): String =
+    value.toString.flatMap {
+      case c if c.isUpper => "-" + c.toLower
+      case c => c.toString
+    }.stripPrefix("-")
 }

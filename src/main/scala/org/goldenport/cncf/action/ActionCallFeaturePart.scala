@@ -782,6 +782,9 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         access = access,
         entityNames = entitynames,
         accessMode = accessmode,
+        operationModel = Some(operationmodel),
+        entityOperationKind = Some(entityoperationkind),
+        entityApplicationDomain = Some(entityapplicationdomain),
         relationRules = derivedprofile.relationRules,
         naturalConditions = naturalconditions
       )

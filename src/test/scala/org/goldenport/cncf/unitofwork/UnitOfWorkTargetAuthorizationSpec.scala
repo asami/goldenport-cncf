@@ -6,7 +6,7 @@ import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext,
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.http.FakeHttpDriver
-import org.goldenport.cncf.security.{EntityAbacCondition, EntityAccessMode, EntityAccessRelation}
+import org.goldenport.cncf.security.{EntityAbacCondition, EntityAccessMode, EntityAccessRelation, EntityApplicationDomain, EntityOperationKind, ServiceOperationModel}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.scalatest.GivenWhenThen
@@ -498,6 +498,44 @@ final class UnitOfWorkTargetAuthorizationSpec
           conclusion.show should include("2999-01-01T00:00:00Z")
         case _ =>
           fail("expected authorization failure")
+    }
+
+    "allow read when operation and application natural ABAC conditions match" in {
+      given ExecutionContext = _execution_context(
+        principalId = "reader"
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val id = EntityId("test", "read_abac_operation_application_allowed", _cid)
+      _seed(PersonEntity(id, "operation-application-record", "reader"))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+            UnitOfWorkOp.EntityStoreLoad(
+              id,
+              summon[EntityPersistent[PersonEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("Person"),
+                  targetId = Some(id),
+                  accessKind = "read",
+                  operationModel = Some(ServiceOperationModel.BusinessService),
+                  entityOperationKind = Some(EntityOperationKind.Resource),
+                  entityApplicationDomain = Some(EntityApplicationDomain.Business),
+                  naturalConditions = EntityAbacCondition.parseList(
+                    "operation.operationModel=business-service:read;application.entityOperationKind=resource:read;application.entityApplicationDomain=business:read"
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
     }
   }
 

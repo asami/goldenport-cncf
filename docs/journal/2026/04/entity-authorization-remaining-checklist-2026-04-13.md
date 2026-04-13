@@ -98,7 +98,7 @@ Status update on 2026-04-13:
       `visibility`, `publicAt`, `startAt`, `endAt`, and `unpublishAt`.
 - [x] Add natural ABAC checks for business boundaries such as tenant,
       organization, account, or customer scope where they are direct attributes.
-- [ ] Add operation/application attribute checks for `operationModel`,
+- [x] Add operation/application attribute checks for `operationModel`,
       `entityOperationKind`, and `entityApplicationDomain`.
 - [x] Decide allow/deny/not-applicable/indeterminate result semantics for ABAC
       natural evaluation.
