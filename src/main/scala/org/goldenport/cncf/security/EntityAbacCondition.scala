@@ -102,7 +102,7 @@ object EntityAbacCondition {
 
   def parse(text: String): Option[EntityAbacCondition] = {
     val parts = Option(text).getOrElse("").split(":", 2).map(_.trim)
-    val expr = parts.headOption.getOrElse("")
+    val expr = _decode_entities(parts.headOption.getOrElse(""))
     val accessKinds =
       parts.drop(1).headOption.toSet.flatMap(_.split("[,|]")).map(normalize).filter(_.nonEmpty)
     _split_expr(expr).map { case (left, op, right) =>
@@ -168,6 +168,12 @@ object EntityAbacCondition {
         None
     }.toVector.headOption
   }
+
+  private def _decode_entities(text: String): String =
+    Option(text).getOrElse("")
+      .replace("&lt;", "<")
+      .replace("&gt;", ">")
+      .replace("&amp;", "&")
 
   private def _compare(
     actual: String,

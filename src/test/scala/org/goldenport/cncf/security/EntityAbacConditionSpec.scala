@@ -73,6 +73,7 @@ final class EntityAbacConditionSpec
     "parse publication time window comparisons" in {
       val publish = EntityAbacCondition.parse("publishAt<=now:read").get
       val close = EntityAbacCondition.parse("closeAt>now:read,search/list").get
+      val escaped = EntityAbacCondition.parse("publishAt&lt;=now:read").get
 
       publish.entityAttribute shouldBe "publishAt"
       publish.operator shouldBe EntityAbacCondition.Operator.Lte
@@ -80,6 +81,8 @@ final class EntityAbacConditionSpec
       close.entityAttribute shouldBe "closeAt"
       close.operator shouldBe EntityAbacCondition.Operator.Gt
       close.allows("search/list") shouldBe true
+      escaped.entityAttribute shouldBe "publishAt"
+      escaped.operator shouldBe EntityAbacCondition.Operator.Lte
     }
 
     "match publication time windows against now" in {

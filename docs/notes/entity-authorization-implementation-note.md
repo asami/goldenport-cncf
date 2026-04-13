@@ -121,6 +121,13 @@ publishAt<=now:read,search/list
 closeAt>now:read,search/list
 ```
 
+In CML text, write `<` and `>` as HTML entities to avoid Markdown/XML parsing:
+
+```text
+publishAt&lt;=now:read,search/list
+closeAt&gt;now:read,search/list
+```
+
 These conditions are evaluated before relation rules and owner/group/other
 permissions for user-permission entity access.
 
