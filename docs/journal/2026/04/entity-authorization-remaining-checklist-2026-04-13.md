@@ -67,11 +67,11 @@ Status update on 2026-04-13:
 
 ## Relation-Based Authorization
 
-- [ ] Support multiple relation rules per entity/operation.
+- [x] Support multiple relation rules per entity/operation.
 - [x] Support relation rules with explicit access kinds.
 - [x] Support relation rules based on principal id.
 - [x] Support relation rules based on subject attributes.
-- [ ] Support tenant/organization relation rules.
+- [x] Support tenant/organization relation rules.
 - [ ] Support customer/account relation rules.
 - [ ] Support assignee/participant relation rules.
 - [ ] Decide denial precedence when ACL and relation rules disagree.
