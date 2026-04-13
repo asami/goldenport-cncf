@@ -163,7 +163,7 @@ Status update on 2026-04-13:
 - [x] Include relation rule match/miss information in debug-level diagnostics.
 - [x] Include target entity collection/name in audit records.
 - [x] Include subject id and normalized role/group/capability summary.
-- [ ] Ensure denied authorization does not emit action execution enter/leave
+- [x] Ensure denied authorization does not emit action execution enter/leave
       events.
 - [ ] Add dashboard/admin visibility for authorization counters.
 

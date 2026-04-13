@@ -301,6 +301,11 @@ Relation rule diagnostics are emitted as `authorization.relation.diagnostics`
 debug events when relation rules are evaluated. They summarize applicable,
 matched, missed, and not-applicable rules.
 
+Action-level authorization denial is separated from action execution
+observability. `ActionEngine.executeAuthorized` commits an authorization-failed
+`ActionEvent`, but it does not build the `ActionCall` and does not invoke
+execution enter/leave observation hooks.
+
 `ServiceInternal` and `System` bypass object permissions by design. The current
 implementation emits an `authorization.permission.bypass` observability event
 with access mode, resource information, target id, access kind, and subject id.
