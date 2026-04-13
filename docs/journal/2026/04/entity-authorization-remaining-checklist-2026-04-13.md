@@ -2,6 +2,8 @@
 
 Date: 2026-04-13
 
+Status: closed
+
 ## Context
 
 The first baseline for entity authorization has been implemented and documented.
@@ -13,6 +15,11 @@ Baseline documents:
 - `docs/journal/2026/04/entity-authorization-implementation-2026-04-13.md`
 
 This checklist records remaining work after that baseline.
+
+The security implementation checklist was closed on 2026-04-14.  Remaining
+business/sample-app scenario work was moved to:
+
+- `docs/journal/2026/04/entity-authorization-business-sample-followup-2026-04-14.md`
 
 Status update on 2026-04-13:
 
@@ -179,16 +186,19 @@ Status update on 2026-04-13:
 - [x] Update `docs/notes/entity-runtime-architecture.md` with authorization
       boundary references.
 - [x] Add CML examples once syntax is finalized.
-- [ ] Add SalesOrder business example once generator support exists.
+- [x] Move SalesOrder business example follow-up to the business/sample-app
+      scenario checklist.
 - [x] Add first CMS content example using operation `ACCESS` / `CONDITION` in
       the notice-board sample app.
 
 ## Verification
 
 - [x] Add full test suite target for entity authorization.
-- [ ] Add sample app scenario exercising business/private entity defaults.
+- [x] Move sample app business/private entity default scenario to the
+      business/sample-app scenario checklist.
 - [x] Add sample app scenario exercising CMS/public-content defaults.
-- [ ] Add sample app scenario exercising relation-based customer read.
+- [x] Move sample app relation-based customer read scenario to the
+      business/sample-app scenario checklist.
 - [x] Add regression test that `--` or low-level CLI paths cannot bypass UoW
       authorization for entity access.
 
