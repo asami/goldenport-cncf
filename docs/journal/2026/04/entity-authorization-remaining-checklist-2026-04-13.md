@@ -69,8 +69,8 @@ Status update on 2026-04-13:
 
 - [ ] Support multiple relation rules per entity/operation.
 - [x] Support relation rules with explicit access kinds.
-- [ ] Support relation rules based on principal id.
-- [ ] Support relation rules based on subject attributes.
+- [x] Support relation rules based on principal id.
+- [x] Support relation rules based on subject attributes.
 - [ ] Support tenant/organization relation rules.
 - [ ] Support customer/account relation rules.
 - [ ] Support assignee/participant relation rules.

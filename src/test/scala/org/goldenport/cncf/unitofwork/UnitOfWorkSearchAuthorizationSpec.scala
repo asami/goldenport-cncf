@@ -351,6 +351,51 @@ final class UnitOfWorkSearchAuthorizationSpec
       result.totalCount shouldBe Some(0)
       result.fetchedCount shouldBe 0
     }
+
+    "filter search results by principal id relation rule" in {
+      Given("a principal whose id matches an entity owner id relation")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(
+        datastorespace,
+        entitystorespace,
+        principalId = "principal-owner"
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val p1 = PersonEntity(EntityId("test", "rp1", _cid), "principal-record", "principal-owner")
+      val p2 = PersonEntity(EntityId("test", "rp2", _cid), "other-record", "other-owner")
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
+          )
+        )
+      )
+      val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(summon[ExecutionContext]))
+
+      When("searching with a principal id relation rule")
+      val result = interpreter.execute(
+        UnitOfWorkOp.EntityStoreSearch(
+          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          tc = summon[EntityPersistent[PersonEntity]],
+          authorization = Some(
+            UnitOfWorkAuthorization(
+              resourceFamily = "domain",
+              resourceType = Some("Person"),
+              accessKind = "search/list",
+              relationRules = Vector(EntityAccessRelation("ownerId", "subjectId", Set("search/list")))
+            )
+          )
+        )
+      )
+
+      Then("only the principal-related entity remains")
+      result.data.map(_.id) shouldBe Vector(p1.id)
+      result.totalCount shouldBe Some(1)
+      result.fetchedCount shouldBe 1
+    }
   }
 
   private def _execution_context(
