@@ -277,6 +277,21 @@ ABAC-centered model =
       via entity.ownerId/groupId/permission
 ```
 
+The intended natural ABAC decision vocabulary is `Allow`, `Deny`,
+`NotApplicable`, and `Indeterminate`. In the current implementation this is only
+partially represented: an applicable matched condition behaves as allow, an
+applicable missed condition behaves as deny, and conditions that do not list the
+requested access kind are not applicable. A future evaluator should represent
+these states explicitly. Missing context or unsupported evaluators should be
+treated as `Indeterminate`; for user-permission entity access this should fail
+closed until a policy explicitly defines another behavior.
+
+Composition is guard-first. Natural ABAC conditions constrain the grant paths:
+RBAC-style manager role grants, ReBAC-style relation grants, and DAC-style
+owner/group/other permission grants are considered only after applicable natural
+conditions have allowed. Relation and DAC grants remain positive grants, not
+explicit deny rules.
+
 The first practical ABAC natural evaluators should cover:
 
 - publication status and visibility;

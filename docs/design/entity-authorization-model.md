@@ -238,6 +238,34 @@ as:
 - operation exposure based on service operation model;
 - entity behavior based on operation kind and application domain.
 
+Natural ABAC condition results should use four decision states:
+
+- `Allow`: the condition is applicable and matched;
+- `Deny`: the condition is applicable and missed;
+- `NotApplicable`: the condition does not apply to the requested access kind or
+  is not present in the policy set;
+- `Indeterminate`: the condition could not be evaluated because required
+  context, attributes, or evaluator support is missing.
+
+For the current positive-condition model, natural ABAC is composed as a mandatory
+guard before RBAC-style, ReBAC-style, and DAC-style grants. All applicable
+natural conditions must allow. Any `Deny` denies the request before relation or
+owner/group/other permission checks. `NotApplicable` has no effect. Until a full
+policy language defines explicit error handling, `Indeterminate` is fail-closed
+for user-permission access.
+
+After natural ABAC guard evaluation, grants compose as follows:
+
+1. RBAC-style manager privileges can grant broad management access.
+2. Public read policy can grant read visibility for public profiles.
+3. ReBAC-style relation rules grant only their listed access kinds.
+4. DAC-style owner/group/other permissions are evaluated as the fallback grant
+   path.
+
+This keeps ABAC as the organizing model: RBAC-style roles, ReBAC-style
+relations, and DAC-style permissions are all attribute-based grant patterns, but
+natural ABAC conditions remain guard conditions that constrain those grants.
+
 Further extensions should preserve the same UnitOfWork/internal DSL boundary.
 
 The stable first CML surface for explicit natural ABAC is operation `ACCESS` /

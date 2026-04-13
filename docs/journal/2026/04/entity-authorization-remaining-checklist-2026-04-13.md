@@ -100,9 +100,9 @@ Status update on 2026-04-13:
       organization, account, or customer scope where they are direct attributes.
 - [ ] Add operation/application attribute checks for `operationModel`,
       `entityOperationKind`, and `entityApplicationDomain`.
-- [ ] Decide allow/deny/not-applicable/indeterminate result semantics for ABAC
+- [x] Decide allow/deny/not-applicable/indeterminate result semantics for ABAC
       natural evaluation.
-- [ ] Decide how ABAC natural evaluation composes with RBAC-style, ReBAC-style,
+- [x] Decide how ABAC natural evaluation composes with RBAC-style, ReBAC-style,
       and DAC-style checks.
 - [x] Add minimal diagnostics explaining which ABAC natural condition missed on
       direct authorization denial.
