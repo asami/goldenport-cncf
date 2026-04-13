@@ -40,7 +40,7 @@ object EntityCreateDefaultsPolicy {
     )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Record = {
       val now = java.time.ZonedDateTime.now(ctx.clock.withZone(ctx.timezone))
       val principalid = ctx.security.principal.id.value
-      val principal = principalid
+      val principal = _identifier_text(principalid)
       val propertyname = ctx.runtime.context.propertyName
       val defaults = Vector.newBuilder[(String, Any)]
       val knownkeys = record.keySet
@@ -73,7 +73,11 @@ object EntityCreateDefaultsPolicy {
       add_or_replace("updatedBy", Some(principal))
       add_or_replace("postStatus", Some(PostStatus.Published))
       add_if_missing("aliveness", Some(Aliveness.default))
-      add_if_missing("securityAttributes", Some(_default_security_attributes(principal, options)))
+      val security = _default_security_attributes(principal, options)
+      add_if_missing("ownerId", Some(security.ownerId.id.value))
+      add_if_missing("groupId", Some(security.groupId.id.value))
+      add_if_missing("rights", Some(security.rights.toRecord))
+      add_if_missing("privilegeId", Some(security.privilegeId.id.value))
       options.defaultValues.fields.foreach { field =>
         add_if_missing(field.key, Some(field.value.single))
       }
@@ -92,16 +96,16 @@ object EntityCreateDefaultsPolicy {
     private def _default_security_attributes(
       principal: String,
       options: EntityCreateOptions
-    ): Record =
+    ): SecurityAttributes =
       if (
         options.hasDefaultProfile("public-read") ||
         options.hasDefaultProfile("publication") ||
         options.hasDefaultProfile("cms") ||
         options.hasDefaultProfile("public-content")
       )
-        SecurityAttributes.publicOwnedBy(principal).toRecord
+        SecurityAttributes.publicOwnedBy(principal)
       else
-        SecurityAttributes.privateOwnedBy(principal).toRecord
+        SecurityAttributes.privateOwnedBy(principal)
 
     private def _is_system_or_unknown(p: Any): Boolean =
       _is_system(p) || Option(p).exists(_.toString.equalsIgnoreCase("unknown"))
@@ -125,6 +129,19 @@ object EntityCreateDefaultsPolicy {
         case Some(v) => _single_value(v)
         case None => ""
         case m => m
+
+    private def _identifier_text(text: String): String = {
+      val sanitized = text.trim.map {
+        case c if c.isLetterOrDigit || c == '_' => c
+        case _ => '_'
+      }.mkString
+      val nonempty = if (sanitized.isEmpty) "unknown" else sanitized
+      if (nonempty.headOption.exists(_.isLetter))
+        nonempty
+      else
+        s"id_$nonempty"
+    }
+
   }
 
   final case class ByCollectionName(

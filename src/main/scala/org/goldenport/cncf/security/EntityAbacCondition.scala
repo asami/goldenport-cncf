@@ -82,7 +82,7 @@ object EntityAbacCondition {
     Option(value).getOrElse("").trim.toLowerCase(java.util.Locale.ROOT)
 
   def normalizeValue(value: String): String =
-    Option(value).getOrElse("").trim
+    normalize(value)
 
   private def _value(text: String): Value =
     if (text.equalsIgnoreCase("subject.id") || text.equalsIgnoreCase("principal.id"))
