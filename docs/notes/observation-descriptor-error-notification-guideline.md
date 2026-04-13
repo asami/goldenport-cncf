@@ -26,9 +26,15 @@ For recurring patterns, always use existing `Consequence` helper functions first
 Do not hand-write equivalent `match` branches unless a helper is unavailable.
 
 Priority:
-1. Existing helper (`Consequence.fromOption`, `Consequence.successOrEntityNotFound`, etc.)
-2. Standard combinators (`map`, `flatMap`, `fold`)
-3. Explicit pattern match (`Success` / `Failure`) only when necessary
+1. Semantic failure helper (`argumentMissingInput`, authorization helpers, etc.)
+2. Existing conversion helper (`Consequence.fromOption`, `Consequence.successOrEntityNotFound`, etc.)
+3. Standard combinators (`map`, `flatMap`, `fold`)
+4. Low-level `Consequence.fail(...)` only for intentionally structured application-specific failures
+5. Explicit pattern match (`Success` / `Failure`) only when necessary
+
+`Consequence.failure(...)` is a last-resort fallback while a failure shape is
+still unstructured.  Legacy `Consequence.failXxx(...)` and
+`Conclusion.failXxx(...)` aliases should not be introduced in new CNCF code.
 
 ## 2.2 Frequently Used Consequence Helpers (Current CNCF Codebase)
 
@@ -74,12 +80,20 @@ component.map(_.aggregateSpace).getOrElse(Consequence.failUninitializedState.RAI
 
 ### `Consequence.success` / `Consequence.failure`
 
-Use these constructors only when there is no more specific helper.
+Use `Consequence.success` for canonical success construction.
+Use `Consequence.failure` only when there is no more specific structured or
+semantic failure helper.
 
 ```scala
 Consequence.success(value)
 Consequence.failure("invalid selector")
 ```
+
+### `Consequence.fail`
+
+Use only when the caller intentionally supplies structured taxonomy, cause,
+and facets and there is no reusable semantic helper yet.  If the same shape
+appears repeatedly, add a semantic helper at the core layer.
 
 ### `c.toOption.flatten` (instance-side extraction)
 

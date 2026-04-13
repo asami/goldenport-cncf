@@ -52,6 +52,7 @@ Core provides:
 - Failure vs defect distinction
 - Cause taxonomy (`Cause`, `CauseKind`)
 - Observation data model
+- Semantic failure utility methods for recurring structured failures
 
 Core does NOT define:
 - CLI exit codes
@@ -70,6 +71,16 @@ This includes:
 - Mapping errors to HTTP status codes
 - Defining stable, client-visible error structures
 - Ensuring consistent behavior across all execution modes
+
+CNCF must use the semantic failure utilities provided by the core layer
+when a matching utility exists.  It should not re-create core taxonomy,
+cause, or facet structures locally for recurring failure meanings.  If CNCF
+finds a repeated failure shape with no utility, the preferred direction is
+to add the semantic utility in the core layer and then use it from CNCF.
+
+Low-level `Consequence.fail(...)` construction remains acceptable for
+application-specific structured failures.  Legacy `Consequence.failXxx(...)`
+and `Conclusion.failXxx(...)` aliases are not to be used in new CNCF code.
 
 ---
 

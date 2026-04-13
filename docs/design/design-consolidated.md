@@ -40,6 +40,8 @@ application code.
 
 Assumption: goldenport core provides the error model (Consequence/Conclusion)
 and basic utilities, while CNCF defines runtime structure and boundaries.
+CNCF uses core-provided semantic failure utilities for recurring structured
+errors instead of redefining taxonomy/cause/facet construction locally.
 
 
 Architecture
@@ -149,6 +151,7 @@ Execution is explicitly phased (docs/execution-model.md):
 Error handling:
 - All paths use Consequence; exceptions are mapped to Conclusion.
 - Authorization failure is not an operation failure.
+- Recurring structured failures use core semantic utilities where available.
 
 Security notes:
 - Security design notes (pre-execution vs in-action decisions, SecurityEvent) are summarized in `docs/design/execution-model.md`.
