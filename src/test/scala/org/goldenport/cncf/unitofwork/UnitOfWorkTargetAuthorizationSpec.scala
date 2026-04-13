@@ -1,11 +1,13 @@
 package org.goldenport.cncf.unitofwork
 
 import cats.~>
+import scala.collection.mutable.ListBuffer
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, TraceId}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.http.FakeHttpDriver
+import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 import org.goldenport.cncf.security.{EntityAbacCondition, EntityAccessMode, EntityAccessRelation, EntityApplicationDomain, EntityOperationKind, ServiceOperationModel}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -288,6 +290,88 @@ final class UnitOfWorkTargetAuthorizationSpec
 
       result shouldBe Consequence.unit
       _load_name(id) shouldBe Consequence.success(Some("projection-2"))
+    }
+
+    "emit audit event when service-internal permission bypass is used" in {
+      val backend = new MemoryBackend
+      LogBackendHolder.reset()
+      LogBackendHolder.install(backend)
+      try {
+        given ExecutionContext = _execution_context(
+          principalId = "service-principal"
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
+
+        val id = EntityId("test", "update_service_internal_audit", _cid)
+        _seed(PersonEntity(id, "order-1", "sales-org"))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Unit](
+              UnitOfWorkOp.EntityStoreUpdate(
+                entity = PersonEntity(id, "order-2", "sales-org"),
+                tc = summon[EntityPersistent[PersonEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("SalesOrder"),
+                    targetId = Some(id),
+                    accessKind = "update",
+                    accessMode = EntityAccessMode.ServiceInternal
+                  )
+                )
+              )
+            )
+          )
+        )
+
+        result shouldBe Consequence.unit
+        backend.lines.exists(_.contains("authorization.permission.bypass")) shouldBe true
+      } finally {
+        LogBackendHolder.reset()
+      }
+    }
+
+    "emit audit event when system permission bypass is used" in {
+      val backend = new MemoryBackend
+      LogBackendHolder.reset()
+      LogBackendHolder.install(backend)
+      try {
+        given ExecutionContext = _execution_context(
+          principalId = "system-principal"
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
+
+        val id = EntityId("test", "update_system_audit", _cid)
+        _seed(PersonEntity(id, "projection-1", "business-owner"))
+        val uow = new UnitOfWork(summon[ExecutionContext])
+
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Unit](
+              UnitOfWorkOp.EntityStoreUpdate(
+                entity = PersonEntity(id, "projection-2", "business-owner"),
+                tc = summon[EntityPersistent[PersonEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("Projection"),
+                    targetId = Some(id),
+                    accessKind = "update",
+                    accessMode = EntityAccessMode.System
+                  )
+                )
+              )
+            )
+          )
+        )
+
+        result shouldBe Consequence.unit
+        backend.lines.exists(_.contains("authorization.permission.bypass")) shouldBe true
+      } finally {
+        LogBackendHolder.reset()
+      }
     }
 
     "allow relation-based read without granting other read permission" in {
@@ -849,4 +933,16 @@ final class UnitOfWorkTargetAuthorizationSpec
       def toRecord(e: PersonCreate): Record = e.toRecord()
       def collection(e: PersonCreate): EntityCollectionId = _cid
     }
+
+  private final class MemoryBackend extends LogBackend {
+    private val _lines = ListBuffer.empty[String]
+
+    def lines: Vector[String] = _lines.synchronized {
+      _lines.toVector
+    }
+
+    override def writeLine(line: String): Unit = _lines.synchronized {
+      _lines += line
+    }
+  }
 }

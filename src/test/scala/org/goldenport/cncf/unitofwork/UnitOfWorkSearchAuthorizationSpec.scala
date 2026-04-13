@@ -9,7 +9,7 @@ import org.goldenport.cncf.directive.{Query, SearchResult}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityQuery, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
-import org.goldenport.cncf.security.{EntityAbacCondition, EntityAccessRelation}
+import org.goldenport.cncf.security.{EntityAbacCondition, EntityAccessMode, EntityAccessRelation}
 import org.goldenport.datatype.PathName
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -255,6 +255,54 @@ final class UnitOfWorkSearchAuthorizationSpec
         result.data.map(_.id) shouldBe Vector(p1.id)
         result.totalCount shouldBe Some(1)
         backend.lines.exists(_.contains("authorization.abac.filter")) shouldBe true
+      } finally {
+        LogBackendHolder.reset()
+      }
+    }
+
+    "emit audit event when system search bypasses permission filtering" in {
+      val backend = new MemoryBackend
+      LogBackendHolder.reset()
+      LogBackendHolder.install(backend)
+      try {
+        val datastorespace = DataStoreSpace.default()
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        given ExecutionContext = _execution_context(
+          datastorespace,
+          entitystorespace,
+          principalId = "system-principal"
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
+
+        val p1 = PersonEntity(EntityId("test", "sys_n1", _cid), "visible", "owner-1")
+        val p2 = PersonEntity(EntityId("test", "sys_n2", _cid), "otherwise-hidden", "owner-2")
+        val _ = datastorespace.inject(
+          DataStoreSpace.Seed(
+            Vector(
+              DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+              DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord())
+            )
+          )
+        )
+        val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(summon[ExecutionContext]))
+
+        val result = interpreter.execute(
+          UnitOfWorkOp.EntityStoreSearch(
+            query = EntityQuery(_cid, Query(PersonQuery.any)),
+            tc = summon[EntityPersistent[PersonEntity]],
+            authorization = Some(
+              UnitOfWorkAuthorization(
+                resourceFamily = "domain",
+                resourceType = Some("Person"),
+                accessKind = "search/list",
+                accessMode = EntityAccessMode.System
+              )
+            )
+          )
+        )
+
+        result.data.map(_.id) shouldBe Vector(p1.id, p2.id)
+        backend.lines.exists(_.contains("authorization.permission.bypass")) shouldBe true
       } finally {
         LogBackendHolder.reset()
       }

@@ -85,6 +85,7 @@ object OperationAccessPolicy {
   )(using ctx: ExecutionContext): Consequence[Unit] =
     authorization.accessMode match
       case EntityAccessMode.System | EntityAccessMode.ServiceInternal =>
+        _emit_permission_bypass(authorization, "unit-of-work")
         Consequence.unit
       case EntityAccessMode.UserPermission =>
         authorization.access.flatMap(a => Option(a.policy).map(_.trim.toLowerCase(java.util.Locale.ROOT))) match
@@ -100,6 +101,7 @@ object OperationAccessPolicy {
   )(using ctx: ExecutionContext): Consequence[SearchResult[T]] =
     authorization.accessMode match
       case EntityAccessMode.System | EntityAccessMode.ServiceInternal =>
+        _emit_permission_bypass(authorization, "search/list")
         Consequence.success(result)
       case EntityAccessMode.UserPermission =>
         authorization.access.flatMap(a => Option(a.policy).map(_.trim.toLowerCase(java.util.Locale.ROOT))) match
@@ -232,6 +234,26 @@ object OperationAccessPolicy {
     }
   }
 
+  private def _emit_permission_bypass(
+    authorization: UnitOfWorkAuthorization,
+    surface: String
+  )(using ctx: ExecutionContext): Unit = {
+    val _ = ctx.observability.emitInfo(
+      ctx.cncfCore.scope,
+      "authorization.permission.bypass",
+      Record.dataAuto(
+        "surface" -> surface,
+        "access-mode" -> _label(authorization.accessMode),
+        "resource-family" -> authorization.resourceFamily,
+        "resource-type" -> authorization.resourceType,
+        "collection" -> authorization.collectionName,
+        "target-id" -> authorization.targetId.map(_.print),
+        "access-kind" -> authorization.accessKind,
+        "subject-id" -> _subject.subjectId
+      )
+    )
+  }
+
   private def _is_public_policy(
     authorization: UnitOfWorkAuthorization
   ): Boolean =
@@ -259,6 +281,12 @@ object OperationAccessPolicy {
     authorization.relationRules.exists { rule =>
       rule.allows(authorization.accessKind) && rule.matches(record, _subject)
     }
+
+  private def _label(value: EntityAccessMode): String =
+    value.toString.flatMap {
+      case c if c.isUpper => "-" + c.toLower
+      case c => c.toString
+    }.stripPrefix("-")
 
   private def _role_for(
     record: Record

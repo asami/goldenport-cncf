@@ -125,8 +125,8 @@ Status update on 2026-04-13:
 
 - [x] Define formal semantics for `ServiceInternal`.
 - [x] Define formal semantics for `System`.
-- [ ] Add audit records for `ServiceInternal` permission bypass.
-- [ ] Add audit records for `System` permission bypass.
+- [x] Add audit records for `ServiceInternal` permission bypass.
+- [x] Add audit records for `System` permission bypass.
 - [ ] Add cross-component service grant model.
 - [ ] Require explicit grant/capability when `ServiceInternal` touches another
       component's entity.

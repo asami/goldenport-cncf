@@ -286,8 +286,9 @@ a subject field. Future likely needs include:
 
 Audit and observability are incomplete.
 
-`ServiceInternal` and `System` bypass object permissions by design, but the
-authorization decision should become visible in audit/security telemetry.
+`ServiceInternal` and `System` bypass object permissions by design. The current
+implementation emits an `authorization.permission.bypass` observability event
+with access mode, resource information, target id, access kind, and subject id.
 
 The implemented derivation is operation-model based: `InternalService` derives
 `ServiceInternal`, `SystemTask` derives `System`, and ordinary business
