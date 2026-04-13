@@ -195,12 +195,16 @@ object EntityCreateDefaultsPolicy {
       add_or_replace("postStatus", Some(PostStatus.Published))
       add_if_missing("aliveness", Some(Aliveness.default))
       val security = _default_security_attributes(ownerid, groupid, options)
-      add_if_missing("ownerId", Some(security.ownerId.id.value))
-      add_if_missing("groupId", Some(security.groupId.id.value))
+      val generatedsecuritydefault = _has_generated_security_default(record, propertyname)
+      add_or_replace_generated_default("ownerId", Some(security.ownerId.id.value), _is_system_or_unknown)
+      add_or_replace_generated_default("groupId", Some(security.groupId.id.value), _is_system_or_unknown)
       add_if_missing("tenantId", tenantid)
       add_if_missing("organizationId", organizationid)
-      add_if_missing("rights", Some(security.rights.toRecord))
-      add_if_missing("privilegeId", Some(security.privilegeId.id.value))
+      if (generatedsecuritydefault)
+        add_or_replace("rights", Some(security.rights.toRecord))
+      else
+        add_if_missing("rights", Some(security.rights.toRecord))
+      add_or_replace_generated_default("privilegeId", Some(security.privilegeId.id.value), _is_system_or_unknown)
       options.defaultValues.fields.foreach { field =>
         add_if_missing(field.key, Some(field.value.single))
       }
@@ -237,6 +241,17 @@ object EntityCreateDefaultsPolicy {
         rights = rights,
         privilegeId = _object_id(ownerId)
       )
+    }
+
+    private def _has_generated_security_default(
+      record: Record,
+      propertyName: org.goldenport.cncf.context.RuntimeContext.PropertyNameContext
+    ): Boolean = {
+      def first(canonical: String): Option[Any] =
+        propertyName.aliases(canonical).iterator.flatMap(record.getAny).map(_single_value).toVector.headOption
+      first("ownerId").exists(_is_system_or_unknown) &&
+        first("groupId").exists(_is_system_or_unknown) &&
+        first("privilegeId").exists(_is_system_or_unknown)
     }
 
     private def _object_id(text: String): ObjectId =

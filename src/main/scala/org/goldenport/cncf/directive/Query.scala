@@ -12,7 +12,7 @@ import org.goldenport.cncf.entity.EntityPersistableQuery
  * @since   Feb. 19, 2026
  *  version Mar. 30, 2026
  *  version Apr.  4, 2026
- * @version Apr.  5, 2026
+ * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 case class Query[T](query: T) extends RecordPresentable {
@@ -139,7 +139,7 @@ object Query {
   def fromRecord(record: Record): Query[?] = {
     val condition = Record.create(
       record.fields.iterator.collect {
-        case field if !_is_query_control_parameter(field.key) && !_is_query_control_container(field.key, field.value.single) =>
+        case field if !_is_framework_parameter(field.key) && !_is_framework_container(field.key) && !_is_subject_parameter(field.key) && !_is_subject_container(field.key) && !_is_query_control_parameter(field.key) && !_is_query_control_container(field.key, field.value.single) =>
           field.key -> field.value.single
       }.toVector
     )
@@ -200,7 +200,7 @@ object Query {
         _condition_without_legacy_controls(p.condition).map(x => p.copy(condition = x))
       case rec: Record =>
         val filtered = rec.asMap.filterNot { case (k, v) =>
-          _is_query_control_parameter(k) || _is_legacy_query_control_blob(k, v) || _is_query_control_container(k, v)
+          _is_framework_parameter(k) || _is_framework_container(k) || _is_subject_parameter(k) || _is_subject_container(k) || _is_query_control_parameter(k) || _is_legacy_query_control_blob(k, v) || _is_query_control_container(k, v)
         }
         Some(Record.create(filtered))
       case other =>
@@ -486,6 +486,7 @@ object Query {
     key: String
   ): Option[Int] =
     record.getRecord("query").flatMap(_.getAny(key)).flatMap(value => _int_option(Some(value)))
+      .orElse(record.getAny(s"query.$key").flatMap(value => _int_option(Some(value))))
 
   private def _expr_from_map(record: Map[String, Any]): Expr = {
     val clauses = record.toVector.flatMap {
@@ -500,6 +501,15 @@ object Query {
 
   private def _is_framework_parameter(name: String): Boolean =
     name.startsWith("textus.") || name.startsWith("cncf.")
+
+  private def _is_framework_container(name: String): Boolean =
+    name == "textus" || name == "cncf"
+
+  private def _is_subject_parameter(name: String): Boolean =
+    name.startsWith("subject.") || name.startsWith("principal.")
+
+  private def _is_subject_container(name: String): Boolean =
+    name == "subject" || name == "principal"
 
   private def _is_query_control_parameter(name: String): Boolean =
     name.startsWith("query.")

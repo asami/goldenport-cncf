@@ -6,7 +6,6 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- *  version Apr.  7, 2026
  * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -194,6 +193,26 @@ final class SecuritySubjectSpec
       subject.normalizedAttributeValues("tenantId") should contain allOf ("tenanta", "tenantb")
       subject.normalizedAttributeValues("accountId") should contain allOf ("account1", "account2")
       subject.normalizedAttributeValues("customerId") should contain allOf ("customer123", "customer456")
+    }
+
+    "support subject-prefixed business boundary attributes" in {
+      val principal = new Principal {
+        def id: PrincipalId = PrincipalId("u1")
+        def attributes: Map[String, String] = Map(
+          "subject.customer_id" -> "Customer-123",
+          "principal.tenant_id" -> "Tenant-A"
+        )
+      }
+      val subject = SecuritySubject.from(
+        SecurityContext(
+          principal = principal,
+          capabilities = Set.empty,
+          level = SecurityLevel("user")
+        )
+      )
+
+      subject.attributeValues("customerId") should contain ("Customer-123")
+      subject.attributeValues("tenantId") should contain ("Tenant-A")
     }
   }
 }

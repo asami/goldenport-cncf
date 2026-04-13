@@ -21,7 +21,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -98,7 +98,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     val privilege = _resolve_privilege(attributes)
     val caps = _resolve_requested_capabilities(attributes)
     privilege.flatMap { p =>
-      val ctx0 = ExecutionContext.create(p)
+      val ctx0 = ExecutionContext.withSecurityContext(ExecutionContext.create(p), _security_context(p, attributes))
       val ctx1 = _production_runtime_context(ctx0)
       val ctx = _bind_context(attributes, ctx1)
       if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
@@ -123,7 +123,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
         Consequence.failure[SecurityContext]("No authentication provider accepted the request.")
     security0.orElse {
       if (_fallback_privilege_enabled(base))
-        _resolve_privilege(attributes).map(_security_context)
+        _resolve_privilege(attributes).map(_security_context(_, attributes))
       else
         Consequence.failure[SecurityContext]("Privilege fallback is disabled by resolved security wiring.")
     }.flatMap { security =>
@@ -243,12 +243,13 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   }
 
   private def _security_context(
-    privilege: SecurityContext.Privilege
+    privilege: SecurityContext.Privilege,
+    ingressAttributes: Map[String, String] = Map.empty
   ): SecurityContext =
     SecurityContext(
       principal = new Principal {
-        val id: PrincipalId = privilege.principalId
-        val attributes: Map[String, String] = privilege.attributes
+        val id: PrincipalId = _resolve_principal_id(ingressAttributes).getOrElse(privilege.principalId)
+        val attributes: Map[String, String] = privilege.attributes ++ _security_subject_attributes(ingressAttributes)
       },
       capabilities = privilege.capabilities,
       level = privilege.level,
@@ -425,6 +426,32 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       .map(_normalize_token)
       .filter(_.nonEmpty)
       .toSet
+
+  private def _resolve_principal_id(
+    attributes: Map[String, String]
+  ): Option[PrincipalId] =
+    _find_first(attributes, Vector(
+      "cncf.security.principal_id",
+      "cncf.security.principalId",
+      "security.principal_id",
+      "security.principalId",
+      "principal_id",
+      "principalId",
+      "subject.id",
+      "principal.id"
+    )).map(PrincipalId(_))
+
+  private def _security_subject_attributes(
+    attributes: Map[String, String]
+  ): Map[String, String] =
+    attributes.filter { case (k, _) =>
+      k.startsWith("subject.") ||
+        k.startsWith("principal.") ||
+        k == "subject_id" ||
+        k == "subjectId" ||
+        k == "principal_id" ||
+        k == "principalId"
+    }
 
   private def _find_first(
     attributes: Map[String, String],

@@ -75,9 +75,9 @@ final case class SecuritySubject(
   }
 
   def attributeValues(name: String): Set[String] =
-    attributes
-      .get(name)
-      .orElse(attributes.get(SecuritySubject.snake(name)))
+    SecuritySubject.attributeKeys(name)
+      .iterator
+      .flatMap(attributes.get)
       .toSet
       .flatMap(SecuritySubject.splitTokens)
 
@@ -136,6 +136,11 @@ object SecuritySubject {
       case c if c.isUpper => "_" + c.toLower
       case c => c.toString
     }.stripPrefix("_")
+
+  def attributeKeys(name: String): Vector[String] = {
+    val base = Vector(name, snake(name)).distinct
+    (base ++ base.map("subject." + _) ++ base.map("principal." + _)).distinct
+  }
 
   def createGrantTargets(
     resourceType: Option[String],

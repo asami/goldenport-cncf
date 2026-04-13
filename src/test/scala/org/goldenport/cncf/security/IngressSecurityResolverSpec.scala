@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- * @version Apr.  9, 2026
+ * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
@@ -87,6 +87,18 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
       resolved.executionContext.jobContext.taskStack shouldBe Vector.empty
       resolved.executionContext.jobContext.traceMetadata.get("traceId").nonEmpty shouldBe true
       resolved.executionContext.jobContext.traceMetadata.get("correlationId").nonEmpty shouldBe true
+    }
+
+    "bind subject attributes and principal id into fallback security context" in {
+      val result = IngressSecurityResolver.resolve(Map(
+        "principal.id" -> "customer-a-user",
+        "subject.customer_id" -> "customer-a"
+      ))
+
+      result shouldBe a[Consequence.Success[_]]
+      val resolved = result.toOption.get
+      resolved.executionContext.security.principal.id.value shouldBe "customer-a-user"
+      SecuritySubject.from(resolved.executionContext.security).attributeValues("customerId") should contain("customer-a")
     }
 
     "deny when authentication providers do not resolve and privilege fallback is disabled by resolved wiring" in {

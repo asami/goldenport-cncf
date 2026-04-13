@@ -294,6 +294,55 @@ final class ActionCallEntityAccessMetricsSpec
         createdEntity.publishedBy should not be empty
       }
     }
+
+    "derive private create defaults from business component descriptor entity classification" in {
+      EntityAccessMetricsRegistry.shared.synchronized {
+        Given("a component descriptor declares the entity as a business resource")
+        EntityAccessMetricsRegistry.shared.clear()
+        given EntityPersistent[TestPerson] = _persistent
+        given EntityPersistentCreate[TestPersonCreate] = _create_persistent
+
+        val datastorespace = DataStoreSpace.default()
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        val ctx = _execution_context(datastorespace, entitystorespace)
+        val cid = _cid("person_metrics_descriptor_business_create")
+        val component = TestComponentFactory.create("descriptor_business_create", Protocol.empty)
+          .withComponentDescriptors(Vector(ComponentDescriptor(
+            name = Some("descriptor-business-create"),
+            componentName = Some("descriptor-business-create"),
+            entityRuntimeDescriptors = Vector(EntityRuntimeDescriptor(
+              entityName = "TestPerson",
+              collectionId = cid,
+              memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+              partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+              maxPartitions = 4,
+              maxEntitiesPerPartition = 16,
+              usageKind = EntityUsageKind.BusinessRecord,
+              operationKind = EntityOperationKind.Resource,
+              applicationDomain = EntityApplicationDomain.Business
+            ))
+          )))
+        component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
+        val probe = _component_scoped_probe(component, ctx)
+
+        When("creating through ActionCallEntityStorePart without operation-level ACCESS")
+        val created = probe.create[TestPersonCreate](TestPersonCreate("descriptor-business-default", 42, cid))
+
+        Then("the descriptor classification keeps business/private defaults")
+        val createdId = created match {
+          case Consequence.Success(result) => result.id
+          case other => fail(s"create failed: $other")
+        }
+        val createdEntity = component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values.find(_.id == createdId).get
+        createdEntity.securityAttributes
+          .flatMap(_.getRecord("rights"))
+          .flatMap(_.getRecord("other"))
+          .flatMap(_.getBoolean("read")) should contain(false)
+        createdEntity.publishAt shouldBe empty
+        createdEntity.publicAt shouldBe empty
+        createdEntity.publishedBy shouldBe empty
+      }
+    }
   }
 
   private def _probe(
