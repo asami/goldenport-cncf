@@ -136,14 +136,14 @@ Status update on 2026-04-13:
 
 ## Subject Model
 
-- [ ] Promote `SecuritySubject` from provisional helper to documented internal
+- [x] Promote `SecuritySubject` from provisional helper to documented internal
       subject model.
-- [ ] Decide whether primary group should live directly in `SecurityContext`.
-- [ ] Decide whether roles should live directly in `SecurityContext`.
-- [ ] Decide whether privileges should live directly in `SecurityContext`.
-- [ ] Normalize tenant/account/customer identifiers.
-- [ ] Add tests for subject attribute normalization.
-- [ ] Add tests for multi-valued subject attributes.
+- [x] Decide whether primary group should live directly in `SecurityContext`.
+- [x] Decide whether roles should live directly in `SecurityContext`.
+- [x] Decide whether privileges should live directly in `SecurityContext`.
+- [x] Normalize tenant/account/customer identifiers.
+- [x] Add tests for subject attribute normalization.
+- [x] Add tests for multi-valued subject attributes.
 
 ## Object Model
 

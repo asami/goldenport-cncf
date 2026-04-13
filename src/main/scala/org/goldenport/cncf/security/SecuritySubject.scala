@@ -80,6 +80,9 @@ final case class SecuritySubject(
       .orElse(attributes.get(SecuritySubject.snake(name)))
       .toSet
       .flatMap(SecuritySubject.splitTokens)
+
+  def normalizedAttributeValues(name: String): Set[String] =
+    attributeValues(name).map(SecuritySubject.normalize)
 }
 
 object SecuritySubject {
@@ -105,7 +108,7 @@ object SecuritySubject {
     val privilegeSet =
       _tokens(attributes, "privilege", "privilege_id", "privileges")
     val capabilitySet =
-      security.capabilities.flatMap(x => splitTokens(x.name).map(normalize))
+      security.capabilities.flatMap(x => _capability_tokens(x.name))
     val levelSet =
       splitTokens(security.level.value).map(normalize)
     SecuritySubject(
@@ -191,6 +194,9 @@ object SecuritySubject {
 
   private def _tokens(attributes: Map[String, String], keys: String*): Set[String] =
     keys.iterator.flatMap(k => attributes.get(k).toVector).flatMap(splitTokens).toSet
+
+  private def _capability_tokens(value: String): Set[String] =
+    splitTokens(value).map(normalize) + normalize(value)
 
   private def _first_token(attributes: Map[String, String], keys: String*): Option[String] =
     keys.iterator.flatMap(k => attributes.get(k).toVector).flatMap(splitTokens).find(_.nonEmpty)

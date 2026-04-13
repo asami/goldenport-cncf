@@ -53,6 +53,32 @@ The supported entity access kinds are:
 
 Search/list also performs result visibility filtering for user-permission access.
 
+## Subject Model
+
+The internal subject model is `SecuritySubject`. It is the normalized CNCF view
+over `SecurityContext`.
+
+`SecurityContext` remains the ingress/runtime input shape: principal id,
+principal attributes, capabilities, and security level. CNCF does not currently
+copy primary group, roles, or privileges into first-class `SecurityContext`
+fields. Instead, `SecuritySubject.from(SecurityContext)` derives:
+
+- authentication state;
+- access-token presence;
+- primary group;
+- groups;
+- roles;
+- privileges;
+- capabilities;
+- security level;
+- raw and normalized attribute values.
+
+This keeps the normalization and alias handling in one security-layer model
+instead of spreading it through runtime context construction. Business boundary
+attributes such as `tenantId`, `accountId`, and `customerId` are read from
+principal attributes with camelCase/snake_case aliases, split as multi-valued
+tokens, and normalized for policy matching.
+
 ## Access Modes
 
 Entity authorization distinguishes these modes:

@@ -6,7 +6,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr.  7, 2026
+ *  version Apr.  7, 2026
+ * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SecuritySubjectSpec
@@ -143,6 +144,56 @@ final class SecuritySubjectSpec
 
       subject.isAnonymous shouldBe true
       subject.isAuthenticated shouldBe false
+    }
+
+    "normalize groups roles privileges capabilities and security level from SecurityContext" in {
+      val principal = new Principal {
+        def id: PrincipalId = PrincipalId("u1")
+        def attributes: Map[String, String] = Map(
+          "group" -> "Sales-Ops",
+          "roles" -> "Content-Manager Inventory_Reader",
+          "privileges" -> "Sales-Order-Write|Inventory_Read"
+        )
+      }
+      val subject = SecuritySubject.from(
+        SecurityContext(
+          principal = principal,
+          capabilities = Set(Capability("service-grant:sales:inventory")),
+          level = SecurityLevel("Power-User")
+        )
+      )
+
+      subject.primaryGroup shouldBe Some("salesops")
+      subject.hasGroup("sales_ops") shouldBe true
+      subject.hasRole("content_manager") shouldBe true
+      subject.hasRole("inventory-reader") shouldBe true
+      subject.hasPrivilege("sales_order_write") shouldBe true
+      subject.hasPrivilege("inventory-read") shouldBe true
+      subject.hasCapability("service-grant:sales:inventory") shouldBe true
+      subject.securityLevel should contain("poweruser")
+    }
+
+    "support normalized and multi-valued business boundary attributes" in {
+      val principal = new Principal {
+        def id: PrincipalId = PrincipalId("u1")
+        def attributes: Map[String, String] = Map(
+          "tenant_id" -> "Tenant-A|Tenant_B",
+          "account_id" -> "Account-1 Account_2",
+          "customer_id" -> "Customer-123,Customer_456"
+        )
+      }
+      val subject = SecuritySubject.from(
+        SecurityContext(
+          principal = principal,
+          capabilities = Set.empty,
+          level = SecurityLevel("user")
+        )
+      )
+
+      subject.attributeValues("tenantId") should contain allOf ("Tenant-A", "Tenant_B")
+      subject.normalizedAttributeValues("tenantId") should contain allOf ("tenanta", "tenantb")
+      subject.normalizedAttributeValues("accountId") should contain allOf ("account1", "account2")
+      subject.normalizedAttributeValues("customerId") should contain allOf ("customer123", "customer456")
     }
   }
 }

@@ -88,6 +88,14 @@ The current authorization modes are:
 - service internal;
 - system.
 
+`SecuritySubject` is now the documented internal subject model rather than a
+temporary helper. `SecurityContext` stays as the runtime input shape, and
+`SecuritySubject.from(SecurityContext)` derives normalized primary group, groups,
+roles, privileges, capabilities, security level, and business boundary
+attributes. Primary group, roles, and privileges should not be duplicated as
+first-class `SecurityContext` fields until an ingress/runtime use case requires
+that broader API change.
+
 The current relation rule supports simple field equality such as:
 
 ```text
