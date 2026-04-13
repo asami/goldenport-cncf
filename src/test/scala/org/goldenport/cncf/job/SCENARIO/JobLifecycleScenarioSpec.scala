@@ -171,7 +171,7 @@ private case class RecordingService(
         val jobid = logic.submitJob(List(task), executioncontext)
         _await_job_result(jobid).map(_.toResponse)
       case _ =>
-        Consequence.failure("OperationRequest must be Action")
+        Consequence.operationInvalid("OperationRequest must be Action")
     }
   }
 
@@ -186,7 +186,7 @@ private case class RecordingService(
     result match {
       case Some(JobResult.Success(response)) => Consequence.success(response)
       case Some(JobResult.Failure(conclusion)) => Consequence.Failure(conclusion)
-      case None => Consequence.failure(s"query job timeout: ${jobid.value}")
+      case None => Consequence.stateConflict(s"query job timeout: ${jobid.value}")
     }
   }
 }
@@ -250,7 +250,7 @@ private object TestCommandOperation extends spec.OperationDefinition {
           }
         )
       case None =>
-        Consequence.failure("missing argument: value")
+        Consequence.argumentMissing("value")
     }
   }
 }
@@ -288,7 +288,7 @@ private object TestCommandFailOperation extends spec.OperationDefinition {
                 override val core: ActionCall.Core = _core_
                 override def action: Action = actionself
                 override def execute(): Consequence[OperationResponse] =
-                  Consequence.failure(s"Command failed: ${arg.value}")
+                  Consequence.operationInvalid(s"Command failed: ${arg.value}")
               }
             }
 
@@ -296,7 +296,7 @@ private object TestCommandFailOperation extends spec.OperationDefinition {
           }
         )
       case None =>
-        Consequence.failure("missing argument: value")
+        Consequence.argumentMissing("value")
     }
   }
 }
@@ -342,7 +342,7 @@ private object TestQueryOperation extends spec.OperationDefinition {
           }
         )
       case None =>
-        Consequence.failure("missing argument: value")
+        Consequence.argumentMissing("value")
     }
   }
 }
@@ -355,7 +355,7 @@ private object TestStringEgress extends Egress[String] {
       case Response.Scalar(value: String) =>
         Consequence.success(value)
       case _ =>
-        Consequence.failure("unsupported response type")
+        Consequence.operationInvalid("unsupported response type")
     }
   }
 }

@@ -11,7 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matchers {
@@ -89,7 +90,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
         case (Some(id: EntityId), Some(name: String)) =>
           Consequence.success(_Person(id, name))
         case _ =>
-          Consequence.failure("invalid person record")
+          Consequence.argumentInvalid("invalid person record")
       }
     }
   }
@@ -170,7 +171,7 @@ final class PlannedTransitionValidationHookSpec extends AnyWordSpec with Matcher
       val failaction = new ResolvedAction[T, TransitionEvent] {
         def run(state: T, event: TransitionEvent): Consequence[Unit] = {
           val _ = (state, event)
-          Consequence.failure("transition failed in spec")
+          Consequence.stateConflict("transition failed in spec")
         }
       }
       Consequence.success(

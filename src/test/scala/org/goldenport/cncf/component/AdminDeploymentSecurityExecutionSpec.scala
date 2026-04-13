@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr.  9, 2026
  *  version Apr.  9, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminDeploymentSecurityExecutionSpec
@@ -98,7 +99,7 @@ final class AdminDeploymentSecurityExecutionSpec
         val call = component.logic.createActionCall(action)
         component.logic.execute(call)
       case other =>
-        Consequence.failure(s"unexpected OperationRequest type: ${other.getClass.getName}")
+        Consequence.operationInvalid(s"unexpected OperationRequest type: ${other.getClass.getName}")
     }
 
   private def _build_request(

@@ -13,7 +13,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryStateMachineBootstrapSpec
@@ -115,7 +116,7 @@ final class ComponentFactoryStateMachineBootstrapSpec
         case (Some(id: EntityId), Some(name: String)) =>
           Consequence.success(_Entity(id, name))
         case _ =>
-          Consequence.failure("invalid entity record")
+          Consequence.argumentInvalid("invalid entity record")
       }
     }
   }

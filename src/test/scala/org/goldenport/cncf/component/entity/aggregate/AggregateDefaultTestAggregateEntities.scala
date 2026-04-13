@@ -1,6 +1,7 @@
 /*
  * @since   Mar. 30, 2026
- * @version Mar. 30, 2026
+ *  version Mar. 30, 2026
+ * @version Apr. 14, 2026
  */
 package org.goldenport.cncf.component.entity.aggregate
 
@@ -41,7 +42,7 @@ object Order extends AggregateAssembler[Order] {
       case "lines" =>
         Consequence.success(aggregate.withLines(members.collect { case m: OrderLine => m }))
       case _ =>
-        Consequence.failure(s"Unknown aggregate member: ${member_name}")
+        Consequence.operationInvalid(s"Unknown aggregate member: ${member_name}")
     }
 }
 
@@ -89,7 +90,7 @@ object OrderLine extends AggregateAssembler[OrderLine] {
     member_name: String,
     members: Vector[Any]
   ): Consequence[OrderLine] =
-    Consequence.failure(s"Unknown aggregate member: ${member_name}")
+    Consequence.operationInvalid(s"Unknown aggregate member: ${member_name}")
 }
 
 final case class OrderLine(
@@ -130,7 +131,7 @@ object Customer extends AggregateAssembler[Customer] {
     member_name: String,
     members: Vector[Any]
   ): Consequence[Customer] =
-    Consequence.failure(s"Unknown aggregate member: ${member_name}")
+    Consequence.operationInvalid(s"Unknown aggregate member: ${member_name}")
 }
 
 final case class Customer(

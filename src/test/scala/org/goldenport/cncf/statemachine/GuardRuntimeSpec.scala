@@ -6,7 +6,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ *  version Mar. 19, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GuardRuntimeSpec extends AnyWordSpec with Matchers {
@@ -27,7 +28,7 @@ final class GuardRuntimeSpec extends AnyWordSpec with Matchers {
     "propagate resolver failure" in {
       val resolver = new GuardBindingResolver[Int, Int] {
         def resolve(name: String): Consequence[Guard[Int, Int]] =
-          Consequence.failure(s"guard not found: $name")
+          Consequence.operationNotFound(s"guard not found: $name")
       }
       val guard = RefGuard[Int, Int]("missing", resolver)
 
@@ -56,7 +57,7 @@ final class GuardRuntimeSpec extends AnyWordSpec with Matchers {
     "build ExpressionGuard for expression" in {
       val resolver = new GuardBindingResolver[Int, Int] {
         def resolve(name: String): Consequence[Guard[Int, Int]] =
-          Consequence.failure(s"unexpected: $name")
+          Consequence.operationInvalid(s"unexpected: $name")
       }
       val guard = GuardRuntime.build[Int, Int](
         GuardExpr.Expression("state > 0"),

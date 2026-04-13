@@ -132,7 +132,7 @@ private object TestQueryOperation extends spec.OperationDefinition {
           }
         )
       case None =>
-        org.goldenport.Consequence.failure("missing argument: query")
+        org.goldenport.Consequence.argumentMissing("query")
     }
   }
 }
@@ -147,7 +147,7 @@ private object TestStringEgress extends Egress[String] {
       case Response.Scalar(value: String) =>
         Consequence.success(value)
       case _ =>
-        Consequence.failure("unsupported response type")
+        Consequence.operationInvalid("unsupported response type")
     }
   }
 }

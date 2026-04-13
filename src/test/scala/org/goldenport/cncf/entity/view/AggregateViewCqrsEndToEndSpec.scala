@@ -11,7 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateViewCqrsEndToEndSpec
@@ -32,7 +33,7 @@ final class AggregateViewCqrsEndToEndSpec
       val aggregate = new AggregateCommandHandler[_Command, _State, _Event] {
         def handle(command: _Command, state: _State): Consequence[AggregateCommandResult[_State, _Event]] =
           if (command.amount <= 0)
-            Consequence.failure("amount must be positive")
+            Consequence.argumentInvalid("amount must be positive")
           else
             Consequence.success(
               AggregateCommandResult(
@@ -56,7 +57,7 @@ final class AggregateViewCqrsEndToEndSpec
         collection = new org.goldenport.cncf.entity.runtime.Collection[_View] {
           def resolve(id: EntityId): Consequence[_View] =
             if (id == viewid) Consequence.success(synchronizer.currentView)
-            else Consequence.failure(s"view not found: $id")
+            else Consequence.operationNotFound(s"view not found: $id")
         },
         queryfn = _ => Consequence.success(Vector(synchronizer.currentView))
       )

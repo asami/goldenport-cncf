@@ -14,7 +14,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- * @version Mar. 20, 2026
+ *  version Mar. 20, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventBusSpec
@@ -131,7 +132,7 @@ final class EventBusSpec
           handler = new EventDispatchHandler {
             def dispatch(event: DomainEvent): Consequence[Unit] = {
               val _ = event
-              Consequence.failure("handler failed")
+              Consequence.operationInvalid("handler failed")
             }
           }
         )

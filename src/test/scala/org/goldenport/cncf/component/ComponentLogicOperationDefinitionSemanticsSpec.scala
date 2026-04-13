@@ -18,7 +18,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 22, 2026
  * @author  ASAMI, Tomoharu
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 14, 2026
  */
 final class ComponentLogicOperationDefinitionSemanticsSpec
   extends AnyWordSpec
@@ -312,7 +313,7 @@ private final case class _ValidatedRecordOperation(
     if (req.properties.exists(p => p.name == "addressCountry" && p.value.toString == "JP"))
       Consequence.success(_ValidatedRecordAction(req))
     else
-      Consequence.failure("addressCountry must be JP")
+      Consequence.argumentInvalid("addressCountry must be JP")
 }
 
 private final case class _ValidatedRecordAction(
@@ -351,7 +352,7 @@ private final case class _ValidatedCommandOperation(
     if (req.properties.exists(p => p.name == "addressCountry" && p.value.toString == "JP"))
       Consequence.success(_ValidatedCommandAction(req))
     else
-      Consequence.failure("addressCountry must be JP")
+      Consequence.argumentInvalid("addressCountry must be JP")
 }
 
 private final case class _ValidatedCommandAction(

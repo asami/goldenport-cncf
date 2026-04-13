@@ -541,11 +541,11 @@ final class ActionCallEntityAccessMetricsSpec
           case Some(id: EntityId) => Consequence.success(id)
           case Some(idText: String) => EntityId.parse(idText)
           case Some(other) => EntityId.parse(other.toString)
-          case None => Consequence.failure("missing id")
+          case None => Consequence.argumentMissing("id")
         }
         val pname = m.get("name").map(_.toString).filter(_.nonEmpty) match {
           case Some(v) => Consequence.success(v)
-          case None => Consequence.failure("missing name")
+          case None => Consequence.argumentMissing("name")
         }
         val page = m.get("age") match {
           case Some(v: Int) => Consequence.success(v)
@@ -553,14 +553,14 @@ final class ActionCallEntityAccessMetricsSpec
           case Some(v: String) =>
             scala.util.Try(v.toInt).toOption match {
               case Some(n) => Consequence.success(n)
-              case None => Consequence.failure("invalid age")
+              case None => Consequence.argumentInvalid("invalid age")
             }
           case Some(other) =>
             scala.util.Try(other.toString.toInt).toOption match {
               case Some(n) => Consequence.success(n)
-              case None => Consequence.failure("invalid age")
+              case None => Consequence.argumentInvalid("invalid age")
             }
-          case None => Consequence.failure("missing age")
+          case None => Consequence.argumentMissing("age")
         }
         val poststatus = r.getString("postStatus").orElse(r.getString("post_status"))
         val aliveness = r.getString("aliveness")

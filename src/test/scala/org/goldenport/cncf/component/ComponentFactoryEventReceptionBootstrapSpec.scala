@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryEventReceptionBootstrapSpec
@@ -194,7 +195,7 @@ final class ComponentFactoryEventReceptionBootstrapSpec
       def id(e: _BootEntity): EntityId = e.id
       def toRecord(e: _BootEntity): Record = e.toRecord()
       def fromRecord(r: Record): Consequence[_BootEntity] =
-        Consequence.failure("not used in this spec")
+        Consequence.notImplemented("not used in this spec")
     }
 }
 

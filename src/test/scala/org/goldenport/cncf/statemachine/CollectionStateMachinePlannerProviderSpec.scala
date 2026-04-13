@@ -10,7 +10,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class CollectionStateMachinePlannerProviderSpec
@@ -97,7 +98,7 @@ final class CollectionStateMachinePlannerProviderSpec
         case (Some(id: EntityId), Some(name: String), Some(age: Int)) =>
           Consequence.success(_Person(id, name, age))
         case _ =>
-          Consequence.failure("invalid person record")
+          Consequence.argumentInvalid("invalid person record")
       }
     }
   }

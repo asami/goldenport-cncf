@@ -12,7 +12,8 @@ import org.scalatest.matchers.should.Matchers
 
 /*
  * @since   Mar.  4, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentDefaultServiceSpec extends AnyWordSpec with Matchers {
@@ -99,7 +100,7 @@ class ComponentDefaultServiceSpec extends AnyWordSpec with Matchers {
         val call = component.logic.createActionCall(action)
         component.logic.execute(call)
       case other =>
-        Consequence.failure(s"unexpected operation request type: ${other.getClass.getName}")
+        Consequence.operationInvalid(s"unexpected operation request type: ${other.getClass.getName}")
     }
 }
 

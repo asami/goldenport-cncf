@@ -13,7 +13,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 27, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreImportSeedSpec
@@ -106,7 +107,7 @@ final class EntityStoreImportSeedSpec
           case (Some(id: EntityId), Some(name: String)) =>
             Consequence.success(PersonEntity(id, name))
           case _ =>
-            Consequence.failure("invalid person record")
+            Consequence.argumentInvalid("invalid person record")
         }
       }
     }

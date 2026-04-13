@@ -29,7 +29,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryWorkingSetIterableOnceSpec
@@ -59,7 +60,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
             case _ => Record.empty
           }
         def fromRecord(r: Record): Consequence[Any] =
-          Consequence.failure("not used in this spec")
+          Consequence.notImplemented("not used in this spec")
       }
 
       val storerealm = new EntityRealm[Any](
@@ -136,7 +137,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
               case _ => Record.empty
             }
           def fromRecord(r: Record): Consequence[Any] =
-            Consequence.failure("not used in this spec")
+            Consequence.notImplemented("not used in this spec")
         }
 
         val storerealm = new EntityRealm[Any](
@@ -211,7 +212,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
               case _ => Record.empty
             }
           def fromRecord(r: Record): Consequence[Any] =
-            Consequence.failure("not used in this spec")
+            Consequence.notImplemented("not used in this spec")
         }
 
         val storerealm = new EntityRealm[Any](

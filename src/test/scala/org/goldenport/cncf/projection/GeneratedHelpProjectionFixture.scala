@@ -15,7 +15,8 @@ import org.goldenport.value.BaseContent
 /*
  * @since   Mar. 25, 2026
  *  version Mar. 29, 2026
- * @version Apr.  6, 2026
+ *  version Apr.  6, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object GeneratedHelpProjectionFixture {
@@ -148,6 +149,6 @@ private[projection] object GeneratedHelpProjectionFixture {
       .build()
 
     override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      Consequence.failure("not used")
+      Consequence.notImplemented("not used")
   }
 }

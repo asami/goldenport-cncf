@@ -23,7 +23,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Jan. 20, 2026
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AdminSystemPingExecutionSpec
@@ -147,7 +148,7 @@ final class AdminSystemPingExecutionSpec
           .getOrElse(component.logic.createActionCall(action))
         component.logic.execute(call)
       case other =>
-        Consequence.failure(s"unexpected OperationRequest type: ${other.getClass.getName}")
+        Consequence.operationInvalid(s"unexpected OperationRequest type: ${other.getClass.getName}")
     }
   }
 

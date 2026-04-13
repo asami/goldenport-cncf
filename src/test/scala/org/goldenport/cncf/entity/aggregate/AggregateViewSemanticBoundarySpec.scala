@@ -7,7 +7,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 21, 2026
+ *  version Mar. 21, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateViewSemanticBoundarySpec
@@ -90,9 +91,9 @@ final class AggregateViewSemanticBoundarySpec
       val aggregate = new AggregateContract[State, Command, Event] {
         def handle(command: Command, state: State): Consequence[(State, Vector[Event])] =
           if (command.withdraw <= 0)
-            Consequence.failure("withdraw amount must be positive")
+            Consequence.argumentInvalid("withdraw amount must be positive")
           else if (state.balance < command.withdraw)
-            Consequence.failure("insufficient balance")
+            Consequence.stateConflict("insufficient balance")
           else
             Consequence.success(
               (

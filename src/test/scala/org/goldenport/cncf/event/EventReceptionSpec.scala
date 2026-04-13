@@ -14,7 +14,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 21, 2026
+ *  version Mar. 21, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventReceptionSpec
@@ -989,7 +990,7 @@ final class EventReceptionSpec
       request: JobControlRequest,
       policy: JobControlPolicy
     )(using ExecutionContext): Consequence[JobControlResponse] =
-      Consequence.failure("not used in this spec")
+      Consequence.notImplemented("not used in this spec")
     def query(jobId: JobId): Option[JobQueryReadModel] = None
     def queryTasks(jobId: JobId, offset: Int, limit: Int): Option[JobTaskPage] = None
     def queryTimeline(jobId: JobId, offset: Int, limit: Int): Option[JobTimelinePage] = None

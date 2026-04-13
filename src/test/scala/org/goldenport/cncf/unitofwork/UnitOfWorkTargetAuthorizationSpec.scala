@@ -17,7 +17,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 13, 2026
+ *  version Apr. 13, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkTargetAuthorizationSpec
@@ -1085,7 +1086,7 @@ final class UnitOfWorkTargetAuthorizationSpec
         case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId, customerId, tenantId, publishAt, closeAt, visibility, publicAt, startAt, endAt, unpublishAt) =>
           Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId, customerId, tenantId, publishAt, closeAt, visibility, publicAt, startAt, endAt, unpublishAt))
         case _ =>
-          Consequence.failure("invalid person record")
+          Consequence.argumentInvalid("invalid person record")
   }
 
   private val _person_patch_persistent: EntityPersistentUpdate[PersonPatch] = new EntityPersistentUpdate[PersonPatch] {

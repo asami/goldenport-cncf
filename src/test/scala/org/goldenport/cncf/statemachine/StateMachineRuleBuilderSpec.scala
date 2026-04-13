@@ -11,7 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StateMachineRuleBuilderSpec
@@ -105,7 +106,7 @@ final class StateMachineRuleBuilderSpec
         case (Some(id: EntityId), Some(name: String)) =>
           Consequence.success(_Entity(id, name))
         case _ =>
-          Consequence.failure("invalid record")
+          Consequence.argumentInvalid("invalid record")
       }
     }
   }

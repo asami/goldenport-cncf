@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventReceptionEntitySubscriptionSpec
@@ -255,7 +256,7 @@ final class EventReceptionEntitySubscriptionSpec
       def id(e: _TestEntity): EntityId = e.id
       def toRecord(e: _TestEntity): Record = e.toRecord()
       def fromRecord(r: Record): Consequence[_TestEntity] =
-        Consequence.failure("not used in this spec")
+        Consequence.notImplemented("not used in this spec")
     }
 }
 

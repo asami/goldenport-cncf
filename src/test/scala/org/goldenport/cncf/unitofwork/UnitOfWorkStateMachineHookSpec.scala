@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkStateMachineHookSpec
@@ -172,7 +173,7 @@ final class UnitOfWorkStateMachineHookSpec
         case (Some(id: EntityId), Some(name: String), Some(age: Int)) =>
           Consequence.success(PersonEntity(id, name, age))
         case _ =>
-          Consequence.failure("invalid person record")
+          Consequence.argumentInvalid("invalid person record")
       }
     }
   }
@@ -222,7 +223,7 @@ final class UnitOfWorkStateMachineHookSpec
       tc: org.goldenport.cncf.entity.EntityPersistent[T]
     )(using ExecutionContext): Consequence[Unit] = {
       val _ = (entity, tc)
-      Consequence.failure("transition pre-check failed")
+      Consequence.stateConflict("transition pre-check failed")
     }
 
     def beforeUpdateById[P](

@@ -20,7 +20,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 24, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with Matchers {
@@ -166,7 +167,7 @@ final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with 
       def id(e: _PersonEntity): EntityId = e.id
       def toRecord(e: _PersonEntity): Record = e.toRecord()
       def fromRecord(r: Record): Consequence[_PersonEntity] =
-        Consequence.failure("not used")
+        Consequence.notImplemented("not used")
     }
 }
 
@@ -181,7 +182,7 @@ private final case class _NoopOperation(
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-    Consequence.failure("not used")
+    Consequence.notImplemented("not used")
 }
 
 private final case class _PersonEntity(

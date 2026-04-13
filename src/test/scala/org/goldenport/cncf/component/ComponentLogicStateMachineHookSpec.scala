@@ -13,7 +13,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicStateMachineHookSpec
@@ -55,7 +56,7 @@ final class ComponentLogicStateMachineHookSpec
         case (Some(id: EntityId), Some(name: String)) =>
           Consequence.success(_Person(id, name))
         case _ =>
-          Consequence.failure("invalid person record")
+          Consequence.argumentInvalid("invalid person record")
       }
     }
   }

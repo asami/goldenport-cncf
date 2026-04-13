@@ -12,7 +12,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityCollectionStoreFallbackSpec
@@ -31,7 +32,7 @@ final class EntityCollectionStoreFallbackSpec
         def id(e: TestEntity): EntityId = e.id
         def toRecord(e: TestEntity): Record = e.toRecord()
         def fromRecord(r: Record): Consequence[TestEntity] =
-          Consequence.failure("not used in this spec")
+          Consequence.notImplemented("not used in this spec")
       }
 
       val storerealm = new EntityRealm[TestEntity](

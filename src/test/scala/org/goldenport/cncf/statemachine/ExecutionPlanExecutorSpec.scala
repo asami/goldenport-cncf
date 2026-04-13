@@ -7,7 +7,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ *  version Mar. 19, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ExecutionPlanExecutorSpec extends AnyWordSpec with Matchers {
@@ -38,7 +39,7 @@ final class ExecutionPlanExecutorSpec extends AnyWordSpec with Matchers {
         def run(state: String, event: String): Consequence[Unit] = {
           val _ = (state, event)
           trace += "transition"
-          Consequence.failure("transition failed")
+          Consequence.stateConflict("transition failed")
         }
       }
       val entry1 = _action[String, String]("entry-1", trace)
@@ -60,7 +61,7 @@ final class ExecutionPlanExecutorSpec extends AnyWordSpec with Matchers {
         def run(state: String, event: String): Consequence[Unit] = {
           val _ = (state, event)
           trace += "exit-1"
-          Consequence.failure("exit failed")
+          Consequence.stateConflict("exit failed")
         }
       }
       val transition = _action[String, String]("transition", trace)
@@ -85,7 +86,7 @@ final class ExecutionPlanExecutorSpec extends AnyWordSpec with Matchers {
         def run(state: String, event: String): Consequence[Unit] = {
           val _ = (state, event)
           trace += "entry-1"
-          Consequence.failure("entry failed")
+          Consequence.stateConflict("entry failed")
         }
       }
       val plan = ExecutionPlan[String, String](

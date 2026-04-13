@@ -6,7 +6,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ *  version Mar. 19, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class TransitionSelectorSpec extends AnyWordSpec with Matchers {
@@ -37,7 +38,7 @@ final class TransitionSelectorSpec extends AnyWordSpec with Matchers {
     "propagate guard failure as failure" in {
       val candidates = Vector(TransitionCandidate("t1", priority = 1, declarationOrder = 0))
 
-      val result = TransitionSelector.select(candidates)(_ => Consequence.failure("guard evaluation failed"))
+      val result = TransitionSelector.select(candidates)(_ => Consequence.operationInvalid("guard evaluation failed"))
 
       result shouldBe a[Consequence.Failure[_]]
     }

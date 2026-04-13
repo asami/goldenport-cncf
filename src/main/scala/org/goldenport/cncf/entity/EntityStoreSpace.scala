@@ -66,10 +66,16 @@ class EntityStoreSpace {
           def collection(e: T): EntityCollectionId = tc.id(e).collection
         }
         given EntityPersistentCreate[T] = createTc
-        val cid = tc.id(entry.entity).collection
+        val id = tc.id(entry.entity)
+        val cid = id.collection
         for {
-          entitystore <- _by_collection(cid)
-          _ <- entitystore.save(entry.entity).map(_ => ())
+          _ <- _by_collection(cid)
+          dscid <- dataStoreCollection(cid)
+          dsid <- dataStoreEntryId(id)
+          ds <- ctx.dataStoreSpace.dataStore(dscid)
+          _ <- ds.create(dscid, dsid, tc.toRecord(entry.entity)).recoverWith { case _ =>
+            ds.save(dscid, dsid, tc.toRecord(entry.entity))
+          }
         } yield ()
       }
     }

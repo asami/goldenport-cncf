@@ -22,7 +22,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Mar. 27, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StartupEntityImportSpec
@@ -527,19 +528,19 @@ final class StartupEntityImportSpec
               case x =>
                 scala.util.Try(x.toString.toInt).toOption match {
                   case Some(n) => Consequence.success(n)
-                  case None => Consequence.failure("invalid person record")
+                  case None => Consequence.argumentInvalid("invalid person record")
                 }
             }
             (entityId, ageValue) match {
               case (Consequence.Success(parsed), Consequence.Success(parsedAge)) =>
                 Consequence.success(_PersonEntity(parsed, name.toString, parsedAge))
               case (Consequence.Failure(conclusion), _) =>
-                Consequence.failure(conclusion.show)
+                Consequence.operationInvalid(conclusion.show)
               case (_, Consequence.Failure(conclusion)) =>
-                Consequence.failure(conclusion.show)
+                Consequence.operationInvalid(conclusion.show)
             }
           case _ =>
-            Consequence.failure("invalid person record")
+            Consequence.argumentInvalid("invalid person record")
         }
       }
     }

@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -42,7 +43,7 @@ final class EntityStoreQueryRouteSpec
             case (Some(id: EntityId), Some(name: String), Some(age: Int)) =>
               Consequence.success(PersonEntity(id, name, age))
             case _ =>
-              Consequence.failure("invalid person record")
+              Consequence.argumentInvalid("invalid person record")
           }
         }
       }
@@ -339,8 +340,8 @@ final class EntityStoreQueryRouteSpec
       created.map(_.id) shouldBe Consequence.success(created.TAKE.id)
       loaded.map(_.flatMap(_.getString("id"))) shouldBe Consequence.success(Some(created.TAKE.id.print))
       loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(Some("test-principal"))
-      loaded.map(_.flatMap(_.getString("created_by"))) shouldBe Consequence.success(Some("test-principal"))
-      loaded.map(_.flatMap(_.getString("post_status")).exists(_.toLowerCase.contains("draft"))) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(_.getString("created_by"))) shouldBe Consequence.success(Some("test_principal"))
+      loaded.map(_.flatMap(_.getString("post_status")).exists(_.toLowerCase.contains("published"))) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("aliveness")).exists(_.toLowerCase.contains("alive"))) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("trace_id")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("correlation_id")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
@@ -669,7 +670,7 @@ private def _person_persistent: EntityPersistent[PersonEntity] =
         case (Some(id: EntityId), Some(name: String), Some(age: Int)) =>
           Consequence.success(PersonEntity(id, name, age))
         case _ =>
-          Consequence.failure("invalid person record")
+          Consequence.argumentInvalid("invalid person record")
       }
     }
   }
@@ -740,7 +741,7 @@ private def _save_candidate_persistent: EntityPersistent[SaveCandidate] =
     def id(e: SaveCandidate): EntityId = e.id
     def toRecord(e: SaveCandidate): Record = e.toRecord()
     def fromRecord(r: Record): Consequence[SaveCandidate] =
-      Consequence.failure("not used in this spec")
+      Consequence.notImplemented("not used in this spec")
   }
 
 private final case class UpdateCandidate(
@@ -758,5 +759,5 @@ private def _update_candidate_persistent: EntityPersistent[UpdateCandidate] =
     def id(e: UpdateCandidate): EntityId = e.id
     def toRecord(e: UpdateCandidate): Record = e.toRecord()
     def fromRecord(r: Record): Consequence[UpdateCandidate] =
-      Consequence.failure("not used in this spec")
+      Consequence.notImplemented("not used in this spec")
   }

@@ -8,7 +8,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr.  7, 2026
+ *  version Apr.  7, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class PortBindingSpec
@@ -224,7 +225,7 @@ final class PortBindingSpec
               )
             )
           case m =>
-            Consequence.failure(s"unsupported capability: $m")
+            Consequence.operationInvalid(s"unsupported capability: $m")
         }
     }
 

@@ -18,7 +18,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 23, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateViewProjectionAlignmentSpec
@@ -224,5 +225,5 @@ private final case class _NoopOperation(
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-    Consequence.failure("not used")
+    Consequence.notImplemented("not used")
 }

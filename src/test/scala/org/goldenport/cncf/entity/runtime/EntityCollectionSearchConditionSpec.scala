@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 16, 2026
  *  version Mar. 24, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityCollectionSearchConditionSpec
@@ -33,7 +34,7 @@ final class EntityCollectionSearchConditionSpec
         def id(e: PersonEntity): EntityId = e.id
         def toRecord(e: PersonEntity): Record = e.toRecord()
         def fromRecord(r: Record): Consequence[PersonEntity] =
-          Consequence.failure("not used in this spec")
+          Consequence.notImplemented("not used in this spec")
       }
 
       val p1 = PersonEntity(EntityId("m", "a", _cid), Name("taro"), Age(20))
@@ -86,7 +87,7 @@ final class EntityCollectionSearchConditionSpec
         def id(e: PersonEntity): EntityId = e.id
         def toRecord(e: PersonEntity): Record = e.toRecord()
         def fromRecord(r: Record): Consequence[PersonEntity] =
-          Consequence.failure("not used in this spec")
+          Consequence.notImplemented("not used in this spec")
       }
 
       val p1 = PersonEntity(EntityId("m", "a", _cid), Name("taro"), Age(20))
@@ -146,7 +147,7 @@ final class EntityCollectionSearchConditionSpec
         def id(e: StatusEntity): EntityId = e.id
         def toRecord(e: StatusEntity): Record = e.toRecord()
         def fromRecord(r: Record): Consequence[StatusEntity] =
-          Consequence.failure("not used in this spec")
+          Consequence.notImplemented("not used in this spec")
       }
 
       val s1 = StatusEntity(EntityId("m", "ja", _cid), "Published", "trace-a")

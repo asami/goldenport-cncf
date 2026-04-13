@@ -1,6 +1,7 @@
 /*
  * @since   Mar. 30, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 14, 2026
  */
 package org.goldenport.cncf.component
 
@@ -251,5 +252,5 @@ private final case class _AggregateNoopOperation(
     )
 
   override def createOperationRequest(req: Request): Consequence[OperationRequest] =
-    Consequence.failure("not used")
+    Consequence.notImplemented("not used")
 }

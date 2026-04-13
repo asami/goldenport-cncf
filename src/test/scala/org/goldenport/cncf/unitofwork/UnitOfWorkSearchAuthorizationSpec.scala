@@ -20,7 +20,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 13, 2026
+ *  version Apr. 13, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkSearchAuthorizationSpec
@@ -748,7 +749,7 @@ final class UnitOfWorkSearchAuthorizationSpec
         case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId, publishAt, customerId, accountId, tenantId, organizationId, assigneeId, participantId) =>
           Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId, publishAt, customerId, accountId, tenantId, organizationId, assigneeId, participantId))
         case _ =>
-          Consequence.failure("invalid person record")
+          Consequence.argumentInvalid("invalid person record")
   }
 
   private final class MemoryBackend extends LogBackend {

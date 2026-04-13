@@ -9,7 +9,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 21, 2026
+ *  version Mar. 21, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateViewSynchronizationSpec
@@ -101,7 +102,7 @@ final class AggregateViewSynchronizationSpec
       val flaky = new EventProjector[_View] {
         def project(current: _View, event: EventRecord): Consequence[_View] = {
           invoked = invoked + 1
-          if (invoked == 1) Consequence.failure("temporary failure")
+          if (invoked == 1) Consequence.operationInvalid("temporary failure")
           else Consequence.success(_View(current.total + _amount(event)))
         }
       }
@@ -118,7 +119,7 @@ final class AggregateViewSynchronizationSpec
       Given("a projector that always fails")
       val alwaysFail = new EventProjector[_View] {
         def project(current: _View, event: EventRecord): Consequence[_View] =
-          Consequence.failure("projection failure")
+          Consequence.operationInvalid("projection failure")
       }
       val skipSynchronizer =
         new AggregateViewSynchronizer[_View](_View(0), alwaysFail, ProjectionFailurePolicy.Skip)
