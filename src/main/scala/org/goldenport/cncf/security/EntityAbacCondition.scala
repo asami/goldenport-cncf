@@ -25,11 +25,20 @@ final case class EntityAbacCondition(
     record: Record,
     subject: SecuritySubject
   ): Boolean =
-    EntityAbacCondition.recordValue(record, entityAttribute)
+    evaluate(record, subject).matched
+
+  def evaluate(
+    record: Record,
+    subject: SecuritySubject
+  ): EntityAbacCondition.Evaluation = {
+    val actual = EntityAbacCondition.recordValue(record, entityAttribute)
       .orElse(EntityAbacCondition.defaultRecordValue(entityAttribute))
-      .exists { actual =>
-      expected.resolve(subject).exists(operator.matches(actual, _))
-    }
+    val expectedvalue = expected.resolve(subject)
+    val matched = (actual, expectedvalue) match
+      case (Some(a), Some(e)) => operator.matches(a, e)
+      case _ => false
+    EntityAbacCondition.Evaluation(this, matched, actual, expectedvalue)
+  }
 }
 
 object EntityAbacCondition {
@@ -80,23 +89,43 @@ object EntityAbacCondition {
 
   sealed trait Value {
     def resolve(subject: SecuritySubject): Option[String]
+    def label: String
   }
   object Value {
     final case class Literal(value: String) extends Value {
       def resolve(subject: SecuritySubject): Option[String] =
         Some(rawValue(value))
+      def label: String = value
     }
     final case class SubjectAttribute(name: String) extends Value {
       def resolve(subject: SecuritySubject): Option[String] =
         subject.attributeValues(name).headOption.map(rawValue)
+      def label: String = s"subject.$name"
     }
     case object SubjectId extends Value {
       def resolve(subject: SecuritySubject): Option[String] =
         Some(rawValue(subject.subjectId))
+      def label: String = "subject.id"
     }
     case object Now extends Value {
       def resolve(subject: SecuritySubject): Option[String] =
         Some(Instant.now.toString)
+      def label: String = "now"
+    }
+  }
+
+  final case class Evaluation(
+    condition: EntityAbacCondition,
+    matched: Boolean,
+    actual: Option[String],
+    expected: Option[String]
+  ) {
+    def conditionText: String =
+      s"${condition.entityAttribute}${condition.operator.symbol}${condition.expected.label}"
+
+    def message: String = {
+      val outcome = if (matched) "matched" else "missed"
+      s"ABAC natural condition $outcome: $conditionText actual=${actual.getOrElse("<missing>")} expected=${expected.getOrElse("<missing>")}"
     }
   }
 

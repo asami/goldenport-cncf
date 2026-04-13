@@ -422,6 +422,12 @@ final class UnitOfWorkTargetAuthorizationSpec
       )
 
       result shouldBe a[Consequence.Failure[_]]
+      result match
+        case Consequence.Failure(conclusion) =>
+          conclusion.show should include("publishAt<=now")
+          conclusion.show should include("2999-01-01T00:00:00Z")
+        case _ =>
+          fail("expected authorization failure")
     }
   }
 

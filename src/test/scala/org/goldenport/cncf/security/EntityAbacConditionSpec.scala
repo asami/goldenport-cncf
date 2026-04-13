@@ -106,5 +106,28 @@ final class EntityAbacConditionSpec
       EntityAbacCondition.parse("closeAt>now:read").get.matches(record, subject) shouldBe true
       EntityAbacCondition.parse("publishAt>now:read").get.matches(record, subject) shouldBe false
     }
+
+    "explain missed conditions" in {
+      val condition = EntityAbacCondition.parse("publishAt<=now:read").get
+      val subject = SecuritySubject(
+        subjectId = "u1",
+        authenticationState = SecuritySubject.AuthenticationState.Anonymous,
+        accessTokenPresent = false,
+        primaryGroup = None,
+        groups = Set.empty,
+        roles = Set.empty,
+        privileges = Set.empty,
+        capabilities = Set.empty,
+        securityLevel = Set.empty
+      )
+      val record = Record.dataAuto("publishAt" -> Instant.parse("2999-01-01T00:00:00Z").toString)
+
+      val evaluation = condition.evaluate(record, subject)
+
+      evaluation.matched shouldBe false
+      evaluation.conditionText shouldBe "publishAt<=now"
+      evaluation.message should include("publishAt<=now")
+      evaluation.message should include("actual=2999-01-01T00:00:00Z")
+    }
   }
 }

@@ -137,14 +137,15 @@ object OperationAccessPolicy {
               case Some(id) =>
                 loadRecord(id).flatMap {
                   case Some(record) =>
-                    if (!_matches_natural_conditions(record, authorization))
-                      Consequence.failure("ABAC natural condition is not satisfied.")
-                    else if (authorization.accessKind == "read" && _is_public_policy(authorization))
-                      Consequence.unit
-                    else if (_matches_relation(record, authorization))
-                      Consequence.unit
-                    else
-                      authorizeSimpleEntity(record, authorization.accessKind)
+                    _natural_condition_miss(record, authorization) match
+                      case Some(miss) =>
+                        Consequence.failure(miss.message)
+                      case None if (authorization.accessKind == "read" && _is_public_policy(authorization)) =>
+                        Consequence.unit
+                      case None if _matches_relation(record, authorization) =>
+                        Consequence.unit
+                      case None =>
+                        authorizeSimpleEntity(record, authorization.accessKind)
                   case None => authorizeSimpleEntityOwnerOrManager(id, loadRecord)
                 }
               case None =>
@@ -196,6 +197,16 @@ object OperationAccessPolicy {
     authorization.naturalConditions
       .filter(_.allows(authorization.accessKind))
       .forall(_.matches(record, _subject))
+
+  private def _natural_condition_miss(
+    record: Record,
+    authorization: UnitOfWorkAuthorization
+  )(using ctx: ExecutionContext): Option[EntityAbacCondition.Evaluation] =
+    authorization.naturalConditions
+      .filter(_.allows(authorization.accessKind))
+      .iterator
+      .map(_.evaluate(record, _subject))
+      .find(!_.matched)
 
   private def _matches_relation(
     record: Record,

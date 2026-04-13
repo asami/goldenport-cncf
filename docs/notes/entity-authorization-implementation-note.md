@@ -151,6 +151,11 @@ evaluator. The `now` value is currently the first environment attribute. A riche
 authorization context and entity-level syntax remain future work.
 For multiple conditions in CML, use `;` as the stable delimiter for now.
 
+Natural condition evaluation now produces a minimal diagnostic result. When a
+direct read/update/delete authorization path is denied by a missed ABAC natural
+condition, the failure message includes the condition text plus actual and
+expected values. This is not yet full audit or observability telemetry.
+
 ## SalesOrder Example
 
 For a business entity such as `SalesOrder`, the intended defaults are:
