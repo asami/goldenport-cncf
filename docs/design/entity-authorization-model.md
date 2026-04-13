@@ -226,10 +226,11 @@ Current specialized patterns are:
 
 The natural ABAC evaluation path is an incremental extension. The baseline has
 an explicit `UnitOfWorkAuthorization.naturalConditions` carrier for direct
-entity-attribute equality conditions, but does not yet provide a full
-authorization context or general policy language. Natural ABAC covers conditions
-that are not simply role, relation, or owner/group/other permission checks, such
-as:
+entity-attribute equality conditions. `EntityAuthorizationContext` is the
+canonical carrier for natural ABAC evaluation input. It exposes subject, entity,
+operation, application, and environment attributes, though the first evaluator
+only uses subject and entity attributes. Natural ABAC covers conditions that are
+not simply role, relation, or owner/group/other permission checks, such as:
 
 - publication status and visibility;
 - publish/unpublish time windows;

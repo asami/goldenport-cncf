@@ -44,6 +44,33 @@ final class EntityAbacConditionSpec
       condition.matches(record, subject) shouldBe true
     }
 
+    "evaluate through authorization context" in {
+      val condition = EntityAbacCondition.parse("tenantId=subject.tenantId:read").get
+      val subject = SecuritySubject(
+        subjectId = "u1",
+        authenticationState = SecuritySubject.AuthenticationState.Authenticated,
+        accessTokenPresent = false,
+        primaryGroup = None,
+        groups = Set.empty,
+        roles = Set.empty,
+        privileges = Set.empty,
+        capabilities = Set.empty,
+        securityLevel = Set.empty,
+        attributes = Map("tenant_id" -> "tenant-a")
+      )
+      val context = EntityAuthorizationContext(
+        subject = subject,
+        entity = Record.dataAuto("tenantId" -> "tenant-a"),
+        operation = EntityAuthorizationContext.Operation("read", "domain", Some("Person"), Some("person"), EntityAccessMode.UserPermission),
+        application = EntityAuthorizationContext.Application(Vector("Person")),
+        environment = EntityAuthorizationContext.Environment("trace-1", Some("correlation-1"))
+      )
+
+      condition.matches(context) shouldBe true
+      context.operation.resourceType shouldBe Some("Person")
+      context.environment.correlationId shouldBe Some("correlation-1")
+    }
+
     "match literal values" in {
       val condition = EntityAbacCondition.parse("postStatus=Published:read").get
       val subject = SecuritySubject(

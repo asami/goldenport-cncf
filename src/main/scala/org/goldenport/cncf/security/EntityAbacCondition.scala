@@ -27,13 +27,29 @@ final case class EntityAbacCondition(
   ): Boolean =
     evaluate(record, subject).matched
 
+  def matches(
+    context: EntityAuthorizationContext
+  ): Boolean =
+    evaluate(context).matched
+
   def evaluate(
     record: Record,
     subject: SecuritySubject
+  ): EntityAbacCondition.Evaluation =
+    evaluate(EntityAuthorizationContext(
+      subject = subject,
+      entity = record,
+      operation = EntityAuthorizationContext.Operation("", "", None, None, EntityAccessMode.UserPermission),
+      application = EntityAuthorizationContext.Application(Vector.empty),
+      environment = EntityAuthorizationContext.Environment("", None)
+    ))
+
+  def evaluate(
+    context: EntityAuthorizationContext
   ): EntityAbacCondition.Evaluation = {
-    val actual = EntityAbacCondition.recordValue(record, entityAttribute)
+    val actual = EntityAbacCondition.recordValue(context.entity, entityAttribute)
       .orElse(EntityAbacCondition.defaultRecordValue(entityAttribute))
-    val expectedvalue = expected.resolve(subject)
+    val expectedvalue = expected.resolve(context)
     val matched = (actual, expectedvalue) match
       case (Some(a), Some(e)) => operator.matches(a, e)
       case _ => false
@@ -89,6 +105,8 @@ object EntityAbacCondition {
 
   sealed trait Value {
     def resolve(subject: SecuritySubject): Option[String]
+    def resolve(context: EntityAuthorizationContext): Option[String] =
+      resolve(context.subject)
     def label: String
   }
   object Value {

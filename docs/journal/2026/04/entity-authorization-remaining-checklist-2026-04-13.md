@@ -87,7 +87,7 @@ Status update on 2026-04-13:
       relation, or owner/group/other permission checks.
 - [x] Add a minimal explicit ABAC natural condition carrier to
       `UnitOfWorkAuthorization`.
-- [ ] Add a full authorization context structure that clearly exposes subject,
+- [x] Add a full authorization context structure that clearly exposes subject,
       entity, operation, application, and environment attributes.
 - [x] Add the first natural ABAC check for CMS publication status
       (`postStatus`) through explicit operation `ACCESS` / `CONDITION`.

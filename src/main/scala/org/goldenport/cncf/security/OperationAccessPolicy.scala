@@ -240,23 +240,17 @@ object OperationAccessPolicy {
       .map(_.trim.toLowerCase(java.util.Locale.ROOT))
       .contains("public")
 
-  private def _matches_natural_conditions(
-    record: Record,
-    authorization: UnitOfWorkAuthorization
-  )(using ctx: ExecutionContext): Boolean =
-    authorization.naturalConditions
-      .filter(_.allows(authorization.accessKind))
-      .forall(_.matches(record, _subject))
-
   private def _natural_condition_miss(
     record: Record,
     authorization: UnitOfWorkAuthorization
-  )(using ctx: ExecutionContext): Option[EntityAbacCondition.Evaluation] =
+  )(using ctx: ExecutionContext): Option[EntityAbacCondition.Evaluation] = {
+    val context = EntityAuthorizationContext(record, authorization)
     authorization.naturalConditions
       .filter(_.allows(authorization.accessKind))
       .iterator
-      .map(_.evaluate(record, _subject))
+      .map(_.evaluate(context))
       .find(!_.matched)
+  }
 
   private def _matches_relation(
     record: Record,

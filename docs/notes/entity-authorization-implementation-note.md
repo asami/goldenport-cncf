@@ -15,6 +15,7 @@ The current implementation introduced:
 - `EntityApplicationDomain`;
 - `ServiceOperationModel`;
 - `EntityAuthorizationProfile`;
+- `EntityAuthorizationContext`;
 - `EntityCreateDefaultsPolicy`;
 - `RuntimeContext.entityCreateDefaultsPolicy`;
 - `SecuritySubject` as a normalized view over `SecurityContext`;
@@ -291,6 +292,12 @@ RBAC-style manager role grants, ReBAC-style relation grants, and DAC-style
 owner/group/other permission grants are considered only after applicable natural
 conditions have allowed. Relation and DAC grants remain positive grants, not
 explicit deny rules.
+
+`EntityAuthorizationContext` is the first explicit context carrier for natural
+ABAC evaluation. It exposes subject, entity, operation, application, and
+environment attributes in one structure. The current evaluator still only uses
+subject and entity attributes, but the structure is now in place for
+operation/application/environment conditions.
 
 The first practical ABAC natural evaluators should cover:
 
