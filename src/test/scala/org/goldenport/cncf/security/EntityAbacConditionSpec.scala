@@ -167,6 +167,33 @@ final class EntityAbacConditionSpec
       EntityAbacCondition.parse("publishAt>now:read").get.matches(record, subject) shouldBe false
     }
 
+    "match CMS publication visibility attributes" in {
+      val subject = SecuritySubject(
+        subjectId = "u1",
+        authenticationState = SecuritySubject.AuthenticationState.Anonymous,
+        accessTokenPresent = false,
+        primaryGroup = None,
+        groups = Set.empty,
+        roles = Set.empty,
+        privileges = Set.empty,
+        capabilities = Set.empty,
+        securityLevel = Set.empty
+      )
+      val record = Record.dataAuto(
+        "visibility" -> "Public",
+        "publicAt" -> Instant.parse("2026-04-13T00:00:00Z").toString,
+        "startAt" -> Instant.parse("2026-04-13T00:00:00Z").toString,
+        "endAt" -> Instant.parse("2999-01-01T00:00:00Z").toString,
+        "unpublishAt" -> Instant.parse("2999-01-01T00:00:00Z").toString
+      )
+
+      EntityAbacCondition.parse("visibility=Public:read").get.matches(record, subject) shouldBe true
+      EntityAbacCondition.parse("publicAt<=now:read").get.matches(record, subject) shouldBe true
+      EntityAbacCondition.parse("startAt<=now:read").get.matches(record, subject) shouldBe true
+      EntityAbacCondition.parse("endAt>now:read").get.matches(record, subject) shouldBe true
+      EntityAbacCondition.parse("unpublishAt>now:read").get.matches(record, subject) shouldBe true
+    }
+
     "explain missed conditions" in {
       val condition = EntityAbacCondition.parse("publishAt<=now:read").get
       val subject = SecuritySubject(

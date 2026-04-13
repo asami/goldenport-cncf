@@ -537,6 +537,95 @@ final class UnitOfWorkTargetAuthorizationSpec
 
       result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
     }
+
+    "allow read when explicit CMS publication visibility conditions match" in {
+      given ExecutionContext = _execution_context(
+        principalId = "reader"
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val id = EntityId("test", "read_abac_visibility_allowed", _cid)
+      _seed(PersonEntity(
+        id,
+        "public-record",
+        "reader",
+        visibility = Some("Public"),
+        publicAt = Some("2000-01-01T00:00:00Z"),
+        startAt = Some("2000-01-01T00:00:00Z"),
+        endAt = Some("2999-01-01T00:00:00Z"),
+        unpublishAt = Some("2999-01-01T00:00:00Z")
+      ))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+            UnitOfWorkOp.EntityStoreLoad(
+              id,
+              summon[EntityPersistent[PersonEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("Person"),
+                  targetId = Some(id),
+                  accessKind = "read",
+                  naturalConditions = EntityAbacCondition.parseList(
+                    "visibility=Public:read;publicAt<=now:read;startAt<=now:read;endAt>now:read;unpublishAt>now:read"
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+    }
+
+    "reject read when explicit CMS publication visibility condition misses" in {
+      given ExecutionContext = _execution_context(
+        principalId = "reader"
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val id = EntityId("test", "read_abac_visibility_denied", _cid)
+      _seed(PersonEntity(
+        id,
+        "private-record",
+        "reader",
+        visibility = Some("Private"),
+        publicAt = Some("2000-01-01T00:00:00Z")
+      ))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Option[PersonEntity]](
+            UnitOfWorkOp.EntityStoreLoad(
+              id,
+              summon[EntityPersistent[PersonEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("Person"),
+                  targetId = Some(id),
+                  accessKind = "read",
+                  naturalConditions = EntityAbacCondition.parseList("visibility=Public:read;publicAt<=now:read")
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result shouldBe a[Consequence.Failure[_]]
+      result match
+        case Consequence.Failure(conclusion) =>
+          conclusion.show should include("visibility=Public")
+          conclusion.show should include("Private")
+        case _ =>
+          fail("expected authorization failure")
+    }
   }
 
   private def _execution_context(
@@ -623,7 +712,12 @@ final class UnitOfWorkTargetAuthorizationSpec
     customerId: Option[String] = None,
     tenantId: Option[String] = None,
     publishAt: Option[String] = None,
-    closeAt: Option[String] = None
+    closeAt: Option[String] = None,
+    visibility: Option[String] = None,
+    publicAt: Option[String] = None,
+    startAt: Option[String] = None,
+    endAt: Option[String] = None,
+    unpublishAt: Option[String] = None
   ) {
     def toRecord(): Record =
       Record.dataAuto(
@@ -633,6 +727,11 @@ final class UnitOfWorkTargetAuthorizationSpec
         "tenantId" -> tenantId,
         "publishAt" -> publishAt,
         "closeAt" -> closeAt,
+        "visibility" -> visibility,
+        "publicAt" -> publicAt,
+        "startAt" -> startAt,
+        "endAt" -> endAt,
+        "unpublishAt" -> unpublishAt,
         "security_attributes" -> Record.dataAuto(
           "owner_id" -> ownerId,
           "group_id" -> groupId,
@@ -690,10 +789,15 @@ final class UnitOfWorkTargetAuthorizationSpec
         r.getString("customerId").orElse(r.getString("customer_id")),
         r.getString("tenantId").orElse(r.getString("tenant_id")),
         r.getString("publishAt").orElse(r.getString("publish_at")),
-        r.getString("closeAt").orElse(r.getString("close_at"))
+        r.getString("closeAt").orElse(r.getString("close_at")),
+        r.getString("visibility"),
+        r.getString("publicAt").orElse(r.getString("public_at")),
+        r.getString("startAt").orElse(r.getString("start_at")),
+        r.getString("endAt").orElse(r.getString("end_at")),
+        r.getString("unpublishAt").orElse(r.getString("unpublish_at"))
       ) match
-        case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId, customerId, tenantId, publishAt, closeAt) =>
-          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId, customerId, tenantId, publishAt, closeAt))
+        case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId, customerId, tenantId, publishAt, closeAt, visibility, publicAt, startAt, endAt, unpublishAt) =>
+          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId, customerId, tenantId, publishAt, closeAt, visibility, publicAt, startAt, endAt, unpublishAt))
         case _ =>
           Consequence.failure("invalid person record")
   }

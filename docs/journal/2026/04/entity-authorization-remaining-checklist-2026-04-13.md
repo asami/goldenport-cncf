@@ -99,7 +99,7 @@ Status update on 2026-04-13:
 - [x] Add the first natural ABAC time-window checks for CMS publication windows
       (`publishAt<=now`, `closeAt>now`) through explicit operation `ACCESS` /
       `CONDITION`.
-- [ ] Add full natural ABAC checks for CMS publication attributes such as
+- [x] Add full natural ABAC checks for CMS publication attributes such as
       `visibility`, `publicAt`, `startAt`, `endAt`, and `unpublishAt`.
 - [x] Add natural ABAC checks for business boundaries such as tenant,
       organization, account, or customer scope where they are direct attributes.
@@ -118,7 +118,7 @@ Status update on 2026-04-13:
 - [x] Add a first tenant boundary test for explicit ABAC natural conditions.
 - [x] Add parser tests for explicit ABAC natural conditions.
 - [x] Add tests for publication status and publication time-window policies.
-- [ ] Add tests for publication visibility, tenant boundary, and operation
+- [x] Add tests for publication visibility, tenant boundary, and operation
       exposure policies.
 
 ## Service/Internal Authorization
