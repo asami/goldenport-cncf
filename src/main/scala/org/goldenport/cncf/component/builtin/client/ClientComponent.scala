@@ -137,7 +137,7 @@ object ClientComponent {
   private def _path(req: Request): Consequence[String] =
     req.arguments.find(_.name == "path").map(_.value.toString) match {
       case Some(path) => Consequence.success(path)
-      case None => Consequence.failure("path argument is required")
+      case None => Consequence.argumentMissing("path")
     }
 
   private def _build_url(baseurl: String, path: String): String = {

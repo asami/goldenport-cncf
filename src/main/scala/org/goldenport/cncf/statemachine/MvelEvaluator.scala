@@ -5,7 +5,8 @@ import org.goldenport.Consequence
 
 /*
  * @since   Mar. 19, 2026
- * @version Mar. 19, 2026
+ *  version Mar. 19, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object MvelEvaluator {
@@ -19,9 +20,9 @@ object MvelEvaluator {
       _to_boolean(expression, result)
     } catch {
       case _: ClassNotFoundException =>
-        Consequence.failure("MVEL engine is not available on classpath")
+        Consequence.serviceUnavailable("MVEL engine is not available on classpath")
       case NonFatal(e) =>
-        Consequence.failure(e)
+        Consequence.operationInvalid(s"MVEL expression evaluation failed: ${e.getMessage}")
     }
 
   private def _to_anyref(p: Any): AnyRef =
@@ -44,7 +45,6 @@ object MvelEvaluator {
       case m: java.lang.Boolean => Consequence.success(m.booleanValue)
       case m: Boolean => Consequence.success(m)
       case _ =>
-        Consequence.failure(s"MVEL expression did not return Boolean: '$expression'")
+        Consequence.operationInvalid(s"MVEL expression did not return Boolean: '$expression'")
     }
 }
-

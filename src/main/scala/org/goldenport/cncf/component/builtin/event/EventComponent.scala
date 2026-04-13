@@ -16,7 +16,8 @@ import org.goldenport.value.BaseContent
 
 /*
  * @since   Mar. 28, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventComponent() extends Component {
@@ -100,16 +101,16 @@ object EventComponent {
         case Some(store) =>
           store.load(eventId).flatMap {
             case Some(event) => Consequence.success(event)
-            case None => Consequence.failure(s"event not found: ${eventId.value}")
+            case None => Consequence.operationNotFound(s"event:${eventId.value}")
           }
         case None =>
-          Consequence.failure("event store is not available")
+          Consequence.serviceUnavailable("event store is not available")
       }
 
     def searchEvent(): Consequence[Vector[EventRecord]] =
       component.eventStore match {
         case Some(store) => store.query(EventStore.Query())
-        case None => Consequence.failure("event store is not available")
+        case None => Consequence.serviceUnavailable("event store is not available")
       }
   }
 
@@ -125,13 +126,13 @@ object EventComponent {
             )
           }
         case None =>
-          Consequence.failure("event store is not available")
+          Consequence.serviceUnavailable("event store is not available")
       }
 
     def searchEventLog(): Consequence[Vector[EventRecord]] =
       component.eventStore match {
         case Some(store) => store.query(EventStore.Query())
-        case None => Consequence.failure("event store is not available")
+        case None => Consequence.serviceUnavailable("event store is not available")
       }
 
     def loadJobEvents(jobId: org.goldenport.cncf.job.JobId): Consequence[Vector[EventRecord]] =
@@ -144,7 +145,7 @@ object EventComponent {
             }
           }
         case None =>
-          Consequence.failure("event store is not available")
+          Consequence.serviceUnavailable("event store is not available")
       }
   }
 
@@ -270,7 +271,7 @@ object EventComponent {
           case Some(service) =>
             service.loadEvent(eventId).map(event => OperationResponse.RecordResponse(_event_record(event)))
           case None =>
-            Consequence.failure("event service is not available")
+            Consequence.serviceUnavailable("event service is not available")
         }
       }
   }
@@ -288,7 +289,7 @@ object EventComponent {
               )
             }
           case None =>
-            Consequence.failure("event service is not available")
+            Consequence.serviceUnavailable("event service is not available")
         }
       }
   }
@@ -302,7 +303,7 @@ object EventComponent {
           case Some(service) =>
             service.loadEventStoreStatus().map(record => OperationResponse.RecordResponse(record))
           case None =>
-            Consequence.failure("event admin service is not available")
+            Consequence.serviceUnavailable("event admin service is not available")
         }
       }
   }
@@ -320,7 +321,7 @@ object EventComponent {
               )
             }
           case None =>
-            Consequence.failure("event admin service is not available")
+            Consequence.serviceUnavailable("event admin service is not available")
         }
       }
   }
@@ -342,7 +343,7 @@ object EventComponent {
               )
             }
           case None =>
-            Consequence.failure("event admin service is not available")
+            Consequence.serviceUnavailable("event admin service is not available")
         }
       }
   }
@@ -350,7 +351,7 @@ object EventComponent {
   private def _event_store(core: ActionCall.Core): Consequence[EventStore] =
     core.component.flatMap(_.eventStore) match {
       case Some(store) => Consequence.success(store)
-      case None => Consequence.failure("event store is not available")
+      case None => Consequence.serviceUnavailable("event store is not available")
     }
 
   private def _event_id(req: Request): Consequence[EventId] =
@@ -359,7 +360,7 @@ object EventComponent {
       case None =>
         req.properties.find(_.name == "id") match {
           case Some(prop) => _parse_event_id(prop.value.toString)
-          case None => Consequence.failure("id argument is required")
+          case None => Consequence.argumentMissing("id")
         }
     }
 
@@ -369,7 +370,7 @@ object EventComponent {
       case None =>
         req.properties.find(_.name == "id") match {
           case Some(prop) => org.goldenport.cncf.job.JobId.parse(prop.value.toString)
-          case None => Consequence.failure("id argument is required")
+          case None => Consequence.argumentMissing("id")
         }
     }
 

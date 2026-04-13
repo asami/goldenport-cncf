@@ -8,7 +8,8 @@ import org.goldenport.Consequence
 
 /*
  * @since   Mar. 22, 2026
- * @version Apr.  8, 2026
+ *  version Apr.  8, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ArchiveManifest(
@@ -33,7 +34,7 @@ object ArchiveManifest {
   ): Consequence[ArchiveManifest] = {
     val path = root.resolve(_manifest_relative_path)
     if (!Files.exists(path)) {
-      return Consequence.failure(s"${archiveType}.manifest-missing path=${path}")
+      return Consequence.resourceNotFound(s"${archiveType}.manifest-missing path=${path}")
     }
     val text = new String(Files.readAllBytes(path), StandardCharsets.UTF_8)
     _parse(text, archiveType)
@@ -54,7 +55,7 @@ object ArchiveManifest {
   ): Consequence[ArchiveManifest] =
     parse(text) match {
       case Left(err) =>
-        Consequence.failure(s"${archiveType}.manifest-invalid-json: ${err.getMessage}")
+        Consequence.resourceInvalid(s"${archiveType}.manifest-invalid-json: ${err.getMessage}")
       case Right(json) =>
         _to_manifest(json, archiveType)
     }
@@ -71,13 +72,13 @@ object ArchiveManifest {
     val extensions = _read_string_map(cursor.get[Json]("extension").toOption)
     val config = _read_string_map(cursor.get[Json]("config").toOption)
     if (name.isEmpty) {
-      Consequence.failure(s"${archiveType}.manifest-invalid: missing name")
+      Consequence.argumentMissing("name")
     } else if (version.isEmpty) {
-      Consequence.failure(s"${archiveType}.manifest-invalid: missing version")
+      Consequence.argumentMissing("version")
     } else if (archiveType == "car" && component.isEmpty) {
-      Consequence.failure(s"${archiveType}.manifest-invalid: missing component")
+      Consequence.argumentMissing("component")
     } else if (archiveType == "sar" && subsystem.isEmpty) {
-      Consequence.failure(s"${archiveType}.manifest-invalid: missing subsystem")
+      Consequence.argumentMissing("subsystem")
     } else {
       Consequence.success(
         ArchiveManifest(

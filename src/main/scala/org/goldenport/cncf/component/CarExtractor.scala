@@ -154,5 +154,5 @@ object CarExtractor {
     required: String,
     actual: Int
   ): Consequence[CarExtracted] =
-    Consequence.failure(s"invalid car structure path=${car} location=${location} required=${required} actual=${actual}")
+    Consequence.resourceInvalid(s"invalid car structure path=${car} location=${location} required=${required} actual=${actual}")
 }

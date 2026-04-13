@@ -1,12 +1,14 @@
 package org.goldenport.cncf.component.repository
 
 import org.goldenport.Consequence
+import org.goldenport.provisional.observation.Taxonomy
 import org.goldenport.cncf.component.Component
 import scala.util.control.NonFatal
 
 /*
  * @since   Jan. 12, 2026
- * @version Jan. 12, 2026
+ *  version Jan. 12, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentFactory {
@@ -76,7 +78,7 @@ object ComponentFactory {
   private def _failure[A](e: Throwable): Consequence[A] = {
     val message = Option(e.getMessage).getOrElse("")
     val wrapped = new RuntimeException(s"${e.getClass.getName}: ${message}".trim, e)
-    Consequence.failure(wrapped)
+    Consequence.fail(Taxonomy.componentInvalid, wrapped)
   }
 
   private def _sequence[A](

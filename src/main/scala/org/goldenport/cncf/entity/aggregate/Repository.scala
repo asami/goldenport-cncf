@@ -7,7 +7,8 @@ import org.goldenport.cncf.entity.runtime.Collection
 
 /*
  * @since   Mar. 15, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Repository[A] {
@@ -31,6 +32,6 @@ object Repository {
         collection.resolve(id)
 
       def query(q: Query[?]): Consequence[Vector[E]] =
-        Consequence.failure("Repository.query is not supported")
+        Consequence.notImplemented("Repository.query is not supported")
     }
 }

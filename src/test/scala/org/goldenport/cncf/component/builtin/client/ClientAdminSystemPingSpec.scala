@@ -252,7 +252,7 @@ class ClientAdminSystemPingSpec
             )
         }
       case None =>
-        Consequence.failure("client http path is required")
+        Consequence.argumentMissing("client http path")
     }
   }
 
@@ -265,7 +265,7 @@ class ClientAdminSystemPingSpec
           case b: Bag => Consequence.success(Some(b))
           case MimeBody(_, bag) => Consequence.success(Some(bag))
           case s: String => Consequence.success(Some(Bag.text(s, StandardCharsets.UTF_8)))
-          case _ => Consequence.failure("client request body must be a MimeBody, Bag, or String")
+          case _ => Consequence.argumentInvalid("client request body must be a MimeBody, Bag, or String")
         }
       case None =>
         Consequence.success(None)
@@ -338,7 +338,7 @@ class ClientAdminSystemPingSpec
           val call = action.createCall(core)
           component.logic.execute(call).map(_.toResponse)
         case _ =>
-          Consequence.failure("OperationRequest must be Action")
+          Consequence.argumentInvalid("OperationRequest must be Action")
       }
     }
   }

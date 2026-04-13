@@ -9,7 +9,8 @@ import org.goldenport.cncf.subsystem.Subsystem
 /*
  * @since   Jan. 31, 2026
  *  version Feb.  1, 2026
- * @version Mar.  5, 2026
+ *  version Mar.  5, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class HelpOperation(val subsystem: Subsystem) extends CliOperation {
@@ -45,7 +46,7 @@ class HelpOperation(val subsystem: Subsystem) extends CliOperation {
           )
         )
       case None =>
-        Consequence.failure("component not available for meta.help delegation")
+        Consequence.serviceUnavailable("component not available for meta.help delegation")
     }
   }
 }

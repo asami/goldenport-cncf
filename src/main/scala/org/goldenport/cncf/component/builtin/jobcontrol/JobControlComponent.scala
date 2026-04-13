@@ -19,7 +19,8 @@ import org.goldenport.value.BaseContent
 /*
  * @since   Mar. 28, 2026
  *  version Mar. 29, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
@@ -117,20 +118,20 @@ object JobControlComponent {
       {
       component.jobEngine.query(jobId) match {
         case Some(model) => Consequence.success(model)
-        case None => Consequence.failure(s"job not found: ${jobId.value}")
+        case None => Consequence.operationNotFound(s"job:${jobId.value}")
       }
       }
 
     def loadJobHistory(jobId: JobId): Consequence[JobTimelinePage] =
       component.jobEngine.queryTimeline(jobId) match {
         case Some(page) => Consequence.success(page)
-        case None => Consequence.failure(s"job history not found: ${jobId.value}")
+        case None => Consequence.operationNotFound(s"job history:${jobId.value}")
       }
 
     def getJobResult(jobId: JobId): Consequence[JobResult] =
       component.logic.getJobResult(jobId) match {
         case Some(result) => Consequence.success(result)
-        case None => Consequence.failure(s"job result not found: ${jobId.value}")
+        case None => Consequence.operationNotFound(s"job result:${jobId.value}")
       }
 
     def awaitJobResult(jobId: JobId): Consequence[OperationResponse] =
@@ -157,7 +158,7 @@ object JobControlComponent {
             }.map(_event_record)
           }
         case None =>
-          Consequence.failure("event store is not available")
+          Consequence.serviceUnavailable("event store is not available")
       }
   }
 
@@ -328,10 +329,10 @@ object JobControlComponent {
         case Some(component) =>
           component.port.get[JobService].map(_.getJobStatus(jobId)) match {
             case Some(result) => result.map(model => OperationResponse.RecordResponse(_job_record(model)))
-            case None => Consequence.failure("job service is not available")
+            case None => Consequence.serviceUnavailable("job service is not available")
           }
         case None =>
-          Consequence.failure("component is not initialized")
+          Consequence.serviceUnavailable("component is not initialized")
       }
   }
 
@@ -344,10 +345,10 @@ object JobControlComponent {
         case Some(component) =>
           component.port.get[JobService].map(_.loadJobHistory(jobId)) match {
             case Some(result) => result.map(page => OperationResponse.RecordResponse(_timeline_record(jobId, page)))
-            case None => Consequence.failure("job service is not available")
+            case None => Consequence.serviceUnavailable("job service is not available")
           }
         case None =>
-          Consequence.failure("component is not initialized")
+          Consequence.serviceUnavailable("component is not initialized")
       }
   }
 
@@ -368,10 +369,10 @@ object JobControlComponent {
         case Some(component) =>
           component.port.get[JobService].map(_.awaitJobResult(jobId)) match {
             case Some(result) => result
-            case None => Consequence.failure("job service is not available")
+            case None => Consequence.serviceUnavailable("job service is not available")
           }
         case None =>
-          Consequence.failure("component is not initialized")
+          Consequence.serviceUnavailable("component is not initialized")
       }
   }
 
@@ -389,10 +390,10 @@ object JobControlComponent {
               case JobResult.Failure(conclusion) => Consequence.Failure(conclusion)
             }
           case None =>
-            Consequence.failure("job service is not available")
+            Consequence.serviceUnavailable("job service is not available")
         }
       case None =>
-        Consequence.failure("component is not initialized")
+        Consequence.serviceUnavailable("component is not initialized")
     }
   
 
@@ -424,10 +425,10 @@ object JobControlComponent {
                 )
               }
             case None =>
-              Consequence.failure("job admin service is not available")
+              Consequence.serviceUnavailable("job admin service is not available")
           }
         case None =>
-          Consequence.failure("component is not initialized")
+          Consequence.serviceUnavailable("component is not initialized")
       }
   }
 
@@ -449,10 +450,10 @@ object JobControlComponent {
                 )
               }
             case None =>
-              Consequence.failure("job admin service is not available")
+              Consequence.serviceUnavailable("job admin service is not available")
           }
         case None =>
-          Consequence.failure("component is not initialized")
+          Consequence.serviceUnavailable("component is not initialized")
       }
   }
 
@@ -462,7 +463,7 @@ object JobControlComponent {
       case None =>
         req.properties.find(_.name == "id") match {
           case Some(prop) => JobId.parse(prop.value.toString)
-          case None => Consequence.failure("id argument is required")
+          case None => Consequence.argumentMissing("id")
         }
     }
 

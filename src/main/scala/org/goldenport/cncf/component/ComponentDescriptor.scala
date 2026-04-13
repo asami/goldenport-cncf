@@ -13,7 +13,8 @@ import org.simplemodeling.model.datatype.EntityCollectionId
  * CAR-style local override.
  *
  * @since   Mar. 27, 2026
- * @version Apr.  8, 2026
+ *  version Apr.  8, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentDescriptor(
@@ -31,7 +32,7 @@ object ComponentDescriptor {
   given RecordDecoder[EntityRuntimeDescriptor] with
     def fromRecord(rec: Record): Consequence[EntityRuntimeDescriptor] =
       for {
-        entityName <- _string(rec, "entity", "entityName").map(Consequence.success).getOrElse(Consequence.failure("missing entity/entityName"))
+        entityName <- _string(rec, "entity", "entityName").map(Consequence.success).getOrElse(Consequence.argumentMissing("entity/entityName"))
         major = _string(rec, "collectionMajor", "major").getOrElse("sys")
         minor = _string(rec, "collectionMinor", "minor").getOrElse("sys")
         name = _string(rec, "collectionName", "name").getOrElse(entityName)
@@ -79,7 +80,7 @@ object ComponentDescriptor {
         xs.foldLeft(Consequence.success(Vector.empty[EntityRuntimeDescriptor])) { (z, x) =>
           for {
             acc <- z
-            r <- _any_to_record(x).map(Consequence.success).getOrElse(Consequence.failure("invalid entities entry"))
+            r <- _any_to_record(x).map(Consequence.success).getOrElse(Consequence.argumentInvalid("invalid entities entry"))
             d <- summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(r)
           } yield acc :+ d
         }

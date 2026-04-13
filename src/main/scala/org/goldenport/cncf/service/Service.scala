@@ -21,7 +21,8 @@ import org.goldenport.cncf.protocol.OperationResponseFormatter
  *  version Jan.  3, 2026
  *  version Jan. 21, 2026
  *  version Feb. 19, 2026
- * @version Mar. 28, 2026
+ *  version Mar. 28, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Service extends ProtocolService with Service.CCore.Holder {
@@ -40,7 +41,7 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
       case action: Action =>
         logic.executeAction(action, executionContext)
       case _ =>
-        Consequence.failure("OperationRequest must be Action")
+        Consequence.operationInvalid("OperationRequest must be Action")
     }
   }
 
@@ -102,7 +103,7 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
     req: HttpRequest
   ): Consequence[Request] = {
     val _ = req
-    Consequence.failure("invokeHttp: request conversion not implemented")
+    Consequence.notImplemented("invokeHttp: request conversion not implemented")
   }
 
   private def _to_http_response(

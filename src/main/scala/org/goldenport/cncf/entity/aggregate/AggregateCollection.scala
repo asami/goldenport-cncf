@@ -8,7 +8,8 @@ import org.goldenport.cncf.entity.runtime.Collection
 
 /*
  * @since   Mar. 14, 2026
- * @version Mar. 30, 2026
+ *  version Mar. 30, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 // NOTE:
@@ -24,12 +25,12 @@ trait ContextualAggregateBuilder[A] extends AggregateBuilder[A] {
   def build_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[A]
 
   override def build(id: EntityId): Consequence[A] =
-    Consequence.failure("ExecutionContext is required for contextual aggregate builder")
+    Consequence.operationInvalid("ExecutionContext is required for contextual aggregate builder")
 }
 
 final class AggregateCollection[A](
   builder: AggregateBuilder[A],
-  queryfn: Query[?] => Consequence[Vector[A]] = _ => Consequence.failure("AggregateCollection.query is not supported")
+  queryfn: Query[?] => Consequence[Vector[A]] = _ => Consequence.notImplemented("AggregateCollection.query is not supported")
 ) extends Collection[A] {
   def resolve_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[A] =
     builder match {
@@ -54,5 +55,5 @@ trait ContextualAggregateQuery[A] extends (Query[?] => Consequence[Vector[A]]) {
   def query_with_context(q: Query[?])(using ctx: ExecutionContext): Consequence[Vector[A]]
 
   override def apply(q: Query[?]): Consequence[Vector[A]] =
-    Consequence.failure("ExecutionContext is required for contextual aggregate query")
+    Consequence.operationInvalid("ExecutionContext is required for contextual aggregate query")
 }

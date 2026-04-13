@@ -23,7 +23,8 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  * @since   Jan.  3, 2026
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Mar. 31, 2026
+ *  version Mar. 31, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -265,7 +266,7 @@ case class ComponentLogic(
     result match {
       case Some(JobResult.Success(response)) => Consequence.success(response)
       case Some(JobResult.Failure(conclusion)) => Consequence.Failure(conclusion)
-      case None => Consequence.failure(s"job timeout: ${jobid.value}")
+      case None => Consequence.stateConflict(s"job timeout: ${jobid.value}")
     }
   }
 
@@ -404,10 +405,10 @@ object ComponentLogic {
                 )
               }
             case None =>
-              Consequence.failure("event reception definition is missing")
+              Consequence.serviceUnavailable("event reception definition is missing")
           }
         case None =>
-          Consequence.failure("event reception is not initialized")
+          Consequence.serviceUnavailable("event reception is not initialized")
       }
   }
 
@@ -422,7 +423,7 @@ object ComponentLogic {
           c.recordEventEffect(record)
           Consequence.success(OperationResponse.create(record))
         case None =>
-          Consequence.failure("component is not initialized")
+          Consequence.stateConflict("component is not initialized")
       }
   }
 
@@ -435,7 +436,7 @@ object ComponentLogic {
         case Some(c) =>
           Consequence.success(OperationResponse.create(c.loadEventEffect()))
         case None =>
-          Consequence.failure("component is not initialized")
+          Consequence.stateConflict("component is not initialized")
       }
   }
 

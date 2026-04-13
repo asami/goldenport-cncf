@@ -13,7 +13,8 @@ import org.goldenport.process.{ShellCommand, ShellCommandExecutor, LocalShellCom
 
 /*
  * @since   Feb.  5, 2026
- * @version Feb.  6, 2026
+ *  version Feb.  6, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DockerAdapter {
@@ -171,7 +172,7 @@ final class CommandDockerAdapter(
 
   private def safe[A](description: String)(body: => A): Consequence[A] =
     try Consequence.success(body)
-    catch { case NonFatal(e) => Consequence.failure(s"$description: ${e.getMessage}") }
+    catch { case NonFatal(e) => Consequence.resourceInvalid(s"$description: ${e.getMessage}") }
 }
 
 /**
@@ -181,5 +182,5 @@ final class CommandDockerAdapter(
  */
 final class ServerDockerAdapter extends DockerAdapter {
   override def execute(input: DockerInput): Consequence[DockerOutput] =
-    Consequence.failure("ServerDockerAdapter is not implemented yet (stateful / session-based adapter)")
+    Consequence.notImplemented("ServerDockerAdapter is not implemented yet (stateful / session-based adapter)")
 }

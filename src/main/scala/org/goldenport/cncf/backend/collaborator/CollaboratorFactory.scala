@@ -11,13 +11,15 @@ import scala.util.control.NonFatal
 import java.nio.charset.StandardCharsets
 
 import org.goldenport.Consequence
+import org.goldenport.provisional.observation.Taxonomy
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.backend.collaborator.Collaborator
 import org.goldenport.cncf.collaborator.api.Collaborator as ApiCollaborator
 
 /*
  * @since   Jan. 30, 2026
- * @version Feb.  5, 2026
+ *  version Feb.  5, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class CollaboratorFactory(
@@ -63,7 +65,7 @@ object CollaboratorFactory {
       _validateAndWrap(cls)
     } catch {
       case NonFatal(e) =>
-        Consequence.failure(e)
+        Consequence.fail(Taxonomy.componentInvalid, e)
     }
   }
 
@@ -81,10 +83,10 @@ object CollaboratorFactory {
         Consequence.success(Collaborator(apiInstance))
       } catch {
         case NonFatal(e) =>
-          Consequence.failure(e)
+          Consequence.fail(Taxonomy.componentInvalid, e)
       }
     } else {
-      Consequence.failure(s"invalid collaborator class: ${cls.getName}")
+      Consequence.fail(Taxonomy.componentInvalid, s"invalid collaborator class: ${cls.getName}")
     }
   }
 
@@ -93,14 +95,14 @@ object CollaboratorFactory {
     classpaths: Seq[java.nio.file.Path]
   ): Consequence[Collaborator] = {
     if (classpaths.isEmpty) {
-      Consequence.failure("collaborator classpath is empty")
+      Consequence.resourceNotFound("collaborator classpath is empty")
     } else {
       val classNames = _jar_class_names_from_paths(classpaths)
       val candidates = classNames.flatMap(_loadApiCollaboratorClass(_, loader))
       candidates.distinct match {
         case Vector(cls) => _validateAndWrap(cls)
-        case Vector() => Consequence.failure("no collaborator implementations found by scanning")
-        case _ => Consequence.failure("multiple collaborator implementations found by scanning")
+        case Vector() => Consequence.resourceNotFound("no collaborator implementations found by scanning")
+        case _ => Consequence.fail(Taxonomy.componentInvalid, "multiple collaborator implementations found by scanning")
       }
     }
   }

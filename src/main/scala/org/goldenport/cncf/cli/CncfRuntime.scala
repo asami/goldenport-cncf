@@ -2268,7 +2268,7 @@ object RunMode {
   def parse(p: String): org.goldenport.Consequence[RunMode] =
     from(p) match {
       case Some(runMode) => org.goldenport.Consequence.success(runMode)
-      case None => org.goldenport.Consequence.failure(s"invalid run mode: ${p}")
+      case None => org.goldenport.Consequence.argumentInvalid(s"invalid run mode: ${p}")
     }
 }
 
@@ -2549,13 +2549,13 @@ class CncfRuntime() extends GlobalObservable {
 
         def executeCommand(args: Array[String]): Consequence[Response] =
           if (_is_closed)
-            Consequence.failure("CncfHandle is already closed")
+            Consequence.stateConflict("CncfHandle is already closed")
           else
             executeCommandResponse(initializedSubsystem, args)
 
         def executeAction(action: org.goldenport.cncf.action.Action): Consequence[OperationResponse] =
           if (_is_closed)
-            Consequence.failure("CncfHandle is already closed")
+            Consequence.stateConflict("CncfHandle is already closed")
           else
             executeActionResponse(initializedSubsystem, action)
 

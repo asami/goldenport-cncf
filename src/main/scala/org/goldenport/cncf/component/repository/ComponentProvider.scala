@@ -1,6 +1,7 @@
 package org.goldenport.cncf.component.repository
 
 import org.goldenport.Consequence
+import org.goldenport.provisional.observation.Taxonomy
 import org.goldenport.cncf.bootstrap.BootstrapLog
 import org.goldenport.cncf.observability.global.{ObservabilityScopeDefaults, PersistentBootstrapLog}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
@@ -19,7 +20,8 @@ import scala.util.control.NonFatal
  * @since   Jan. 12, 2026
  *  version Jan. 29, 2026
  *  version Feb. 15, 2026
- * @version Mar. 26, 2026
+ *  version Mar. 26, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentProvider {
@@ -117,7 +119,7 @@ object ComponentProvider {
       case None =>
         val message = s"factory ${factory.getClass.getName} produced no components"
         log.warn(message)
-        Consequence.failure(new RuntimeException(message))
+        Consequence.fail(Taxonomy.componentInvalid, message)
     }
   }
 
@@ -184,7 +186,7 @@ object ComponentProvider {
     try {
       Consequence.success(f)
     } catch {
-      case NonFatal(e) => Consequence.failure(e)
+      case NonFatal(e) => Consequence.fail(Taxonomy.componentInvalid, e)
     }
   }
 
@@ -257,7 +259,7 @@ object ComponentProvider {
           case None =>
             val message = s"companion factory for ${componentClass.getName} produced no components"
             log.warn(message)
-            Consequence.failure(new RuntimeException(message))
+            Consequence.fail(Taxonomy.componentInvalid, message)
         }
       case _ =>
         Consequence.Failure(fallbackConclusion)

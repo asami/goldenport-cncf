@@ -33,7 +33,8 @@ import scala.util.Try
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Mar. 31, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -311,7 +312,7 @@ final class ComponentFactory(
         }
 
       def fromRecord(r: Record): Consequence[Any] =
-        Consequence.failure("EntityPersistent[Any].fromRecord is not wired in bootstrap placeholder")
+        Consequence.notImplemented("EntityPersistent[Any].fromRecord is not wired in bootstrap placeholder")
     }
 
   private final class _IdRef[A](initial: A) extends Ref[cats.Id, A] {
@@ -594,13 +595,13 @@ final class ComponentFactory(
         collection.resolve(id).recoverWith { case _ =>
           EntityStore.standard().load[Any](id)(using summon[EntityPersistent[Any]], ctx0).flatMap {
             case Some(s) => Consequence.success(s)
-            case None => Consequence.failure(s"${_entity_class_name(entityname)} not found: ${id.value}")
+            case None => Consequence.entityNotFound(s"${_entity_class_name(entityname)} not found: ${id.value}")
           }
         }
       case None =>
         EntityStore.standard().load[Any](id)(using summon[EntityPersistent[Any]], ctx0).flatMap {
           case Some(s) => Consequence.success(s)
-          case None => Consequence.failure(s"${_entity_class_name(entityname)} not found: ${id.value}")
+          case None => Consequence.entityNotFound(s"${_entity_class_name(entityname)} not found: ${id.value}")
         }
     }
   }
@@ -704,9 +705,9 @@ final class ComponentFactory(
       case "reverse" =>
         _search_related_entities(component, entityspace, definition, member, rootEntity)
       case "through" =>
-        Consequence.failure(s"Aggregate join strategy 'through' is not implemented for member ${member.name}")
+        Consequence.notImplemented(s"Aggregate join strategy 'through' is not implemented for member ${member.name}")
       case s =>
-        Consequence.failure(s"Unsupported aggregate join strategy: $s")
+        Consequence.argumentInvalid(s"Unsupported aggregate join strategy: $s")
     }
   }
 
@@ -842,7 +843,7 @@ final class ComponentFactory(
               .load[Any](id)
               .flatMap {
                 case Some(s) => Consequence.success(s)
-                case None => Consequence.failure(s"${_entity_class_name(entityname)} not found: ${id.value}")
+                case None => Consequence.entityNotFound(s"${_entity_class_name(entityname)} not found: ${id.value}")
               }
         }
       case None =>
@@ -851,7 +852,7 @@ final class ComponentFactory(
           .load[Any](id)
           .flatMap {
             case Some(s) => Consequence.success(s)
-            case None => Consequence.failure(s"${_entity_class_name(entityname)} not found: ${id.value}")
+            case None => Consequence.entityNotFound(s"${_entity_class_name(entityname)} not found: ${id.value}")
           }
     }
 
@@ -966,9 +967,9 @@ final class ComponentFactory(
             case None =>
               val errors = results.collect { case Left(msg) => msg }
               if (methods.isEmpty)
-                Consequence.failure(s"create(record) not found: ${module.getClass.getName}")
+                Consequence.operationNotFound(s"create(record):${module.getClass.getName}")
               else
-                Consequence.failure(errors.mkString("; "))
+                Consequence.argumentInvalid(errors.mkString("; "))
           }
     }
 
@@ -982,7 +983,7 @@ final class ComponentFactory(
       case m: AggregateAssembler[?] =>
         m.asInstanceOf[AggregateAssembler[Any]].attach_member(aggregate, memberName, members)
       case _ =>
-        Consequence.failure(s"AggregateAssembler not found: ${module.getClass.getName}")
+        Consequence.operationNotFound(s"AggregateAssembler:${module.getClass.getName}")
     }
 
   private def _initialize_working_sets(
@@ -1546,7 +1547,7 @@ object ComponentFactory {
       }
     }
     error match {
-      case Some(e) => Consequence.failure(e)
+      case Some(e) => Consequence.fail(org.goldenport.provisional.observation.Taxonomy.componentInvalid, e)
       case None => Consequence.success(sources.result())
     }
   }

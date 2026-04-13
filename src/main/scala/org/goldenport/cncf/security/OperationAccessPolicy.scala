@@ -58,7 +58,7 @@ object OperationAccessPolicy {
     else
       loadRecord(entityId).flatMap {
         case Some(record) => authorizeOwnerOrManager(record)
-        case None => Consequence.failure(s"SimpleEntity not found: ${entityId.print}")
+        case None => Consequence.entityNotFound(s"SimpleEntity not found: ${entityId.print}")
       }
 
   def hasManagerPrivilege(using ctx: ExecutionContext): Boolean =

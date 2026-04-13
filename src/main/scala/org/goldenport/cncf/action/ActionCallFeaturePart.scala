@@ -79,7 +79,7 @@ trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
   ): Consequence[AggregateBehavior[?]] =
     component.flatMap(_.factory).flatMap(_.create_aggregate_behavior(action, core)) match {
       case Some(behavior) => Consequence.success(behavior)
-      case None => Consequence.failure(s"AggregateBehavior not found: ${action.name}")
+      case None => Consequence.operationNotFound(s"AggregateBehavior not found: ${action.name}")
     }
 
   protected final def invoke_aggregate_behavior[A](

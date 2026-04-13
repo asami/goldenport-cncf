@@ -28,7 +28,8 @@ import org.goldenport.cncf.security.OperationAccessPolicy
  *  version Mar. 29, 2026
  *  version Apr.  4, 2026
  *  version Apr.  7, 2026
- * @version Apr. 13, 2026
+ *  version Apr. 13, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -89,17 +90,17 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case UnitOfWorkOp.DataStoreLoad(id) =>
       withCallTree("uow:datastore:load") {
-        Consequence.failure("DataStore not wired: DataStoreLoad")
+        Consequence.dataStoreUnavailable("DataStore not wired: DataStoreLoad")
       }
 
     case UnitOfWorkOp.DataStoreSave(id, record) =>
       withCallTree("uow:datastore:save") {
-        Consequence.failure("DataStore not wired: DataStoreSave")
+        Consequence.dataStoreUnavailable("DataStore not wired: DataStoreSave")
       }
 
     case UnitOfWorkOp.DataStoreDelete(id) =>
       withCallTree("uow:datastore:delete") {
-        Consequence.failure("DataStore not wired: DataStoreDelete")
+        Consequence.dataStoreUnavailable("DataStore not wired: DataStoreDelete")
       }
 
     case m: (UnitOfWorkOp.EntityStoreCreate[t] @unchecked) =>

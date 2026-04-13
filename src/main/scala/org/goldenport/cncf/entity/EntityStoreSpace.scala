@@ -15,7 +15,8 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
  * @since   Feb. 24, 2026
  *  version Feb. 25, 2026
  *  version Mar. 27, 2026
- * @version Apr. 13, 2026
+ *  version Apr. 13, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {
@@ -68,9 +69,7 @@ class EntityStoreSpace {
         val cid = tc.id(entry.entity).collection
         for {
           entitystore <- _by_collection(cid)
-          _ <- entitystore.create(entry.entity).map(_ => ()).recoverWith { case _ =>
-            entitystore.save(entry.entity).map(_ => ())
-          }
+          _ <- entitystore.save(entry.entity).map(_ => ())
         } yield ()
       }
     }

@@ -177,7 +177,7 @@ abstract class Component() extends Component.Core.Holder {
       case Some(m: Component.Binding[?, ?]) =>
         m.asInstanceOf[Component.Binding[Req, S]].install(this, req)
       case None =>
-        Consequence.failure(s"binding not found: $name")
+        Consequence.serviceUnavailable(s"binding not found: $name")
     }
 
   def withPort(port: Component.Port): Component = {
@@ -414,7 +414,7 @@ object Component {
         case Some(extensionpoint) =>
           extensionpoint.provide(contract, selection)
         case None =>
-          Consequence.failure(
+          Consequence.serviceUnavailable(
             s"extension point not found for contract=${contract.name}, variation=$selection"
           )
       }

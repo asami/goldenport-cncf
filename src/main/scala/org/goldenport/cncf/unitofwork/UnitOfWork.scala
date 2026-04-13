@@ -29,7 +29,8 @@ import org.goldenport.cncf.http.HttpDriver
  *  version Dec. 21, 2025
  *  version Jan. 18, 2026
  *  version Feb. 27, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
@@ -131,7 +132,7 @@ class UnitOfWork(
           eventengine.abort(tx) // TODO
           tx.abort()
           _pending_events = Vector.empty
-          Consequence.failure(reason)
+          Consequence.stateConflict(reason)
         case None =>
           recorder.record("UnitOfWork.commit")
           tx.commit()

@@ -12,7 +12,8 @@ import org.goldenport.record.Record
 
 /*
  * @since   Feb. 25, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace {
@@ -37,7 +38,7 @@ class DataStoreSpace {
       case m: SearchableDataStore =>
         m.search(cid, directive)
       case _ =>
-        Consequence.failure(s"datastore is not searchable: ${cid.print}")
+        Consequence.dataStoreUnavailable(s"datastore is not searchable: ${cid.print}")
     }
 
   def inject(

@@ -13,7 +13,8 @@ import org.goldenport.cncf.component.DescriptorRecordLoader
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -202,7 +203,7 @@ object GenericSubsystemDescriptor {
 
   def load(path: Path): Consequence[GenericSubsystemDescriptor] =
     if (!Files.exists(path))
-      Consequence.failure(s"subsystem descriptor path does not exist: ${path}")
+      Consequence.resourceNotFound(s"subsystem descriptor path does not exist: ${path}")
     else if (Files.isDirectory(path))
       _resolve_descriptor_file(path) match {
         case Some(file) => _load_file(file)
@@ -330,17 +331,17 @@ object GenericSubsystemDescriptor {
                 }
               }
               _from_record(path, rec, assemblyDescriptor)
-            }.getOrElse(Consequence.failure(s"subsystem descriptor is empty in archive: ${path}"))
+            }.getOrElse(Consequence.resourceInvalid(s"subsystem descriptor is empty in archive: ${path}"))
           }
         case None =>
-          Consequence.failure(s"subsystem descriptor not found in archive: ${path}")
+          Consequence.resourceNotFound(s"subsystem descriptor not found in archive: ${path}")
       }
     }
   }
 
   private def _load_file(path: Path): Consequence[GenericSubsystemDescriptor] =
     DescriptorRecordLoader.load(path).flatMap { records =>
-      records.headOption.map(_from_record(path, _)).getOrElse(Consequence.failure(s"subsystem descriptor is empty: ${path}"))
+      records.headOption.map(_from_record(path, _)).getOrElse(Consequence.resourceInvalid(s"subsystem descriptor is empty: ${path}"))
     }
 
   private def _load_manifest_compat(path: Path): Consequence[GenericSubsystemDescriptor] =
@@ -718,7 +719,7 @@ object GenericSubsystemDescriptor {
             )
           )
         case None =>
-          Consequence.failure("missing component/componentName/name")
+          Consequence.argumentMissing("component/componentName/name")
       }
     }
 
@@ -740,7 +741,7 @@ object GenericSubsystemDescriptor {
             )
           )
         case _ =>
-          Consequence.failure("missing authentication provider name/component")
+          Consequence.argumentMissing("authentication provider name/component")
       }
     }
 
@@ -783,7 +784,7 @@ object GenericSubsystemDescriptor {
         case Some(name) =>
           val bindings = _bindings_from_record(Path.of("<record>"), rec)
           if (bindings.isEmpty)
-            Consequence.failure("missing component bindings")
+            Consequence.argumentMissing("component bindings")
           else
             Consequence.success(
               Shape(
@@ -798,7 +799,7 @@ object GenericSubsystemDescriptor {
               )
             )
         case None =>
-          Consequence.failure("missing subsystem/subsystemName/name")
+          Consequence.argumentMissing("subsystem/subsystemName/name")
       }
     }
 }

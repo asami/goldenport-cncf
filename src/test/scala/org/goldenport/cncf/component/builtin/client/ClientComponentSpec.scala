@@ -123,6 +123,6 @@ class ClientComponentSpec
         val call = component.logic.createActionCall(action)
         component.logic.execute(call)
       case _ =>
-        Consequence.failure("OperationRequest must be Action")
+        Consequence.argumentInvalid("OperationRequest must be Action")
     }
 }

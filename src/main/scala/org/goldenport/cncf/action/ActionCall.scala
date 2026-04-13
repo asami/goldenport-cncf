@@ -46,11 +46,11 @@ abstract class ActionCall()
                 z.flatMap(_ => factory.authorize_operation_entity(action, entityName, core).getOrElse(Consequence.unit))
               }
             } getOrElse {
-              Consequence.failure(s"Operation entity authorization is declared but no factory authorizer is available: ${action.name}")
+              Consequence.serviceUnavailable(s"Operation entity authorization is declared but no factory authorizer is available: ${action.name}")
             }
       ) { access =>
         getFactory[Component.Factory].flatMap(_.authorize_operation_access(action, access, core)) getOrElse {
-          Consequence.failure(s"Operation access is declared but no factory authorizer is available: ${action.name}")
+          Consequence.serviceUnavailable(s"Operation access is declared but no factory authorizer is available: ${action.name}")
         }
       }
     }

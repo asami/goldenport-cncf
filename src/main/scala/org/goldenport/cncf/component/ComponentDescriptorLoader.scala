@@ -15,7 +15,8 @@ import org.goldenport.record.RecordDecoder
  * - explicit path may point at a descriptor file or a CAR-style directory
  *
  * @since   Mar. 27, 2026
- * @version Apr.  8, 2026
+ *  version Apr.  8, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentDescriptorLoader {
@@ -42,24 +43,24 @@ object ComponentDescriptorLoader {
 
   def load(path: Path): Consequence[Vector[ComponentDescriptor]] =
     if (!Files.exists(path))
-      Consequence.failure(s"component descriptor path does not exist: ${path}")
+      Consequence.resourceNotFound(s"component descriptor path does not exist: ${path}")
     else if (Files.isDirectory(path))
       _load_directory(path)
     else if (Files.isRegularFile(path))
       _load_file(path)
     else
-      Consequence.failure(s"component descriptor path is not a file or directory: ${path}")
+      Consequence.resourceInvalid(s"component descriptor path is not a file or directory: ${path}")
 
   def loadArchive(path: Path): Consequence[ComponentDescriptor] =
     if (!Files.exists(path))
-      Consequence.failure(s"component archive descriptor path does not exist: ${path}")
+      Consequence.resourceNotFound(s"component archive descriptor path does not exist: ${path}")
     else {
       val descriptorPath =
         if (Files.isDirectory(path)) _resolve_canonical_descriptor_files(path).headOption
         else Some(path)
       descriptorPath match {
         case Some(file) =>
-          _load_file(file).flatMap(_.headOption.map(Consequence.success).getOrElse(Consequence.failure(s"component archive descriptor is empty: ${file}")))
+          _load_file(file).flatMap(_.headOption.map(Consequence.success).getOrElse(Consequence.resourceInvalid(s"component archive descriptor is empty: ${file}")))
         case None =>
           // Descriptor-first path is the current design.
           // manifest.json fallback remains only as a compatibility memo.
@@ -101,7 +102,7 @@ object ComponentDescriptorLoader {
     if (canonical.nonEmpty)
       _load_files(canonical)
     else
-      Consequence.failure(s"component descriptor not found under canonical CAR layout: ${path}")
+      Consequence.resourceNotFound(s"component descriptor not found under canonical CAR layout: ${path}")
   }
 
   private def _resolve_canonical_descriptor_files(path: Path): Vector[Path] =

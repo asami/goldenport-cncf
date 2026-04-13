@@ -16,7 +16,8 @@ import org.goldenport.schema.DataType
 /*
  * @since   Mar. 29, 2026
  *  version Mar. 29, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class MetricsComponent() extends Component {
@@ -94,7 +95,7 @@ object MetricsComponent {
         case Some(service) =>
           service.loadEntityAccessMetrics().map(OperationResponse.RecordResponse.apply)
         case None =>
-          Consequence.failure("metrics service is not available")
+          Consequence.serviceUnavailable("metrics service is not available")
       }
   }
 }

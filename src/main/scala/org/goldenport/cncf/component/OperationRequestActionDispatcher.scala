@@ -10,7 +10,8 @@ import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 28, 2026
+ *  version Mar. 28, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationRequestActionDispatcher(
@@ -26,10 +27,10 @@ final class OperationRequestActionDispatcher(
           case action: Action =>
             Consequence.success(ParsedEventAction(actionName, action, event))
           case _ =>
-            Consequence.failure(s"OperationRequest must be Action: $actionName")
+            Consequence.argumentInvalid(s"OperationRequest must be Action: $actionName")
         }
       case _ =>
-        Consequence.failure(s"unsupported event for action dispatch: ${event.getClass.getSimpleName}")
+        Consequence.argumentInvalid(s"unsupported event for action dispatch: ${event.getClass.getSimpleName}")
     }
 
   def dispatchParsedAction(
@@ -74,7 +75,7 @@ final class OperationRequestActionDispatcher(
       case Vector(service, operation) =>
         Consequence.success((_default_component_name, service, operation))
       case _ =>
-        Consequence.failure(s"action name must be component.service.operation or service.operation: $p")
+        Consequence.argumentInvalid(s"action name must be component.service.operation or service.operation: $p")
     }
 
   private def _default_component_name: String =
@@ -100,10 +101,10 @@ final class OperationRequestActionDispatcher(
           case Some(operationDefinition) =>
             Consequence.success((resolvedComponent, serviceDefinition.name, operationDefinition.name))
           case None =>
-            Consequence.failure(s"operation not found: ${serviceDefinition.name}.${operation}")
+            Consequence.operationNotFound(s"${serviceDefinition.name}.${operation}")
         }
       case None =>
-        Consequence.failure(s"service not found: $service")
+        Consequence.operationNotFound(s"service:${service}")
     }
   }
 

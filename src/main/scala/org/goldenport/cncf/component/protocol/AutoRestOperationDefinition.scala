@@ -30,5 +30,5 @@ final class AutoRestOperationDefinition(
   override def createOperationRequest(
     request: Request
   ): Consequence[operation.OperationRequest] =
-    Consequence.failure("AutoRest operation execution is not implemented")
+    Consequence.notImplemented("AutoRest operation execution is not implemented")
 }

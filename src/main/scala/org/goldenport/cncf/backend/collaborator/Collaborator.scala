@@ -13,7 +13,8 @@ import org.goldenport.cncf.context.ExecutionContext
 
 /*
  * @since   Jan. 30, 2026
- * @version Feb.  5, 2026
+ *  version Feb.  5, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Collaborator() {
@@ -42,7 +43,7 @@ object Collaborator {
         val r = collaborator.invoke(ccall)
         fromCollaborator(r)
       } catch {
-        case NonFatal(e) => Consequence.failure(e) // TODO
+        case NonFatal(e) => Consequence.serviceUnavailable(s"collaborator invocation failed: ${e.getMessage}")
       }
     }
   }
@@ -59,7 +60,7 @@ object Collaborator {
     } else {
       val observation = Option(p.observation())
       val message = observation.flatMap(obs => Option(obs.message())).getOrElse("collaborator failure")
-      Consequence.failure(new RuntimeException(message))
+      Consequence.serviceUnavailable(message)
     }
   }
 
@@ -93,7 +94,7 @@ object Collaborator {
     if (consequence.isSuccess) {
       Consequence.success(OperationResponse.Scalar(consequence.value().toString))
     } else {
-      Consequence.failure(new RuntimeException("collaborator failure"))
+      Consequence.serviceUnavailable("collaborator failure")
     }
  */ 
 }

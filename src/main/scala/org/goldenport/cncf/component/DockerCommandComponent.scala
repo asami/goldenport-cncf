@@ -16,7 +16,8 @@ import org.goldenport.protocol.spec.OperationDefinition
 
 /*
  * @since   Feb.  6, 2026
- * @version Feb.  6, 2026
+ *  version Feb.  6, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class DockerCommandComponent(
@@ -123,7 +124,7 @@ abstract class DockerCommandComponent(
       Consequence.success(body)
     } catch {
       case NonFatal(exception) =>
-        Consequence.failure(s"${description}: ${exception.getMessage}")
+        Consequence.resourceInvalid(s"${description}: ${exception.getMessage}")
     }
 
 }

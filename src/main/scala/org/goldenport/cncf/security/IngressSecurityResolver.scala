@@ -21,7 +21,8 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Apr. 13, 2026
+ *  version Apr. 13, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -120,12 +121,12 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       if (resolvedProviders.nonEmpty)
         _resolve_authenticated_security(resolvedProviders, base, request)
       else
-        Consequence.failure[SecurityContext]("No authentication provider accepted the request.")
+        Consequence.securityAuthenticationRequired[SecurityContext]("No authentication provider accepted the request.")
     security0.orElse {
       if (_fallback_privilege_enabled(base))
         _resolve_privilege(attributes).map(_security_context(_, attributes))
       else
-        Consequence.failure[SecurityContext]("Privilege fallback is disabled by resolved security wiring.")
+        Consequence.securityPermissionDenied[SecurityContext]("Privilege fallback is disabled by resolved security wiring.")
     }.flatMap { security =>
       val privilege = _resolve_privilege_from_security(security)
       val ctx0 = ExecutionContext.withSecurityContext(base, security)
@@ -261,11 +262,13 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     base: ExecutionContext,
     request: AuthenticationRequest
   ): Consequence[SecurityContext] = {
-    providers.foldLeft(Consequence.failure[SecurityContext]("No authentication provider accepted the request.")) { (z, provider) =>
+    val initial: Consequence[SecurityContext] =
+      Consequence.securityAuthenticationRequired[SecurityContext]("No authentication provider accepted the request.")
+    providers.foldLeft(initial) { (z, provider) =>
       z.orElse {
         provider.authenticate(request)(using base).flatMap {
           case Some(result) => Consequence.success(result.toSecurityContext)
-          case None => Consequence.failure[SecurityContext](s"Authentication provider did not match: ${provider.name}")
+          case None => Consequence.securityAuthenticationRequired[SecurityContext](s"Authentication provider did not match: ${provider.name}")
         }
       }
     }

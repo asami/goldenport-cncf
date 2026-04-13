@@ -4,7 +4,8 @@ import org.goldenport.Consequence
 
 /*
  * @since   Apr.  9, 2026
- * @version Apr.  9, 2026
+ *  version Apr.  9, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -39,7 +40,7 @@ object AwaitSupport {
     }
     result match {
       case Some(value) => Consequence.success(value)
-      case None => Consequence.failure(message)
+      case None => Consequence.operationInvalid(message)
     }
   }
 

@@ -173,7 +173,7 @@ final case class RestCall(
       case Some(t: TextBag) =>
         _exec_from(t.toText.map(Some(_)))
       case Some(bag) =>
-        _exec_from(Consequence.failure(s"unsupported request body bag type: ${bag.getClass.getName}"))
+        _exec_from(Consequence.argumentInvalid(s"unsupported request body bag type: ${bag.getClass.getName}"))
     }
 
   private def _headers_map(req: HttpRequest): Map[String, String] =

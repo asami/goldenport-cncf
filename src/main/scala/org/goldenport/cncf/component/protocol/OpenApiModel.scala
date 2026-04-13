@@ -15,7 +15,8 @@ import org.goldenport.http.HttpRequest
  * is performed at this stage.
  *
  * @since   Feb.  7, 2026
- * @version Feb.  7, 2026
+ *  version Feb.  7, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class OpenApiModel(
@@ -40,7 +41,7 @@ object OpenApiModel {
     for {
       version <- r.getString("openapi") match {
         case Some(ver) => Consequence.success(ver)
-        case None => Consequence.failure("openapi version missing")
+        case None => Consequence.argumentMissing("openapi")
       }
       pathsRec <- r.getFieldAsRecord("paths")
       services <- _services(pathsRec)
@@ -100,7 +101,7 @@ object OpenApiModel {
     def getFieldAsRecord(key: String): Consequence[Record] =
       record.asMap.get(key) match {
         case Some(rec: Record) => Consequence.success(rec)
-        case _ => Consequence.failure(s"Record field '$key' is missing or not a Record")
+        case _ => Consequence.argumentInvalid(s"Record field '$key' is missing or not a Record")
       }
   }
 }

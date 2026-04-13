@@ -10,7 +10,8 @@ import org.goldenport.cncf.component.{CommandParameterMappingRule, ShellCommandC
 
 /*
  * @since   Feb.  5, 2026
- * @version Feb. 19, 2026
+ *  version Feb. 19, 2026
+ * @version Apr. 14, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ShellCommandOperationDefinition() extends ComponentOperationDefinition() {
@@ -84,6 +85,6 @@ case class ShellCommandCall(
           OperationResponse.Scalar(result.stdout.asStringUnsafe())
         }
       case _ =>
-        Consequence.failure("ShellCommandComponent is required for shell execution")
+        Consequence.serviceUnavailable("ShellCommandComponent is required for shell execution")
     }
 }

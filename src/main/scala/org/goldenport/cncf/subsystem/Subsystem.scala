@@ -266,7 +266,7 @@ final class Subsystem(
       case "passthrough" =>
         Consequence.success(request)
       case other =>
-        Consequence.failure(s"unsupported request glue mode: ${other}")
+        Consequence.operationInvalid(s"unsupported request glue mode: ${other}")
     }
 
   private def _apply_response_glue(
@@ -289,7 +289,7 @@ final class Subsystem(
           )
         )
       case other =>
-        Consequence.failure(s"unsupported response glue mode: ${other}")
+        Consequence.operationInvalid(s"unsupported response glue mode: ${other}")
     }
   }
 
@@ -586,7 +586,7 @@ object Subsystem {
       val httpDriver =
         conf.get[String]("cncf.subsystem.http.driver").flatMap {
           case Some(value) => Consequence.success(value)
-          case None        => Consequence.failure("cncf.subsystem.http.driver is required")
+          case None        => Consequence.argumentMissing("cncf.subsystem.http.driver")
         }
 
       val mode =
@@ -596,7 +596,7 @@ object Subsystem {
           .flatMap { value =>
             RunMode.from(value) match {
               case Some(runMode) => Consequence.success(runMode)
-              case None          => Consequence.failure(s"invalid run mode: ${value}")
+              case None          => Consequence.argumentInvalid(s"invalid run mode: ${value}")
             }
           }
 

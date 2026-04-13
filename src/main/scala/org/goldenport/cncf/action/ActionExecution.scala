@@ -117,7 +117,7 @@ import org.goldenport.cncf.security.{Action as SecurityAction, SecuredResource}
 //   def accesses: Seq[ResourceAccess] = Nil
 
 //   def execute(): Consequence[OperationResponse] =
-//     Consequence.failure("ActionCall execution is not implemented in Phase 1")
+//     Consequence.notImplemented("ActionCall execution is not implemented in Phase 1")
 // }
 
 final case class ResourceAccess(
