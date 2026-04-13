@@ -290,6 +290,76 @@ final class UnitOfWorkTargetAuthorizationSpec
       result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
     }
 
+    "reject relation-based update unless update access is explicitly allowed" in {
+      given ExecutionContext = _execution_context(
+        principalId = "customer-user",
+        principalAttributes = Map("customer_id" -> "customer-123")
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val id = EntityId("test", "update_relation_denied", _cid)
+      _seed(PersonEntity(id, "order-4", "sales-org", customerId = Some("customer-123")))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Unit](
+            UnitOfWorkOp.EntityStoreUpdate(
+              entity = PersonEntity(id, "order-4-updated", "sales-org", customerId = Some("customer-123")),
+              tc = summon[EntityPersistent[PersonEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("SalesOrder"),
+                  targetId = Some(id),
+                  accessKind = "update",
+                  relationRules = Vector(EntityAccessRelation("customerId", "customerId", Set("read", "search/list")))
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result shouldBe a[Consequence.Failure[_]]
+      _load_name(id) shouldBe Consequence.success(Some("order-4"))
+    }
+
+    "allow relation-based update when update access is explicitly allowed" in {
+      given ExecutionContext = _execution_context(
+        principalId = "customer-user",
+        principalAttributes = Map("customer_id" -> "customer-123")
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val id = EntityId("test", "update_relation_allowed", _cid)
+      _seed(PersonEntity(id, "order-5", "sales-org", customerId = Some("customer-123")))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Unit](
+            UnitOfWorkOp.EntityStoreUpdate(
+              entity = PersonEntity(id, "order-5-updated", "sales-org", customerId = Some("customer-123")),
+              tc = summon[EntityPersistent[PersonEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("SalesOrder"),
+                  targetId = Some(id),
+                  accessKind = "update",
+                  relationRules = Vector(EntityAccessRelation("customerId", "customerId", Set("update")))
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result shouldBe Consequence.unit
+      _load_name(id) shouldBe Consequence.success(Some("order-5-updated"))
+    }
+
     "reject read when explicit ABAC tenant condition does not match" in {
       given ExecutionContext = _execution_context(
         principalId = "tenant-user",
