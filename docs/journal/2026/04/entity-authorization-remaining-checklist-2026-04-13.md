@@ -165,7 +165,7 @@ Status update on 2026-04-13:
 - [x] Include subject id and normalized role/group/capability summary.
 - [x] Ensure denied authorization does not emit action execution enter/leave
       events.
-- [ ] Add dashboard/admin visibility for authorization counters.
+- [x] Add dashboard/admin visibility for authorization counters.
 
 ## Documentation
 

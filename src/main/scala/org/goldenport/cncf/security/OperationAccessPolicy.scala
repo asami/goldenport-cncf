@@ -5,6 +5,7 @@ import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.entity.EntityPersistent
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.observability.ObservabilityEngine
 import org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization
 import org.simplemodeling.model.datatype.EntityId
@@ -283,6 +284,7 @@ object OperationAccessPolicy {
     val outcome = result match
       case Consequence.Success(_) => "allow"
       case Consequence.Failure(_) => "deny"
+    RuntimeDashboardMetrics.recordAuthorizationDecision(outcome == "deny")
     val _ = ctx.observability.emitInfo(
       ctx.cncfCore.scope,
       "authorization.decision",

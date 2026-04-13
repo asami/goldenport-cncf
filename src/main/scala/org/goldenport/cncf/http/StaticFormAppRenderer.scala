@@ -9,7 +9,8 @@ import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 12, 2026
+ *  version Apr. 12, 2026
+ * @version Apr. 13, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -316,11 +317,12 @@ object StaticFormAppRenderer {
        |      latestData = data;
        |      const failedJobs = data.actions.jobs.failed || 0;
        |      const recentFailures = data.html.requests.summary.minute.errors || 0;
-       |      const health = (failedJobs > 0 || recentFailures > 0) ? "WARN" : data.status;
+       |      const recentDenials = data.authorization.decisions.summary.minute.errors || 0;
+       |      const health = (failedJobs > 0 || recentFailures > 0 || recentDenials > 0) ? "WARN" : data.status;
        |      healthPanel.classList.toggle("border-success", health == "UP");
        |      healthPanel.classList.toggle("border-warning", health != "UP");
        |      healthText.textContent = health;
-       |      healthNote.textContent = `jobs failed: $${failedJobs}, recent failures: $${recentFailures}`;
+       |      healthNote.textContent = `jobs failed: $${failedJobs}, recent failures: $${recentFailures}, recent denials: $${recentDenials}`;
        |      subsystemName.textContent = data.subsystem.name;
        |      subsystemVersion.textContent = "subsystem " + (data.subsystem.version || "unversioned");
        |      cncfVersion.textContent = data.cncf.version;
@@ -354,7 +356,8 @@ object StaticFormAppRenderer {
        |      const rows = [
        |        ["HTML request", data.html.requests.summary],
        |        ["ActionCall", data.actions.actionCalls.summary],
-       |        ["Jobs", data.actions.jobs.summary]
+       |        ["Jobs", data.actions.jobs.summary],
+       |        ["Authorization", data.authorization.decisions.summary]
        |      ];
        |      const cells = rows.map(([name, summary]) => `<tr><td>$${name}</td><td>$${summary.cumulative.count}</td><td>$${summary.cumulative.errors}</td><td>$${summary.day.count}</td><td>$${summary.day.errors}</td><td>$${summary.hour.count}</td><td>$${summary.hour.errors}</td><td>$${summary.minute.count}</td><td>$${summary.minute.errors}</td></tr>`).join("");
        |      return `<table class="table table-sm"><thead><tr><th>Level</th><th>Total</th><th>Total err</th><th>1d</th><th>1d err</th><th>1h</th><th>1h err</th><th>1m</th><th>1m err</th></tr></thead><tbody>$${cells}</tbody></table>`;
@@ -448,10 +451,11 @@ object StaticFormAppRenderer {
   private def _performance_page(subsystem: Subsystem): String = {
     val htmlRequests = RuntimeDashboardMetrics.htmlSnapshot
     val actionCalls = RuntimeDashboardMetrics.actionCallSnapshot
+    val authorizationDecisions = RuntimeDashboardMetrics.authorizationDecisionSnapshot
     val jobs = _job_metrics(subsystem)
     _simple_page(
       title = "System Performance",
-      subtitle = "HTML request, ActionCall, and Jobs detail",
+      subtitle = "HTML request, ActionCall, authorization, and Jobs detail",
       body =
         s"""<article>
            |  <h2>Navigation</h2>
@@ -476,6 +480,10 @@ object StaticFormAppRenderer {
            |<article>
            |  <h2>ActionCall</h2>
            |  ${_summary_table(actionCalls.summary)}
+           |</article>
+           |<article>
+           |  <h2>Authorization</h2>
+           |  ${_summary_table(authorizationDecisions.summary)}
            |</article>
            |<article>
            |  <h2>Jobs</h2>
@@ -699,13 +707,14 @@ object StaticFormAppRenderer {
     val (running, queued, completed, failed) = jobs
     val htmlRequests = RuntimeDashboardMetrics.htmlSnapshot
     val actionCalls = RuntimeDashboardMetrics.actionCallSnapshot
+    val authorizationDecisions = RuntimeDashboardMetrics.authorizationDecisionSnapshot
     val avgMillis =
       if (htmlRequests.recent.isEmpty) 0L
       else htmlRequests.recent.map(_.elapsedMillis).sum / htmlRequests.recent.size
     val adminPath =
       if (scope == "component") s"/web/${NamingConventions.toNormalizedSegment(name)}/admin"
       else "/web/system/admin"
-    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance"},"components":${componentJson}}"""
+    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance"},"components":${componentJson}}"""
   }
 
   private def _snapshot_json(

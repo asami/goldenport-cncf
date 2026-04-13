@@ -309,6 +309,10 @@ execution enter/leave observation hooks.
 `ServiceInternal` and `System` bypass object permissions by design. The current
 implementation emits an `authorization.permission.bypass` observability event
 with access mode, resource information, target id, access kind, and subject id.
+Authorization decisions are also counted in `RuntimeDashboardMetrics`.
+Dashboard state exposes them as `authorization.decisions`, and the system
+performance page shows total/day/hour/minute counts with denials represented as
+errors.
 
 The implemented derivation is operation-model based: `InternalService` derives
 `ServiceInternal`, `SystemTask` derives `System`, and ordinary business
