@@ -292,6 +292,29 @@ For multiple conditions in CML, use `;` as the stable delimiter for now.
 `NATURAL_CONDITION`, and `NATURAL_CONDITIONS` are accepted as compatibility
 aliases, but new CML should use `CONDITION`.
 
+Entity classification is declared in the entity `FEATURES` section:
+
+```text
+### FEATURES
+usageKind = "business-object"
+operationKind = "resource"
+applicationDomain = "business"
+```
+
+Service-level `operationModel` is declared in service `ACCESS`; operation-level
+`operationModel` uses the same `ACCESS` shape inside the operation and overrides
+the service default:
+
+```text
+### ACCESS
+
+#### POLICY
+owner_or_manager
+
+#### OPERATION_MODEL
+business-service
+```
+
 ## Variation Points
 
 Component factories can provide coarse and fine-grained entity authorization

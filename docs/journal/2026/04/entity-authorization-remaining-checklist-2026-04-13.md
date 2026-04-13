@@ -26,11 +26,11 @@ Status update on 2026-04-13:
 
 ## CML Surface
 
-- [ ] Define CML syntax for entity `operationKind`.
-- [ ] Define CML syntax for entity `applicationDomain`.
-- [ ] Keep `usageKind` available as a separate classification axis.
-- [ ] Define CML syntax for service-level `operationModel`.
-- [ ] Define CML syntax for operation-level `operationModel` override.
+- [x] Define CML syntax for entity `operationKind`.
+- [x] Define CML syntax for entity `applicationDomain`.
+- [x] Keep `usageKind` available as a separate classification axis.
+- [x] Define CML syntax for service-level `operationModel`.
+- [x] Define CML syntax for operation-level `operationModel` override.
 - [ ] Define CML syntax for relation-based authorization.
 - [x] Define first stable CML syntax for operation-level ABAC natural condition
       as `ACCESS` / `CONDITION`, with `;` as the multi-condition delimiter.
@@ -43,12 +43,12 @@ Status update on 2026-04-13:
 
 ## Descriptor and Generation
 
-- [ ] Ensure generated CAR/component descriptors emit `operationKind`.
-- [ ] Ensure generated CAR/component descriptors emit `applicationDomain`.
-- [ ] Decide whether generated descriptors should also emit `usageKind`.
+- [x] Ensure generated CAR/component descriptors emit `operationKind`.
+- [x] Ensure generated CAR/component descriptors emit `applicationDomain`.
+- [x] Decide whether generated descriptors should also emit `usageKind`.
 - [ ] Wire descriptor entity classification into runtime create default profile
       derivation.
-- [ ] Add descriptor tests for camelCase and snake_case field names.
+- [x] Add descriptor tests for camelCase and snake_case field names.
 - [ ] Add generated sample descriptor examples for business and CMS entities.
 
 ## Create Defaults

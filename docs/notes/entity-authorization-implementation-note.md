@@ -147,10 +147,30 @@ postStatus=Published:read,search/list;visibility=Public:read,search/list
 
 `CONDITIONS`, `ABAC`, `ABAC_CONDITION`, `ABAC_CONDITIONS`,
 `NATURAL_CONDITION`, and `NATURAL_CONDITIONS` are accepted as compatibility
-aliases, but new CML should use `CONDITION`. This is only the first carrier and
-evaluator. The `now` value is currently the first environment attribute. A richer
-authorization context and entity-level syntax remain future work.
+aliases, but new CML should use `CONDITION`. The `now` value is currently the
+first environment attribute.
 For multiple conditions in CML, use `;` as the stable delimiter for now.
+
+Entity classification is carried in the entity `FEATURES` section. New CML
+should use camelCase names:
+
+```text
+### FEATURES
+usageKind = "business-object"
+operationKind = "resource"
+applicationDomain = "business"
+```
+
+snake_case aliases remain accepted. Service-level and operation-level
+`operationModel` are carried in `ACCESS`:
+
+```text
+### ACCESS
+#### POLICY
+owner_or_manager
+#### OPERATION_MODEL
+business-service
+```
 
 Natural condition evaluation now produces a minimal diagnostic result. When a
 direct read/update/delete authorization path is denied by a missed ABAC natural
