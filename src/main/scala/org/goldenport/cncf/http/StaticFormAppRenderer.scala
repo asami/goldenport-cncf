@@ -186,7 +186,10 @@ object StaticFormAppRenderer {
         Some(Page(_subsystem_dashboard_state(subsystem)))
     }
 
-  def renderSystemAdmin(subsystem: Subsystem): Page =
+  def renderSystemAdmin(
+    subsystem: Subsystem,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
+  ): Page =
     Page(_admin_page(
       title = "System Admin Configuration",
       subtitle = "Current CNCF runtime configuration",
@@ -194,16 +197,21 @@ object StaticFormAppRenderer {
       subsystemName = subsystem.name,
       subsystemVersion = subsystem.version,
       dashboardPath = "/web/system/dashboard",
-      performancePath = "/web/system/performance"
+      performancePath = "/web/system/performance",
+      webDescriptor = webDescriptor
     ))
 
   def renderComponentAdmin(
     subsystem: Subsystem,
-    componentName: String
+    componentName: String,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
-    _find_component(subsystem, componentName).map(renderComponentAdmin)
+    _find_component(subsystem, componentName).map(renderComponentAdmin(_, webDescriptor))
 
-  def renderComponentAdmin(component: Component): Page = {
+  def renderComponentAdmin(
+    component: Component,
+    webDescriptor: WebDescriptor
+  ): Page = {
     val name = NamingConventions.toNormalizedSegment(component.name)
     Page(_admin_page(
       title = s"${_escape(component.name)} Admin Configuration",
@@ -212,7 +220,8 @@ object StaticFormAppRenderer {
       subsystemName = component.subsystem.map(_.name).getOrElse(component.name),
       subsystemVersion = component.subsystem.flatMap(_.version),
       dashboardPath = s"/web/${name}/dashboard",
-      performancePath = "/web/system/performance"
+      performancePath = "/web/system/performance",
+      webDescriptor = webDescriptor
     ))
   }
 
@@ -468,7 +477,8 @@ object StaticFormAppRenderer {
     subsystemName: String,
     subsystemVersion: Option[String],
     dashboardPath: String,
-    performancePath: String
+    performancePath: String,
+    webDescriptor: WebDescriptor
   ): String = {
     val componentBlocks = components.map { component =>
       val services = component.protocol.services.services.map { service =>
@@ -504,9 +514,62 @@ object StaticFormAppRenderer {
            |  <h2>Navigation</h2>
            |  <p><a href="${_escape(dashboardPath)}">Dashboard</a> · <a href="${_escape(performancePath)}">Performance details</a> · <a href="/web/manual">Manual</a> · <a href="/web/console">Console</a></p>
            |</article>
+           |<article>
+           |  <h2>Web Descriptor</h2>
+           |  ${_web_descriptor_summary(webDescriptor)}
+           |</article>
            |${componentBlocks}""".stripMargin
     )
   }
+
+  private def _web_descriptor_summary(
+    descriptor: WebDescriptor
+  ): String =
+    s"""<div class="table-responsive"><table class="table table-sm">
+       |  <tbody>
+       |    <tr><th>Status</th><td>${if (descriptor.hasControls) "configured" else "default"}</td></tr>
+       |    <tr><th>Auth mode</th><td>${_escape(descriptor.auth.mode)}</td></tr>
+       |    <tr><th>Exposure entries</th><td>${descriptor.expose.size}</td></tr>
+       |    <tr><th>Authorization entries</th><td>${descriptor.authorization.size}</td></tr>
+       |    <tr><th>Form entries</th><td>${descriptor.form.size}</td></tr>
+       |    <tr><th>App entries</th><td>${descriptor.apps.size}</td></tr>
+       |  </tbody>
+       |</table></div>
+       |${_web_descriptor_app_list(descriptor)}
+       |${_web_descriptor_exposure_list(descriptor)}""".stripMargin
+
+  private def _web_descriptor_app_list(
+    descriptor: WebDescriptor
+  ): String =
+    if (descriptor.apps.isEmpty) {
+      "<p>Using built-in Web HTML app defaults.</p>"
+    } else {
+      val rows = descriptor.apps.map { app =>
+        s"""<tr><td>${_escape(app.name)}</td><td><code>${_escape(app.path)}</code></td><td>${_escape(app.kind)}</td></tr>"""
+      }.mkString("\n")
+      s"""<h3>Apps</h3><div class="table-responsive"><table class="table table-sm">
+         |  <thead><tr><th>Name</th><th>Path</th><th>Kind</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
+
+  private def _web_descriptor_exposure_list(
+    descriptor: WebDescriptor
+  ): String =
+    if (descriptor.expose.isEmpty) {
+      "<p>No explicit Web exposure entries.</p>"
+    } else {
+      val rows = descriptor.expose.toVector.sortBy(_._1).map {
+        case (selector, exposure) =>
+          val auth = descriptor.authorization.get(selector).map(_ => "yes").getOrElse("no")
+          val form = descriptor.form.get(selector).flatMap(_.enabled).map(_.toString).getOrElse("default")
+          s"""<tr><td><code>${_escape(selector)}</code></td><td>${_escape(exposure.name)}</td><td>${auth}</td><td>${form}</td></tr>"""
+      }.mkString("\n")
+      s"""<h3>Operation Exposure</h3><div class="table-responsive"><table class="table table-sm">
+         |  <thead><tr><th>Selector</th><th>Exposure</th><th>Authorization</th><th>Form</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
 
   private def _performance_page(subsystem: Subsystem): String = {
     val htmlRequests = RuntimeDashboardMetrics.htmlSnapshot

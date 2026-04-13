@@ -76,6 +76,27 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/system/performance")
       html should include ("/web/manual")
       html should include ("/web/console")
+      html should include ("Web Descriptor")
+      html should include ("Using built-in Web HTML app defaults.")
+    }
+
+    "render resolved Web Descriptor summary on system admin page" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val descriptor = WebDescriptor(
+        expose = Map("notice-board.notice.search-notices" -> WebDescriptor.Exposure.Public),
+        authorization = Map("notice-board.notice.search-notices" -> WebDescriptor.Authorization(roles = Vector("reader"))),
+        form = Map("notice-board.notice.search-notices" -> WebDescriptor.Form(enabled = Some(true))),
+        apps = Vector(WebDescriptor.App("manual", "/web/manual", "manual"))
+      )
+
+      val html = StaticFormAppRenderer.renderSystemAdmin(subsystem, descriptor).body
+
+      html should include ("Web Descriptor")
+      html should include ("configured")
+      html should include ("notice-board.notice.search-notices")
+      html should include ("public")
+      html should include ("manual")
+      html should include ("/web/manual")
     }
 
     "render component admin configuration detail page" in {
@@ -91,6 +112,24 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/system/performance")
       html should include ("/web/manual")
       html should include ("/web/console")
+    }
+
+    "render resolved Web Descriptor summary on component admin page" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      val descriptor = WebDescriptor(
+        expose = Map(s"${componentPath}.service.operation" -> WebDescriptor.Exposure.Protected),
+        apps = Vector(WebDescriptor.App("component-dashboard", s"/web/${componentPath}/dashboard", "dashboard"))
+      )
+
+      val html = StaticFormAppRenderer.renderComponentAdmin(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("component admin is missing"))
+
+      html should include ("Web Descriptor")
+      html should include ("configured")
+      html should include (s"${componentPath}.service.operation")
+      html should include ("protected")
+      html should include ("component-dashboard")
     }
 
     "render system performance detail page" in {

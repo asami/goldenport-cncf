@@ -196,7 +196,7 @@ final class Http4sHttpServer(
   }
 
   private def _system_admin(): IO[HResponse[IO]] = {
-    val p = StaticFormAppRenderer.renderSystemAdmin(engine.runtimeSubsystem)
+    val p = StaticFormAppRenderer.renderSystemAdmin(engine.runtimeSubsystem, engine.webDescriptor)
     IO.pure(
       HResponse[IO](HStatus.Ok)
         .withEntity(p.body)
@@ -205,7 +205,7 @@ final class Http4sHttpServer(
   }
 
   private def _component_admin(app: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdmin(engine.runtimeSubsystem, app) match {
+    StaticFormAppRenderer.renderComponentAdmin(engine.runtimeSubsystem, app, engine.webDescriptor) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
