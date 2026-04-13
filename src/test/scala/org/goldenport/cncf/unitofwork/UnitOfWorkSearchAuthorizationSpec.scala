@@ -456,6 +456,56 @@ final class UnitOfWorkSearchAuthorizationSpec
       result.totalCount shouldBe Some(3)
       result.fetchedCount shouldBe 3
     }
+
+    "filter search results by assignee and participant relation rules" in {
+      Given("a principal assigned to one entity and participating in another")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(
+        datastorespace,
+        entitystorespace,
+        principalId = "work-user"
+      )
+      given EntityPersistent[PersonEntity] = _person_persistent
+
+      val p1 = PersonEntity(EntityId("test", "ra1", _cid), "assigned-record", "owner-x", assigneeId = Some("work-user"))
+      val p2 = PersonEntity(EntityId("test", "ra2", _cid), "participant-record", "owner-y", participantId = Some("work-user"))
+      val p3 = PersonEntity(EntityId("test", "ra3", _cid), "unrelated-record", "owner-z", assigneeId = Some("other-user"), participantId = Some("another-user"))
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p1.toRecord()),
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p2.toRecord()),
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(_cid), p3.toRecord())
+          )
+        )
+      )
+      val interpreter = new UnitOfWorkInterpreter(new UnitOfWork(summon[ExecutionContext]))
+
+      When("searching with assignee and participant relation rules")
+      val result = interpreter.execute(
+        UnitOfWorkOp.EntityStoreSearch(
+          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          tc = summon[EntityPersistent[PersonEntity]],
+          authorization = Some(
+            UnitOfWorkAuthorization(
+              resourceFamily = "domain",
+              resourceType = Some("Person"),
+              accessKind = "search/list",
+              relationRules = Vector(
+                EntityAccessRelation("assigneeId", "subjectId", Set("search/list")),
+                EntityAccessRelation("participantId", "subjectId", Set("search/list"))
+              )
+            )
+          )
+        )
+      )
+
+      Then("assigned or participating entities remain visible")
+      result.data.map(_.id).toSet shouldBe Set(p1.id, p2.id)
+      result.totalCount shouldBe Some(2)
+      result.fetchedCount shouldBe 2
+    }
   }
 
   private def _execution_context(
@@ -528,7 +578,9 @@ final class UnitOfWorkSearchAuthorizationSpec
     customerId: Option[String] = None,
     accountId: Option[String] = None,
     tenantId: Option[String] = None,
-    organizationId: Option[String] = None
+    organizationId: Option[String] = None,
+    assigneeId: Option[String] = None,
+    participantId: Option[String] = None
   ) {
     def toRecord(): Record =
       Record.dataAuto(
@@ -539,6 +591,8 @@ final class UnitOfWorkSearchAuthorizationSpec
         "accountId" -> accountId,
         "tenantId" -> tenantId,
         "organizationId" -> organizationId,
+        "assigneeId" -> assigneeId,
+        "participantId" -> participantId,
         "security_attributes" -> Record.dataAuto(
           "owner_id" -> ownerId,
           "group_id" -> groupId,
@@ -584,10 +638,12 @@ final class UnitOfWorkSearchAuthorizationSpec
         r.getString("customerId").orElse(r.getString("customer_id")),
         r.getString("accountId").orElse(r.getString("account_id")),
         r.getString("tenantId").orElse(r.getString("tenant_id")),
-        r.getString("organizationId").orElse(r.getString("organization_id"))
+        r.getString("organizationId").orElse(r.getString("organization_id")),
+        r.getString("assigneeId").orElse(r.getString("assignee_id")),
+        r.getString("participantId").orElse(r.getString("participant_id"))
       ) match
-        case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId, publishAt, customerId, accountId, tenantId, organizationId) =>
-          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId, publishAt, customerId, accountId, tenantId, organizationId))
+        case (Some(entityId), Some(entityName), Some(entityOwnerId), entityGroupId, entityPrivilegeId, publishAt, customerId, accountId, tenantId, organizationId, assigneeId, participantId) =>
+          Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId, publishAt, customerId, accountId, tenantId, organizationId, assigneeId, participantId))
         case _ =>
           Consequence.failure("invalid person record")
   }
