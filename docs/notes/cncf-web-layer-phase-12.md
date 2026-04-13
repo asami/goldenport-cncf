@@ -167,6 +167,12 @@ Those links do not make Dashboard an execution surface. Console operation
 execution remains in the separate Console/Form App context; Dashboard only
 offers navigation.
 
+Advanced visualizations are deferred from the WEB-04 baseline. SVG assembly
+diagrams, richer wiring graphs, and other visual projections should be built as
+later projections of existing admin assembly/report data, not as new Dashboard
+semantics. The baseline Dashboard keeps the at-a-glance health view, counts,
+graph tabs, and links to detail surfaces.
+
 A Component Dashboard must not replace the Subsystem Dashboard because it has a
 narrower scope and different screen composition.
 

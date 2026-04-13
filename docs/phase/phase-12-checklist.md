@@ -161,7 +161,7 @@ exposure, security, form behavior, traffic control, and application hosting.
 
 ## WEB-04: Read-Only Dashboard Baseline
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -177,7 +177,7 @@ CNCF runtime, observability, and meta capabilities.
 - [x] Define calltree/action history visibility from existing observability design.
 - [x] Define assembly warning visibility for dashboard/admin surfaces.
 - [x] Define navigation links from dashboard to management console and manual without inline control actions.
-- [ ] Defer advanced visualizations unless required for the baseline.
+- [x] Defer advanced visualizations unless required for the baseline.
 
 ### Inputs
 

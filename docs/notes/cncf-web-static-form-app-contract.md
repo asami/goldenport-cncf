@@ -103,6 +103,11 @@ operation surfaces:
 /form/admin/assembly/report
 ```
 
+Advanced visual projections such as SVG assembly diagrams or richer wiring
+graphs are not part of the WEB-04 baseline. They should remain projections of
+the existing assembly/admin data and may be added later without changing the
+Dashboard state contract.
+
 ## Execution Model
 
 REST operation execution remains the only business execution path.
