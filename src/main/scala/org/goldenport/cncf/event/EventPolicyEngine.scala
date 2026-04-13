@@ -2,8 +2,6 @@ package org.goldenport.cncf.event
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.observation.Descriptor.Facet
-import org.goldenport.provisional.observation.Taxonomy
 
 /*
  * EV-04 policy boundary for event surfaces.
@@ -56,7 +54,7 @@ object EventPolicyEngine {
       else
         Consequence.operationIllegal(
           operation,
-          Seq(Facet.Message(s"required capability: ${requiredCaps.toVector.sorted.mkString("|")}"))
+          s"required capability: ${requiredCaps.toVector.sorted.mkString("|")}"
         )
 
     private def _has_any_capability(

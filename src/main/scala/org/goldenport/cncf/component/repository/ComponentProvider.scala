@@ -1,8 +1,6 @@
 package org.goldenport.cncf.component.repository
 
 import org.goldenport.Consequence
-import org.goldenport.observation.Descriptor.Facet
-import org.goldenport.provisional.observation.Taxonomy
 import org.goldenport.cncf.bootstrap.BootstrapLog
 import org.goldenport.cncf.observability.global.{ObservabilityScopeDefaults, PersistentBootstrapLog}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
@@ -120,7 +118,7 @@ object ComponentProvider {
       case None =>
         val message = s"factory ${factory.getClass.getName} produced no components"
         log.warn(message)
-        Consequence.componentInvalid(Seq(Facet.Message(message)))
+        Consequence.componentInvalid(message)
     }
   }
 
@@ -187,7 +185,7 @@ object ComponentProvider {
     try {
       Consequence.success(f)
     } catch {
-      case NonFatal(e) => Consequence.componentInvalid(Seq(Facet.Exception(e)))
+      case NonFatal(e) => Consequence.componentInvalid(e)
     }
   }
 
@@ -260,7 +258,7 @@ object ComponentProvider {
           case None =>
             val message = s"companion factory for ${componentClass.getName} produced no components"
             log.warn(message)
-            Consequence.componentInvalid(Seq(Facet.Message(message)))
+            Consequence.componentInvalid(message)
         }
       case _ =>
         Consequence.Failure(fallbackConclusion)

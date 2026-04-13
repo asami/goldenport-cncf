@@ -5,7 +5,6 @@ import java.lang.reflect.InvocationTargetException
 import cats.effect.Ref
 import cats.data.State
 import org.goldenport.Consequence
-import org.goldenport.observation.Descriptor.Facet
 import org.goldenport.record.Record
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.config.ConfigurationAccess
@@ -1548,7 +1547,7 @@ object ComponentFactory {
       }
     }
     error match {
-      case Some(e) => Consequence.componentInvalid(Seq(Facet.Exception(e)))
+      case Some(e) => Consequence.componentInvalid(e)
       case None => Consequence.success(sources.result())
     }
   }

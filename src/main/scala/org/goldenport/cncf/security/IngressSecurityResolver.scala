@@ -10,8 +10,6 @@ import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.event.EventReception
 import org.goldenport.cncf.job.{ActionId, JobContext, JobId, TaskId}
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
-import org.goldenport.observation.Descriptor.Facet
-import org.goldenport.provisional.observation.Taxonomy
 import org.goldenport.protocol.Request
 
 /*
@@ -107,7 +105,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       else
         Consequence.operationIllegal(
           "security.resolve",
-          Seq(Facet.Message(s"required capability: ${caps.toVector.sorted.mkString("|")}"))
+          s"required capability: ${caps.toVector.sorted.mkString("|")}"
         )
     }
   }
@@ -136,7 +134,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       else
         Consequence.operationIllegal(
           "security.resolve",
-          Seq(Facet.Message(s"required capability: ${caps.toVector.sorted.mkString("|")}"))
+          s"required capability: ${caps.toVector.sorted.mkString("|")}"
         )
     }
   }
@@ -412,7 +410,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       case Some(other) =>
         Consequence.operationInvalid(
           "security.resolve",
-          Seq(Facet.Message(s"invalid privilege: $other"))
+          s"invalid privilege: $other"
         )
     }
   }

@@ -10,8 +10,6 @@ import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, QueryAction
 import org.goldenport.cncf.component.{Component, ComponentLogic}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.event.{EventId, EventLane, EventRecord, EventStore}
-import org.goldenport.observation.Descriptor.Facet
-import org.goldenport.provisional.observation.Taxonomy
 
 /*
  * @since   Jan.  4, 2026
@@ -144,7 +142,7 @@ object JobControlPolicy {
       else
         Consequence.operationIllegal(
           "job.control",
-          Seq(Facet.Message(s"required capability: ${_control_caps.toVector.sorted.mkString("|")}"))
+          s"required capability: ${_control_caps.toVector.sorted.mkString("|")}"
         )
     }
   }
@@ -323,7 +321,7 @@ object JobQueryPolicy {
       else
         Consequence.operationIllegal(
           "job.query",
-          Seq(Facet.Message(s"required capability: ${_read_caps.toVector.sorted.mkString("|")}"))
+          s"required capability: ${_read_caps.toVector.sorted.mkString("|")}"
         )
   }
 }
