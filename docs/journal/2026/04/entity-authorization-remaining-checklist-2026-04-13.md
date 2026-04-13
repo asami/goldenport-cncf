@@ -74,7 +74,7 @@ Status update on 2026-04-13:
 - [x] Support tenant/organization relation rules.
 - [x] Support customer/account relation rules.
 - [x] Support assignee/participant relation rules.
-- [ ] Decide denial precedence when ACL and relation rules disagree.
+- [x] Decide denial precedence when ACL and relation rules disagree.
 - [x] Add result filtering tests for relation-based search/list.
 - [x] Add tests for relation-based update denial unless explicitly allowed.
 

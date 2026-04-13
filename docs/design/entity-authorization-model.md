@@ -197,6 +197,21 @@ entity.customerId == subject.customerId
 Relation rules are evaluated before object-side owner/group/other permission
 checks for user-permission access.
 
+When ACL-style owner/group/other permissions and relation rules disagree, the
+implemented precedence is:
+
+1. ABAC natural conditions are mandatory guards. A missed natural condition
+   denies access before relation or owner/group/other checks.
+2. Public read policy can grant read visibility.
+3. Matching relation rules grant the access kinds they explicitly allow.
+4. Owner/group/other permissions are evaluated as the fallback grant path.
+
+This means a matching relation rule can grant read/search/update access even when
+`other` permission is false. Relation rules do not currently model explicit deny;
+they are positive grants only. A relation that does not include the requested
+access kind is ignored for that request, and the decision falls through to the
+owner/group/other permission checks.
+
 ## ABAC Evaluation Perspective
 
 The implemented baseline uses ABAC attributes primarily for profile derivation

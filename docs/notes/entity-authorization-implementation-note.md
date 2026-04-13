@@ -159,6 +159,13 @@ observability event when ABAC natural conditions hide one or more records. The
 event records a summary count and the first missed condition. This is not yet
 full audit telemetry for every condition evaluation.
 
+Relation rules are positive grants. The current user-permission evaluation order
+is natural conditions, public read policy, relation rules, then owner/group/other
+permissions. A matching relation rule can therefore grant an explicitly listed
+access kind even when `other` permission is false. Relation rules do not yet
+represent explicit deny; if a rule does not list the requested access kind, it is
+not applicable and the decision falls through to owner/group/other permissions.
+
 ## SalesOrder Example
 
 For a business entity such as `SalesOrder`, the intended defaults are:
@@ -235,7 +242,7 @@ a subject field. Future likely needs include:
 - subject group/account expansion;
 - relation lookup through another component;
 - scoped relation kinds such as customer, tenant, organization, assignee;
-- denial precedence rules.
+- explicit deny rules, if a future use case requires them.
 
 Audit and observability are incomplete.
 
