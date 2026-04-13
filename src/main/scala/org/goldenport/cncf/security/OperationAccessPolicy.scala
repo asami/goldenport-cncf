@@ -83,7 +83,8 @@ object OperationAccessPolicy {
     authorization: UnitOfWorkAuthorization,
     loadRecord: EntityId => Consequence[Option[Record]] = _ => Consequence.success(None)
   )(using ctx: ExecutionContext): Consequence[Unit] =
-    authorization.accessMode match
+    _with_decision_event(authorization, "unit-of-work") {
+      authorization.accessMode match
       case EntityAccessMode.ServiceInternal if _is_cross_component(authorization) && !_subject.hasServiceGrant(authorization.sourceComponentName, authorization.targetComponentName) =>
         Consequence.failure(s"Cross-component service grant is required: ${authorization.sourceComponentName.getOrElse("<unknown>")} -> ${authorization.targetComponentName.getOrElse("<unknown>")}.")
       case EntityAccessMode.System | EntityAccessMode.ServiceInternal =>
@@ -95,13 +96,15 @@ object OperationAccessPolicy {
             authorizeManagerOnly()
           case _ =>
             _authorize_domain_default(authorization, loadRecord)
+    }
 
   def filterVisibleSearchResult[T](
     authorization: UnitOfWorkAuthorization,
     result: SearchResult[T],
     tc: EntityPersistent[T]
   )(using ctx: ExecutionContext): Consequence[SearchResult[T]] =
-    authorization.accessMode match
+    _with_decision_event(authorization, "search/list") {
+      authorization.accessMode match
       case EntityAccessMode.ServiceInternal if _is_cross_component(authorization) && !_subject.hasServiceGrant(authorization.sourceComponentName, authorization.targetComponentName) =>
         Consequence.failure(s"Cross-component service grant is required: ${authorization.sourceComponentName.getOrElse("<unknown>")} -> ${authorization.targetComponentName.getOrElse("<unknown>")}.")
       case EntityAccessMode.System | EntityAccessMode.ServiceInternal =>
@@ -128,6 +131,7 @@ object OperationAccessPolicy {
                 )
               case _ =>
                 Consequence.success(result)
+    }
 
   private def _is_manager(using ctx: ExecutionContext): Boolean = {
     (_subject.roles ++ _subject.capabilities ++ _subject.securityLevel).exists(_manager_aliases.contains)
@@ -254,6 +258,50 @@ object OperationAccessPolicy {
         "target-id" -> authorization.targetId.map(_.print),
         "access-kind" -> authorization.accessKind,
         "subject-id" -> _subject.subjectId
+      )
+    )
+  }
+
+  private def _with_decision_event[A](
+    authorization: UnitOfWorkAuthorization,
+    surface: String
+  )(
+    body: => Consequence[A]
+  )(using ctx: ExecutionContext): Consequence[A] = {
+    val result = body
+    _emit_decision_event(authorization, surface, result)
+    result
+  }
+
+  private def _emit_decision_event[A](
+    authorization: UnitOfWorkAuthorization,
+    surface: String,
+    result: Consequence[A]
+  )(using ctx: ExecutionContext): Unit = {
+    val subject = _subject
+    val outcome = result match
+      case Consequence.Success(_) => "allow"
+      case Consequence.Failure(_) => "deny"
+    val _ = ctx.observability.emitInfo(
+      ctx.cncfCore.scope,
+      "authorization.decision",
+      Record.dataAuto(
+        "surface" -> surface,
+        "outcome" -> outcome,
+        "access-mode" -> _label(authorization.accessMode),
+        "resource-family" -> authorization.resourceFamily,
+        "resource-type" -> authorization.resourceType,
+        "collection" -> authorization.collectionName,
+        "target-id" -> authorization.targetId.map(_.print),
+        "access-kind" -> authorization.accessKind,
+        "entity-names" -> authorization.entityNames.mkString(","),
+        "source-component" -> authorization.sourceComponentName,
+        "target-component" -> authorization.targetComponentName,
+        "subject-id" -> subject.subjectId,
+        "subject-roles" -> subject.roles.toVector.sorted.mkString(","),
+        "subject-groups" -> subject.groups.toVector.sorted.mkString(","),
+        "subject-capabilities" -> subject.capabilities.toVector.sorted.mkString(","),
+        "subject-security-level" -> subject.securityLevel.toVector.sorted.mkString(",")
       )
     )
   }

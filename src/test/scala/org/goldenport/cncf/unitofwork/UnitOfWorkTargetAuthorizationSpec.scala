@@ -328,6 +328,7 @@ final class UnitOfWorkTargetAuthorizationSpec
 
         result shouldBe Consequence.unit
         backend.lines.exists(_.contains("authorization.permission.bypass")) shouldBe true
+        backend.lines.exists(_.contains("authorization.decision")) shouldBe true
       } finally {
         LogBackendHolder.reset()
       }
@@ -411,39 +412,47 @@ final class UnitOfWorkTargetAuthorizationSpec
     }
 
     "reject cross-component service-internal update without service grant" in {
-      given ExecutionContext = _execution_context(
-        principalId = "service-principal"
-      )
-      given EntityPersistent[PersonEntity] = _person_persistent
+      val backend = new MemoryBackend
+      LogBackendHolder.reset()
+      LogBackendHolder.install(backend)
+      try {
+        given ExecutionContext = _execution_context(
+          principalId = "service-principal"
+        )
+        given EntityPersistent[PersonEntity] = _person_persistent
 
-      val id = EntityId("test", "update_cross_component_internal_denied", _cid)
-      _seed(PersonEntity(id, "stock-1", "inventory-org"))
-      val uow = new UnitOfWork(summon[ExecutionContext])
+        val id = EntityId("test", "update_cross_component_internal_denied", _cid)
+        _seed(PersonEntity(id, "stock-1", "inventory-org"))
+        val uow = new UnitOfWork(summon[ExecutionContext])
 
-      val result = new UnitOfWorkInterpreter(uow).run(
-        org.goldenport.ConsequenceT.liftF(
-          cats.free.Free.liftF[UnitOfWorkOp, Unit](
-            UnitOfWorkOp.EntityStoreUpdate(
-              entity = PersonEntity(id, "stock-2", "inventory-org"),
-              tc = summon[EntityPersistent[PersonEntity]],
-              authorization = Some(
-                UnitOfWorkAuthorization(
-                  resourceFamily = "domain",
-                  resourceType = Some("Inventory"),
-                  targetId = Some(id),
-                  accessKind = "update",
-                  accessMode = EntityAccessMode.ServiceInternal,
-                  sourceComponentName = Some("sales"),
-                  targetComponentName = Some("inventory")
+        val result = new UnitOfWorkInterpreter(uow).run(
+          org.goldenport.ConsequenceT.liftF(
+            cats.free.Free.liftF[UnitOfWorkOp, Unit](
+              UnitOfWorkOp.EntityStoreUpdate(
+                entity = PersonEntity(id, "stock-2", "inventory-org"),
+                tc = summon[EntityPersistent[PersonEntity]],
+                authorization = Some(
+                  UnitOfWorkAuthorization(
+                    resourceFamily = "domain",
+                    resourceType = Some("Inventory"),
+                    targetId = Some(id),
+                    accessKind = "update",
+                    accessMode = EntityAccessMode.ServiceInternal,
+                    sourceComponentName = Some("sales"),
+                    targetComponentName = Some("inventory")
+                  )
                 )
               )
             )
           )
         )
-      )
 
-      result shouldBe a[Consequence.Failure[_]]
-      _load_name(id) shouldBe Consequence.success(Some("stock-1"))
+        result shouldBe a[Consequence.Failure[_]]
+        _load_name(id) shouldBe Consequence.success(Some("stock-1"))
+        backend.lines.exists(_.contains("authorization.decision")) shouldBe true
+      } finally {
+        LogBackendHolder.reset()
+      }
     }
 
     "allow cross-component service-internal update with service grant" in {

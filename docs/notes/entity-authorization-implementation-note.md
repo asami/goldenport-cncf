@@ -292,7 +292,12 @@ a subject field. Future likely needs include:
 - scoped relation kinds such as customer, tenant, organization, assignee;
 - explicit deny rules, if a future use case requires them.
 
-Audit and observability are incomplete.
+Audit and observability are partially implemented. The runtime emits
+`authorization.decision` for `UnitOfWork` authorization checks and search/list
+visibility checks. The event includes outcome, access mode, resource
+family/type, collection, target id, entity names, source/target component,
+subject id, and normalized role/group/capability/security-level summaries.
+Relation rule match/miss diagnostics are still incomplete.
 
 `ServiceInternal` and `System` bypass object permissions by design. The current
 implementation emits an `authorization.permission.bypass` observability event

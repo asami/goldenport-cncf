@@ -158,11 +158,11 @@ Status update on 2026-04-13:
 
 ## Observability and Audit
 
-- [ ] Emit authorization decision events.
-- [ ] Include access mode in authorization observability records.
+- [x] Emit authorization decision events.
+- [x] Include access mode in authorization observability records.
 - [ ] Include relation rule match/miss information in debug-level diagnostics.
-- [ ] Include target entity collection/name in audit records.
-- [ ] Include subject id and normalized role/group/capability summary.
+- [x] Include target entity collection/name in audit records.
+- [x] Include subject id and normalized role/group/capability summary.
 - [ ] Ensure denied authorization does not emit action execution enter/leave
       events.
 - [ ] Add dashboard/admin visibility for authorization counters.
