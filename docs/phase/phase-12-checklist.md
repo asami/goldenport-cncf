@@ -176,7 +176,7 @@ CNCF runtime, observability, and meta capabilities.
 - [x] Add Dashboard state contract tests for subsystem and component scopes.
 - [x] Define calltree/action history visibility from existing observability design.
 - [x] Define assembly warning visibility for dashboard/admin surfaces.
-- [ ] Define navigation links from dashboard to management console and manual without inline control actions.
+- [x] Define navigation links from dashboard to management console and manual without inline control actions.
 - [ ] Defer advanced visualizations unless required for the baseline.
 
 ### Inputs

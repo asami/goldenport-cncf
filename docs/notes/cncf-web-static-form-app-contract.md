@@ -167,6 +167,18 @@ console -> controlled operation execution
 manual  -> read-only reference navigation
 ```
 
+The baseline navigation paths are:
+
+```text
+/web/manual
+/web/console
+```
+
+Dashboard may link to these pages, but it must not inline Console actions.
+The Manual remains read-only reference navigation. The Console may link to
+operation forms, but operation execution remains on the existing `/form/...`
+submission path.
+
 Phase 12 implements the shared web route first. Subsystem Dashboard and
 Component Dashboard are separate read-only operational surfaces backed by the
 same metadata class. Component Dashboard is mounted under

@@ -156,6 +156,17 @@ The initial Subsystem Dashboard must not:
 Management Console may later link from the Subsystem Dashboard, but remains a
 separate Static Form App instance.
 
+Dashboard navigation may link to:
+
+- `/web/system/admin`
+- `/web/system/performance`
+- `/web/manual`
+- `/web/console`
+
+Those links do not make Dashboard an execution surface. Console operation
+execution remains in the separate Console/Form App context; Dashboard only
+offers navigation.
+
 A Component Dashboard must not replace the Subsystem Dashboard because it has a
 narrower scope and different screen composition.
 

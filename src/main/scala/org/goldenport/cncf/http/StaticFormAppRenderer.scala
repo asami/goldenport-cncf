@@ -62,6 +62,10 @@ object StaticFormAppRenderer {
     page: Vector[String] = Vector.empty
   ): Option[Page] = {
     page match {
+      case Vector() if app == "manual" =>
+        Some(renderSystemManual(subsystem))
+      case Vector() if app == "console" =>
+        Some(renderSystemConsole(subsystem))
       case Vector("dashboard") =>
         _find_component(subsystem, app).map(renderComponentDashboard)
       case _ =>
@@ -207,6 +211,36 @@ object StaticFormAppRenderer {
   def renderSystemPerformance(subsystem: Subsystem): Page =
     Page(_performance_page(subsystem))
 
+  def renderSystemManual(subsystem: Subsystem): Page =
+    Page(_simple_page(
+      title = "System Manual",
+      subtitle = "Read-only reference",
+      body =
+        s"""<article>
+           |  <h2>Navigation</h2>
+           |  <p><a href="/web/system/dashboard">System dashboard</a> · <a href="/web/system/admin">Admin configuration</a> · <a href="/web/system/performance">Performance details</a> · <a href="/web/console">Console</a></p>
+           |</article>
+           |<article>
+           |  <h2>Components</h2>
+           |  ${_component_reference_list(subsystem.components)}
+           |</article>""".stripMargin
+    ))
+
+  def renderSystemConsole(subsystem: Subsystem): Page =
+    Page(_simple_page(
+      title = "System Console",
+      subtitle = "Controlled operation entry",
+      body =
+        s"""<article>
+           |  <h2>Navigation</h2>
+           |  <p><a href="/web/system/dashboard">System dashboard</a> · <a href="/web/system/admin">Admin configuration</a> · <a href="/web/system/performance">Performance details</a> · <a href="/web/manual">Manual</a></p>
+           |</article>
+           |<article>
+           |  <h2>Operation forms</h2>
+           |  ${_component_form_list(subsystem.components)}
+           |</article>""".stripMargin
+    ))
+
   private def _find_component(
     subsystem: Subsystem,
     name: String
@@ -241,7 +275,7 @@ object StaticFormAppRenderer {
        |    <section class="row g-3 mb-3">
        |      <div class="col-12 col-lg-4"><article id="healthPanel" class="card h-100 border-success"><div class="card-body"><h2 class="h5 card-title">Health</h2><div class="big" id="healthText">UP</div><p class="text-secondary mb-0" id="healthNote">Starting</p></div></article></div>
        |      <div class="col-12 col-lg-4"><article class="card h-100"><div class="card-body"><h2 class="h5 card-title">Subsystem</h2><p class="mb-1"><strong id="subsystemName">-</strong></p><p class="text-secondary mb-0" id="subsystemVersion">-</p></div></article></div>
-       |      <div class="col-12 col-lg-4"><article class="card h-100"><div class="card-body"><h2 class="h5 card-title">CNCF</h2><p class="mb-1"><strong id="cncfVersion">-</strong></p><p class="mb-0"><a id="detailsLink" href="/web/system/admin">Admin details</a> · <a id="performanceLink" href="/web/system/performance">Performance details</a></p></div></article></div>
+       |      <div class="col-12 col-lg-4"><article class="card h-100"><div class="card-body"><h2 class="h5 card-title">CNCF</h2><p class="mb-1"><strong id="cncfVersion">-</strong></p><p class="mb-0"><a id="detailsLink" href="/web/system/admin">Admin details</a> · <a id="performanceLink" href="/web/system/performance">Performance details</a> · <a id="manualLink" href="/web/manual">Manual</a> · <a id="consoleLink" href="/web/console">Console</a></p></div></article></div>
        |    </section>
        |    <section class="row g-3 mb-3">
        |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">Components</span><strong id="componentCount">0</strong></div></div></div>
@@ -293,6 +327,8 @@ object StaticFormAppRenderer {
        |    const cncfVersion = document.getElementById("cncfVersion");
        |    const detailsLink = document.getElementById("detailsLink");
        |    const performanceLink = document.getElementById("performanceLink");
+       |    const manualLink = document.getElementById("manualLink");
+       |    const consoleLink = document.getElementById("consoleLink");
        |    const componentCount = document.getElementById("componentCount");
        |    const serviceCount = document.getElementById("serviceCount");
        |    const operationCount = document.getElementById("operationCount");
@@ -331,6 +367,8 @@ object StaticFormAppRenderer {
        |      cncfVersion.textContent = data.cncf.version;
        |      detailsLink.href = data.links.admin;
        |      performanceLink.href = data.links.performance;
+       |      manualLink.href = data.links.manual;
+       |      consoleLink.href = data.links.console;
        |      componentCount.textContent = data.componentCount;
        |      serviceCount.textContent = data.serviceCount;
        |      operationCount.textContent = data.operationCount;
@@ -447,7 +485,7 @@ object StaticFormAppRenderer {
            |</article>
            |<article>
            |  <h2>Navigation</h2>
-           |  <p><a href="${_escape(dashboardPath)}">Dashboard</a> · <a href="${_escape(performancePath)}">Performance details</a></p>
+           |  <p><a href="${_escape(dashboardPath)}">Dashboard</a> · <a href="${_escape(performancePath)}">Performance details</a> · <a href="/web/manual">Manual</a> · <a href="/web/console">Console</a></p>
            |</article>
            |${componentBlocks}""".stripMargin
     )
@@ -464,7 +502,7 @@ object StaticFormAppRenderer {
       body =
         s"""<article>
            |  <h2>Navigation</h2>
-           |  <p><a href="/web/system/dashboard">System dashboard</a> · <a href="/web/system/admin">Admin configuration</a></p>
+           |  <p><a href="/web/system/dashboard">System dashboard</a> · <a href="/web/system/admin">Admin configuration</a> · <a href="/web/manual">Manual</a> · <a href="/web/console">Console</a></p>
            |</article>
            |<article>
            |  <h2>Assembly warnings</h2>
@@ -725,7 +763,7 @@ object StaticFormAppRenderer {
     val adminPath =
       if (scope == "component") s"/web/${NamingConventions.toNormalizedSegment(name)}/admin"
       else "/web/system/admin"
-    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance","assemblyWarnings":"/form/admin/assembly/warnings"},"components":${componentJson}}"""
+    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance","manual":"/web/manual","console":"/web/console","assemblyWarnings":"/form/admin/assembly/warnings"},"components":${componentJson}}"""
   }
 
   private def _snapshot_json(
@@ -856,6 +894,18 @@ object StaticFormAppRenderer {
     val operationCount = component.protocol.services.services.map(_.operations.operations.length).sum
     s"""{"name":"${_json(component.name)}","version":${component.artifactMetadata.map(_.version).map(v => "\"" + _json(v) + "\"").getOrElse("null")},"serviceCount":${component.protocol.services.services.size},"operationCount":${operationCount},"services":${services}}"""
   }
+
+  private def _component_reference_list(components: Vector[Component]): String =
+    components.map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      s"""<p><strong>${_escape(component.name)}</strong> · <a href="/web/${componentPath}/dashboard">Dashboard</a> · <a href="/web/${componentPath}/admin">Admin</a> · <a href="/form/${componentPath}">Forms</a></p>"""
+    }.mkString("\n")
+
+  private def _component_form_list(components: Vector[Component]): String =
+    components.map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      s"""<p><strong>${_escape(component.name)}</strong> · <a href="/form/${componentPath}">Operation forms</a></p>"""
+    }.mkString("\n")
 
   private def _job_metrics(subsystem: Subsystem): (Int, Int, Int, Int) =
     subsystem.jobEngine.metrics.map(x => (x.running, x.queued, x.completed, x.failed)).getOrElse((0, 0, 0, 0))

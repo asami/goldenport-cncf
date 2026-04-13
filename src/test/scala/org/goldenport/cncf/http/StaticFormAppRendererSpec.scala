@@ -40,6 +40,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       c.downField("assembly").downField("warnings").get[Int]("count").isRight shouldBe true
       c.downField("links").get[String]("admin") shouldBe Right("/web/system/admin")
       c.downField("links").get[String]("performance") shouldBe Right("/web/system/performance")
+      c.downField("links").get[String]("manual") shouldBe Right("/web/manual")
+      c.downField("links").get[String]("console") shouldBe Right("/web/console")
       c.downField("links").get[String]("assemblyWarnings") shouldBe Right("/form/admin/assembly/warnings")
     }
 
@@ -72,6 +74,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Subsystem")
       html should include ("/web/system/dashboard")
       html should include ("/web/system/performance")
+      html should include ("/web/manual")
+      html should include ("/web/console")
     }
 
     "render component admin configuration detail page" in {
@@ -85,6 +89,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include (component.name)
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/dashboard")
       html should include ("/web/system/performance")
+      html should include ("/web/manual")
+      html should include ("/web/console")
     }
 
     "render system performance detail page" in {
@@ -115,6 +121,24 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("34 ms")
       html should include ("/web/system/dashboard")
       html should include ("/web/system/admin")
+      html should include ("/web/manual")
+      html should include ("/web/console")
+    }
+
+    "render manual and console entry pages without inline operation execution" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+
+      val manual = StaticFormAppRenderer.render(subsystem, "manual").map(_.body).getOrElse(fail("manual is missing"))
+      val console = StaticFormAppRenderer.render(subsystem, "console").map(_.body).getOrElse(fail("console is missing"))
+
+      manual should include ("System Manual")
+      manual should include ("/web/system/dashboard")
+      manual should include ("/web/console")
+      console should include ("System Console")
+      console should include ("/web/system/dashboard")
+      console should include ("/web/manual")
+      console should include ("/form/")
+      console should not include ("<form method=\"post\"")
     }
 
     "render component HTML form operation index" in {
