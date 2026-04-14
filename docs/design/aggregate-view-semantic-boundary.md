@@ -68,9 +68,44 @@ EntityDef.view: Option[ViewDef]
 Minimum fields:
 
 ```scala
-AggregateDef(commands, state, invariants)
+AggregateDef(creates, commands, state, invariants)
 ViewDef(attributes, queries)
 ```
+
+## Aggregate Create / Command Semantics
+
+Aggregate creation is a distinct Aggregate Root capability.
+
+- `CREATE` defines how a new Aggregate Root is created.
+- `COMMAND` defines business operations against an existing Aggregate Root.
+- `STATE` defines aggregate state exposed to invariant and command handling.
+- `INVARIANT` defines rules that must hold for valid aggregate state.
+
+The runtime metadata shape is:
+
+```scala
+AggregateDefinition(
+  creates = Vector(AggregateCreateDefinition(...)),
+  commands = Vector(AggregateCommandDefinition(...))
+)
+```
+
+`AggregateCreateDefinition.name` names an Aggregate Root creation operation.
+`AggregateCommandDefinition.name` names a business command operation on an
+existing Aggregate Root.
+
+Operations are external entry points. Their implementations are expected to call
+Aggregate Root capabilities:
+
+- create operations call the Aggregate Root `create` function or equivalent
+  factory method.
+- command operations call Aggregate Root domain methods.
+- neither Web nor Management Console creates or patches aggregate state
+  directly.
+
+This keeps application logic centered on Aggregate Root behavior while allowing
+transport layers, Form Web, and management tooling to discover available
+actions from metadata.
 
 Ownership note:
 - CML parser/modeler source-of-truth is Cozy.
@@ -97,4 +132,3 @@ AV-01 does not change runtime orchestration.
 - synchronization runtime implementation (AV-03)
 - projection/meta surface implementation (AV-04)
 - full executable spec closure (AV-05)
-

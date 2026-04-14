@@ -2,9 +2,12 @@ package org.goldenport.cncf.http
 
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace, Query as DataStoreQuery, QueryDirective, QueryLimit}
+import org.goldenport.cncf.directive.{Query as EntityQuery}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.record.Record
 import io.circe.Json
 import io.circe.parser.parse
 
@@ -236,8 +239,9 @@ object StaticFormAppRenderer {
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val rows = component.componentDescriptors.flatMap(_.entityRuntimeDescriptors).map { descriptor =>
+        val entityPath = NamingConventions.toNormalizedSegment(descriptor.entityName)
         s"""<tr>
-           |  <td>${_escape(descriptor.entityName)}</td>
+           |  <td><a href="/web/${componentPath}/admin/entities/${entityPath}">${_escape(descriptor.entityName)}</a></td>
            |  <td><code>${_escape(descriptor.collectionId.name)}</code></td>
            |  <td>${_escape(descriptor.usageKind.toString)}</td>
            |  <td>${_escape(descriptor.operationKind.toString)}</td>
@@ -268,6 +272,457 @@ object StaticFormAppRenderer {
              |</article>""".stripMargin
       ))
     }
+
+  def renderComponentAdminEntityType(
+    subsystem: Subsystem,
+    componentName: String,
+    entityName: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val entityPath = NamingConventions.toNormalizedSegment(entityName)
+      val entityLabel = _title_label(entityPath)
+      val basePath = s"/web/${componentPath}/admin/entities/${entityPath}"
+      val entityIds = _entity_record_ids(component, entityName)
+      val rows =
+        if (entityIds.isEmpty) {
+          """<tr><td colspan="2">No records are currently available for this entity.</td></tr>"""
+        } else {
+          entityIds.map { id =>
+            s"""<tr><td><code>${_escape(id)}</code></td><td><a href="${_escape(basePath)}/${_escape(id)}">Detail</a> · <a href="${_escape(basePath)}/${_escape(id)}/edit">Edit</a></td></tr>"""
+          }.mkString("\n")
+        }
+      Page(_simple_page(
+        title = s"${_escape(component.name)} ${_escape(entityLabel)} Administration",
+        subtitle = "Entity record list baseline",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/web/${componentPath}/admin/entities">Entity types</a> · <a href="/form/${componentPath}">Operation forms</a></p>
+             |</article>
+             |<article>
+             |  <h2>${_escape(entityLabel)} records</h2>
+             |  <p>List with paging</p>
+             |  <p><a class="btn btn-primary" href="${_escape(basePath)}/new">New ${_escape(entityLabel)}</a></p>
+             |  <div class="table-responsive"><table class="table table-sm">
+             |    <thead><tr><th>Id</th><th>Actions</th></tr></thead>
+             |    <tbody>
+             |      ${rows}
+             |    </tbody>
+             |  </table></div>
+             |  ${_paging_nav(1, 20, None, s"${basePath}?page={page}&pageSize={pageSize}")}
+             |</article>""".stripMargin
+      ))
+    }
+
+  def renderComponentAdminEntityDetail(
+    subsystem: Subsystem,
+    componentName: String,
+    entityName: String,
+    id: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val entityPath = NamingConventions.toNormalizedSegment(entityName)
+      val entityLabel = _title_label(entityPath)
+      val basePath = s"/web/${componentPath}/admin/entities/${entityPath}"
+      val body = _entity_record_table(component, entityName, id)
+      Page(_simple_page(
+        title = s"${_escape(component.name)} ${_escape(entityLabel)} Detail",
+        subtitle = "Entity record detail baseline",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="${_escape(basePath)}">Back to ${_escape(entityLabel)} records</a> · <a href="${_escape(basePath)}/${_escape(id)}/edit">Edit</a> · <a href="/web/${componentPath}/admin/entities">Entity types</a></p>
+             |</article>
+             |<article>
+             |  <h2>${_escape(entityLabel)} detail</h2>
+             |  ${body}
+             |</article>""".stripMargin
+      ))
+    }
+
+  def renderComponentAdminEntityEdit(
+    subsystem: Subsystem,
+    componentName: String,
+    entityName: String,
+    id: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val entityPath = NamingConventions.toNormalizedSegment(entityName)
+      val entityLabel = _title_label(entityPath)
+      val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
+      val actionPath = s"/form/${componentPath}/admin/entities/${entityPath}/${id}/update"
+      val fields = _entity_record_fields(component, entityName, id).getOrElse(Vector("id" -> id))
+      val controls = fields.map {
+        case (key, value) =>
+          s"""<div class="mb-3">
+             |  <label class="form-label" for="field-${_escape(key)}">${_escape(key)}</label>
+             |  <input class="form-control" id="field-${_escape(key)}" name="${_escape(key)}" value="${_escape(value)}">
+             |</div>""".stripMargin
+      }.mkString("\n")
+      Page(_simple_page(
+        title = s"${_escape(component.name)} ${_escape(entityLabel)} Edit",
+        subtitle = "Entity record edit baseline",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="${_escape(webBasePath)}/${_escape(id)}">Detail</a> · <a href="${_escape(webBasePath)}">Back to ${_escape(entityLabel)} records</a></p>
+             |</article>
+             |<article>
+             |  <h2>Edit ${_escape(entityLabel)}</h2>
+             |  <form method="post" action="${_escape(actionPath)}">
+             |    ${controls}
+             |    <button type="submit" class="btn btn-primary">Update</button>
+             |    <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}/${_escape(id)}">Cancel</a>
+             |  </form>
+             |</article>""".stripMargin
+      ))
+    }
+
+  def renderComponentAdminEntityNew(
+    subsystem: Subsystem,
+    componentName: String,
+    entityName: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val entityPath = NamingConventions.toNormalizedSegment(entityName)
+      val entityLabel = _title_label(entityPath)
+      val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
+      val actionPath = s"/form/${componentPath}/admin/entities/${entityPath}/create"
+      Page(_simple_page(
+        title = s"${_escape(component.name)} ${_escape(entityLabel)} New",
+        subtitle = "Entity record create baseline",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="${_escape(webBasePath)}">Back to ${_escape(entityLabel)} records</a> · <a href="/web/${componentPath}/admin/entities">Entity types</a></p>
+             |</article>
+             |<article>
+             |  <h2>New ${_escape(entityLabel)}</h2>
+             |  <form method="post" action="${_escape(actionPath)}">
+             |    <div class="mb-3">
+             |      <label class="form-label" for="entityFields">Fields</label>
+             |      <textarea class="form-control" id="entityFields" name="fields" rows="8" placeholder="id=sales-order-1&#10;status=draft"></textarea>
+             |      <div class="form-text">Use one name=value pair per line until schema-driven fields are available.</div>
+             |    </div>
+             |    <button type="submit" class="btn btn-primary">Create</button>
+             |    <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}">Cancel</a>
+             |  </form>
+             |</article>""".stripMargin
+      ))
+    }
+
+  def renderComponentAdminEntityUpdateResult(
+    componentName: String,
+    entityName: String,
+    id: String,
+    values: Map[String, String],
+    applied: Boolean = false,
+    message: String = "Entity update execution is not enabled in this baseline."
+  ): Page = {
+    val componentPath = NamingConventions.toNormalizedSegment(componentName)
+    val entityPath = NamingConventions.toNormalizedSegment(entityName)
+    val entityLabel = _title_label(entityPath)
+    val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
+    val rows = _submitted_fields_rows(values)
+    Page(_simple_page(
+      title = s"${_escape(componentName)} ${_escape(entityLabel)} Update Result",
+      subtitle = "Entity record update submission baseline",
+      body =
+        s"""<article>
+           |  <h2>Navigation</h2>
+           |  <p><a href="${_escape(webBasePath)}/${_escape(id)}">Detail</a> · <a href="${_escape(webBasePath)}">Back to ${_escape(entityLabel)} records</a> · <a href="${_escape(webBasePath)}/${_escape(id)}/edit">Edit again</a></p>
+           |</article>
+           |<article>
+           |  <h2>Update submitted</h2>
+           |  <p>${_escape(message)}</p>
+           |  <div class="table-responsive"><table class="table table-sm">
+           |    <thead><tr><th>Applied</th><td>${applied}</td></tr></thead>
+           |    <tbody>${rows}</tbody>
+           |  </table></div>
+           |</article>""".stripMargin
+    ))
+  }
+
+  def renderComponentAdminEntityCreateResult(
+    componentName: String,
+    entityName: String,
+    values: Map[String, String],
+    applied: Boolean = false,
+    message: String = "Entity create execution is not enabled in this baseline."
+  ): Page = {
+    val componentPath = NamingConventions.toNormalizedSegment(componentName)
+    val entityPath = NamingConventions.toNormalizedSegment(entityName)
+    val entityLabel = _title_label(entityPath)
+    val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
+    val rows = _submitted_fields_rows(values)
+    Page(_simple_page(
+      title = s"${_escape(componentName)} ${_escape(entityLabel)} Create Result",
+      subtitle = "Entity record create submission baseline",
+      body =
+        s"""<article>
+           |  <h2>Navigation</h2>
+           |  <p><a href="${_escape(webBasePath)}">Back to ${_escape(entityLabel)} records</a> · <a href="${_escape(webBasePath)}/new">Create another</a></p>
+           |</article>
+           |<article>
+           |  <h2>Create submitted</h2>
+           |  <p>${_escape(message)}</p>
+           |  <div class="table-responsive"><table class="table table-sm">
+           |    <thead><tr><th>Applied</th><td>${applied}</td></tr></thead>
+           |    <tbody>${rows}</tbody>
+           |  </table></div>
+           |</article>""".stripMargin
+    ))
+  }
+
+  private def _entity_record_ids(
+    component: Component,
+    entityName: String
+  ): Vector[String] =
+    _entity_collection(component, entityName).toVector.flatMap { collection =>
+      val values = _entity_collection_values(collection)
+      values.map(entity => collection.descriptor.persistent.id(entity).value)
+    }
+
+  private def _entity_record_table(
+    component: Component,
+    entityName: String,
+    id: String
+  ): String =
+    _entity_record_fields(component, entityName, id) match {
+      case Some(fields) =>
+        val rows = fields.map {
+          case (key, value) =>
+            s"""<tr><th>${_escape(key)}</th><td>${_escape(value)}</td></tr>"""
+        }.mkString("\n")
+        s"""<div class="table-responsive"><table class="table table-sm">
+           |  <tbody>${rows}</tbody>
+           |</table></div>""".stripMargin
+      case None =>
+        s"""<p>No record is currently available for id <code>${_escape(id)}</code>.</p>"""
+    }
+
+  private def _entity_record_fields(
+    component: Component,
+    entityName: String,
+    id: String
+  ): Option[Vector[(String, String)]] =
+    _entity_collection(component, entityName).flatMap { collection =>
+      val values = _entity_collection_values(collection)
+      values.find(entity => collection.descriptor.persistent.id(entity).value == id).map { entity =>
+        collection.descriptor.persistent.toRecord(entity).asMap.toVector
+          .sortBy(_._1)
+          .map { case (key, value) => key -> Option(value).map(_.toString).getOrElse("") }
+      }
+    }
+
+  private def _entity_collection(
+    component: Component,
+    entityName: String
+  ) =
+    component.entitySpace.entityOption[Any](entityName).orElse {
+      component.componentDescriptors
+        .flatMap(_.entityRuntimeDescriptors)
+        .find(x => NamingConventions.equivalentByNormalized(x.entityName, entityName))
+        .flatMap(x => component.entitySpace.entityOption(x.collectionId))
+    }
+
+  private def _entity_collection_values(
+    collection: org.goldenport.cncf.entity.runtime.EntityCollection[?]
+  ) =
+    collection.storage.memoryRealm.map(_.values).getOrElse(collection.storage.storeRealm.values)
+
+  private def _submitted_fields_rows(values: Map[String, String]): String =
+    if (values.isEmpty) {
+      """<tr><td colspan="2">No submitted fields.</td></tr>"""
+    } else {
+      values.toVector.sortBy(_._1).map {
+        case (key, value) =>
+          s"""<tr><th>${_escape(key)}</th><td>${_escape(value)}</td></tr>"""
+      }.mkString("\n")
+    }
+
+  private def _data_records(
+    subsystem: Subsystem,
+    dataName: String
+  ): Vector[Record] = {
+    given org.goldenport.cncf.context.ExecutionContext = org.goldenport.cncf.context.ExecutionContext.create()
+    val cid = DataStore.CollectionId(dataName)
+    _data_store_space(subsystem).search(cid, QueryDirective(DataStoreQuery.Empty, limit = QueryLimit.Limit(20))).toOption.map(_.records).getOrElse(Vector.empty)
+  }
+
+  private def _data_record(
+    subsystem: Subsystem,
+    dataName: String,
+    id: String
+  ): Option[Record] = {
+    given org.goldenport.cncf.context.ExecutionContext = org.goldenport.cncf.context.ExecutionContext.create()
+    val cid = DataStore.CollectionId(dataName)
+    for {
+      ds <- _data_store_space(subsystem).dataStore(cid).toOption
+      entry <- DataStore.EntryId.parse(id).toOption
+      record <- ds.load(cid, entry).toOption.flatten
+    } yield record
+  }
+
+  private def _data_store_space(subsystem: Subsystem): DataStoreSpace =
+    scala.util.Try(subsystem.globalRuntimeContext.dataStoreSpace).getOrElse(DataStoreSpace.default())
+
+  private def _data_record_id(record: Record): String =
+    record.getString("id").getOrElse(record.getAny("id").map(_.toString).getOrElse("unknown"))
+
+  private def _data_record_table(
+    subsystem: Subsystem,
+    dataName: String,
+    id: String
+  ): String =
+    _data_record(subsystem, dataName, id) match {
+      case Some(record) =>
+        val rows = _record_fields(record).map {
+          case (key, value) =>
+            s"""<tr><th>${_escape(key)}</th><td>${_escape(value)}</td></tr>"""
+        }.mkString("\n")
+        s"""<div class="table-responsive"><table class="table table-sm">
+           |  <tbody>${rows}</tbody>
+           |</table></div>""".stripMargin
+      case None =>
+        s"""<p>No data record is currently available for id <code>${_escape(id)}</code>.</p>"""
+    }
+
+  private def _record_fields(record: Record): Vector[(String, String)] =
+    record.asMap.toVector
+      .sortBy(_._1)
+      .map { case (key, value) => key -> Option(value).map(_.toString).getOrElse("") }
+
+  private def _view_definition(
+    component: Component,
+    viewName: String
+  ) =
+    component.viewDefinitions.find(d => NamingConventions.equivalentByNormalized(d.name, viewName))
+
+  private def _view_query_table(
+    component: Component,
+    viewName: String
+  ): String =
+    component.viewSpace.browserOption[Any](viewName) match {
+      case Some(browser) =>
+        val q = EntityQuery.plan(Record.empty, limit = Some(20))
+        browser.query(q) match {
+          case org.goldenport.Consequence.Success(values) if values.isEmpty =>
+            "<p>No view records are currently available.</p>"
+          case org.goldenport.Consequence.Success(values) =>
+            val rows = values.map { value =>
+              s"""<tr><td>${_escape(Option(value).map(_.toString).getOrElse(""))}</td></tr>"""
+            }.mkString("\n")
+            s"""<div class="table-responsive"><table class="table table-sm">
+               |  <thead><tr><th>Value</th></tr></thead>
+               |  <tbody>${rows}</tbody>
+               |</table></div>""".stripMargin
+          case org.goldenport.Consequence.Failure(conclusion) =>
+            s"""<p>View query is not available: ${_escape(conclusion.toString)}</p>"""
+        }
+      case None =>
+        s"""<p>No view browser is registered for <code>${_escape(viewName)}</code>.</p>"""
+    }
+
+  private def _aggregate_definition(
+    component: Component,
+    aggregateName: String
+  ) =
+    component.aggregateDefinitions.find(d => NamingConventions.equivalentByNormalized(d.name, aggregateName))
+
+  private def _aggregate_query_table(
+    component: Component,
+    aggregateName: String
+  ): String =
+    component.aggregateSpace.collectionOption[Any](aggregateName) match {
+      case Some(collection) =>
+        collection.query(EntityQuery.plan(Record.empty, limit = Some(20))) match {
+          case org.goldenport.Consequence.Success(values) if values.isEmpty =>
+            "<p>No aggregate records are currently available.</p>"
+          case org.goldenport.Consequence.Success(values) =>
+            val rows = values.map { value =>
+              s"""<tr><td>${_escape(Option(value).map(_.toString).getOrElse(""))}</td></tr>"""
+            }.mkString("\n")
+            s"""<div class="table-responsive"><table class="table table-sm">
+               |  <thead><tr><th>Value</th></tr></thead>
+               |  <tbody>${rows}</tbody>
+               |</table></div>""".stripMargin
+          case org.goldenport.Consequence.Failure(conclusion) =>
+            s"""<p>Aggregate query is not available: ${_escape(conclusion.toString)}</p>"""
+        }
+      case None =>
+        s"""<p>No aggregate collection is registered for <code>${_escape(aggregateName)}</code>.</p>"""
+    }
+
+  private def _aggregate_operation_actions(
+    component: Component,
+    aggregateName: String
+  ): String = {
+    val componentPath = NamingConventions.toNormalizedSegment(component.name)
+    val bindings = _aggregate_operation_bindings(component, aggregateName)
+    if (bindings.isEmpty) {
+      "<p>No aggregate operations are currently exposed.</p>"
+    } else {
+      val rows = bindings.map { binding =>
+        val path = s"/form/${componentPath}/${NamingConventions.toNormalizedSegment(binding.service)}/${NamingConventions.toNormalizedSegment(binding.operation)}"
+        s"""<tr><td>${_escape(binding.kind)}</td><td>${_escape(binding.service)}</td><td>${_escape(binding.operation)}</td><td><a href="${_escape(path)}">Open form</a></td></tr>"""
+      }.mkString("\n")
+      s"""<div class="table-responsive"><table class="table table-sm">
+         |  <thead><tr><th>Kind</th><th>Service</th><th>Operation</th><th>Action</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
+  }
+
+  private final case class _AggregateOperationBinding(
+    kind: String,
+    service: String,
+    operation: String
+  )
+
+  private def _aggregate_operation_bindings(
+    component: Component,
+    aggregateName: String
+  ): Vector[_AggregateOperationBinding] = {
+    val definition = _aggregate_definition(component, aggregateName)
+    val commandNames = definition.map(_.commands.map(_.name)).getOrElse(Vector.empty)
+    val readNames = Vector(s"read-${aggregateName}", s"get-${aggregateName}", s"load-${aggregateName}", s"search-${aggregateName}")
+    val createNames =
+      definition.map(_.creates.map(_.name)).filter(_.nonEmpty)
+        .getOrElse(Vector(s"create-${aggregateName}", s"new-${aggregateName}"))
+    val updateNames = Vector(s"update-${aggregateName}") ++ commandNames
+    val candidates =
+      _operation_bindings(component, readNames, "read") ++
+        _operation_bindings(component, createNames, "create") ++
+        _operation_bindings(component, updateNames, "update")
+    candidates
+      .groupBy(x => (x.kind, NamingConventions.toNormalizedSegment(x.operation)))
+      .values
+      .toVector
+      .collect { case Vector(one) => one }
+      .sortBy(x => (x.kind, x.service, x.operation))
+  }
+
+  private def _operation_bindings(
+    component: Component,
+    names: Vector[String],
+    kind: String
+  ): Vector[_AggregateOperationBinding] = {
+    val normalized = names.map(NamingConventions.toNormalizedSegment).toSet
+    component.services.services.flatMap { service =>
+      service.serviceDefinition.operations.operations.toVector.flatMap { operation =>
+        val name = operation.name
+        if (normalized.contains(NamingConventions.toNormalizedSegment(name)))
+          Some(_AggregateOperationBinding(kind, service.serviceDefinition.name, name))
+        else
+          None
+      }
+    }
+  }
 
   def renderComponentAdminViews(
     subsystem: Subsystem,
@@ -318,6 +773,49 @@ object StaticFormAppRenderer {
       ))
     }
 
+  def renderComponentAdminViewDetail(
+    subsystem: Subsystem,
+    componentName: String,
+    viewName: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val viewPath = NamingConventions.toNormalizedSegment(viewName)
+      val definition = _view_definition(component, viewName)
+      val metadata = definition match {
+        case Some(d) =>
+          s"""<div class="table-responsive"><table class="table table-sm">
+             |  <tbody>
+             |    <tr><th>View</th><td>${_escape(d.name)}</td></tr>
+             |    <tr><th>Entity</th><td>${_escape(d.entityName)}</td></tr>
+             |    <tr><th>Names</th><td>${_escape(if (d.viewNames.isEmpty) "default" else d.viewNames.mkString(", "))}</td></tr>
+             |    <tr><th>Queries</th><td>${_escape(if (d.queries.isEmpty) "none" else d.queries.map(_.name).mkString(", "))}</td></tr>
+             |    <tr><th>Source events</th><td>${_escape(if (d.sourceEvents.isEmpty) "none" else d.sourceEvents.mkString(", "))}</td></tr>
+             |    <tr><th>Rebuildable</th><td>${_escape(d.rebuildable.map(_.toString).getOrElse("unspecified"))}</td></tr>
+             |  </tbody>
+             |</table></div>""".stripMargin
+        case None =>
+          s"""<p>No view definition is registered for <code>${_escape(viewName)}</code>.</p>"""
+      }
+      Page(_simple_page(
+        title = s"${_escape(component.name)} ${_escape(_title_label(viewPath))} View",
+        subtitle = "View read baseline",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="/web/${componentPath}/admin/views">View definitions</a> · <a href="/web/${componentPath}/admin">Component admin</a> · <a href="/form/${componentPath}">Operation forms</a></p>
+             |</article>
+             |<article>
+             |  <h2>${_escape(_title_label(viewPath))} metadata</h2>
+             |  ${metadata}
+             |</article>
+             |<article>
+             |  <h2>Read result</h2>
+             |  ${_view_query_table(component, viewName)}
+             |</article>""".stripMargin
+      ))
+    }
+
   def renderComponentAdminAggregates(
     subsystem: Subsystem,
     componentName: String
@@ -331,6 +829,9 @@ object StaticFormAppRenderer {
         val commands =
           if (definition.commands.isEmpty) "none"
           else definition.commands.map(c => _escape(c.name)).mkString(", ")
+        val creates =
+          if (definition.creates.isEmpty) "none"
+          else definition.creates.map(c => _escape(c.name)).mkString(", ")
         val state =
           if (definition.state.isEmpty) "none"
           else definition.state.map(s => _escape(s.name)).mkString(", ")
@@ -341,6 +842,7 @@ object StaticFormAppRenderer {
            |  <td>${_escape(definition.name)}</td>
            |  <td>${_escape(definition.entityName)}</td>
            |  <td>${members}</td>
+           |  <td>${creates}</td>
            |  <td>${commands}</td>
            |  <td>${state}</td>
            |  <td>${invariants}</td>
@@ -351,7 +853,7 @@ object StaticFormAppRenderer {
           "<p>No aggregate definitions are registered for this component.</p>"
         } else {
           s"""<div class="table-responsive"><table class="table table-sm">
-             |  <thead><tr><th>Aggregate</th><th>Entity</th><th>Members</th><th>Commands</th><th>State</th><th>Invariants</th></tr></thead>
+             |  <thead><tr><th>Aggregate</th><th>Entity</th><th>Members</th><th>Creates</th><th>Commands</th><th>State</th><th>Invariants</th></tr></thead>
              |  <tbody>${rows}</tbody>
              |</table></div>""".stripMargin
         }
@@ -366,6 +868,54 @@ object StaticFormAppRenderer {
              |<article>
              |  <h2>Aggregate CRUD</h2>
              |  ${body}
+             |</article>""".stripMargin
+      ))
+    }
+
+  def renderComponentAdminAggregateDetail(
+    subsystem: Subsystem,
+    componentName: String,
+    aggregateName: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val aggregatePath = NamingConventions.toNormalizedSegment(aggregateName)
+      val definition = _aggregate_definition(component, aggregateName)
+      val metadata = definition match {
+        case Some(d) =>
+          s"""<div class="table-responsive"><table class="table table-sm">
+             |  <tbody>
+             |    <tr><th>Aggregate</th><td>${_escape(d.name)}</td></tr>
+             |    <tr><th>Entity</th><td>${_escape(d.entityName)}</td></tr>
+             |    <tr><th>Members</th><td>${_escape(if (d.members.isEmpty) "none" else d.members.map(m => s"${m.name}:${m.entityName}").mkString(", "))}</td></tr>
+             |    <tr><th>Creates</th><td>${_escape(if (d.creates.isEmpty) "none" else d.creates.map(_.name).mkString(", "))}</td></tr>
+             |    <tr><th>Commands</th><td>${_escape(if (d.commands.isEmpty) "none" else d.commands.map(_.name).mkString(", "))}</td></tr>
+             |    <tr><th>State</th><td>${_escape(if (d.state.isEmpty) "none" else d.state.map(_.name).mkString(", "))}</td></tr>
+             |    <tr><th>Invariants</th><td>${_escape(if (d.invariants.isEmpty) "none" else d.invariants.map(_.name).mkString(", "))}</td></tr>
+             |  </tbody>
+             |</table></div>""".stripMargin
+        case None =>
+          s"""<p>No aggregate definition is registered for <code>${_escape(aggregateName)}</code>.</p>"""
+      }
+      Page(_simple_page(
+        title = s"${_escape(component.name)} ${_escape(_title_label(aggregatePath))} Aggregate",
+        subtitle = "Aggregate read baseline",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="/web/${componentPath}/admin/aggregates">Aggregate definitions</a> · <a href="/web/${componentPath}/admin">Component admin</a> · <a href="/form/${componentPath}">Operation forms</a></p>
+             |</article>
+             |<article>
+             |  <h2>${_escape(_title_label(aggregatePath))} metadata</h2>
+             |  ${metadata}
+             |</article>
+             |<article>
+             |  <h2>Read result</h2>
+             |  ${_aggregate_query_table(component, aggregateName)}
+             |</article>
+             |<article>
+             |  <h2>Operations</h2>
+             |  ${_aggregate_operation_actions(component, aggregateName)}
              |</article>""".stripMargin
       ))
     }
@@ -390,6 +940,201 @@ object StaticFormAppRenderer {
              |</article>""".stripMargin
       ))
     }
+
+  def renderComponentAdminDataType(
+    subsystem: Subsystem,
+    componentName: String,
+    dataName: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val dataPath = NamingConventions.toNormalizedSegment(dataName)
+      val basePath = s"/web/${componentPath}/admin/data/${dataPath}"
+      val records = _data_records(subsystem, dataName)
+      val rows =
+        if (records.isEmpty) {
+          """<tr><td colspan="2">No records are currently available for this data collection.</td></tr>"""
+        } else {
+          records.map { record =>
+            val id = _data_record_id(record)
+            s"""<tr><td><code>${_escape(id)}</code></td><td><a href="${_escape(basePath)}/${_escape(id)}">Detail</a> · <a href="${_escape(basePath)}/${_escape(id)}/edit">Edit</a></td></tr>"""
+          }.mkString("\n")
+        }
+      Page(_simple_page(
+        title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data Administration",
+        subtitle = "Data record list baseline",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/web/${componentPath}/admin/data">Data CRUD</a> · <a href="/form/${componentPath}">Operation forms</a></p>
+             |</article>
+             |<article>
+             |  <h2>${_escape(_title_label(dataPath))} records</h2>
+             |  <p>List with paging</p>
+             |  <p><a class="btn btn-primary" href="${_escape(basePath)}/new">New ${_escape(_title_label(dataPath))}</a></p>
+             |  <div class="table-responsive"><table class="table table-sm">
+             |    <thead><tr><th>Id</th><th>Actions</th></tr></thead>
+             |    <tbody>${rows}</tbody>
+             |  </table></div>
+             |  ${_paging_nav(1, 20, None, s"${basePath}?page={page}&pageSize={pageSize}")}
+             |</article>""".stripMargin
+      ))
+    }
+
+  def renderComponentAdminDataDetail(
+    subsystem: Subsystem,
+    componentName: String,
+    dataName: String,
+    id: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val dataPath = NamingConventions.toNormalizedSegment(dataName)
+      val basePath = s"/web/${componentPath}/admin/data/${dataPath}"
+      Page(_simple_page(
+        title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data Detail",
+        subtitle = "Data record detail baseline",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="${_escape(basePath)}">Back to ${_escape(_title_label(dataPath))} records</a> · <a href="${_escape(basePath)}/${_escape(id)}/edit">Edit</a></p>
+             |</article>
+             |<article>
+             |  <h2>${_escape(_title_label(dataPath))} detail</h2>
+             |  ${_data_record_table(subsystem, dataName, id)}
+             |</article>""".stripMargin
+      ))
+    }
+
+  def renderComponentAdminDataEdit(
+    subsystem: Subsystem,
+    componentName: String,
+    dataName: String,
+    id: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val dataPath = NamingConventions.toNormalizedSegment(dataName)
+      val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
+      val actionPath = s"/form/${componentPath}/admin/data/${dataPath}/${id}/update"
+      val record = _data_record(subsystem, dataName, id).getOrElse(Record.create(Vector("id" -> id)))
+      val controls = _record_fields(record).map {
+        case (key, value) =>
+          s"""<div class="mb-3">
+             |  <label class="form-label" for="data-field-${_escape(key)}">${_escape(key)}</label>
+             |  <input class="form-control" id="data-field-${_escape(key)}" name="${_escape(key)}" value="${_escape(value)}">
+             |</div>""".stripMargin
+      }.mkString("\n")
+      Page(_simple_page(
+        title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data Edit",
+        subtitle = "Data record edit baseline",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="${_escape(webBasePath)}/${_escape(id)}">Detail</a> · <a href="${_escape(webBasePath)}">Back to ${_escape(_title_label(dataPath))} records</a></p>
+             |</article>
+             |<article>
+             |  <h2>Edit ${_escape(_title_label(dataPath))}</h2>
+             |  <form method="post" action="${_escape(actionPath)}">
+             |    ${controls}
+             |    <button type="submit" class="btn btn-primary">Update</button>
+             |    <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}/${_escape(id)}">Cancel</a>
+             |  </form>
+             |</article>""".stripMargin
+      ))
+    }
+
+  def renderComponentAdminDataNew(
+    subsystem: Subsystem,
+    componentName: String,
+    dataName: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val dataPath = NamingConventions.toNormalizedSegment(dataName)
+      val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
+      val actionPath = s"/form/${componentPath}/admin/data/${dataPath}/create"
+      Page(_simple_page(
+        title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data New",
+        subtitle = "Data record create baseline",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="${_escape(webBasePath)}">Back to ${_escape(_title_label(dataPath))} records</a> · <a href="/web/${componentPath}/admin/data">Data CRUD</a></p>
+             |</article>
+             |<article>
+             |  <h2>New ${_escape(_title_label(dataPath))}</h2>
+             |  <form method="post" action="${_escape(actionPath)}">
+             |    <div class="mb-3">
+             |      <label class="form-label" for="dataFields">Fields</label>
+             |      <textarea class="form-control" id="dataFields" name="fields" rows="8" placeholder="id=record-1&#10;status=draft"></textarea>
+             |      <div class="form-text">Use one name=value pair per line.</div>
+             |    </div>
+             |    <button type="submit" class="btn btn-primary">Create</button>
+             |    <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}">Cancel</a>
+             |  </form>
+             |</article>""".stripMargin
+      ))
+    }
+
+  def renderComponentAdminDataUpdateResult(
+    componentName: String,
+    dataName: String,
+    id: String,
+    values: Map[String, String],
+    applied: Boolean,
+    message: String
+  ): Page = {
+    val componentPath = NamingConventions.toNormalizedSegment(componentName)
+    val dataPath = NamingConventions.toNormalizedSegment(dataName)
+    val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
+    Page(_simple_page(
+      title = s"${_escape(componentName)} ${_escape(_title_label(dataPath))} Data Update Result",
+      subtitle = "Data record update submission baseline",
+      body =
+        s"""<article>
+           |  <h2>Navigation</h2>
+           |  <p><a href="${_escape(webBasePath)}/${_escape(id)}">Detail</a> · <a href="${_escape(webBasePath)}">Back to ${_escape(_title_label(dataPath))} records</a> · <a href="${_escape(webBasePath)}/${_escape(id)}/edit">Edit again</a></p>
+           |</article>
+           |<article>
+           |  <h2>Update submitted</h2>
+           |  <p>${_escape(message)}</p>
+           |  <div class="table-responsive"><table class="table table-sm">
+           |    <thead><tr><th>Applied</th><td>${applied}</td></tr></thead>
+           |    <tbody>${_submitted_fields_rows(values)}</tbody>
+           |  </table></div>
+           |</article>""".stripMargin
+    ))
+  }
+
+  def renderComponentAdminDataCreateResult(
+    componentName: String,
+    dataName: String,
+    values: Map[String, String],
+    applied: Boolean,
+    message: String
+  ): Page = {
+    val componentPath = NamingConventions.toNormalizedSegment(componentName)
+    val dataPath = NamingConventions.toNormalizedSegment(dataName)
+    val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
+    Page(_simple_page(
+      title = s"${_escape(componentName)} ${_escape(_title_label(dataPath))} Data Create Result",
+      subtitle = "Data record create submission baseline",
+      body =
+        s"""<article>
+           |  <h2>Navigation</h2>
+           |  <p><a href="${_escape(webBasePath)}">Back to ${_escape(_title_label(dataPath))} records</a> · <a href="${_escape(webBasePath)}/new">Create another</a></p>
+           |</article>
+           |<article>
+           |  <h2>Create submitted</h2>
+           |  <p>${_escape(message)}</p>
+           |  <div class="table-responsive"><table class="table table-sm">
+           |    <thead><tr><th>Applied</th><td>${applied}</td></tr></thead>
+           |    <tbody>${_submitted_fields_rows(values)}</tbody>
+           |  </table></div>
+           |</article>""".stripMargin
+    ))
+  }
 
   def renderComponentAdmin(
     component: Component,
@@ -1371,6 +2116,16 @@ object StaticFormAppRenderer {
       .replace(">", "&gt;")
       .replace("\"", "&quot;")
       .replace("'", "&#39;")
+
+  private def _title_label(
+    segment: String
+  ): String =
+    segment
+      .split("[-_]")
+      .toVector
+      .filter(_.nonEmpty)
+      .map(x => x.head.toUpper + x.tail)
+      .mkString(" ")
 
   private def _json(value: String): String =
     value

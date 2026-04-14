@@ -193,7 +193,7 @@ CNCF runtime, observability, and meta capabilities.
 
 ## WEB-05: Management Console Baseline
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -272,6 +272,93 @@ before broad UI work begins.
 - [ ] Add spec for Web Descriptor exposure filtering.
 - [ ] Add spec for protected/internal operation visibility.
 - [ ] Add minimal runtime hook or adapter only after the contract is stable.
+
+---
+
+## WEB-08: Management Console CRUD Flow
+
+Status: ACTIVE
+
+### Objective
+
+Use the Management Console as the practical driver for Form Web application
+foundation features: list, detail, edit/update, and create flows.
+
+These capabilities are required for Form Web applications in general, not only
+for the built-in admin console.
+
+### Detailed Tasks
+
+- [x] Define common Form Web route model for collection/list, detail, edit, update, new, and create pages.
+- [x] Define separate Management Console entry points for entity, data, aggregate, and view resources.
+- [x] Define entity type entry points such as `/web/{component}/admin/entities/{entityName}`.
+- [x] Define list page contract with paging as a first-class capability.
+- [x] Define list-to-detail navigation contract.
+- [x] Define list-to-edit navigation and update submission contract.
+- [x] Define list-to-new navigation and create submission contract.
+- [x] Decide how Form Web pages bind to Component / Service / Operation metadata.
+- [x] Decide how result properties and continuation properties are passed between pages.
+- [x] Define optimistic update or stale-form handling requirements.
+- [x] Define validation error rendering and redisplay behavior for edit/create forms.
+- [x] Implement the first Management Console CRUD page for entity resources.
+- [x] Protect the entity list/detail/edit/new/update/create flow with executable specifications.
+- [x] Add executable specifications that verify entity update/create POST reaches `EntityCollection.putRecord`.
+- [x] Extend data management beyond the entry page to data list/detail/edit/new/update/create against `DataStore`.
+- [x] Add executable specifications that verify data update/create POST reaches `DataStore`.
+- [x] Extend aggregate management beyond the entry page to aggregate definition/read pages where an aggregate collection query contract is available.
+- [x] Extend view management beyond the entry page to view list/read pages where a view browser/query contract is available.
+- [x] Define aggregate create/command/update flow separately from read baseline.
+
+### Current Scope Status
+
+- Entity CRUD baseline: implemented for list, detail, edit, new, update POST,
+  and create POST against `EntityCollection`.
+- Data management: implemented for list, detail, edit, new, update POST, and
+  create POST against `DataStore`.
+- Aggregate management: implemented for definition detail and read result
+  against `AggregateSpace` / `AggregateCollection`; create/command/update flow is
+  operation-backed and action rendering is available when matching operations
+  are exposed. Aggregate create is operation-backed and available when the
+  aggregate exposes an Aggregate Root creation operation.
+- View management: implemented for definition detail and read result against
+  `ViewSpace` / `Browser`.
+
+### Aggregate Create / Command / Update Policy
+
+- Aggregate create is available only when the aggregate exposes an Aggregate
+  Root creation operation. The Management Console calls that operation; it does
+  not create aggregate state directly.
+- Aggregate update is available only when the aggregate exposes an update or
+  command operation. The Management Console calls that operation; it does not
+  patch aggregate state directly.
+- Application logic is expected to use Aggregate Root capabilities: operations
+  are external entry points, and their implementations call the Aggregate Root
+  `create` function or domain methods.
+- Aggregate read may call an aggregate read operation when one is exposed. If no
+  read operation is available, the read baseline may use
+  `AggregateSpace` / `AggregateCollection` metadata and query results.
+- If the aggregate does not expose the corresponding operation, the UI must not
+  render the create/update/command action.
+
+### Remaining Required Work
+
+- [x] Implement aggregate operation discovery for read/create/update-command actions.
+- [x] Render aggregate create/update/command actions only when matching operations are exposed.
+- [x] Route aggregate create/update/command submissions through the discovered
+      Component / Service / Operation entry point.
+- [x] Add executable specifications for aggregate operation-backed action
+      discovery and rendering.
+- [x] Add executable specifications for aggregate operation-backed create/update-command
+      submission routing.
+- [x] Add executable specifications for successful aggregate operation
+      execution with an HTTP ingress-capable fixture.
+
+### Inputs
+
+- `docs/notes/cncf-web-static-form-app-contract.md`
+- `docs/journal/2026/04/web-form-api-note.md`
+- `docs/journal/2026/04/web-operational-management-note.md`
+- `textus-sample-app` as the practical validation driver.
 
 ---
 

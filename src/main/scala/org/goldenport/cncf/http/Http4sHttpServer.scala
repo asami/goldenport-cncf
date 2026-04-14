@@ -21,8 +21,12 @@ import org.http4s.server.websocket.WebSocketBuilder2
 import org.http4s.websocket.WebSocketFrame
 import org.goldenport.record.Record
 import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse}
+import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
+import org.goldenport.cncf.naming.NamingConventions
+import org.goldenport.cncf.entity.runtime.EntityCollection
 import org.goldenport.bag.Bag
 import org.goldenport.datatype.{ContentType, MimeBody}
 
@@ -85,12 +89,32 @@ final class Http4sHttpServer(
         _component_admin(app)
       case GET -> Root / "web" / app / "admin" / "entities" =>
         _component_admin_entities(app)
+      case GET -> Root / "web" / app / "admin" / "entities" / entity =>
+        _component_admin_entity_type(app, entity)
+      case GET -> Root / "web" / app / "admin" / "entities" / entity / "new" =>
+        _component_admin_entity_new(app, entity)
+      case GET -> Root / "web" / app / "admin" / "entities" / entity / id / "edit" =>
+        _component_admin_entity_edit(app, entity, id)
+      case GET -> Root / "web" / app / "admin" / "entities" / entity / id =>
+        _component_admin_entity_detail(app, entity, id)
       case GET -> Root / "web" / app / "admin" / "data" =>
         _component_admin_data(app)
+      case GET -> Root / "web" / app / "admin" / "data" / data =>
+        _component_admin_data_type(app, data)
+      case GET -> Root / "web" / app / "admin" / "data" / data / "new" =>
+        _component_admin_data_new(app, data)
+      case GET -> Root / "web" / app / "admin" / "data" / data / id / "edit" =>
+        _component_admin_data_edit(app, data, id)
+      case GET -> Root / "web" / app / "admin" / "data" / data / id =>
+        _component_admin_data_detail(app, data, id)
       case GET -> Root / "web" / app / "admin" / "aggregates" =>
         _component_admin_aggregates(app)
+      case GET -> Root / "web" / app / "admin" / "aggregates" / aggregate =>
+        _component_admin_aggregate_detail(app, aggregate)
       case GET -> Root / "web" / app / "admin" / "views" =>
         _component_admin_views(app)
+      case GET -> Root / "web" / app / "admin" / "views" / view =>
+        _component_admin_view_detail(app, view)
       case GET -> Root / "web" / app =>
         _static_form_app(app, Vector.empty)
       case GET -> Root / "web" / app / page =>
@@ -103,6 +127,14 @@ final class Http4sHttpServer(
         _operation_form_result(req, app, service, operation)
       case req @ GET -> Root / "form" / app / service / operation / "continue" / id =>
         _operation_form_continue(req, app, service, operation, id)
+      case req @ POST -> Root / "form" / app / "admin" / "entities" / entity / "create" =>
+        _submit_component_admin_entity_create(req, app, entity)
+      case req @ POST -> Root / "form" / app / "admin" / "entities" / entity / id / "update" =>
+        _submit_component_admin_entity_update(req, app, entity, id)
+      case req @ POST -> Root / "form" / app / "admin" / "data" / data / "create" =>
+        _submit_component_admin_data_create(req, app, data)
+      case req @ POST -> Root / "form" / app / "admin" / "data" / data / id / "update" =>
+        _submit_component_admin_data_update(req, app, data, id)
       case req @ POST -> Root / "form" / app / service / operation =>
         _submit_operation_form(req, app, service, operation)
       case req =>
@@ -247,6 +279,54 @@ final class Http4sHttpServer(
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity admin not found"))
     }
 
+  private def _component_admin_entity_type(app: String, entity: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminEntityType(engine.runtimeSubsystem, app, entity) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity type admin not found"))
+    }
+
+  private def _component_admin_entity_detail(app: String, entity: String, id: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminEntityDetail(engine.runtimeSubsystem, app, entity, id) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity detail admin not found"))
+    }
+
+  private def _component_admin_entity_edit(app: String, entity: String, id: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminEntityEdit(engine.runtimeSubsystem, app, entity, id) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity edit admin not found"))
+    }
+
+  private def _component_admin_entity_new(app: String, entity: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminEntityNew(engine.runtimeSubsystem, app, entity) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity new admin not found"))
+    }
+
   private def _component_admin_data(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminData(engine.runtimeSubsystem, app) match {
       case Some(p) =>
@@ -257,6 +337,54 @@ final class Http4sHttpServer(
         )
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data admin not found"))
+    }
+
+  private def _component_admin_data_type(app: String, data: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminDataType(engine.runtimeSubsystem, app, data) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data type admin not found"))
+    }
+
+  private def _component_admin_data_detail(app: String, data: String, id: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminDataDetail(engine.runtimeSubsystem, app, data, id) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data detail admin not found"))
+    }
+
+  private def _component_admin_data_edit(app: String, data: String, id: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminDataEdit(engine.runtimeSubsystem, app, data, id) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data edit admin not found"))
+    }
+
+  private def _component_admin_data_new(app: String, data: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminDataNew(engine.runtimeSubsystem, app, data) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data new admin not found"))
     }
 
   private def _component_admin_views(app: String): IO[HResponse[IO]] =
@@ -271,6 +399,18 @@ final class Http4sHttpServer(
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component view admin not found"))
     }
 
+  private def _component_admin_view_detail(app: String, view: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminViewDetail(engine.runtimeSubsystem, app, view) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component view detail admin not found"))
+    }
+
   private def _component_admin_aggregates(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminAggregates(engine.runtimeSubsystem, app) match {
       case Some(p) =>
@@ -281,6 +421,18 @@ final class Http4sHttpServer(
         )
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component aggregate admin not found"))
+    }
+
+  private def _component_admin_aggregate_detail(app: String, aggregate: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminAggregateDetail(engine.runtimeSubsystem, app, aggregate) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component aggregate detail admin not found"))
     }
 
   private def _static_form_app(
@@ -321,7 +473,7 @@ final class Http4sHttpServer(
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form not found"))
     }
 
-  private def _submit_operation_form(
+  private[http] def _submit_operation_form(
     req: org.http4s.Request[IO],
     app: String,
     service: String,
@@ -390,6 +542,174 @@ final class Http4sHttpServer(
         }
       case _ =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Form continuation not found"))
+    }
+
+  private[http] def _submit_component_admin_entity_update(
+    req: org.http4s.Request[IO],
+    app: String,
+    entity: String,
+    id: String
+  ): IO[HResponse[IO]] = {
+    val started = System.nanoTime()
+    for {
+      form <- _to_plain_form_record(req)
+      record = Record.create((form.asMap + ("id" -> id)).toVector)
+      result = _put_component_admin_entity_record(app, entity, record)
+      page = StaticFormAppRenderer.renderComponentAdminEntityUpdateResult(app, entity, id, _form_values(record), result._1, result._2)
+      html <- _html(page)
+    } yield {
+      RuntimeDashboardMetrics.recordHtmlRequest(
+        req.method.name,
+        req.uri.path.renderString,
+        HStatus.Ok.code,
+        (System.nanoTime() - started) / 1000000L
+      )
+      html
+    }
+  }
+
+  private[http] def _submit_component_admin_entity_create(
+    req: org.http4s.Request[IO],
+    app: String,
+    entity: String
+  ): IO[HResponse[IO]] = {
+    val started = System.nanoTime()
+    for {
+      form <- _to_plain_form_record(req)
+      result = _put_component_admin_entity_record(app, entity, form)
+      page = StaticFormAppRenderer.renderComponentAdminEntityCreateResult(app, entity, _form_values(form), result._1, result._2)
+      html <- _html(page)
+    } yield {
+      RuntimeDashboardMetrics.recordHtmlRequest(
+        req.method.name,
+        req.uri.path.renderString,
+        HStatus.Ok.code,
+        (System.nanoTime() - started) / 1000000L
+      )
+      html
+    }
+  }
+
+  private[http] def _submit_component_admin_data_update(
+    req: org.http4s.Request[IO],
+    app: String,
+    data: String,
+    id: String
+  ): IO[HResponse[IO]] = {
+    val started = System.nanoTime()
+    for {
+      form <- _to_plain_form_record(req)
+      record = Record.create((form.asMap + ("id" -> id)).toVector)
+      result = _update_component_admin_data_record(data, id, record)
+      page = StaticFormAppRenderer.renderComponentAdminDataUpdateResult(app, data, id, _form_values(record), result._1, result._2)
+      html <- _html(page)
+    } yield {
+      RuntimeDashboardMetrics.recordHtmlRequest(
+        req.method.name,
+        req.uri.path.renderString,
+        HStatus.Ok.code,
+        (System.nanoTime() - started) / 1000000L
+      )
+      html
+    }
+  }
+
+  private[http] def _submit_component_admin_data_create(
+    req: org.http4s.Request[IO],
+    app: String,
+    data: String
+  ): IO[HResponse[IO]] = {
+    val started = System.nanoTime()
+    for {
+      form <- _to_plain_form_record(req)
+      result = _create_component_admin_data_record(data, form)
+      page = StaticFormAppRenderer.renderComponentAdminDataCreateResult(app, data, _form_values(form), result._1, result._2)
+      html <- _html(page)
+    } yield {
+      RuntimeDashboardMetrics.recordHtmlRequest(
+        req.method.name,
+        req.uri.path.renderString,
+        HStatus.Ok.code,
+        (System.nanoTime() - started) / 1000000L
+      )
+      html
+    }
+  }
+
+  private def _update_component_admin_data_record(
+    data: String,
+    id: String,
+    record: Record
+  ): (Boolean, String) = {
+    given ExecutionContext = ExecutionContext.create()
+    val cid = DataStore.CollectionId(data)
+    val result =
+      for {
+        entry <- DataStore.EntryId.parse(id)
+        ds <- engine.runtimeSubsystem.globalRuntimeContext.dataStoreSpace.dataStore(cid)
+        r <- ds.save(cid, entry, record)
+      } yield r
+    _data_result(result)
+  }
+
+  private def _create_component_admin_data_record(
+    data: String,
+    record: Record
+  ): (Boolean, String) = {
+    given ExecutionContext = ExecutionContext.create()
+    val cid = DataStore.CollectionId(data)
+    val result =
+      for {
+        entry <- DataStore.EntryId.parse(record.getString("id").getOrElse(""))
+        ds <- engine.runtimeSubsystem.globalRuntimeContext.dataStoreSpace.dataStore(cid)
+        r <- ds.create(cid, entry, record)
+      } yield r
+    _data_result(result)
+  }
+
+  private def _data_result(result: org.goldenport.Consequence[Unit]): (Boolean, String) =
+    result match {
+      case org.goldenport.Consequence.Success(_) =>
+        (true, "Data record was applied.")
+      case org.goldenport.Consequence.Failure(conclusion) =>
+        (false, conclusion.toString)
+    }
+
+  private def _put_component_admin_entity_record(
+    app: String,
+    entity: String,
+    record: Record
+  ): (Boolean, String) =
+    _component_admin_entity_collection(app, entity) match {
+      case Some(collection) =>
+        collection.putRecord(record) match {
+          case org.goldenport.Consequence.Success(_) =>
+            (true, "Entity record was applied.")
+          case org.goldenport.Consequence.Failure(conclusion) =>
+            (false, conclusion.toString)
+        }
+      case None =>
+        (false, s"Entity collection not found: ${entity}")
+    }
+
+  private def _component_admin_entity_collection(
+    app: String,
+    entity: String
+  ): Option[EntityCollection[?]] =
+    _component_by_name(app).flatMap(_entity_collection(_, entity))
+
+  private def _component_by_name(name: String): Option[Component] =
+    engine.runtimeSubsystem.components.find(x => NamingConventions.equivalentByNormalized(x.name, name))
+
+  private def _entity_collection(
+    component: Component,
+    entity: String
+  ): Option[EntityCollection[?]] =
+    component.entitySpace.entityOption[Any](entity).orElse {
+      component.componentDescriptors
+        .flatMap(_.entityRuntimeDescriptors)
+        .find(x => NamingConventions.equivalentByNormalized(x.entityName, entity))
+        .flatMap(x => component.entitySpace.entityOption(x.collectionId))
     }
 
   private def _operation_form_result(

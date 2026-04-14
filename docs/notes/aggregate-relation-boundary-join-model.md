@@ -114,6 +114,20 @@ This is why `ShipmentOrder` must not be treated as equivalent to `User`.
 
 # Runtime Interpretation
 
+Aggregate relation metadata describes how an aggregate is assembled and how its
+members participate in the boundary. It does not define create or command
+behavior.
+
+Create and command behavior is defined separately:
+
+- `AggregateCreateDefinition` describes Aggregate Root creation.
+- `AggregateCommandDefinition` describes business operations on an existing
+  Aggregate Root.
+
+Application logic should use the Aggregate Root `create` function and domain
+methods. Relation/boundary/join metadata remains the assembly contract used to
+resolve members and read aggregate state.
+
 ## composition + internal
 
 - aggregate-internal constituent

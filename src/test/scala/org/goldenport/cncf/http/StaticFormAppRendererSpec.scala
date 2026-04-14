@@ -1,9 +1,36 @@
 package org.goldenport.cncf.http
 
+import cats.data.State
+import cats.effect.IO
+import cats.effect.Ref
+import cats.effect.unsafe.implicits.global
+import cats.data.NonEmptyVector
 import io.circe.Json
 import io.circe.parser.parse
+import org.http4s.{Method, Request, Uri}
+import org.goldenport.Consequence
+import org.goldenport.protocol.{Protocol, Request as GRequest}
+import org.goldenport.protocol.handler.ProtocolHandler
+import org.goldenport.protocol.handler.egress.{EgressCollection, RestEgress}
+import org.goldenport.protocol.handler.ingress.{IngressCollection, RestIngress}
+import org.goldenport.protocol.handler.projection.ProjectionCollection
+import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
+import org.goldenport.protocol.spec as spec
+import org.goldenport.record.Record
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall, QueryAction}
+import org.goldenport.cncf.component.ComponentDescriptor
+import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.context.GlobalRuntimeContext
+import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
+import org.goldenport.cncf.entity.EntityPersistent
+import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateCommandDefinition, AggregateCreateDefinition, AggregateDefinition, AggregateMemberDefinition}
+import org.goldenport.cncf.entity.runtime.*
+import org.goldenport.cncf.entity.view.{Browser, ViewBuilder, ViewCollection, ViewDefinition, ViewQueryDefinition}
+import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -197,6 +224,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     "render component entity administration page" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
 
       val html = StaticFormAppRenderer.renderComponentAdminEntities(subsystem, component.name).map(_.body).getOrElse(fail("component entity admin is missing"))
 
@@ -205,6 +233,179 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin")
       html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
       html should include ("entity runtime descriptors")
+      component.componentDescriptors.flatMap(_.entityRuntimeDescriptors).headOption match {
+        case Some(descriptor) =>
+          html should include (s"/web/${componentPath}/admin/entities/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(descriptor.entityName)}")
+        case None =>
+          html should include ("No entity runtime descriptors")
+      }
+    }
+
+    "render component entity type list page contract" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+
+      val html = StaticFormAppRenderer.renderComponentAdminEntityType(subsystem, component.name, "sales-order").map(_.body).getOrElse(fail("component entity type admin is missing"))
+
+      html should include (s"${component.name} Sales Order Administration")
+      html should include ("Sales Order records")
+      html should include ("List with paging")
+      html should include (s"/web/${componentPath}/admin/entities")
+      html should include (s"/web/${componentPath}/admin/entities/sales-order/new")
+      html should include ("No records are currently available")
+      html should not include ("sample-id")
+      html should include ("Previous")
+      html should include ("Next")
+    }
+
+    "render component entity detail page contract" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+
+      val html = StaticFormAppRenderer.renderComponentAdminEntityDetail(subsystem, component.name, "sales-order", "missing-id").map(_.body).getOrElse(fail("component entity detail admin is missing"))
+
+      html should include (s"${component.name} Sales Order Detail")
+      html should include ("Sales Order detail")
+      html should include (s"/web/${componentPath}/admin/entities/sales-order")
+      html should include (s"/web/${componentPath}/admin/entities/sales-order/missing-id/edit")
+      html should include ("No record is currently available")
+      html should include ("missing-id")
+    }
+
+    "render component entity pages from a live EntityCollection fixture" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val componentName = "notice_board"
+      val componentPath = "notice-board"
+      val entityPath = "notice"
+      val recordId = subsystem.components.head.entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id.value
+
+      val list = StaticFormAppRenderer.renderComponentAdminEntityType(subsystem, componentName, entityPath).map(_.body).getOrElse(fail("component entity type admin is missing"))
+      val detail = StaticFormAppRenderer.renderComponentAdminEntityDetail(subsystem, componentName, entityPath, recordId).map(_.body).getOrElse(fail("component entity detail admin is missing"))
+      val edit = StaticFormAppRenderer.renderComponentAdminEntityEdit(subsystem, componentName, entityPath, recordId).map(_.body).getOrElse(fail("component entity edit admin is missing"))
+
+      list should include ("notice_1")
+      list should include (s"/web/${componentPath}/admin/entities/${entityPath}/${recordId}")
+      list should include (s"/web/${componentPath}/admin/entities/${entityPath}/${recordId}/edit")
+      list should not include ("No records are currently available")
+      detail should include ("board update")
+      detail should include ("alice")
+      edit should include ("name=\"title\"")
+      edit should include ("value=\"board update\"")
+      edit should include (s"/form/${componentPath}/admin/entities/${entityPath}/${recordId}/update")
+    }
+
+    "apply component entity update form POST into the EntityCollection fixture" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val collection = subsystem.components.head.entitySpace.entity[_NoticeEntity]("notice")
+      val recordId = collection.storage.storeRealm.values.head.id.value
+      val req = _post_form_request(
+        s"/form/notice-board/admin/entities/notice/${recordId}/update",
+        "title=board+updated&author=bob"
+      )
+
+      val html = server
+        ._submit_component_admin_entity_update(req, "notice-board", "notice", recordId)
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      html should include ("Entity record was applied")
+      html should include ("Applied</th><td>true")
+      val updated = collection.storage.storeRealm.values.find(_.id.value == recordId).getOrElse(fail("updated entity is missing"))
+      updated.title shouldBe "board updated"
+      updated.author shouldBe "bob"
+    }
+
+    "apply component entity create form POST into the EntityCollection fixture" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val collection = subsystem.components.head.entitySpace.entity[_NoticeEntity]("notice")
+      val before = collection.storage.storeRealm.values.size
+      val req = _post_form_request(
+        "/form/notice-board/admin/entities/notice/create",
+        "fields=id%3Dnotice_2%0Atitle%3Dnew+notice%0Aauthor%3Dbob"
+      )
+
+      val html = server
+        ._submit_component_admin_entity_create(req, "notice-board", "notice")
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      html should include ("Entity record was applied")
+      html should include ("Applied</th><td>true")
+      collection.storage.storeRealm.values.size shouldBe before + 1
+      collection.storage.storeRealm.values.exists(x => x.title == "new notice" && x.author == "bob") shouldBe true
+    }
+
+    "render component entity edit page contract" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+
+      val html = StaticFormAppRenderer.renderComponentAdminEntityEdit(subsystem, component.name, "sales-order", "missing-id").map(_.body).getOrElse(fail("component entity edit admin is missing"))
+
+      html should include (s"${component.name} Sales Order Edit")
+      html should include ("Edit Sales Order")
+      html should include ("<form method=\"post\"")
+      html should include (s"/form/${componentPath}/admin/entities/sales-order/missing-id/update")
+      html should include ("name=\"id\"")
+      html should include ("value=\"missing-id\"")
+      html should include ("Update")
+      html should include ("Cancel")
+      html should include (s"/web/${componentPath}/admin/entities/sales-order/missing-id")
+    }
+
+    "render component entity new page contract" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+
+      val html = StaticFormAppRenderer.renderComponentAdminEntityNew(subsystem, component.name, "sales-order").map(_.body).getOrElse(fail("component entity new admin is missing"))
+
+      html should include (s"${component.name} Sales Order New")
+      html should include ("New Sales Order")
+      html should include ("<form method=\"post\"")
+      html should include (s"/form/${componentPath}/admin/entities/sales-order/create")
+      html should include ("name=\"fields\"")
+      html should include ("Use one name=value pair per line")
+      html should include ("Create")
+      html should include ("Cancel")
+      html should include (s"/web/${componentPath}/admin/entities/sales-order")
+    }
+
+    "render component entity update submission result contract" in {
+      val html = StaticFormAppRenderer.renderComponentAdminEntityUpdateResult(
+        "admin",
+        "sales-order",
+        "sales-order-1",
+        Map("status" -> "confirmed")
+      ).body
+
+      html should include ("admin Sales Order Update Result")
+      html should include ("Update submitted")
+      html should include ("Entity update execution is not enabled in this baseline")
+      html should include ("status")
+      html should include ("confirmed")
+      html should include ("/web/admin/admin/entities/sales-order/sales-order-1")
+      html should include ("/web/admin/admin/entities/sales-order/sales-order-1/edit")
+    }
+
+    "render component entity create submission result contract" in {
+      val html = StaticFormAppRenderer.renderComponentAdminEntityCreateResult(
+        "admin",
+        "sales-order",
+        Map("status" -> "draft")
+      ).body
+
+      html should include ("admin Sales Order Create Result")
+      html should include ("Create submitted")
+      html should include ("Entity create execution is not enabled in this baseline")
+      html should include ("status")
+      html should include ("draft")
+      html should include ("/web/admin/admin/entities/sales-order")
+      html should include ("/web/admin/admin/entities/sales-order/new")
     }
 
     "render component data administration page" in {
@@ -220,6 +421,58 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("not enabled in this baseline")
     }
 
+    "render component data pages from a live DataStore fixture" in {
+      val fixture = _data_fixture()
+      _with_global_runtime(fixture.runtime) {
+        val html = StaticFormAppRenderer.renderComponentAdminDataType(fixture.subsystem, "notice_board", "audit").map(_.body).getOrElse(fail("component data type admin is missing"))
+        val detail = StaticFormAppRenderer.renderComponentAdminDataDetail(fixture.subsystem, "notice_board", "audit", "audit_1").map(_.body).getOrElse(fail("component data detail admin is missing"))
+        val edit = StaticFormAppRenderer.renderComponentAdminDataEdit(fixture.subsystem, "notice_board", "audit", "audit_1").map(_.body).getOrElse(fail("component data edit admin is missing"))
+        val newly = StaticFormAppRenderer.renderComponentAdminDataNew(fixture.subsystem, "notice_board", "audit").map(_.body).getOrElse(fail("component data new admin is missing"))
+
+        html should include ("audit_1")
+        html should include ("/web/notice-board/admin/data/audit/audit_1")
+        detail should include ("created")
+        detail should include ("alice")
+        edit should include ("name=\"action\"")
+        edit should include ("value=\"created\"")
+        newly should include ("/form/notice-board/admin/data/audit/create")
+      }
+    }
+
+    "apply component data update/create form POST into the DataStore fixture" in {
+      val fixture = _data_fixture()
+      _with_global_runtime(fixture.runtime) {
+        val server = new Http4sHttpServer(new HttpExecutionEngine(fixture.subsystem))
+        val updateReq = _post_form_request(
+          "/form/notice-board/admin/data/audit/audit_1/update",
+          "action=updated&actor=bob"
+        )
+        val updateHtml = server
+          ._submit_component_admin_data_update(updateReq, "notice-board", "audit", "audit_1")
+          .flatMap(_.as[String])
+          .unsafeRunSync()
+
+        updateHtml should include ("Data record was applied")
+        updateHtml should include ("Applied</th><td>true")
+        _load_data_record(fixture.dataStoreSpace, "audit", "audit_1").getString("action") shouldBe Some("updated")
+        _load_data_record(fixture.dataStoreSpace, "audit", "audit_1").getString("actor") shouldBe Some("bob")
+
+        val createReq = _post_form_request(
+          "/form/notice-board/admin/data/audit/create",
+          "fields=id%3Daudit_2%0Aaction%3Dcreated%0Aactor%3Dbob"
+        )
+        val createHtml = server
+          ._submit_component_admin_data_create(createReq, "notice-board", "audit")
+          .flatMap(_.as[String])
+          .unsafeRunSync()
+
+        createHtml should include ("Data record was applied")
+        createHtml should include ("Applied</th><td>true")
+        _load_data_record(fixture.dataStoreSpace, "audit", "audit_2").getString("action") shouldBe Some("created")
+        _load_data_record(fixture.dataStoreSpace, "audit", "audit_2").getString("actor") shouldBe Some("bob")
+      }
+    }
+
     "render component view administration page" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
@@ -233,6 +486,21 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("view definitions")
     }
 
+    "render component view read page from a live ViewSpace fixture" in {
+      val subsystem = _view_fixture_subsystem()
+
+      val html = StaticFormAppRenderer.renderComponentAdminViewDetail(subsystem, "notice_board", "notice_view").map(_.body).getOrElse(fail("component view detail admin is missing"))
+
+      html should include ("notice_board Notice View View")
+      html should include ("Notice View metadata")
+      html should include ("notice_view")
+      html should include ("notice")
+      html should include ("recent")
+      html should include ("Read result")
+      html should include ("notice summary")
+      html should include ("/web/notice-board/admin/views")
+    }
+
     "render component aggregate administration page" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
@@ -244,6 +512,89 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin")
       html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
       html should include ("aggregate definitions")
+    }
+
+    "render component aggregate read page from a live AggregateSpace fixture" in {
+      val subsystem = _aggregate_fixture_subsystem()
+
+      val html = StaticFormAppRenderer.renderComponentAdminAggregateDetail(subsystem, "notice_board", "notice_aggregate").map(_.body).getOrElse(fail("component aggregate detail admin is missing"))
+
+      html should include ("notice_board Notice Aggregate Aggregate")
+      html should include ("Notice Aggregate metadata")
+      html should include ("notice_aggregate")
+      html should include ("notice")
+      html should include ("notice:notice")
+      html should include ("Read result")
+      html should include ("notice aggregate")
+      html should include ("Operations")
+      html should include ("create-notice-aggregate")
+      html should include ("approve-notice-aggregate")
+      html should include ("read-notice-aggregate")
+      html should include ("/form/notice-board/notice-aggregate/create-notice-aggregate")
+      html should include ("/form/notice-board/notice-aggregate/approve-notice-aggregate")
+      html should include ("/web/notice-board/admin/aggregates")
+    }
+
+    "submit aggregate create/update actions through the discovered operation form route" in {
+      val subsystem = _aggregate_fixture_subsystem()
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val createHtml = server
+        ._submit_operation_form(
+          _post_form_request("/form/notice-board/notice-aggregate/create-notice-aggregate", "title=hello"),
+          "notice-board",
+          "notice-aggregate",
+          "create-notice-aggregate"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+      val updateHtml = server
+        ._submit_operation_form(
+          _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1&approved=true"),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      createHtml should include ("notice-board.notice-aggregate.create-notice-aggregate")
+      createHtml should include ("result.status")
+      updateHtml should include ("notice-board.notice-aggregate.approve-notice-aggregate")
+      updateHtml should include ("result.status")
+    }
+
+    "execute aggregate create/update actions through an HTTP ingress-capable component" in {
+      val subsystem = _aggregate_http_fixture_subsystem()
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val createHtml = server
+        ._submit_operation_form(
+          _post_form_request("/form/notice-board/notice-aggregate/create-notice-aggregate", "title=hello"),
+          "notice-board",
+          "notice-aggregate",
+          "create-notice-aggregate"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+      val updateHtml = server
+        ._submit_operation_form(
+          _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1&approved=true"),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      createHtml should include ("result.status")
+      createHtml should include ("200")
+      createHtml should include ("aggregate-created:hello")
+      createHtml should not include ("HTTP ingress not configured")
+      updateHtml should include ("result.status")
+      updateHtml should include ("200")
+      updateHtml should include ("aggregate-updated:notice_1")
+      updateHtml should not include ("HTTP ingress not configured")
     }
 
     "render resolved Web Descriptor summary on component admin page" in {
@@ -509,4 +860,422 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       case None =>
         fail(s"dashboard state not found: ${componentName.getOrElse("system")}")
     }
+
+  private def _post_form_request(
+    path: String,
+    body: String
+  ): Request[IO] =
+    Request[IO](
+      method = Method.POST,
+      uri = Uri.unsafeFromString(path)
+    ).withEntity(body)
+
+  private final case class _DataFixture(
+    subsystem: Subsystem,
+    runtime: GlobalRuntimeContext,
+    dataStoreSpace: DataStoreSpace
+  )
+
+  private def _data_fixture(): _DataFixture = {
+    val dataStoreSpace = DataStoreSpace.default()
+    given org.goldenport.cncf.context.ExecutionContext = org.goldenport.cncf.context.ExecutionContext.create()
+    val cid = DataStore.CollectionId("audit")
+    val _ = dataStoreSpace.inject(cid, Record.create(Vector(
+      "id" -> "audit_1",
+      "action" -> "created",
+      "actor" -> "alice"
+    )))
+    val runtime = GlobalRuntimeContext.create(
+      "data-admin-test",
+      RuntimeConfig.default.copy(dataStoreSpace = dataStoreSpace),
+      ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty),
+      org.goldenport.cncf.context.ExecutionContext.create().observability,
+      AliasResolver.empty
+    )
+    val component = TestComponentFactory.create("notice_board", Protocol.empty)
+    val subsystem = TestComponentFactory.emptySubsystem("sample-web").add(Vector(component))
+    _DataFixture(subsystem, runtime, dataStoreSpace)
+  }
+
+  private def _with_global_runtime[A](
+    runtime: GlobalRuntimeContext
+  )(body: => A): A = {
+    val previous = GlobalRuntimeContext.current
+    GlobalRuntimeContext.current = Some(runtime)
+    try {
+      body
+    } finally {
+      GlobalRuntimeContext.current = previous
+    }
+  }
+
+  private def _load_data_record(
+    space: DataStoreSpace,
+    collection: String,
+    id: String
+  ): Record = {
+    given org.goldenport.cncf.context.ExecutionContext = org.goldenport.cncf.context.ExecutionContext.create()
+    val cid = DataStore.CollectionId(collection)
+    (for {
+      ds <- space.dataStore(cid)
+      entry <- DataStore.EntryId.parse(id)
+      record <- ds.load(cid, entry).map(_.getOrElse(Record.empty))
+    } yield record).toOption.getOrElse(Record.empty)
+  }
+
+  private def _view_fixture_subsystem(): Subsystem = {
+    val component = new org.goldenport.cncf.component.Component() {
+      override def viewDefinitions: Vector[ViewDefinition] =
+        Vector(
+          ViewDefinition(
+            name = "notice_view",
+            entityName = "notice",
+            viewNames = Vector("default"),
+            queries = Vector(ViewQueryDefinition("recent", Some("notice.updatedAt desc")))
+          )
+        )
+    }
+    _initialize_component("notice_board", component)
+    val collection = new ViewCollection[String](
+      new ViewBuilder[String] {
+        def build(id: EntityId): Consequence[String] =
+          Consequence.success(s"notice detail ${id.minor}")
+      }
+    )
+    val browser = Browser.from(
+      collection,
+      _ => Consequence.success(Vector("notice summary"))
+    )
+    component.viewSpace.register("notice_view", collection, browser)
+    TestComponentFactory.emptySubsystem("sample-web").add(Vector(component))
+  }
+
+  private def _aggregate_fixture_subsystem(): Subsystem = {
+    val component = new org.goldenport.cncf.component.Component() {
+      override def aggregateDefinitions: Vector[AggregateDefinition] =
+        Vector(
+          AggregateDefinition(
+            name = "notice_aggregate",
+            entityName = "notice",
+            members = Vector(AggregateMemberDefinition("notice", "notice")),
+            creates = Vector(AggregateCreateDefinition("create-notice-aggregate")),
+            commands = Vector(AggregateCommandDefinition("approve-notice-aggregate"))
+          )
+        )
+    }
+    _initialize_component("notice_board", component, _aggregate_protocol())
+    val aggregate = _NoticeAggregate("notice aggregate")
+    component.aggregateSpace.register(
+      "notice_aggregate",
+      new AggregateCollection[_NoticeAggregate](
+        new AggregateBuilder[_NoticeAggregate] {
+          def build(id: EntityId): Consequence[_NoticeAggregate] =
+            Consequence.success(aggregate)
+        },
+        _ => Consequence.success(Vector(aggregate))
+      )
+    )
+    TestComponentFactory.emptySubsystem("sample-web").add(Vector(component))
+  }
+
+  private def _aggregate_protocol(): Protocol =
+    Protocol(
+      services = spec.ServiceDefinitionGroup(
+        Vector(
+          spec.ServiceDefinition(
+            name = "notice-aggregate",
+            operations = spec.OperationDefinitionGroup(
+              operations = NonEmptyVector.of(
+                _NoopOperation("read-notice-aggregate"),
+                _NoopOperation("create-notice-aggregate"),
+                _NoopOperation("approve-notice-aggregate")
+              )
+            )
+          )
+        )
+      )
+    )
+
+  private def _aggregate_http_fixture_subsystem(): Subsystem = {
+    val component = new org.goldenport.cncf.component.Component() {
+      override def aggregateDefinitions: Vector[AggregateDefinition] =
+        Vector(
+          AggregateDefinition(
+            name = "notice_aggregate",
+            entityName = "notice",
+            members = Vector(AggregateMemberDefinition("notice", "notice")),
+            creates = Vector(AggregateCreateDefinition("create-notice-aggregate")),
+            commands = Vector(AggregateCommandDefinition("approve-notice-aggregate"))
+          )
+        )
+    }
+    _initialize_component("notice_board", component, _aggregate_http_protocol())
+    TestComponentFactory.emptySubsystem("sample-web").add(Vector(component))
+  }
+
+  private def _aggregate_http_protocol(): Protocol =
+    Protocol(
+      services = spec.ServiceDefinitionGroup(
+        Vector(
+          spec.ServiceDefinition(
+            name = "notice-aggregate",
+            operations = spec.OperationDefinitionGroup(
+              operations = NonEmptyVector.of(
+                _SuccessfulAggregateOperation("create-notice-aggregate", "title", "aggregate-created"),
+                _SuccessfulAggregateOperation("approve-notice-aggregate", "id", "aggregate-updated")
+              )
+            )
+          )
+        )
+      ),
+      handler = ProtocolHandler(
+        ingresses = IngressCollection(Vector(RestIngress())),
+        egresses = EgressCollection(Vector(RestEgress())),
+        projections = ProjectionCollection()
+      )
+    )
+
+  private def _initialize_component(
+    name: String,
+    component: org.goldenport.cncf.component.Component,
+    protocol: Protocol = Protocol.empty
+  ): org.goldenport.cncf.component.Component = {
+    val componentId = org.goldenport.cncf.component.ComponentId(name)
+    val instanceId = org.goldenport.cncf.component.ComponentInstanceId.default(componentId)
+    val factory = new org.goldenport.cncf.component.Component.Factory {
+      override protected def create_Components(params: org.goldenport.cncf.component.ComponentCreate): Vector[org.goldenport.cncf.component.Component] =
+        Vector.empty
+
+      override protected def create_Core(
+        params: org.goldenport.cncf.component.ComponentCreate,
+        comp: org.goldenport.cncf.component.Component
+      ): org.goldenport.cncf.component.Component.Core =
+        org.goldenport.cncf.component.Component.Core.create(name, componentId, instanceId, protocol, this)
+    }
+    val core = org.goldenport.cncf.component.Component.Core.create(name, componentId, instanceId, protocol, factory)
+    component.initialize(
+      org.goldenport.cncf.component.ComponentInit(
+        TestComponentFactory.emptySubsystem("test"),
+        core,
+        org.goldenport.cncf.component.ComponentOrigin.Builtin
+      )
+    )
+  }
+
+  private def _management_console_fixture_subsystem(): Subsystem = {
+    given EntityPersistent[_NoticeEntity] = _notice_persistent
+    val cid = _NoticeEntity.collectionId
+    val descriptor = ComponentDescriptor(
+      componentName = Some("notice_board"),
+      entityRuntimeDescriptors = Vector(
+        EntityRuntimeDescriptor(
+          entityName = "notice",
+          collectionId = cid,
+          memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+          partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+          maxPartitions = 4,
+          maxEntitiesPerPartition = 100
+        )
+      )
+    )
+    val component = TestComponentFactory
+      .create("notice_board", Protocol.empty)
+      .withComponentDescriptors(Vector(descriptor))
+    component.entitySpace.registerEntity(
+      "notice",
+      _notice_collection(
+        Vector(
+          _NoticeEntity(
+            EntityId("sample", "notice_1", cid),
+            "board update",
+            "alice"
+          )
+        )
+      )
+    )
+    TestComponentFactory.emptySubsystem("sample-web").add(Vector(component))
+  }
+
+  private def _notice_collection(
+    entities: Vector[_NoticeEntity]
+  )(using EntityPersistent[_NoticeEntity]): EntityCollection[_NoticeEntity] = {
+    val store = new EntityRealm[_NoticeEntity](
+      entityName = "notice",
+      loader = EntityLoader[_NoticeEntity](id => entities.find(_.id == id)),
+      state = new _IdRef(EntityRealmState(Map.empty))
+    )
+    val memory = new PartitionedMemoryRealm[_NoticeEntity](
+      strategy = PartitionStrategy.byOrganizationMonthUTC,
+      idOf = _.id
+    )
+    val descriptor = EntityDescriptor(
+      collectionId = _NoticeEntity.collectionId,
+      plan = EntityRuntimePlan(
+        entityName = "notice",
+        memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+        workingSet = None,
+        partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+        maxPartitions = 4,
+        maxEntitiesPerPartition = 100
+      ),
+      persistent = summon[EntityPersistent[_NoticeEntity]]
+    )
+    val collection = new EntityCollection[_NoticeEntity](
+      descriptor = descriptor,
+      storage = EntityStorage(store, Some(memory))
+    )
+    entities.foreach(collection.put)
+    collection
+  }
+
+  private def _notice_persistent: EntityPersistent[_NoticeEntity] =
+    new EntityPersistent[_NoticeEntity] {
+      def id(e: _NoticeEntity): EntityId = e.id
+      def toRecord(e: _NoticeEntity): Record = e.toRecord()
+      def fromRecord(r: Record): Consequence[_NoticeEntity] =
+        Consequence.success(
+          _NoticeEntity(
+            _notice_entity_id(r.getString("id").getOrElse("notice_1")),
+            r.getString("title").getOrElse(""),
+            r.getString("author").getOrElse("")
+          )
+        )
+    }
+
+  private def _notice_entity_id(value: String): EntityId =
+    EntityId.parse(value).toOption.getOrElse(EntityId("sample", value, _NoticeEntity.collectionId))
+}
+
+private final case class _NoticeEntity(
+  id: EntityId,
+  title: String,
+  author: String
+) {
+  def toRecord(): Record =
+    Record.dataAuto(
+      "id" -> id,
+      "title" -> title,
+      "author" -> author
+    )
+}
+
+private object _NoticeEntity {
+  val collectionId: EntityCollectionId =
+    EntityCollectionId("sample", "web", "notice")
+}
+
+private final case class _NoticeAggregate(summary: String)
+
+private final case class _NoopOperation(
+  opname: String
+) extends spec.OperationDefinition {
+  override val specification: spec.OperationDefinition.Specification =
+    spec.OperationDefinition.Specification(
+      name = opname,
+      request = spec.RequestDefinition(),
+      response = spec.ResponseDefinition.void
+    )
+
+  override def createOperationRequest(req: GRequest): Consequence[OperationRequest] =
+    Consequence.notImplemented("not used")
+}
+
+private final case class _SuccessfulAggregateOperation(
+  opname: String,
+  argumentName: String,
+  resultPrefix: String
+) extends spec.OperationDefinition {
+  override val specification: spec.OperationDefinition.Specification =
+    spec.OperationDefinition.Specification(
+      name = opname,
+      request = spec.RequestDefinition(),
+      response = spec.ResponseDefinition.void
+    )
+
+  override def createOperationRequest(req: GRequest): Consequence[OperationRequest] =
+    Consequence.success(_SuccessfulAggregateAction(OperationRequest.Core(req), argumentName, resultPrefix))
+}
+
+private final case class _SuccessfulAggregateAction(
+  core: OperationRequest.Core,
+  argumentName: String,
+  resultPrefix: String
+) extends QueryAction with OperationRequest.Core.Holder {
+  override def createCall(core: ActionCall.Core): ActionCall =
+    _SuccessfulAggregateActionCall(core, argumentName, resultPrefix)
+}
+
+private final case class _SuccessfulAggregateActionCall(
+  core: ActionCall.Core,
+  argumentName: String,
+  resultPrefix: String
+) extends ProcedureActionCall {
+  override def execute(): Consequence[OperationResponse] = {
+    val value = core.action.arguments.find(_.name == argumentName).map(_.value).getOrElse("")
+    Consequence.success(OperationResponse.Scalar(s"${resultPrefix}:${value}"))
+  }
+}
+
+private final class _IdRef[A](initial: A) extends Ref[cats.Id, A] {
+  private var _value: A = initial
+
+  def get: A = synchronized {
+    _value
+  }
+
+  def set(a: A): Unit = synchronized {
+    _value = a
+  }
+
+  override def getAndSet(a: A): A = synchronized {
+    val prev = _value
+    _value = a
+    prev
+  }
+
+  def access: (A, A => Boolean) = synchronized {
+    val snapshot = _value
+    val setter: A => Boolean = (next: A) => synchronized {
+      if (_value == snapshot) {
+        _value = next
+        true
+      } else {
+        false
+      }
+    }
+    (snapshot, setter)
+  }
+
+  override def tryUpdate(f: A => A): Boolean = synchronized {
+    _value = f(_value)
+    true
+  }
+
+  override def tryModify[B](f: A => (A, B)): Option[B] = synchronized {
+    val (next, out) = f(_value)
+    _value = next
+    Some(out)
+  }
+
+  def update(f: A => A): Unit = synchronized {
+    _value = f(_value)
+  }
+
+  def modify[B](f: A => (A, B)): B = synchronized {
+    val (next, out) = f(_value)
+    _value = next
+    out
+  }
+
+  override def modifyState[B](state: State[A, B]): B = synchronized {
+    val (next, out) = state.run(_value).value
+    _value = next
+    out
+  }
+
+  override def tryModifyState[B](state: State[A, B]): Option[B] = synchronized {
+    val (next, out) = state.run(_value).value
+    _value = next
+    Some(out)
+  }
 }

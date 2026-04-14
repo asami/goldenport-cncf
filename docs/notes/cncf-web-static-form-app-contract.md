@@ -395,6 +395,198 @@ Total count opt-in uses an explicit parameter, conventionally:
 paging.requireTotal=true
 ```
 
+## Management Console CRUD Flow
+
+The Management Console is the first practical driver for Form Web CRUD
+foundation features. The same foundation must be reusable by ordinary Form Web
+applications.
+
+The required browser-visible flow is:
+
+- list page with paging
+- list-to-detail navigation
+- list-to-edit navigation and update submission
+- list-to-new navigation and create submission
+
+The Management Console has separate entry points for each managed-data kind:
+
+```text
+/web/{component}/admin/entities
+/web/{component}/admin/data
+/web/{component}/admin/aggregates
+/web/{component}/admin/views
+```
+
+Current implementation status:
+
+- `entities`: baseline list, detail, edit, new, update POST, and create POST
+  are implemented against `EntityCollection`.
+- `data`: baseline list, detail, edit, new, update POST, and create POST
+  are implemented against `DataStore`.
+- `aggregates`: baseline definition detail and read result are implemented
+  against `AggregateSpace` / `AggregateCollection`; create/command/update flow
+  is operation-backed and action links are rendered when matching operations are
+  exposed.
+- `views`: baseline definition detail and read result are implemented against
+  `ViewSpace` / `Browser`.
+
+Entity management uses a two-level resource path. The first level is the
+managed-data kind (`entities`), and the second level is the entity type name:
+
+```text
+GET  /web/{component}/admin/entities
+GET  /web/{component}/admin/entities/{entityName}
+GET  /web/{component}/admin/entities/{entityName}/{id}
+GET  /web/{component}/admin/entities/{entityName}/{id}/edit
+POST /form/{component}/admin/entities/{entityName}/{id}/update
+GET  /web/{component}/admin/entities/{entityName}/new
+POST /form/{component}/admin/entities/{entityName}/create
+```
+
+For example, a `SalesOrder` entity uses the normalized entity type segment:
+
+```text
+/web/{component}/admin/entities/sales-order
+```
+
+`/web/{component}/admin/entities` lists entity types. `/web/{component}/admin/entities/sales-order`
+lists SalesOrder records with paging. `/web/{component}/admin/entities/sales-order/{id}`
+shows one SalesOrder record.
+
+Data and aggregate management also keep their managed-data kind as the first
+level, then add a resource type or collection segment before the record id:
+
+```text
+GET  /web/{component}/admin/data/{dataName}
+GET  /web/{component}/admin/data/{dataName}/{id}
+GET  /web/{component}/admin/data/{dataName}/{id}/edit
+POST /form/{component}/admin/data/{dataName}/{id}/update
+GET  /web/{component}/admin/data/{dataName}/new
+POST /form/{component}/admin/data/{dataName}/create
+GET  /web/{component}/admin/aggregates/{aggregateName}
+GET  /web/{component}/admin/aggregates/{aggregateName}/{id}
+```
+
+Aggregate create/command/update flows are operation-backed:
+
+- Create is available only when the aggregate exposes an Aggregate Root creation
+  operation.
+- Update is available only when the aggregate exposes an update or command
+  operation.
+- Read may call an aggregate read operation when one is exposed.
+- If the aggregate does not expose the corresponding operation, the Management
+  Console does not render that action.
+
+The Management Console does not create or patch aggregate state directly. It
+uses Component / Service / Operation execution for aggregate mutation, and uses
+the read baseline only for metadata and query-backed inspection when an
+operation-backed read action is not available. Application logic is expected to
+be assembled around Aggregate Root capabilities: operations are the external
+entry points, while aggregate creation and mutation call the Aggregate Root
+`create` function or domain methods.
+
+The current baseline routes aggregate create/update/command submissions through
+the discovered `/form/{component}/{service}/{operation}` entry point. A
+successful operation-result fixture still requires an HTTP ingress-capable
+component; a component without HTTP ingress reports the normal operation result
+page with the ingress error instead of mutating aggregate state directly.
+
+The aggregate operation binding is resolved from aggregate metadata to component
+operation metadata:
+
+- `AggregateCommandDefinition.name` names the aggregate command.
+- `AggregateCreateDefinition.name` names the Aggregate Root creation operation.
+- CML `#### CREATE` maps to `AggregateCreateDefinition`; CML `#### COMMAND`
+  maps to `AggregateCommandDefinition`.
+- A create or command definition may bind to a component operation with the same
+  normalized name.
+- If multiple services contain matching operations, the binding must become
+  explicit before the action is rendered.
+- Create/read/update operation categories are inferred conservatively from
+  aggregate metadata; name heuristics are only a fallback for the baseline when
+  the aggregate does not yet provide explicit create metadata.
+
+Views have a separate read-oriented entry point. The first level lists view
+definitions; the second level selects a view definition or view name:
+
+```text
+GET /web/{component}/admin/views
+GET /web/{component}/admin/views/{viewName}
+```
+
+List pages must use the paging property model already defined for result
+widgets. Detail, edit, and new pages must receive enough page properties to
+return to the originating list page after success or validation error.
+
+CRUD pages pass navigation and continuation state through page properties. The
+minimum property set is:
+
+```text
+crud.component
+crud.resourceKind
+crud.resourceName
+crud.entityName
+crud.id
+crud.mode
+crud.origin.href
+crud.success.href
+crud.error.href
+paging.page
+paging.pageSize
+paging.chunkSize
+paging.href
+```
+
+`crud.origin.href` is the page to return to when the user cancels or after a
+validation error redisplay. `crud.success.href` is the preferred page after a
+successful update or create. `crud.error.href` is the page used when the form
+submission cannot be applied and must be redisplayed.
+
+List pages own the paging continuation. Detail, edit, and new pages must carry
+the originating list paging values forward without re-executing the list query.
+Update and create result pages must preserve those properties so the user can
+return to the same list context.
+
+Validation errors must redisplay the originating edit or new page as HTML. The
+redisplayed page receives the submitted values and structured error properties:
+
+```text
+validation.failed=true
+validation.summary
+validation.field.{fieldName}.message
+validation.field.{fieldName}.code
+```
+
+The form must preserve the submitted field values. It must also preserve
+`crud.origin.href`, `crud.success.href`, `crud.error.href`, and the paging
+properties so cancel and retry keep the user in the same list context. Plain
+HTML FORM users must not be forced through a JSON-only validation path.
+
+Edit forms must support optimistic update and stale-form detection. The baseline
+contract uses a hidden version token property:
+
+```text
+crud.version
+```
+
+The token may be derived from an entity revision, updated timestamp, ETag, or a
+storage-specific version value. If no version source exists, the value may be
+empty and the update proceeds without stale-form detection. When a submitted
+`crud.version` does not match the current record version, the update must not be
+applied. The page must redisplay the edit form with:
+
+```text
+validation.failed=true
+validation.summary=Record was changed by another update.
+validation.stale=true
+```
+
+The redisplayed form must preserve the submitted values and must provide links
+back to the current detail page and originating list page.
+
+Form submission remains under `/form`. User-visible pages remain under `/web`.
+This keeps HTML page navigation separate from execution entry points.
+
 ## Runtime Hook Rule
 
 The first runtime hook must be generic:
