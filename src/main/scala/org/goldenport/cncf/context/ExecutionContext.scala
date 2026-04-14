@@ -16,7 +16,7 @@ import org.goldenport.cncf.entity.EntityStoreSpace
 import org.goldenport.cncf.entity.runtime.EntitySpace
 import org.goldenport.cncf.unitofwork.UnitOfWork
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
-import org.goldenport.cncf.observability.CallTreeContext
+import org.goldenport.cncf.observability.{CallTreeContext, DslChokepointHook}
 import cats.~>
 
 /**
@@ -41,7 +41,7 @@ import cats.~>
  *  version Dec. 31, 2025
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -101,7 +101,8 @@ object ExecutionContext {
 
   final case class FrameworkParameter(
     commandExecutionMode: Option[CommandExecutionMode] = None,
-    callTreeEnabled: Boolean = false
+    callTreeEnabled: Boolean = false,
+    dslChokepointHooks: Option[Vector[DslChokepointHook]] = None
   )
 
   /**
@@ -245,6 +246,22 @@ object ExecutionContext {
           observability = observability,
           framework = i.cncfCore.framework.copy(
             callTreeEnabled = enabled
+          )
+        )
+      )
+    case _ =>
+      ctx
+  }
+
+  def withFrameworkDslChokepointHooks(
+    ctx: ExecutionContext,
+    hooks: Vector[DslChokepointHook]
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(
+        cncfCore = i.cncfCore.copy(
+          framework = i.cncfCore.framework.copy(
+            dslChokepointHooks = Some(hooks)
           )
         )
       )

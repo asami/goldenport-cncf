@@ -11,7 +11,8 @@ import org.goldenport.id.UniversalId
  * @since   Dec. 21, 2025
  *  version Dec. 31, 2025
  *  version Jan. 20, 2026
- * @version Mar. 11, 2026
+ *  version Mar. 11, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TraceId(
@@ -111,6 +112,13 @@ final case class ObservabilityContext(
     attributes: Record
   ): Unit =
     ObservabilityEngine.emitInfo(this, scope, name, attributes)
+
+  def emitDebug(
+    scope: ScopeContext,
+    name: String,
+    attributes: Record
+  ): Unit =
+    ObservabilityEngine.emitDebug(this, scope, name, attributes)
 
   def emitWarn(
     scope: ScopeContext,

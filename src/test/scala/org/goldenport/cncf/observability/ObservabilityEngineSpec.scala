@@ -1,19 +1,30 @@
 package org.goldenport.cncf.observability
 
+import scala.collection.mutable.ListBuffer
+
+import org.scalatest.BeforeAndAfterEach
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 import org.goldenport.Conclusion
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{ObservabilityContext, ScopeContext, ScopeKind, TraceId}
+import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
+import org.goldenport.record.Record
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 
 /*
  * @since   Jan.  8, 2026
  *  version Jan. 20, 2026
- * @version Apr. 11, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
-class ObservabilityEngineSpec extends AnyWordSpec with Matchers {
+class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAfterEach {
+  override protected def afterEach(): Unit = {
+    ObservabilityEngine.updateVisibilityPolicy(VisibilityPolicy(minLevel = LogLevel.Info))
+    LogBackendHolder.reset()
+    super.afterEach()
+  }
+
   private def _trace_id_(): TraceId =
     TraceId("cncf", "test")
 
@@ -55,6 +66,30 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers {
       keys.contains("result.success") shouldBe true
       keys.contains("error.kind") shouldBe true
       keys.contains("error.code") shouldBe true
+    }
+  }
+
+  "visibility policy" should {
+    "hide debug events when the minimum level is info" in {
+      val backend = new MemoryBackend
+      LogBackendHolder.install(backend)
+      ObservabilityEngine.updateVisibilityPolicy(VisibilityPolicy(minLevel = LogLevel.Info))
+
+      ObservabilityEngine.emitDebug(
+        _scope_context_().observabilityContext,
+        _scope_context_(),
+        "debug-event",
+        Record.empty
+      )
+      ObservabilityEngine.emitInfo(
+        _scope_context_().observabilityContext,
+        _scope_context_(),
+        "info-event",
+        Record.empty
+      )
+
+      backend.lines.exists(_.contains("debug-event")) shouldBe false
+      backend.lines.exists(_.contains("info-event")) shouldBe true
     }
   }
 
@@ -110,6 +145,18 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers {
       RuntimeConfig.getString(configuration, RuntimeConfig.LogBackendKey) shouldBe Some("stderr")
       RuntimeConfig.getString(configuration, RuntimeConfig.LogLevelKey) shouldBe Some("debug")
       RuntimeConfig.getString(configuration, RuntimeConfig.LogFilePathKey) shouldBe Some("/tmp/cncf.log")
+    }
+  }
+
+  private final class MemoryBackend extends LogBackend {
+    private val _lines = ListBuffer.empty[String]
+
+    def lines: Vector[String] = _lines.synchronized {
+      _lines.toVector
+    }
+
+    override def writeLine(line: String): Unit = _lines.synchronized {
+      _lines += line
     }
   }
 }

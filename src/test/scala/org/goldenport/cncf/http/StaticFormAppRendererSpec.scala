@@ -37,7 +37,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -66,6 +66,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       c.downField("authorization").downField("decisions").downField("summary").downField("cumulative").get[Long]("count").isRight shouldBe true
       c.downField("authorization").downField("decisions").downField("summary").downField("cumulative").get[Long]("errors").isRight shouldBe true
       c.downField("authorization").downField("decisions").downField("series").downField("hour").focus.flatMap(_.asArray).exists(_.nonEmpty) shouldBe true
+      c.downField("dsl").downField("chokepoints").downField("summary").downField("cumulative").get[Long]("count").isRight shouldBe true
+      c.downField("dsl").downField("chokepoints").downField("summary").downField("cumulative").get[Long]("errors").isRight shouldBe true
+      c.downField("dsl").downField("chokepoints").downField("series").downField("hour").focus.flatMap(_.asArray).exists(_.nonEmpty) shouldBe true
       c.downField("assembly").downField("warnings").get[Int]("count").isRight shouldBe true
       c.downField("links").get[String]("admin") shouldBe Right("/web/system/admin")
       c.downField("links").get[String]("performance") shouldBe Right("/web/system/performance")
@@ -88,6 +91,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       c.downField("actions").downField("actionCalls").downField("summary").downField("hour").get[Long]("errors").isRight shouldBe true
       c.downField("actions").downField("jobs").downField("summary").downField("hour").get[Long]("errors").isRight shouldBe true
       c.downField("authorization").downField("decisions").downField("summary").downField("hour").get[Long]("errors").isRight shouldBe true
+      c.downField("dsl").downField("chokepoints").downField("summary").downField("hour").get[Long]("errors").isRight shouldBe true
       c.downField("links").get[String]("admin") shouldBe Right(s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(componentName)}/admin")
     }
 
@@ -631,6 +635,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Recent requests")
       html should include ("Recent errors")
       html should include ("ActionCall")
+      html should include ("DSL Chokepoints")
       html should include ("Authorization")
       html should include ("Jobs")
       html should include ("Assembly warnings")

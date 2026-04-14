@@ -29,6 +29,7 @@ import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.cncf.action.AggregateBehavior
+import org.goldenport.cncf.observability.{DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 
 /*
  * @since   Jan.  6, 2026
@@ -102,13 +103,23 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   // Aggregate-oriented access for application logic.
   // This returns the domain value object directly.
   protected final def aggregate_load_c[A](id: EntityId): Consequence[A] =
-    for {
-      _ <- _aggregate_authorize_load(id.collection.name, id)
-      r <- component
-        .map(_.aggregateSpace)
-        .getOrElse(Consequence.uninitializedState.RAISE)
-        .resolve_with_context[A](id)(using execution_context)
-    } yield r
+    _aggregate_chokepoint[A](
+      operation = "load",
+      aggregateName = id.collection.name,
+      targetId = Some(id)
+    ) { ctx =>
+      for {
+        _ <- _aggregate_phase(ctx, DslChokepointPhase.Authorization) {
+          _aggregate_authorize_load(id.collection.name, id)
+        }
+        r <- _aggregate_phase(ctx, DslChokepointPhase.Resolve) {
+          component
+            .map(_.aggregateSpace)
+            .getOrElse(Consequence.uninitializedState.RAISE)
+            .resolve_with_context[A](id)(using execution_context)
+        }
+      } yield r
+    }
 
   protected final def aggregate_authorize_type(
     aggregateName: String,
@@ -206,13 +217,23 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   protected final def aggregate_load_option_c[A](
     targetid: EntityId
   ): Consequence[Option[A]] =
-    for {
-      _ <- _aggregate_authorize_load(targetid.collection.name, targetid)
-      r <- component
-        .map(_.aggregateSpace)
-        .getOrElse(Consequence.uninitializedState.RAISE)
-        .resolveOption[A](targetid)(using execution_context)
-    } yield r
+    _aggregate_chokepoint[Option[A]](
+      operation = "load",
+      aggregateName = targetid.collection.name,
+      targetId = Some(targetid)
+    ) { ctx =>
+      for {
+        _ <- _aggregate_phase(ctx, DslChokepointPhase.Authorization) {
+          _aggregate_authorize_load(targetid.collection.name, targetid)
+        }
+        r <- _aggregate_phase(ctx, DslChokepointPhase.Resolve) {
+          component
+            .map(_.aggregateSpace)
+            .getOrElse(Consequence.uninitializedState.RAISE)
+            .resolveOption[A](targetid)(using execution_context)
+        }
+      } yield r
+    }
 
   protected final def aggregate_load_option_or_throw[A](targetid: EntityId): Option[A] =
     aggregate_load_option_c[A](targetid).TAKE
@@ -227,13 +248,23 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     collectionname: String,
     id: EntityId
   ): Consequence[A] =
-    for {
-      _ <- _aggregate_authorize_load(collectionname, id)
-      r <- component
-        .map(_.aggregate[A](collectionname))
-        .getOrElse(Consequence.uninitializedState.RAISE)
-        .resolve_with_context(id)(using execution_context)
-    } yield r
+    _aggregate_chokepoint[A](
+      operation = "load",
+      aggregateName = collectionname,
+      targetId = Some(id)
+    ) { ctx =>
+      for {
+        _ <- _aggregate_phase(ctx, DslChokepointPhase.Authorization) {
+          _aggregate_authorize_load(collectionname, id)
+        }
+        r <- _aggregate_phase(ctx, DslChokepointPhase.Resolve) {
+          component
+            .map(_.aggregate[A](collectionname))
+            .getOrElse(Consequence.uninitializedState.RAISE)
+            .resolve_with_context(id)(using execution_context)
+        }
+      } yield r
+    }
 
   private def _aggregate_authorize_load(
     aggregateName: String,
@@ -291,22 +322,31 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     collectionname: String,
     q: Query[?]
   ): Consequence[SearchResult[A]] =
-    for {
-      _ <- _aggregate_authorize_search(collectionname)
-      xs <- component
-        .map(_.aggregateSpace)
-        .getOrElse(Consequence.uninitializedState.RAISE)
-        .query_with_context[A](collectionname, q)(using execution_context)
-    } yield {
-        SearchResult(
-          query = q,
-          data = xs,
-          totalCount = Some(xs.size),
-          offset = q.offset,
-          limit = q.limit,
-          fetchedCount = xs.size
-        )
-      }
+    _aggregate_chokepoint[SearchResult[A]](
+      operation = "search",
+      aggregateName = collectionname
+    ) { ctx =>
+      for {
+        _ <- _aggregate_phase(ctx, DslChokepointPhase.Authorization) {
+          _aggregate_authorize_search(collectionname)
+        }
+        xs <- _aggregate_phase(ctx, DslChokepointPhase.Query) {
+          component
+            .map(_.aggregateSpace)
+            .getOrElse(Consequence.uninitializedState.RAISE)
+            .query_with_context[A](collectionname, q)(using execution_context)
+        }
+      } yield {
+          SearchResult(
+            query = q,
+            data = xs,
+            totalCount = Some(xs.size),
+            offset = q.offset,
+            limit = q.limit,
+            fetchedCount = xs.size
+          )
+        }
+    }
 
   private def _aggregate_authorize_search(
     aggregateName: String
@@ -349,11 +389,23 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     commandName: String,
     action: => Consequence[A]
   ): Consequence[A] =
-    for {
-      _ <- _aggregate_authorize_create(entityName, commandName)
-      aggregate <- action
-      _ <- _aggregate_put_record_authorized_c(entityName, aggregate.toRecord())
-    } yield aggregate
+    _aggregate_chokepoint[A](
+      operation = "create",
+      aggregateName = entityName,
+      commandName = Some(commandName)
+    ) { ctx =>
+      for {
+        _ <- _aggregate_phase(ctx, DslChokepointPhase.Authorization) {
+          _aggregate_authorize_create(entityName, commandName)
+        }
+        aggregate <- _aggregate_phase(ctx, DslChokepointPhase.Method) {
+          action
+        }
+        _ <- _aggregate_phase(ctx, DslChokepointPhase.Persistence) {
+          _aggregate_put_record_authorized_c(entityName, aggregate.toRecord())
+        }
+      } yield aggregate
+    }
 
   protected final def aggregate_update[A <: org.goldenport.record.RecordPresentable](
     entityName: String,
@@ -369,11 +421,54 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     commandName: String,
     action: => Consequence[A]
   ): Consequence[A] =
-    for {
-      _ <- _aggregate_authorize_update(entityName, targetId, commandName)
-      aggregate <- action
-      _ <- _aggregate_put_record_authorized_c(entityName, aggregate.toRecord())
-    } yield aggregate
+    _aggregate_chokepoint[A](
+      operation = "update",
+      aggregateName = entityName,
+      targetId = Some(targetId),
+      commandName = Some(commandName)
+    ) { ctx =>
+      for {
+        _ <- _aggregate_phase(ctx, DslChokepointPhase.Authorization) {
+          _aggregate_authorize_update(entityName, targetId, commandName)
+        }
+        aggregate <- _aggregate_phase(ctx, DslChokepointPhase.Method) {
+          action
+        }
+        _ <- _aggregate_phase(ctx, DslChokepointPhase.Persistence) {
+          _aggregate_put_record_authorized_c(entityName, aggregate.toRecord())
+        }
+      } yield aggregate
+    }
+
+  private def _aggregate_chokepoint[A](
+    operation: String,
+    aggregateName: String,
+    targetId: Option[EntityId] = None,
+    commandName: Option[String] = None
+  )(
+    body: DslChokepointContext => Consequence[A]
+  ): Consequence[A] = {
+    given ExecutionContext = execution_context
+    val ctx = DslChokepointContext(
+      domain = "aggregate",
+      operation = operation,
+      componentName = component_name_option,
+      resourceName = Some(aggregateName),
+      targetId = targetId.map(_.toString),
+      commandName = commandName
+    )
+    DslChokepointRunner.run(ctx)(body(ctx))
+  }
+
+  private def _aggregate_phase[A](
+    context: DslChokepointContext,
+    phase: DslChokepointPhase
+  )(
+    body: => Consequence[A]
+  ): Consequence[A] = {
+    given ExecutionContext = execution_context
+    DslChokepointRunner.phase(context, phase)(body)
+  }
 
   private def _aggregate_authorize_create(
     aggregateName: String,

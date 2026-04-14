@@ -1,14 +1,19 @@
 package org.goldenport.cncf.action
 
 import cats.syntax.flatMap.*
+import scala.collection.mutable.ListBuffer
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpaceSpecHelper, ProductBuilder, SalesOrderBuilder, UserBuilder}
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.runtime.testdomain.{ProductAggregate, SalesOrder, SalesOrderAggregate, SalesOrderLine, UserAggregate}
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
+import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
+import org.goldenport.cncf.observability.{DslChokepointContext, DslChokepointHook, DslChokepointOutcome, DslChokepointPhase}
 import org.goldenport.cncf.operation.{CmlOperationAccess, CmlOperationDefinition}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
@@ -174,6 +179,124 @@ final class ActionCallAggregateResolveSpec
       Then("the call returns search result payload")
       result shouldBe a[Consequence.Success[OperationResponse]]
       call.asInstanceOf[SearchAggregateCall[UserAggregate]].searched.map(_.data) shouldBe Some(Vector(expected))
+    }
+
+    "record aggregate DSL chokepoint and phases in calltree" in {
+      Given("an execution context with calltree enabled")
+      val component = new Component() {}
+      component.aggregateSpace.register("user", new AggregateCollection(new UserBuilder))
+      val base = ActionCallSupport.componentPair(component)
+      val context = ExecutionContext.withFrameworkCallTreeEnabled(base.executioncontext, enabled = true)
+      val pair = ActionCallSupport.pair(base.component, context)
+
+      When("executing an action call that loads an aggregate")
+      val call = action_call(
+        actionname = "load-user-aggregate-calltree",
+        pair
+      ) { core =>
+        ResolveAggregateCall[UserAggregate](core, user_id())
+      }
+      val result = call.execute()
+
+      Then("the aggregate DSL chokepoint and phases are captured in calltree")
+      result shouldBe a[Consequence.Success[_]]
+      val calltree = context.observability.callTreeContext.build().getOrElse(fail("calltree missing"))
+      val text = calltree.toRecord.print
+      text should include("dsl:aggregate.load")
+      text should include("dsl:aggregate.load.authorization")
+      text should include("dsl:aggregate.load.resolve")
+    }
+
+    "record aggregate DSL chokepoint metrics" in {
+      Given("an aggregate DSL metrics snapshot before the call")
+      val before = RuntimeDashboardMetrics.dslChokepointSnapshot.summary.cumulative.total
+      val component = new Component() {}
+      component.aggregateSpace.register("user", new AggregateCollection(new UserBuilder))
+      val pair = ActionCallSupport.componentPair(component)
+
+      When("executing an aggregate load through the DSL")
+      val call = action_call(
+        actionname = "load-user-aggregate-metrics",
+        pair
+      ) { core =>
+        ResolveAggregateCall[UserAggregate](core, user_id())
+      }
+      val result = call.execute()
+
+      Then("the DSL chokepoint metrics are incremented")
+      result shouldBe a[Consequence.Success[_]]
+      val after = RuntimeDashboardMetrics.dslChokepointSnapshot.summary.cumulative.total
+      after should be > before
+    }
+
+    "use execution context DSL chokepoint hook registration" in {
+      Given("an execution context with a registered custom DSL chokepoint hook")
+      val hook = new RecordingDslChokepointHook
+      val component = new Component() {}
+      component.aggregateSpace.register("user", new AggregateCollection(new UserBuilder))
+      val base = ActionCallSupport.componentPair(component)
+      val context = ExecutionContext.withFrameworkDslChokepointHooks(
+        base.executioncontext,
+        Vector(hook)
+      )
+      val pair = ActionCallSupport.pair(base.component, context)
+
+      When("executing an aggregate load through the DSL")
+      val call = action_call(
+        actionname = "load-user-aggregate-custom-hook",
+        pair
+      ) { core =>
+        ResolveAggregateCall[UserAggregate](core, user_id())
+      }
+      val result = call.execute()
+
+      Then("the registered hook receives chokepoint and phase callbacks")
+      result shouldBe a[Consequence.Success[_]]
+      hook.events should contain("enter:aggregate.load")
+      hook.events should contain("phase-enter:aggregate.load.authorization")
+      hook.events should contain("phase-leave:aggregate.load.resolve.success")
+      hook.events should contain("leave:aggregate.load.success")
+    }
+
+    "emit aggregate DSL audit events when authorization fails" in {
+      val backend = new MemoryBackend
+      LogBackendHolder.reset()
+      LogBackendHolder.install(backend)
+      try {
+        Given("a private aggregate backing entity owned by another subject")
+        given EntityPersistent[NoticeProbeAggregate] = NoticeProbeAggregate.persistent
+        val cid = org.simplemodeling.model.datatype.EntityCollectionId("test", "a", "notice")
+        val id = EntityId("test", "private_notice_audit", cid)
+        val component = new Component() {}
+        component.entitySpace.registerEntity(
+          "notice",
+          NoticeProbeAggregate.collection(
+            cid,
+            NoticeProbeAggregate.privateOwnedBy(id, "private", "other-owner")
+          )
+        )
+        val pair = ActionCallSupport.componentPair(component)
+
+        When("executing an aggregate update denied at the DSL chokepoint")
+        val call = action_call(
+          actionname = "update-notice-audit",
+          pair
+        ) { core =>
+          UpdateNoticeProbeAggregateCall(
+            core,
+            id,
+            NoticeProbeAggregate(id, "updated")
+          )
+        }
+        val result = call.execute()
+
+        Then("DSL audit event names identify the failed aggregate phase")
+        result shouldBe a[Consequence.Failure[_]]
+        backend.lines.exists(_.contains("dsl.audit.aggregate.update.authorization.failure")) shouldBe true
+        backend.lines.exists(_.contains("dsl.audit.aggregate.update.failure")) shouldBe true
+      } finally {
+        LogBackendHolder.reset()
+      }
     }
 
     "reject aggregate update at the ActionCall chokepoint before running update logic" in {
@@ -462,4 +585,52 @@ private object NoticeProbeAggregate {
         } yield NoticeProbeAggregate(i, n)
       }
     }
+}
+
+private final class RecordingDslChokepointHook extends DslChokepointHook {
+  private val _events = ListBuffer.empty[String]
+
+  def events: Vector[String] = _events.synchronized {
+    _events.toVector
+  }
+
+  override def enter(
+    ctx: DslChokepointContext
+  )(using ExecutionContext): Unit =
+    _record(s"enter:${ctx.domain}.${ctx.operation}")
+
+  override def phaseEnter(
+    ctx: DslChokepointContext,
+    phase: DslChokepointPhase
+  )(using ExecutionContext): Unit =
+    _record(s"phase-enter:${ctx.domain}.${ctx.operation}.${phase.name}")
+
+  override def phaseLeave(
+    ctx: DslChokepointContext,
+    phase: DslChokepointPhase,
+    outcome: DslChokepointOutcome
+  )(using ExecutionContext): Unit =
+    _record(s"phase-leave:${ctx.domain}.${ctx.operation}.${phase.name}.${outcome.name}")
+
+  override def leave(
+    ctx: DslChokepointContext,
+    outcome: DslChokepointOutcome
+  )(using ExecutionContext): Unit =
+    _record(s"leave:${ctx.domain}.${ctx.operation}.${outcome.name}")
+
+  private def _record(event: String): Unit = _events.synchronized {
+    _events += event
+  }
+}
+
+private final class MemoryBackend extends LogBackend {
+  private val _lines = ListBuffer.empty[String]
+
+  def lines: Vector[String] = _lines.synchronized {
+    _lines.toVector
+  }
+
+  override def writeLine(line: String): Unit = _lines.synchronized {
+    _lines += line
+  }
 }

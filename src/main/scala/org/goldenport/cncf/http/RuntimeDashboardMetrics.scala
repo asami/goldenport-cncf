@@ -2,8 +2,7 @@ package org.goldenport.cncf.http
 
 /*
  * @since   Apr. 12, 2026
- *  version Apr. 12, 2026
- * @version Apr. 13, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object RuntimeDashboardMetrics {
@@ -49,6 +48,7 @@ object RuntimeDashboardMetrics {
   private var _htmlEvents = Vector.empty[Event]
   private var _actionEvents = Vector.empty[Event]
   private var _authorizationEvents = Vector.empty[Event]
+  private var _dslEvents = Vector.empty[Event]
   private var _recent = Vector.empty[RequestEntry]
 
   def recordHtmlRequest(
@@ -70,6 +70,10 @@ object RuntimeDashboardMetrics {
     _authorizationEvents = (_authorizationEvents :+ Event(java.time.Instant.now.toEpochMilli, denied)).takeRight(10000)
   }
 
+  def recordDslChokepoint(error: Boolean): Unit = synchronized {
+    _dslEvents = (_dslEvents :+ Event(java.time.Instant.now.toEpochMilli, error)).takeRight(10000)
+  }
+
   def htmlSnapshot: Snapshot = synchronized {
     _snapshot(_htmlEvents, _recent)
   }
@@ -80,6 +84,10 @@ object RuntimeDashboardMetrics {
 
   def authorizationDecisionSnapshot: Snapshot = synchronized {
     _snapshot(_authorizationEvents, Vector.empty)
+  }
+
+  def dslChokepointSnapshot: Snapshot = synchronized {
+    _snapshot(_dslEvents, Vector.empty)
   }
 
   private def _snapshot(

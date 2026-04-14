@@ -1371,6 +1371,7 @@ object StaticFormAppRenderer {
        |      const rows = [
        |        ["HTML request", data.html.requests.summary],
        |        ["ActionCall", data.actions.actionCalls.summary],
+       |        ["DSL Chokepoints", data.dsl.chokepoints.summary],
        |        ["Jobs", data.actions.jobs.summary],
        |        ["Authorization", data.authorization.decisions.summary]
        |      ];
@@ -1695,6 +1696,7 @@ object StaticFormAppRenderer {
     val htmlRequests = RuntimeDashboardMetrics.htmlSnapshot
     val actionCalls = RuntimeDashboardMetrics.actionCallSnapshot
     val authorizationDecisions = RuntimeDashboardMetrics.authorizationDecisionSnapshot
+    val dslChokepoints = RuntimeDashboardMetrics.dslChokepointSnapshot
     val jobs = _job_metrics(subsystem)
     _simple_page(
       title = "System Performance",
@@ -1732,6 +1734,10 @@ object StaticFormAppRenderer {
            |<article>
            |  <h2>Authorization</h2>
            |  ${_summary_table(authorizationDecisions.summary)}
+           |</article>
+           |<article>
+           |  <h2>DSL Chokepoints</h2>
+           |  ${_summary_table(dslChokepoints.summary)}
            |</article>
            |<article>
            |  <h2>Jobs</h2>
@@ -1957,13 +1963,14 @@ object StaticFormAppRenderer {
     val htmlRequests = RuntimeDashboardMetrics.htmlSnapshot
     val actionCalls = RuntimeDashboardMetrics.actionCallSnapshot
     val authorizationDecisions = RuntimeDashboardMetrics.authorizationDecisionSnapshot
+    val dslChokepoints = RuntimeDashboardMetrics.dslChokepointSnapshot
     val avgMillis =
       if (htmlRequests.recent.isEmpty) 0L
       else htmlRequests.recent.map(_.elapsedMillis).sum / htmlRequests.recent.size
     val adminPath =
       if (scope == "component") s"/web/${NamingConventions.toNormalizedSegment(name)}/admin"
       else "/web/system/admin"
-    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance","manual":"/web/manual","console":"/web/console","assemblyWarnings":"/form/admin/assembly/warnings"},"components":${componentJson}}"""
+    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"dsl":{"chokepoints":${_snapshot_json(dslChokepoints, includeRecent = false)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance","manual":"/web/manual","console":"/web/console","assemblyWarnings":"/form/admin/assembly/warnings"},"components":${componentJson}}"""
   }
 
   private def _snapshot_json(

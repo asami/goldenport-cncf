@@ -14,7 +14,7 @@ import org.goldenport.observation.calltree.CallTree
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 29, 2026
- * @version Apr. 11, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class OperationContext(
@@ -291,8 +291,10 @@ object ObservabilityEngine {
   ): Unit = {
     val _ = attributes
     LogBackendHolder.backend.foreach { backend =>
-      val prefix = s"event=$level scope=${scope.kind} name=${scope.name} "
-      backend.log(level, s"$prefix$message")
+      if (shouldEmit(level, scope, "org.goldenport.cncf", "ObservabilityEngine", backend)) {
+        val prefix = s"event=$level scope=${scope.kind} name=${scope.name} "
+        backend.log(level, s"$prefix$message")
+      }
     }
   }
 

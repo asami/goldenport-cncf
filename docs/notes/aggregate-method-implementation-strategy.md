@@ -123,6 +123,101 @@ Aggregate methods may still implement business-specific invariants, state
 transition guards, or domain-level checks. Those checks are not a substitute for
 the CNCF authorization chokepoints.
 
+## DSL Chokepoint Pipeline
+
+Aggregate chokepoints are implemented on top of the generic DSL chokepoint
+runner. The runner is intentionally not aggregate-specific; the same mechanism
+is expected to be reused for Entity, View, Data, Admin, and later Form/Web DSL
+entry points.
+
+The generic model is:
+
+```text
+DslChokepointContext
+  domain       = aggregate | entity | view | data | admin | form | ...
+  operation    = create | update | load | search | ...
+  component    = optional component name
+  resource     = aggregate/entity/view/data name
+  targetId     = optional target id
+  command      = optional command name
+
+DslChokepointRunner
+  enter
+  phase enter/leave
+  leave
+```
+
+Initial phases are:
+
+- `authorization`
+- `resolve`
+- `query`
+- `method`
+- `persistence`
+
+The first hooks are:
+
+- calltree hook
+- observability event hook
+- audit hook
+- metrics hook
+
+The default hook set is owned by `DslChokepointRunner`. An execution can
+override the hook set through `ExecutionContext.FrameworkParameter`; this keeps
+the initial extension point close to the execution boundary and avoids making
+application code responsible for audit or authorization observability. A later
+runtime-level configuration can feed the same framework parameter when hook
+selection needs to come from `RuntimeConfig` or deployment policy.
+
+Log-level policy:
+
+- calltree is structural state and is not emitted as a normal log line by this
+  hook.
+- normal DSL observability events are `debug`; they are useful for tracing a
+  chokepoint but should not appear in the default `info` runtime log.
+- DSL audit events are `info`; failed authorization/method/persistence phases
+  and persistence outcomes remain visible by default.
+- metrics are in-memory dashboard state and are not controlled by log level.
+
+This makes the chokepoint the single place where later concerns can be added or
+changed:
+
+- audit
+- metrics
+- tracing
+- diagnostics
+- dashboard event aggregation
+- policy-specific reporting
+
+The aggregate DSL now records calltree nodes like:
+
+```text
+dsl:aggregate.update
+  dsl:aggregate.update.authorization
+  dsl:aggregate.update.method
+  dsl:aggregate.update.persistence
+```
+
+For `load`:
+
+```text
+dsl:aggregate.load
+  dsl:aggregate.load.authorization
+  dsl:aggregate.load.resolve
+```
+
+The same tree shape should be preserved when the mechanism is expanded to other
+DSL domains.
+
+The initial audit hook emits DSL audit events for failed chokepoints and for
+persistence phase outcomes. Authorization decisions still emit their own
+authorization audit events; DSL audit events describe the higher-level DSL
+operation attempt and the phase where it failed or persisted.
+
+The initial metrics hook records aggregate DSL chokepoint totals and errors in
+`RuntimeDashboardMetrics`. The dashboard can later expose this alongside HTML
+requests, ActionCalls, and authorization decisions.
+
 ## IMPLEMENTATION Strategy
 
 `IMPLEMENTATION` should describe how an executable aggregate method is realized.
