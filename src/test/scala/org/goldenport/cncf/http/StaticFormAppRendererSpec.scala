@@ -1,5 +1,7 @@
 package org.goldenport.cncf.http
 
+import scala.collection.mutable.ListBuffer
+import java.nio.charset.StandardCharsets
 import cats.data.State
 import cats.effect.IO
 import cats.effect.Ref
@@ -9,6 +11,10 @@ import io.circe.Json
 import io.circe.parser.parse
 import org.http4s.{Method, Request, Uri}
 import org.goldenport.Consequence
+import org.goldenport.http.{HttpRequest, HttpResponse}
+import org.goldenport.http.HttpStatus
+import org.goldenport.bag.Bag
+import org.goldenport.datatype.{ContentType, MimeType}
 import org.goldenport.protocol.{Protocol, Request as GRequest}
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.egress.{EgressCollection, RestEgress}
@@ -541,7 +547,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
     "submit aggregate create/update actions through the discovered operation form route" in {
       val subsystem = _aggregate_fixture_subsystem()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val before = RuntimeDashboardMetrics.dslChokepointSnapshot.summary.cumulative.total
 
       val createHtml = server
         ._submit_operation_form(
@@ -566,6 +575,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       createHtml should include ("result.status")
       updateHtml should include ("notice-board.notice-aggregate.approve-notice-aggregate")
       updateHtml should include ("result.status")
+      RuntimeDashboardMetrics.dslChokepointSnapshot.summary.cumulative.total should be > before
+      dispatcher.paths should contain ("/notice-board/notice-aggregate/create-notice-aggregate")
+      dispatcher.paths should contain ("/notice-board/notice-aggregate/approve-notice-aggregate")
     }
 
     "execute aggregate create/update actions through an HTTP ingress-capable component" in {
@@ -599,6 +611,30 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       updateHtml should include ("200")
       updateHtml should include ("aggregate-updated:notice_1")
       updateHtml should not include ("HTTP ingress not configured")
+    }
+
+    "build REST operation dispatch requests without executing local operation logic" in {
+      val driver = new RecordingRestDriver
+      val dispatcher = WebOperationDispatcher.Rest("http://app.example/base", driver)
+      val request = HttpRequest.fromPath(
+        method = HttpRequest.POST,
+        path = "/notice-board/notice-aggregate/create-notice-aggregate",
+        query = Record.data("page" -> "1"),
+        header = Record.data("X-Trace-Id" -> "trace-1"),
+        form = Record.data("title" -> "hello world")
+      )
+
+      val response = dispatcher.dispatch(request)
+
+      response.code shouldBe 200
+      driver.calls should contain (
+        RecordingRestDriver.Call(
+          method = "POST",
+          path = "http://app.example/base/notice-board/notice-aggregate/create-notice-aggregate?page=1",
+          body = Some("title=hello+world"),
+          headers = Map("X-Trace-Id" -> "trace-1")
+        )
+      )
     }
 
     "render resolved Web Descriptor summary on component admin page" in {
@@ -1219,6 +1255,77 @@ private final case class _SuccessfulAggregateActionCall(
     val value = core.action.arguments.find(_.name == argumentName).map(_.value).getOrElse("")
     Consequence.success(OperationResponse.Scalar(s"${resultPrefix}:${value}"))
   }
+}
+
+private final class RecordingWebOperationDispatcher(
+  delegate: WebOperationDispatcher
+) extends WebOperationDispatcher {
+  private val _paths = ListBuffer.empty[String]
+
+  def targetName: String = "recording"
+
+  def paths: Vector[String] = _paths.synchronized {
+    _paths.toVector
+  }
+
+  def dispatch(request: HttpRequest): HttpResponse = {
+    _paths.synchronized {
+      _paths += request.path.asString
+    }
+    delegate.dispatch(request)
+  }
+}
+
+private final class RecordingRestDriver extends HttpDriver {
+  import RecordingRestDriver.Call
+
+  private val _calls = ListBuffer.empty[Call]
+  private val _response =
+    HttpResponse.Text(
+      HttpStatus.Ok,
+      ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+      Bag.text("ok", StandardCharsets.UTF_8)
+    )
+
+  def calls: Vector[Call] = _calls.synchronized {
+    _calls.toVector
+  }
+
+  def get(path: String): HttpResponse = {
+    _record(Call("GET", path, None, Map.empty))
+    _response
+  }
+
+  def post(
+    path: String,
+    body: Option[String],
+    headers: Map[String, String]
+  ): HttpResponse = {
+    _record(Call("POST", path, body, headers))
+    _response
+  }
+
+  def put(
+    path: String,
+    body: Option[String],
+    headers: Map[String, String]
+  ): HttpResponse = {
+    _record(Call("PUT", path, body, headers))
+    _response
+  }
+
+  private def _record(call: Call): Unit = _calls.synchronized {
+    _calls += call
+  }
+}
+
+private object RecordingRestDriver {
+  final case class Call(
+    method: String,
+    path: String,
+    body: Option[String],
+    headers: Map[String, String]
+  )
 }
 
 private final class _IdRef[A](initial: A) extends Ref[cats.Id, A] {

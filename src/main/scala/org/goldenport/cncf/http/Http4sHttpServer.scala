@@ -24,6 +24,7 @@ import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse}
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.observability.{DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.entity.runtime.EntityCollection
@@ -34,15 +35,18 @@ import org.goldenport.datatype.{ContentType, MimeBody}
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
   engine: HttpExecutionEngine,
-  port: Int = Http4sHttpServer.defaultPort
+  port: Int = Http4sHttpServer.defaultPort,
+  operationDispatcherOption: Option[WebOperationDispatcher] = None
 ) extends HttpServer(engine) {
   private val _bind_host = Host.fromString("0.0.0.0").get
   private val _form_continuations = TrieMap.empty[String, Http4sHttpServer.FormContinuation]
+  private val _operation_dispatcher =
+    operationDispatcherOption.getOrElse(WebOperationDispatcher.create(engine))
 
   def start(args: Array[String] = Array.empty): Unit = {
     val _ = args
@@ -487,13 +491,18 @@ final class Http4sHttpServer(
     val started = System.nanoTime()
     for {
       form <- _to_plain_form_record(req)
-      res = execute(HttpRequest.fromPath(
-        method = HttpRequest.POST,
-        path = s"/${app}/${service}/${operation}",
-        query = Record.create(req.uri.query.params.toVector),
-        header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value)),
-        form = form
-      ))
+      res = _dispatch_operation(
+        app,
+        service,
+        operation,
+        HttpRequest.fromPath(
+          method = HttpRequest.POST,
+          path = s"/${app}/${service}/${operation}",
+          query = Record.create(req.uri.query.params.toVector),
+          header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value)),
+          form = form
+        )
+      )
       continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
       properties = _form_result_properties(app, service, operation, res, _form_values(form) ++ _continuation_values(continuation))
       page = StaticFormAppRenderer.renderFormResult(properties)
@@ -544,12 +553,44 @@ final class Http4sHttpServer(
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Form continuation not found"))
     }
 
+  private def _dispatch_operation(
+    app: String,
+    service: String,
+    operation: String,
+    request: HttpRequest
+  ): HttpResponse = {
+    given ExecutionContext = ExecutionContext.create()
+    val context = DslChokepointContext(
+      domain = "web",
+      operation = "operation.dispatch",
+      componentName = Some(app),
+      resourceName = Some(s"${service}.${operation}"),
+      commandName = Some(operation),
+      attributes = Record.dataAuto(
+        "web.service" -> service,
+        "web.operation" -> operation,
+        "web.dispatch.target" -> _operation_dispatcher.targetName
+      )
+    )
+    DslChokepointRunner.run(context) {
+      DslChokepointRunner.phase(context, DslChokepointPhase.Method) {
+        org.goldenport.Consequence.success(_operation_dispatcher.dispatch(request))
+      }
+    } match {
+      case org.goldenport.Consequence.Success(response) =>
+        response
+      case org.goldenport.Consequence.Failure(conclusion) =>
+        HttpResponse.internalServerError(conclusion.toString)
+    }
+  }
+
   private[http] def _submit_component_admin_entity_update(
     req: org.http4s.Request[IO],
     app: String,
     entity: String,
     id: String
   ): IO[HResponse[IO]] = {
+    // TODO WEB-ADMIN: dispatch to admin.entity.update Operation instead of touching EntityCollection directly.
     val started = System.nanoTime()
     for {
       form <- _to_plain_form_record(req)
@@ -573,6 +614,7 @@ final class Http4sHttpServer(
     app: String,
     entity: String
   ): IO[HResponse[IO]] = {
+    // TODO WEB-ADMIN: dispatch to admin.entity.create Operation instead of touching EntityCollection directly.
     val started = System.nanoTime()
     for {
       form <- _to_plain_form_record(req)
@@ -596,6 +638,7 @@ final class Http4sHttpServer(
     data: String,
     id: String
   ): IO[HResponse[IO]] = {
+    // TODO WEB-ADMIN: dispatch to admin.data.update Operation instead of touching DataStore directly.
     val started = System.nanoTime()
     for {
       form <- _to_plain_form_record(req)
@@ -619,6 +662,7 @@ final class Http4sHttpServer(
     app: String,
     data: String
   ): IO[HResponse[IO]] = {
+    // TODO WEB-ADMIN: dispatch to admin.data.create Operation instead of touching DataStore directly.
     val started = System.nanoTime()
     for {
       form <- _to_plain_form_record(req)
@@ -726,12 +770,17 @@ final class Http4sHttpServer(
     val started = System.nanoTime()
     val query = Record.create(req.uri.query.params.toVector)
     val values = req.uri.query.params.toMap
-    val res = execute(HttpRequest.fromPath(
-      method = HttpRequest.GET,
-      path = s"/${app}/${service}/${operation}",
-      query = query,
-      header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value))
-    ))
+    val res = _dispatch_operation(
+      app,
+      service,
+      operation,
+      HttpRequest.fromPath(
+        method = HttpRequest.GET,
+        path = s"/${app}/${service}/${operation}",
+        query = query,
+        header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value))
+      )
+    )
     val page = StaticFormAppRenderer.renderFormResult(
       _form_result_properties(app, service, operation, res, values)
     )

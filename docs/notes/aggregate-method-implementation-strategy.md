@@ -209,6 +209,25 @@ dsl:aggregate.load
 The same tree shape should be preserved when the mechanism is expanded to other
 DSL domains.
 
+Web-tier logic dispatch should target Operations. The current local execution
+path calls the in-process CNCF subsystem, but the same dispatch point must later
+support a client-like REST call from a Web-tier CNCF process to an
+Application-tier CNCF process. The Web-tier chokepoint therefore belongs at
+`web.operation.dispatch`, while Aggregate/Entity/Data authorization and audit
+chokepoints should occur naturally inside the target Operation execution.
+`WebOperationDispatcher` is the dispatch abstraction. The first implementation
+is `WebOperationDispatcher.Local`, which delegates to the local
+`HttpExecutionEngine`; a later REST implementation should keep the same
+interface and change only the target behind the dispatcher. The stable design
+contract is tracked in
+[`docs/design/web-operation-dispatcher.md`](../design/web-operation-dispatcher.md).
+
+Admin console CRUD should follow the same rule. The admin pages may provide HTML
+forms and navigation, but create/update/read/list semantics should be represented
+as admin Operations before the implementation is considered production-ready.
+Direct renderer/store chokepoints are avoided because they couple Web tier pages
+to Application-tier storage internals and bypass the intended operation boundary.
+
 The initial audit hook emits DSL audit events for failed chokepoints and for
 persistence phase outcomes. Authorization decisions still emit their own
 authorization audit events; DSL audit events describe the higher-level DSL

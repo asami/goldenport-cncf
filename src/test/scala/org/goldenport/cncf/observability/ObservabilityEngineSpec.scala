@@ -128,7 +128,9 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
             "cncf.runtime.no-exit" -> ConfigurationValue.BooleanValue(true),
             "cncf.runtime.logging.backend" -> ConfigurationValue.StringValue("stderr"),
             "cncf.runtime.logging.level" -> ConfigurationValue.StringValue("debug"),
-            "cncf.runtime.logging.file.path" -> ConfigurationValue.StringValue("/tmp/cncf.log")
+            "cncf.runtime.logging.file.path" -> ConfigurationValue.StringValue("/tmp/cncf.log"),
+            "cncf.runtime.web.operation.dispatcher" -> ConfigurationValue.StringValue("rest"),
+            "cncf.runtime.web.operation.dispatcher.rest.base-url" -> ConfigurationValue.StringValue("http://app.example")
           )
         ),
         ConfigurationTrace.empty
@@ -145,6 +147,8 @@ class ObservabilityEngineSpec extends AnyWordSpec with Matchers with BeforeAndAf
       RuntimeConfig.getString(configuration, RuntimeConfig.LogBackendKey) shouldBe Some("stderr")
       RuntimeConfig.getString(configuration, RuntimeConfig.LogLevelKey) shouldBe Some("debug")
       RuntimeConfig.getString(configuration, RuntimeConfig.LogFilePathKey) shouldBe Some("/tmp/cncf.log")
+      RuntimeConfig.getString(configuration, RuntimeConfig.WebOperationDispatcherKey) shouldBe Some("rest")
+      RuntimeConfig.getString(configuration, RuntimeConfig.WebOperationDispatcherRestBaseUrlKey) shouldBe Some("http://app.example")
     }
   }
 

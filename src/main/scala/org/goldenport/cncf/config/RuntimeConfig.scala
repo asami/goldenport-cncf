@@ -18,7 +18,7 @@ import org.goldenport.cncf.observability.ObservabilityEngine
  *  version Jan. 30, 2026
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -29,6 +29,8 @@ final case class RuntimeConfig(
   dataStoreSpace: DataStoreSpace,
   entityStoreSpace: EntityStoreSpace,
   mode: RunMode,
+  webOperationDispatcher: String = RuntimeConfig.DefaultWebOperationDispatcher,
+  webOperationDispatcherRestBaseUrl: Option[String] = None,
   commandExecutionMode: Option[CommandExecutionMode] = None,
   executionHistoryConfig: ObservabilityEngine.ExecutionHistoryConfig =
     ObservabilityEngine.ExecutionHistoryConfig()
@@ -79,11 +81,16 @@ object RuntimeConfig {
   val RuntimeLogLevelKey = "textus.runtime.logging.level"
   val LogFilePathKey = "textus.logging.file.path"
   val RuntimeLogFilePathKey = "textus.runtime.logging.file.path"
+  val WebOperationDispatcherKey = "textus.web.operation.dispatcher"
+  val RuntimeWebOperationDispatcherKey = "textus.runtime.web.operation.dispatcher"
+  val WebOperationDispatcherRestBaseUrlKey = "textus.web.operation.dispatcher.rest.base-url"
+  val RuntimeWebOperationDispatcherRestBaseUrlKey = "textus.runtime.web.operation.dispatcher.rest.base-url"
 
   val DefaultServerEmulatorBaseUrl = "http://localhost/"
   val DefaultHttpDriverName = "real"
   val DefaultMode = "command"
   val DefaultLogFilePath = ".cncf/data.d/trace.log"
+  val DefaultWebOperationDispatcher = "local"
 
   val default: RuntimeConfig =
     RuntimeConfig(
@@ -94,6 +101,8 @@ object RuntimeConfig {
       dataStoreSpace = DataStoreSpace.default(),
       entityStoreSpace = new EntityStoreSpace(),
       mode = RunMode.Command,
+      webOperationDispatcher = DefaultWebOperationDispatcher,
+      webOperationDispatcherRestBaseUrl = None,
       commandExecutionMode = None,
       executionHistoryConfig = ObservabilityEngine.ExecutionHistoryConfig()
     )
@@ -148,6 +157,13 @@ object RuntimeConfig {
     val datastorespace = DataStoreSpace.create(configuration)
     val entitystorespace = EntityStoreSpace.create(configuration)
     val executionHistoryConfig = _execution_history_config(configuration)
+    val webOperationDispatcher =
+      _get_string(configuration, WebOperationDispatcherKey)
+        .map(_.trim.toLowerCase)
+        .filter(_.nonEmpty)
+        .getOrElse(DefaultWebOperationDispatcher)
+    val webOperationDispatcherRestBaseUrl =
+      _get_string(configuration, WebOperationDispatcherRestBaseUrlKey)
     ObservabilityEngine.updateExecutionHistoryConfig(executionHistoryConfig)
     RuntimeConfig(
       logbackend,
@@ -157,6 +173,8 @@ object RuntimeConfig {
       dataStoreSpace = datastorespace,
       entityStoreSpace = entitystorespace,
       mode = mode,
+      webOperationDispatcher = webOperationDispatcher,
+      webOperationDispatcherRestBaseUrl = webOperationDispatcherRestBaseUrl,
       commandExecutionMode = commandExecutionMode,
       executionHistoryConfig = executionHistoryConfig
     )
@@ -246,6 +264,8 @@ object RuntimeConfig {
         case LogBackendKey => Vector(RuntimeLogBackendKey)
         case LogLevelKey => Vector(RuntimeLogLevelKey)
         case LogFilePathKey => Vector(RuntimeLogFilePathKey)
+        case WebOperationDispatcherKey => Vector(RuntimeWebOperationDispatcherKey)
+        case WebOperationDispatcherRestBaseUrlKey => Vector(RuntimeWebOperationDispatcherRestBaseUrlKey)
         case _ => Vector.empty
       }
     val cncfAliases =
