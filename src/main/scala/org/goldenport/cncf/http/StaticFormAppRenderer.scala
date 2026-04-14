@@ -13,7 +13,7 @@ import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -703,9 +703,19 @@ object StaticFormAppRenderer {
       .groupBy(x => (x.kind, NamingConventions.toNormalizedSegment(x.operation)))
       .values
       .toVector
-      .collect { case Vector(one) => one }
+      .flatMap(_preferred_aggregate_binding)
       .sortBy(x => (x.kind, x.service, x.operation))
   }
+
+  private def _preferred_aggregate_binding(
+    bindings: Vector[_AggregateOperationBinding]
+  ): Option[_AggregateOperationBinding] =
+    bindings match {
+      case Vector(one) =>
+        Some(one)
+      case many =>
+        many.find(x => NamingConventions.equivalentByNormalized(x.service, "aggregate"))
+    }
 
   private def _operation_bindings(
     component: Component,

@@ -8,7 +8,7 @@ import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
-import org.goldenport.cncf.security.{EntityAbacCondition, EntityAccessMode, EntityAccessRelation, EntityApplicationDomain, EntityOperationKind, ServiceOperationModel}
+import org.goldenport.cncf.security.{AggregateAuthorization, EntityAbacCondition, EntityAccessMode, EntityAccessRelation, EntityApplicationDomain, EntityOperationKind, ServiceOperationModel}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.scalatest.GivenWhenThen
@@ -17,8 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- *  version Apr. 13, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkTargetAuthorizationSpec
@@ -57,6 +56,44 @@ final class UnitOfWorkTargetAuthorizationSpec
       )
 
       result shouldBe a[Consequence.Success[_]]
+    }
+
+    "allow aggregate type create command authorization before an instance exists" in {
+      given ExecutionContext = _execution_context(
+        principalId = "aggregate-creator"
+      )
+
+      val result = AggregateAuthorization.authorizeCommand(
+        aggregateName = "notice",
+        targetId = None,
+        commandName = "createNotice",
+        loadRecord = _ => Consequence.success(None)
+      )
+
+      result shouldBe Consequence.unit
+    }
+
+    "reject aggregate instance command authorization when target permission denies update" in {
+      given ExecutionContext = _execution_context(
+        principalId = "aggregate-non-owner"
+      )
+
+      val id = EntityId("test", "aggregate_update_denied", _cid)
+      val record = PersonEntity(id, "notice", "notice-owner", groupId = Some("notice-team")).toRecord()
+
+      val result = AggregateAuthorization.authorizeCommand(
+        aggregateName = "notice",
+        targetId = Some(id),
+        commandName = "updateNotice",
+        loadRecord = _ => Consequence.success(Some(record))
+      )
+
+      result shouldBe a[Consequence.Failure[_]]
+      result match
+        case Consequence.Failure(conclusion) =>
+          conclusion.show should include("Permission is insufficient for update")
+        case _ =>
+          fail("expected aggregate command authorization failure")
     }
 
     "allow load for a group-visible entity" in {

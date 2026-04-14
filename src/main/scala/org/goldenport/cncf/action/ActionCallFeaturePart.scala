@@ -14,7 +14,7 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWork, UnitOfWorkAuthorization}
 import org.goldenport.cncf.unitofwork.UnitOfWorkInterpreter
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
-import org.goldenport.cncf.security.{EntityAbacCondition, EntityAccessMode, EntityAccessRelation, EntityApplicationDomain, EntityAuthorizationProfile, EntityOperationKind, EntityUsageKind, OperationAccessPolicy, ServiceOperationModel}
+import org.goldenport.cncf.security.{AggregateAuthorization, EntityAbacCondition, EntityAccessMode, EntityAccessRelation, EntityApplicationDomain, EntityAuthorizationProfile, EntityOperationKind, EntityUsageKind, OperationAccessPolicy, ServiceOperationModel}
 import org.goldenport.cncf.Program
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.datatype.EntityCollectionId
@@ -35,12 +35,15 @@ import org.goldenport.cncf.action.AggregateBehavior
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 30, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
   protected final def execution_context: ExecutionContext =
     executionContext
+
+  protected final def component_name_option: Option[String] =
+    component.flatMap(_.coreOption.map(_.name))
 
   protected final def exec_pure[A](value: A): ExecUowM[A] =
     ConsequenceT.pure[[X] =>> Program[UnitOfWorkOp, X], A](value)
@@ -99,10 +102,98 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   // Aggregate-oriented access for application logic.
   // This returns the domain value object directly.
   protected final def aggregate_load_c[A](id: EntityId): Consequence[A] =
-    component
-      .map(_.aggregateSpace)
-      .getOrElse(Consequence.uninitializedState.RAISE)
-      .resolve_with_context[A](id)(using execution_context)
+    for {
+      _ <- _aggregate_authorize_load(id.collection.name, id)
+      r <- component
+        .map(_.aggregateSpace)
+        .getOrElse(Consequence.uninitializedState.RAISE)
+        .resolve_with_context[A](id)(using execution_context)
+    } yield r
+
+  protected final def aggregate_authorize_type(
+    aggregateName: String,
+    accessKind: String
+  ): ExecUowM[Unit] =
+    exec_from(
+      AggregateAuthorization.authorizeType(
+        aggregateName = aggregateName,
+        accessKind = accessKind,
+        access = _aggregate_declared_access,
+        sourceComponentName = component_name_option,
+        targetComponentName = component_name_option,
+        operationModel = _aggregate_operation_model,
+        relationRules = _aggregate_relation_rules,
+        naturalConditions = _aggregate_natural_conditions
+      )(using execution_context)
+    )
+
+  protected final def aggregate_authorize_instance(
+    aggregateName: String,
+    targetId: EntityId,
+    accessKind: String,
+    loadRecord: EntityId => Consequence[Option[Record]]
+  ): ExecUowM[Unit] =
+    exec_from(
+      AggregateAuthorization.authorizeInstance(
+        aggregateName = aggregateName,
+        targetId = targetId,
+        accessKind = accessKind,
+        loadRecord = loadRecord,
+        access = _aggregate_declared_access,
+        sourceComponentName = component_name_option,
+        targetComponentName = component_name_option,
+        operationModel = _aggregate_operation_model,
+        relationRules = _aggregate_relation_rules,
+        naturalConditions = _aggregate_natural_conditions
+      )(using execution_context)
+    )
+
+  protected final def aggregate_authorize_command(
+    aggregateName: String,
+    targetId: Option[EntityId],
+    commandName: String,
+    loadRecord: EntityId => Consequence[Option[Record]]
+  ): ExecUowM[Unit] =
+    targetId match {
+      case Some(id) =>
+        aggregate_authorize_instance(
+          aggregateName,
+          id,
+          s"command:$commandName",
+          loadRecord
+        )
+      case None =>
+        aggregate_authorize_type(aggregateName, s"create:$commandName")
+    }
+
+  private def _aggregate_operation_model: ServiceOperationModel = {
+    val access = _aggregate_declared_access
+    getFactory[org.goldenport.cncf.component.Component.Factory]
+      .flatMap(_.service_operation_model(action, core))
+      .orElse(access.flatMap(_.operationModel).map(ServiceOperationModel.parse))
+      .getOrElse(ServiceOperationModel.default)
+  }
+
+  private def _aggregate_relation_rules: Vector[EntityAccessRelation] =
+    _aggregate_declared_access.flatMap(_.relation).map(EntityAccessRelation.parseList).getOrElse(Vector.empty)
+
+  private def _aggregate_natural_conditions: Vector[EntityAbacCondition] =
+    _aggregate_declared_access.flatMap(_.condition).map(EntityAbacCondition.parseList).getOrElse(Vector.empty)
+
+  private def _aggregate_declared_operation_definition =
+    component.flatMap { c =>
+      val actionname = _aggregate_normalize_name(action.name)
+      c.operationDefinitions.find { op =>
+        val opname = _aggregate_normalize_name(op.name)
+        actionname == opname || actionname.endsWith(opname)
+      }
+    }
+
+  private def _aggregate_declared_access =
+    _aggregate_declared_operation_definition.flatMap(_.access)
+
+  private def _aggregate_normalize_name(p: String): String =
+    Option(p).getOrElse("").toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]", "")
 
   protected final def aggregate_load_or_throw[A](id: EntityId): A =
     aggregate_load_c[A](id).TAKE
@@ -115,10 +206,13 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   protected final def aggregate_load_option_c[A](
     targetid: EntityId
   ): Consequence[Option[A]] =
-    component
-      .map(_.aggregateSpace)
-      .getOrElse(Consequence.uninitializedState.RAISE)
-      .resolveOption[A](targetid)(using execution_context)
+    for {
+      _ <- _aggregate_authorize_load(targetid.collection.name, targetid)
+      r <- component
+        .map(_.aggregateSpace)
+        .getOrElse(Consequence.uninitializedState.RAISE)
+        .resolveOption[A](targetid)(using execution_context)
+    } yield r
 
   protected final def aggregate_load_option_or_throw[A](targetid: EntityId): Option[A] =
     aggregate_load_option_c[A](targetid).TAKE
@@ -133,10 +227,53 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     collectionname: String,
     id: EntityId
   ): Consequence[A] =
-    component
-      .map(_.aggregate[A](collectionname))
-      .getOrElse(Consequence.uninitializedState.RAISE)
-      .resolve_with_context(id)(using execution_context)
+    for {
+      _ <- _aggregate_authorize_load(collectionname, id)
+      r <- component
+        .map(_.aggregate[A](collectionname))
+        .getOrElse(Consequence.uninitializedState.RAISE)
+        .resolve_with_context(id)(using execution_context)
+    } yield r
+
+  private def _aggregate_authorize_load(
+    aggregateName: String,
+    id: EntityId
+  ): Consequence[Unit] =
+    if (_aggregate_has_entity_collection(aggregateName))
+      AggregateAuthorization.authorizeInstance(
+        aggregateName = aggregateName,
+        targetId = id,
+        accessKind = "read",
+        loadRecord = _aggregate_load_record(aggregateName),
+        access = _aggregate_declared_access,
+        sourceComponentName = component_name_option,
+        targetComponentName = component_name_option,
+        operationModel = _aggregate_operation_model,
+        relationRules = _aggregate_relation_rules,
+        naturalConditions = _aggregate_natural_conditions
+      )(using execution_context)
+    else
+      Consequence.unit
+
+  private def _aggregate_load_record(
+    aggregateName: String
+  )(id: EntityId): Consequence[Option[Record]] =
+    component.flatMap(_aggregate_entity_collection_name(_, aggregateName)).
+      flatMap(name => component.flatMap(_.entitySpace.entityOption[Any](name))) match {
+        case Some(collection) => collection.resolve(id).map(x => Some(collection.descriptor.persistent.toRecord(x)))
+        case None => Consequence.success(None)
+      }
+
+  private def _aggregate_entity_collection_name(
+    component: org.goldenport.cncf.component.Component,
+    aggregateName: String
+  ): Option[String] =
+    component.aggregateDefinitions.find(_.name == aggregateName).map(_.entityName).orElse(Some(aggregateName))
+
+  private def _aggregate_has_entity_collection(
+    aggregateName: String
+  ): Boolean =
+    component.flatMap(c => _aggregate_entity_collection_name(c, aggregateName).flatMap(c.entitySpace.entityOption[Any])).isDefined
 
   protected final def aggregate_load_or_throw[A](
     collectionname: String,
@@ -154,11 +291,13 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
     collectionname: String,
     q: Query[?]
   ): Consequence[SearchResult[A]] =
-    component
-      .map(_.aggregateSpace)
-      .getOrElse(Consequence.uninitializedState.RAISE)
-      .query_with_context[A](collectionname, q)(using execution_context)
-      .map { xs =>
+    for {
+      _ <- _aggregate_authorize_search(collectionname)
+      xs <- component
+        .map(_.aggregateSpace)
+        .getOrElse(Consequence.uninitializedState.RAISE)
+        .query_with_context[A](collectionname, q)(using execution_context)
+    } yield {
         SearchResult(
           query = q,
           data = xs,
@@ -169,11 +308,105 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
         )
       }
 
+  private def _aggregate_authorize_search(
+    aggregateName: String
+  ): Consequence[Unit] =
+    AggregateAuthorization.authorizeType(
+      aggregateName = aggregateName,
+      accessKind = "search",
+      access = _aggregate_declared_access,
+      sourceComponentName = component_name_option,
+      targetComponentName = component_name_option,
+      operationModel = _aggregate_operation_model,
+      relationRules = _aggregate_relation_rules,
+      naturalConditions = _aggregate_natural_conditions
+    )(using execution_context)
+
   protected final def aggregate_search_or_throw[A](
     collectionname: String,
     q: Query[?]
   ): SearchResult[A] =
     aggregate_search_c[A](collectionname, q).TAKE
+
+  private def _aggregate_put_record_authorized_c(
+    entityName: String,
+    record: Record
+  ): Consequence[Unit] =
+    component.flatMap(_.entitySpace.entityOption[Any](entityName)) match {
+      case Some(collection) => collection.putRecord(record)
+      case None => Consequence.argumentInvalid(s"$entityName entity collection is not available")
+    }
+
+  protected final def aggregate_create[A <: org.goldenport.record.RecordPresentable](
+    entityName: String,
+    commandName: String,
+    action: => Consequence[A]
+  ): ExecUowM[A] =
+    exec_from(aggregate_create_c(entityName, commandName, action))
+
+  protected final def aggregate_create_c[A <: org.goldenport.record.RecordPresentable](
+    entityName: String,
+    commandName: String,
+    action: => Consequence[A]
+  ): Consequence[A] =
+    for {
+      _ <- _aggregate_authorize_create(entityName, commandName)
+      aggregate <- action
+      _ <- _aggregate_put_record_authorized_c(entityName, aggregate.toRecord())
+    } yield aggregate
+
+  protected final def aggregate_update[A <: org.goldenport.record.RecordPresentable](
+    entityName: String,
+    targetId: EntityId,
+    commandName: String,
+    action: => Consequence[A]
+  ): ExecUowM[A] =
+    exec_from(aggregate_update_c(entityName, targetId, commandName, action))
+
+  protected final def aggregate_update_c[A <: org.goldenport.record.RecordPresentable](
+    entityName: String,
+    targetId: EntityId,
+    commandName: String,
+    action: => Consequence[A]
+  ): Consequence[A] =
+    for {
+      _ <- _aggregate_authorize_update(entityName, targetId, commandName)
+      aggregate <- action
+      _ <- _aggregate_put_record_authorized_c(entityName, aggregate.toRecord())
+    } yield aggregate
+
+  private def _aggregate_authorize_create(
+    aggregateName: String,
+    commandName: String
+  ): Consequence[Unit] =
+    AggregateAuthorization.authorizeType(
+      aggregateName = aggregateName,
+      accessKind = s"create:$commandName",
+      access = _aggregate_declared_access,
+      sourceComponentName = component_name_option,
+      targetComponentName = component_name_option,
+      operationModel = _aggregate_operation_model,
+      relationRules = _aggregate_relation_rules,
+      naturalConditions = _aggregate_natural_conditions
+    )(using execution_context)
+
+  private def _aggregate_authorize_update(
+    aggregateName: String,
+    targetId: EntityId,
+    commandName: String
+  ): Consequence[Unit] =
+    AggregateAuthorization.authorizeInstance(
+      aggregateName = aggregateName,
+      targetId = targetId,
+      accessKind = s"command:$commandName",
+      loadRecord = _aggregate_load_record(aggregateName),
+      access = _aggregate_declared_access,
+      sourceComponentName = component_name_option,
+      targetComponentName = component_name_option,
+      operationModel = _aggregate_operation_model,
+      relationRules = _aggregate_relation_rules,
+      naturalConditions = _aggregate_natural_conditions
+    )(using execution_context)
 }
 
 trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -812,8 +1045,8 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         targetId = targetId,
         accessKind = accessKind,
         access = access,
-        sourceComponentName = component.map(_.name),
-        targetComponentName = component.map(_.name),
+        sourceComponentName = component_name_option,
+        targetComponentName = component_name_option,
         entityNames = entitynames,
         accessMode = accessmode,
         operationModel = Some(operationmodel),

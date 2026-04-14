@@ -14,8 +14,7 @@ import org.simplemodeling.model.value.SecurityAttributes
 
 /*
  * @since   Apr.  6, 2026
- *  version Apr. 13, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationAccessPolicy {
@@ -99,7 +98,7 @@ object OperationAccessPolicy {
           case Some(policy) if Set("manager_only", "manager-only").contains(policy) =>
             authorizeManagerOnly()
           case _ =>
-            _authorize_domain_default(authorization, loadRecord)
+            _authorize_resource_default(authorization, loadRecord)
     }
 
   def filterVisibleSearchResult[T](
@@ -171,16 +170,16 @@ object OperationAccessPolicy {
     (_subject.roles ++ _subject.capabilities ++ _subject.securityLevel).exists(_manager_aliases.contains)
   }
 
-  private def _authorize_domain_default(
+  private def _authorize_resource_default(
     authorization: UnitOfWorkAuthorization,
     loadRecord: EntityId => Consequence[Option[Record]]
   )(using ctx: ExecutionContext): Consequence[Unit] =
     authorization.resourceFamily.trim.toLowerCase(java.util.Locale.ROOT) match
-      case "domain" =>
+      case "domain" | "aggregate" =>
         authorization.accessKind match
           case "create" =>
             _authorize_domain_create_default(authorization)
-          case kind if Set("read", "update", "delete").contains(kind) =>
+          case kind if Set("read", "update", "delete").contains(_permission_access_kind(kind)) =>
             authorization.targetId match
               case Some(id) =>
                 loadRecord(id).flatMap {
@@ -193,7 +192,7 @@ object OperationAccessPolicy {
                       case None if _matches_relation(record, authorization) =>
                         Consequence.unit
                       case None =>
-                        authorizeSimpleEntity(record, authorization.accessKind)
+                        authorizeSimpleEntity(record, _permission_access_kind(authorization.accessKind))
                   case None => authorizeSimpleEntityOwnerOrManager(id, loadRecord)
                 }
               case None =>
@@ -202,6 +201,18 @@ object OperationAccessPolicy {
             Consequence.unit
       case _ =>
         Consequence.unit
+
+  private def _permission_access_kind(accessKind: String): String = {
+    val normalized = accessKind.trim.toLowerCase(java.util.Locale.ROOT)
+    if (normalized.startsWith("command:"))
+      "update"
+    else if (normalized.startsWith("create:"))
+      "create"
+    else if (Set("search", "list", "search/list").contains(normalized))
+      "read"
+    else
+      normalized
+  }
 
   private def _authorize_domain_create_default(
     authorization: UnitOfWorkAuthorization

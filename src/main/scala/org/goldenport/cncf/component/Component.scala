@@ -47,9 +47,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
  *  version Mar. 30, 2026
- *  version Apr.  9, 2026
- *  version Apr. 10, 2026
- * @version Apr. 13, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -638,6 +636,12 @@ object Component {
     def aggregate_behavior_bindings(
       comp: Component
     ): Vector[AggregateBehaviorBinding] = Vector.empty
+
+    def create_aggregate_from_record(
+      entityName: String,
+      record: Record,
+      default: => Consequence[Any]
+    ): Consequence[Any] = default
 
     def create_aggregate_behavior(
       action: Action,
