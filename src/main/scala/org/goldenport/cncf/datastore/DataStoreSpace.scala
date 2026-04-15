@@ -40,6 +40,17 @@ class DataStoreSpace {
         Consequence.dataStoreUnavailable(s"datastore is not searchable: ${cid.print}")
     }
 
+  def count(
+    cid: DataStore.CollectionId,
+    directive: QueryDirective
+  ): Consequence[Int] =
+    dataStore(cid).flatMap {
+      case m: SearchableDataStore =>
+        m.count(cid, directive)
+      case _ =>
+        Consequence.dataStoreUnavailable(s"datastore is not countable: ${cid.print}")
+    }
+
   def totalCountCapability(
     cid: DataStore.CollectionId
   ): Consequence[TotalCountCapability] =

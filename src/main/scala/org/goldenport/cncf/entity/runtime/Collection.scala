@@ -10,7 +10,7 @@ import org.goldenport.cncf.directive.{Query, SearchResult}
 /*
  * @since   Mar. 14, 2026
  *  version Mar. 30, 2026
- * @version Apr.  5, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -88,7 +88,7 @@ final class EntityCollection[E](
       SearchResult(
         query = query.query,
         data = values,
-        totalCount = Some(filtered.size),
+        totalCount = if (query.query.includeTotal) Some(filtered.size) else None,
         offset = query.query.offset,
         limit = query.query.limit,
         fetchedCount = values.size

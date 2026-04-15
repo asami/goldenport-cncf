@@ -205,6 +205,34 @@ SQL pushdown becomes important when:
 - admin/data browser needs DataStore-backed paging
 - total count is requested and DataStore can support it
 
+## Total Count Control
+
+Entity search does not calculate total count by default. This is important for
+DataStore-backed search because total count may require a separate query or may
+be effectively unavailable on some middleware.
+
+`Query.Plan` has an explicit `includeTotal` flag. `EntityStore.search` and
+resident `EntityCollection.search` return `SearchResult.totalCount` only when
+`includeTotal=true`.
+
+Runtime request records may set the same control through:
+
+- `query.includeTotal`
+- `query.include_total`
+
+When `includeTotal=true`, EntityStore must not fetch an unbounded candidate set
+just to count rows. Instead it keeps the page query bounded and asks the
+DataStore for a separate total count. SQLite uses `SELECT COUNT(*)` with the
+same translated `WHERE` expression.
+
+Since `QueryDirective` currently has no offset slot, EntityStore pushes down
+`offset + limit` as the DataStore limit and then applies the final slice after
+decoding. This applies whether or not total count is requested.
+
+If a DataStore cannot support total count, an optional total request should
+return no total, and a required total request should fail at the caller policy
+layer. EntityStore must not emulate production total count by unbounded fetch.
+
 ## Next Implementation Steps
 
 1. Extend DataStore `Query` with an expression-bearing case.

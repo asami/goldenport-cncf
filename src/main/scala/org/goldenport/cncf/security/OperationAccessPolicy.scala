@@ -128,7 +128,7 @@ object OperationAccessPolicy {
                 Consequence.success(
                   result.copy(
                     data = visible,
-                    totalCount = Some(visible.size),
+                    totalCount = result.totalCount.map(_ => visible.size),
                     fetchedCount = visible.size
                   )
                 )

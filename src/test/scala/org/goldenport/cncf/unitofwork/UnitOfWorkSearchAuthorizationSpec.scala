@@ -20,8 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- *  version Apr. 13, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkSearchAuthorizationSpec
@@ -58,7 +57,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       When("searching through UnitOfWorkInterpreter with domain search authorization metadata")
       val result = interpreter.execute(
         UnitOfWorkOp.EntityStoreSearch(
-          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          query = EntityQuery(_cid, Query.plan(PersonQuery.any, includeTotal = true)),
           tc = summon[EntityPersistent[PersonEntity]],
           authorization = Some(
             UnitOfWorkAuthorization(
@@ -103,7 +102,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       When("searching through UnitOfWorkInterpreter")
       val result = interpreter.execute(
         UnitOfWorkOp.EntityStoreSearch(
-          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          query = EntityQuery(_cid, Query.plan(PersonQuery.any, includeTotal = true)),
           tc = summon[EntityPersistent[PersonEntity]],
           authorization = Some(
             UnitOfWorkAuthorization(
@@ -148,7 +147,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       When("searching through UnitOfWorkInterpreter")
       val result = interpreter.execute(
         UnitOfWorkOp.EntityStoreSearch(
-          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          query = EntityQuery(_cid, Query.plan(PersonQuery.any, includeTotal = true)),
           tc = summon[EntityPersistent[PersonEntity]],
           authorization = Some(
             UnitOfWorkAuthorization(
@@ -192,7 +191,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       When("searching through UnitOfWorkInterpreter")
       val result = interpreter.execute(
         UnitOfWorkOp.EntityStoreSearch(
-          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          query = EntityQuery(_cid, Query.plan(PersonQuery.any, includeTotal = true)),
           tc = summon[EntityPersistent[PersonEntity]],
           authorization = Some(
             UnitOfWorkAuthorization(
@@ -239,7 +238,7 @@ final class UnitOfWorkSearchAuthorizationSpec
         When("searching through UnitOfWorkInterpreter")
         val result = interpreter.execute(
           UnitOfWorkOp.EntityStoreSearch(
-            query = EntityQuery(_cid, Query(PersonQuery.any)),
+            query = EntityQuery(_cid, Query.plan(PersonQuery.any, includeTotal = true)),
             tc = summon[EntityPersistent[PersonEntity]],
             authorization = Some(
               UnitOfWorkAuthorization(
@@ -289,7 +288,7 @@ final class UnitOfWorkSearchAuthorizationSpec
 
         val result = interpreter.execute(
           UnitOfWorkOp.EntityStoreSearch(
-            query = EntityQuery(_cid, Query(PersonQuery.any)),
+            query = EntityQuery(_cid, Query.plan(PersonQuery.any, includeTotal = true)),
             tc = summon[EntityPersistent[PersonEntity]],
             authorization = Some(
               UnitOfWorkAuthorization(
@@ -341,7 +340,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       When("searching with customer and account relation rules")
       val result = interpreter.execute(
         UnitOfWorkOp.EntityStoreSearch(
-          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          query = EntityQuery(_cid, Query.plan(PersonQuery.any, includeTotal = true)),
           tc = summon[EntityPersistent[PersonEntity]],
           authorization = Some(
             UnitOfWorkAuthorization(
@@ -388,7 +387,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       When("searching with a read-only relation rule")
       val result = interpreter.execute(
         UnitOfWorkOp.EntityStoreSearch(
-          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          query = EntityQuery(_cid, Query.plan(PersonQuery.any, includeTotal = true)),
           tc = summon[EntityPersistent[PersonEntity]],
           authorization = Some(
             UnitOfWorkAuthorization(
@@ -433,7 +432,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       When("searching with a principal id relation rule")
       val result = interpreter.execute(
         UnitOfWorkOp.EntityStoreSearch(
-          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          query = EntityQuery(_cid, Query.plan(PersonQuery.any, includeTotal = true)),
           tc = summon[EntityPersistent[PersonEntity]],
           authorization = Some(
             UnitOfWorkAuthorization(
@@ -484,7 +483,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       When("searching with tenant and organization relation rules")
       val result = interpreter.execute(
         UnitOfWorkOp.EntityStoreSearch(
-          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          query = EntityQuery(_cid, Query.plan(PersonQuery.any, includeTotal = true)),
           tc = summon[EntityPersistent[PersonEntity]],
           authorization = Some(
             UnitOfWorkAuthorization(
@@ -534,7 +533,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       When("searching with assignee and participant relation rules")
       val result = interpreter.execute(
         UnitOfWorkOp.EntityStoreSearch(
-          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          query = EntityQuery(_cid, Query.plan(PersonQuery.any, includeTotal = true)),
           tc = summon[EntityPersistent[PersonEntity]],
           authorization = Some(
             UnitOfWorkAuthorization(
@@ -590,7 +589,7 @@ final class UnitOfWorkSearchAuthorizationSpec
       When("searching with business boundary natural conditions")
       val result = interpreter.execute(
         UnitOfWorkOp.EntityStoreSearch(
-          query = EntityQuery(_cid, Query(PersonQuery.any)),
+          query = EntityQuery(_cid, Query.plan(PersonQuery.any, includeTotal = true)),
           tc = summon[EntityPersistent[PersonEntity]],
           authorization = Some(
             UnitOfWorkAuthorization(

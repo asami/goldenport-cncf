@@ -246,14 +246,19 @@ class StandardEntityStore(
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] = {
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(query.collection)
+      directive = QueryDirective(
+        query = DataStoreQuery.Expr(EntityDirectiveQuery.whereOf(query.query)),
+        order = _to_datastore_order(query.query.sort),
+        limit = _to_datastore_limit(query.query)
+      )
       raw <- ctx.dataStoreSpace.search(
         cid,
-        QueryDirective(
-          query = DataStoreQuery.Expr(EntityDirectiveQuery.whereOf(query.query)),
-          order = _to_datastore_order(query.query.sort),
-          limit = _to_datastore_limit(query.query.limit)
-        )
+        directive
       )
+      count <- if (query.query.includeTotal)
+        ctx.dataStoreSpace.count(cid, directive.copy(limit = QueryLimit.Unbounded)).map(Some(_))
+      else
+        Consequence.success(None)
       notdeleted = raw.records.toVector.filterNot(_is_logically_deleted_record)
       visible = _filter_visibility(notdeleted, query.query)
       _ = _emit_entity_access(
@@ -279,7 +284,7 @@ class StandardEntityStore(
     } yield SearchResult(
       query = query.query,
       data = values,
-      totalCount = Some(filtered.size),
+      totalCount = count,
       offset = query.query.offset,
       limit = query.query.limit,
       fetchedCount = values.size
@@ -287,9 +292,14 @@ class StandardEntityStore(
   }
 
   private def _to_datastore_limit(
-    limit: Option[Int]
+    query: EntityDirectiveQuery[?]
   ): QueryLimit =
-    limit.map(QueryLimit.Limit.apply).getOrElse(QueryLimit.Unbounded)
+    {
+      val limit = for {
+        l <- query.limit
+      } yield query.offset.getOrElse(0) + l
+      limit.map(QueryLimit.Limit.apply).getOrElse(QueryLimit.Unbounded)
+    }
 
   private final case class _VisibilityPolicy(
     postStatuses: Option[Set[String]],

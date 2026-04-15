@@ -16,8 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 16, 2026
  *  version Mar. 24, 2026
- *  version Apr. 10, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityCollectionSearchConditionSpec
@@ -130,7 +129,8 @@ final class EntityCollectionSearchConditionSpec
         where = Query.Gte("age.value", 20),
         sort = Vector(Query.SortKey("age.value", Query.SortDirection.Desc)),
         limit = Some(1),
-        offset = Some(1)
+        offset = Some(1),
+        includeTotal = true
       )
       val query = EntityQuery(_cid, planned)
       val result = collection.search(query)

@@ -11,8 +11,7 @@ import org.goldenport.cncf.entity.EntityPersistableQuery
 /*
  * @since   Feb. 19, 2026
  *  version Mar. 30, 2026
- *  version Apr.  4, 2026
- * @version Apr. 13, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 case class Query[T](query: T) extends RecordPresentable {
@@ -30,6 +29,9 @@ case class Query[T](query: T) extends RecordPresentable {
 
   def offset: Option[Int] =
     Query.offsetOf(this)
+
+  def includeTotal: Boolean =
+    Query.includeTotalOf(this)
 
   def completeSql(
     tables: Iterable[(String, String)]
@@ -84,7 +86,8 @@ object Query {
     where: Expr = True,
     sort: Vector[SortKey] = Vector.empty,
     limit: Option[Int] = None,
-    offset: Option[Int] = None
+    offset: Option[Int] = None,
+    includeTotal: Boolean = false
   )
 
   final case class SqlTableName(
@@ -119,7 +122,8 @@ object Query {
           "where" -> _expr_record_option(p.where),
           "sort" -> p.sort.map(_sort_record),
           "limit" -> p.limit,
-          "offset" -> p.offset
+          "offset" -> p.offset,
+          "includeTotal" -> p.includeTotal
         )
       case other =>
         Record.dataAuto(
@@ -132,9 +136,10 @@ object Query {
     where: Expr = True,
     sort: Vector[SortKey] = Vector.empty,
     limit: Option[Int] = None,
-    offset: Option[Int] = None
+    offset: Option[Int] = None,
+    includeTotal: Boolean = false
   ): Query[Plan[T]] =
-    Query(Plan(condition, where, sort, limit, offset))
+    Query(Plan(condition, where, sort, limit, offset, includeTotal))
 
   def fromRecord(record: Record): Query[?] = {
     val condition = Record.create(
@@ -145,7 +150,10 @@ object Query {
     )
     val limit = _query_control_int(record, "limit")
     val offset = _query_control_int(record, "offset")
-    Query.plan(condition, limit = limit, offset = offset)
+    val includeTotal = _query_control_bool(record, "includeTotal")
+      .orElse(_query_control_bool(record, "include_total"))
+      .getOrElse(false)
+    Query.plan(condition, limit = limit, offset = offset, includeTotal = includeTotal)
   }
 
   def withControls(
@@ -154,8 +162,10 @@ object Query {
   ): Query[?] = {
     val limit = _query_control_int(record, "limit")
     val offset = _query_control_int(record, "offset")
+    val includeTotal = _query_control_bool(record, "includeTotal")
+      .orElse(_query_control_bool(record, "include_total"))
     val sanitizedCondition = _condition_without_legacy_controls(query.query)
-    if (limit.isEmpty && offset.isEmpty)
+    if (limit.isEmpty && offset.isEmpty && includeTotal.isEmpty)
       sanitizedCondition match {
         case None => query
         case Some(condition) => query.query match {
@@ -165,7 +175,8 @@ object Query {
               where = p.where,
               sort = p.sort,
               limit = p.limit,
-              offset = p.offset
+              offset = p.offset,
+              includeTotal = p.includeTotal
             ))
           case _ =>
             Query(condition)
@@ -179,7 +190,8 @@ object Query {
             where = p.where,
             sort = p.sort,
             limit = limit.orElse(p.limit),
-            offset = offset.orElse(p.offset)
+            offset = offset.orElse(p.offset),
+            includeTotal = includeTotal.getOrElse(p.includeTotal)
           ))
         case other =>
           Query.plan(
@@ -187,7 +199,8 @@ object Query {
             where = whereOf(Query(other)),
             sort = sortOf(query),
             limit = limit,
-            offset = offset
+            offset = offset,
+            includeTotal = includeTotal.getOrElse(includeTotalOf(query))
           )
       }
   }
@@ -225,10 +238,10 @@ object Query {
   ): Boolean =
     key == "query" && (value match {
       case rec: Record =>
-        rec.fields.forall(x => x.key == "limit" || x.key == "offset")
+        rec.fields.forall(x => _is_query_control_key(x.key))
       case m: Map[?, ?] =>
         m.keys.forall {
-          case s: String => s == "limit" || s == "offset"
+          case s: String => _is_query_control_key(s)
           case _ => false
         }
       case other =>
@@ -384,6 +397,12 @@ object Query {
       case _ => None
     }
 
+  def includeTotalOf(query: Query[?]): Boolean =
+    query.query match {
+      case p: Plan[?] => p.includeTotal
+      case _ => false
+    }
+
   def toExpr(condition: Any): Expr =
     condition match {
       case expr: Expr => expr
@@ -488,6 +507,26 @@ object Query {
     record.getRecord("query").flatMap(_.getAny(key)).flatMap(value => _int_option(Some(value)))
       .orElse(record.getAny(s"query.$key").flatMap(value => _int_option(Some(value))))
 
+  private def _query_control_bool(
+    record: Record,
+    key: String
+  ): Option[Boolean] =
+    record.getRecord("query").flatMap(_.getAny(key)).flatMap(value => _bool_option(Some(value)))
+      .orElse(record.getAny(s"query.$key").flatMap(value => _bool_option(Some(value))))
+
+  private def _bool_option(p: Option[Any]): Option[Boolean] =
+    p.flatMap {
+      case b: Boolean => Some(b)
+      case s: String =>
+        s.trim.toLowerCase(java.util.Locale.ROOT) match {
+          case "true" | "yes" | "on" | "1" => Some(true)
+          case "false" | "no" | "off" | "0" => Some(false)
+          case _ => None
+        }
+      case n: java.lang.Number => Some(n.intValue != 0)
+      case _ => None
+    }
+
   private def _expr_from_map(record: Map[String, Any]): Expr = {
     val clauses = record.toVector.flatMap {
       case (name, _) if _is_framework_parameter(name) => None
@@ -513,6 +552,9 @@ object Query {
 
   private def _is_query_control_parameter(name: String): Boolean =
     name.startsWith("query.")
+
+  private def _is_query_control_key(name: String): Boolean =
+    name == "limit" || name == "offset" || name == "includeTotal" || name == "include_total"
 
   private def _is_visibility_control_parameter(name: String): Boolean =
     name == "postStatus" || name == "post_status" || name == "aliveness"

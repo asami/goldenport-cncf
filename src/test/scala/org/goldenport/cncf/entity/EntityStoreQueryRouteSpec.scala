@@ -16,8 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- *  version Apr. 11, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -73,7 +72,8 @@ final class EntityStoreQueryRouteSpec
         where = Query.Gte("age", 20),
         sort = Vector(Query.SortKey("age", Query.SortDirection.Desc)),
         offset = Some(1),
-        limit = Some(1)
+        limit = Some(1),
+        includeTotal = true
       )
       val op = UnitOfWorkOp.EntityStoreSearch(
         query = EntityQuery(_cid, planned),
@@ -108,9 +108,9 @@ final class EntityStoreQueryRouteSpec
       )
       val result = entitystorespace.search(op)
 
-      Then("an empty search result is returned instead of a datastore failure")
+      Then("an empty search result is returned without total count by default")
       result.map(_.data) shouldBe Consequence.success(Vector.empty)
-      result.map(_.totalCount) shouldBe Consequence.success(Some(0))
+      result.map(_.totalCount) shouldBe Consequence.success(None)
       result.map(_.fetchedCount) shouldBe Consequence.success(0)
     }
 
@@ -160,7 +160,7 @@ final class EntityStoreQueryRouteSpec
 
       Then("only published + alive is visible")
       result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(p1.id))
-      result.map(_.totalCount) shouldBe Consequence.success(Some(1))
+      result.map(_.totalCount) shouldBe Consequence.success(None)
     }
 
     "apply default visibility for content manager (published + draft)" in {
@@ -213,7 +213,7 @@ final class EntityStoreQueryRouteSpec
 
       Then("published + draft are visible by default")
       result.map(_.data.map(_.id).toSet) shouldBe Consequence.success(Set(p1.id, p2.id))
-      result.map(_.totalCount) shouldBe Consequence.success(Some(2))
+      result.map(_.totalCount) shouldBe Consequence.success(None)
     }
 
     "exclude logically deleted records even for content manager default filters" in {
@@ -269,7 +269,7 @@ final class EntityStoreQueryRouteSpec
 
       Then("archived records are excluded in normal search path")
       result.map(_.data.map(_.id).toSet) shouldBe Consequence.success(Set(p1.id, p2.id))
-      result.map(_.totalCount) shouldBe Consequence.success(Some(2))
+      result.map(_.totalCount) shouldBe Consequence.success(None)
     }
 
     "apply patch update by id on entity-store route" in {

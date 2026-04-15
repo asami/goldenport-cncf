@@ -126,6 +126,22 @@ class SqlDataStore(
         }
     }
 
+  override def count(
+    collection: CollectionId,
+    directive: QueryDirective
+  ): Consequence[Int] =
+    directive.query match {
+      case Query.Empty | Query.Expr(_) =>
+        _with_connection { conn =>
+          _table_exists(conn, collection).flatMap { exists =>
+            if (exists)
+              _count(conn, collection, directive)
+            else
+              Consequence.success(0)
+          }
+        }
+    }
+
   override def totalCountCapability(collection: CollectionId): TotalCountCapability =
     TotalCountCapability.Supported
 
@@ -492,6 +508,38 @@ class SqlDataStore(
     val where = _where_sql(directive.query)
     SqlDataStore.SqlStatement(
       s"SELECT $select FROM ${dialect.quote_identifier(_table_name(collection))}${where.sql}$order$limit",
+      where.params
+    )
+  }
+
+  private def _count(
+    conn: Connection,
+    collection: CollectionId,
+    directive: QueryDirective
+  ): Consequence[Int] =
+    Consequence {
+      val sql = _count_sql(collection, directive)
+      val stmt = conn.prepareStatement(sql.sql)
+      try {
+        _bind(stmt, sql.params)
+        val rs = stmt.executeQuery()
+        try {
+          if (rs.next()) rs.getInt(1) else 0
+        } finally {
+          rs.close()
+        }
+      } finally {
+        stmt.close()
+      }
+    }
+
+  private def _count_sql(
+    collection: CollectionId,
+    directive: QueryDirective
+  ): SqlDataStore.SqlStatement = {
+    val where = _where_sql(directive.query)
+    SqlDataStore.SqlStatement(
+      s"SELECT COUNT(*) FROM ${dialect.quote_identifier(_table_name(collection))}${where.sql}",
       where.params
     )
   }

@@ -426,6 +426,9 @@ trait SearchableDataStore extends DataStore {
     TotalCountCapability.Unsupported
 
   def search(collection: DataStore.CollectionId, directive: QueryDirective): Consequence[SearchResult]
+
+  def count(collection: DataStore.CollectionId, directive: QueryDirective): Consequence[Int] =
+    search(collection, directive.copy(limit = QueryLimit.Unbounded)).map(_.records.size)
 }
 
 final case class QueryDirective(
