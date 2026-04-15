@@ -25,7 +25,7 @@ import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.service.{Service, ServiceGroup}
 import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
 import org.goldenport.cncf.cli.RunMode
-import org.goldenport.cncf.cli.renderer.{CliHelpJsonRenderer, CliHelpYamlRenderer, CliTreeJsonRenderer, CliTreeYamlRenderer}
+import org.goldenport.cncf.cli.renderer.{CliTreeJsonRenderer, CliTreeYamlRenderer}
 import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace, Repository, AggregateDefinition}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
 import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace, ViewDefinition}
@@ -1179,21 +1179,22 @@ object Component {
     core: ActionCall.Core
   ) extends ProcedureActionCall {
     override def execute(): Consequence[OperationResponse] = {
-      val text = core.component match {
+      val response = core.component match {
         case Some(component) =>
-          val model = HelpProjection.projectModel(
+          val record = HelpProjection.project(
             component,
             _meta_help_selector(req)
           )
-          if (_request_wants_json(req)) {
-            CliHelpJsonRenderer.render(model)
-          } else {
-            CliHelpYamlRenderer.render(model)
-          }
+          OperationResponse.RecordResponse(record)
         case None =>
-          "type: error\nsummary: component context missing"
+          OperationResponse.RecordResponse(
+            Record.data(
+              "type" -> "error",
+              "summary" -> "component context missing"
+            )
+          )
       }
-      Consequence.success(OperationResponse.Scalar(text))
+      Consequence.success(response)
     }
   }
 
@@ -1704,8 +1705,12 @@ object Component {
 
   private def _request_wants_json(request: Request): Boolean =
     request.properties.exists { p =>
-      (p.name == "textus.format" || p.name == "cncf.format") &&
-        Option(p.value).map(_.toString.toLowerCase).contains("json")
+      (
+        p.name.equalsIgnoreCase("textus.format") ||
+          p.name.equalsIgnoreCase("textus.output.format") ||
+          p.name.equalsIgnoreCase("cncf.format") ||
+          p.name.equalsIgnoreCase("cncf.output.format")
+      ) && Option(p.value).map(_.toString.trim.toLowerCase).contains("json")
     }
 
   private def _configuration_value(

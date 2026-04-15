@@ -185,8 +185,8 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
       val req = CncfRuntime.parseCommandArgs(subsystem, Array("meta.help")).toOption.getOrElse(fail("parse failed"))
       subsystem.execute(req) match {
-        case Consequence.Success(Response.Scalar(value)) =>
-          val body = value.toString
+        case Consequence.Success(res) =>
+          val body = res.print
           body.contains("type: subsystem") shouldBe true
           body.contains("components:") shouldBe true
         case other =>
@@ -198,8 +198,8 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
       val subsystem = _subsystem_with_domain()
       val req = CncfRuntime.parseCommandArgs(subsystem, Array("domain.meta.help")).toOption.getOrElse(fail("parse failed"))
       subsystem.execute(req) match {
-        case Consequence.Success(Response.Scalar(value)) =>
-          val body = value.toString
+        case Consequence.Success(res) =>
+          val body = res.print
           withClue(s"body=\n$body\n") {
             body.contains("type: component") shouldBe true
             body.contains("name: domain") shouldBe true
@@ -213,9 +213,22 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
     "return JSON for meta.help when --json is specified" in {
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
       val req = CncfRuntime.parseCommandArgs(subsystem, Array("meta.help", "--json")).toOption.getOrElse(fail("parse failed"))
+      req.properties.exists(p => p.name == "textus.format" && p.value == "json") shouldBe true
       subsystem.execute(req) match {
-        case Consequence.Success(Response.Scalar(value)) =>
-          value.toString.nonEmpty shouldBe true
+        case Consequence.Success(res) =>
+          res.print.trim should startWith("{")
+        case other =>
+          fail(s"unexpected response: $other")
+      }
+    }
+
+    "return JSON for meta.help when textus.format is specified" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val req = CncfRuntime.parseCommandArgs(subsystem, Array("admin.meta.help", "--textus.format", "json")).toOption.getOrElse(fail("parse failed"))
+      req.properties.exists(p => p.name == "textus.format" && p.value == "json") shouldBe true
+      subsystem.execute(req) match {
+        case Consequence.Success(res) =>
+          res.print.trim should startWith("{")
         case other =>
           fail(s"unexpected response: $other")
       }
@@ -225,8 +238,8 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
       val subsystem = _subsystem_with_domain()
       val req = CncfRuntime.parseCommandArgs(subsystem, Array("domain.meta.help", "--no-exit")).toOption.getOrElse(fail("parse failed"))
       subsystem.execute(req) match {
-        case Consequence.Success(Response.Scalar(value)) =>
-          val body = value.toString
+        case Consequence.Success(res) =>
+          val body = res.print
           withClue(s"body=\n$body\n") {
             body.contains("type: component") shouldBe true
             body.contains("name: domain") shouldBe true
@@ -279,8 +292,8 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
       val subsystem = _subsystem_with_domain()
       val req = CncfRuntime.parseCommandArgs(subsystem, Array("help", "domain")).toOption.getOrElse(fail("parse failed"))
       subsystem.execute(req) match {
-        case Consequence.Success(Response.Scalar(value)) =>
-          val body = value.toString
+        case Consequence.Success(res) =>
+          val body = res.print
           body.contains("type: component") shouldBe true
           body.contains("name: domain") shouldBe true
         case other =>
