@@ -205,6 +205,75 @@ object StaticFormAppRenderer {
         .mkString("\n")
     )
 
+  private def _admin_new_controls(
+    schemaFields: Vector[String],
+    values: Map[String, String],
+    fieldsId: String,
+    placeholder: String
+  ): String =
+    if (schemaFields.isEmpty)
+      _admin_fields_textarea(values, fieldsId, placeholder, "Use one name=value pair per line.")
+    else {
+      val userValues = values.filterNot { case (key, _) => key == "error" || key.startsWith("error.") || key == "fields" }
+      val controls = schemaFields.map { key =>
+        val value = userValues.getOrElse(key, "")
+        s"""<div class="mb-3">
+           |  <label class="form-label" for="new-field-${_escape(key)}">${_escape(key)}</label>
+           |  <input class="form-control" id="new-field-${_escape(key)}" name="${_escape(key)}" value="${_escape(value)}">
+           |</div>""".stripMargin
+      }.mkString("\n")
+      val extras = userValues.filterNot { case (key, _) => schemaFields.contains(key) }
+      val extraText = extras.toVector.sortBy(_._1).map { case (key, value) => s"${key}=${value}" }.mkString("\n")
+      val extra =
+        s"""<div class="mb-3">
+           |  <label class="form-label" for="${_escape(fieldsId)}">Additional fields</label>
+           |  <textarea class="form-control" id="${_escape(fieldsId)}" name="fields" rows="3">${_escape(values.getOrElse("fields", extraText))}</textarea>
+           |  <div class="form-text">Use one name=value pair per line for extension fields.</div>
+           |</div>""".stripMargin
+      s"${controls}\n${extra}"
+    }
+
+  private def _admin_record_controls(
+    schemaFields: Vector[String],
+    defaults: Vector[(String, String)],
+    values: Map[String, String],
+    idPrefix: String
+  ): String = {
+    val fields = _admin_schema_ordered_fields(schemaFields, _admin_form_fields(defaults, values))
+    fields.map {
+      case (key, value) =>
+        s"""<div class="mb-3">
+           |  <label class="form-label" for="${_escape(idPrefix)}-${_escape(key)}">${_escape(key)}</label>
+           |  <input class="form-control" id="${_escape(idPrefix)}-${_escape(key)}" name="${_escape(key)}" value="${_escape(value)}">
+           |</div>""".stripMargin
+    }.mkString("\n")
+  }
+
+  private def _admin_schema_ordered_fields(
+    schemaFields: Vector[String],
+    fields: Vector[(String, String)]
+  ): Vector[(String, String)] = {
+    val values = fields.toMap
+    val fieldKeys = fields.map(_._1).toSet
+    val schemaRows = schemaFields.map(key => key -> values.getOrElse(key, ""))
+    val extensionRows = fields.filterNot { case (key, _) => schemaFields.contains(key) }
+    (schemaRows ++ extensionRows).distinctBy(_._1).filter {
+      case (key, value) => fieldKeys.contains(key) || value.nonEmpty || key == "id"
+    }
+  }
+
+  private def _admin_fields_textarea(
+    values: Map[String, String],
+    fieldsId: String,
+    placeholder: String,
+    help: String
+  ): String =
+    s"""<div class="mb-3">
+       |  <label class="form-label" for="${_escape(fieldsId)}">Fields</label>
+       |  <textarea class="form-control" id="${_escape(fieldsId)}" name="fields" rows="8" placeholder="${placeholder}">${_escape(_admin_new_fields_value(values))}</textarea>
+       |  <div class="form-text">${_escape(help)}</div>
+       |</div>""".stripMargin
+
   private def _operation_form_controls(
     operation: org.goldenport.protocol.spec.OperationDefinition,
     values: Map[String, String],
@@ -559,17 +628,12 @@ object StaticFormAppRenderer {
       val entityLabel = _title_label(entityPath)
       val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
       val actionPath = s"/form/${componentPath}/admin/entities/${entityPath}/${id}/update"
-      val fields = _admin_form_fields(
+      val controls = _admin_record_controls(
+        _admin_entity_schema_fields(subsystem, componentPath, entityPath),
         _admin_entity_record_fields(subsystem, componentPath, entityPath, id).getOrElse(Vector("id" -> id)),
-        values
+        values,
+        "field"
       )
-      val controls = fields.map {
-        case (key, value) =>
-          s"""<div class="mb-3">
-             |  <label class="form-label" for="field-${_escape(key)}">${_escape(key)}</label>
-             |  <input class="form-control" id="field-${_escape(key)}" name="${_escape(key)}" value="${_escape(value)}">
-             |</div>""".stripMargin
-      }.mkString("\n")
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} Edit",
         subtitle = "Entity record edit baseline",
@@ -602,7 +666,8 @@ object StaticFormAppRenderer {
       val entityLabel = _title_label(entityPath)
       val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
       val actionPath = s"/form/${componentPath}/admin/entities/${entityPath}/create"
-      val fieldsValue = _escape(_admin_new_fields_value(values))
+      val schemaFields = _admin_entity_schema_fields(subsystem, componentPath, entityPath)
+      val controls = _admin_new_controls(schemaFields, values, "entityFields", "id=sales-order-1&#10;status=draft")
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} New",
         subtitle = "Entity record create baseline",
@@ -615,11 +680,7 @@ object StaticFormAppRenderer {
              |  <h2>New ${_escape(entityLabel)}</h2>
              |  ${_form_error_panel(values)}
              |  <form method="post" action="${_escape(actionPath)}">
-             |    <div class="mb-3">
-             |      <label class="form-label" for="entityFields">Fields</label>
-             |      <textarea class="form-control" id="entityFields" name="fields" rows="8" placeholder="id=sales-order-1&#10;status=draft">${fieldsValue}</textarea>
-             |      <div class="form-text">Use one name=value pair per line until schema-driven fields are available.</div>
-             |    </div>
+             |    ${controls}
              |    <button type="submit" class="btn btn-primary">Create</button>
              |    <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}">Cancel</a>
              |  </form>
@@ -720,12 +781,9 @@ object StaticFormAppRenderer {
     entityPath: String,
     id: String
   ): String =
-    _admin_key_value_table(
-      _admin_operation_lines(
-        subsystem,
-        "/admin/entity/read",
-        Record.data("component" -> componentPath, "entity" -> entityPath, "id" -> id)
-      ),
+    _admin_record_table(
+      _admin_entity_schema_fields(subsystem, componentPath, entityPath),
+      _admin_entity_record_fields(subsystem, componentPath, entityPath, id),
       s"""No record is currently available for id <code>${_escape(id)}</code>."""
     )
 
@@ -739,6 +797,19 @@ object StaticFormAppRenderer {
       subsystem,
       "/admin/entity/read",
       Record.data("component" -> componentPath, "entity" -> entityPath, "id" -> id)
+    )
+
+  private def _admin_entity_schema_fields(
+    subsystem: Subsystem,
+    componentPath: String,
+    entityPath: String
+  ): Vector[String] =
+    _admin_schema_fields(
+      subsystem,
+      "/admin/entity/list",
+      "/admin/entity/read",
+      Record.data("component" -> componentPath, "entity" -> entityPath),
+      Record.data("component" -> componentPath, "entity" -> entityPath)
     )
 
   private def _admin_data_list(
@@ -798,12 +869,9 @@ object StaticFormAppRenderer {
     dataPath: String,
     id: String
   ): String =
-    _admin_key_value_table(
-      _admin_operation_lines(
-        subsystem,
-        "/admin/data/read",
-        Record.data("component" -> componentPath, "data" -> dataPath, "id" -> id)
-      ),
+    _admin_record_table(
+      _admin_data_schema_fields(subsystem, componentPath, dataPath),
+      _admin_data_record_fields(subsystem, componentPath, dataPath, id),
       s"""No data record is currently available for id <code>${_escape(id)}</code>."""
     )
 
@@ -818,6 +886,39 @@ object StaticFormAppRenderer {
       "/admin/data/read",
       Record.data("component" -> componentPath, "data" -> dataPath, "id" -> id)
     )
+
+  private def _admin_data_schema_fields(
+    subsystem: Subsystem,
+    componentPath: String,
+    dataPath: String
+  ): Vector[String] =
+    _admin_schema_fields(
+      subsystem,
+      "/admin/data/list",
+      "/admin/data/read",
+      Record.data("component" -> componentPath, "data" -> dataPath),
+      Record.data("component" -> componentPath, "data" -> dataPath)
+    )
+
+  private def _admin_schema_fields(
+    subsystem: Subsystem,
+    listPath: String,
+    readPath: String,
+    listForm: Record,
+    readBaseForm: Record
+  ): Vector[String] =
+    _admin_operation_record(subsystem, listPath, listForm).toVector.flatMap { record =>
+      _admin_record_items(record).headOption.toVector.flatMap { item =>
+        _admin_record_fields(
+          subsystem,
+          readPath,
+          Record.create((readBaseForm.asMap + ("id" -> item.id)).toVector)
+        ).toVector.flatten.map(_._1)
+      }
+    }.distinct match {
+      case xs if xs.nonEmpty => xs
+      case _ => Vector("id")
+    }
 
   private def _admin_record_fields(
     subsystem: Subsystem,
@@ -1011,6 +1112,28 @@ object StaticFormAppRenderer {
     } else {
       _value_table(lines)
     }
+
+  private def _admin_record_table(
+    schemaFields: Vector[String],
+    fields: Option[Vector[(String, String)]],
+    emptyMessage: String
+  ): String =
+    fields match {
+      case Some(xs) if xs.nonEmpty =>
+        _field_table(_admin_schema_ordered_fields(schemaFields, xs))
+      case _ =>
+        s"<p>${emptyMessage}</p>"
+    }
+
+  private def _field_table(fields: Vector[(String, String)]): String = {
+    val rows = fields.map {
+      case (key, value) =>
+        s"""<tr><th>${_escape(key)}</th><td>${_escape(value)}</td></tr>"""
+    }.mkString("\n")
+    s"""<div class="table-responsive"><table class="table table-sm">
+       |  <tbody>${rows}</tbody>
+       |</table></div>""".stripMargin
+  }
 
   private def _value_table(lines: Vector[String]): String = {
     val rows = lines.map { line =>
@@ -1577,17 +1700,12 @@ object StaticFormAppRenderer {
       val dataPath = NamingConventions.toNormalizedSegment(dataName)
       val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
       val actionPath = s"/form/${componentPath}/admin/data/${dataPath}/${id}/update"
-      val fields = _admin_form_fields(
+      val controls = _admin_record_controls(
+        _admin_data_schema_fields(subsystem, componentPath, dataPath),
         _admin_data_record_fields(subsystem, componentPath, dataPath, id).getOrElse(Vector("id" -> id)),
-        values
+        values,
+        "data-field"
       )
-      val controls = fields.map {
-        case (key, value) =>
-          s"""<div class="mb-3">
-             |  <label class="form-label" for="data-field-${_escape(key)}">${_escape(key)}</label>
-             |  <input class="form-control" id="data-field-${_escape(key)}" name="${_escape(key)}" value="${_escape(value)}">
-             |</div>""".stripMargin
-      }.mkString("\n")
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data Edit",
         subtitle = "Data record edit baseline",
@@ -1619,7 +1737,8 @@ object StaticFormAppRenderer {
       val dataPath = NamingConventions.toNormalizedSegment(dataName)
       val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
       val actionPath = s"/form/${componentPath}/admin/data/${dataPath}/create"
-      val fieldsValue = _escape(_admin_new_fields_value(values))
+      val schemaFields = _admin_data_schema_fields(subsystem, componentPath, dataPath)
+      val controls = _admin_new_controls(schemaFields, values, "dataFields", "id=record-1&#10;status=draft")
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data New",
         subtitle = "Data record create baseline",
@@ -1632,11 +1751,7 @@ object StaticFormAppRenderer {
              |  <h2>New ${_escape(_title_label(dataPath))}</h2>
              |  ${_form_error_panel(values)}
              |  <form method="post" action="${_escape(actionPath)}">
-             |    <div class="mb-3">
-             |      <label class="form-label" for="dataFields">Fields</label>
-             |      <textarea class="form-control" id="dataFields" name="fields" rows="8" placeholder="id=record-1&#10;status=draft">${fieldsValue}</textarea>
-             |      <div class="form-text">Use one name=value pair per line.</div>
-             |    </div>
+             |    ${controls}
              |    <button type="submit" class="btn btn-primary">Create</button>
              |    <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}">Cancel</a>
              |  </form>

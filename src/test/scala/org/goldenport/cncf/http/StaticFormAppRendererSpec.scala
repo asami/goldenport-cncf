@@ -694,9 +694,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         html should include ("error.status")
         html should include ("400")
         html should include ("invalid data create")
-        html should include ("id=audit_bad")
-        html should include ("action=created")
-        html should include ("actor=bob")
+        html should include ("name=\"id\" value=\"audit_bad\"")
+        html should include ("name=\"action\" value=\"created\"")
+        html should include ("name=\"actor\" value=\"bob\"")
       }
     }
 

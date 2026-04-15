@@ -658,8 +658,8 @@ final class Http4sHttpServer(
       form <- _to_plain_form_record(req)
       record = Record.create((form.asMap + ("id" -> id)).toVector)
       result = _dispatch_component_admin_entity_record("update", app, entity, record)
-      page = StaticFormAppRenderer.renderComponentAdminEntityUpdateResult(app, entity, id, _form_values(record), result._1, result._2)
-      html <- _admin_form_transition_response(app, "entities", entity, "update", record, result._1, result._2, page)
+      page = StaticFormAppRenderer.renderComponentAdminEntityUpdateResult(app, entity, id, _form_values(record), result.applied, result.message)
+      html <- _admin_form_transition_response(app, "entities", entity, "update", record, result, page)
     } yield {
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
@@ -680,8 +680,8 @@ final class Http4sHttpServer(
     for {
       form <- _to_plain_form_record(req)
       result = _dispatch_component_admin_entity_record("create", app, entity, form)
-      page = StaticFormAppRenderer.renderComponentAdminEntityCreateResult(app, entity, _form_values(form), result._1, result._2)
-      html <- _admin_form_transition_response(app, "entities", entity, "create", form, result._1, result._2, page)
+      page = StaticFormAppRenderer.renderComponentAdminEntityCreateResult(app, entity, _form_values(form), result.applied, result.message)
+      html <- _admin_form_transition_response(app, "entities", entity, "create", form, result, page)
     } yield {
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
@@ -704,8 +704,8 @@ final class Http4sHttpServer(
       form <- _to_plain_form_record(req)
       record = Record.create((form.asMap + ("id" -> id)).toVector)
       result = _dispatch_component_admin_data_record("update", app, data, record)
-      page = StaticFormAppRenderer.renderComponentAdminDataUpdateResult(app, data, id, _form_values(record), result._1, result._2)
-      html <- _admin_form_transition_response(app, "data", data, "update", record, result._1, result._2, page)
+      page = StaticFormAppRenderer.renderComponentAdminDataUpdateResult(app, data, id, _form_values(record), result.applied, result.message)
+      html <- _admin_form_transition_response(app, "data", data, "update", record, result, page)
     } yield {
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
@@ -726,8 +726,8 @@ final class Http4sHttpServer(
     for {
       form <- _to_plain_form_record(req)
       result = _dispatch_component_admin_data_record("create", app, data, form)
-      page = StaticFormAppRenderer.renderComponentAdminDataCreateResult(app, data, _form_values(form), result._1, result._2)
-      html <- _admin_form_transition_response(app, "data", data, "create", form, result._1, result._2, page)
+      page = StaticFormAppRenderer.renderComponentAdminDataCreateResult(app, data, _form_values(form), result.applied, result.message)
+      html <- _admin_form_transition_response(app, "data", data, "create", form, result, page)
     } yield {
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
@@ -744,7 +744,7 @@ final class Http4sHttpServer(
     app: String,
     data: String,
     record: Record
-  ): (Boolean, String) = {
+  ): _AdminFormDispatchResult = {
     val response = _dispatch_operation(
       "admin",
       "data",
@@ -755,11 +755,7 @@ final class Http4sHttpServer(
         form = Record.create((record.asMap + ("component" -> app) + ("data" -> data)).toVector)
       )
     )
-    val applied = response.code >= 200 && response.code < 300
-    val message = response.getString.getOrElse {
-      if (applied) "Data record was applied." else s"HTTP ${response.code}"
-    }
-    (applied, message)
+    _AdminFormDispatchResult(response, "Data record was applied.")
   }
 
   private def _dispatch_component_admin_entity_record(
@@ -767,7 +763,7 @@ final class Http4sHttpServer(
     app: String,
     entity: String,
     record: Record
-  ): (Boolean, String) = {
+  ): _AdminFormDispatchResult = {
     val response = _dispatch_operation(
       "admin",
       "entity",
@@ -778,11 +774,20 @@ final class Http4sHttpServer(
         form = Record.create((record.asMap + ("component" -> app) + ("entity" -> entity)).toVector)
       )
     )
-    val applied = response.code >= 200 && response.code < 300
-    val message = response.getString.getOrElse {
-      if (applied) "Entity record was applied." else s"HTTP ${response.code}"
-    }
-    (applied, message)
+    _AdminFormDispatchResult(response, "Entity record was applied.")
+  }
+
+  private final case class _AdminFormDispatchResult(
+    response: HttpResponse,
+    defaultSuccessMessage: String
+  ) {
+    def applied: Boolean =
+      response.code >= 200 && response.code < 300
+
+    def message: String =
+      response.getString.getOrElse {
+        if (applied) defaultSuccessMessage else s"HTTP ${response.code}"
+      }
   }
 
   private def _admin_form_transition_response(
@@ -791,13 +796,12 @@ final class Http4sHttpServer(
     collection: String,
     operation: String,
     form: Record,
-    applied: Boolean,
-    message: String,
+    result: _AdminFormDispatchResult,
     fallback: StaticFormAppRenderer.Page
   ): IO[HResponse[IO]] = {
     val descriptor = _admin_form_descriptor(app, surface, collection, operation)
     val redirect =
-      if (applied)
+      if (result.applied)
         descriptor.flatMap(_.successRedirect)
       else if (descriptor.exists(_.stayOnError))
         None
@@ -805,10 +809,10 @@ final class Http4sHttpServer(
         descriptor.flatMap(_.failureRedirect)
     redirect match {
       case Some(template) =>
-        IO.pure(_see_other(_render_admin_redirect_template(template, app, surface, collection, operation, form, applied, message)))
+        IO.pure(_see_other(_render_admin_redirect_template(template, app, surface, collection, operation, form, result)))
       case None =>
-        if (!applied && descriptor.exists(_.stayOnError))
-          _admin_stay_on_error_response(app, surface, collection, operation, form, message, fallback)
+        if (!result.applied && descriptor.exists(_.stayOnError))
+          _admin_stay_on_error_response(app, surface, collection, operation, form, result.response, fallback)
         else
           _html(fallback)
     }
@@ -820,13 +824,10 @@ final class Http4sHttpServer(
     collection: String,
     operation: String,
     form: Record,
-    message: String,
+    response: HttpResponse,
     fallback: StaticFormAppRenderer.Page
   ): IO[HResponse[IO]] = {
-    val values = _form_values(form) ++ Map(
-      "error.status" -> "400",
-      "error.body" -> message
-    )
+    val values = _form_values(form) ++ _error_values(response)
     val page =
       (surface, operation, form.getString("id")) match {
         case ("entities", "update", Some(id)) =>
@@ -1006,11 +1007,10 @@ final class Http4sHttpServer(
     collection: String,
     operation: String,
     form: Record,
-    applied: Boolean,
-    message: String
+    result: _AdminFormDispatchResult
   ): String = {
     val id = form.getString("id")
-    val resultId = id.orElse(FormResultMetadata.fromBody(message).id)
+    val resultId = id.orElse(FormResultMetadata.fromHttpResponse(result.response).id)
     val values =
       _form_values(form) ++ Map(
         "component" -> app,
@@ -1018,8 +1018,8 @@ final class Http4sHttpServer(
         "collection" -> collection,
         "service" -> s"admin.${surface}.${collection}",
         "operation" -> operation,
-        "result.status" -> (if (applied) "200" else "400"),
-        "result.body" -> message
+        "result.status" -> result.response.code.toString,
+        "result.body" -> result.message
       ) ++ id.map("id" -> _).toMap ++ resultId.map("result.id" -> _).toMap
     """\$\{([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(template, m =>
       java.util.regex.Matcher.quoteReplacement(values.getOrElse(m.group(1), ""))
