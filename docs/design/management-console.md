@@ -62,7 +62,11 @@ Operation boundary.
 
 ## Forms
 
-Form HTML pages live under `/form`. Operation forms are generated from
+Form HTML pages live under `/form`. JSON-style form submission APIs live under
+`/form-api` and return the Operation response directly without HTML rendering
+or browser redirects.
+
+Operation forms are generated from
 `OperationDefinition.specification.request.parameters` when available. Each
 parameter becomes a normal HTML input with:
 
@@ -90,6 +94,16 @@ The initial type mapping is intentionally conservative:
 - enum/select, multi-value, hidden fields, and system fields require explicit
   descriptor or CML support before they are generated automatically.
 
+Descriptor-level form controls may override generated controls:
+
+- `type`: `text`, `textarea`, `select`, `checkbox`, `hidden`, or another HTML
+  input type.
+- `values`: select option candidates.
+- `multiple`: enables multiple select.
+- `hidden`: renders a hidden input.
+- `system`: marks a control as framework-provided for future policy checks.
+- `required`: overrides multiplicity-derived requiredness.
+
 Form execution result pages receive properties derived from the Operation
 response:
 
@@ -114,10 +128,19 @@ behavior is:
 - provide an explicit link back to the Operation form and the component form
   index.
 
-Redirect-after-success, redirect-after-failure, and inline validation error
-redisplay are future descriptor-controlled behaviors. They should be configured
-per form or per Operation. JSON Form APIs are separate from this HTML Form
-flow and must not depend on browser redirect behavior.
+Descriptor-controlled transitions are available per form:
+
+- `successRedirect`: returns `303 See Other` after a successful Operation.
+- `failureRedirect`: returns `303 See Other` after a failed Operation.
+- `stayOnError`: suppresses failure redirect and renders the result page with
+  `textus-error-panel`.
+
+Redirect templates can reference `${component}`, `${service}`, `${operation}`,
+submitted form fields such as `${id}`, and result properties such as
+`${result.status}`. Aggregate command forms use the same mechanism: create
+forms can redirect to an aggregate list or detail page, while update/command
+forms can redirect to `/web/{component}/admin/aggregates/{aggregate}/{id}` when
+the submitted or returned id is available.
 
 ## Display Labels
 

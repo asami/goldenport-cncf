@@ -160,7 +160,8 @@ object StaticFormAppRenderer {
       val servicePath = NamingConventions.toNormalizedSegment(service.name)
       val operationPath = NamingConventions.toNormalizedSegment(operation.name)
       val action = s"/form/${componentPath}/${servicePath}/${operationPath}"
-      val controls = _operation_form_controls(operation, values)
+      val formDescriptor = webDescriptor.form.get(_operation_selector(component.name, service.name, operation.name))
+      val controls = _operation_form_controls(operation, values, formDescriptor.map(_.controls).getOrElse(Map.empty))
       Page(_simple_page(
         title = s"${_escape(component.name)}.${_escape(service.name)}.${_escape(operation.name)}",
         subtitle = "HTML form operation",
@@ -177,7 +178,8 @@ object StaticFormAppRenderer {
 
   private def _operation_form_controls(
     operation: org.goldenport.protocol.spec.OperationDefinition,
-    values: Map[String, String]
+    values: Map[String, String],
+    controlDescriptors: Map[String, WebDescriptor.FormControl] = Map.empty
   ): String = {
     val parameters = operation.specification.request.parameters.toVector
     if (parameters.isEmpty)
@@ -188,10 +190,11 @@ object StaticFormAppRenderer {
         val name = parameter.name
         val id = s"field-${NamingConventions.toNormalizedSegment(name)}"
         val value = values.getOrElse(name, "")
-        val required = if (_operation_parameter_required(parameter)) " required" else ""
-        val inputType = _operation_parameter_input_type(parameter)
+        val descriptor = controlDescriptors.get(name)
+        val required = if (descriptor.flatMap(_.required).getOrElse(_operation_parameter_required(parameter))) " required" else ""
+        val inputType = descriptor.flatMap(_.controlType).getOrElse(_operation_parameter_input_type(parameter))
         val help = _operation_parameter_help(parameter)
-        _operation_parameter_control(name, id, inputType, value, required, help)
+        _operation_parameter_control(name, id, inputType, value, required, help, descriptor)
       }.mkString("\n")
       val extraValues = values.filterNot { case (key, _) => parameterNames.contains(key) }
       val extra =
@@ -242,9 +245,25 @@ object StaticFormAppRenderer {
     inputType: String,
     value: String,
     required: String,
-    help: String
+    help: String,
+    descriptor: Option[WebDescriptor.FormControl] = None
   ): String =
-    if (inputType == "checkbox") {
+    if (descriptor.exists(_.hidden) || inputType == "hidden") {
+      s"""<input type="hidden" id="${_escape(id)}" name="${_escape(name)}" value="${_escape(value)}">"""
+    } else if (inputType == "select" || descriptor.exists(_.values.nonEmpty)) {
+      val multiple = if (descriptor.exists(_.multiple)) " multiple" else ""
+      val options = descriptor.toVector.flatMap(_.values).map { candidate =>
+        val selected = if (candidate == value) " selected" else ""
+        s"""<option value="${_escape(candidate)}"${selected}>${_escape(candidate)}</option>"""
+      }.mkString("\n")
+      s"""<div class="mb-3">
+         |  <label class="form-label" for="${_escape(id)}">${_escape(name)}</label>
+         |  <select class="form-select" id="${_escape(id)}" name="${_escape(name)}"${required}${multiple}>
+         |    ${options}
+         |  </select>
+         |  <div class="form-text">${_escape(help)}</div>
+         |</div>""".stripMargin
+    } else if (inputType == "checkbox") {
       val checked =
         if (Set("true", "on", "1", "yes").contains(value.toLowerCase)) " checked" else ""
       s"""<div class="mb-3 form-check">

@@ -1128,22 +1128,73 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Additional fields")
     }
 
-    "render textarea and password controls for operation parameters" in {
+    "render descriptor-defined select and hidden controls for operation parameters" in {
       val subsystem = _form_type_fixture_subsystem()
+      val selector = "notice-board.notice.post-secret-notice"
+      val descriptor = WebDescriptor(
+        expose = Map(selector -> WebDescriptor.Exposure.Protected),
+        form = Map(selector -> WebDescriptor.Form(
+          controls = Map(
+            "accessToken" -> WebDescriptor.FormControl(hidden = true),
+            "body" -> WebDescriptor.FormControl(controlType = Some("select"), values = Vector("hello", "world"))
+          )
+        ))
+      )
 
       val html = StaticFormAppRenderer.renderOperationForm(
         subsystem,
         "notice_board",
         "notice",
         "post_secret_notice",
+        descriptor,
         values = Map("body" -> "hello", "accessToken" -> "abc")
       ).map(_.body).getOrElse(fail("operation form is missing"))
 
-      html should include ("<textarea")
+      html should include ("<select")
+      html should include ("<option value=\"hello\" selected>")
       html should include ("name=\"body\"")
-      html should include ("hello")
-      html should include ("type=\"password\"")
+      html should include ("type=\"hidden\"")
       html should include ("name=\"accessToken\"")
+    }
+
+    "redirect HTML form submissions by descriptor transition while form-api returns operation response" in {
+      val subsystem = _aggregate_http_fixture_subsystem()
+      val descriptor = WebDescriptor(
+        expose = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Exposure.Protected
+        ),
+        form = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Form(
+            successRedirect = Some("/web/${component}/admin/aggregates/${service}/${id}"),
+            failureRedirect = Some("/form/${component}/${service}/${operation}")
+          )
+        )
+      )
+      val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
+      val server = new Http4sHttpServer(engine)
+
+      val redirected = server
+        ._submit_operation_form(
+          _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate"
+        )
+        .unsafeRunSync()
+      val api = server
+        ._submit_operation_form_api(
+          _post_form_request("/form-api/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate"
+        )
+        .unsafeRunSync()
+
+      redirected.status.code shouldBe 303
+      redirected.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe
+        Some("/web/notice-board/admin/aggregates/notice-aggregate/notice_1")
+      api.status.code shouldBe 200
+      api.as[String].unsafeRunSync() should include ("aggregate-updated:notice_1")
     }
 
     "merge schema-driven form fields with additional fields on submit" in {

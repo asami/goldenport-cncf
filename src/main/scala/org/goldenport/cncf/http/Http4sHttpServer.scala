@@ -10,9 +10,9 @@ import fs2.Pipe
 import fs2.Stream
 import com.comcast.ip4s.Host
 import com.comcast.ip4s.Port
-import org.http4s.{HttpRoutes, MediaType, Request as HRequest, Response as HResponse, Status as HStatus}
+import org.http4s.{HttpRoutes, MediaType, Request as HRequest, Response as HResponse, Status as HStatus, Uri}
 import org.http4s.ember.server.EmberServerBuilder
-import org.http4s.headers.`Content-Type`
+import org.http4s.headers.{`Content-Type`, Location}
 import org.http4s.Charset
 import org.http4s.syntax.all.*
 import org.http4s.dsl.io.*
@@ -141,6 +141,8 @@ final class Http4sHttpServer(
         _submit_component_admin_data_update(req, app, data, id)
       case req @ POST -> Root / "form" / app / service / operation =>
         _submit_operation_form(req, app, service, operation)
+      case req @ POST -> Root / "form-api" / app / service / operation =>
+        _submit_operation_form_api(req, app, service, operation)
       case req =>
         try {
           val started = System.nanoTime()
@@ -529,8 +531,7 @@ final class Http4sHttpServer(
       )
       continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
       properties = _form_result_properties(app, service, operation, res, _form_values(form) ++ _continuation_values(continuation))
-      page = StaticFormAppRenderer.renderFormResult(properties)
-      html <- _html(page)
+      response <- _form_transition_response(app, service, operation, form, res, properties)
     } yield {
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
@@ -538,9 +539,47 @@ final class Http4sHttpServer(
         res.code,
         (System.nanoTime() - started) / 1000000L
       )
-      html
+      response
     }
   }
+
+  private[http] def _submit_operation_form_api(
+    req: org.http4s.Request[IO],
+    app: String,
+    service: String,
+    operation: String
+  ): IO[HResponse[IO]] =
+    if (!_is_form_enabled(app, service, operation)) {
+      IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form API not found"))
+    } else if (!_is_web_authorized(app, service, operation, Some(req))) {
+      _forbidden()
+    } else {
+      val started = System.nanoTime()
+      for {
+        form <- _to_plain_form_record(req)
+        res = _dispatch_operation(
+          app,
+          service,
+          operation,
+          HttpRequest.fromPath(
+            method = HttpRequest.POST,
+            path = s"/${app}/${service}/${operation}",
+            query = Record.create(req.uri.query.params.toVector),
+            header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value)),
+            form = form
+          )
+        )
+        out <- _to_http_response(res)
+      } yield {
+        RuntimeDashboardMetrics.recordHtmlRequest(
+          req.method.name,
+          req.uri.path.renderString,
+          res.code,
+          (System.nanoTime() - started) / 1000000L
+        )
+        out
+      }
+    }
 
   private def _operation_form_continue(
     req: org.http4s.Request[IO],
@@ -798,6 +837,62 @@ final class Http4sHttpServer(
       response.mime.value,
       response.getString.getOrElse("")
     )
+
+  private def _form_transition_response(
+    app: String,
+    service: String,
+    operation: String,
+    form: Record,
+    response: HttpResponse,
+    properties: StaticFormAppRenderer.FormResultProperties
+  ): IO[HResponse[IO]] = {
+    val descriptor = _form_descriptor(app, service, operation)
+    val ok = response.code >= 200 && response.code < 400
+    val redirect =
+      if (ok)
+        descriptor.flatMap(_.successRedirect)
+      else if (descriptor.exists(_.stayOnError))
+        None
+      else
+        descriptor.flatMap(_.failureRedirect)
+    redirect match {
+      case Some(template) =>
+        IO.pure(_see_other(_render_redirect_template(template, app, service, operation, form, response)))
+      case None =>
+        _html(StaticFormAppRenderer.renderFormResult(properties))
+    }
+  }
+
+  private def _form_descriptor(
+    app: String,
+    service: String,
+    operation: String
+  ): Option[WebDescriptor.Form] =
+    engine.webDescriptor.form.get(Vector(app, service, operation).mkString("."))
+
+  private def _render_redirect_template(
+    template: String,
+    app: String,
+    service: String,
+    operation: String,
+    form: Record,
+    response: HttpResponse
+  ): String = {
+    val values =
+      _form_values(form) ++ Map(
+        "component" -> app,
+        "service" -> service,
+        "operation" -> operation,
+        "result.status" -> response.code.toString,
+        "result.body" -> response.getString.getOrElse("")
+      )
+    """\$\{([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(template, m =>
+      java.util.regex.Matcher.quoteReplacement(values.getOrElse(m.group(1), ""))
+    )
+  }
+
+  private def _see_other(path: String): HResponse[IO] =
+    HResponse[IO](HStatus.SeeOther).putHeaders(Location(Uri.unsafeFromString(path)))
 
   private def _is_form_enabled(
     app: String,

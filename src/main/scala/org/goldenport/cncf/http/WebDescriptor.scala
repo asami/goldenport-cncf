@@ -105,7 +105,20 @@ object WebDescriptor {
   )
 
   final case class Form(
-    enabled: Option[Boolean] = None
+    enabled: Option[Boolean] = None,
+    successRedirect: Option[String] = None,
+    failureRedirect: Option[String] = None,
+    stayOnError: Boolean = false,
+    controls: Map[String, FormControl] = Map.empty
+  )
+
+  final case class FormControl(
+    controlType: Option[String] = None,
+    hidden: Boolean = false,
+    system: Boolean = false,
+    values: Vector[String] = Vector.empty,
+    multiple: Boolean = false,
+    required: Option[Boolean] = None
   )
 
   enum TotalCountPolicy {
@@ -218,8 +231,29 @@ object WebDescriptor {
       .map(_.asMap.toVector.flatMap {
         case (key, value) =>
           _any_to_record(value).map { r =>
-            key -> Form(enabled = _boolean(r, "enabled"))
+            key -> Form(
+              enabled = _boolean(r, "enabled"),
+              successRedirect = _string(r, "successRedirect").orElse(_string(r, "success-redirect")),
+              failureRedirect = _string(r, "failureRedirect").orElse(_string(r, "failure-redirect")),
+              stayOnError = _boolean(r, "stayOnError").orElse(_boolean(r, "stay-on-error")).getOrElse(false),
+              controls = _form_controls(r)
+            )
           }
+      }.toMap)
+      .getOrElse(Map.empty)
+
+  private def _form_controls(record: Record): Map[String, FormControl] =
+    _record_value(record, "controls")
+      .map(_.asMap.toVector.flatMap {
+        case (key, value) =>
+          _any_to_record(value).map(r => key -> FormControl(
+            controlType = _string(r, "type").orElse(_string(r, "controlType")).orElse(_string(r, "control-type")),
+            hidden = _boolean(r, "hidden").getOrElse(false),
+            system = _boolean(r, "system").getOrElse(false),
+            values = _string_vector(r, "values"),
+            multiple = _boolean(r, "multiple").getOrElse(false),
+            required = _boolean(r, "required")
+          ))
       }.toMap)
       .getOrElse(Map.empty)
 
@@ -295,6 +329,9 @@ object WebDescriptor {
         case _ => None
       }
     }
+
+  private def _string(record: Record, key: String): Option[String] =
+    record.getString(key).map(_.trim).filter(_.nonEmpty)
 
   private def _normalize_app_segment(value: String): String =
     value.trim.toLowerCase.replace("_", "-")
