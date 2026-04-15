@@ -104,7 +104,7 @@ object CncfRuntime extends GlobalObservable {
     aliasResolver: AliasResolver
   )
 
-  private val _configuration_application_name = "cncf"
+  private val _configuration_application_name = "textus"
   private val _help_flags = Set("--help", "-h")
   private val _runtime_service_name = "runtime"
   private lazy val _runtime_parameter_parser = new RuntimeParameterParser()
@@ -2146,8 +2146,11 @@ object CncfRuntime extends GlobalObservable {
     cwd: Path,
     configargs: Map[String, String]
   ): Vector[ConfigurationSource] = {
-    val files = _split_config_paths(configargs.get("cncf.config.file")) ++
-      _split_config_paths(configargs.get("cncf.config.files"))
+    val files =
+      _split_config_paths(configargs.get("cncf.config.file")) ++
+        _split_config_paths(configargs.get("cncf.config.files")) ++
+        _split_config_paths(configargs.get("textus.config.file")) ++
+        _split_config_paths(configargs.get("textus.config.files"))
     files.distinct.map { path =>
       val p = _normalize_config_path(cwd, path)
       ConfigurationSource.File(
@@ -2165,32 +2168,44 @@ object CncfRuntime extends GlobalObservable {
     args: Map[String, String]
   ): ConfigurationSources = {
     val loader = new RuntimeFileConfigLoader
+    val names = _configuration_application_names(applicationname)
     val home = sys.props.get("user.home").toVector.flatMap { home =>
+      names.flatMap { name =>
+        _runtime_standard_file_sources(
+          Paths.get(home).resolve(_configuration_dir_name(name)),
+          ConfigurationOrigin.Home,
+          ConfigurationSource.Rank.Home,
+          loader
+        )
+      }
+    }
+    val project = names.flatMap { name =>
+      ProjectRootFinder.find(cwd, name).toVector.flatMap { root =>
+        _runtime_standard_file_sources(
+          root.resolve(_configuration_dir_name(name)),
+          ConfigurationOrigin.Project,
+          ConfigurationSource.Rank.Project,
+          loader
+        )
+      }
+    }
+    val current = names.flatMap { name =>
       _runtime_standard_file_sources(
-        Paths.get(home).resolve(_configuration_dir_name(applicationname)),
-        ConfigurationOrigin.Home,
-        ConfigurationSource.Rank.Home,
+        cwd.resolve(_configuration_dir_name(name)),
+        ConfigurationOrigin.Cwd,
+        ConfigurationSource.Rank.Cwd,
         loader
       )
     }
-    val project = ProjectRootFinder.find(cwd, applicationname).toVector.flatMap { root =>
-      _runtime_standard_file_sources(
-        root.resolve(_configuration_dir_name(applicationname)),
-        ConfigurationOrigin.Project,
-        ConfigurationSource.Rank.Project,
-        loader
-      )
-    }
-    val current = _runtime_standard_file_sources(
-      cwd.resolve(_configuration_dir_name(applicationname)),
-      ConfigurationOrigin.Cwd,
-      ConfigurationSource.Rank.Cwd,
-      loader
-    )
     val envsource = ConfigurationSource.env(sys.env, applicationname).toVector
     val argsource = ConfigurationSource.args(args).toVector
     ConfigurationSources(home ++ project ++ current ++ envsource ++ argsource)
   }
+
+  private def _configuration_application_names(
+    applicationname: String
+  ): Vector[String] =
+    Vector("cncf", applicationname).distinct
 
   private def _runtime_standard_file_sources(
     dir: Path,
@@ -2501,7 +2516,7 @@ private[cli] object RuntimeOptionsParser {
 }
 
 class CncfRuntime() extends GlobalObservable {
-  private val _configuration_application_name = "cncf"
+  private val _configuration_application_name = "textus"
   private val _runtime_service_name = "runtime"
   private val _help_flags = Set("--help", "-h")
   private val _args_parser = new ArgsParser(ArgsParser.Config())

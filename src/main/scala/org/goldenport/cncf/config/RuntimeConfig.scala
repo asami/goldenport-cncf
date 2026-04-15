@@ -89,7 +89,7 @@ object RuntimeConfig {
   val DefaultServerEmulatorBaseUrl = "http://localhost/"
   val DefaultHttpDriverName = "real"
   val DefaultMode = "command"
-  val DefaultLogFilePath = ".cncf/data.d/trace.log"
+  val DefaultLogFilePath = ".textus/data.d/trace.log"
   val DefaultWebOperationDispatcher = "local"
 
   val default: RuntimeConfig =

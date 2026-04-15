@@ -1044,7 +1044,8 @@ final class Http4sHttpServer(
 }
 
 object Http4sHttpServer {
-  val PortPropertyKey = "cncf.server.port"
+  val PortPropertyKey = "textus.server.port"
+  val LegacyPortPropertyKey = "cncf.server.port"
 
   final case class FormContinuation(
     id: String,
@@ -1066,6 +1067,7 @@ object Http4sHttpServer {
   def defaultPort: Int =
     sys.props
       .get(PortPropertyKey)
+      .orElse(sys.props.get(LegacyPortPropertyKey))
       .flatMap(x => scala.util.Try(x.toInt).toOption)
       .getOrElse(8080)
 

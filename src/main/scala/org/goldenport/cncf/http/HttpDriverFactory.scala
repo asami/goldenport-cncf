@@ -7,7 +7,7 @@ import org.goldenport.configuration.ResolvedConfiguration
 /*
  * @since   Jan. 17, 2026
  *  version Jan. 30, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object HttpDriverFactory {
@@ -21,7 +21,9 @@ object HttpDriverFactory {
       case "nop" | "fake" =>
         Consequence.success(FakeHttpDriver.okText("nop"))
       case "real" | "url-connection" =>
-        val baseurl = sys.props.getOrElse("cncf.http.baseurl", ClientConfig.DefaultBaseUrl)
+        val baseurl = sys.props.get("textus.http.baseurl")
+          .orElse(sys.props.get("cncf.http.baseurl"))
+          .getOrElse(ClientConfig.DefaultBaseUrl)
         Consequence.success(new UrlConnectionHttpDriver(baseurl))
       case "loopback" =>
         val server = LoopbackHttpServer.create()

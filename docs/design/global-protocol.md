@@ -111,7 +111,7 @@ GlobalProtocol
     |       - constructs GlobalRuntimeContext
     |
     +--> ConfigProtocol
-    |       - loads configuration sources (e.g. .cncf/config.yaml)
+    |       - loads configuration sources (e.g. .textus/config.yaml)
     |       - validates against Global Protocol definitions
     |
     +--> DomainProtocol
@@ -154,10 +154,13 @@ This guarantees forward compatibility for domain-level extensions.
 
 Relation to Configuration
 ----------------------------------------------------------------------
-Configuration files (e.g. .cncf/config.yaml) are interpreted exclusively
+Configuration files (e.g. .textus/config.yaml) are interpreted exclusively
 through the Global Protocol.
 
 Domain Protocol logic MUST NOT access configuration directly.
+
+`.cncf/config.*` remains a compatibility source for existing deployments, but
+new examples and documentation should use `.textus/config.*`.
 
 Example:
 

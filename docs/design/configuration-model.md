@@ -657,9 +657,32 @@ Each layer has a single responsibility.
 
 ## 13. Configuration Key Naming
 
-The primary configuration namespace should be `textus.*`.
+The primary configuration namespace is `textus.*`.
+
+The product-facing name is CozyTextus. Runtime options, system properties,
+environment-variable names, and local configuration directory names should
+therefore use `textus` as the primary spelling.
 
 Older `cncf.*` keys may remain as compatibility aliases, but new documentation and examples should prefer `textus.*`.
+
+Compatibility is one-way:
+
+- New features must document `textus.*`.
+- Existing `cncf.*` inputs may continue to work as fallback aliases.
+- If both `textus.*` and `cncf.*` values are supplied for the same semantic
+  setting, the `textus.*` value wins.
+
+The same naming rule applies to standard runtime configuration directories:
+
+- `.textus/` is the primary directory.
+- `.cncf/` is a compatibility directory.
+- Within the same HOME / PROJECT / CWD scope, `.textus` values override `.cncf`
+  values.
+
+The same naming rule applies to explicit runtime configuration file options:
+
+- `--textus.config.file` and `--textus.config.files` are primary.
+- `--cncf.config.file` and `--cncf.config.files` are compatibility aliases.
 
 The `runtime` segment should not be used as a generic bucket.
 Prefer a concrete semantic owner:

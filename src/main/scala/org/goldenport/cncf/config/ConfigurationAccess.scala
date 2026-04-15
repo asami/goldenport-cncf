@@ -31,7 +31,7 @@ object ConfigurationAccess {
     _system_config_files().iterator.flatMap(_read_simple_config(_, key)).toSeq.headOption
 
   private def _system_config_files(): Vector[java.nio.file.Path] =
-    Vector("cncf.config.file", "textus.config.file")
+    Vector("textus.config.file", "cncf.config.file")
       .flatMap(k => Option(System.getProperty(k)))
       .flatMap(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
       .map(Paths.get(_).normalize)

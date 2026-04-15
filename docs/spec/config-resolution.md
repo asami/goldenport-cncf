@@ -1,14 +1,19 @@
 # Configuration Resolution
-Local / Runtime Configuration Resolution (Legacy CNCF ConfigResolver)
+Local / Runtime Configuration Resolution
 
-This document defines the legacy CNCF-local configuration resolution mechanism.
+This document defines the Textus runtime configuration resolution mechanism.
 Current production path is `org.goldenport.configuration.*`.
+
+The product-facing name is CozyTextus. Runtime configuration therefore uses
+`textus` as the primary namespace and directory name. Existing `cncf` names are
+compatibility aliases and remain supported where explicitly described.
 
 This mechanism is intentionally generic, deterministic, and boring.
 Its purpose is to prevent accidental coupling between components,
 applications, and runtime environments.
 
-This document is normative for the legacy CNCF resolver only.
+This document is normative for runtime configuration source discovery,
+precedence, and compatibility behavior.
 
 
 ----------------------------------------------------------------------
@@ -41,6 +46,8 @@ Status note:
 
     - `org.goldenport.cncf.config.ConfigResolver` is deprecated (Phase 2.8).
     - Runtime uses `org.goldenport.configuration.ConfigurationResolver`.
+    - The primary product namespace is `textus`.
+    - `cncf` remains as a compatibility namespace.
 
 
 ----------------------------------------------------------------------
@@ -64,16 +71,19 @@ This layer prioritizes predictability over convenience.
 
 Configuration values are discovered from the following sources.
 
-3.1 Supported Sources (legacy resolver)
+3.1 Supported Sources
 
     - HOME configuration
-        $HOME/.cncf/
+        $HOME/.textus/
+        $HOME/.cncf/        (compatibility)
 
-    - PROJECT configuration (legacy fixed path)
-        ${CWD}/.cncf/
+    - PROJECT configuration
+        ${PROJECT_ROOT}/.textus/
+        ${PROJECT_ROOT}/.cncf/   (compatibility)
 
     - CWD configuration
-        ${CWD}/.cncf/
+        ${CWD}/.textus/
+        ${CWD}/.cncf/      (compatibility)
 
     - Environment variables
 
@@ -82,21 +92,64 @@ Configuration values are discovered from the following sources.
 All sources are optional.
 Absence of configuration must be handled gracefully.
 
+3.2 Standard File Names
+
+Within each configuration directory, standard files are evaluated in this order:
+
+    1. config.conf
+    2. config.props
+    3. config.properties
+    4. config.json
+    5. config.yaml
+    6. config.xml
+
+Later files in the same directory overwrite earlier files by key.
+`props` and `properties` are treated as `conf`-compatible inputs.
+
+YAML and XML object structures also expose dot-path keys for runtime lookup.
+For example:
+
+    textus:
+      web:
+        descriptor: config/web-descriptor.yaml
+
+must be available as:
+
+    textus.web.descriptor
+
+3.3 Primary and Compatibility Directories
+
+For a given HOME / PROJECT / CWD scope, compatibility `.cncf` files are loaded
+before primary `.textus` files.
+
+This means:
+
+    .cncf/config.yaml      compatibility fallback
+    .textus/config.yaml    primary value
+
+If both define the same key, `.textus` wins.
+
 
 ----------------------------------------------------------------------
 4. Project Root Resolution (Legacy Effective Behavior)
 ----------------------------------------------------------------------
 
-Legacy CNCF resolver does not perform upward project-root detection.
+The deprecated CNCF-local resolver does not perform upward project-root
+detection.
 
 4.1 Effective Rule (as implemented)
 
-`ConfigSource.project(cwd)` and `ConfigSource.cwd(cwd)` both resolve to:
+`org.goldenport.cncf.config.ConfigSource.project(cwd)` and
+`ConfigSource.cwd(cwd)` both resolve to:
 
     ${CWD}/.cncf/config.conf
 
 No `.git` or parent-directory probing is executed in this legacy path.
 Project source and CWD source are distinct origins with the same location.
+
+The current runtime path uses `org.goldenport.configuration.ProjectRootFinder`.
+For Textus runtime configuration, project discovery uses the primary
+application name `textus` and keeps `cncf` as a compatibility application name.
 
 4.2 Design Rationale
 
@@ -124,6 +177,17 @@ From weakest to strongest:
 Later sources overwrite earlier ones.
 
 This order is foundational and must remain stable.
+
+Within HOME, PROJECT, and CWD, `.cncf` compatibility sources are weaker than
+`.textus` primary sources.
+
+Explicit config file arguments use the following compatibility rule:
+
+    --cncf.config.file(s)      compatibility
+    --textus.config.file(s)    primary
+
+When both are present, the Textus arguments are loaded after CNCF arguments and
+therefore win on duplicate keys.
 
 
 ----------------------------------------------------------------------
