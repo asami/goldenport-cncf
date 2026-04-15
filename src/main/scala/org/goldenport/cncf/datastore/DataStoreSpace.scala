@@ -12,8 +12,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Feb. 25, 2026
- *  version Apr. 10, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class DataStoreSpace {
@@ -39,6 +38,16 @@ class DataStoreSpace {
         m.search(cid, directive)
       case _ =>
         Consequence.dataStoreUnavailable(s"datastore is not searchable: ${cid.print}")
+    }
+
+  def totalCountCapability(
+    cid: DataStore.CollectionId
+  ): Consequence[TotalCountCapability] =
+    dataStore(cid).map {
+      case m: SearchableDataStore =>
+        m.totalCountCapability(cid)
+      case _ =>
+        TotalCountCapability.Unsupported
     }
 
   def inject(

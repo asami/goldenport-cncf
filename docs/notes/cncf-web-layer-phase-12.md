@@ -254,9 +254,11 @@ but it is honored only when the Web Descriptor admin surface declares
 extra count query do not pay that cost unless the application design and caller
 both ask for it. When a total count is returned, `totalAvailable=true`;
 otherwise the response includes `totalAvailable=false` and omits `total`.
-Middleware capability checks for stores where total counting is unsupported or
-effectively impossible remain a follow-up: `optional` should degrade with a
-warning and no `total`, while `required` should fail with a structured error.
+Middleware capability checks now gate DataStore total counting. `optional`
+degrades to no `total` when the DataStore reports total count as unsupported or
+effectively impossible, while `required` fails with a structured argument error.
+Optional degradation returns `totalUnavailableReason` and a warning message for
+HTML rendering. Richer count capability classes remain follow-up work.
 
 Entity and data Management Console list pages read `page`, `pageSize`, and
 `includeTotal` from the `/web/...` query string and pass them to the admin query

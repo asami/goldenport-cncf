@@ -315,6 +315,7 @@ object StaticFormAppRenderer {
       )
       val result = _admin_entity_list(subsystem, componentPath, entityPath, effectivePageRequest)
       val entityIds = result.ids
+      val warningHtml = _admin_warnings(result.warnings)
       val rows =
         if (entityIds.isEmpty) {
           """<tr><td colspan="2">No records are currently available for this entity.</td></tr>"""
@@ -334,6 +335,7 @@ object StaticFormAppRenderer {
              |<article>
              |  <h2>${_escape(entityLabel)} records</h2>
              |  <p>List with paging${result.total.map(t => s" · total ${_escape(t.toString)}").getOrElse("")}</p>
+             |  ${warningHtml}
              |  <p><a class="btn btn-primary" href="${_escape(basePath)}/new">New ${_escape(entityLabel)}</a></p>
              |  <div class="table-responsive"><table class="table table-sm">
              |    <thead><tr><th>Id</th><th>Actions</th></tr></thead>
@@ -514,7 +516,8 @@ object StaticFormAppRenderer {
     page: Int,
     pageSize: Int,
     hasNext: Boolean,
-    total: Option[Int]
+    total: Option[Int],
+    warnings: Vector[String]
   )
 
   private def _admin_entity_list(
@@ -584,11 +587,31 @@ object StaticFormAppRenderer {
           record.getInt("page").getOrElse(1),
           record.getInt("pageSize").getOrElse(20),
           record.getBoolean("hasNext").getOrElse(false),
-          record.getInt("total")
+          record.getInt("total"),
+          _admin_record_warnings(record)
         )
       case None =>
-        _AdminListResult(Vector.empty, 1, 20, false, None)
+        _AdminListResult(Vector.empty, 1, 20, false, None, Vector.empty)
     }
+
+  private def _admin_record_warnings(
+    record: Record
+  ): Vector[String] =
+    record.getAny("warnings") match {
+      case Some(xs: Seq[?]) => xs.toVector.map(_.toString).filter(_.nonEmpty)
+      case Some(xs: java.util.List[?]) => xs.toArray.toVector.map(_.toString).filter(_.nonEmpty)
+      case Some(value) => Vector(value.toString).filter(_.nonEmpty)
+      case None =>
+        record.getString("totalUnavailableReason").map(reason => s"total count is not available: ${reason}").toVector
+    }
+
+  private def _admin_warnings(
+    warnings: Vector[String]
+  ): String =
+    if (warnings.isEmpty)
+      ""
+    else
+      s"""<div class="alert alert-warning" role="alert">${warnings.map(_escape).mkString("<br>")}</div>"""
 
   private def _admin_data_record_table(
     subsystem: Subsystem,
@@ -1076,6 +1099,7 @@ object StaticFormAppRenderer {
       )
       val result = _admin_data_list(subsystem, componentPath, dataPath, effectivePageRequest)
       val recordIds = result.ids
+      val warningHtml = _admin_warnings(result.warnings)
       val rows =
         if (recordIds.isEmpty) {
           """<tr><td colspan="2">No records are currently available for this data collection.</td></tr>"""
@@ -1095,6 +1119,7 @@ object StaticFormAppRenderer {
              |<article>
              |  <h2>${_escape(_title_label(dataPath))} records</h2>
              |  <p>List with paging${result.total.map(t => s" · total ${_escape(t.toString)}").getOrElse("")}</p>
+             |  ${warningHtml}
              |  <p><a class="btn btn-primary" href="${_escape(basePath)}/new">New ${_escape(_title_label(dataPath))}</a></p>
              |  <div class="table-responsive"><table class="table table-sm">
              |    <thead><tr><th>Id</th><th>Actions</th></tr></thead>

@@ -157,8 +157,10 @@ because some backing stores need a separate or expensive count query.
 `totalCountPolicy` defaults to `disabled`, so browser requests cannot enable
 total counting unless the application design declares it. Supported policy
 values are `disabled`, `optional`, and `required`; current implementation treats
-`optional` and `required` as total-count enabled for supported in-memory
-surfaces and leaves middleware capability-specific errors as a follow-up.
+`optional` and `required` as total-count enabled only when the backing surface
+reports total count support. `optional` degrades to no `total` on unsupported
+stores and returns `totalUnavailableReason` plus a warning message. `required`
+fails with an argument error when total count is unsupported.
 
 Create/update Operations are synchronous browser form commands in the current
 baseline and return a scalar status message. Their persistence effect must occur

@@ -28,7 +28,7 @@ import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentDescriptor}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.GlobalRuntimeContext
-import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
+import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace, QueryDirective, SearchResult, SearchableDataStore, TotalCountCapability}
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateCommandDefinition, AggregateCreateDefinition, AggregateDefinition, AggregateMemberDefinition}
 import org.goldenport.cncf.entity.runtime.*
@@ -37,6 +37,7 @@ import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.unitofwork.{PrepareResult, TransactionContext}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -492,6 +493,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           StaticFormAppRenderer.PageRequest(page = 1, pageSize = 1, includeTotal = true),
           WebDescriptor(admin = Map("data.audit" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional)))
         ).map(_.body).getOrElse(fail("component data total page admin is missing"))
+        val unsupportedFixture = _data_fixture(TotalCountCapability.Unsupported)
+        val unsupportedTotalPage = _with_global_runtime(unsupportedFixture.runtime) {
+          StaticFormAppRenderer.renderComponentAdminDataType(
+            unsupportedFixture.subsystem,
+            "notice_board",
+            "audit",
+            StaticFormAppRenderer.PageRequest(page = 1, pageSize = 1, includeTotal = true),
+            WebDescriptor(admin = Map("data.audit" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional)))
+          ).map(_.body).getOrElse(fail("component data unsupported total page admin is missing"))
+        }
         val detail = StaticFormAppRenderer.renderComponentAdminDataDetail(fixture.subsystem, "notice_board", "audit", "audit_1").map(_.body).getOrElse(fail("component data detail admin is missing"))
         val edit = StaticFormAppRenderer.renderComponentAdminDataEdit(fixture.subsystem, "notice_board", "audit", "audit_1").map(_.body).getOrElse(fail("component data edit admin is missing"))
         val newly = StaticFormAppRenderer.renderComponentAdminDataNew(fixture.subsystem, "notice_board", "audit").map(_.body).getOrElse(fail("component data new admin is missing"))
@@ -504,6 +515,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         secondPage should include ("page-item disabled\"><a class=\"page-link\" href=\"/web/notice-board/admin/data/audit?page=3&amp;pageSize=1\">Next")
         totalPage should include ("total 2")
         totalPage should include ("includeTotal=true")
+        unsupportedTotalPage should include ("alert-warning")
+        unsupportedTotalPage should include ("total count is not available for data.audit")
         detail should include ("created")
         detail should include ("alice")
         edit should include ("name=\"action\"")
@@ -639,6 +652,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val totalEntityListRecord = _admin_record_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
       totalEntityListRecord.getInt("total") shouldBe Some(2)
       totalEntityListRecord.getBoolean("totalAvailable") shouldBe Some(true)
+      val requiredEntityListRecord = _admin_record_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "includeTotal" -> "true", "totalCountPolicy" -> "required")
+      requiredEntityListRecord.getInt("total") shouldBe Some(2)
       val pagedEntityListRecord = _admin_record_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "page" -> "2", "pageSize" -> "5")
       pagedEntityListRecord.getInt("page") shouldBe Some(2)
       pagedEntityListRecord.getInt("pageSize") shouldBe Some(5)
@@ -673,6 +688,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         val totalDataListRecord = _admin_record_response(dataFixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
         totalDataListRecord.getInt("total") shouldBe Some(2)
         totalDataListRecord.getBoolean("totalAvailable") shouldBe Some(true)
+        val requiredDataListRecord = _admin_record_response(dataFixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "includeTotal" -> "true", "totalCountPolicy" -> "required")
+        requiredDataListRecord.getInt("total") shouldBe Some(2)
+        val unsupportedDataFixture = _data_fixture(TotalCountCapability.Unsupported)
+        _with_global_runtime(unsupportedDataFixture.runtime) {
+          val optionalUnsupported = _admin_record_response(unsupportedDataFixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
+          optionalUnsupported.getInt("total") shouldBe None
+          optionalUnsupported.getBoolean("totalAvailable") shouldBe Some(false)
+          optionalUnsupported.getString("totalUnavailableReason") shouldBe Some("unsupported")
+          optionalUnsupported.getAny("warnings").map(_.toString).getOrElse("") should include ("total count is not available for data.audit")
+          _admin_response(unsupportedDataFixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "includeTotal" -> "true", "totalCountPolicy" -> "required") match {
+            case Consequence.Failure(_) => succeed
+            case other => fail(s"required total on unsupported datastore should fail: ${other}")
+          }
+        }
         val dataReadRecord = _admin_record_response(dataFixture.subsystem, "data", "read", "component" -> "notice-board", "data" -> "audit", "id" -> "audit_1")
         dataReadRecord.getString("kind") shouldBe Some("data.read")
         dataReadRecord.getString("fields").getOrElse("") should include ("actor=alice")
@@ -1111,8 +1140,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     dataStoreSpace: DataStoreSpace
   )
 
-  private def _data_fixture(): _DataFixture = {
-    val dataStoreSpace = DataStoreSpace.default()
+  private def _data_fixture(
+    totalCountCapability: TotalCountCapability = TotalCountCapability.Supported
+  ): _DataFixture = {
+    val dataStoreSpace = _data_store_space(totalCountCapability)
     given org.goldenport.cncf.context.ExecutionContext = org.goldenport.cncf.context.ExecutionContext.create()
     val cid = DataStore.CollectionId("audit")
     val _ = dataStoreSpace.inject(cid, Record.create(Vector(
@@ -1135,6 +1166,77 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     val component = TestComponentFactory.create("notice_board", Protocol.empty)
     val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
     _DataFixture(subsystem, runtime, dataStoreSpace)
+  }
+
+  private def _data_store_space(
+    totalCountCapability: TotalCountCapability
+  ): DataStoreSpace =
+    totalCountCapability match {
+      case TotalCountCapability.Supported =>
+        DataStoreSpace.default()
+      case other =>
+        new DataStoreSpace().addDataStore(
+          new _TotalCountCapabilityDataStore(DataStore.inMemorySearchable(), other)
+        )
+    }
+
+  private final class _TotalCountCapabilityDataStore(
+    delegate: SearchableDataStore,
+    capability: TotalCountCapability
+  ) extends SearchableDataStore {
+    def isAccept(cid: DataStore.CollectionId): Boolean =
+      delegate.isAccept(cid)
+
+    def create(
+      collection: DataStore.CollectionId,
+      id: DataStore.EntryId,
+      record: Record
+    )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[Unit] =
+      delegate.create(collection, id, record)
+
+    def load(
+      collection: DataStore.CollectionId,
+      id: DataStore.EntryId
+    )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[Option[Record]] =
+      delegate.load(collection, id)
+
+    def save(
+      collection: DataStore.CollectionId,
+      id: DataStore.EntryId,
+      record: Record
+    )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[Unit] =
+      delegate.save(collection, id, record)
+
+    def update(
+      collection: DataStore.CollectionId,
+      id: DataStore.EntryId,
+      changes: Record
+    )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[Unit] =
+      delegate.update(collection, id, changes)
+
+    def delete(
+      collection: DataStore.CollectionId,
+      id: DataStore.EntryId
+    )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[Unit] =
+      delegate.delete(collection, id)
+
+    def search(
+      collection: DataStore.CollectionId,
+      directive: QueryDirective
+    ): Consequence[SearchResult] =
+      delegate.search(collection, directive)
+
+    override def totalCountCapability(collection: DataStore.CollectionId): TotalCountCapability =
+      capability
+
+    def prepare(tx: TransactionContext): PrepareResult =
+      delegate.prepare(tx)
+
+    def commit(tx: TransactionContext): Unit =
+      delegate.commit(tx)
+
+    def abort(tx: TransactionContext): Unit =
+      delegate.abort(tx)
   }
 
   private def _with_global_runtime[A](

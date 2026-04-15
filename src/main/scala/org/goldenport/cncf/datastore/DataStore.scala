@@ -15,7 +15,7 @@ import scala.util.control.NonFatal
  * @since   Jan.  6, 2026
  *  version Jan. 10, 2026
  *  version Feb. 25, 2026
- * @version Apr.  3, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {
@@ -405,6 +405,9 @@ object DataStore {
     ): Consequence[SearchResult] = 
       _ensure_collection(collection).flatMap(_.search(directive))
 
+    override def totalCountCapability(collection: CollectionId): TotalCountCapability =
+      TotalCountCapability.Supported
+
   //   def prepare(tx: TransactionContext): PrepareResult = {
   //     recorder.record("DataStore.prepare")
   //     PrepareResult.Prepared
@@ -419,6 +422,9 @@ object DataStore {
 }
 
 trait SearchableDataStore extends DataStore {
+  def totalCountCapability(collection: DataStore.CollectionId): TotalCountCapability =
+    TotalCountCapability.Unsupported
+
   def search(collection: DataStore.CollectionId, directive: QueryDirective): Consequence[SearchResult]
 }
 
@@ -456,6 +462,15 @@ sealed trait QueryLimit
 object QueryLimit {
   case object Unbounded extends QueryLimit
   final case class Limit(value: Int) extends QueryLimit
+}
+
+enum TotalCountCapability {
+  case Supported
+  case Unsupported
+  case Expensive
+
+  def supportsTotalCount: Boolean =
+    this == Supported
 }
 
 final case class SearchResult(
