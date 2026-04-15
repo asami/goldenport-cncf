@@ -280,7 +280,7 @@ final class Http4sHttpServer(
     }
 
   private def _component_admin_entity_type(req: HRequest[IO], app: String, entity: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminEntityType(engine.runtimeSubsystem, app, entity, _page_request(req)) match {
+    StaticFormAppRenderer.renderComponentAdminEntityType(engine.runtimeSubsystem, app, entity, _page_request(req), engine.webDescriptor) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
@@ -340,7 +340,7 @@ final class Http4sHttpServer(
     }
 
   private def _component_admin_data_type(req: HRequest[IO], app: String, data: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminDataType(engine.runtimeSubsystem, app, data, _page_request(req)) match {
+    StaticFormAppRenderer.renderComponentAdminDataType(engine.runtimeSubsystem, app, data, _page_request(req), engine.webDescriptor) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
@@ -530,7 +530,7 @@ final class Http4sHttpServer(
       case Some(continuation) if continuation.matches(app, service, operation) =>
         val started = System.nanoTime()
         val queryValues = req.uri.query.params.toMap
-        val pagingValues = queryValues.filter { case (k, _) => k == "page" || k == "pageSize" || k == "requireTotal" }
+        val pagingValues = queryValues.filter { case (k, _) => k == "page" || k == "pageSize" || k == "includeTotal" }
         val res = continuation.response
         val values = _continuation_values(continuation) ++ pagingValues.map { case (k, v) => s"paging.${k}" -> v }
         val page = StaticFormAppRenderer.renderFormResult(
@@ -1027,9 +1027,19 @@ final class Http4sHttpServer(
     val params = req.uri.query.params
     StaticFormAppRenderer.PageRequest(
       page = params.get("page").flatMap(_.toIntOption).filter(_ > 0).getOrElse(1),
-      pageSize = params.get("pageSize").flatMap(_.toIntOption).filter(_ > 0).getOrElse(20)
+      pageSize = params.get("pageSize").flatMap(_.toIntOption).filter(_ > 0).getOrElse(20),
+      includeTotal = _boolean_param(params, "includeTotal")
     )
   }
+
+  private def _boolean_param(
+    params: Map[String, String],
+    key: String
+  ): Boolean =
+    params.get(key).map(_.trim.toLowerCase).exists {
+      case "true" | "yes" | "on" | "1" => true
+      case _ => false
+    }
 
 }
 

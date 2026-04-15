@@ -224,17 +224,17 @@ intentionally not retained.
 The current admin query response baseline is:
 
 - `admin.entity.list`: `RecordResponse(kind, component, collection, ids, page,
-  pageSize, hasNext)`
+  pageSize, hasNext, total?, totalAvailable)`
 - `admin.entity.read`: `RecordResponse(kind, component, collection, id, record,
   fields)`
 - `admin.data.list`: `RecordResponse(kind, component, collection, ids, page,
-  pageSize, hasNext)`
+  pageSize, hasNext, total?, totalAvailable)`
 - `admin.data.read`: `RecordResponse(kind, component, collection, id, record,
   fields)`
 - `admin.view.read`: `RecordResponse(kind, component, collection, values,
-  fields, page, pageSize, hasNext)`
+  fields, page, pageSize, hasNext, total?, totalAvailable)`
 - `admin.aggregate.read`: `RecordResponse(kind, component, collection, values,
-  fields, page, pageSize, hasNext)`
+  fields, page, pageSize, hasNext, total?, totalAvailable)`
 
 `fields` is the browser rendering bridge for the current Static Form App.
 `ids` and `values` are structured data slots for later JSON Form API and richer
@@ -247,11 +247,23 @@ the current DataStore query directive has no offset slot. View and aggregate
 queries pass both offset and over-fetch limit through the entity query
 directive.
 
-Entity and data Management Console list pages read `page` and `pageSize` from
-the `/web/...` query string and pass them to the admin query Operation. The HTML
-paging navigation uses the returned `page`, `pageSize`, and `hasNext` values, so
-`Next` is disabled when the Operation response reports no following page even
-when no total count is available.
+Total count is optional and design-gated. `includeTotal=true` requests `total`,
+but it is honored only when the Web Descriptor admin surface declares
+`totalCount=optional` or `totalCount=required`; the default policy is
+`disabled`. The default remains no total count so backing stores that require an
+extra count query do not pay that cost unless the application design and caller
+both ask for it. When a total count is returned, `totalAvailable=true`;
+otherwise the response includes `totalAvailable=false` and omits `total`.
+Middleware capability checks for stores where total counting is unsupported or
+effectively impossible remain a follow-up: `optional` should degrade with a
+warning and no `total`, while `required` should fail with a structured error.
+
+Entity and data Management Console list pages read `page`, `pageSize`, and
+`includeTotal` from the `/web/...` query string and pass them to the admin query
+Operation together with the Descriptor-derived `totalCountPolicy`. The HTML
+paging navigation uses the returned `page`, `pageSize`, `hasNext`, and optional
+`total` values, so `Next` is disabled when the Operation response reports no
+following page even when no total count is available.
 
 CLI and meta projections remain separate surfaces. Phase 12 Web does not
 replace command-line help, describe/schema output, OpenAPI projection, or the

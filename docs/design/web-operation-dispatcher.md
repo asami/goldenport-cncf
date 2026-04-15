@@ -129,6 +129,9 @@ List Operations return a record with:
 - `pageSize`: requested page size, default `20`
 - `hasNext`: whether another page is available, calculated by fetching one
   extra item beyond `pageSize`
+- `total`: total result count, only when `includeTotal=true` is requested and
+  `totalCountPolicy` allows it and the surface can calculate it
+- `totalAvailable`: whether `total` is present
 
 Read Operations return a record with:
 
@@ -143,9 +146,19 @@ Read Operations return a record with:
 - `pageSize`: requested page size for view/aggregate read results, default `20`
 - `hasNext`: whether another page is available for view/aggregate read results,
   calculated by fetching one extra item beyond `pageSize`
+- `total`: total result count for view/aggregate read results, only when
+  `includeTotal=true` is requested, `totalCountPolicy` allows it, and the
+  surface can calculate it
+- `totalAvailable`: whether `total` is present
 
 `page` and `pageSize` must be positive integers. Invalid values are argument
-errors at the target admin Operation.
+errors at the target admin Operation. `includeTotal` defaults to `false`
+because some backing stores need a separate or expensive count query.
+`totalCountPolicy` defaults to `disabled`, so browser requests cannot enable
+total counting unless the application design declares it. Supported policy
+values are `disabled`, `optional`, and `required`; current implementation treats
+`optional` and `required` as total-count enabled for supported in-memory
+surfaces and leaves middleware capability-specific errors as a follow-up.
 
 Create/update Operations are synchronous browser form commands in the current
 baseline and return a scalar status message. Their persistence effect must occur

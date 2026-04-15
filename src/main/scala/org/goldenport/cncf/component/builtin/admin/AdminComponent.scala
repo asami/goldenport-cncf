@@ -1595,7 +1595,10 @@ object AdminComponent {
       paging <- _paging(args)
       result <- subsystem.globalRuntimeContext.dataStoreSpace.search(
         DataStore.CollectionId(dataName),
-        QueryDirective(DataStoreQuery.Empty, limit = QueryLimit.Limit(paging.fetchSize))
+        QueryDirective(
+          DataStoreQuery.Empty,
+          limit = if (paging.includeTotal) QueryLimit.Unbounded else QueryLimit.Limit(paging.fetchSize)
+        )
       )
     } yield OperationResponse.RecordResponse(
       _list_response_record(
@@ -1645,13 +1648,19 @@ object AdminComponent {
       paging <- _paging(args)
       component <- Consequence.fromOption(_component_by_name(subsystem, componentName), s"Component not found: ${componentName}")
       browser <- Consequence.fromOption(_view_browser(component, viewName), s"View browser not found: ${viewName}")
-      values <- browser.query(EntityQuery.plan(Record.empty, limit = Some(paging.fetchPageSize), offset = Some(paging.offset)))
+      values <- if (paging.includeTotal)
+        browser.query(EntityQuery.plan(Record.empty))
+      else
+        browser.query(EntityQuery.plan(Record.empty, limit = Some(paging.fetchPageSize), offset = Some(paging.offset)))
     } yield OperationResponse.RecordResponse(
       _read_values_response_record(
         "view",
         componentName,
         viewName,
-        _prefetched_page_values(values.map(x => Option(x).map(_.toString).getOrElse("")).toVector, paging),
+        if (paging.includeTotal)
+          _page_values(values.map(x => Option(x).map(_.toString).getOrElse("")).toVector, paging)
+        else
+          _prefetched_page_values(values.map(x => Option(x).map(_.toString).getOrElse("")).toVector, paging),
         paging
       )
     )
@@ -1668,13 +1677,19 @@ object AdminComponent {
       paging <- _paging(args)
       component <- Consequence.fromOption(_component_by_name(subsystem, componentName), s"Component not found: ${componentName}")
       collection <- Consequence.fromOption(_aggregate_collection(component, aggregateName), s"Aggregate collection not found: ${aggregateName}")
-      values <- collection.query(EntityQuery.plan(Record.empty, limit = Some(paging.fetchPageSize), offset = Some(paging.offset)))
+      values <- if (paging.includeTotal)
+        collection.query(EntityQuery.plan(Record.empty))
+      else
+        collection.query(EntityQuery.plan(Record.empty, limit = Some(paging.fetchPageSize), offset = Some(paging.offset)))
     } yield OperationResponse.RecordResponse(
       _read_values_response_record(
         "aggregate",
         componentName,
         aggregateName,
-        _prefetched_page_values(values.map(x => Option(x).map(_.toString).getOrElse("")).toVector, paging),
+        if (paging.includeTotal)
+          _page_values(values.map(x => Option(x).map(_.toString).getOrElse("")).toVector, paging)
+        else
+          _prefetched_page_values(values.map(x => Option(x).map(_.toString).getOrElse("")).toVector, paging),
         paging
       )
     )
@@ -1706,7 +1721,8 @@ object AdminComponent {
 
   private final case class _Paging(
     page: Int,
-    pageSize: Int
+    pageSize: Int,
+    includeTotal: Boolean
   ) {
     def offset: Int = (page - 1) * pageSize
     def fetchPageSize: Int = pageSize + 1
@@ -1719,7 +1735,33 @@ object AdminComponent {
     for {
       page <- _positive_int_arg(args, "page", 1)
       pageSize <- _positive_int_arg(args, "pageSize", 20)
-    } yield _Paging(page, pageSize)
+      policy <- _total_count_policy(args)
+    } yield _Paging(page, pageSize, _boolean_arg(args, "includeTotal", false) && policy.allowsTotal)
+
+  private enum _TotalCountPolicy {
+    case Disabled
+    case Optional
+    case Required
+
+    def allowsTotal: Boolean =
+      this != Disabled
+  }
+
+  private def _total_count_policy(
+    args: Map[String, Any]
+  ): Consequence[_TotalCountPolicy] =
+    args.get("totalCountPolicy").map(_.toString.trim.toLowerCase).filter(_.nonEmpty) match {
+      case Some("disabled" | "none" | "false" | "off") =>
+        Consequence.success(_TotalCountPolicy.Disabled)
+      case Some("optional" | "best-effort" | "besteffort" | "true" | "on") =>
+        Consequence.success(_TotalCountPolicy.Optional)
+      case Some("required" | "require") =>
+        Consequence.success(_TotalCountPolicy.Required)
+      case Some(value) =>
+        Consequence.argumentInvalid(s"totalCountPolicy must be disabled, optional, or required: ${value}")
+      case None =>
+        Consequence.success(_TotalCountPolicy.Disabled)
+    }
 
   private def _positive_int_arg(
     args: Map[String, Any],
@@ -1736,6 +1778,18 @@ object AdminComponent {
         }
       case None =>
         Consequence.success(default)
+    }
+
+  private def _boolean_arg(
+    args: Map[String, Any],
+    key: String,
+    default: Boolean
+  ): Boolean =
+    args.get(key).map(_.toString.trim.toLowerCase).filter(_.nonEmpty) match {
+      case Some("true" | "yes" | "on" | "1") => true
+      case Some("false" | "no" | "off" | "0") => false
+      case Some(_) => default
+      case None => default
     }
 
   private def _admin_entity_record(
@@ -1783,22 +1837,30 @@ object AdminComponent {
   ): _Page[A] = {
     val source = values.drop(paging.offset)
     val visible = source.take(paging.pageSize)
-    _Page(visible, source.size > paging.pageSize)
+    _Page(visible, source.size > paging.pageSize, if (paging.includeTotal) Some(values.size) else None)
   }
 
   private def _prefetched_page_values[A](
     values: Vector[A],
-    paging: _Paging
+    paging: _Paging,
+    total: Option[Int] = None
   ): _Page[A] = {
     val source = values
     val visible = source.take(paging.pageSize)
-    _Page(visible, source.size > paging.pageSize)
+    _Page(visible, source.size > paging.pageSize, if (paging.includeTotal) total else None)
   }
 
   private final case class _Page[A](
     values: Vector[A],
-    hasNext: Boolean
+    hasNext: Boolean,
+    total: Option[Int]
   )
+
+  private def _with_optional_total(
+    base: Vector[(String, Any)],
+    page: _Page[?]
+  ): Vector[(String, Any)] =
+    base ++ page.total.map(total => Vector("total" -> total, "totalAvailable" -> true)).getOrElse(Vector("totalAvailable" -> false))
 
   private def _list_response_record(
     kind: String,
@@ -1808,13 +1870,18 @@ object AdminComponent {
     paging: _Paging
   ): Record =
     Record.dataAuto(
-      "kind" -> s"${kind}.list",
-      "component" -> componentName,
-      "collection" -> collectionName,
-      "ids" -> page.values,
-      "page" -> paging.page,
-      "pageSize" -> paging.pageSize,
-      "hasNext" -> page.hasNext
+      _with_optional_total(
+        Vector(
+          "kind" -> s"${kind}.list",
+          "component" -> componentName,
+          "collection" -> collectionName,
+          "ids" -> page.values,
+          "page" -> paging.page,
+          "pageSize" -> paging.pageSize,
+          "hasNext" -> page.hasNext
+        ),
+        page
+      )*
     )
 
   private def _read_response_record(
@@ -1841,14 +1908,19 @@ object AdminComponent {
     paging: _Paging
   ): Record =
     Record.dataAuto(
-      "kind" -> s"${kind}.read",
-      "component" -> componentName,
-      "collection" -> collectionName,
-      "values" -> page.values,
-      "fields" -> page.values.mkString("\n"),
-      "page" -> paging.page,
-      "pageSize" -> paging.pageSize,
-      "hasNext" -> page.hasNext
+      _with_optional_total(
+        Vector(
+          "kind" -> s"${kind}.read",
+          "component" -> componentName,
+          "collection" -> collectionName,
+          "values" -> page.values,
+          "fields" -> page.values.mkString("\n"),
+          "page" -> paging.page,
+          "pageSize" -> paging.pageSize,
+          "hasNext" -> page.hasNext
+        ),
+        page
+      )*
     )
 
   private def _record_text(

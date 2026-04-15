@@ -20,13 +20,28 @@ object StaticFormAppRenderer {
   final case class Page(body: String)
   final case class PageRequest(
     page: Int = 1,
-    pageSize: Int = 20
+    pageSize: Int = 20,
+    includeTotal: Boolean = false,
+    totalCountPolicy: WebDescriptor.TotalCountPolicy = WebDescriptor.TotalCountPolicy.Disabled
   ) {
+    def effectiveIncludeTotal: Boolean =
+      includeTotal && totalCountPolicy.allowsTotal
+
     def toPairs: Vector[(String, Any)] =
       Vector(
         "page" -> page,
         "pageSize" -> pageSize
-      )
+      ) ++
+        Vector("totalCountPolicy" -> totalCountPolicy.name) ++
+        (if (effectiveIncludeTotal) Vector("includeTotal" -> true) else Vector.empty)
+
+    def href(basePath: String): String = {
+      val total = if (effectiveIncludeTotal) "&includeTotal=true" else ""
+      s"${basePath}?page={page}&pageSize={pageSize}${total}"
+    }
+
+    def withTotalCountPolicy(policy: WebDescriptor.TotalCountPolicy): PageRequest =
+      copy(totalCountPolicy = policy)
   }
   final case class FormPageProperties(
     componentName: String,
@@ -287,14 +302,18 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     componentName: String,
     entityName: String,
-    pageRequest: PageRequest = PageRequest()
+    pageRequest: PageRequest = PageRequest(),
+    webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val entityPath = NamingConventions.toNormalizedSegment(entityName)
       val entityLabel = _title_label(entityPath)
       val basePath = s"/web/${componentPath}/admin/entities/${entityPath}"
-      val result = _admin_entity_list(subsystem, componentPath, entityPath, pageRequest)
+      val effectivePageRequest = pageRequest.withTotalCountPolicy(
+        webDescriptor.adminTotalCountPolicy(componentPath, "entity", entityPath)
+      )
+      val result = _admin_entity_list(subsystem, componentPath, entityPath, effectivePageRequest)
       val entityIds = result.ids
       val rows =
         if (entityIds.isEmpty) {
@@ -314,7 +333,7 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>${_escape(entityLabel)} records</h2>
-             |  <p>List with paging</p>
+             |  <p>List with paging${result.total.map(t => s" · total ${_escape(t.toString)}").getOrElse("")}</p>
              |  <p><a class="btn btn-primary" href="${_escape(basePath)}/new">New ${_escape(entityLabel)}</a></p>
              |  <div class="table-responsive"><table class="table table-sm">
              |    <thead><tr><th>Id</th><th>Actions</th></tr></thead>
@@ -322,7 +341,7 @@ object StaticFormAppRenderer {
              |      ${rows}
              |    </tbody>
              |  </table></div>
-             |  ${_paging_nav(result.page, result.pageSize, None, s"${basePath}?page={page}&pageSize={pageSize}", Some(result.hasNext))}
+             |  ${_paging_nav(result.page, result.pageSize, result.total, effectivePageRequest.href(basePath), Some(result.hasNext))}
              |</article>""".stripMargin
       ))
     }
@@ -494,7 +513,8 @@ object StaticFormAppRenderer {
     ids: Vector[String],
     page: Int,
     pageSize: Int,
-    hasNext: Boolean
+    hasNext: Boolean,
+    total: Option[Int]
   )
 
   private def _admin_entity_list(
@@ -563,10 +583,11 @@ object StaticFormAppRenderer {
           ids,
           record.getInt("page").getOrElse(1),
           record.getInt("pageSize").getOrElse(20),
-          record.getBoolean("hasNext").getOrElse(false)
+          record.getBoolean("hasNext").getOrElse(false),
+          record.getInt("total")
         )
       case None =>
-        _AdminListResult(Vector.empty, 1, 20, false)
+        _AdminListResult(Vector.empty, 1, 20, false, None)
     }
 
   private def _admin_data_record_table(
@@ -1043,13 +1064,17 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     componentName: String,
     dataName: String,
-    pageRequest: PageRequest = PageRequest()
+    pageRequest: PageRequest = PageRequest(),
+    webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val dataPath = NamingConventions.toNormalizedSegment(dataName)
       val basePath = s"/web/${componentPath}/admin/data/${dataPath}"
-      val result = _admin_data_list(subsystem, componentPath, dataPath, pageRequest)
+      val effectivePageRequest = pageRequest.withTotalCountPolicy(
+        webDescriptor.adminTotalCountPolicy(componentPath, "data", dataPath)
+      )
+      val result = _admin_data_list(subsystem, componentPath, dataPath, effectivePageRequest)
       val recordIds = result.ids
       val rows =
         if (recordIds.isEmpty) {
@@ -1069,13 +1094,13 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>${_escape(_title_label(dataPath))} records</h2>
-             |  <p>List with paging</p>
+             |  <p>List with paging${result.total.map(t => s" · total ${_escape(t.toString)}").getOrElse("")}</p>
              |  <p><a class="btn btn-primary" href="${_escape(basePath)}/new">New ${_escape(_title_label(dataPath))}</a></p>
              |  <div class="table-responsive"><table class="table table-sm">
              |    <thead><tr><th>Id</th><th>Actions</th></tr></thead>
              |    <tbody>${rows}</tbody>
              |  </table></div>
-             |  ${_paging_nav(result.page, result.pageSize, None, s"${basePath}?page={page}&pageSize={pageSize}", Some(result.hasNext))}
+             |  ${_paging_nav(result.page, result.pageSize, result.total, effectivePageRequest.href(basePath), Some(result.hasNext))}
              |</article>""".stripMargin
       ))
     }
@@ -1700,6 +1725,7 @@ object StaticFormAppRenderer {
        |    <tr><th>Authorization entries</th><td>${descriptor.authorization.size}</td></tr>
        |    <tr><th>Form entries</th><td>${descriptor.form.size}</td></tr>
        |    <tr><th>App entries</th><td>${descriptor.apps.size}</td></tr>
+       |    <tr><th>Admin entries</th><td>${descriptor.admin.size}</td></tr>
        |  </tbody>
        |</table></div>
        |<p><a href="/web/system/admin/descriptor">Resolved descriptor JSON</a></p>
@@ -1734,6 +1760,14 @@ object StaticFormAppRenderer {
           case (selector, form) =>
             selector -> Json.obj(
               "enabled" -> form.enabled.map(Json.fromBoolean).getOrElse(Json.Null)
+            )
+        }
+      ),
+      "admin" -> Json.fromFields(
+        descriptor.admin.toVector.sortBy(_._1).map {
+          case (selector, admin) =>
+            selector -> Json.obj(
+              "totalCount" -> Json.fromString(admin.totalCount.name)
             )
         }
       ),

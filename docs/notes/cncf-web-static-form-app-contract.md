@@ -392,8 +392,13 @@ current memory-resident working set model.
 Total count opt-in uses an explicit parameter, conventionally:
 
 ```text
-paging.requireTotal=true
+paging.includeTotal=true
 ```
+
+For Management Console pages this runtime opt-in is design-gated. The Web
+Descriptor admin surface must declare `totalCount=optional` or
+`totalCount=required`; otherwise `includeTotal` is ignored and the page keeps
+using `hasNext`-only paging.
 
 ## Management Console CRUD Flow
 

@@ -11,7 +11,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Apr. 14, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
@@ -19,13 +19,15 @@ final case class WebDescriptor(
   auth: WebDescriptor.Auth = WebDescriptor.Auth(),
   authorization: Map[String, WebDescriptor.Authorization] = Map.empty,
   form: Map[String, WebDescriptor.Form] = Map.empty,
-  apps: Vector[WebDescriptor.App] = Vector.empty
+  apps: Vector[WebDescriptor.App] = Vector.empty,
+  admin: Map[String, WebDescriptor.AdminSurface] = Map.empty
 ) {
   def hasControls: Boolean =
     expose.nonEmpty ||
       authorization.nonEmpty ||
       form.nonEmpty ||
       apps.nonEmpty ||
+      admin.nonEmpty ||
       auth != WebDescriptor.Auth()
 
   def exposureOf(selector: String): WebDescriptor.Exposure =
@@ -46,6 +48,26 @@ final case class WebDescriptor(
       true
     else
       apps.exists(_.matches(name, path))
+
+  def adminTotalCountPolicy(
+    componentName: String,
+    surface: String,
+    collectionName: String
+  ): WebDescriptor.TotalCountPolicy = {
+    def normalize(value: String): String =
+      value.trim.toLowerCase.replace("_", "-")
+    val component = normalize(componentName)
+    val s = normalize(surface)
+    val collection = normalize(collectionName)
+    Vector(
+      s"${component}.${s}.${collection}",
+      s"${s}.${collection}",
+      s"${component}.${s}.*",
+      s"${s}.*",
+      s"${component}.${s}",
+      s
+    ).flatMap(admin.get).headOption.map(_.totalCount).getOrElse(WebDescriptor.TotalCountPolicy.Disabled)
+  }
 }
 
 object WebDescriptor {
@@ -84,6 +106,36 @@ object WebDescriptor {
 
   final case class Form(
     enabled: Option[Boolean] = None
+  )
+
+  enum TotalCountPolicy {
+    case Disabled
+    case Optional
+    case Required
+
+    def name: String =
+      this match {
+        case Disabled => "disabled"
+        case Optional => "optional"
+        case Required => "required"
+      }
+
+    def allowsTotal: Boolean =
+      this != Disabled
+  }
+
+  object TotalCountPolicy {
+    def parse(value: String): Option[TotalCountPolicy] =
+      value.trim.toLowerCase match {
+        case "disabled" | "none" | "false" | "off" => Some(Disabled)
+        case "optional" | "best-effort" | "besteffort" | "true" | "on" => Some(Optional)
+        case "required" | "require" => Some(Required)
+        case _ => None
+      }
+  }
+
+  final case class AdminSurface(
+    totalCount: TotalCountPolicy = TotalCountPolicy.Disabled
   )
 
   final case class App(
@@ -130,7 +182,8 @@ object WebDescriptor {
       auth = _auth(web),
       authorization = _authorization(web),
       form = _form(web),
-      apps = _apps(web)
+      apps = _apps(web),
+      admin = _admin(web)
     )
   }
 
@@ -184,6 +237,23 @@ object WebDescriptor {
       kind <- record.getString("kind").map(_.trim).filter(_.nonEmpty)
     } yield App(name, path, kind)
 
+  private def _admin(record: Record): Map[String, AdminSurface] =
+    _record_value(record, "admin")
+      .map(_.asMap.toVector.flatMap {
+        case (key, value) =>
+          _any_to_record(value).flatMap { r =>
+            _total_count_policy(r).map(policy =>
+              _normalize_selector(key) -> AdminSurface(totalCount = policy)
+            )
+          }
+      }.toMap)
+      .getOrElse(Map.empty)
+
+  private def _total_count_policy(record: Record): Option[TotalCountPolicy] =
+    record.getString("totalCount")
+      .orElse(record.getString("total-count"))
+      .flatMap(TotalCountPolicy.parse)
+
   private def _record_value(record: Record, key: String): Option[Record] =
     record.getAny(key).flatMap(_any_to_record)
 
@@ -227,6 +297,12 @@ object WebDescriptor {
     }
 
   private def _normalize_app_segment(value: String): String =
+    value.trim.toLowerCase.replace("_", "-")
+
+  private def _normalize_selector(value: String): String =
+    value.split("\\.").toVector.map(_normalize_selector_segment).mkString(".")
+
+  private def _normalize_selector_segment(value: String): String =
     value.trim.toLowerCase.replace("_", "-")
 
   private def _is_archive_file(path: Path): Boolean = {

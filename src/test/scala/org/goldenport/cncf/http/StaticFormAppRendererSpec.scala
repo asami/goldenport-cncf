@@ -168,7 +168,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         expose = Map("notice-board.notice.search-notices" -> WebDescriptor.Exposure.Public),
         authorization = Map("notice-board.notice.search-notices" -> WebDescriptor.Authorization(roles = Vector("reader"))),
         form = Map("notice-board.notice.search-notices" -> WebDescriptor.Form(enabled = Some(true))),
-        apps = Vector(WebDescriptor.App("manual", "/web/manual", "manual"))
+        apps = Vector(WebDescriptor.App("manual", "/web/manual", "manual")),
+        admin = Map("entity.notice" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional))
       )
 
       val html = StaticFormAppRenderer.renderSystemAdmin(subsystem, descriptor).body
@@ -179,6 +180,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("public")
       html should include ("manual")
       html should include ("/web/manual")
+      html should include ("Admin entries")
     }
 
     "render resolved Web Descriptor drill-down page" in {
@@ -186,7 +188,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         expose = Map("notice-board.notice.search-notices" -> WebDescriptor.Exposure.Public),
         authorization = Map("notice-board.notice.search-notices" -> WebDescriptor.Authorization(roles = Vector("reader"))),
         form = Map("notice-board.notice.search-notices" -> WebDescriptor.Form(enabled = Some(true))),
-        apps = Vector(WebDescriptor.App("manual", "/web/manual", "manual"))
+        apps = Vector(WebDescriptor.App("manual", "/web/manual", "manual")),
+        admin = Map("entity.notice" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional))
       )
 
       val html = StaticFormAppRenderer.renderSystemAdminDescriptor(descriptor).body
@@ -196,6 +199,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/system/admin")
       html should include ("&quot;status&quot; : &quot;configured&quot;")
       html should include ("&quot;notice-board.notice.search-notices&quot; : &quot;public&quot;")
+      html should include ("&quot;entity.notice&quot;")
+      html should include ("&quot;totalCount&quot; : &quot;optional&quot;")
       html should include ("&quot;roles&quot;")
       html should include ("&quot;reader&quot;")
       html should include ("&quot;enabled&quot; : true")
@@ -304,6 +309,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         entityPath,
         StaticFormAppRenderer.PageRequest(page = 2, pageSize = 1)
       ).map(_.body).getOrElse(fail("component entity second page admin is missing"))
+      val totalPage = StaticFormAppRenderer.renderComponentAdminEntityType(
+        subsystem,
+        componentName,
+        entityPath,
+        StaticFormAppRenderer.PageRequest(page = 1, pageSize = 1, includeTotal = true),
+        WebDescriptor(admin = Map("entity.notice" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional)))
+      ).map(_.body).getOrElse(fail("component entity total page admin is missing"))
       val detail = StaticFormAppRenderer.renderComponentAdminEntityDetail(subsystem, componentName, entityPath, recordId).map(_.body).getOrElse(fail("component entity detail admin is missing"))
       val edit = StaticFormAppRenderer.renderComponentAdminEntityEdit(subsystem, componentName, entityPath, recordId).map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
@@ -317,6 +329,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       secondPage should include ("Page 2")
       secondPage should include ("page=1&amp;pageSize=1")
       secondPage should include ("page-item disabled\"><a class=\"page-link\" href=\"/web/notice-board/admin/entities/notice?page=3&amp;pageSize=1\">Next")
+      totalPage should include ("total 2")
+      totalPage should include ("includeTotal=true")
       detail should include ("board update")
       detail should include ("alice")
       edit should include ("name=\"title\"")
@@ -471,6 +485,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           "audit",
           StaticFormAppRenderer.PageRequest(page = 2, pageSize = 1)
         ).map(_.body).getOrElse(fail("component data second page admin is missing"))
+        val totalPage = StaticFormAppRenderer.renderComponentAdminDataType(
+          fixture.subsystem,
+          "notice_board",
+          "audit",
+          StaticFormAppRenderer.PageRequest(page = 1, pageSize = 1, includeTotal = true),
+          WebDescriptor(admin = Map("data.audit" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional)))
+        ).map(_.body).getOrElse(fail("component data total page admin is missing"))
         val detail = StaticFormAppRenderer.renderComponentAdminDataDetail(fixture.subsystem, "notice_board", "audit", "audit_1").map(_.body).getOrElse(fail("component data detail admin is missing"))
         val edit = StaticFormAppRenderer.renderComponentAdminDataEdit(fixture.subsystem, "notice_board", "audit", "audit_1").map(_.body).getOrElse(fail("component data edit admin is missing"))
         val newly = StaticFormAppRenderer.renderComponentAdminDataNew(fixture.subsystem, "notice_board", "audit").map(_.body).getOrElse(fail("component data new admin is missing"))
@@ -481,6 +502,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         firstPage should include ("page=2&amp;pageSize=1")
         secondPage should include ("Page 2")
         secondPage should include ("page-item disabled\"><a class=\"page-link\" href=\"/web/notice-board/admin/data/audit?page=3&amp;pageSize=1\">Next")
+        totalPage should include ("total 2")
+        totalPage should include ("includeTotal=true")
         detail should include ("created")
         detail should include ("alice")
         edit should include ("name=\"action\"")
@@ -608,6 +631,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       entityListRecord.getInt("page") shouldBe Some(1)
       entityListRecord.getInt("pageSize") shouldBe Some(20)
       entityListRecord.getBoolean("hasNext") shouldBe Some(false)
+      entityListRecord.getInt("total") shouldBe None
+      entityListRecord.getBoolean("totalAvailable") shouldBe Some(false)
+      val ignoredTotalEntityListRecord = _admin_record_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "includeTotal" -> "true")
+      ignoredTotalEntityListRecord.getInt("total") shouldBe None
+      ignoredTotalEntityListRecord.getBoolean("totalAvailable") shouldBe Some(false)
+      val totalEntityListRecord = _admin_record_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
+      totalEntityListRecord.getInt("total") shouldBe Some(2)
+      totalEntityListRecord.getBoolean("totalAvailable") shouldBe Some(true)
       val pagedEntityListRecord = _admin_record_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "page" -> "2", "pageSize" -> "5")
       pagedEntityListRecord.getInt("page") shouldBe Some(2)
       pagedEntityListRecord.getInt("pageSize") shouldBe Some(5)
@@ -638,6 +669,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         val dataListRecord = _admin_record_response(dataFixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit")
         dataListRecord.getString("kind") shouldBe Some("data.list")
         dataListRecord.getAny("ids").map(_.toString).getOrElse("") should include ("audit_1")
+        dataListRecord.getInt("total") shouldBe None
+        val totalDataListRecord = _admin_record_response(dataFixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
+        totalDataListRecord.getInt("total") shouldBe Some(2)
+        totalDataListRecord.getBoolean("totalAvailable") shouldBe Some(true)
         val dataReadRecord = _admin_record_response(dataFixture.subsystem, "data", "read", "component" -> "notice-board", "data" -> "audit", "id" -> "audit_1")
         dataReadRecord.getString("kind") shouldBe Some("data.read")
         dataReadRecord.getString("fields").getOrElse("") should include ("actor=alice")
@@ -665,6 +700,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       viewReadRecord.getInt("page") shouldBe Some(1)
       viewReadRecord.getInt("pageSize") shouldBe Some(20)
       viewReadRecord.getBoolean("hasNext") shouldBe Some(false)
+      viewReadRecord.getInt("total") shouldBe None
+      val totalViewReadRecord = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
+      totalViewReadRecord.getInt("total") shouldBe Some(2)
+      totalViewReadRecord.getBoolean("totalAvailable") shouldBe Some(true)
       val pagedViewReadRecord = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "page" -> "4", "pageSize" -> "9")
       pagedViewReadRecord.getInt("page") shouldBe Some(4)
       pagedViewReadRecord.getInt("pageSize") shouldBe Some(9)
@@ -685,6 +724,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       aggregateReadRecord.getString("kind") shouldBe Some("aggregate.read")
       aggregateReadRecord.getString("fields").getOrElse("") should include ("notice aggregate")
       aggregateReadRecord.getAny("values").map(_.toString).getOrElse("") should include ("notice aggregate")
+      aggregateReadRecord.getInt("total") shouldBe None
+      val totalAggregateReadRecord = _admin_record_response(aggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
+      totalAggregateReadRecord.getInt("total") shouldBe Some(2)
+      totalAggregateReadRecord.getBoolean("totalAvailable") shouldBe Some(true)
       val pagedAggregateReadRecord = _admin_record_response(aggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "page" -> "5", "pageSize" -> "11")
       pagedAggregateReadRecord.getInt("page") shouldBe Some(5)
       pagedAggregateReadRecord.getInt("pageSize") shouldBe Some(11)
