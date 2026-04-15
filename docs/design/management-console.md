@@ -19,6 +19,16 @@ View surfaces are read-only. Aggregate surfaces expose list/detail reads and
 operation links; create and command behavior is executed through component
 Operations.
 
+Aggregate pages classify discovered Operations as:
+
+- `create`: create Operations declared by the Aggregate definition.
+- `read`: read/get/load/search Operations for the Aggregate.
+- `update`: update Operations and Aggregate command Operations.
+
+Aggregate instance pages expose only read/update Operations and prefill the
+aggregate id in the Operation form. Aggregate creation is intentionally rooted
+at the Aggregate page rather than an instance page.
+
 ## Query Responses
 
 Admin list Operations return `items`. Each item has:
@@ -70,6 +80,16 @@ value so an unchecked field still submits a value. Numeric and date-like
 datatypes are rendered with HTML `number` and `date` controls when the
 Operation parameter datatype exposes that intent.
 
+The initial type mapping is intentionally conservative:
+
+- boolean datatypes become checkboxes.
+- numeric datatypes become number inputs.
+- date/datetime/timestamp datatypes become date or datetime-local inputs.
+- password/secret/token-like parameter names become password inputs.
+- text/body/content/description/comment/message-like parameters become textarea controls.
+- enum/select, multi-value, hidden fields, and system fields require explicit
+  descriptor or CML support before they are generated automatically.
+
 Form execution result pages receive properties derived from the Operation
 response:
 
@@ -82,6 +102,22 @@ response:
 HTML templates use `textus-*` widgets such as `textus-result-view`,
 `textus-result-table`, `textus-property-list`, and `textus-error-panel` to
 render these properties without adding template control syntax.
+
+## Result Transitions
+
+Plain HTML form submissions must be usable without JavaScript. The baseline
+behavior is:
+
+- execute the Operation through the Form path.
+- render a result page that includes the submitted Operation result and error
+  information.
+- provide an explicit link back to the Operation form and the component form
+  index.
+
+Redirect-after-success, redirect-after-failure, and inline validation error
+redisplay are future descriptor-controlled behaviors. They should be configured
+per form or per Operation. JSON Form APIs are separate from this HTML Form
+flow and must not depend on browser redirect behavior.
 
 ## Display Labels
 

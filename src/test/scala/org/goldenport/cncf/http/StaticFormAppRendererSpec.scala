@@ -641,6 +641,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("create-notice-aggregate")
       html should include ("approve-notice-aggregate")
       html should include ("read-notice-aggregate")
+      html should include ("Create operations construct a new aggregate root")
+      html should include ("Update and command operations mutate aggregate state")
+      html should include ("btn-warning")
       html should include ("/form/notice-board/notice-aggregate/create-notice-aggregate")
       html should include ("/form/notice-board/notice-aggregate/approve-notice-aggregate")
       html should include ("/web/notice-board/admin/aggregates")
@@ -657,6 +660,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("value")
       html should include ("notice aggregate")
       html should include ("Instance operations")
+      html should include ("aggregate id prefilled")
       html should include ("/form/notice-board/notice-aggregate/approve-notice-aggregate?id=notice_1")
       html should include ("/form/notice-board/notice-aggregate/read-notice-aggregate?id=notice_1")
       html should include ("/web/notice-board/admin/aggregates/notice-aggregate")
@@ -1124,6 +1128,24 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Additional fields")
     }
 
+    "render textarea and password controls for operation parameters" in {
+      val subsystem = _form_type_fixture_subsystem()
+
+      val html = StaticFormAppRenderer.renderOperationForm(
+        subsystem,
+        "notice_board",
+        "notice",
+        "post_secret_notice",
+        values = Map("body" -> "hello", "accessToken" -> "abc")
+      ).map(_.body).getOrElse(fail("operation form is missing"))
+
+      html should include ("<textarea")
+      html should include ("name=\"body\"")
+      html should include ("hello")
+      html should include ("type=\"password\"")
+      html should include ("name=\"accessToken\"")
+    }
+
     "merge schema-driven form fields with additional fields on submit" in {
       val subsystem = _aggregate_http_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
@@ -1507,6 +1529,28 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
                 _NoopOperation("read-notice-aggregate"),
                 _NoopOperation("create-notice-aggregate"),
                 _NoopOperation("approve-notice-aggregate", Vector("id"))
+              )
+            )
+          )
+        )
+      )
+    )
+
+  private def _form_type_fixture_subsystem(): Subsystem = {
+    val component = new org.goldenport.cncf.component.Component() {}
+    _initialize_component("notice_board", component, _form_type_protocol())
+    DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+  }
+
+  private def _form_type_protocol(): Protocol =
+    Protocol(
+      services = spec.ServiceDefinitionGroup(
+        Vector(
+          spec.ServiceDefinition(
+            name = "notice",
+            operations = spec.OperationDefinitionGroup(
+              operations = NonEmptyVector.of(
+                _NoopOperation("post-secret-notice", Vector("body", "accessToken"))
               )
             )
           )

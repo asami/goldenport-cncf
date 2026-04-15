@@ -212,12 +212,29 @@ object StaticFormAppRenderer {
   private def _operation_parameter_input_type(
     parameter: org.goldenport.protocol.spec.ParameterDefinition
   ): String = {
+    val name = parameter.name.toLowerCase
     val datatype = Option(parameter.domain.datatype).map(_.toString.toLowerCase).getOrElse("")
     if (datatype.contains("bool")) "checkbox"
+    else if (_operation_parameter_multiline(name, datatype)) "textarea"
+    else if (name.contains("password") || name.contains("secret") || name.contains("token")) "password"
     else if (datatype.contains("int") || datatype.contains("long") || datatype.contains("decimal") || datatype.contains("number")) "number"
+    else if (datatype.contains("datetime") || datatype.contains("timestamp")) "datetime-local"
     else if (datatype.contains("date")) "date"
     else "text"
   }
+
+  private def _operation_parameter_multiline(
+    name: String,
+    datatype: String
+  ): Boolean =
+    datatype.contains("text") ||
+      datatype.contains("memo") ||
+      datatype.contains("document") ||
+      name.contains("body") ||
+      name.contains("content") ||
+      name.contains("description") ||
+      name.contains("comment") ||
+      name.contains("message")
 
   private def _operation_parameter_control(
     name: String,
@@ -234,6 +251,12 @@ object StaticFormAppRenderer {
          |  <input type="hidden" name="${_escape(name)}" value="false">
          |  <input class="form-check-input" id="${_escape(id)}" name="${_escape(name)}" type="checkbox" value="true"${checked}${required}>
          |  <label class="form-check-label" for="${_escape(id)}">${_escape(name)}</label>
+         |  <div class="form-text">${_escape(help)}</div>
+         |</div>""".stripMargin
+    } else if (inputType == "textarea") {
+      s"""<div class="mb-3">
+         |  <label class="form-label" for="${_escape(id)}">${_escape(name)}</label>
+         |  <textarea class="form-control" id="${_escape(id)}" name="${_escape(name)}" rows="5"${required}>${_escape(value)}</textarea>
          |  <div class="form-text">${_escape(help)}</div>
          |</div>""".stripMargin
     } else {
@@ -989,11 +1012,22 @@ object StaticFormAppRenderer {
     if (bindings.isEmpty) {
       "<p>No aggregate operations are currently exposed.</p>"
     } else {
+      val grouped = bindings.groupBy(_.kind).withDefaultValue(Vector.empty)
+      val summary = Vector(
+        "create" -> "Create operations construct a new aggregate root.",
+        "read" -> "Read operations retrieve aggregate state.",
+        "update" -> "Update and command operations mutate aggregate state."
+      ).map { case (kind, text) =>
+        val count = grouped(kind).size
+        s"""<li><strong>${_escape(kind)}</strong>: ${count} ${_escape(text)}</li>"""
+      }.mkString("\n")
       val rows = bindings.map { binding =>
         val path = _form_operation_path(componentPath, binding.service, binding.operation)
-        s"""<tr><td>${_escape(binding.kind)}</td><td>${_escape(binding.service)}</td><td>${_escape(binding.operation)}</td><td><a href="${_escape(path)}">Open form</a></td></tr>"""
+        val style = if (binding.kind == "create") "btn-primary" else if (binding.kind == "update") "btn-warning" else "btn-outline-secondary"
+        s"""<tr><td>${_escape(binding.kind)}</td><td>${_escape(binding.service)}</td><td>${_escape(binding.operation)}</td><td><a class="btn btn-sm ${style}" href="${_escape(path)}">Open form</a></td></tr>"""
       }.mkString("\n")
-      s"""<div class="table-responsive"><table class="table table-sm">
+      s"""<ul>${summary}</ul>
+         |<div class="table-responsive"><table class="table table-sm">
          |  <thead><tr><th>Kind</th><th>Service</th><th>Operation</th><th>Action</th></tr></thead>
          |  <tbody>${rows}</tbody>
          |</table></div>""".stripMargin
@@ -1013,9 +1047,11 @@ object StaticFormAppRenderer {
     } else {
       val rows = bindings.map { binding =>
         val path = _form_operation_path(componentPath, binding.service, binding.operation, Map("id" -> id))
-        s"""<tr><td>${_escape(binding.kind)}</td><td>${_escape(binding.service)}</td><td>${_escape(binding.operation)}</td><td><a href="${_escape(path)}">Open form</a></td></tr>"""
+        val style = if (binding.kind == "update") "btn-warning" else "btn-outline-secondary"
+        s"""<tr><td>${_escape(binding.kind)}</td><td>${_escape(binding.service)}</td><td>${_escape(binding.operation)}</td><td><a class="btn btn-sm ${style}" href="${_escape(path)}">Open form</a></td></tr>"""
       }.mkString("\n")
-      s"""<div class="table-responsive"><table class="table table-sm">
+      s"""<p>Instance operations are opened as normal Operation forms with the aggregate id prefilled.</p>
+         |<div class="table-responsive"><table class="table table-sm">
          |  <thead><tr><th>Kind</th><th>Service</th><th>Operation</th><th>Action</th></tr></thead>
          |  <tbody>${rows}</tbody>
          |</table></div>""".stripMargin
