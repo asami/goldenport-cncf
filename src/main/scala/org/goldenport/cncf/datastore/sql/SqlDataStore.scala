@@ -10,14 +10,27 @@ import org.goldenport.record.Record
 import org.goldenport.record.RecordPresentable
 import org.goldenport.record.io.RecordDecoder
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.datastore.{
+  DataStore,
+  OrderDirection,
+  Query,
+  QueryDirective,
+  QueryLimit,
+  QueryOrder,
+  QueryProjection,
+  ResultRange,
+  SearchResult,
+  SearchableDataStore,
+  TotalCountCapability
+}
 import org.goldenport.cncf.unitofwork.{CommitRecorder, PrepareResult, TransactionContext}
 
 /*
  * @since   Mar. 12, 2026
  *  version Mar. 19, 2026
  *  version Mar. 31, 2026
- * @version Apr.  3, 2026
+ *  version Apr.  3, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -25,7 +38,7 @@ class SqlDataStore(
   datasource: DataSource,
   recorder: CommitRecorder = CommitRecorder.noop,
   config: SqlDataStore.Config = SqlDataStore.Config()
-) extends DataStore {
+) extends DataStore with SearchableDataStore {
   import DataStore.*
   private val _record_decoder = new RecordDecoder()
 
@@ -95,6 +108,25 @@ class SqlDataStore(
         if (exists) _delete(conn, collection, id) else Consequence.unit
       }
     }
+
+  def search(
+    collection: CollectionId,
+    directive: QueryDirective
+  ): Consequence[SearchResult] =
+    directive.query match {
+      case Query.Empty =>
+        _with_connection { conn =>
+          _table_exists(conn, collection).flatMap { exists =>
+            if (exists)
+              _search_empty(conn, collection, directive)
+            else
+              Consequence.success(SearchResult(Vector.empty, ResultRange.Exact, None))
+          }
+        }
+    }
+
+  override def totalCountCapability(collection: CollectionId): TotalCountCapability =
+    TotalCountCapability.Supported
 
   def prepare(tx: TransactionContext): PrepareResult =
     record_prepare(recorder)
@@ -398,6 +430,82 @@ class SqlDataStore(
         stmt.close()
       }
     }
+
+  private def _search_empty(
+    conn: Connection,
+    collection: CollectionId,
+    directive: QueryDirective
+  ): Consequence[SearchResult] =
+    Consequence {
+      val sql = _search_sql(collection, directive)
+      val stmt = conn.createStatement()
+      try {
+        val rs = stmt.executeQuery(sql)
+        try {
+          val buf = Vector.newBuilder[Record]
+          while (rs.next()) {
+            buf += _record_from_result_set(rs)
+          }
+          val records = buf.result()
+          val range = directive.limit match {
+            case QueryLimit.Unbounded => ResultRange.Exact
+            case QueryLimit.Limit(n) => ResultRange.Limited(n)
+          }
+          SearchResult(records, range, None)
+        } finally {
+          rs.close()
+        }
+      } finally {
+        stmt.close()
+      }
+    }
+
+  private def _search_sql(
+    collection: CollectionId,
+    directive: QueryDirective
+  ): String = {
+    val select = directive.projection match {
+      case QueryProjection.All =>
+        "*"
+      case QueryProjection.Fields(names) if names.isEmpty =>
+        "*"
+      case QueryProjection.Fields(names) =>
+        val normalized = names.map(_column_name).distinct
+        ("id" +: normalized.filterNot(_ == "id")).map(dialect.quote_identifier).mkString(", ")
+    }
+    val order = directive.order match {
+      case QueryOrder.None =>
+        ""
+      case QueryOrder.By(field, OrderDirection.Asc) =>
+        s" ORDER BY ${dialect.quote_identifier(_column_name(field))} ASC"
+      case QueryOrder.By(field, OrderDirection.Desc) =>
+        s" ORDER BY ${dialect.quote_identifier(_column_name(field))} DESC"
+    }
+    val limit = directive.limit match {
+      case QueryLimit.Unbounded =>
+        ""
+      case QueryLimit.Limit(n) =>
+        s" LIMIT ${math.max(0, n)}"
+    }
+    s"SELECT $select FROM ${dialect.quote_identifier(_table_name(collection))}$order$limit"
+  }
+
+  private def _record_from_result_set(
+    rs: java.sql.ResultSet
+  ): Record = {
+    val md = rs.getMetaData
+    val count = md.getColumnCount
+    val values = (1 to count).toVector.map { i =>
+      val rawname = md.getColumnLabel(i)
+      val name = if (config.normalizeColumnNames) _to_property_name(rawname) else rawname
+      val value = _decode_column_value(Option(rs.getObject(i)).getOrElse(""))
+      name -> value
+    }
+    Record.create(values)
+  }
+
+  private def _column_name(name: String): String =
+    if (config.normalizeColumnNames) _to_column_name(name) else name
 
   private def _to_column_name(name: String): String = {
     val b = new StringBuilder(name.length + 8)

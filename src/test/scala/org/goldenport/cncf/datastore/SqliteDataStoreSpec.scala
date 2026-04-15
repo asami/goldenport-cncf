@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 12, 2026
  *  version Mar. 12, 2026
  *  version Apr.  3, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqliteDataStoreSpec
@@ -139,6 +140,53 @@ class SqliteDataStoreSpec
         Then("the record is removed")
         deleted should be_success
         deleted shouldBe Consequence.success(None)
+      }
+    }
+
+    "search records with order, limit, and projection" in {
+      val path = Files.createTempFile("cncf-sqlite-search", ".db").toString
+      val datastore = SqlDataStore.sqlite(path)
+      val collection = DataStore.CollectionId("searchable")
+      val ctx = ExecutionContext.create()
+      given ExecutionContext = ctx
+
+      Given("a sqlite datastore with multiple records")
+      datastore.create(
+        collection,
+        DataStore.StringEntryId("a1"),
+        Record.data("id" -> "a1", "name" -> "alpha", "priority" -> 2)
+      ) should be_success
+      datastore.create(
+        collection,
+        DataStore.StringEntryId("b2"),
+        Record.data("id" -> "b2", "name" -> "bravo", "priority" -> 1)
+      ) should be_success
+      datastore.create(
+        collection,
+        DataStore.StringEntryId("c3"),
+        Record.data("id" -> "c3", "name" -> "charlie", "priority" -> 3)
+      ) should be_success
+
+      When("searching with projection, order, and limit")
+      val result = datastore.search(
+        collection,
+        QueryDirective(
+          query = Query.Empty,
+          projection = QueryProjection.Fields(Vector("name")),
+          order = QueryOrder.By("priority", OrderDirection.Asc),
+          limit = QueryLimit.Limit(2)
+        )
+      )
+
+      Then("the requested page is returned from sqlite")
+      result should be_success
+      result match {
+        case Consequence.Success(SearchResult(records, ResultRange.Limited(2), None)) =>
+          records.map(_.getString("id")) shouldBe Vector(Some("b2"), Some("a1"))
+          records.map(_.getString("name")) shouldBe Vector(Some("bravo"), Some("alpha"))
+          records.foreach(_.getString("priority") shouldBe None)
+        case other =>
+          fail(s"unexpected result: $other")
       }
     }
   }
