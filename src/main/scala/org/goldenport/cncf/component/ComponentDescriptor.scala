@@ -14,7 +14,8 @@ import org.simplemodeling.model.datatype.EntityCollectionId
  *
  * @since   Mar. 27, 2026
  *  version Apr.  8, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Apr. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentDescriptor(

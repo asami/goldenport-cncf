@@ -24,6 +24,7 @@ import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
+import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, XString}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentDescriptor}
@@ -492,6 +493,46 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Create")
       html should include ("Cancel")
       html should include (s"/web/${componentPath}/admin/entities/sales-order")
+    }
+
+    "render component entity new page from CML schema descriptor without WebDescriptor" in {
+      val descriptor = ComponentDescriptor(
+        componentName = Some("notice_board"),
+        entityRuntimeDescriptors = Vector(
+          EntityRuntimeDescriptor(
+            entityName = "notice",
+            collectionId = EntityCollectionId("sys", "sys", "notice"),
+            memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+            partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+            maxPartitions = 4,
+            maxEntitiesPerPartition = 100,
+            schema = Some(_schema(Vector(
+              "id" -> WebColumn.empty,
+              "title" -> WebColumn.empty,
+              "body" -> WebColumn(
+                controlType = Some("textarea"),
+                readonly = true,
+                placeholder = Some("Write the notice body."),
+                help = Some("Notice body shown on the board.")
+              )
+            )))
+          )
+        )
+      )
+      val component = TestComponentFactory
+        .create("notice_board", Protocol.empty)
+        .withComponentDescriptors(Vector(descriptor))
+      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+
+      val html = StaticFormAppRenderer.renderComponentAdminEntityNew(subsystem, "notice_board", "notice").map(_.body).getOrElse(fail("component entity new admin is missing"))
+
+      html should include ("name=\"id\"")
+      html should include ("name=\"title\"")
+      html should include ("name=\"body\"")
+      html should include ("<textarea")
+      html should include ("readonly")
+      html should include ("placeholder=\"Write the notice body.\"")
+      html should include ("Notice body shown on the board.")
     }
 
     "render component entity update submission result contract" in {
@@ -2019,7 +2060,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           memoryPolicy = EntityMemoryPolicy.LoadToMemory,
           partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
           maxPartitions = 4,
-          maxEntitiesPerPartition = 100
+          maxEntitiesPerPartition = 100,
+          schema = Some(_schema("id", "title", "author"))
         )
       )
     )
@@ -2050,6 +2092,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     subsystem: Subsystem
   ): Component =
     subsystem.components.find(_.name == "notice_board").getOrElse(fail("notice fixture component is missing"))
+
+  private def _schema(names: String*): Schema =
+    Schema(names.toVector.map { name =>
+      Column(BaseContent.simple(name), ValueDomain(datatype = XString, multiplicity = Multiplicity.One))
+    })
+
+  private def _schema(fields: Vector[(String, WebColumn)]): Schema =
+    Schema(fields.toVector.map {
+      case (name, web) =>
+        Column(BaseContent.simple(name), ValueDomain(datatype = XString, multiplicity = Multiplicity.One), web = web)
+    })
 
   private def _notice_collection(
     entities: Vector[_NoticeEntity]

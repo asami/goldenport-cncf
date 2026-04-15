@@ -231,10 +231,30 @@ Component-qualified selectors such as `notice-board.entity.notice` are also
 accepted. The unqualified form applies to the named surface and collection
 across components.
 
-`admin.<surface>.<collection>.fields` declares the form/detail field schema for
-Management Console CRUD pages. This is the preferred design-time source for
-create, update, and detail rendering. If `fields` is absent, the current
-renderer falls back to best-effort inference from existing read/list results.
+`admin.<surface>.<collection>.fields` declares Web UI field selection and
+presentation overrides for Management Console pages. It is not the primary
+model schema. The primary field source is `EntityRuntimeDescriptor.schema`,
+an effective static schema normally built from CML-derived
+`org.goldenport.schema.Schema` metadata on generated entity/value/operation
+companion objects. If that schema lacks necessary information, the schema model
+itself should be extended rather than adding parallel field-list metadata. If no
+schema is available, the renderer falls back to best-effort inference from
+existing read/list results.
+
+The composition point is `WebSchemaResolver`. It resolves
+`EntityRuntimeDescriptor.schema` and WebDescriptor controls into a Web-facing
+schema before rendering. Renderers should consume the resolved Web schema rather
+than directly reading CML, generated companions, component descriptor, or
+WebDescriptor structures.
+
+Portable Web hints belong to `org.goldenport.schema.Schema` rather than to a
+parallel CNCF-only field list. The initial carrier is `Schema.Column.web`, which
+can hold control type, required override, hidden/system flags, select values,
+multiple selection, readonly intent, placeholder, and help text. CNCF consumes
+the same vocabulary through `WebDescriptor.FormControl`, and operation
+parameters can carry it through `ParameterDefinition.web`. Missing presentation
+needs should be added to the shared Schema model first and then mapped through
+`WebSchemaResolver`.
 
 Field entries may be short strings or records:
 
@@ -267,12 +287,14 @@ admin:
 Admin controls reuse the same minimum control vocabulary as operation forms:
 `type`, `required`, `hidden`, `system`, `values`, and `multiple`.
 
-For Phase 12, `fields` is implemented for `entity` and `data` create/detail/edit
-pages. `view` and `aggregate` admin pages remain read-oriented, but their
-instance detail pages also use descriptor fields for display order and for
-design-time fields that are absent from the current record. Editable
-view/aggregate command forms will be promoted to the same CRUD form pipeline in
-a later pass.
+For Phase 12, resolved Web schema is used for `entity` create/detail/edit pages
+when available, so the pages can render useful controls even when the collection
+is empty and no Web Descriptor is present. `fields` can narrow or reorder that
+schema. `data` still uses descriptor fields or read/list inference because it
+has no CML entity schema. `view` and `aggregate` admin pages remain read-oriented,
+but their list/detail pages also use the resolved schema of their backing entity
+for display order before applying descriptor overrides. Editable view/aggregate
+command forms will be promoted to the same CRUD form pipeline in a later pass.
 
 Aggregate operation forms can use operation-specific admin field controls with
 one additional selector segment:

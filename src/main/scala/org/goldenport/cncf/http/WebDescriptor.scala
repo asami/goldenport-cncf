@@ -160,7 +160,10 @@ object WebDescriptor {
     system: Boolean = false,
     values: Vector[String] = Vector.empty,
     multiple: Boolean = false,
-    required: Option[Boolean] = None
+    required: Option[Boolean] = None,
+    readonly: Boolean = false,
+    placeholder: Option[String] = None,
+    help: Option[String] = None
   )
 
   enum TotalCountPolicy {
@@ -305,7 +308,10 @@ object WebDescriptor {
       system = _boolean(record, "system").getOrElse(false),
       values = _string_vector(record, "values"),
       multiple = _boolean(record, "multiple").getOrElse(false),
-      required = _boolean(record, "required")
+      required = _boolean(record, "required"),
+      readonly = _boolean(record, "readonly").orElse(_boolean(record, "readOnly")).orElse(_boolean(record, "read-only")).getOrElse(false),
+      placeholder = _string(record, "placeholder"),
+      help = _string(record, "help")
     )
 
   private def _apps(record: Record): Vector[App] =

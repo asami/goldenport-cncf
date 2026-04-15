@@ -2,15 +2,19 @@ package org.goldenport.cncf.entity.runtime
 
 import org.simplemodeling.model.datatype.EntityCollectionId
 import org.goldenport.cncf.security.{EntityApplicationDomain, EntityOperationKind, EntityUsageKind}
+import org.goldenport.schema.Schema
 
 /*
- * Static runtime metadata for an entity.
+ * Static metadata for CNCF entity operations.
  *
- * This is intended to become the descriptor-side contract used by CNCF
- * bootstrap instead of program-side ad hoc providers.
+ * It aggregates runtime policy and the effective static entity schema used by
+ * Web/Admin/Form and other meta operations. The schema is normally derived from
+ * the generated companion Schema and may be adjusted by descriptor or
+ * application policy before being stored here.
  *
  * @since   Mar. 27, 2026
- * @version Mar. 27, 2026
+ *  version Mar. 27, 2026
+ * @version Apr. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityRuntimeDescriptor(
@@ -21,12 +25,16 @@ final case class EntityRuntimeDescriptor(
   maxPartitions: Int,
   maxEntitiesPerPartition: Int,
   workingSet: Option[WorkingSetDescriptor] = None,
+  schema: Option[Schema] = None,
   aggregateNames: Vector[String] = Vector.empty,
   viewNames: Vector[String] = Vector.empty,
   usageKind: EntityUsageKind = EntityUsageKind.default,
   operationKind: EntityOperationKind = EntityOperationKind.default,
   applicationDomain: EntityApplicationDomain = EntityApplicationDomain.default
 ) {
+  def withSchema(p: Schema): EntityRuntimeDescriptor =
+    copy(schema = Some(p))
+
   def toPlan: EntityRuntimePlan[Any] =
     EntityRuntimePlan(
       entityName = entityName,

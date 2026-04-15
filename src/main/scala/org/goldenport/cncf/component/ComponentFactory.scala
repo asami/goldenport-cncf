@@ -26,6 +26,7 @@ import org.goldenport.cncf.entity.view.{Browser, ContextualBrowserCount, Context
 import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.statemachine.{CollectionStateMachinePlanner, CollectionStateMachinePlannerProvider, CollectionTransitionRule, CollectionTransitionRuleProvider, TransitionTrigger, TransitionRule}
 import org.goldenport.cncf.naming.NamingConventions
+import org.goldenport.schema.Schema
 import scala.util.Try
 
 /*
@@ -33,7 +34,7 @@ import scala.util.Try
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Mar. 31, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -71,6 +72,7 @@ final class ComponentFactory(
   }
 
   private def _bootstrap_collections(component: Component): Component = {
+    _enrich_component_descriptors(component)
     val storesnapshot = scala.collection.concurrent.TrieMap.empty[EntityId, Any]
     // One EntitySpace per component. All collections in the component share it.
     val entityspace = component.entitySpace
@@ -93,6 +95,31 @@ final class ComponentFactory(
     _bootstrap_event_reception(component)
     component
   }
+
+  private def _enrich_component_descriptors(
+    component: Component
+  ): Unit = {
+    val descriptors = component.componentDescriptors.map { descriptor =>
+      descriptor.copy(
+        entityRuntimeDescriptors = descriptor.entityRuntimeDescriptors.map(_enrich_entity_runtime_descriptor(component, _))
+      )
+    }
+    if (descriptors.nonEmpty)
+      component.withComponentDescriptors(descriptors)
+  }
+
+  private def _enrich_entity_runtime_descriptor(
+    component: Component,
+    descriptor: EntityRuntimeDescriptor
+  ): EntityRuntimeDescriptor =
+    descriptor.schema match {
+      case Some(_) => descriptor
+      case None =>
+        _generated_entity_module(component, descriptor.entityName)
+          .flatMap(_extract_schema)
+          .map(descriptor.withSchema)
+          .getOrElse(descriptor)
+    }
 
   private def _bootstrap_event_reception(
     component: Component
@@ -1186,6 +1213,13 @@ final class ComponentFactory(
           .flatMap(_extract_collection_id)
       }
       .getOrElse(EntityCollectionId("sys", "sys", entityname))
+
+  private def _extract_schema(
+    module: AnyRef
+  ): Option[Schema] =
+    Try(module.getClass.getMethod("schema").invoke(module)).toOption.collect {
+      case s: Schema => s
+    }
 
   private def _bootstrap_entity_persistent(
     component: Component,

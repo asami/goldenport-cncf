@@ -75,17 +75,34 @@ sampling existing records. Sampling is useful as a fallback, but it fails for
 empty collections and cannot express HTML control choices such as textarea,
 select, required, hidden, or system fields.
 
-The current direction is:
+The direction was refined after the admin field schema was introduced:
 
-- Web Descriptor `admin.<surface>.<collection>.fields` is the design-time
-  schema for admin CRUD forms.
+- `EntityRuntimeDescriptor.schema` is the primary source for Web-facing fields.
+  It is an effective static schema normally built from CML-derived
+  `org.goldenport.schema.Schema` on generated entity/value/operation companion
+  objects.
+- `WebSchemaResolver` is the composition layer that merges domain schema,
+  read/list fallback metadata, and WebDescriptor controls before rendering.
+- Parallel schema field-list metadata was removed. Missing schema information
+  should be handled by extending `org.goldenport.schema.Schema`.
+- The first shared Schema extension is `Schema.Column.web`, which carries
+  portable Web hints such as control type, required override, hidden/system
+  flags, select values, multiple selection, readonly intent, placeholder, and
+  help text. `ParameterDefinition.web` now uses the same vocabulary for
+  Operation parameters, and CNCF maps both through `WebSchemaResolver`.
+- `WebDescriptor.FormControl` accepts the same Web hint fields, so descriptor
+  overrides can adjust readonly state, placeholder text, and field help without
+  introducing another schema model.
+- Web Descriptor `admin.<surface>.<collection>.fields` is a Web UI override for
+  field selection, ordering, and presentation, not the primary model schema.
 - `controls` reuses the operation form control vocabulary.
-- Runtime rendering prefers descriptor fields and falls back to read/list
-  inference only when the descriptor is silent.
+- Runtime rendering consumes resolved Web schema, applies Web Descriptor field
+  overrides when present, and falls back to read/list inference only when no
+  schema is available.
 - The implemented CRUD path covers entity and data surfaces first.
 - View and aggregate surfaces are still read-oriented, but instance detail pages
-  now use descriptor fields for display ordering and empty design-time fields.
-  This keeps the same admin surface contract available before editable
+  now use resolved backing-entity schema and Web Descriptor fields for display
+  ordering. This keeps the same admin surface contract available before editable
   view/aggregate command forms are promoted into the CRUD form pipeline.
 - View and aggregate list pages can also use descriptor fields as table columns
   when the read result carries field-shaped item values. The fixed ID/Value table

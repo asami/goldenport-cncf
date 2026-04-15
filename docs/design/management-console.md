@@ -66,9 +66,30 @@ Form HTML pages live under `/form`. JSON-style form submission APIs live under
 `/form-api` and return the Operation response directly without HTML rendering
 or browser redirects.
 
+Form schemas are resolved through `WebSchemaResolver`. The resolver composes
+entity operation metadata from `EntityRuntimeDescriptor.schema` with
+WebDescriptor presentation overrides, then passes a Web-facing schema to the
+renderer. `EntityRuntimeDescriptor.schema` is the static effective entity schema
+for entity operations; it is normally derived from the generated companion
+`org.goldenport.schema.Schema` and may later be adjusted by application or
+descriptor policy before Web rendering.
+
+Web-specific field hints are carried on the shared Schema model as
+`Schema.Column.web`. Management Console rendering treats these hints as the
+portable CML-to-Web path and then applies WebDescriptor overrides at the
+resolver layer. CNCF should not add a second schema field-list model when the
+shared Schema is missing information.
+
+Operation parameters use the same portable vocabulary through
+`ParameterDefinition.web`. This keeps Entity fields and Operation form
+parameters on one Web schema path: generated CML metadata supplies the default
+control shape, `WebSchemaResolver` normalizes it, and WebDescriptor controls may
+override deployment-specific presentation.
+
 Operation forms are generated from
-`OperationDefinition.specification.request.parameters` when available. Each
-parameter becomes a normal HTML input with:
+`OperationDefinition.specification.request.parameters` when available and are
+also normalized through the Web schema resolver. Each parameter becomes a normal
+HTML input with:
 
 - `name` from the parameter name
 - `type` derived from the parameter datatype
@@ -94,7 +115,7 @@ The initial type mapping is intentionally conservative:
 - enum/select, multi-value, hidden fields, and system fields require explicit
   descriptor or CML support before they are generated automatically.
 
-Descriptor-level form controls may override generated controls:
+WebDescriptor-level form controls may override generated controls:
 
 - `type`: `text`, `textarea`, `select`, `checkbox`, `hidden`, or another HTML
   input type.
@@ -103,6 +124,9 @@ Descriptor-level form controls may override generated controls:
 - `hidden`: renders a hidden input.
 - `system`: marks a control as framework-provided for future policy checks.
 - `required`: overrides multiplicity-derived requiredness.
+- `readonly`: renders non-editable controls where HTML supports it.
+- `placeholder`: supplies input placeholder text.
+- `help`: supplies user-facing field help text.
 
 Form execution result pages receive properties derived from the Operation
 response:

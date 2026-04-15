@@ -167,7 +167,12 @@ object StaticFormAppRenderer {
           formDescriptor.map(_.controls).getOrElse(Map.empty)
         else
           _admin_field_controls(adminFields)
-      val controls = _operation_form_controls(operation, values, descriptorControls)
+      val webSchema = WebSchemaResolver.resolveOperationControls(
+        _operation_selector(component.name, service.name, operation.name),
+        operation.specification.request.parameters.toVector,
+        descriptorControls
+      )
+      val controls = _operation_form_controls(webSchema, values)
       val errorPanel = _form_error_panel(values)
       Page(_simple_page(
         title = s"${_escape(component.name)}.${_escape(service.name)}.${_escape(operation.name)}",
@@ -216,7 +221,7 @@ object StaticFormAppRenderer {
     values: Map[String, String],
     fieldsId: String,
     placeholder: String,
-    controlDescriptors: Map[String, WebDescriptor.FormControl] = Map.empty
+    webFields: Map[String, WebSchemaResolver.ResolvedWebField] = Map.empty
   ): String =
     if (schemaFields.isEmpty)
       _admin_fields_textarea(values, fieldsId, placeholder, "Use one name=value pair per line.")
@@ -224,7 +229,7 @@ object StaticFormAppRenderer {
       val userValues = values.filterNot { case (key, _) => key == "error" || key.startsWith("error.") || key == "fields" }
       val controls = schemaFields.map { key =>
         val value = userValues.getOrElse(key, "")
-        _admin_field_control(key, s"new-field-${NamingConventions.toNormalizedSegment(key)}", value, controlDescriptors.get(key))
+        _admin_field_control(key, s"new-field-${NamingConventions.toNormalizedSegment(key)}", value, webFields.get(key))
       }.mkString("\n")
       val extras = userValues.filterNot { case (key, _) => schemaFields.contains(key) }
       val extraText = extras.toVector.sortBy(_._1).map { case (key, value) => s"${key}=${value}" }.mkString("\n")
@@ -242,12 +247,12 @@ object StaticFormAppRenderer {
     defaults: Vector[(String, String)],
     values: Map[String, String],
     idPrefix: String,
-    controlDescriptors: Map[String, WebDescriptor.FormControl] = Map.empty
+    webFields: Map[String, WebSchemaResolver.ResolvedWebField] = Map.empty
   ): String = {
     val fields = _admin_schema_ordered_fields(schemaFields, _admin_form_fields(defaults, values))
     fields.map {
       case (key, value) =>
-        _admin_field_control(key, s"${idPrefix}-${NamingConventions.toNormalizedSegment(key)}", value, controlDescriptors.get(key))
+        _admin_field_control(key, s"${idPrefix}-${NamingConventions.toNormalizedSegment(key)}", value, webFields.get(key))
     }.mkString("\n")
   }
 
@@ -255,11 +260,22 @@ object StaticFormAppRenderer {
     name: String,
     id: String,
     value: String,
-    descriptor: Option[WebDescriptor.FormControl]
+    webField: Option[WebSchemaResolver.ResolvedWebField]
   ): String = {
+    val descriptor = webField.map(_.asControl)
     val inputType = descriptor.flatMap(_.controlType).getOrElse("text")
     val required = if (descriptor.flatMap(_.required).getOrElse(false)) " required" else ""
-    _operation_parameter_control(name, id, inputType, value, required, "Admin field", descriptor)
+    _operation_parameter_control(
+      name,
+      id,
+      inputType,
+      value,
+      required,
+      webField.flatMap(_.help).getOrElse("Admin field"),
+      descriptor,
+      readonly = webField.exists(_.readonly),
+      placeholder = webField.flatMap(_.placeholder)
+    )
   }
 
   private def _admin_schema_ordered_fields(
@@ -286,6 +302,11 @@ object StaticFormAppRenderer {
   ): Map[String, WebDescriptor.FormControl] =
     adminFields.map(x => x.name -> x.control).toMap
 
+  private def _web_field_map(
+    webSchema: WebSchemaResolver.ResolvedWebSchema
+  ): Map[String, WebSchemaResolver.ResolvedWebField] =
+    webSchema.fields.map(x => x.name -> x).toMap
+
   private def _admin_fields_textarea(
     values: Map[String, String],
     fieldsId: String,
@@ -299,45 +320,53 @@ object StaticFormAppRenderer {
        |</div>""".stripMargin
 
   private def _operation_form_controls(
-    operation: org.goldenport.protocol.spec.OperationDefinition,
-    values: Map[String, String],
-    controlDescriptors: Map[String, WebDescriptor.FormControl] = Map.empty
+    webSchema: WebSchemaResolver.ResolvedWebSchema,
+    values: Map[String, String]
   ): String = {
-    val parameters = operation.specification.request.parameters.toVector
-    if (parameters.isEmpty)
+    val fields = webSchema.fields
+    if (fields.isEmpty)
       _operation_form_fields_textarea(values, "Fields")
     else {
-      val parameterNames = parameters.map(_.name).toSet
-      val fields = parameters.map { parameter =>
-        val name = parameter.name
+      val fieldNames = fields.map(_.name).toSet
+      val controls = fields.map { field =>
+        val name = field.name
         val id = s"field-${NamingConventions.toNormalizedSegment(name)}"
         val value = values.getOrElse(name, "")
-        val descriptor = controlDescriptors.get(name)
-        val required = if (descriptor.flatMap(_.required).getOrElse(_operation_parameter_required(parameter))) " required" else ""
-        val inputType = descriptor.flatMap(_.controlType).getOrElse(_operation_parameter_input_type(parameter))
-        val help = _operation_parameter_help(parameter)
-        _operation_parameter_control(name, id, inputType, value, required, help, descriptor)
+        val descriptor = Some(field.asControl)
+        val required = if (field.required) " required" else ""
+        val help = _web_schema_field_help(field)
+        _operation_parameter_control(
+          name,
+          id,
+          field.controlType,
+          value,
+          required,
+          help,
+          descriptor,
+          readonly = field.readonly,
+          placeholder = field.placeholder
+        )
       }.mkString("\n")
-      val descriptorOnlyFields = controlDescriptors.toVector.sortBy(_._1).collect {
-        case (name, descriptor) if !parameterNames.contains(name) =>
-          val id = s"field-${NamingConventions.toNormalizedSegment(name)}"
-          val value = values.getOrElse(name, "")
-          val required = if (descriptor.required.getOrElse(false)) " required" else ""
-          val inputType = descriptor.controlType.getOrElse("text")
-          _operation_parameter_control(name, id, inputType, value, required, "Descriptor field", Some(descriptor))
-      }.mkString("\n")
-      val extraValues = values.filterNot { case (key, _) => parameterNames.contains(key) }
-        .filterNot { case (key, _) => controlDescriptors.contains(key) }
+      val extraValues = values.filterNot { case (key, _) => fieldNames.contains(key) }
       val extra =
         if (extraValues.isEmpty)
           _operation_form_fields_textarea(Map.empty, "Additional fields", rows = 3)
         else
           _operation_form_fields_textarea(extraValues, "Additional fields", rows = 3)
-      s"""${fields}
-         |${descriptorOnlyFields}
+      s"""${controls}
          |${extra}""".stripMargin
     }
   }
+
+  private def _web_schema_field_help(
+    field: WebSchemaResolver.ResolvedWebField
+  ): String =
+    field.help.getOrElse {
+      Vector(
+        field.dataType.getOrElse("unknown"),
+        field.multiplicity.getOrElse("unknown")
+      ).mkString("; ")
+    }
 
   private def _operation_parameter_required(
     parameter: org.goldenport.protocol.spec.ParameterDefinition
@@ -378,19 +407,22 @@ object StaticFormAppRenderer {
     value: String,
     required: String,
     help: String,
-    descriptor: Option[WebDescriptor.FormControl] = None
+    descriptor: Option[WebDescriptor.FormControl] = None,
+    readonly: Boolean = false,
+    placeholder: Option[String] = None
   ): String =
     if (descriptor.exists(_.hidden) || inputType == "hidden") {
       s"""<input type="hidden" id="${_escape(id)}" name="${_escape(name)}" value="${_escape(value)}">"""
     } else if (inputType == "select" || descriptor.exists(_.values.nonEmpty)) {
       val multiple = if (descriptor.exists(_.multiple)) " multiple" else ""
+      val disabled = if (readonly) " disabled" else ""
       val options = descriptor.toVector.flatMap(_.values).map { candidate =>
         val selected = if (candidate == value) " selected" else ""
         s"""<option value="${_escape(candidate)}"${selected}>${_escape(candidate)}</option>"""
       }.mkString("\n")
       s"""<div class="mb-3">
          |  <label class="form-label" for="${_escape(id)}">${_escape(name)}</label>
-         |  <select class="form-select" id="${_escape(id)}" name="${_escape(name)}"${required}${multiple}>
+         |  <select class="form-select" id="${_escape(id)}" name="${_escape(name)}"${required}${multiple}${disabled}>
          |    ${options}
          |  </select>
          |  <div class="form-text">${_escape(help)}</div>
@@ -398,22 +430,27 @@ object StaticFormAppRenderer {
     } else if (inputType == "checkbox") {
       val checked =
         if (Set("true", "on", "1", "yes").contains(value.toLowerCase)) " checked" else ""
+      val disabled = if (readonly) " disabled" else ""
       s"""<div class="mb-3 form-check">
          |  <input type="hidden" name="${_escape(name)}" value="false">
-         |  <input class="form-check-input" id="${_escape(id)}" name="${_escape(name)}" type="checkbox" value="true"${checked}${required}>
+         |  <input class="form-check-input" id="${_escape(id)}" name="${_escape(name)}" type="checkbox" value="true"${checked}${required}${disabled}>
          |  <label class="form-check-label" for="${_escape(id)}">${_escape(name)}</label>
          |  <div class="form-text">${_escape(help)}</div>
          |</div>""".stripMargin
     } else if (inputType == "textarea") {
+      val readonlyAttr = if (readonly) " readonly" else ""
+      val placeholderAttr = placeholder.map(x => s""" placeholder="${_escape(x)}"""").getOrElse("")
       s"""<div class="mb-3">
          |  <label class="form-label" for="${_escape(id)}">${_escape(name)}</label>
-         |  <textarea class="form-control" id="${_escape(id)}" name="${_escape(name)}" rows="5"${required}>${_escape(value)}</textarea>
+         |  <textarea class="form-control" id="${_escape(id)}" name="${_escape(name)}" rows="5"${required}${readonlyAttr}${placeholderAttr}>${_escape(value)}</textarea>
          |  <div class="form-text">${_escape(help)}</div>
          |</div>""".stripMargin
     } else {
+      val readonlyAttr = if (readonly) " readonly" else ""
+      val placeholderAttr = placeholder.map(x => s""" placeholder="${_escape(x)}"""").getOrElse("")
       s"""<div class="mb-3">
          |  <label class="form-label" for="${_escape(id)}">${_escape(name)}</label>
-         |  <input class="form-control" id="${_escape(id)}" name="${_escape(name)}" type="${_escape(inputType)}" value="${_escape(value)}"${required}>
+         |  <input class="form-control" id="${_escape(id)}" name="${_escape(name)}" type="${_escape(inputType)}" value="${_escape(value)}"${required}${readonlyAttr}${placeholderAttr}>
          |  <div class="form-text">${_escape(help)}</div>
          |</div>""".stripMargin
     }
@@ -634,7 +671,7 @@ object StaticFormAppRenderer {
       val entityPath = NamingConventions.toNormalizedSegment(entityName)
       val entityLabel = _title_label(entityPath)
       val basePath = s"/web/${componentPath}/admin/entities/${entityPath}"
-      val body = _admin_entity_record_table(subsystem, componentPath, entityPath, id, webDescriptor)
+      val body = _admin_entity_record_table(subsystem, component, componentPath, entityPath, id, webDescriptor)
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} Detail",
         subtitle = "Entity record detail baseline",
@@ -664,13 +701,19 @@ object StaticFormAppRenderer {
       val entityLabel = _title_label(entityPath)
       val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
       val actionPath = s"/form/${componentPath}/admin/entities/${entityPath}/${id}/update"
-      val adminFields = webDescriptor.adminFields(componentPath, "entity", entityPath)
+      val webSchema = WebSchemaResolver.resolveEntity(
+        component,
+        componentPath,
+        entityPath,
+        webDescriptor,
+        _admin_entity_schema_fields(subsystem, component, componentPath, entityPath)
+      )
       val controls = _admin_record_controls(
-        _admin_schema_field_names(adminFields, _admin_entity_schema_fields(subsystem, componentPath, entityPath)),
+        webSchema.fieldNames,
         _admin_entity_record_fields(subsystem, componentPath, entityPath, id).getOrElse(Vector("id" -> id)),
         values,
         "field",
-        _admin_field_controls(adminFields)
+        _web_field_map(webSchema)
       )
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} Edit",
@@ -705,9 +748,14 @@ object StaticFormAppRenderer {
       val entityLabel = _title_label(entityPath)
       val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
       val actionPath = s"/form/${componentPath}/admin/entities/${entityPath}/create"
-      val adminFields = webDescriptor.adminFields(componentPath, "entity", entityPath)
-      val schemaFields = _admin_schema_field_names(adminFields, _admin_entity_schema_fields(subsystem, componentPath, entityPath))
-      val controls = _admin_new_controls(schemaFields, values, "entityFields", "id=sales-order-1&#10;status=draft", _admin_field_controls(adminFields))
+      val webSchema = WebSchemaResolver.resolveEntity(
+        component,
+        componentPath,
+        entityPath,
+        webDescriptor,
+        _admin_entity_schema_fields(subsystem, component, componentPath, entityPath)
+      )
+      val controls = _admin_new_controls(webSchema.fieldNames, values, "entityFields", "id=sales-order-1&#10;status=draft", _web_field_map(webSchema))
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} New",
         subtitle = "Entity record create baseline",
@@ -817,14 +865,21 @@ object StaticFormAppRenderer {
 
   private def _admin_entity_record_table(
     subsystem: Subsystem,
+    component: Component,
     componentPath: String,
     entityPath: String,
     id: String,
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): String = {
-    val adminFields = webDescriptor.adminFields(componentPath, "entity", entityPath)
+    val webSchema = WebSchemaResolver.resolveEntity(
+      component,
+      componentPath,
+      entityPath,
+      webDescriptor,
+      _admin_entity_schema_fields(subsystem, component, componentPath, entityPath)
+    )
     _admin_record_table(
-      _admin_schema_field_names(adminFields, _admin_entity_schema_fields(subsystem, componentPath, entityPath)),
+      webSchema.fieldNames,
       _admin_entity_record_fields(subsystem, componentPath, entityPath, id),
       s"""No record is currently available for id <code>${_escape(id)}</code>."""
     )
@@ -844,16 +899,20 @@ object StaticFormAppRenderer {
 
   private def _admin_entity_schema_fields(
     subsystem: Subsystem,
+    component: Component,
     componentPath: String,
     entityPath: String
   ): Vector[String] =
-    _admin_schema_fields(
-      subsystem,
-      "/admin/entity/list",
-      "/admin/entity/read",
-      Record.data("component" -> componentPath, "entity" -> entityPath),
-      Record.data("component" -> componentPath, "entity" -> entityPath)
-    )
+    _descriptor_entity_schema_fields(component, entityPath)
+      .getOrElse {
+        _admin_schema_fields(
+          subsystem,
+          "/admin/entity/list",
+          "/admin/entity/read",
+          Record.data("component" -> componentPath, "entity" -> entityPath),
+          Record.data("component" -> componentPath, "entity" -> entityPath)
+        )
+      }
 
   private def _admin_data_list(
     subsystem: Subsystem,
@@ -913,9 +972,14 @@ object StaticFormAppRenderer {
     id: String,
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): String = {
-    val adminFields = webDescriptor.adminFields(componentPath, "data", dataPath)
+    val webSchema = WebSchemaResolver.resolveData(
+      componentPath,
+      dataPath,
+      webDescriptor,
+      _admin_data_schema_fields(subsystem, componentPath, dataPath)
+    )
     _admin_record_table(
-      _admin_schema_field_names(adminFields, _admin_data_schema_fields(subsystem, componentPath, dataPath)),
+      webSchema.fieldNames,
       _admin_data_record_fields(subsystem, componentPath, dataPath, id),
       s"""No data record is currently available for id <code>${_escape(id)}</code>."""
     )
@@ -965,6 +1029,19 @@ object StaticFormAppRenderer {
       case xs if xs.nonEmpty => xs
       case _ => Vector("id")
     }
+
+  private def _descriptor_entity_schema_fields(
+    component: Component,
+    entityName: String
+  ): Option[Vector[String]] =
+    component.componentDescriptors
+      .flatMap(_.entityRuntimeDescriptors)
+      .find(d => NamingConventions.equivalentByNormalized(d.entityName, entityName))
+      .flatMap(_.schema.map(WebSchemaResolver.fromSchema(_).map(_.name)).filter(_.nonEmpty))
+      .map {
+        case xs if xs.contains("id") => xs
+        case xs => "id" +: xs
+      }
 
   private def _admin_record_fields(
     subsystem: Subsystem,
@@ -1463,8 +1540,14 @@ object StaticFormAppRenderer {
       val effectivePageRequest = pageRequest.withTotalCountPolicy(
         webDescriptor.adminTotalCountPolicy(componentPath, "view", viewPath)
       )
-      val schemaFields = webDescriptor.adminFields(componentPath, "view", viewPath).map(_.name)
       val definition = _view_definition(component, viewName)
+      val webSchema = WebSchemaResolver.resolveView(
+        component,
+        componentPath,
+        viewPath,
+        definition.map(_.entityName),
+        webDescriptor
+      )
       val metadata = definition match {
         case Some(d) =>
           s"""<div class="table-responsive"><table class="table table-sm">
@@ -1501,7 +1584,7 @@ object StaticFormAppRenderer {
                    basePath,
                    s"No view records are currently available for ${viewName}.",
                    effectivePageRequest,
-                   schemaFields
+                   webSchema.fieldNames
                  )}
              |</article>""".stripMargin
       ))
@@ -1518,7 +1601,14 @@ object StaticFormAppRenderer {
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val viewPath = NamingConventions.toNormalizedSegment(viewName)
       val basePath = s"/web/${componentPath}/admin/views/${viewPath}"
-      val schemaFields = webDescriptor.adminFields(componentPath, "view", viewPath).map(_.name)
+      val definition = _view_definition(component, viewName)
+      val webSchema = WebSchemaResolver.resolveView(
+        component,
+        componentPath,
+        viewPath,
+        definition.map(_.entityName),
+        webDescriptor
+      )
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(viewPath))} View Detail",
         subtitle = "View instance read baseline",
@@ -1534,7 +1624,7 @@ object StaticFormAppRenderer {
                    "/admin/view/read",
                    Record.data("component" -> componentPath, "view" -> viewPath, "id" -> id),
                    s"No view record is currently available for ${id}.",
-                   schemaFields
+                   webSchema.fieldNames
                  )}
              |</article>""".stripMargin
       ))
@@ -1610,8 +1700,14 @@ object StaticFormAppRenderer {
       val effectivePageRequest = pageRequest.withTotalCountPolicy(
         webDescriptor.adminTotalCountPolicy(componentPath, "aggregate", aggregatePath)
       )
-      val schemaFields = webDescriptor.adminFields(componentPath, "aggregate", aggregatePath).map(_.name)
       val definition = _aggregate_definition(component, aggregateName)
+      val webSchema = WebSchemaResolver.resolveAggregate(
+        component,
+        componentPath,
+        aggregatePath,
+        definition.map(_.entityName),
+        webDescriptor
+      )
       val metadata = definition match {
         case Some(d) =>
           s"""<div class="table-responsive"><table class="table table-sm">
@@ -1649,7 +1745,7 @@ object StaticFormAppRenderer {
                    basePath,
                    s"No aggregate records are currently available for ${aggregateName}.",
                    effectivePageRequest,
-                   schemaFields
+                   webSchema.fieldNames
                  )}
              |</article>
              |<article>
@@ -1670,7 +1766,14 @@ object StaticFormAppRenderer {
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val aggregatePath = NamingConventions.toNormalizedSegment(aggregateName)
       val basePath = s"/web/${componentPath}/admin/aggregates/${aggregatePath}"
-      val schemaFields = webDescriptor.adminFields(componentPath, "aggregate", aggregatePath).map(_.name)
+      val definition = _aggregate_definition(component, aggregateName)
+      val webSchema = WebSchemaResolver.resolveAggregate(
+        component,
+        componentPath,
+        aggregatePath,
+        definition.map(_.entityName),
+        webDescriptor
+      )
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(aggregatePath))} Aggregate Detail",
         subtitle = "Aggregate instance read baseline",
@@ -1686,7 +1789,7 @@ object StaticFormAppRenderer {
                    "/admin/aggregate/read",
                    Record.data("component" -> componentPath, "aggregate" -> aggregatePath, "id" -> id),
                    s"No aggregate record is currently available for ${id}.",
-                   schemaFields
+                   webSchema.fieldNames
                  )}
              |</article>
              |<article>
@@ -1804,13 +1907,18 @@ object StaticFormAppRenderer {
       val dataPath = NamingConventions.toNormalizedSegment(dataName)
       val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
       val actionPath = s"/form/${componentPath}/admin/data/${dataPath}/${id}/update"
-      val adminFields = webDescriptor.adminFields(componentPath, "data", dataPath)
+      val webSchema = WebSchemaResolver.resolveData(
+        componentPath,
+        dataPath,
+        webDescriptor,
+        _admin_data_schema_fields(subsystem, componentPath, dataPath)
+      )
       val controls = _admin_record_controls(
-        _admin_schema_field_names(adminFields, _admin_data_schema_fields(subsystem, componentPath, dataPath)),
+        webSchema.fieldNames,
         _admin_data_record_fields(subsystem, componentPath, dataPath, id).getOrElse(Vector("id" -> id)),
         values,
         "data-field",
-        _admin_field_controls(adminFields)
+        _web_field_map(webSchema)
       )
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data Edit",
@@ -1844,9 +1952,13 @@ object StaticFormAppRenderer {
       val dataPath = NamingConventions.toNormalizedSegment(dataName)
       val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
       val actionPath = s"/form/${componentPath}/admin/data/${dataPath}/create"
-      val adminFields = webDescriptor.adminFields(componentPath, "data", dataPath)
-      val schemaFields = _admin_schema_field_names(adminFields, _admin_data_schema_fields(subsystem, componentPath, dataPath))
-      val controls = _admin_new_controls(schemaFields, values, "dataFields", "id=record-1&#10;status=draft", _admin_field_controls(adminFields))
+      val webSchema = WebSchemaResolver.resolveData(
+        componentPath,
+        dataPath,
+        webDescriptor,
+        _admin_data_schema_fields(subsystem, componentPath, dataPath)
+      )
+      val controls = _admin_new_controls(webSchema.fieldNames, values, "dataFields", "id=record-1&#10;status=draft", _web_field_map(webSchema))
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data New",
         subtitle = "Data record create baseline",
@@ -2459,6 +2571,9 @@ object StaticFormAppRenderer {
                   "type" -> field.control.controlType.map(Json.fromString).getOrElse(Json.Null),
                   "required" -> field.control.required.map(Json.fromBoolean).getOrElse(Json.Null),
                   "hidden" -> Json.fromBoolean(field.control.hidden),
+                  "readonly" -> Json.fromBoolean(field.control.readonly),
+                  "placeholder" -> field.control.placeholder.map(Json.fromString).getOrElse(Json.Null),
+                  "help" -> field.control.help.map(Json.fromString).getOrElse(Json.Null),
                   "values" -> Json.arr(field.control.values.map(Json.fromString)*)
                 )
               )*)

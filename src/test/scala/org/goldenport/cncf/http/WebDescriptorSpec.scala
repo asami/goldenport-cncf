@@ -44,6 +44,8 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |        body:
           |          type: textarea
           |          required: true
+          |          placeholder: Write a notice.
+          |          help: Notice body.
           |        status:
           |          type: select
           |          values: [Draft, Published]
@@ -51,6 +53,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |        accessToken:
           |          hidden: true
           |          system: true
+          |          readonly: true
           |
           |  admin:
           |    entity.notice:
@@ -94,11 +97,14 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.form("notice-board.notice.search-notices").stayOnError shouldBe true
       descriptor.form("notice-board.notice.search-notices").controls("body").controlType shouldBe Some("textarea")
       descriptor.form("notice-board.notice.search-notices").controls("body").required shouldBe Some(true)
+      descriptor.form("notice-board.notice.search-notices").controls("body").placeholder shouldBe Some("Write a notice.")
+      descriptor.form("notice-board.notice.search-notices").controls("body").help shouldBe Some("Notice body.")
       descriptor.form("notice-board.notice.search-notices").controls("status").controlType shouldBe Some("select")
       descriptor.form("notice-board.notice.search-notices").controls("status").values shouldBe Vector("Draft", "Published")
       descriptor.form("notice-board.notice.search-notices").controls("status").multiple shouldBe true
       descriptor.form("notice-board.notice.search-notices").controls("accessToken").hidden shouldBe true
       descriptor.form("notice-board.notice.search-notices").controls("accessToken").system shouldBe true
+      descriptor.form("notice-board.notice.search-notices").controls("accessToken").readonly shouldBe true
       descriptor.admin("entity.notice").totalCount shouldBe WebDescriptor.TotalCountPolicy.Optional
       descriptor.admin("data.audit").totalCount shouldBe WebDescriptor.TotalCountPolicy.Required
       descriptor.admin("entity.notice").fields.map(_.name) shouldBe Vector("id", "title", "body")
