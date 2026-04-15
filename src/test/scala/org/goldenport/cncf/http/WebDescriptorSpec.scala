@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 14, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers {
@@ -55,8 +55,19 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |  admin:
           |    entity.notice:
           |      totalCount: optional
+          |      fields:
+          |        - id
+          |        - title
+          |        - name: body
+          |          type: textarea
+          |          required: true
           |    data.audit:
           |      totalCount: required
+          |      fields: id action actor
+          |      controls:
+          |        action:
+          |          type: select
+          |          values: [created, updated]
           |
           |  apps:
           |    - name: manual
@@ -90,8 +101,15 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.form("notice-board.notice.search-notices").controls("accessToken").system shouldBe true
       descriptor.admin("entity.notice").totalCount shouldBe WebDescriptor.TotalCountPolicy.Optional
       descriptor.admin("data.audit").totalCount shouldBe WebDescriptor.TotalCountPolicy.Required
+      descriptor.admin("entity.notice").fields.map(_.name) shouldBe Vector("id", "title", "body")
+      descriptor.admin("entity.notice").fields(2).control.controlType shouldBe Some("textarea")
+      descriptor.admin("entity.notice").fields(2).control.required shouldBe Some(true)
+      descriptor.admin("data.audit").fields.map(_.name) shouldBe Vector("id", "action", "actor")
+      descriptor.admin("data.audit").fields(1).control.controlType shouldBe Some("select")
+      descriptor.admin("data.audit").fields(1).control.values shouldBe Vector("created", "updated")
       descriptor.adminTotalCountPolicy("notice_board", "entity", "notice") shouldBe WebDescriptor.TotalCountPolicy.Optional
       descriptor.adminTotalCountPolicy("notice_board", "data", "audit") shouldBe WebDescriptor.TotalCountPolicy.Required
+      descriptor.adminFields("notice_board", "data", "audit").map(_.name) shouldBe Vector("id", "action", "actor")
       descriptor.apps.map(_.name) shouldBe Vector("manual", "console")
       descriptor.apps.map(_.path) shouldBe Vector("/web/manual", "/web/console")
     }

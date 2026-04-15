@@ -11,7 +11,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Apr. 14, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
@@ -53,7 +53,49 @@ final case class WebDescriptor(
     componentName: String,
     surface: String,
     collectionName: String
-  ): WebDescriptor.TotalCountPolicy = {
+  ): WebDescriptor.TotalCountPolicy =
+    adminSurface(componentName, surface, collectionName).map(_.totalCount).getOrElse(WebDescriptor.TotalCountPolicy.Disabled)
+
+  def adminFields(
+    componentName: String,
+    surface: String,
+    collectionName: String
+  ): Vector[WebDescriptor.AdminField] =
+    adminSurface(componentName, surface, collectionName).toVector.flatMap(_.fields)
+
+  def adminOperationFields(
+    componentName: String,
+    surface: String,
+    collectionName: String,
+    operationName: String
+  ): Vector[WebDescriptor.AdminField] =
+    adminOperationSurface(componentName, surface, collectionName, operationName).toVector.flatMap(_.fields)
+
+  def adminOperationSurface(
+    componentName: String,
+    surface: String,
+    collectionName: String,
+    operationName: String
+  ): Option[WebDescriptor.AdminSurface] = {
+    def normalize(value: String): String =
+      value.trim.toLowerCase.replace("_", "-")
+    val component = normalize(componentName)
+    val s = normalize(surface)
+    val collection = normalize(collectionName)
+    val operation = normalize(operationName)
+    Vector(
+      s"${component}.${s}.${collection}.${operation}",
+      s"${s}.${collection}.${operation}",
+      s"${component}.${s}.${collection}.*",
+      s"${s}.${collection}.*"
+    ).flatMap(admin.get).headOption.orElse(adminSurface(componentName, surface, collectionName))
+  }
+
+  def adminSurface(
+    componentName: String,
+    surface: String,
+    collectionName: String
+  ): Option[WebDescriptor.AdminSurface] = {
     def normalize(value: String): String =
       value.trim.toLowerCase.replace("_", "-")
     val component = normalize(componentName)
@@ -66,7 +108,7 @@ final case class WebDescriptor(
       s"${s}.*",
       s"${component}.${s}",
       s
-    ).flatMap(admin.get).headOption.map(_.totalCount).getOrElse(WebDescriptor.TotalCountPolicy.Disabled)
+    ).flatMap(admin.get).headOption
   }
 }
 
@@ -148,7 +190,13 @@ object WebDescriptor {
   }
 
   final case class AdminSurface(
-    totalCount: TotalCountPolicy = TotalCountPolicy.Disabled
+    totalCount: TotalCountPolicy = TotalCountPolicy.Disabled,
+    fields: Vector[AdminField] = Vector.empty
+  )
+
+  final case class AdminField(
+    name: String,
+    control: FormControl = FormControl()
   )
 
   final case class App(
@@ -246,16 +294,19 @@ object WebDescriptor {
     _record_value(record, "controls")
       .map(_.asMap.toVector.flatMap {
         case (key, value) =>
-          _any_to_record(value).map(r => key -> FormControl(
-            controlType = _string(r, "type").orElse(_string(r, "controlType")).orElse(_string(r, "control-type")),
-            hidden = _boolean(r, "hidden").getOrElse(false),
-            system = _boolean(r, "system").getOrElse(false),
-            values = _string_vector(r, "values"),
-            multiple = _boolean(r, "multiple").getOrElse(false),
-            required = _boolean(r, "required")
-          ))
+          _any_to_record(value).map(r => key -> _form_control(r))
       }.toMap)
       .getOrElse(Map.empty)
+
+  private def _form_control(record: Record): FormControl =
+    FormControl(
+      controlType = _string(record, "type").orElse(_string(record, "controlType")).orElse(_string(record, "control-type")),
+      hidden = _boolean(record, "hidden").getOrElse(false),
+      system = _boolean(record, "system").getOrElse(false),
+      values = _string_vector(record, "values"),
+      multiple = _boolean(record, "multiple").getOrElse(false),
+      required = _boolean(record, "required")
+    )
 
   private def _apps(record: Record): Vector[App] =
     record.getAny("apps") match {
@@ -275,13 +326,50 @@ object WebDescriptor {
     _record_value(record, "admin")
       .map(_.asMap.toVector.flatMap {
         case (key, value) =>
-          _any_to_record(value).flatMap { r =>
-            _total_count_policy(r).map(policy =>
-              _normalize_selector(key) -> AdminSurface(totalCount = policy)
+          _any_to_record(value).map { r =>
+            _normalize_selector(key) -> AdminSurface(
+              totalCount = _total_count_policy(r).getOrElse(TotalCountPolicy.Disabled),
+              fields = _admin_fields(r)
             )
           }
       }.toMap)
       .getOrElse(Map.empty)
+
+  private def _admin_fields(record: Record): Vector[AdminField] = {
+    val controls = _form_controls(record)
+    val fields = record.getAny("fields") match {
+      case Some(xs: Seq[?]) => xs.toVector.flatMap(_admin_field(_, controls))
+      case Some(xs: java.util.List[?]) => xs.asScala.toVector.flatMap(_admin_field(_, controls))
+      case Some(s: String) => s.split("[,|\\s]+").toVector.flatMap(_admin_field(_, controls))
+      case Some(other) => _admin_field(other, controls).toVector
+      case None => Vector.empty
+    }
+    val fieldNames = fields.map(_.name).toSet
+    fields ++ controls.toVector.sortBy(_._1).collect {
+      case (name, control) if !fieldNames.contains(name) => AdminField(name, control)
+    }
+  }
+
+  private def _admin_field(
+    value: Any,
+    controls: Map[String, FormControl]
+  ): Option[AdminField] =
+    value match {
+      case s: String =>
+        val name = s.trim
+        Option.when(name.nonEmpty)(AdminField(name, controls.getOrElse(name, FormControl())))
+      case r: Record =>
+        _string(r, "name").map { name =>
+          AdminField(name, _form_control(r))
+        }
+      case m: Map[?, ?] =>
+        _admin_field(_map_to_record(m), controls)
+      case m: java.util.Map[?, ?] =>
+        _admin_field(_map_to_record(m.asScala.toMap), controls)
+      case _ =>
+        val name = value.toString.trim
+        Option.when(name.nonEmpty)(AdminField(name, controls.getOrElse(name, FormControl())))
+    }
 
   private def _total_count_policy(record: Record): Option[TotalCountPolicy] =
     record.getString("totalCount")

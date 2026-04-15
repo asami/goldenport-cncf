@@ -161,7 +161,13 @@ object StaticFormAppRenderer {
       val operationPath = NamingConventions.toNormalizedSegment(operation.name)
       val action = s"/form/${componentPath}/${servicePath}/${operationPath}"
       val formDescriptor = webDescriptor.form.get(_operation_selector(component.name, service.name, operation.name))
-      val controls = _operation_form_controls(operation, values, formDescriptor.map(_.controls).getOrElse(Map.empty))
+      val adminFields = webDescriptor.adminOperationFields(componentPath, "aggregate", servicePath, operationPath)
+      val descriptorControls =
+        if (formDescriptor.exists(_.controls.nonEmpty))
+          formDescriptor.map(_.controls).getOrElse(Map.empty)
+        else
+          _admin_field_controls(adminFields)
+      val controls = _operation_form_controls(operation, values, descriptorControls)
       val errorPanel = _form_error_panel(values)
       Page(_simple_page(
         title = s"${_escape(component.name)}.${_escape(service.name)}.${_escape(operation.name)}",
@@ -209,7 +215,8 @@ object StaticFormAppRenderer {
     schemaFields: Vector[String],
     values: Map[String, String],
     fieldsId: String,
-    placeholder: String
+    placeholder: String,
+    controlDescriptors: Map[String, WebDescriptor.FormControl] = Map.empty
   ): String =
     if (schemaFields.isEmpty)
       _admin_fields_textarea(values, fieldsId, placeholder, "Use one name=value pair per line.")
@@ -217,10 +224,7 @@ object StaticFormAppRenderer {
       val userValues = values.filterNot { case (key, _) => key == "error" || key.startsWith("error.") || key == "fields" }
       val controls = schemaFields.map { key =>
         val value = userValues.getOrElse(key, "")
-        s"""<div class="mb-3">
-           |  <label class="form-label" for="new-field-${_escape(key)}">${_escape(key)}</label>
-           |  <input class="form-control" id="new-field-${_escape(key)}" name="${_escape(key)}" value="${_escape(value)}">
-           |</div>""".stripMargin
+        _admin_field_control(key, s"new-field-${NamingConventions.toNormalizedSegment(key)}", value, controlDescriptors.get(key))
       }.mkString("\n")
       val extras = userValues.filterNot { case (key, _) => schemaFields.contains(key) }
       val extraText = extras.toVector.sortBy(_._1).map { case (key, value) => s"${key}=${value}" }.mkString("\n")
@@ -237,16 +241,25 @@ object StaticFormAppRenderer {
     schemaFields: Vector[String],
     defaults: Vector[(String, String)],
     values: Map[String, String],
-    idPrefix: String
+    idPrefix: String,
+    controlDescriptors: Map[String, WebDescriptor.FormControl] = Map.empty
   ): String = {
     val fields = _admin_schema_ordered_fields(schemaFields, _admin_form_fields(defaults, values))
     fields.map {
       case (key, value) =>
-        s"""<div class="mb-3">
-           |  <label class="form-label" for="${_escape(idPrefix)}-${_escape(key)}">${_escape(key)}</label>
-           |  <input class="form-control" id="${_escape(idPrefix)}-${_escape(key)}" name="${_escape(key)}" value="${_escape(value)}">
-           |</div>""".stripMargin
+        _admin_field_control(key, s"${idPrefix}-${NamingConventions.toNormalizedSegment(key)}", value, controlDescriptors.get(key))
     }.mkString("\n")
+  }
+
+  private def _admin_field_control(
+    name: String,
+    id: String,
+    value: String,
+    descriptor: Option[WebDescriptor.FormControl]
+  ): String = {
+    val inputType = descriptor.flatMap(_.controlType).getOrElse("text")
+    val required = if (descriptor.flatMap(_.required).getOrElse(false)) " required" else ""
+    _operation_parameter_control(name, id, inputType, value, required, "Admin field", descriptor)
   }
 
   private def _admin_schema_ordered_fields(
@@ -254,13 +267,24 @@ object StaticFormAppRenderer {
     fields: Vector[(String, String)]
   ): Vector[(String, String)] = {
     val values = fields.toMap
-    val fieldKeys = fields.map(_._1).toSet
     val schemaRows = schemaFields.map(key => key -> values.getOrElse(key, ""))
     val extensionRows = fields.filterNot { case (key, _) => schemaFields.contains(key) }
-    (schemaRows ++ extensionRows).distinctBy(_._1).filter {
-      case (key, value) => fieldKeys.contains(key) || value.nonEmpty || key == "id"
-    }
+    (schemaRows ++ extensionRows).distinctBy(_._1)
   }
+
+  private def _admin_schema_field_names(
+    adminFields: Vector[WebDescriptor.AdminField],
+    fallback: Vector[String]
+  ): Vector[String] =
+    adminFields.map(_.name) match {
+      case xs if xs.nonEmpty => xs
+      case _ => fallback
+    }
+
+  private def _admin_field_controls(
+    adminFields: Vector[WebDescriptor.AdminField]
+  ): Map[String, WebDescriptor.FormControl] =
+    adminFields.map(x => x.name -> x.control).toMap
 
   private def _admin_fields_textarea(
     values: Map[String, String],
@@ -294,13 +318,23 @@ object StaticFormAppRenderer {
         val help = _operation_parameter_help(parameter)
         _operation_parameter_control(name, id, inputType, value, required, help, descriptor)
       }.mkString("\n")
+      val descriptorOnlyFields = controlDescriptors.toVector.sortBy(_._1).collect {
+        case (name, descriptor) if !parameterNames.contains(name) =>
+          val id = s"field-${NamingConventions.toNormalizedSegment(name)}"
+          val value = values.getOrElse(name, "")
+          val required = if (descriptor.required.getOrElse(false)) " required" else ""
+          val inputType = descriptor.controlType.getOrElse("text")
+          _operation_parameter_control(name, id, inputType, value, required, "Descriptor field", Some(descriptor))
+      }.mkString("\n")
       val extraValues = values.filterNot { case (key, _) => parameterNames.contains(key) }
+        .filterNot { case (key, _) => controlDescriptors.contains(key) }
       val extra =
         if (extraValues.isEmpty)
           _operation_form_fields_textarea(Map.empty, "Additional fields", rows = 3)
         else
           _operation_form_fields_textarea(extraValues, "Additional fields", rows = 3)
       s"""${fields}
+         |${descriptorOnlyFields}
          |${extra}""".stripMargin
     }
   }
@@ -592,14 +626,15 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     componentName: String,
     entityName: String,
-    id: String
+    id: String,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val entityPath = NamingConventions.toNormalizedSegment(entityName)
       val entityLabel = _title_label(entityPath)
       val basePath = s"/web/${componentPath}/admin/entities/${entityPath}"
-      val body = _admin_entity_record_table(subsystem, componentPath, entityPath, id)
+      val body = _admin_entity_record_table(subsystem, componentPath, entityPath, id, webDescriptor)
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} Detail",
         subtitle = "Entity record detail baseline",
@@ -620,7 +655,8 @@ object StaticFormAppRenderer {
     componentName: String,
     entityName: String,
     id: String,
-    values: Map[String, String] = Map.empty
+    values: Map[String, String] = Map.empty,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
@@ -628,11 +664,13 @@ object StaticFormAppRenderer {
       val entityLabel = _title_label(entityPath)
       val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
       val actionPath = s"/form/${componentPath}/admin/entities/${entityPath}/${id}/update"
+      val adminFields = webDescriptor.adminFields(componentPath, "entity", entityPath)
       val controls = _admin_record_controls(
-        _admin_entity_schema_fields(subsystem, componentPath, entityPath),
+        _admin_schema_field_names(adminFields, _admin_entity_schema_fields(subsystem, componentPath, entityPath)),
         _admin_entity_record_fields(subsystem, componentPath, entityPath, id).getOrElse(Vector("id" -> id)),
         values,
-        "field"
+        "field",
+        _admin_field_controls(adminFields)
       )
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} Edit",
@@ -658,7 +696,8 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     componentName: String,
     entityName: String,
-    values: Map[String, String] = Map.empty
+    values: Map[String, String] = Map.empty,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
@@ -666,8 +705,9 @@ object StaticFormAppRenderer {
       val entityLabel = _title_label(entityPath)
       val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
       val actionPath = s"/form/${componentPath}/admin/entities/${entityPath}/create"
-      val schemaFields = _admin_entity_schema_fields(subsystem, componentPath, entityPath)
-      val controls = _admin_new_controls(schemaFields, values, "entityFields", "id=sales-order-1&#10;status=draft")
+      val adminFields = webDescriptor.adminFields(componentPath, "entity", entityPath)
+      val schemaFields = _admin_schema_field_names(adminFields, _admin_entity_schema_fields(subsystem, componentPath, entityPath))
+      val controls = _admin_new_controls(schemaFields, values, "entityFields", "id=sales-order-1&#10;status=draft", _admin_field_controls(adminFields))
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} New",
         subtitle = "Entity record create baseline",
@@ -779,13 +819,16 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     componentPath: String,
     entityPath: String,
-    id: String
-  ): String =
+    id: String,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
+  ): String = {
+    val adminFields = webDescriptor.adminFields(componentPath, "entity", entityPath)
     _admin_record_table(
-      _admin_entity_schema_fields(subsystem, componentPath, entityPath),
+      _admin_schema_field_names(adminFields, _admin_entity_schema_fields(subsystem, componentPath, entityPath)),
       _admin_entity_record_fields(subsystem, componentPath, entityPath, id),
       s"""No record is currently available for id <code>${_escape(id)}</code>."""
     )
+  }
 
   private def _admin_entity_record_fields(
     subsystem: Subsystem,
@@ -867,13 +910,16 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     componentPath: String,
     dataPath: String,
-    id: String
-  ): String =
+    id: String,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
+  ): String = {
+    val adminFields = webDescriptor.adminFields(componentPath, "data", dataPath)
     _admin_record_table(
-      _admin_data_schema_fields(subsystem, componentPath, dataPath),
+      _admin_schema_field_names(adminFields, _admin_data_schema_fields(subsystem, componentPath, dataPath)),
       _admin_data_record_fields(subsystem, componentPath, dataPath, id),
       s"""No data record is currently available for id <code>${_escape(id)}</code>."""
     )
+  }
 
   private def _admin_data_record_fields(
     subsystem: Subsystem,
@@ -986,11 +1032,12 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     path: String,
     form: Record,
-    emptyMessage: String
+    emptyMessage: String,
+    schemaFields: Vector[String] = Vector.empty
   ): String =
     _admin_operation_value_lines(subsystem, path, form)
       .filter(_.nonEmpty)
-      .map(_value_table)
+      .map(lines => _field_table(_admin_schema_ordered_fields(schemaFields, _field_lines(lines.mkString("\n")))))
       .getOrElse(s"<p>${_escape(emptyMessage)}</p>")
 
   private def _admin_read_result_list(
@@ -999,7 +1046,8 @@ object StaticFormAppRenderer {
     form: Record,
     basePath: String,
     emptyMessage: String,
-    pageRequest: PageRequest
+    pageRequest: PageRequest,
+    schemaFields: Vector[String] = Vector.empty
   ): String =
     _admin_operation_record(subsystem, path, form) match {
       case Some(record) =>
@@ -1009,25 +1057,69 @@ object StaticFormAppRenderer {
         val pageSize = record.getInt("pageSize").getOrElse(pageRequest.pageSize)
         val total = record.getInt("total")
         val hasNext = record.getBoolean("hasNext")
-        val rows =
-          if (items.isEmpty) {
-            s"""<tr><td colspan="3">${_escape(emptyMessage)}</td></tr>"""
-          } else {
-            items.map { item =>
-              val href = s"${basePath}/${_escape_path_segment(item.id)}"
-              s"""<tr><td><code>${_escape(item.id)}</code></td><td>${_escape(item.label)}</td><td><a href="${_escape(href)}">Detail</a></td></tr>"""
-            }.mkString("\n")
-          }
+        val table = _admin_read_result_list_table(items, schemaFields, basePath, emptyMessage)
         s"""<p>List with paging${total.map(t => s" · total ${_escape(t.toString)}").getOrElse("")}</p>
            |${warnings}
-           |<div class="table-responsive"><table class="table table-sm">
-           |  <thead><tr><th>ID</th><th>Value</th><th>Actions</th></tr></thead>
-           |  <tbody>${rows}</tbody>
-           |</table></div>
+           |${table}
            |${_paging_nav(page, pageSize, total, pageRequest.href(basePath), hasNext)}""".stripMargin
       case None =>
         s"<p>${_escape(emptyMessage)}</p>"
     }
+
+  private def _admin_read_result_list_table(
+    items: Vector[_AdminReadListItem],
+    schemaFields: Vector[String],
+    basePath: String,
+    emptyMessage: String
+  ): String =
+    if (schemaFields.isEmpty) {
+      val rows =
+        if (items.isEmpty) {
+          s"""<tr><td colspan="3">${_escape(emptyMessage)}</td></tr>"""
+        } else {
+          items.map { item =>
+            val href = s"${basePath}/${_escape_path_segment(item.id)}"
+            s"""<tr><td><code>${_escape(item.id)}</code></td><td>${_escape(item.label)}</td><td><a href="${_escape(href)}">Detail</a></td></tr>"""
+          }.mkString("\n")
+        }
+      s"""<div class="table-responsive"><table class="table table-sm">
+         |  <thead><tr><th>ID</th><th>Value</th><th>Actions</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    } else {
+      val headings = schemaFields.map(x => s"<th>${_escape(x)}</th>").mkString
+      val rows =
+        if (items.isEmpty) {
+          s"""<tr><td colspan="${schemaFields.size + 1}">${_escape(emptyMessage)}</td></tr>"""
+        } else {
+          items.map { item =>
+            val href = s"${basePath}/${_escape_path_segment(item.id)}"
+            val values = _admin_read_list_item_fields(item)
+            val columns = schemaFields.map { field =>
+              val value =
+                if (field == "id") values.getOrElse(field, item.id)
+                else if (field == "label") values.getOrElse(field, item.label)
+                else if (field == "value") values.getOrElse(field, item.value)
+                else values.getOrElse(field, "")
+              s"<td>${_escape(value)}</td>"
+            }.mkString
+            s"""<tr>${columns}<td><a href="${_escape(href)}">Detail</a></td></tr>"""
+          }.mkString("\n")
+        }
+      s"""<div class="table-responsive"><table class="table table-sm">
+         |  <thead><tr>${headings}<th>Actions</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
+
+  private def _admin_read_list_item_fields(
+    item: _AdminReadListItem
+  ): Map[String, String] =
+    _field_lines(item.value).toMap ++ Map(
+      "id" -> item.id,
+      "label" -> item.label,
+      "value" -> item.value
+    )
 
   private final case class _AdminReadListItem(
     id: String,
@@ -1371,6 +1463,7 @@ object StaticFormAppRenderer {
       val effectivePageRequest = pageRequest.withTotalCountPolicy(
         webDescriptor.adminTotalCountPolicy(componentPath, "view", viewPath)
       )
+      val schemaFields = webDescriptor.adminFields(componentPath, "view", viewPath).map(_.name)
       val definition = _view_definition(component, viewName)
       val metadata = definition match {
         case Some(d) =>
@@ -1407,7 +1500,8 @@ object StaticFormAppRenderer {
                    Record.create(Vector("component" -> componentPath, "view" -> viewPath) ++ effectivePageRequest.toPairs),
                    basePath,
                    s"No view records are currently available for ${viewName}.",
-                   effectivePageRequest
+                   effectivePageRequest,
+                   schemaFields
                  )}
              |</article>""".stripMargin
       ))
@@ -1417,12 +1511,14 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     componentName: String,
     viewName: String,
-    id: String
+    id: String,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val viewPath = NamingConventions.toNormalizedSegment(viewName)
       val basePath = s"/web/${componentPath}/admin/views/${viewPath}"
+      val schemaFields = webDescriptor.adminFields(componentPath, "view", viewPath).map(_.name)
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(viewPath))} View Detail",
         subtitle = "View instance read baseline",
@@ -1437,7 +1533,8 @@ object StaticFormAppRenderer {
                    subsystem,
                    "/admin/view/read",
                    Record.data("component" -> componentPath, "view" -> viewPath, "id" -> id),
-                   s"No view record is currently available for ${id}."
+                   s"No view record is currently available for ${id}.",
+                   schemaFields
                  )}
              |</article>""".stripMargin
       ))
@@ -1513,6 +1610,7 @@ object StaticFormAppRenderer {
       val effectivePageRequest = pageRequest.withTotalCountPolicy(
         webDescriptor.adminTotalCountPolicy(componentPath, "aggregate", aggregatePath)
       )
+      val schemaFields = webDescriptor.adminFields(componentPath, "aggregate", aggregatePath).map(_.name)
       val definition = _aggregate_definition(component, aggregateName)
       val metadata = definition match {
         case Some(d) =>
@@ -1550,7 +1648,8 @@ object StaticFormAppRenderer {
                    Record.create(Vector("component" -> componentPath, "aggregate" -> aggregatePath) ++ effectivePageRequest.toPairs),
                    basePath,
                    s"No aggregate records are currently available for ${aggregateName}.",
-                   effectivePageRequest
+                   effectivePageRequest,
+                   schemaFields
                  )}
              |</article>
              |<article>
@@ -1564,12 +1663,14 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     componentName: String,
     aggregateName: String,
-    id: String
+    id: String,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val aggregatePath = NamingConventions.toNormalizedSegment(aggregateName)
       val basePath = s"/web/${componentPath}/admin/aggregates/${aggregatePath}"
+      val schemaFields = webDescriptor.adminFields(componentPath, "aggregate", aggregatePath).map(_.name)
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(aggregatePath))} Aggregate Detail",
         subtitle = "Aggregate instance read baseline",
@@ -1584,7 +1685,8 @@ object StaticFormAppRenderer {
                    subsystem,
                    "/admin/aggregate/read",
                    Record.data("component" -> componentPath, "aggregate" -> aggregatePath, "id" -> id),
-                   s"No aggregate record is currently available for ${id}."
+                   s"No aggregate record is currently available for ${id}.",
+                   schemaFields
                  )}
              |</article>
              |<article>
@@ -1667,7 +1769,8 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     componentName: String,
     dataName: String,
-    id: String
+    id: String,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
@@ -1683,7 +1786,7 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>${_escape(_title_label(dataPath))} detail</h2>
-             |  ${_admin_data_record_table(subsystem, componentPath, dataPath, id)}
+             |  ${_admin_data_record_table(subsystem, componentPath, dataPath, id, webDescriptor)}
              |</article>""".stripMargin
       ))
     }
@@ -1693,18 +1796,21 @@ object StaticFormAppRenderer {
     componentName: String,
     dataName: String,
     id: String,
-    values: Map[String, String] = Map.empty
+    values: Map[String, String] = Map.empty,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val dataPath = NamingConventions.toNormalizedSegment(dataName)
       val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
       val actionPath = s"/form/${componentPath}/admin/data/${dataPath}/${id}/update"
+      val adminFields = webDescriptor.adminFields(componentPath, "data", dataPath)
       val controls = _admin_record_controls(
-        _admin_data_schema_fields(subsystem, componentPath, dataPath),
+        _admin_schema_field_names(adminFields, _admin_data_schema_fields(subsystem, componentPath, dataPath)),
         _admin_data_record_fields(subsystem, componentPath, dataPath, id).getOrElse(Vector("id" -> id)),
         values,
-        "data-field"
+        "data-field",
+        _admin_field_controls(adminFields)
       )
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data Edit",
@@ -1730,15 +1836,17 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     componentName: String,
     dataName: String,
-    values: Map[String, String] = Map.empty
+    values: Map[String, String] = Map.empty,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val dataPath = NamingConventions.toNormalizedSegment(dataName)
       val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
       val actionPath = s"/form/${componentPath}/admin/data/${dataPath}/create"
-      val schemaFields = _admin_data_schema_fields(subsystem, componentPath, dataPath)
-      val controls = _admin_new_controls(schemaFields, values, "dataFields", "id=record-1&#10;status=draft")
+      val adminFields = webDescriptor.adminFields(componentPath, "data", dataPath)
+      val schemaFields = _admin_schema_field_names(adminFields, _admin_data_schema_fields(subsystem, componentPath, dataPath))
+      val controls = _admin_new_controls(schemaFields, values, "dataFields", "id=record-1&#10;status=draft", _admin_field_controls(adminFields))
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data New",
         subtitle = "Data record create baseline",
@@ -2299,11 +2407,12 @@ object StaticFormAppRenderer {
     } else {
       val rows = descriptor.admin.toVector.sortBy(_._1).map {
         case (selector, admin) =>
-          s"""<tr><td><code>${_escape(selector)}</code></td><td>${_escape(admin.totalCount.name)}</td></tr>"""
+          val fields = admin.fields.map(_.name).mkString(", ")
+          s"""<tr><td><code>${_escape(selector)}</code></td><td>${_escape(admin.totalCount.name)}</td><td>${_escape(fields)}</td></tr>"""
       }.mkString("\n")
       s"""<h3>Management Console Controls</h3>
          |<div class="table-responsive"><table class="table table-sm">
-         |  <thead><tr><th>Surface</th><th>Total count</th></tr></thead>
+         |  <thead><tr><th>Surface</th><th>Total count</th><th>Fields</th></tr></thead>
          |  <tbody>${rows}</tbody>
          |</table></div>""".stripMargin
     }
@@ -2343,7 +2452,16 @@ object StaticFormAppRenderer {
         descriptor.admin.toVector.sortBy(_._1).map {
           case (selector, admin) =>
             selector -> Json.obj(
-              "totalCount" -> Json.fromString(admin.totalCount.name)
+              "totalCount" -> Json.fromString(admin.totalCount.name),
+              "fields" -> Json.arr(admin.fields.map(field =>
+                Json.obj(
+                  "name" -> Json.fromString(field.name),
+                  "type" -> field.control.controlType.map(Json.fromString).getOrElse(Json.Null),
+                  "required" -> field.control.required.map(Json.fromBoolean).getOrElse(Json.Null),
+                  "hidden" -> Json.fromBoolean(field.control.hidden),
+                  "values" -> Json.arr(field.control.values.map(Json.fromString)*)
+                )
+              )*)
             )
         }
       ),

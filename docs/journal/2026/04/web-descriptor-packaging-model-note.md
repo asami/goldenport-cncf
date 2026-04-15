@@ -62,3 +62,41 @@ Priority:
 - unified deployment model
 - scalable from single component to multi-component system
 - clean separation between model and configuration
+
+
+6. Admin Form Schema Update
+---------------------------
+
+The Management Console CRUD work introduced a field schema on the Web
+Descriptor admin surface.
+
+The reason is practical: create/update/detail pages must not depend only on
+sampling existing records. Sampling is useful as a fallback, but it fails for
+empty collections and cannot express HTML control choices such as textarea,
+select, required, hidden, or system fields.
+
+The current direction is:
+
+- Web Descriptor `admin.<surface>.<collection>.fields` is the design-time
+  schema for admin CRUD forms.
+- `controls` reuses the operation form control vocabulary.
+- Runtime rendering prefers descriptor fields and falls back to read/list
+  inference only when the descriptor is silent.
+- The implemented CRUD path covers entity and data surfaces first.
+- View and aggregate surfaces are still read-oriented, but instance detail pages
+  now use descriptor fields for display ordering and empty design-time fields.
+  This keeps the same admin surface contract available before editable
+  view/aggregate command forms are promoted into the CRUD form pipeline.
+- View and aggregate list pages can also use descriptor fields as table columns
+  when the read result carries field-shaped item values. The fixed ID/Value table
+  remains the fallback for compact read results.
+- Aggregate operation forms now accept
+  `admin.aggregate.<aggregate>.<operation>.fields` as a fallback control schema
+  for the normal operation form route. Explicit `form.<selector>.controls` still
+  wins because it is tied to the concrete Web Form endpoint.
+
+Cozy now has a raw CML `# WEB` metadata bridge for generating
+`src/main/web/web.yaml` in `car-sbt-project`. This is intentionally a bridge,
+not a CML semantic extension. The Web Descriptor remains deployment/configuration
+data; the bridge just keeps sample projects convenient until the Dox/Kaleidox
+metadata contract is formalized.

@@ -87,8 +87,19 @@ web:
   admin:
     entity.notice:
       totalCount: optional
+      fields:
+        - id
+        - title
+        - name: body
+          type: textarea
+          required: true
     data.audit:
       totalCount: required
+      fields: id action actor
+      controls:
+        action:
+          type: select
+          values: [created, updated]
 
   apps:
     - name: manual
@@ -219,6 +230,81 @@ The supported surface names are `entity`, `data`, `view`, and `aggregate`.
 Component-qualified selectors such as `notice-board.entity.notice` are also
 accepted. The unqualified form applies to the named surface and collection
 across components.
+
+`admin.<surface>.<collection>.fields` declares the form/detail field schema for
+Management Console CRUD pages. This is the preferred design-time source for
+create, update, and detail rendering. If `fields` is absent, the current
+renderer falls back to best-effort inference from existing read/list results.
+
+Field entries may be short strings or records:
+
+```yaml
+admin:
+  entity.notice:
+    fields:
+      - id
+      - title
+      - name: body
+        type: textarea
+        required: true
+```
+
+`controls` may be used when the field order is clearer as a short `fields` list
+and control details should be separated:
+
+```yaml
+admin:
+  data.audit:
+    fields: id action actor
+    controls:
+      action:
+        type: select
+        values: [created, updated]
+      actor:
+        required: true
+```
+
+Admin controls reuse the same minimum control vocabulary as operation forms:
+`type`, `required`, `hidden`, `system`, `values`, and `multiple`.
+
+For Phase 12, `fields` is implemented for `entity` and `data` create/detail/edit
+pages. `view` and `aggregate` admin pages remain read-oriented, but their
+instance detail pages also use descriptor fields for display order and for
+design-time fields that are absent from the current record. Editable
+view/aggregate command forms will be promoted to the same CRUD form pipeline in
+a later pass.
+
+Aggregate operation forms can use operation-specific admin field controls with
+one additional selector segment:
+
+```yaml
+admin:
+  aggregate.notice-aggregate.approve-notice-aggregate:
+    fields:
+      - name: id
+        hidden: true
+      - name: approved
+        type: select
+        values: [true, false]
+```
+
+This is currently used as a fallback for the normal `/form/{component}/{service}/{operation}`
+operation form when the operation has no explicit `form.<selector>.controls`
+entry. Explicit operation form controls remain the highest-priority form
+descriptor because they describe the concrete Web Form endpoint directly.
+
+## CML WEB Metadata Bridge
+
+Cozy `car-sbt-project` may generate `src/main/web/web.yaml` from a top-level CML
+`# WEB` section. The section body is treated as raw Web Descriptor YAML and is
+copied into the generated project. When the section is absent, Cozy generates a
+default sample descriptor scaffold.
+
+This bridge keeps Web deployment/configuration data outside the CML core model
+while still allowing a sample application or small CAR project to carry the
+initial Web Descriptor next to the model. The current implementation is a raw
+metadata bridge. A later pass may connect the same concept to Dox/Kaleidox AST
+metadata once the CML metadata contract is finalized.
 
 ## Application Hosting Entries
 

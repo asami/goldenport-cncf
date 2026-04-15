@@ -298,7 +298,7 @@ final class Http4sHttpServer(
     }
 
   private def _component_admin_entity_detail(app: String, entity: String, id: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminEntityDetail(engine.runtimeSubsystem, app, entity, id) match {
+    StaticFormAppRenderer.renderComponentAdminEntityDetail(engine.runtimeSubsystem, app, entity, id, engine.webDescriptor) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
@@ -310,7 +310,7 @@ final class Http4sHttpServer(
     }
 
   private def _component_admin_entity_edit(app: String, entity: String, id: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminEntityEdit(engine.runtimeSubsystem, app, entity, id) match {
+    StaticFormAppRenderer.renderComponentAdminEntityEdit(engine.runtimeSubsystem, app, entity, id, webDescriptor = engine.webDescriptor) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
@@ -322,7 +322,7 @@ final class Http4sHttpServer(
     }
 
   private def _component_admin_entity_new(app: String, entity: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminEntityNew(engine.runtimeSubsystem, app, entity) match {
+    StaticFormAppRenderer.renderComponentAdminEntityNew(engine.runtimeSubsystem, app, entity, webDescriptor = engine.webDescriptor) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
@@ -358,7 +358,7 @@ final class Http4sHttpServer(
     }
 
   private def _component_admin_data_detail(app: String, data: String, id: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminDataDetail(engine.runtimeSubsystem, app, data, id) match {
+    StaticFormAppRenderer.renderComponentAdminDataDetail(engine.runtimeSubsystem, app, data, id, engine.webDescriptor) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
@@ -370,7 +370,7 @@ final class Http4sHttpServer(
     }
 
   private def _component_admin_data_edit(app: String, data: String, id: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminDataEdit(engine.runtimeSubsystem, app, data, id) match {
+    StaticFormAppRenderer.renderComponentAdminDataEdit(engine.runtimeSubsystem, app, data, id, webDescriptor = engine.webDescriptor) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
@@ -382,7 +382,7 @@ final class Http4sHttpServer(
     }
 
   private def _component_admin_data_new(app: String, data: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminDataNew(engine.runtimeSubsystem, app, data) match {
+    StaticFormAppRenderer.renderComponentAdminDataNew(engine.runtimeSubsystem, app, data, webDescriptor = engine.webDescriptor) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
@@ -418,7 +418,7 @@ final class Http4sHttpServer(
     }
 
   private def _component_admin_view_instance_detail(app: String, view: String, id: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminViewInstanceDetail(engine.runtimeSubsystem, app, view, id) match {
+    StaticFormAppRenderer.renderComponentAdminViewInstanceDetail(engine.runtimeSubsystem, app, view, id, engine.webDescriptor) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
@@ -454,7 +454,7 @@ final class Http4sHttpServer(
     }
 
   private def _component_admin_aggregate_instance_detail(app: String, aggregate: String, id: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminAggregateInstanceDetail(engine.runtimeSubsystem, app, aggregate, id) match {
+    StaticFormAppRenderer.renderComponentAdminAggregateInstanceDetail(engine.runtimeSubsystem, app, aggregate, id, engine.webDescriptor) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)

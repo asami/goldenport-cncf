@@ -595,6 +595,47 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       }
     }
 
+    "render admin CRUD forms from WebDescriptor field controls" in {
+      val fixture = _data_fixture()
+      val descriptor = WebDescriptor(
+        admin = Map(
+          "data.audit" -> WebDescriptor.AdminSurface(
+            fields = Vector(
+              WebDescriptor.AdminField("id"),
+              WebDescriptor.AdminField("action", WebDescriptor.FormControl(controlType = Some("select"), values = Vector("created", "updated"))),
+              WebDescriptor.AdminField("actor", WebDescriptor.FormControl(required = Some(true))),
+              WebDescriptor.AdminField("note", WebDescriptor.FormControl(controlType = Some("textarea")))
+            )
+          )
+        )
+      )
+      _with_global_runtime(fixture.runtime) {
+        val edit = StaticFormAppRenderer.renderComponentAdminDataEdit(
+          fixture.subsystem,
+          "notice_board",
+          "audit",
+          "audit_1",
+          webDescriptor = descriptor
+        ).map(_.body).getOrElse(fail("component data edit admin is missing"))
+        val newly = StaticFormAppRenderer.renderComponentAdminDataNew(
+          fixture.subsystem,
+          "notice_board",
+          "audit",
+          webDescriptor = descriptor
+        ).map(_.body).getOrElse(fail("component data new admin is missing"))
+
+        edit should include ("name=\"action\"")
+        edit should include ("<select")
+        edit should include ("<option value=\"created\" selected>")
+        edit should include ("name=\"actor\"")
+        edit should include ("required")
+        edit should include ("name=\"note\"")
+        edit should include ("<textarea")
+        newly should include ("name=\"note\"")
+        newly should include ("<textarea")
+      }
+    }
+
     "apply component data update/create form POST into the DataStore fixture" in {
       val fixture = _data_fixture()
       _with_global_runtime(fixture.runtime) {
@@ -694,9 +735,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         html should include ("error.status")
         html should include ("400")
         html should include ("invalid data create")
-        html should include ("name=\"id\" value=\"audit_bad\"")
-        html should include ("name=\"action\" value=\"created\"")
-        html should include ("name=\"actor\" value=\"bob\"")
+        html should include ("name=\"id\"")
+        html should include ("value=\"audit_bad\"")
+        html should include ("name=\"action\"")
+        html should include ("value=\"created\"")
+        html should include ("name=\"actor\"")
+        html should include ("value=\"bob\"")
       }
     }
 
@@ -751,6 +795,32 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/notice-board/admin/views/notice-view")
     }
 
+    "render component view instance detail with descriptor field schema" in {
+      val subsystem = _view_fixture_subsystem()
+      val descriptor = WebDescriptor(
+        admin = Map(
+          "view.notice-view" -> WebDescriptor.AdminSurface(
+            fields = Vector(
+              WebDescriptor.AdminField("id"),
+              WebDescriptor.AdminField("label"),
+              WebDescriptor.AdminField("value"),
+              WebDescriptor.AdminField("note")
+            )
+          )
+        )
+      )
+
+      val html = StaticFormAppRenderer.renderComponentAdminViewInstanceDetail(subsystem, "notice_board", "notice_view", "notice_1", descriptor).map(_.body).getOrElse(fail("component view instance detail admin is missing"))
+
+      html should include ("<th>id</th>")
+      html should include ("<th>label</th>")
+      html should include ("<th>value</th>")
+      html should include ("<th>note</th>")
+      html.indexOf("<th>id</th>") should be < html.indexOf("<th>label</th>")
+      html.indexOf("<th>label</th>") should be < html.indexOf("<th>value</th>")
+      html.indexOf("<th>value</th>") should be < html.indexOf("<th>note</th>")
+    }
+
     "render component aggregate administration page" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
@@ -790,6 +860,30 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/notice-board/admin/aggregates")
     }
 
+    "render component aggregate list with descriptor field columns" in {
+      val subsystem = _aggregate_fixture_subsystem()
+      val descriptor = WebDescriptor(
+        admin = Map(
+          "aggregate.notice-aggregate" -> WebDescriptor.AdminSurface(
+            fields = Vector(
+              WebDescriptor.AdminField("id"),
+              WebDescriptor.AdminField("label"),
+              WebDescriptor.AdminField("note")
+            )
+          )
+        )
+      )
+
+      val html = StaticFormAppRenderer.renderComponentAdminAggregateDetail(subsystem, "notice_board", "notice_aggregate", webDescriptor = descriptor).map(_.body).getOrElse(fail("component aggregate detail admin is missing"))
+
+      html should include ("<th>id</th>")
+      html should include ("<th>label</th>")
+      html should include ("<th>note</th>")
+      html.indexOf("<th>id</th>") should be < html.indexOf("<th>label</th>")
+      html.indexOf("<th>label</th>") should be < html.indexOf("<th>note</th>")
+      html should include ("/web/notice-board/admin/aggregates/notice-aggregate/notice_1")
+    }
+
     "render component aggregate instance detail page through context-aware read" in {
       val subsystem = _aggregate_fixture_subsystem()
 
@@ -805,6 +899,32 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/form/notice-board/notice-aggregate/approve-notice-aggregate?id=notice_1")
       html should include ("/form/notice-board/notice-aggregate/read-notice-aggregate?id=notice_1")
       html should include ("/web/notice-board/admin/aggregates/notice-aggregate")
+    }
+
+    "render component aggregate instance detail with descriptor field schema" in {
+      val subsystem = _aggregate_fixture_subsystem()
+      val descriptor = WebDescriptor(
+        admin = Map(
+          "aggregate.notice-aggregate" -> WebDescriptor.AdminSurface(
+            fields = Vector(
+              WebDescriptor.AdminField("id"),
+              WebDescriptor.AdminField("label"),
+              WebDescriptor.AdminField("value"),
+              WebDescriptor.AdminField("note")
+            )
+          )
+        )
+      )
+
+      val html = StaticFormAppRenderer.renderComponentAdminAggregateInstanceDetail(subsystem, "notice_board", "notice_aggregate", "notice_1", descriptor).map(_.body).getOrElse(fail("component aggregate instance detail admin is missing"))
+
+      html should include ("<th>id</th>")
+      html should include ("<th>label</th>")
+      html should include ("<th>value</th>")
+      html should include ("<th>note</th>")
+      html.indexOf("<th>id</th>") should be < html.indexOf("<th>label</th>")
+      html.indexOf("<th>label</th>") should be < html.indexOf("<th>value</th>")
+      html.indexOf("<th>value</th>") should be < html.indexOf("<th>note</th>")
     }
 
     "execute admin read/list operations for entity data view and aggregate surfaces" in {
@@ -1296,6 +1416,38 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("name=\"body\"")
       html should include ("type=\"hidden\"")
       html should include ("name=\"accessToken\"")
+    }
+
+    "render aggregate operation form with admin descriptor field controls" in {
+      val subsystem = _aggregate_fixture_subsystem()
+      val descriptor = WebDescriptor(
+        expose = Map("notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Exposure.Protected),
+        admin = Map(
+          "aggregate.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.AdminSurface(
+            fields = Vector(
+              WebDescriptor.AdminField("id", WebDescriptor.FormControl(hidden = true)),
+              WebDescriptor.AdminField("approved", WebDescriptor.FormControl(controlType = Some("select"), values = Vector("true", "false")))
+            )
+          )
+        )
+      )
+
+      val html = StaticFormAppRenderer.renderOperationForm(
+        subsystem,
+        "notice_board",
+        "notice_aggregate",
+        "approve_notice_aggregate",
+        descriptor,
+        values = Map("id" -> "notice_1", "approved" -> "true")
+      ).map(_.body).getOrElse(fail("aggregate operation form is missing"))
+
+      html should include ("type=\"hidden\"")
+      html should include ("name=\"id\"")
+      html should include ("value=\"notice_1\"")
+      html should include ("<select")
+      html should include ("name=\"approved\"")
+      html should include ("<option value=\"true\" selected>true</option>")
+      html should include ("<option value=\"false\">false</option>")
     }
 
     "redirect HTML form submissions by descriptor transition while form-api returns operation response" in {
