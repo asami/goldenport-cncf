@@ -102,6 +102,13 @@ final class ViewCollection[V](
     }
   }
 
+  def query_with_context(
+    q: Query[_]
+  )(
+    queryfn: Query[_] => ExecutionContext ?=> Consequence[Vector[V]]
+  )(using ctx: ExecutionContext): Consequence[Vector[V]] =
+    query(q)(qq => queryfn(qq))
+
   def invalidate(id: EntityId): Unit = synchronized {
     _entityCache.remove(id)
     _queryChunkCache.clear()

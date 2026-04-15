@@ -24,6 +24,7 @@ import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.datastore.{DataStore, Query as DataStoreQuery, QueryDirective, QueryLimit, TotalCountCapability}
 import org.goldenport.cncf.directive.{Query as EntityQuery}
+import org.goldenport.cncf.entity.EntityPersistable
 import org.goldenport.cncf.entity.runtime.EntityCollection
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.observability.ObservabilityEngine
@@ -40,6 +41,7 @@ import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
 import org.goldenport.value.BaseContent
 import org.goldenport.schema.{DataType, XString}
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Jan.  7, 2026
@@ -1685,6 +1687,34 @@ object AdminComponent {
       paging <- _paging(args)
       component <- Consequence.fromOption(_component_by_name(subsystem, componentName), s"Component not found: ${componentName}")
       browser <- Consequence.fromOption(_view_browser(component, viewName), s"View browser not found: ${viewName}")
+      idOption <- _optional_entity_id(args, "id", componentName, "view", viewName)
+      response <- idOption match {
+        case Some((idText, id)) =>
+          browser.find_with_context(id)(using core.executionContext).map { value =>
+            OperationResponse.RecordResponse(
+              _read_value_response_record(
+                "view",
+                componentName,
+                viewName,
+                idText,
+                value
+              )
+            )
+          }
+        case None =>
+          _admin_view_page_response(core, componentName, viewName, browser, paging)
+      }
+    } yield response
+  }
+
+  private def _admin_view_page_response(
+    core: ActionCall.Core,
+    componentName: String,
+    viewName: String,
+    browser: org.goldenport.cncf.entity.view.Browser[Any],
+    paging: _Paging
+  ): Consequence[OperationResponse] =
+    for {
       capability <- browser.totalCountCapabilityWithContext(using core.executionContext)
       pagingDecision <- _paging_with_capability(paging, capability, s"view.${viewName}")
       effectivePaging = pagingDecision.paging
@@ -1693,16 +1723,16 @@ object AdminComponent {
         browser.count_with_context(EntityQuery.plan(Record.empty))(using core.executionContext).map(Some(_))
       else
         Consequence.success(None)
+      items = _read_items(values)
     } yield OperationResponse.RecordResponse(
       _read_values_response_record(
         "view",
         componentName,
         viewName,
-        _prefetched_page_values(values.map(x => Option(x).map(_.toString).getOrElse("")).toVector, effectivePaging, pagingDecision, total),
+        _prefetched_page_values(items, effectivePaging, pagingDecision, total),
         effectivePaging
       )
     )
-  }
 
   private def _admin_aggregate_read(
     core: ActionCall.Core,
@@ -1715,6 +1745,34 @@ object AdminComponent {
       paging <- _paging(args)
       component <- Consequence.fromOption(_component_by_name(subsystem, componentName), s"Component not found: ${componentName}")
       collection <- Consequence.fromOption(_aggregate_collection(component, aggregateName), s"Aggregate collection not found: ${aggregateName}")
+      idOption <- _optional_entity_id(args, "id", componentName, "aggregate", aggregateName)
+      response <- idOption match {
+        case Some((idText, id)) =>
+          collection.resolve_with_context(id)(using core.executionContext).map { value =>
+            OperationResponse.RecordResponse(
+              _read_value_response_record(
+                "aggregate",
+                componentName,
+                aggregateName,
+                idText,
+                value
+              )
+            )
+          }
+        case None =>
+          _admin_aggregate_page_response(core, componentName, aggregateName, collection, paging)
+      }
+    } yield response
+  }
+
+  private def _admin_aggregate_page_response(
+    core: ActionCall.Core,
+    componentName: String,
+    aggregateName: String,
+    collection: org.goldenport.cncf.entity.aggregate.AggregateCollection[Any],
+    paging: _Paging
+  ): Consequence[OperationResponse] =
+    for {
       capability <- collection.totalCountCapabilityWithContext(using core.executionContext)
       pagingDecision <- _paging_with_capability(paging, capability, s"aggregate.${aggregateName}")
       effectivePaging = pagingDecision.paging
@@ -1723,16 +1781,16 @@ object AdminComponent {
         collection.count_with_context(EntityQuery.plan(Record.empty))(using core.executionContext).map(Some(_))
       else
         Consequence.success(None)
+      items = _read_items(values)
     } yield OperationResponse.RecordResponse(
       _read_values_response_record(
         "aggregate",
         componentName,
         aggregateName,
-        _prefetched_page_values(values.map(x => Option(x).map(_.toString).getOrElse("")).toVector, effectivePaging, pagingDecision, total),
+        _prefetched_page_values(items, effectivePaging, pagingDecision, total),
         effectivePaging
       )
     )
-  }
 
   private def _admin_data_create(
     core: ActionCall.Core,
@@ -1756,6 +1814,25 @@ object AdminComponent {
     args.get(key).map(_.toString).filter(_.nonEmpty) match {
       case Some(value) => Consequence.success(value)
       case None => Consequence.argumentMissing(key)
+    }
+
+  private def _optional_entity_id(
+    args: Map[String, Any],
+    key: String,
+    componentName: String,
+    namespace: String,
+    collectionName: String
+  ): Consequence[Option[(String, EntityId)]] =
+    args.get(key).map(_.toString).filter(_.nonEmpty) match {
+      case Some(value) =>
+        EntityId.parse(value)
+          .orElse {
+            val componentPart = NamingConventions.toNormalizedSegment(componentName).replace('-', '_')
+            val collectionPart = NamingConventions.toNormalizedSegment(collectionName).replace('-', '_')
+            Consequence.success(EntityId(namespace, value, EntityCollectionId(componentPart, namespace, collectionPart)))
+          }
+          .map(id => Some(value -> id))
+      case None => Consequence.success(None)
     }
 
   private final case class _Paging(
@@ -2024,7 +2101,7 @@ object AdminComponent {
     kind: String,
     componentName: String,
     collectionName: String,
-    page: _Page[String],
+    page: _Page[_AdminReadItem],
     paging: _Paging
   ): Record =
     Record.dataAuto(
@@ -2033,8 +2110,9 @@ object AdminComponent {
           "kind" -> s"${kind}.read",
           "component" -> componentName,
           "collection" -> collectionName,
-          "values" -> page.values,
-          "fields" -> page.values.mkString("\n"),
+          "items" -> page.values.map(_.toRecord),
+          "values" -> page.values.map(_.value),
+          "fields" -> page.values.map(_.label).mkString("\n"),
           "page" -> paging.page,
           "pageSize" -> paging.pageSize,
           "hasNext" -> page.hasNext
@@ -2042,6 +2120,87 @@ object AdminComponent {
         page
       )*
     )
+
+  private def _read_value_response_record(
+    kind: String,
+    componentName: String,
+    collectionName: String,
+    id: String,
+    value: Any
+  ): Record = {
+    val text = Option(value).map(_.toString).getOrElse("")
+    Record.dataAuto(
+      "kind" -> s"${kind}.read",
+      "component" -> componentName,
+      "collection" -> collectionName,
+      "id" -> id,
+      "value" -> text,
+      "fields" -> text
+    )
+  }
+
+  private final case class _AdminReadItem(
+    id: String,
+    label: String,
+    value: String
+  ) {
+    def toRecord: Record =
+      Record.dataAuto(
+        "id" -> id,
+        "label" -> label,
+        "value" -> value
+      )
+  }
+
+  private def _read_items(values: Vector[Any]): Vector[_AdminReadItem] =
+    values.zipWithIndex.map { case (value, index) =>
+      val text = _read_text(value)
+      val id = _read_item_id(value).getOrElse(text) match {
+        case "" => (index + 1).toString
+        case x => x
+      }
+      _AdminReadItem(
+        id = id,
+        label = _read_item_label(value).getOrElse(text),
+        value = text
+      )
+    }
+
+  private def _read_text(value: Any): String =
+    Option(value).map(_.toString).getOrElse("")
+
+  private def _read_item_label(value: Any): Option[String] =
+    _product_field(value, "label")
+      .orElse(_product_field(value, "summary"))
+      .orElse(_product_field(value, "name"))
+      .map(_.toString)
+      .filter(_.nonEmpty)
+
+  private def _read_item_id(value: Any): Option[String] =
+    value match {
+      case null => None
+      case id: EntityId => Some(id.value)
+      case x: EntityPersistable => Some(x.id.value)
+      case record: Record => record.getAny("id").map(_id_text)
+      case product: Product => _product_field(product, "id").map(_id_text)
+      case x: String => Some(x)
+      case _ => None
+    }
+
+  private def _id_text(value: Any): String =
+    value match {
+      case id: EntityId => id.value
+      case Some(id: EntityId) => id.value
+      case Some(x) => x.toString
+      case x => Option(x).map(_.toString).getOrElse("")
+    }
+
+  private def _product_field(value: Any, name: String): Option[Any] =
+    value match {
+      case product: Product =>
+        product.productElementNames.zip(product.productIterator).find(_._1 == name).map(_._2)
+      case _ => None
+    }
 
   private def _record_text(
     record: Record

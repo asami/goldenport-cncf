@@ -91,7 +91,7 @@ object Browser {
         queryfn match {
           case m: ContextualBrowserQuery[V @unchecked] =>
             collection match {
-              case vc: ViewCollection[V @unchecked] => vc.query(q)(qq => m.query_with_context(qq))
+              case vc: ViewCollection[V @unchecked] => vc.query_with_context(q)(qq => m.query_with_context(qq))
               case _ => m.query_with_context(q)
             }
           case _ => query(q)
@@ -166,7 +166,7 @@ object Browser {
         queryfn match {
           case m: ContextualBrowserQuery[V @unchecked] =>
             collection match {
-              case vc: ViewCollection[V @unchecked] => vc.query(q)(qq => m.query_with_context(qq))
+              case vc: ViewCollection[V @unchecked] => vc.query_with_context(q)(qq => m.query_with_context(qq))
               case _ => m.query_with_context(q)
             }
           case _ => query(q)

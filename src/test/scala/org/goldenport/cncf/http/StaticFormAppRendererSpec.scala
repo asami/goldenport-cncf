@@ -591,7 +591,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("recent")
       html should include ("Read result")
       html should include ("notice summary")
+      html should include ("/web/notice-board/admin/views/notice-view/notice%20summary")
+      html should include ("Result pages")
       html should include ("/web/notice-board/admin/views")
+    }
+
+    "render component view instance detail page through context-aware read" in {
+      val subsystem = _view_fixture_subsystem()
+
+      val html = StaticFormAppRenderer.renderComponentAdminViewInstanceDetail(subsystem, "notice_board", "notice_view", "notice_1").map(_.body).getOrElse(fail("component view instance detail admin is missing"))
+
+      html should include ("notice_board Notice View View Detail")
+      html should include ("notice_1")
+      html should include ("notice detail notice_1")
+      html should include ("/web/notice-board/admin/views/notice-view")
     }
 
     "render component aggregate administration page" in {
@@ -619,6 +632,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("notice:notice")
       html should include ("Read result")
       html should include ("notice aggregate")
+      html should include ("/web/notice-board/admin/aggregates/notice-aggregate/notice_1")
+      html should include ("Result pages")
       html should include ("Operations")
       html should include ("create-notice-aggregate")
       html should include ("approve-notice-aggregate")
@@ -626,6 +641,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/form/notice-board/notice-aggregate/create-notice-aggregate")
       html should include ("/form/notice-board/notice-aggregate/approve-notice-aggregate")
       html should include ("/web/notice-board/admin/aggregates")
+    }
+
+    "render component aggregate instance detail page through context-aware read" in {
+      val subsystem = _aggregate_fixture_subsystem()
+
+      val html = StaticFormAppRenderer.renderComponentAdminAggregateInstanceDetail(subsystem, "notice_board", "notice_aggregate", "notice_1").map(_.body).getOrElse(fail("component aggregate instance detail admin is missing"))
+
+      html should include ("notice_board Notice Aggregate Aggregate Detail")
+      html should include ("notice_1")
+      html should include ("notice aggregate")
+      html should include ("Instance operations")
+      html should include ("/form/notice-board/notice-aggregate/approve-notice-aggregate?id=notice_1")
+      html should include ("/form/notice-board/notice-aggregate/read-notice-aggregate?id=notice_1")
+      html should include ("/web/notice-board/admin/aggregates/notice-aggregate")
     }
 
     "execute admin read/list operations for entity data view and aggregate surfaces" in {
@@ -729,6 +758,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       viewReadRecord.getString("kind") shouldBe Some("view.read")
       viewReadRecord.getString("fields").getOrElse("") should include ("notice summary")
       viewReadRecord.getAny("values").map(_.toString).getOrElse("") should include ("notice summary")
+      viewReadRecord.getAny("items").map(_.toString).getOrElse("") should include ("notice summary")
       viewReadRecord.getInt("page") shouldBe Some(1)
       viewReadRecord.getInt("pageSize") shouldBe Some(20)
       viewReadRecord.getBoolean("hasNext") shouldBe Some(false)
@@ -755,6 +785,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val secondViewPage = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "page" -> "2", "pageSize" -> "1")
       secondViewPage.getString("fields") shouldBe Some("notice next")
       secondViewPage.getBoolean("hasNext") shouldBe Some(false)
+      val viewInstanceRecord = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "id" -> "notice_1")
+      viewInstanceRecord.getString("kind") shouldBe Some("view.read")
+      viewInstanceRecord.getString("id") shouldBe Some("notice_1")
+      viewInstanceRecord.getString("fields").getOrElse("") should include ("notice detail notice_1")
 
       val aggregateSubsystem = _aggregate_fixture_subsystem()
       val aggregateEngine = new HttpExecutionEngine(aggregateSubsystem)
@@ -766,6 +800,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       aggregateReadRecord.getString("kind") shouldBe Some("aggregate.read")
       aggregateReadRecord.getString("fields").getOrElse("") should include ("notice aggregate")
       aggregateReadRecord.getAny("values").map(_.toString).getOrElse("") should include ("notice aggregate")
+      aggregateReadRecord.getAny("items").map(_.toString).getOrElse("") should include ("notice_1")
       aggregateReadRecord.getInt("total") shouldBe None
       val totalAggregateReadRecord = _admin_record_response(aggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
       totalAggregateReadRecord.getInt("total") shouldBe None
@@ -789,6 +824,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val secondAggregatePage = _admin_record_response(aggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "page" -> "2", "pageSize" -> "1")
       secondAggregatePage.getString("fields").getOrElse("") should include ("notice next")
       secondAggregatePage.getBoolean("hasNext") shouldBe Some(false)
+      val aggregateInstanceRecord = _admin_record_response(aggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "id" -> "notice_1")
+      aggregateInstanceRecord.getString("kind") shouldBe Some("aggregate.read")
+      aggregateInstanceRecord.getString("id") shouldBe Some("notice_1")
+      aggregateInstanceRecord.getString("fields").getOrElse("") should include ("notice aggregate")
     }
 
     "submit aggregate create/update actions through the discovered operation form route" in {
@@ -1046,6 +1085,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val form = StaticFormAppRenderer.renderOperationForm(subsystem, component.name, service.name, operation.name, descriptor)
 
       form.map(_.body).getOrElse(fail("operation form is missing")) should include (s"/form/${componentPath}/${servicePath}/${operationPath}")
+    }
+
+    "render HTML operation form with query-provided initial fields" in {
+      val subsystem = _aggregate_fixture_subsystem()
+
+      val html = StaticFormAppRenderer.renderOperationForm(
+        subsystem,
+        "notice_board",
+        "notice_aggregate",
+        "approve_notice_aggregate",
+        values = Map("id" -> "notice_1")
+      ).map(_.body).getOrElse(fail("operation form is missing"))
+
+      html should include ("id=notice_1")
     }
 
     "render textus result widgets with paging links" in {
@@ -1361,8 +1414,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
     }
     _initialize_component("notice_board", component, _aggregate_protocol())
-    val aggregate = _NoticeAggregate("notice aggregate")
-    val nextAggregate = _NoticeAggregate("notice next")
+    val aggregate = _NoticeAggregate("notice_1", "notice aggregate")
+    val nextAggregate = _NoticeAggregate("notice_2", "notice next")
     component.aggregateSpace.register(
       "notice_aggregate",
       new AggregateCollection[_NoticeAggregate](
@@ -1574,7 +1627,7 @@ private object _NoticeEntity {
     EntityCollectionId("sample", "web", "notice")
 }
 
-private final case class _NoticeAggregate(summary: String)
+private final case class _NoticeAggregate(id: String, summary: String)
 
 private final case class _NoopOperation(
   opname: String

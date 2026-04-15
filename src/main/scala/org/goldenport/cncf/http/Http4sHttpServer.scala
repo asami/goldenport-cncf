@@ -109,12 +109,16 @@ final class Http4sHttpServer(
         _component_admin_data_detail(app, data, id)
       case GET -> Root / "web" / app / "admin" / "aggregates" =>
         _component_admin_aggregates(app)
-      case GET -> Root / "web" / app / "admin" / "aggregates" / aggregate =>
-        _component_admin_aggregate_detail(app, aggregate)
+      case GET -> Root / "web" / app / "admin" / "aggregates" / aggregate / id =>
+        _component_admin_aggregate_instance_detail(app, aggregate, id)
+      case req @ GET -> Root / "web" / app / "admin" / "aggregates" / aggregate =>
+        _component_admin_aggregate_detail(req, app, aggregate)
       case GET -> Root / "web" / app / "admin" / "views" =>
         _component_admin_views(app)
-      case GET -> Root / "web" / app / "admin" / "views" / view =>
-        _component_admin_view_detail(app, view)
+      case GET -> Root / "web" / app / "admin" / "views" / view / id =>
+        _component_admin_view_instance_detail(app, view, id)
+      case req @ GET -> Root / "web" / app / "admin" / "views" / view =>
+        _component_admin_view_detail(req, app, view)
       case GET -> Root / "web" / app =>
         _static_form_app(app, Vector.empty)
       case GET -> Root / "web" / app / page =>
@@ -399,8 +403,8 @@ final class Http4sHttpServer(
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component view admin not found"))
     }
 
-  private def _component_admin_view_detail(app: String, view: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminViewDetail(engine.runtimeSubsystem, app, view) match {
+  private def _component_admin_view_detail(req: HRequest[IO], app: String, view: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminViewDetail(engine.runtimeSubsystem, app, view, _page_request(req), engine.webDescriptor) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
@@ -409,6 +413,18 @@ final class Http4sHttpServer(
         )
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component view detail admin not found"))
+    }
+
+  private def _component_admin_view_instance_detail(app: String, view: String, id: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminViewInstanceDetail(engine.runtimeSubsystem, app, view, id) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component view instance detail admin not found"))
     }
 
   private def _component_admin_aggregates(app: String): IO[HResponse[IO]] =
@@ -423,8 +439,8 @@ final class Http4sHttpServer(
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component aggregate admin not found"))
     }
 
-  private def _component_admin_aggregate_detail(app: String, aggregate: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminAggregateDetail(engine.runtimeSubsystem, app, aggregate) match {
+  private def _component_admin_aggregate_detail(req: HRequest[IO], app: String, aggregate: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminAggregateDetail(engine.runtimeSubsystem, app, aggregate, _page_request(req), engine.webDescriptor) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
@@ -433,6 +449,18 @@ final class Http4sHttpServer(
         )
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component aggregate detail admin not found"))
+    }
+
+  private def _component_admin_aggregate_instance_detail(app: String, aggregate: String, id: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminAggregateInstanceDetail(engine.runtimeSubsystem, app, aggregate, id) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component aggregate instance detail admin not found"))
     }
 
   private def _static_form_app(
@@ -466,7 +494,7 @@ final class Http4sHttpServer(
   ): IO[HResponse[IO]] =
     if (!_is_web_authorized(app, service, operation, Some(req)))
       _forbidden()
-    else StaticFormAppRenderer.renderOperationForm(engine.runtimeSubsystem, app, service, operation, engine.webDescriptor) match {
+    else StaticFormAppRenderer.renderOperationForm(engine.runtimeSubsystem, app, service, operation, engine.webDescriptor, req.uri.query.params.toMap) match {
       case Some(p) =>
         _html(p)
       case None =>

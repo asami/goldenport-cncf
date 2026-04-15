@@ -1,5 +1,7 @@
 package org.goldenport.cncf.http
 
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.naming.NamingConventions
@@ -138,7 +140,8 @@ object StaticFormAppRenderer {
     componentName: String,
     serviceName: String,
     operationName: String,
-    webDescriptor: WebDescriptor = WebDescriptor.empty
+    webDescriptor: WebDescriptor = WebDescriptor.empty,
+    values: Map[String, String] = Map.empty
   ): Option[Page] =
     for {
       component <- _find_component(subsystem, componentName)
@@ -150,6 +153,7 @@ object StaticFormAppRenderer {
       val servicePath = NamingConventions.toNormalizedSegment(service.name)
       val operationPath = NamingConventions.toNormalizedSegment(operation.name)
       val action = s"/form/${componentPath}/${servicePath}/${operationPath}"
+      val initialFields = _form_initial_fields(values)
       Page(_simple_page(
         title = s"${_escape(component.name)}.${_escape(service.name)}.${_escape(operation.name)}",
         subtitle = "HTML form operation",
@@ -158,7 +162,7 @@ object StaticFormAppRenderer {
              |  <form method="post" action="${_escape(action)}">
              |    <div class="mb-3">
              |      <label class="form-label" for="formFields">Fields</label>
-             |      <textarea class="form-control" id="formFields" name="fields" rows="6" placeholder="name=value&#10;keyword=sample"></textarea>
+             |      <textarea class="form-control" id="formFields" name="fields" rows="6" placeholder="name=value&#10;keyword=sample">${initialFields}</textarea>
              |      <div class="form-text">Use one name=value pair per line. Query-style values are also accepted.</div>
              |    </div>
              |    <button type="submit" class="btn btn-primary">Run</button>
@@ -713,6 +717,82 @@ object StaticFormAppRenderer {
       .map(_value_table)
       .getOrElse(s"<p>${_escape(emptyMessage)}</p>")
 
+  private def _admin_read_result_list(
+    subsystem: Subsystem,
+    path: String,
+    form: Record,
+    basePath: String,
+    emptyMessage: String,
+    pageRequest: PageRequest
+  ): String =
+    _admin_operation_record(subsystem, path, form) match {
+      case Some(record) =>
+        val items = _admin_record_items(record)
+        val warnings = _admin_warnings(_admin_record_warnings(record))
+        val page = record.getInt("page").getOrElse(pageRequest.page)
+        val pageSize = record.getInt("pageSize").getOrElse(pageRequest.pageSize)
+        val total = record.getInt("total")
+        val hasNext = record.getBoolean("hasNext")
+        val rows =
+          if (items.isEmpty) {
+            s"""<tr><td colspan="3">${_escape(emptyMessage)}</td></tr>"""
+          } else {
+            items.map { item =>
+              val href = s"${basePath}/${_escape_path_segment(item.id)}"
+              s"""<tr><td><code>${_escape(item.id)}</code></td><td>${_escape(item.label)}</td><td><a href="${_escape(href)}">Detail</a></td></tr>"""
+            }.mkString("\n")
+          }
+        s"""<p>List with paging${total.map(t => s" · total ${_escape(t.toString)}").getOrElse("")}</p>
+           |${warnings}
+           |<div class="table-responsive"><table class="table table-sm">
+           |  <thead><tr><th>ID</th><th>Value</th><th>Actions</th></tr></thead>
+           |  <tbody>${rows}</tbody>
+           |</table></div>
+           |${_paging_nav(page, pageSize, total, pageRequest.href(basePath), hasNext)}""".stripMargin
+      case None =>
+        s"<p>${_escape(emptyMessage)}</p>"
+    }
+
+  private final case class _AdminReadListItem(
+    id: String,
+    label: String,
+    value: String
+  )
+
+  private def _admin_record_items(record: Record): Vector[_AdminReadListItem] =
+    record.getAny("items") match {
+      case Some(xs: Seq[?]) => xs.toVector.flatMap(_admin_record_item)
+      case Some(xs: java.util.List[?]) => xs.toArray.toVector.flatMap(_admin_record_item)
+      case Some(value) => _admin_record_item(value).toVector
+      case None => _admin_record_values(record).map(x => _AdminReadListItem(x, x, x))
+    }
+
+  private def _admin_record_item(value: Any): Option[_AdminReadListItem] =
+    value match {
+      case record: Record =>
+        val id = record.getAny("id").map(_.toString).getOrElse("")
+        val label = record.getAny("label").map(_.toString).getOrElse(id)
+        val itemValue = record.getAny("value").map(_.toString).getOrElse(label)
+        Option.when(id.nonEmpty)(_AdminReadListItem(id, label, itemValue))
+      case map: scala.collection.Map[?, ?] =>
+        val values = map.toVector.map { case (key, itemValue) => key.toString -> itemValue }
+        val id = values.find(_._1 == "id").map(_._2.toString).getOrElse("")
+        val label = values.find(_._1 == "label").map(_._2.toString).getOrElse(id)
+        val itemValue = values.find(_._1 == "value").map(_._2.toString).getOrElse(label)
+        Option.when(id.nonEmpty)(_AdminReadListItem(id, label, itemValue))
+      case x =>
+        val text = x.toString
+        Option.when(text.nonEmpty)(_AdminReadListItem(text, text, text))
+    }
+
+  private def _admin_record_values(record: Record): Vector[String] =
+    record.getAny("values") match {
+      case Some(xs: Seq[?]) => xs.toVector.map(_.toString)
+      case Some(xs: java.util.List[?]) => xs.toArray.toVector.map(_.toString)
+      case Some(value) => Vector(value.toString)
+      case None => record.getString("fields").map(_lines).getOrElse(Vector.empty)
+    }
+
   private def _admin_operation_value_lines(
     subsystem: Subsystem,
     path: String,
@@ -758,6 +838,18 @@ object StaticFormAppRenderer {
        |</table></div>""".stripMargin
   }
 
+  private def _escape_path_segment(value: String): String =
+    URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
+
+  private def _escape_query(value: String): String =
+    URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")
+
+  private def _form_initial_fields(values: Map[String, String]): String =
+    values.toVector
+      .sortBy(_._1)
+      .map { case (key, value) => s"${_escape(key)}=${_escape(value)}" }
+      .mkString("\n")
+
   private def _submitted_fields_rows(values: Map[String, String]): String =
     if (values.isEmpty) {
       """<tr><td colspan="2">No submitted fields.</td></tr>"""
@@ -790,7 +882,7 @@ object StaticFormAppRenderer {
       "<p>No aggregate operations are currently exposed.</p>"
     } else {
       val rows = bindings.map { binding =>
-        val path = s"/form/${componentPath}/${NamingConventions.toNormalizedSegment(binding.service)}/${NamingConventions.toNormalizedSegment(binding.operation)}"
+        val path = _form_operation_path(componentPath, binding.service, binding.operation)
         s"""<tr><td>${_escape(binding.kind)}</td><td>${_escape(binding.service)}</td><td>${_escape(binding.operation)}</td><td><a href="${_escape(path)}">Open form</a></td></tr>"""
       }.mkString("\n")
       s"""<div class="table-responsive"><table class="table table-sm">
@@ -798,6 +890,43 @@ object StaticFormAppRenderer {
          |  <tbody>${rows}</tbody>
          |</table></div>""".stripMargin
     }
+  }
+
+  private def _aggregate_instance_operation_actions(
+    component: Component,
+    aggregateName: String,
+    id: String
+  ): String = {
+    val componentPath = NamingConventions.toNormalizedSegment(component.name)
+    val bindings = _aggregate_operation_bindings(component, aggregateName)
+      .filter(x => x.kind == "read" || x.kind == "update")
+    if (bindings.isEmpty) {
+      "<p>No aggregate instance operations are currently exposed.</p>"
+    } else {
+      val rows = bindings.map { binding =>
+        val path = _form_operation_path(componentPath, binding.service, binding.operation, Map("id" -> id))
+        s"""<tr><td>${_escape(binding.kind)}</td><td>${_escape(binding.service)}</td><td>${_escape(binding.operation)}</td><td><a href="${_escape(path)}">Open form</a></td></tr>"""
+      }.mkString("\n")
+      s"""<div class="table-responsive"><table class="table table-sm">
+         |  <thead><tr><th>Kind</th><th>Service</th><th>Operation</th><th>Action</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
+  }
+
+  private def _form_operation_path(
+    componentPath: String,
+    service: String,
+    operation: String,
+    values: Map[String, String] = Map.empty
+  ): String = {
+    val base = s"/form/${componentPath}/${NamingConventions.toNormalizedSegment(service)}/${NamingConventions.toNormalizedSegment(operation)}"
+    if (values.isEmpty)
+      base
+    else
+      base + values.toVector.sortBy(_._1).map {
+        case (key, value) => s"${_escape_query(key)}=${_escape_query(value)}"
+      }.mkString("?", "&", "")
   }
 
   private final case class _AggregateOperationBinding(
@@ -908,11 +1037,17 @@ object StaticFormAppRenderer {
   def renderComponentAdminViewDetail(
     subsystem: Subsystem,
     componentName: String,
-    viewName: String
+    viewName: String,
+    pageRequest: PageRequest = PageRequest(),
+    webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val viewPath = NamingConventions.toNormalizedSegment(viewName)
+      val basePath = s"/web/${componentPath}/admin/views/${viewPath}"
+      val effectivePageRequest = pageRequest.withTotalCountPolicy(
+        webDescriptor.adminTotalCountPolicy(componentPath, "view", viewPath)
+      )
       val definition = _view_definition(component, viewName)
       val metadata = definition match {
         case Some(d) =>
@@ -943,11 +1078,43 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>Read result</h2>
+             |  ${_admin_read_result_list(
+                   subsystem,
+                   "/admin/view/read",
+                   Record.create(Vector("component" -> componentPath, "view" -> viewPath) ++ effectivePageRequest.toPairs),
+                   basePath,
+                   s"No view records are currently available for ${viewName}.",
+                   effectivePageRequest
+                 )}
+             |</article>""".stripMargin
+      ))
+    }
+
+  def renderComponentAdminViewInstanceDetail(
+    subsystem: Subsystem,
+    componentName: String,
+    viewName: String,
+    id: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val viewPath = NamingConventions.toNormalizedSegment(viewName)
+      val basePath = s"/web/${componentPath}/admin/views/${viewPath}"
+      Page(_simple_page(
+        title = s"${_escape(component.name)} ${_escape(_title_label(viewPath))} View Detail",
+        subtitle = "View instance read baseline",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="${_escape(basePath)}">Back to ${_escape(_title_label(viewPath))} view</a> · <a href="/web/${componentPath}/admin/views">View definitions</a> · <a href="/web/${componentPath}/admin">Component admin</a></p>
+             |</article>
+             |<article>
+             |  <h2>${_escape(id)}</h2>
              |  ${_admin_read_result_table(
                    subsystem,
                    "/admin/view/read",
-                   Record.data("component" -> componentPath, "view" -> viewPath),
-                   s"No view records are currently available for ${viewName}."
+                   Record.data("component" -> componentPath, "view" -> viewPath, "id" -> id),
+                   s"No view record is currently available for ${id}."
                  )}
              |</article>""".stripMargin
       ))
@@ -1012,11 +1179,17 @@ object StaticFormAppRenderer {
   def renderComponentAdminAggregateDetail(
     subsystem: Subsystem,
     componentName: String,
-    aggregateName: String
+    aggregateName: String,
+    pageRequest: PageRequest = PageRequest(),
+    webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val aggregatePath = NamingConventions.toNormalizedSegment(aggregateName)
+      val basePath = s"/web/${componentPath}/admin/aggregates/${aggregatePath}"
+      val effectivePageRequest = pageRequest.withTotalCountPolicy(
+        webDescriptor.adminTotalCountPolicy(componentPath, "aggregate", aggregatePath)
+      )
       val definition = _aggregate_definition(component, aggregateName)
       val metadata = definition match {
         case Some(d) =>
@@ -1048,16 +1221,52 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>Read result</h2>
-             |  ${_admin_read_result_table(
+             |  ${_admin_read_result_list(
                    subsystem,
                    "/admin/aggregate/read",
-                   Record.data("component" -> componentPath, "aggregate" -> aggregatePath),
-                   s"No aggregate records are currently available for ${aggregateName}."
+                   Record.create(Vector("component" -> componentPath, "aggregate" -> aggregatePath) ++ effectivePageRequest.toPairs),
+                   basePath,
+                   s"No aggregate records are currently available for ${aggregateName}.",
+                   effectivePageRequest
                  )}
              |</article>
              |<article>
              |  <h2>Operations</h2>
              |  ${_aggregate_operation_actions(component, aggregateName)}
+             |</article>""".stripMargin
+      ))
+    }
+
+  def renderComponentAdminAggregateInstanceDetail(
+    subsystem: Subsystem,
+    componentName: String,
+    aggregateName: String,
+    id: String
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val aggregatePath = NamingConventions.toNormalizedSegment(aggregateName)
+      val basePath = s"/web/${componentPath}/admin/aggregates/${aggregatePath}"
+      Page(_simple_page(
+        title = s"${_escape(component.name)} ${_escape(_title_label(aggregatePath))} Aggregate Detail",
+        subtitle = "Aggregate instance read baseline",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="${_escape(basePath)}">Back to ${_escape(_title_label(aggregatePath))} aggregate</a> · <a href="/web/${componentPath}/admin/aggregates">Aggregate definitions</a> · <a href="/web/${componentPath}/admin">Component admin</a></p>
+             |</article>
+             |<article>
+             |  <h2>${_escape(id)}</h2>
+             |  ${_admin_read_result_table(
+                   subsystem,
+                   "/admin/aggregate/read",
+                   Record.data("component" -> componentPath, "aggregate" -> aggregatePath, "id" -> id),
+                   s"No aggregate record is currently available for ${id}."
+                 )}
+             |</article>
+             |<article>
+             |  <h2>Instance operations</h2>
+             |  ${_aggregate_instance_operation_actions(component, aggregateName, id)}
              |</article>""".stripMargin
       ))
     }
