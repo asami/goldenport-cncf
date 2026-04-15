@@ -16,6 +16,7 @@ import org.goldenport.bag.Bag
 import org.goldenport.cli.parser.ArgsParser
 import org.goldenport.configuration.{Configuration, ConfigurationOrigin, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.configuration.source.ConfigurationSource
+import org.goldenport.configuration.source.ProjectRootFinder
 import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.cncf.component.builtin.client.{GetQuery, PostCommand}
 import org.goldenport.cncf.CncfVersion
@@ -2122,7 +2123,7 @@ object CncfRuntime extends GlobalObservable {
     args: Array[String] = Array.empty
   ): ResolvedConfiguration = {
     val configargs = _config_args(args)
-    val basesources = ConfigurationSources.standard(
+    val basesources = _runtime_standard_config_sources(
       cwd,
       applicationname = _configuration_application_name,
       args = Map.empty
@@ -2156,6 +2157,59 @@ object CncfRuntime extends GlobalObservable {
         loader = new RuntimeFileConfigLoader
       )
     }.toVector
+  }
+
+  private def _runtime_standard_config_sources(
+    cwd: Path,
+    applicationname: String,
+    args: Map[String, String]
+  ): ConfigurationSources = {
+    val loader = new RuntimeFileConfigLoader
+    val home = sys.props.get("user.home").toVector.flatMap { home =>
+      _runtime_standard_file_sources(
+        Paths.get(home).resolve(_configuration_dir_name(applicationname)),
+        ConfigurationOrigin.Home,
+        ConfigurationSource.Rank.Home,
+        loader
+      )
+    }
+    val project = ProjectRootFinder.find(cwd, applicationname).toVector.flatMap { root =>
+      _runtime_standard_file_sources(
+        root.resolve(_configuration_dir_name(applicationname)),
+        ConfigurationOrigin.Project,
+        ConfigurationSource.Rank.Project,
+        loader
+      )
+    }
+    val current = _runtime_standard_file_sources(
+      cwd.resolve(_configuration_dir_name(applicationname)),
+      ConfigurationOrigin.Cwd,
+      ConfigurationSource.Rank.Cwd,
+      loader
+    )
+    val envsource = ConfigurationSource.env(sys.env, applicationname).toVector
+    val argsource = ConfigurationSource.args(args).toVector
+    ConfigurationSources(home ++ project ++ current ++ envsource ++ argsource)
+  }
+
+  private def _runtime_standard_file_sources(
+    dir: Path,
+    origin: ConfigurationOrigin,
+    rank: Int,
+    loader: RuntimeFileConfigLoader
+  ): Vector[ConfigurationSource] =
+    Vector("conf", "props", "properties", "json", "yaml", "xml").map { ext =>
+      ConfigurationSource.File(
+        origin = origin,
+        path = dir.resolve(s"config.$ext"),
+        rank = rank,
+        loader = loader
+      )
+    }
+
+  private def _configuration_dir_name(applicationname: String): String = {
+    val name = applicationname.trim.stripPrefix(".")
+    if (name.isEmpty) ".cncf" else s".$name"
   }
 
   private def _split_config_paths(

@@ -2,6 +2,8 @@ package org.goldenport.cncf.config
 
 import java.nio.file.Files
 import org.goldenport.Consequence
+import org.goldenport.observation.Descriptor
+import org.goldenport.provisional.observation.Taxonomy
 import org.goldenport.configuration.ConfigurationValue
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -40,12 +42,47 @@ final class RuntimeFileConfigLoaderSpec extends AnyWordSpec with Matchers {
         .values("descriptor") shouldBe ConfigurationValue.StringValue("config/web-descriptor.yaml")
     }
 
+    "load XML configuration files" in {
+      val path = Files.createTempFile("cncf-runtime", ".xml")
+      Files.writeString(
+        path,
+        """<config>
+          |  <textus>
+          |    <web>
+          |      <descriptor>config/web-descriptor.yaml</descriptor>
+          |    </web>
+          |  </textus>
+          |</config>
+          |""".stripMargin
+      )
+
+      val config = new RuntimeFileConfigLoader().load(path).toOption.get
+
+      config.string("textus.web.descriptor") shouldBe Some("config/web-descriptor.yaml")
+    }
+
+    "load properties configuration files as conf-compatible inputs" in {
+      val path = Files.createTempFile("cncf-runtime", ".properties")
+      Files.writeString(path, "textus.web.descriptor = config/web-descriptor.yaml\n")
+
+      val config = new RuntimeFileConfigLoader().load(path).toOption.get
+
+      config.string("textus.web.descriptor") shouldBe Some("config/web-descriptor.yaml")
+    }
+
     "fail on scalar YAML roots because runtime configuration must be an object" in {
       val path = Files.createTempFile("cncf-runtime", ".yaml")
       Files.writeString(path, "plain-string\n")
 
       new RuntimeFileConfigLoader().load(path) match {
-        case Consequence.Failure(_) => succeed
+        case Consequence.Failure(c) =>
+          c.observation.taxonomy shouldBe Taxonomy.resourceInvalid
+          c.observation.cause.descriptor.facets.collect {
+            case Descriptor.Facet.Properties(properties) => properties
+          }.headOption.get should contain allOf (
+            "fileType" -> "yaml",
+            "path" -> path.toString
+          )
         case other => fail(s"expected failure, got $other")
       }
     }

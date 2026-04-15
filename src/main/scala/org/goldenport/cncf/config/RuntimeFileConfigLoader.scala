@@ -2,9 +2,13 @@ package org.goldenport.cncf.config
 
 import java.nio.file.{Files, Path}
 import scala.jdk.CollectionConverters.*
+import scala.xml.{Elem, Node}
+import scala.xml.XML
 import com.typesafe.config.{ConfigFactory, ConfigValueType}
 import org.yaml.snakeyaml.Yaml
 import org.goldenport.Consequence
+import org.goldenport.observation.Descriptor
+import org.goldenport.provisional.observation.Taxonomy
 import org.goldenport.configuration.{Configuration, ConfigurationValue}
 import org.goldenport.configuration.source.file.FileConfigLoader
 
@@ -24,7 +28,7 @@ final class RuntimeFileConfigLoader extends FileConfigLoader {
         Consequence.success(_load(path))
       } catch {
         case e: Exception =>
-          Consequence.resourceInvalid(s"configuration file parse failed: ${path}: ${e.getMessage}")
+          RuntimeFileConfigLoader.configurationFileParseInvalid(path, e)
       }
     }
 
@@ -34,6 +38,8 @@ final class RuntimeFileConfigLoader extends FileConfigLoader {
     val name = path.getFileName.toString.toLowerCase
     if (name.endsWith(".yaml") || name.endsWith(".yml"))
       _load_yaml(path)
+    else if (name.endsWith(".xml"))
+      _load_xml(path)
     else
       _load_hocon_or_properties(path)
   }
@@ -45,8 +51,22 @@ final class RuntimeFileConfigLoader extends FileConfigLoader {
     val loaded = yaml.load[Any](Files.readString(path))
     loaded match {
       case null => Configuration.empty
-      case other => Configuration(_map_value(other).asInstanceOf[ConfigurationValue.ObjectValue].values)
+      case other =>
+        _map_value(other) match {
+          case obj: ConfigurationValue.ObjectValue =>
+            Configuration(obj.values ++ _flatten_object(obj))
+          case _ =>
+            throw new IllegalArgumentException("runtime configuration root must be an object")
+        }
+      }
     }
+
+  private def _load_xml(
+    path: Path
+  ): Configuration = {
+    val elem = XML.loadFile(path.toFile)
+    val obj = ConfigurationValue.ObjectValue(_xml_children(elem))
+    Configuration(obj.values ++ _flatten_object(obj))
   }
 
   private def _load_hocon_or_properties(
@@ -84,6 +104,31 @@ final class RuntimeFileConfigLoader extends FileConfigLoader {
       case other => ConfigurationValue.StringValue(other.toString)
     }
 
+  private def _xml_children(
+    node: Node
+  ): Map[String, ConfigurationValue] =
+    node.child.collect { case e: Elem => e }.groupBy(_.label).map {
+      case (label, children) => label -> _xml_value(children.toVector)
+    }
+
+  private def _xml_value(
+    children: Seq[Elem]
+  ): ConfigurationValue =
+    children.toList match {
+      case one :: Nil => _xml_value(one)
+      case many => ConfigurationValue.ListValue(many.map(_xml_value))
+    }
+
+  private def _xml_value(
+    node: Elem
+  ): ConfigurationValue = {
+    val elements = node.child.collect { case e: Elem => e }
+    if (elements.nonEmpty)
+      ConfigurationValue.ObjectValue(_xml_children(node))
+    else
+      ConfigurationValue.StringValue(node.text.trim)
+  }
+
   private def _typesafe_value(
     value: com.typesafe.config.ConfigValue
   ): ConfigurationValue =
@@ -99,4 +144,55 @@ final class RuntimeFileConfigLoader extends FileConfigLoader {
           case (k, v) => k.toString -> _map_value(v)
         })
     }
+
+  private def _flatten_object(
+    value: ConfigurationValue.ObjectValue
+  ): Map[String, ConfigurationValue] =
+    value.values.toVector.flatMap {
+      case (key, obj: ConfigurationValue.ObjectValue) => _flatten_object(key, obj)
+      case _ => Vector.empty
+    }.toMap
+
+  private def _flatten_object(
+    prefix: String,
+    value: ConfigurationValue.ObjectValue
+  ): Vector[(String, ConfigurationValue)] =
+    value.values.toVector.flatMap {
+      case (key, obj: ConfigurationValue.ObjectValue) =>
+        val path = s"$prefix.$key"
+        (path -> obj) +: _flatten_object(path, obj)
+      case (key, v) =>
+        Vector(s"$prefix.$key" -> v)
+    }
+}
+
+object RuntimeFileConfigLoader {
+  def configurationFileParseInvalid[A](
+    path: Path,
+    cause: Throwable
+  ): Consequence.Failure[A] = {
+    val filetype = fileType(path)
+    Consequence.fail(
+      Taxonomy.resourceInvalid,
+      cause,
+      Seq(
+        Descriptor.Facet.Message(s"configuration file parse failed: ${path}: ${cause.getMessage}"),
+        Descriptor.Facet.Resource(Descriptor.Facet.Resource.Kind.File, path.toUri),
+        Descriptor.Facet.Properties(Map(
+          "fileType" -> filetype,
+          "path" -> path.toString,
+          "cause" -> Option(cause.getMessage).getOrElse(cause.getClass.getName)
+        ))
+      )
+    )
+  }
+
+  def fileType(path: Path): String = {
+    val name = path.getFileName.toString
+    val i = name.lastIndexOf('.')
+    if (i >= 0 && i + 1 < name.length)
+      name.substring(i + 1).toLowerCase
+    else
+      "unknown"
+  }
 }
