@@ -45,6 +45,8 @@ final class AggregateCollection[A](
   def resolve(id: EntityId): Consequence[A] =
     builder.build(id)
 
+  // Runtime paths should prefer query_with_context for generated/default aggregates.
+  // The context-free query method is for simple manual implementations and tests.
   def query_with_context(q: Query[?])(using ctx: ExecutionContext): Consequence[Vector[A]] =
     queryfn match {
       case m: ContextualAggregateQuery[A @unchecked] => m.query_with_context(q)
@@ -60,6 +62,7 @@ final class AggregateCollection[A](
   def totalCountCapabilityWithContext(using ctx: ExecutionContext): Consequence[TotalCountCapability] =
     totalCountCapabilityWithContextFn.map(_(ctx)).getOrElse(Consequence.success(totalCountCapability))
 
+  // Runtime count must pass through this method so DataStore capability can be checked.
   def count_with_context(q: Query[?])(using ctx: ExecutionContext): Consequence[Int] =
     totalCountCapabilityWithContext.flatMap {
       case m if m.supportsTotalCount =>
@@ -83,6 +86,7 @@ final class AggregateCollection[A](
 }
 
 trait ContextualAggregateQuery[A] extends (Query[?] => Consequence[Vector[A]]) {
+  // Generated/default aggregate queries use this to preserve runtime routing.
   def query_with_context(q: Query[?])(using ctx: ExecutionContext): Consequence[Vector[A]]
 
   override def apply(q: Query[?]): Consequence[Vector[A]] =
@@ -90,6 +94,7 @@ trait ContextualAggregateQuery[A] extends (Query[?] => Consequence[Vector[A]]) {
 }
 
 trait ContextualAggregateCount extends (Query[?] => Consequence[Int]) {
+  // Generated/default aggregate counts use this so total count can be gated by runtime capability.
   def count_with_context(q: Query[?])(using ctx: ExecutionContext): Consequence[Int]
 
   override def apply(q: Query[?]): Consequence[Int] =

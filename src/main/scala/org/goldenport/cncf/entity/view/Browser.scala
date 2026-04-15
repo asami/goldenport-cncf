@@ -14,6 +14,8 @@ import org.goldenport.cncf.entity.runtime.Collection
  * @author  ASAMI, Tomoharu
  */
 trait Browser[V] {
+  // Runtime paths should prefer *_with_context.
+  // Context-free methods are for simple manual implementations, tests, and fixed-capability adapters.
   def find(id: EntityId): Consequence[V]
   def find_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[V] =
     find(id)
@@ -197,6 +199,7 @@ object Browser {
 }
 
 trait ContextualBrowserFind[V] extends (EntityId => Consequence[V]) {
+  // Generated/default browsers use this to prevent accidental context loss.
   def find_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[V]
 
   override def apply(id: EntityId): Consequence[V] =
@@ -204,6 +207,7 @@ trait ContextualBrowserFind[V] extends (EntityId => Consequence[V]) {
 }
 
 trait ContextualBrowserQuery[V] extends (Query[_] => Consequence[Vector[V]]) {
+  // Generated/default browsers use this to preserve runtime EntityStore/DataStore routing.
   def query_with_context(q: Query[_])(using ctx: ExecutionContext): Consequence[Vector[V]]
 
   override def apply(q: Query[_]): Consequence[Vector[V]] =
@@ -211,6 +215,7 @@ trait ContextualBrowserQuery[V] extends (Query[_] => Consequence[Vector[V]]) {
 }
 
 trait ContextualBrowserCount extends (Query[_] => Consequence[Int]) {
+  // Generated/default browsers use this so total count can be gated by runtime capability.
   def count_with_context(q: Query[_])(using ctx: ExecutionContext): Consequence[Int]
 
   override def apply(q: Query[_]): Consequence[Int] =
