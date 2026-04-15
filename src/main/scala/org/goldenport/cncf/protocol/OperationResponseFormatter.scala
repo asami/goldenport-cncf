@@ -14,7 +14,8 @@ import scala.xml.{Elem, NodeSeq, Text}
 /*
  * @since   Mar. 13, 2026
  *  version Mar. 28, 2026
- * @version Apr.  5, 2026
+ *  version Apr.  5, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationResponseFormatter {
@@ -81,6 +82,8 @@ object OperationResponseFormatter {
     }.filter(_.nonEmpty)
     val fromconfig = _configuration_string("textus.format")
       .orElse(_configuration_string("textus.output.format"))
+      .orElse(_configuration_string("cncf.format"))
+      .orElse(_configuration_string("cncf.output.format"))
       .map(_.trim.toLowerCase)
       .filter(_.nonEmpty)
     fromrequest.orElse(fromconfig) match {
@@ -103,6 +106,7 @@ object OperationResponseFormatter {
         Option(prop.value).map(_.toString.trim.toLowerCase).getOrElse("")
     }.filter(_.nonEmpty)
     val fromconfig = _configuration_string("textus.output.shape")
+      .orElse(_configuration_string("cncf.output.shape"))
       .map(_.trim.toLowerCase)
       .filter(_.nonEmpty)
     fromrequest.orElse(fromconfig) match {

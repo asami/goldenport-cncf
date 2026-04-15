@@ -88,6 +88,13 @@ The older `textus.runtime.*` forms are compatibility aliases only.
 The older `cncf.*` forms are also compatibility aliases while command lines and
 samples converge on the Textus namespace.
 
+CozyTextus is the product name and CNCF is the implementation name. This means
+`textus.*` is the normal namespace for product-facing configuration, while
+`cncf.*` may still be used intentionally for hidden implementation controls,
+diagnostics, development hooks, and backward compatibility. A `cncf.*` key
+should be migrated to `textus.*` only when it is meant to be ordinary
+CozyTextus application configuration.
+
 ---
 
 ### Configuration Layers
@@ -683,6 +690,14 @@ The same naming rule applies to explicit runtime configuration file options:
 
 - `--textus.config.file` and `--textus.config.files` are primary.
 - `--cncf.config.file` and `--cncf.config.files` are compatibility aliases.
+
+The same naming rule applies to development-time discovery environment
+variables:
+
+- `TEXTUS_DISCOVER_CLASSES` is primary.
+- `CNCF_DISCOVER_CLASSES` remains a compatibility fallback.
+- `TEXTUS_DISCOVER_PREFIX` is primary.
+- `CNCF_DISCOVER_PREFIX` remains a compatibility fallback.
 
 The `runtime` segment should not be used as a generic bucket.
 Prefer a concrete semantic owner:

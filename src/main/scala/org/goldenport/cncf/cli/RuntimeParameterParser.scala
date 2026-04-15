@@ -16,7 +16,8 @@ import org.slf4j.LoggerFactory
 /*
  * @since   Jan. 22, 2026
  *  version Jan. 29, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeParameterParseResult(
@@ -26,7 +27,8 @@ final case class RuntimeParameterParseResult(
 )
 
 final class RuntimeParameterParser {
-  private val _configuration_application_name = "cncf"
+  private val _configuration_application_name = "textus"
+  private val _configuration_compatibility_application_name = "cncf"
   private val _log = LoggerFactory.getLogger(classOf[RuntimeParameterParser])
   private val _serviceName = "runtime-parameters"
   private val _operationName = "parse"
@@ -91,10 +93,7 @@ final class RuntimeParameterParser {
 
   private def _resolve_configuration(cwd: Path): ResolvedConfiguration = {
     ConfigurationResolver.default.resolve(
-      ConfigurationSources.standard(
-        cwd,
-        applicationname = _configuration_application_name
-      )
+      _standard_configuration_sources(cwd)
     ) match {
       case Consequence.Success(resolved) => resolved
       case Consequence.Failure(_) =>
@@ -103,6 +102,20 @@ final class RuntimeParameterParser {
           trace = org.goldenport.configuration.ConfigurationTrace.empty
         )
     }
+  }
+
+  private def _standard_configuration_sources(cwd: Path): ConfigurationSources = {
+    val compatibility =
+      ConfigurationSources.standard(
+        cwd,
+        applicationname = _configuration_compatibility_application_name
+      )
+    val primary =
+      ConfigurationSources.standard(
+        cwd,
+        applicationname = _configuration_application_name
+      )
+    ConfigurationSources(compatibility.sources ++ primary.sources)
   }
 
   private def _initial_properties(

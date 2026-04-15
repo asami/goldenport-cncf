@@ -107,11 +107,21 @@ object DataStoreSpace {
 
   def create(conf: ResolvedConfiguration): DataStoreSpace = {
     val dss = new DataStoreSpace()
-    val sqlitepath = ConfigurationAccess.getString(conf, "cncf.datastore.sqlite.path")
+    val sqlitepath = _get_string(
+      conf,
+      "textus.datastore.sqlite.path",
+      "cncf.datastore.sqlite.path"
+    )
     val sqlnormalizecolumns =
-      ConfigurationAccess
-        .getString(conf, "cncf.datastore.sql.normalize-column-names")
-        .orElse(ConfigurationAccess.getString(conf, "cncf.datastore.sqlite.normalize-column-names"))
+      _get_string(
+        conf,
+        "textus.datastore.sql.normalize-column-names",
+        "cncf.datastore.sql.normalize-column-names"
+      ).orElse(_get_string(
+        conf,
+        "textus.datastore.sqlite.normalize-column-names",
+        "cncf.datastore.sqlite.normalize-column-names"
+      ))
         .exists(_.trim.equalsIgnoreCase("true"))
     val ds = sqlitepath match {
       case Some(path) =>
@@ -126,4 +136,11 @@ object DataStoreSpace {
     dss.addDataStore(ds)
     dss
   }
+
+  private def _get_string(
+    conf: ResolvedConfiguration,
+    primary: String,
+    compatibility: String
+  ): Option[String] =
+    ConfigurationAccess.getString(conf, primary).orElse(ConfigurationAccess.getString(conf, compatibility))
 }

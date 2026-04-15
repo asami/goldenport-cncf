@@ -4,7 +4,12 @@ Date: 2026-04-15
 
 ## Context
 
-The product-facing name is moving toward **CozyTextus**.
+The product-facing name is **CozyTextus**.
+
+**CNCF** remains the implementation name. This distinction is intentional:
+CozyTextus is the name users and application developers should see first, while
+CNCF may remain visible in implementation packages, internal class names,
+artifacts, compatibility options, and hidden implementation/debug controls.
 
 Historically, runtime options, local configuration directories, and some
 system properties used the `cncf` name directly:
@@ -28,9 +33,14 @@ developer habits may still depend on it.
 
 The intended rule is:
 
-- `textus` is primary.
-- `cncf` is compatibility.
+- `textus` is primary for product-facing runtime configuration.
+- `cncf` is compatibility when an existing user-facing option already exists.
+- `cncf` may be canonical for hidden implementation/debug options.
 - When both are supplied for the same semantic setting, `textus` wins.
+
+Do not automatically migrate every `cncf.*` option to `textus.*`. First decide
+whether the option is CozyTextus product configuration or a CNCF implementation
+control.
 
 ## Applied Runtime Rules
 
@@ -95,6 +105,13 @@ Standard runtime configuration files are evaluated in this order:
 Existing `CNCF_*` launcher variables are still accepted as fallback values in
 the sample scripts.
 
+Development-time discovery environment variables follow the same rule:
+
+- `TEXTUS_DISCOVER_CLASSES` is primary.
+- `CNCF_DISCOVER_CLASSES` remains a fallback.
+- `TEXTUS_DISCOVER_PREFIX` is primary.
+- `CNCF_DISCOVER_PREFIX` remains a fallback.
+
 ## Documentation Updates
 
 The following documents were updated to make the rule explicit:
@@ -119,6 +136,5 @@ Package names and class names under `org.goldenport.cncf` were not changed in
 this step.
 
 This work only changes user-facing runtime names and development launcher
-defaults. Internal package and artifact naming can be evaluated separately when
-the CozyTextus product packaging plan is ready.
-
+defaults. Internal package and artifact naming are CNCF implementation naming
+and do not need to change as part of the CozyTextus product naming transition.

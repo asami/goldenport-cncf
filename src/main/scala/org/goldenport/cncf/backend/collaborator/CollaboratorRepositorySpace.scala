@@ -9,7 +9,8 @@ import org.goldenport.cncf.collaborator.api
 
 /*
  * @since   Jan. 30, 2026
- * @version Feb.  5, 2026
+ *  version Feb.  5, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class CollaboratorRepositorySpace(
@@ -41,7 +42,7 @@ object CollaboratorRepositorySpace {
   private def _config_collaborator_dirs(
     configuration: ResolvedConfiguration
   ): Option[Vector[Path]] =
-    configuration.get[String]("cncf.collaborator.repositories") match {
+    _get_string(configuration, "textus.collaborator.repositories", "cncf.collaborator.repositories") match {
       case Consequence.Success(Some(value)) =>
         val dirs =
           value
@@ -52,6 +53,17 @@ object CollaboratorRepositorySpace {
             .toVector
         if (dirs.nonEmpty) Some(dirs) else None
       case _ => None
+    }
+
+  private def _get_string(
+    configuration: ResolvedConfiguration,
+    primary: String,
+    compatibility: String
+  ): Consequence[Option[String]] =
+    configuration.get[String](primary) match {
+      case Consequence.Success(Some(value)) => Consequence.success(Some(value))
+      case Consequence.Success(None) => configuration.get[String](compatibility)
+      case failure => failure
     }
 
   private def _default_collaborator_dir(): Path =

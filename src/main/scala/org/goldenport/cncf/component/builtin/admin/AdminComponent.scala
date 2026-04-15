@@ -1398,7 +1398,7 @@ object AdminComponent {
 
   private def _config_snapshot_(): Consequence[String] = {
     val cwd = Paths.get("").toAbsolutePath.normalize
-    val sources = ConfigurationSources.standard(cwd, applicationname = "cncf")
+    val sources = _standard_configuration_sources_(cwd)
     ConfigurationResolver.default.resolve(sources).map { resolved =>
       val lines = Vector.newBuilder[String]
       lines += "Config Snapshot"
@@ -1412,6 +1412,12 @@ object AdminComponent {
       }
       lines.result().mkString("\n").trim
     }
+  }
+
+  private def _standard_configuration_sources_(cwd: java.nio.file.Path): ConfigurationSources = {
+    val compatibility = ConfigurationSources.standard(cwd, applicationname = "cncf")
+    val primary = ConfigurationSources.standard(cwd, applicationname = "textus")
+    ConfigurationSources(compatibility.sources ++ primary.sources)
   }
 
   private def _variation_lines_(

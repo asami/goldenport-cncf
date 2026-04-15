@@ -1104,7 +1104,7 @@ object CncfRuntime extends GlobalObservable {
   }
 
   private def _package_prefixes_(): Vector[String] =
-    sys.env.get("CNCF_DISCOVER_PREFIX") match {
+    sys.env.get("TEXTUS_DISCOVER_PREFIX").orElse(sys.env.get("CNCF_DISCOVER_PREFIX")) match {
       case Some(value) =>
         value.split(",").map(_.trim).filter(_.nonEmpty).toVector
       case None =>
@@ -1368,7 +1368,8 @@ object CncfRuntime extends GlobalObservable {
 
   private def _discover_env_enabled(): Boolean =
     sys.env
-      .get("CNCF_DISCOVER_CLASSES")
+      .get("TEXTUS_DISCOVER_CLASSES")
+      .orElse(sys.env.get("CNCF_DISCOVER_CLASSES"))
       .exists(v => _truthy_(v))
 
   private def _truthy_(p: String): Boolean =

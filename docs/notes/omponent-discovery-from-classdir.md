@@ -137,7 +137,8 @@ Opt-in discovery guarded by flags.
 
 Examples:
 - CLI: cncf command --discover=classes hello world greeting
-- Env: CNCF_DISCOVER_CLASSES_DIRS=1
+- Env: TEXTUS_DISCOVER_CLASSES=1
+- Env compatibility: CNCF_DISCOVER_CLASSES=1
 
 Registry API:
 - register(discovered)

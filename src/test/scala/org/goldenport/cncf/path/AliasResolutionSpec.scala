@@ -23,7 +23,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan. 19, 2026
  *  version Feb.  1, 2026
- * @version Mar. 28, 2026
+ *  version Mar. 28, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AliasResolutionSpec
@@ -119,6 +120,21 @@ final class AliasResolutionSpec
   }
 
   "Alias loader validation" should {
+    "prefer textus.path.aliases over legacy cncf.path.aliases" in {
+      val textus = aliasEntries("ping" -> "admin.system.ping")
+      val cncf = aliasEntries("ping" -> "legacy.system.ping")
+      val config = Configuration(
+        Map(
+          AliasLoader.ConfigKey -> ConfigurationValue.ListValue(textus.toList),
+          AliasLoader.CompatibilityConfigKey -> ConfigurationValue.ListValue(cncf.toList)
+        )
+      )
+
+      val resolver = AliasLoader.load(config)
+
+      resolver.resolve("ping", RunMode.Command).value shouldBe "admin.system.ping"
+    }
+
     "reject duplicate alias inputs" in {
       val config = aliasConfig(
         "ping" -> "admin.system.ping",
@@ -184,6 +200,10 @@ final class AliasResolutionSpec
   }
 
   private def aliasConfig(defs: (String, String)*): Configuration = {
+    Configuration(Map(AliasLoader.ConfigKey -> ConfigurationValue.ListValue(aliasEntries(defs: _*).toList)))
+  }
+
+  private def aliasEntries(defs: (String, String)*): Vector[ConfigurationValue] = {
     val entries = defs.toVector.map { case (input, output) =>
       ConfigurationValue.ObjectValue(
         Map(
@@ -192,6 +212,6 @@ final class AliasResolutionSpec
         )
       )
     }
-    Configuration(Map(AliasLoader.ConfigKey -> ConfigurationValue.ListValue(entries.toList)))
+    entries
   }
 }

@@ -12,7 +12,8 @@ import org.goldenport.configuration.{Configuration, ConfigurationValue}
 
 /*
  * @since   Jan. 19, 2026
- * @version Jan. 19, 2026
+ *  version Jan. 19, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class Alias(
@@ -34,7 +35,8 @@ object Purpose {
 }
 
 object AliasLoader {
-  val ConfigKey: String = "cncf.path.aliases"
+  val ConfigKey: String = "textus.path.aliases"
+  val CompatibilityConfigKey: String = "cncf.path.aliases"
 
   def load(configuration: Configuration, forbiddenShortcuts: Set[String] = AliasValidator.DefaultForbiddenShortcuts): AliasResolver = {
     val definitions = _alias_definitions(configuration)
@@ -47,7 +49,7 @@ object AliasLoader {
   }
 
   private def _alias_definitions(configuration: Configuration): Vector[Map[String, ConfigurationValue]] = {
-    configuration.values.get(ConfigKey) match {
+    _configured_aliases(configuration) match {
       case Some(ConfigurationValue.ListValue(values)) =>
         values.zipWithIndex.map { case (value, index) =>
           value match {
@@ -64,6 +66,9 @@ object AliasLoader {
         Vector.empty
     }
   }
+
+  private def _configured_aliases(configuration: Configuration): Option[ConfigurationValue] =
+    configuration.values.get(ConfigKey).orElse(configuration.values.get(CompatibilityConfigKey))
 
   private def _alias_from(definition: Map[String, ConfigurationValue], index: Int): Alias = {
     val label = s"alias entry #${index + 1}"

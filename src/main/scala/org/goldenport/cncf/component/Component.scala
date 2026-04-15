@@ -1704,7 +1704,8 @@ object Component {
 
   private def _request_wants_json(request: Request): Boolean =
     request.properties.exists { p =>
-      p.name == "cncf.format" && Option(p.value).map(_.toString.toLowerCase).contains("json")
+      (p.name == "textus.format" || p.name == "cncf.format") &&
+        Option(p.value).map(_.toString.toLowerCase).contains("json")
     }
 
   private def _configuration_value(

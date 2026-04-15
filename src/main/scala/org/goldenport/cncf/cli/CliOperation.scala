@@ -18,7 +18,7 @@ import org.goldenport.cncf.observability.global.GlobalObservable
  *  version Feb.  1, 2026
  *  version Mar. 27, 2026
  *  version Apr. 11, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class CliOperation extends GlobalObservable {
@@ -124,7 +124,7 @@ abstract class CliOperation extends GlobalObservable {
 
   private def _runtime_properties(options: _RuntimeOptions): List[Property] = {
     val b = List.newBuilder[Property]
-    if (options.json) b += Property("cncf.format", "json", None)
+    if (options.json) b += Property("textus.format", "json", None)
     if (options.debug) b += Property("cncf.debug", "true", None)
     if (options.noExit) b += Property("cncf.no-exit", "true", None)
     b.result()

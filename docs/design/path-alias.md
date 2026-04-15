@@ -10,15 +10,15 @@ Path alias handling is the pre-normalization convenience layer that translates u
 
 Alias logic operates between normalization (case, delimiters) and the resolver core. Consult `docs/spec/path-resolution.md` for the immutable ordering of normalization → omission → suffix resolution → canonical construction; aliases do not change those rules, they only rewrite selectors in a predictable way before the resolver stage described there.
 
-## Configuration Model (`cncf.path.aliases`)
+## Configuration Model (`textus.path.aliases`)
 
-Aliases are declared under the `cncf.path.aliases` configuration key and are loaded by `org.goldenport.cncf.path.AliasLoader`. Each alias entry is an object with required `input`/`output` strings, optional `modes` (a list of `RunMode` names, defaulting to every mode), and optional `purpose` metadata.
+Aliases are declared under the `textus.path.aliases` configuration key and are loaded by `org.goldenport.cncf.path.AliasLoader`. The legacy `cncf.path.aliases` key remains supported as a compatibility fallback. Each alias entry is an object with required `input`/`output` strings, optional `modes` (a list of `RunMode` names, defaulting to every mode), and optional `purpose` metadata.
 
 The loader normalizes inputs case-insensitively, ensures outputs look like canonical identifiers (dot-separated), and records every alias in `org.goldenport.cncf.path.AliasResolver`. Invalid configurations—such as missing fields, duplicate inputs, identifier characters outside `[A-Za-z0-9_]`, references to unknown aliases, or cycles—raise `IllegalArgumentException` during startup, preventing the runtime from booting with bad alias data.
 
 ## RunMode Gating
 
-Each alias lists the RunModes it supports. If no mode list is supplied, the alias is active in all modes (`RunMode.values`). When the runtime builds a `GlobalRuntimeContext`, the configuration loader builds a resolver and stills it in the global context. CLI, script, and HTTP flows consult the resolver with the currently executing `RunMode`, so aliases can be published in `cncf.path.aliases` and scoped to `Command`, `Script`, `Server`, or other modes as needed.
+Each alias lists the RunModes it supports. If no mode list is supplied, the alias is active in all modes (`RunMode.values`). When the runtime builds a `GlobalRuntimeContext`, the configuration loader builds a resolver and stills it in the global context. CLI, script, and HTTP flows consult the resolver with the currently executing `RunMode`, so aliases can be published in `textus.path.aliases` and scoped to `Command`, `Script`, `Server`, or other modes as needed.
 
 ## Validation and Failure Semantics
 
