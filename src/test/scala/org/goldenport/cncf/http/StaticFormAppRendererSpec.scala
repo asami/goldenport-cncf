@@ -182,6 +182,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("manual")
       html should include ("/web/manual")
       html should include ("Admin entries")
+      html should include ("Management Console Controls")
+      html should include ("entity.notice")
+      html should include ("optional")
     }
 
     "render resolved Web Descriptor drill-down page" in {

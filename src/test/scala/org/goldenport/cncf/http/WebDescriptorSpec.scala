@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 14, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers {
@@ -38,6 +38,12 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |    notice-board.notice.search-notices:
           |      enabled: true
           |
+          |  admin:
+          |    entity.notice:
+          |      totalCount: optional
+          |    data.audit:
+          |      totalCount: required
+          |
           |  apps:
           |    - name: manual
           |      path: /web/manual
@@ -58,6 +64,10 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.authorization("notice-board.notice.post-notice").scopes shouldBe Vector("notice:write")
       descriptor.authorization("notice-board.notice.post-notice").capabilities shouldBe Vector("notice.post")
       descriptor.form("notice-board.notice.search-notices").enabled shouldBe Some(true)
+      descriptor.admin("entity.notice").totalCount shouldBe WebDescriptor.TotalCountPolicy.Optional
+      descriptor.admin("data.audit").totalCount shouldBe WebDescriptor.TotalCountPolicy.Required
+      descriptor.adminTotalCountPolicy("notice_board", "entity", "notice") shouldBe WebDescriptor.TotalCountPolicy.Optional
+      descriptor.adminTotalCountPolicy("notice_board", "data", "audit") shouldBe WebDescriptor.TotalCountPolicy.Required
       descriptor.apps.map(_.name) shouldBe Vector("manual", "console")
       descriptor.apps.map(_.path) shouldBe Vector("/web/manual", "/web/console")
     }

@@ -1755,7 +1755,25 @@ object StaticFormAppRenderer {
        |</table></div>
        |<p><a href="/web/system/admin/descriptor">Resolved descriptor JSON</a></p>
        |${_web_descriptor_app_list(descriptor)}
-       |${_web_descriptor_exposure_list(descriptor)}""".stripMargin
+       |${_web_descriptor_exposure_list(descriptor)}
+       |${_web_descriptor_admin_list(descriptor)}""".stripMargin
+
+  private def _web_descriptor_admin_list(
+    descriptor: WebDescriptor
+  ): String =
+    if (descriptor.admin.isEmpty) {
+      "<p>No Management Console controls are configured.</p>"
+    } else {
+      val rows = descriptor.admin.toVector.sortBy(_._1).map {
+        case (selector, admin) =>
+          s"""<tr><td><code>${_escape(selector)}</code></td><td>${_escape(admin.totalCount.name)}</td></tr>"""
+      }.mkString("\n")
+      s"""<h3>Management Console Controls</h3>
+         |<div class="table-responsive"><table class="table table-sm">
+         |  <thead><tr><th>Surface</th><th>Total count</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
 
   private def _web_descriptor_json(
     descriptor: WebDescriptor

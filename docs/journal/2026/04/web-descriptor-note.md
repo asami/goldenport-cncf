@@ -15,6 +15,7 @@ The descriptor is separate from CML and defines:
 - API exposure
 - authentication and authorization
 - Form API behavior
+- Management Console behavior
 - traffic control
 - application hosting
 
@@ -51,6 +52,10 @@ web:
   form:
     userAccount.user.create:
       enabled: true
+
+  admin:
+    entity.user:
+      totalCount: optional
 
   rateLimit:
     userAccount.user.create:

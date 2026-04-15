@@ -84,6 +84,12 @@ web:
     notice-board.notice.search-notices:
       enabled: true
 
+  admin:
+    entity.notice:
+      totalCount: optional
+    data.audit:
+      totalCount: required
+
   apps:
     - name: manual
       path: /web/manual
@@ -184,6 +190,35 @@ If no form entry exists, the default follows exposure:
 
 - `public` or `protected`: form may be generated.
 - `internal`: form is not generated.
+
+## Admin Surface Control
+
+`admin.<surface>.<collection>.totalCount` controls whether Management Console
+list/read pages may request total count values.
+
+Supported `totalCount` values are:
+
+- `disabled`: default. Total count is not requested or displayed.
+- `optional`: the page may request total count. If the backing store reports
+  that total count is unsupported or effectively unavailable, the page falls
+  back to `hasNext` paging and displays a warning.
+- `required`: the page requires total count. If the backing store cannot provide
+  it, the admin Operation fails with a structured error.
+
+Initial selector forms are:
+
+```yaml
+admin:
+  entity.notice:
+    totalCount: optional
+  data.audit:
+    totalCount: required
+```
+
+The supported surface names are `entity`, `data`, `view`, and `aggregate`.
+Component-qualified selectors such as `notice-board.entity.notice` are also
+accepted. The unqualified form applies to the named surface and collection
+across components.
 
 ## Application Hosting Entries
 
