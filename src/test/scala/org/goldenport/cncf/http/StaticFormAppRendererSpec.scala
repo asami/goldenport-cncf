@@ -45,7 +45,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -398,6 +398,42 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       dispatcher.paths should contain ("/admin/entity/update")
     }
 
+    "redisplay component entity update form with submitted values when admin stayOnError is enabled" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val descriptor = WebDescriptor(
+        form = Map(
+          "notice-board.admin.entities.notice.update" -> WebDescriptor.Form(stayOnError = true)
+        )
+      )
+      val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
+      val dispatcher = new StaticWebOperationDispatcher(
+        HttpResponse.Text(
+          HttpStatus.BadRequest,
+          ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+          Bag.text("invalid entity update", StandardCharsets.UTF_8)
+        )
+      )
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val recordId = collection.storage.storeRealm.values.head.id.value
+      val req = _post_form_request(
+        s"/form/notice-board/admin/entities/notice/${recordId}/update",
+        "title=bad+title&author=bob"
+      )
+
+      val html = server
+        ._submit_component_admin_entity_update(req, "notice-board", "notice", recordId)
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      html should include ("Edit Notice")
+      html should include ("error.status")
+      html should include ("400")
+      html should include ("invalid entity update")
+      html should include ("value=\"bad title\"")
+      html should include ("value=\"bob\"")
+    }
+
     "apply component entity create form POST into the EntityCollection fixture" in {
       val subsystem = _management_console_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
@@ -624,6 +660,43 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           Some("/web/notice-board/admin/data/audit/audit_3")
         _load_data_record(fixture.dataStoreSpace, "audit", "audit_3").getString("action") shouldBe Some("created")
         dispatcher.paths should contain ("/admin/data/create")
+      }
+    }
+
+    "redisplay component data create form with submitted fields when admin stayOnError is enabled" in {
+      val fixture = _data_fixture()
+      _with_global_runtime(fixture.runtime) {
+        val descriptor = WebDescriptor(
+          form = Map(
+            "notice-board.admin.data.audit.create" -> WebDescriptor.Form(stayOnError = true)
+          )
+        )
+        val engine = new HttpExecutionEngine(fixture.subsystem, Some(descriptor))
+        val dispatcher = new StaticWebOperationDispatcher(
+          HttpResponse.Text(
+            HttpStatus.BadRequest,
+            ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+            Bag.text("invalid data create", StandardCharsets.UTF_8)
+          )
+        )
+        val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+        val req = _post_form_request(
+          "/form/notice-board/admin/data/audit/create",
+          "fields=id%3Daudit_bad%0Aaction%3Dcreated%0Aactor%3Dbob"
+        )
+
+        val html = server
+          ._submit_component_admin_data_create(req, "notice-board", "audit")
+          .flatMap(_.as[String])
+          .unsafeRunSync()
+
+        html should include ("New Audit")
+        html should include ("error.status")
+        html should include ("400")
+        html should include ("invalid data create")
+        html should include ("id=audit_bad")
+        html should include ("action=created")
+        html should include ("actor=bob")
       }
     }
 

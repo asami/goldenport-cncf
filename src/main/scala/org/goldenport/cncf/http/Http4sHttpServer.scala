@@ -31,7 +31,7 @@ import org.goldenport.datatype.{ContentType, MimeBody}
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -807,8 +807,62 @@ final class Http4sHttpServer(
       case Some(template) =>
         IO.pure(_see_other(_render_admin_redirect_template(template, app, surface, collection, operation, form, applied, message)))
       case None =>
-        _html(fallback)
+        if (!applied && descriptor.exists(_.stayOnError))
+          _admin_stay_on_error_response(app, surface, collection, operation, form, message, fallback)
+        else
+          _html(fallback)
     }
+  }
+
+  private def _admin_stay_on_error_response(
+    app: String,
+    surface: String,
+    collection: String,
+    operation: String,
+    form: Record,
+    message: String,
+    fallback: StaticFormAppRenderer.Page
+  ): IO[HResponse[IO]] = {
+    val values = _form_values(form) ++ Map(
+      "error.status" -> "400",
+      "error.body" -> message
+    )
+    val page =
+      (surface, operation, form.getString("id")) match {
+        case ("entities", "update", Some(id)) =>
+          StaticFormAppRenderer.renderComponentAdminEntityEdit(
+            engine.runtimeSubsystem,
+            app,
+            collection,
+            id,
+            values
+          )
+        case ("entities", "create", _) =>
+          StaticFormAppRenderer.renderComponentAdminEntityNew(
+            engine.runtimeSubsystem,
+            app,
+            collection,
+            values
+          )
+        case ("data", "update", Some(id)) =>
+          StaticFormAppRenderer.renderComponentAdminDataEdit(
+            engine.runtimeSubsystem,
+            app,
+            collection,
+            id,
+            values
+          )
+        case ("data", "create", _) =>
+          StaticFormAppRenderer.renderComponentAdminDataNew(
+            engine.runtimeSubsystem,
+            app,
+            collection,
+            values
+          )
+        case _ =>
+          Some(fallback)
+      }
+    _html(page.getOrElse(fallback))
   }
 
   private def _admin_form_descriptor(

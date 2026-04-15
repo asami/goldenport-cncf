@@ -15,7 +15,7 @@ import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 16, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -183,6 +183,27 @@ object StaticFormAppRenderer {
     if (xs.isEmpty) ""
     else s"""<div class="alert alert-danger" role="alert">${_property_rows(xs)}</div>"""
   }
+
+  private def _admin_form_fields(
+    defaults: Vector[(String, String)],
+    values: Map[String, String]
+  ): Vector[(String, String)] = {
+    val userValues = values.filterNot { case (key, _) => key == "error" || key.startsWith("error.") }
+    val defaultKeys = defaults.map(_._1).toSet
+    defaults.map {
+      case (key, value) => key -> userValues.getOrElse(key, value)
+    } ++ userValues.filterNot { case (key, _) => defaultKeys.contains(key) }.toVector.sortBy(_._1)
+  }
+
+  private def _admin_new_fields_value(values: Map[String, String]): String =
+    values.getOrElse(
+      "fields",
+      values.filterNot { case (key, _) => key == "error" || key.startsWith("error.") }
+        .toVector
+        .sortBy(_._1)
+        .map { case (key, value) => s"${key}=${value}" }
+        .mkString("\n")
+    )
 
   private def _operation_form_controls(
     operation: org.goldenport.protocol.spec.OperationDefinition,
@@ -529,7 +550,8 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     componentName: String,
     entityName: String,
-    id: String
+    id: String,
+    values: Map[String, String] = Map.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
@@ -537,7 +559,10 @@ object StaticFormAppRenderer {
       val entityLabel = _title_label(entityPath)
       val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
       val actionPath = s"/form/${componentPath}/admin/entities/${entityPath}/${id}/update"
-      val fields = _admin_entity_record_fields(subsystem, componentPath, entityPath, id).getOrElse(Vector("id" -> id))
+      val fields = _admin_form_fields(
+        _admin_entity_record_fields(subsystem, componentPath, entityPath, id).getOrElse(Vector("id" -> id)),
+        values
+      )
       val controls = fields.map {
         case (key, value) =>
           s"""<div class="mb-3">
@@ -555,6 +580,7 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>Edit ${_escape(entityLabel)}</h2>
+             |  ${_form_error_panel(values)}
              |  <form method="post" action="${_escape(actionPath)}">
              |    ${controls}
              |    <button type="submit" class="btn btn-primary">Update</button>
@@ -567,7 +593,8 @@ object StaticFormAppRenderer {
   def renderComponentAdminEntityNew(
     subsystem: Subsystem,
     componentName: String,
-    entityName: String
+    entityName: String,
+    values: Map[String, String] = Map.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
@@ -575,6 +602,7 @@ object StaticFormAppRenderer {
       val entityLabel = _title_label(entityPath)
       val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
       val actionPath = s"/form/${componentPath}/admin/entities/${entityPath}/create"
+      val fieldsValue = _escape(_admin_new_fields_value(values))
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} New",
         subtitle = "Entity record create baseline",
@@ -585,10 +613,11 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>New ${_escape(entityLabel)}</h2>
+             |  ${_form_error_panel(values)}
              |  <form method="post" action="${_escape(actionPath)}">
              |    <div class="mb-3">
              |      <label class="form-label" for="entityFields">Fields</label>
-             |      <textarea class="form-control" id="entityFields" name="fields" rows="8" placeholder="id=sales-order-1&#10;status=draft"></textarea>
+             |      <textarea class="form-control" id="entityFields" name="fields" rows="8" placeholder="id=sales-order-1&#10;status=draft">${fieldsValue}</textarea>
              |      <div class="form-text">Use one name=value pair per line until schema-driven fields are available.</div>
              |    </div>
              |    <button type="submit" class="btn btn-primary">Create</button>
@@ -1540,14 +1569,18 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     componentName: String,
     dataName: String,
-    id: String
+    id: String,
+    values: Map[String, String] = Map.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val dataPath = NamingConventions.toNormalizedSegment(dataName)
       val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
       val actionPath = s"/form/${componentPath}/admin/data/${dataPath}/${id}/update"
-      val fields = _admin_data_record_fields(subsystem, componentPath, dataPath, id).getOrElse(Vector("id" -> id))
+      val fields = _admin_form_fields(
+        _admin_data_record_fields(subsystem, componentPath, dataPath, id).getOrElse(Vector("id" -> id)),
+        values
+      )
       val controls = fields.map {
         case (key, value) =>
           s"""<div class="mb-3">
@@ -1565,6 +1598,7 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>Edit ${_escape(_title_label(dataPath))}</h2>
+             |  ${_form_error_panel(values)}
              |  <form method="post" action="${_escape(actionPath)}">
              |    ${controls}
              |    <button type="submit" class="btn btn-primary">Update</button>
@@ -1577,13 +1611,15 @@ object StaticFormAppRenderer {
   def renderComponentAdminDataNew(
     subsystem: Subsystem,
     componentName: String,
-    dataName: String
+    dataName: String,
+    values: Map[String, String] = Map.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val dataPath = NamingConventions.toNormalizedSegment(dataName)
       val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
       val actionPath = s"/form/${componentPath}/admin/data/${dataPath}/create"
+      val fieldsValue = _escape(_admin_new_fields_value(values))
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data New",
         subtitle = "Data record create baseline",
@@ -1594,10 +1630,11 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>New ${_escape(_title_label(dataPath))}</h2>
+             |  ${_form_error_panel(values)}
              |  <form method="post" action="${_escape(actionPath)}">
              |    <div class="mb-3">
              |      <label class="form-label" for="dataFields">Fields</label>
-             |      <textarea class="form-control" id="dataFields" name="fields" rows="8" placeholder="id=record-1&#10;status=draft"></textarea>
+             |      <textarea class="form-control" id="dataFields" name="fields" rows="8" placeholder="id=record-1&#10;status=draft">${fieldsValue}</textarea>
              |      <div class="form-text">Use one name=value pair per line.</div>
              |    </div>
              |    <button type="submit" class="btn btn-primary">Create</button>

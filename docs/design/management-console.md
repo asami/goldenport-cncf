@@ -152,7 +152,9 @@ Their descriptor selectors are:
 Admin redirect templates may also reference `${surface}` and `${collection}`.
 For admin create/update, `${result.id}` is the submitted record `id` when
 available, otherwise it falls back to `FormResultMetadata` extraction from the
-Operation result message.
+Operation result message. `stayOnError` redisplays the relevant admin edit/new
+form with submitted values and an error panel, so plain HTML form users can
+correct validation or authorization failures without losing input.
 
 Aggregate command forms use the same mechanism: create forms can redirect to an
 aggregate list or detail page, while update/command forms can redirect to
