@@ -1541,13 +1541,34 @@ object AdminComponent {
         _component_by_name(subsystem, componentName).flatMap(_entity_collection(_, entityName)),
         s"Entity collection not found: ${entityName}"
       )
+      result <- _admin_entity_search(core, collection, effectivePaging)
     } yield OperationResponse.RecordResponse(
       _list_response_record(
         "entity",
         componentName,
         entityName,
-        _page_values(_entity_ids(collection), effectivePaging, pagingDecision),
+        _admin_entity_page(collection, result, effectivePaging, pagingDecision),
         effectivePaging
+      )
+    )
+  }
+
+  private def _admin_entity_search[A](
+    core: ActionCall.Core,
+    collection: EntityCollection[A],
+    paging: _Paging
+  ): Consequence[org.goldenport.cncf.directive.SearchResult[A]] = {
+    given org.goldenport.cncf.context.ExecutionContext = core.executionContext
+    val query = EntityQuery.plan(
+      Record.empty,
+      limit = Some(paging.fetchPageSize),
+      offset = Some(paging.offset),
+      includeTotal = paging.wantsTotal
+    )
+    core.executionContext.entityStoreSpace.search(
+      org.goldenport.cncf.unitofwork.UnitOfWorkOp.EntityStoreSearch(
+        query = org.goldenport.cncf.entity.EntityQuery(collection.descriptor.collectionId, query),
+        tc = collection.descriptor.persistent
       )
     )
   }
@@ -1608,15 +1629,20 @@ object AdminComponent {
         DataStore.CollectionId(dataName),
         QueryDirective(
           DataStoreQuery.Empty,
-          limit = if (effectivePaging.wantsTotal) QueryLimit.Unbounded else QueryLimit.Limit(effectivePaging.fetchSize)
+          limit = QueryLimit.Limit(effectivePaging.fetchPageSize),
+          offset = effectivePaging.offset
         )
       )
+      total <- if (effectivePaging.wantsTotal)
+        subsystem.globalRuntimeContext.dataStoreSpace.count(DataStore.CollectionId(dataName), QueryDirective(DataStoreQuery.Empty)).map(Some(_))
+      else
+        Consequence.success(None)
     } yield OperationResponse.RecordResponse(
       _list_response_record(
         "data",
         "",
         dataName,
-        _page_values(_record_ids(result.records), effectivePaging, pagingDecision),
+        _prefetched_page_values(_record_ids(result.records), effectivePaging, pagingDecision, total),
         effectivePaging
       )
     )
@@ -1896,6 +1922,33 @@ object AdminComponent {
       decision.unavailableReason
     )
   }
+
+  private def _search_result_page[A](
+    collection: EntityCollection[A],
+    result: org.goldenport.cncf.directive.SearchResult[A],
+    paging: _Paging,
+    decision: _PagingCapabilityDecision
+  ): _Page[String] = {
+    val ids = result.data.map(x => collection.descriptor.persistent.id(x).value)
+    _Page(
+      ids.take(paging.pageSize),
+      result.data.size > paging.pageSize,
+      if (paging.wantsTotal) result.totalCount else None,
+      decision.warning,
+      decision.unavailableReason
+    )
+  }
+
+  private def _admin_entity_page[A](
+    collection: EntityCollection[A],
+    result: org.goldenport.cncf.directive.SearchResult[A],
+    paging: _Paging,
+    decision: _PagingCapabilityDecision
+  ): _Page[String] =
+    if (result.nonEmpty || _entity_values(collection).isEmpty)
+      _search_result_page(collection, result, paging, decision)
+    else
+      _page_values(_entity_ids(collection), paging, decision)
 
   private def _prefetched_page_values[A](
     values: Vector[A],

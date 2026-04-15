@@ -350,11 +350,13 @@ object DataStore {
           case QueryOrder.By(field, OrderDirection.Desc) =>
             projected.sortBy(_.getString(field).getOrElse(""))(Ordering[String].reverse)
         }
+        val offset = math.max(0, directive.offset)
+        val window = sorted.drop(offset)
         directive.limit match {
           case QueryLimit.Unbounded =>
-            SearchResult(sorted, ResultRange.Exact, None)
+            SearchResult(window, ResultRange.Exact, None)
           case QueryLimit.Limit(n) =>
-            SearchResult(sorted.take(n), ResultRange.Limited(n), None)
+            SearchResult(window.take(n), ResultRange.Limited(n), None)
         }
       }
     }
@@ -435,7 +437,8 @@ final case class QueryDirective(
   query: Query,
   projection: QueryProjection = QueryProjection.All,
   order: QueryOrder = QueryOrder.None,
-  limit: QueryLimit = QueryLimit.Unbounded
+  limit: QueryLimit = QueryLimit.Unbounded,
+  offset: Int = 0
 )
 
 sealed trait Query

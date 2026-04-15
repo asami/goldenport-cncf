@@ -15,6 +15,7 @@ import org.goldenport.cncf.component.ComponentDescriptor
 import org.goldenport.cncf.security.{EntityApplicationDomain, EntityOperationKind, EntityUsageKind}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
+import org.goldenport.configuration.ConfigurationValue
 import org.goldenport.record.Record
 import org.goldenport.protocol.Protocol
 import org.scalatest.GivenWhenThen
@@ -25,8 +26,7 @@ import org.simplemodeling.model.directive.Condition
 
 /*
  * @since   Mar. 29, 2026
- *  version Apr. 10, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallEntityAccessMetricsSpec
@@ -220,6 +220,46 @@ final class ActionCallEntityAccessMetricsSpec
         _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 1L
         _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
         component.entitySpace.entity[TestPerson](cid.name).storage.storeRealm.values shouldBe empty
+      }
+    }
+
+    "bypass resident entity-space search when configured" in {
+      EntityAccessMetricsRegistry.shared.synchronized {
+        Given("a resident entity and a different datastore-backed entity")
+        EntityAccessMetricsRegistry.shared.clear()
+        given EntityPersistent[TestPerson] = _persistent
+
+        val datastorespace = DataStoreSpace.default()
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        val ctx = _execution_context(datastorespace, entitystorespace)
+        given ExecutionContext = ctx
+        val cid = _cid("person_metrics_search_bypass")
+        val resident = TestPerson(EntityId("test", "resident", cid), "resident", 20)
+        val stored = TestPerson.privateOwnedBy(EntityId("test", "stored", cid), "stored", 30, "test-principal")
+        val _ = datastorespace.inject(
+          DataStoreSpace.Seed(
+            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), stored.toRecord()))
+          )
+        )
+        val subsystem = TestComponentFactory.subsystemWithConfig(
+          Map("textus.entity.search.bypass-entity-space-resident" -> ConfigurationValue.StringValue("true"))
+        )
+        val component = TestComponentFactory.create("metrics_search_bypass", Protocol.empty, subsystem = subsystem)
+        component.entitySpace.registerEntity(cid.name, _resident_collection(cid, resident))
+        val query: EntityQuery[TestPerson] = EntityQuery(cid, Query(TestPersonQuery(
+          id = Condition.any[EntityId],
+          name = Condition.any[String],
+          age = Condition.any[Int]
+        )))
+
+        When("searching through ActionCallEntityStorePart with bypass enabled")
+        val result = _probe(component, ctx).search[TestPerson](query)
+
+        Then("the resident entity-space path is bypassed and datastore results are returned")
+        result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(stored.id))
+        _metric_count("entity.search.bypass.entity-space", "entity-space") shouldBe 1L
+        _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 0L
+        _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
       }
     }
 

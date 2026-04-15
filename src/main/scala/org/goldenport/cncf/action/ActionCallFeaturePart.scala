@@ -867,7 +867,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       case Some(collection) =>
         if (_bypass_entity_space_resident_search) {
           _emit_entity_access("entity.search.bypass.entity-space", _entity_search_attributes(query, "entity-space", "bypass"))
-          _entity_store_search(query, tc)
+          _entity_store_search_direct(query, tc)
         } else {
           _emit_entity_access("entity.search.try.entity-space", _entity_search_attributes(query, "entity-space", "try"))
           val hasresident =
@@ -904,6 +904,18 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     tc: EntityPersistent[T]
   ): ExecUowM[SearchResult[T]] = {
     val op = UnitOfWorkOp.EntityStoreSearch(
+      query,
+      tc,
+      _entity_uow_authorization(Some(query.collection.name), None, "search/list")
+    )
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  private def _entity_store_search_direct[T](
+    query: EntityQuery[T],
+    tc: EntityPersistent[T]
+  ): ExecUowM[SearchResult[T]] = {
+    val op = UnitOfWorkOp.EntityStoreSearchDirect(
       query,
       tc,
       _entity_uow_authorization(Some(query.collection.name), None, "search/list")

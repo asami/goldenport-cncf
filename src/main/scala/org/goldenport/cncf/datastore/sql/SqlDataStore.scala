@@ -505,9 +505,16 @@ class SqlDataStore(
       case QueryLimit.Limit(n) =>
         s" LIMIT ${math.max(0, n)}"
     }
+    val offset =
+      if (directive.offset <= 0)
+        ""
+      else if (limit.nonEmpty)
+        s" OFFSET ${directive.offset}"
+      else
+        s" LIMIT -1 OFFSET ${directive.offset}"
     val where = _where_sql(directive.query)
     SqlDataStore.SqlStatement(
-      s"SELECT $select FROM ${dialect.quote_identifier(_table_name(collection))}${where.sql}$order$limit",
+      s"SELECT $select FROM ${dialect.quote_identifier(_table_name(collection))}${where.sql}$order$limit$offset",
       where.params
     )
   }

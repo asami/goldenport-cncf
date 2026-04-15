@@ -20,7 +20,7 @@ import org.goldenport.cncf.directive.*
  * @since   Jan. 10, 2026
  *  version Feb. 25, 2026
  *  version Mar. 24, 2026
- * @version Apr. 13, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -127,6 +127,7 @@ object UnitOfWorkOp {
   // Special-use direct path to EntityStoreSpace (bypasses EntitySpace/MemoryRealm).
   final case class EntityStoreSearchDirect[T](
     query: EntityQuery[T],
-    tc: EntityPersistent[T]
+    tc: EntityPersistent[T],
+    authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[SearchResult[T]]
 }

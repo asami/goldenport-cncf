@@ -225,9 +225,14 @@ just to count rows. Instead it keeps the page query bounded and asks the
 DataStore for a separate total count. SQLite uses `SELECT COUNT(*)` with the
 same translated `WHERE` expression.
 
-Since `QueryDirective` currently has no offset slot, EntityStore pushes down
-`offset + limit` as the DataStore limit and then applies the final slice after
-decoding. This applies whether or not total count is requested.
+`QueryDirective` carries both `limit` and `offset`, so EntityStore pushes page
+range directly into DataStore search. SQL DataStore translates this into
+`LIMIT/OFFSET`; when an offset is requested without a limit, SQLite uses
+`LIMIT -1 OFFSET n`.
+
+Total count must ignore page range. EntityStore therefore runs the count
+directive with `limit=Unbounded` and `offset=0`, while keeping the page search
+bounded.
 
 If a DataStore cannot support total count, an optional total request should
 return no total, and a required total request should fail at the caller policy

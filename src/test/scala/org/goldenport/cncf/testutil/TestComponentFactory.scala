@@ -1,6 +1,6 @@
 package org.goldenport.cncf.testutil
 
-import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.protocol.Protocol
 import org.goldenport.cncf.component.*
 import org.goldenport.cncf.subsystem.Subsystem
@@ -10,7 +10,8 @@ import org.goldenport.cncf.path.AliasResolver
 /*
  * @since   Jan.  8, 2026
  *  version Jan. 14, 2026
- * @version Feb. 15, 2026
+ *  version Feb. 15, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object TestComponentFactory {
@@ -22,20 +23,36 @@ object TestComponentFactory {
 
   def emptySubsystem(
     name: String = "test",
-    version: Option[String] = None
+    version: Option[String] = None,
+    configuration: ResolvedConfiguration = emptyConfiguration
   ): Subsystem =
     Subsystem(
       name = name,
       version = version,
-      configuration = emptyConfiguration,
+      configuration = configuration,
       aliasResolver = AliasResolver.empty,
       runMode = RunMode.Command
+    )
+
+  def subsystemWithConfig(
+    values: Map[String, ConfigurationValue],
+    name: String = "test",
+    version: Option[String] = None
+  ): Subsystem =
+    emptySubsystem(
+      name,
+      version,
+      ResolvedConfiguration(
+        Configuration(values),
+        ConfigurationTrace.empty
+      )
     )
 
   def create(
     name: String,
     protocol: Protocol,
-    serviceFactoryOpt: Option[Component.ServiceFactory] = None
+    serviceFactoryOpt: Option[Component.ServiceFactory] = None,
+    subsystem: Subsystem = emptySubsystem("test")
   ): Component = {
     val componentId = ComponentId(name)
     val instanceId = ComponentInstanceId.default(componentId)
@@ -67,8 +84,7 @@ object TestComponentFactory {
       factory
     )
     val c = Component.Instance(core)
-    val dummy = emptySubsystem("test")
-    val params = ComponentInit(dummy, core, ComponentOrigin.Builtin)
+    val params = ComponentInit(subsystem, core, ComponentOrigin.Builtin)
     c.initialize(params)
   }
 }

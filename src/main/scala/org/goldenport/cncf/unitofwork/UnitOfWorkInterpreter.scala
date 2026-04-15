@@ -26,10 +26,7 @@ import org.goldenport.cncf.security.OperationAccessPolicy
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 29, 2026
- *  version Apr.  4, 2026
- *  version Apr.  7, 2026
- *  version Apr. 13, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -191,7 +188,10 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreSearchDirect[t] @unchecked) =>
       withCallTree("uow:entitystore:search:direct") {
-        _entity_store_space.search(UnitOfWorkOp.EntityStoreSearch(m.query, m.tc))
+        val op = UnitOfWorkOp.EntityStoreSearch(m.query, m.tc, m.authorization)
+        _authorize(m.authorization).flatMap { _ =>
+          _entity_store_space.search(UnitOfWorkOp.EntityStoreSearch(m.query, m.tc)).flatMap(_filter_search_result(op, _))
+        }
       }
 
     case UnitOfWorkOp.ShellCommandExec(command) =>
