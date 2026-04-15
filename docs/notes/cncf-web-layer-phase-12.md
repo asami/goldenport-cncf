@@ -189,8 +189,44 @@ JSON Form API is the input preparation layer. It provides:
 - validation endpoint
 - consistent validation error shape
 
-The Form API must not execute business logic by itself. Execution goes through
-the REST API.
+The stable Form API definition response contract is maintained in
+`docs/design/web-form-api-schema.md`. This note records the Phase 12
+implementation surface and remaining rollout context.
+
+The Form API definition endpoint is available at:
+
+```text
+GET /form-api/{component}/{service}/{operation}
+GET /form-api/{component}/admin/entities/{entity}
+GET /form-api/{component}/admin/data/{data}
+GET /form-api/{component}/admin/views/{view}
+GET /form-api/{component}/admin/aggregates/{aggregate}
+```
+
+These endpoints return the same `ResolvedWebSchema` field contract used by the
+HTML form renderers: name, label, type, datatype, multiplicity, required,
+readonly, hidden/system, values, multiple, placeholder, and help. This keeps
+Static Form App HTML, JSON-oriented clients, and later SPA/SDK code on the same
+schema source.
+
+Operation form definitions are resolved from `ParameterDefinition` plus
+WebDescriptor controls. Admin entity, view, and aggregate definitions are
+resolved from the effective entity schema plus WebDescriptor controls. Admin
+data definitions use descriptor/schema information when available and otherwise
+fall back to best-effort inference from data read/list results. In fallback
+inference, `id` is normalized to the first field when present because the
+intermediate `Record`/map route may not preserve model declaration order.
+
+The Form API must not execute business logic by itself. Definition and
+validation endpoints prepare input; execution remains an Operation dispatch.
+Validation is limited to Web input admission, such as required fields,
+datatype shape, candidate values, multiplicity, and unknown-field warnings.
+Domain invariants, state-dependent cross-field rules, instance authorization,
+optimistic locking, and datastore-backed existence/uniqueness checks remain
+Operation-side validation. The normative boundary is maintained in
+`docs/design/web-form-api-schema.md`.
+The current POST compatibility route under `/form-api/{component}/{service}/{operation}`
+submits form data and returns the Operation response directly.
 
 Management Console create/update form submissions follow the same rule. The
 HTML submit route under `/form/{component}/admin/...` builds an Operation

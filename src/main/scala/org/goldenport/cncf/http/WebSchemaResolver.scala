@@ -33,6 +33,11 @@ object WebSchemaResolver {
     case Empty
   }
 
+  enum FieldOrderStrategy {
+    case SchemaOrder
+    case IdFirst
+  }
+
   final case class ResolvedWebSchema(
     selector: String,
     surface: Surface,
@@ -49,9 +54,14 @@ object WebSchemaResolver {
 
   final case class ResolvedWebField(
     name: String,
+    label: Option[String] = None,
     dataType: Option[String] = None,
     multiplicity: Option[String] = None,
     control: WebDescriptor.FormControl = WebDescriptor.FormControl(),
+    hidden: Boolean = false,
+    system: Boolean = false,
+    values: Vector[String] = Vector.empty,
+    multiple: Boolean = false,
     readonly: Boolean = false,
     placeholder: Option[String] = None,
     help: Option[String] = None,
@@ -80,6 +90,10 @@ object WebSchemaResolver {
     def asControl: WebDescriptor.FormControl =
       control.copy(
         controlType = Some(controlType),
+        hidden = hidden,
+        system = system,
+        values = values,
+        multiple = multiple,
         required = Some(required),
         readonly = readonly,
         placeholder = placeholder,
@@ -92,9 +106,10 @@ object WebSchemaResolver {
     componentPath: String,
     entityName: String,
     webDescriptor: WebDescriptor,
-    fallbackFields: => Vector[String] = Vector.empty
+    fallbackFields: => Vector[String] = Vector.empty,
+    fieldOrderStrategy: FieldOrderStrategy = FieldOrderStrategy.IdFirst
   ): ResolvedWebSchema =
-    resolveEntityLike(component, componentPath, Surface.Entity, "entity", entityName, entityName, webDescriptor, fallbackFields)
+    resolveEntityLike(component, componentPath, Surface.Entity, "entity", entityName, entityName, webDescriptor, fallbackFields, fieldOrderStrategy)
 
   def resolveView(
     component: Component,
@@ -102,9 +117,10 @@ object WebSchemaResolver {
     viewName: String,
     entityName: Option[String],
     webDescriptor: WebDescriptor,
-    fallbackFields: => Vector[String] = Vector.empty
+    fallbackFields: => Vector[String] = Vector.empty,
+    fieldOrderStrategy: FieldOrderStrategy = FieldOrderStrategy.IdFirst
   ): ResolvedWebSchema =
-    resolveEntityLike(component, componentPath, Surface.View, "view", viewName, entityName.getOrElse(viewName), webDescriptor, fallbackFields)
+    resolveEntityLike(component, componentPath, Surface.View, "view", viewName, entityName.getOrElse(viewName), webDescriptor, fallbackFields, fieldOrderStrategy)
 
   def resolveAggregate(
     component: Component,
@@ -112,20 +128,26 @@ object WebSchemaResolver {
     aggregateName: String,
     entityName: Option[String],
     webDescriptor: WebDescriptor,
-    fallbackFields: => Vector[String] = Vector.empty
+    fallbackFields: => Vector[String] = Vector.empty,
+    fieldOrderStrategy: FieldOrderStrategy = FieldOrderStrategy.IdFirst
   ): ResolvedWebSchema =
-    resolveEntityLike(component, componentPath, Surface.Aggregate, "aggregate", aggregateName, entityName.getOrElse(aggregateName), webDescriptor, fallbackFields)
+    resolveEntityLike(component, componentPath, Surface.Aggregate, "aggregate", aggregateName, entityName.getOrElse(aggregateName), webDescriptor, fallbackFields, fieldOrderStrategy)
 
   def resolveData(
     componentPath: String,
     dataName: String,
     webDescriptor: WebDescriptor,
-    fallbackFields: => Vector[String]
+    fallbackFields: => Vector[String],
+    fieldOrderStrategy: FieldOrderStrategy = FieldOrderStrategy.IdFirst
   ): ResolvedWebSchema =
     _merge(
       selector = s"${componentPath}.data.${dataName}",
       surface = Surface.Data,
-      base = fallbackFields.map(name => ResolvedWebField(name = name, source = Source.Sampling)),
+      base = _order_fields(
+        fallbackFields.map(name => ResolvedWebField(name = name, source = Source.Sampling)),
+        Source.Sampling,
+        fieldOrderStrategy
+      ),
       baseSource = if (fallbackFields.nonEmpty) Source.Sampling else Source.Empty,
       adminFields = webDescriptor.adminFields(componentPath, "data", dataName)
     )
@@ -177,6 +199,7 @@ object WebSchemaResolver {
     schema.columns.map { column =>
       ResolvedWebField(
         name = column.name.value,
+        label = column.label.map(_.value.displayMessage),
         dataType = Some(column.domain.datatype.name),
         multiplicity = Some(column.domain.multiplicity.toString),
         control = WebDescriptor.FormControl(
@@ -190,6 +213,10 @@ object WebSchemaResolver {
           placeholder = column.web.placeholder,
           help = column.web.help
         ),
+        hidden = column.web.hidden,
+        system = column.web.system,
+        values = column.web.values,
+        multiple = column.web.multiple,
         readonly = column.web.readonly,
         placeholder = column.web.placeholder,
         help = column.web.help,
@@ -205,16 +232,21 @@ object WebSchemaResolver {
     collectionName: String,
     entityName: String,
     webDescriptor: WebDescriptor,
-    fallbackFields: => Vector[String]
+    fallbackFields: => Vector[String],
+    fieldOrderStrategy: FieldOrderStrategy
   ): ResolvedWebSchema = {
     val runtimeDescriptor = component.entityRuntimeDescriptor(entityName)
     val schemaFields = runtimeDescriptor.flatMap(_.schema).map(fromSchema).getOrElse(Vector.empty)
     val fallback = if (schemaFields.nonEmpty) Vector.empty else fallbackFields
     val base =
       if (schemaFields.nonEmpty)
-        _ensure_id_fields(schemaFields, Source.Schema)
+        _order_fields(schemaFields, Source.Schema, fieldOrderStrategy)
       else
-        fallback.map(name => ResolvedWebField(name = name, source = Source.Sampling))
+        _order_fields(
+          fallback.map(name => ResolvedWebField(name = name, source = Source.Sampling)),
+          Source.Sampling,
+          fieldOrderStrategy
+        )
     val source =
       if (schemaFields.nonEmpty) Source.Schema
       else if (fallback.nonEmpty) Source.Sampling
@@ -255,6 +287,7 @@ object WebSchemaResolver {
   ): ResolvedWebField =
     ResolvedWebField(
       name = parameter.name,
+      label = parameter.label.map(_.displayMessage),
       dataType = Option(parameter.domain.datatype).map(_.toString),
       multiplicity = Option(parameter.domain.multiplicity).map(_.toString),
       control = WebDescriptor.FormControl(
@@ -278,20 +311,51 @@ object WebSchemaResolver {
     field: ResolvedWebField,
     control: WebDescriptor.FormControl,
     source: Source
-  ): ResolvedWebField =
+  ): ResolvedWebField = {
+    val mergedControl = _merge_control(field.control, control)
     field.copy(
-      control = control,
-      readonly = control.readonly,
+      control = mergedControl,
+      hidden = mergedControl.hidden,
+      system = mergedControl.system,
+      values = mergedControl.values,
+      multiple = mergedControl.multiple,
+      readonly = mergedControl.readonly,
       placeholder = control.placeholder.orElse(field.placeholder),
       help = control.help.orElse(field.help),
       source = source
     )
+  }
 
-  private def _ensure_id_fields(
+  private def _merge_control(
+    base: WebDescriptor.FormControl,
+    overrideControl: WebDescriptor.FormControl
+  ): WebDescriptor.FormControl =
+    WebDescriptor.FormControl(
+      controlType = overrideControl.controlType.orElse(base.controlType),
+      hidden = base.hidden || overrideControl.hidden,
+      system = base.system || overrideControl.system,
+      values = if (overrideControl.values.nonEmpty) overrideControl.values else base.values,
+      multiple = base.multiple || overrideControl.multiple,
+      required = overrideControl.required.orElse(base.required),
+      readonly = base.readonly || overrideControl.readonly,
+      placeholder = overrideControl.placeholder.orElse(base.placeholder),
+      help = overrideControl.help.orElse(base.help)
+    )
+
+  private def _order_fields(
     fields: Vector[ResolvedWebField],
-    source: Source
+    source: Source,
+    strategy: FieldOrderStrategy
   ): Vector[ResolvedWebField] =
-    if (fields.exists(_.name == "id")) fields else ResolvedWebField(name = "id", source = source) +: fields
+    strategy match {
+      case FieldOrderStrategy.SchemaOrder =>
+        fields
+      case FieldOrderStrategy.IdFirst =>
+        fields.find(_.name == "id") match {
+          case Some(id) => id +: fields.filterNot(_.name == "id")
+          case None => ResolvedWebField(name = "id", source = source) +: fields
+        }
+    }
 
   private def _is_secret(name: String): Boolean = {
     val n = NamingConventions.toNormalizedSegment(name)

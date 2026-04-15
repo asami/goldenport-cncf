@@ -23,7 +23,7 @@ final class WebSchemaResolverSpec extends AnyWordSpec with Matchers {
         Column(BaseContent.simple("title"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
         Column(BaseContent.simple("published"), ValueDomain(datatype = XBoolean, multiplicity = Multiplicity.ZeroOne)),
         Column(
-          BaseContent.simple("body"),
+          BaseContent.Builder("body").label("Body text").build(),
           ValueDomain(datatype = XString, multiplicity = Multiplicity.One),
           web = WebColumn(
             controlType = Some("textarea"),
@@ -62,7 +62,82 @@ final class WebSchemaResolverSpec extends AnyWordSpec with Matchers {
       resolved.controls("body").required shouldBe Some(true)
       resolved.fields.find(_.name == "body").flatMap(_.placeholder) shouldBe Some("Write the notice body.")
       resolved.fields.find(_.name == "body").flatMap(_.help) shouldBe Some("Notice body shown on the board.")
+      resolved.fields.find(_.name == "body").flatMap(_.label) shouldBe Some("Body text")
       resolved.fields.find(_.name == "body").exists(_.readonly) shouldBe true
+    }
+
+    "preserve Schema web metadata when WebDescriptor partially overrides a field" in {
+      val schema = Schema(Vector(
+        Column(
+          BaseContent.Builder("status").label("Publication status").build(),
+          ValueDomain(datatype = XString, multiplicity = Multiplicity.One),
+          web = WebColumn(
+            controlType = Some("select"),
+            values = Vector("draft", "published"),
+            required = Some(true),
+            help = Some("Schema help")
+          )
+        )
+      ))
+      val component = _component_with_schema(schema)
+      val descriptor = WebDescriptor(
+        admin = Map(
+          "entity.notice" -> WebDescriptor.AdminSurface(fields = Vector(
+            WebDescriptor.AdminField(
+              "status",
+              WebDescriptor.FormControl(placeholder = Some("Descriptor placeholder"))
+            )
+          ))
+        )
+      )
+
+      val resolved = WebSchemaResolver.resolveEntity(component, "notice-board", "notice", descriptor)
+      val status = resolved.fields.find(_.name == "status").getOrElse(fail("status field is missing"))
+
+      status.label shouldBe Some("Publication status")
+      status.asControl.controlType shouldBe Some("select")
+      status.asControl.values shouldBe Vector("draft", "published")
+      status.asControl.required shouldBe Some(true)
+      status.placeholder shouldBe Some("Descriptor placeholder")
+      status.help shouldBe Some("Schema help")
+    }
+
+    "preserve Schema column order when schema-order strategy is selected" in {
+      val schema = Schema(Vector(
+        Column(BaseContent.simple("title"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+        Column(BaseContent.simple("id"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+        Column(BaseContent.simple("body"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One))
+      ))
+      val component = _component_with_schema(schema)
+
+      val resolved = WebSchemaResolver.resolveEntity(
+        component,
+        "notice-board",
+        "notice",
+        WebDescriptor.empty,
+        fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
+      )
+
+      resolved.fieldNames shouldBe Vector("title", "id", "body")
+    }
+
+    "apply id-first as an explicit admin list ordering strategy" in {
+      val schema = Schema(Vector(
+        Column(BaseContent.simple("title"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+        Column(BaseContent.simple("id"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+        Column(BaseContent.simple("body"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One))
+      ))
+      val component = _component_with_schema(schema)
+
+      val resolved = WebSchemaResolver.resolveEntity(
+        component,
+        "notice-board",
+        "notice",
+        WebDescriptor.empty,
+        fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.IdFirst
+      )
+
+      resolved.fieldNames shouldBe Vector("id", "title", "body")
     }
 
     "merge operation parameter schema with WebDescriptor controls" in {
@@ -70,11 +145,13 @@ final class WebSchemaResolverSpec extends AnyWordSpec with Matchers {
         "notice-board.notice.post-notice",
         Vector(
           ParameterDefinition(
-            content = BaseContent.simple("body"),
+            content = BaseContent.Builder("body").label("Notice body").build(),
             kind = ParameterDefinition.Kind.Argument,
             domain = ValueDomain(datatype = XString, multiplicity = Multiplicity.One),
             web = WebColumn(
-              controlType = Some("textarea"),
+              controlType = Some("select"),
+              values = Vector("hello", "world"),
+              required = Some(true),
               placeholder = Some("Write the notice body."),
               help = Some("Notice body.")
             )
@@ -86,18 +163,45 @@ final class WebSchemaResolverSpec extends AnyWordSpec with Matchers {
           )
         ),
         Map(
-          "accessToken" -> WebDescriptor.FormControl(hidden = true)
+          "zeta" -> WebDescriptor.FormControl(hidden = true),
+          "accessToken" -> WebDescriptor.FormControl(hidden = true),
+          "body" -> WebDescriptor.FormControl(placeholder = Some("Descriptor body."))
         )
       )
 
-      schema.fieldNames shouldBe Vector("body", "published", "accessToken")
-      schema.controls("body").controlType shouldBe Some("textarea")
+      schema.fieldNames shouldBe Vector("body", "published", "accessToken", "zeta")
+      schema.fields.find(_.name == "body").flatMap(_.label) shouldBe Some("Notice body")
+      schema.controls("body").controlType shouldBe Some("select")
+      schema.controls("body").values shouldBe Vector("hello", "world")
       schema.controls("body").required shouldBe Some(true)
-      schema.fields.find(_.name == "body").flatMap(_.placeholder) shouldBe Some("Write the notice body.")
+      schema.fields.find(_.name == "body").flatMap(_.placeholder) shouldBe Some("Descriptor body.")
       schema.fields.find(_.name == "body").flatMap(_.help) shouldBe Some("Notice body.")
       schema.controls("published").controlType shouldBe Some("checkbox")
       schema.controls("published").required shouldBe Some(false)
       schema.controls("accessToken").hidden shouldBe true
+      schema.controls("zeta").hidden shouldBe true
     }
+  }
+
+  private def _component_with_schema(
+    schema: Schema
+  ) = {
+    val descriptor = ComponentDescriptor(
+      componentName = Some("notice_board"),
+      entityRuntimeDescriptors = Vector(
+        EntityRuntimeDescriptor(
+          entityName = "notice",
+          collectionId = EntityCollectionId("sys", "sys", "notice"),
+          memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+          partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+          maxPartitions = 4,
+          maxEntitiesPerPartition = 100,
+          schema = Some(schema)
+        )
+      )
+    )
+    TestComponentFactory
+      .create("notice_board", Protocol.empty)
+      .withComponentDescriptors(Vector(descriptor))
   }
 }

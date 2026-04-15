@@ -197,6 +197,37 @@ access modes. Those remain in the existing security model.
 `form.<operation>.enabled` controls whether the JSON Form API and plain HTML
 FORM entry are available for that operation.
 
+The stable JSON response contract for Form API definition endpoints is defined
+in `docs/design/web-form-api-schema.md`. This note keeps the WebDescriptor
+configuration side of that contract.
+
+The operation form definition endpoint is:
+
+```text
+GET /form-api/{component}/{service}/{operation}
+```
+
+It uses `WebSchemaResolver.resolveOperationControls` and returns the same
+resolved field contract used by the corresponding HTML page under
+`/form/{component}/{service}/{operation}`. `POST /form-api/...` remains the
+direct Operation-response route; it is not the schema-definition endpoint.
+
+Management Console form definition endpoints use the same JSON field contract:
+
+```text
+GET /form-api/{component}/admin/entities/{entity}
+GET /form-api/{component}/admin/data/{data}
+GET /form-api/{component}/admin/views/{view}
+GET /form-api/{component}/admin/aggregates/{aggregate}
+```
+
+Entity, View, and Aggregate definitions are resolved from the effective entity
+schema plus WebDescriptor controls. Data definitions use descriptor/schema
+metadata when available and otherwise infer fields from the admin data read/list
+operations. Because inferred fields may pass through unordered map-like
+structures, the fallback route normalizes `id` to the first field when it is
+present.
+
 If no form entry exists, the default follows exposure:
 
 - `public` or `protected`: form may be generated.
@@ -247,6 +278,24 @@ schema before rendering. Renderers should consume the resolved Web schema rather
 than directly reading CML, generated companions, component descriptor, or
 WebDescriptor structures.
 
+The current runtime information route is:
+
+```text
+CML
+  -> org.goldenport.schema.Schema / ParameterDefinition
+  -> EntityRuntimeDescriptor / OperationDefinition
+  -> WebSchemaResolver.ResolvedWebSchema
+  -> StaticFormAppRenderer
+```
+
+`ResolvedWebSchema` is the single Web-facing composition result for generated
+HTML forms and Management Console forms. It carries `ResolvedWebField` entries
+with name, label, datatype, multiplicity, control type, requiredness, readonly,
+hidden/system flags, select values, multiple-selection intent, placeholder, and
+help text. Renderer code should operate on `ResolvedWebField` rather than on a
+parallel `Vector[String]` plus lookup `Map`, because the field vector preserves
+the source schema order and the full Web metadata together.
+
 Portable Web hints belong to `org.goldenport.schema.Schema` rather than to a
 parallel CNCF-only field list. The initial carrier is `Schema.Column.web`, which
 can hold control type, required override, hidden/system flags, select values,
@@ -255,6 +304,45 @@ the same vocabulary through `WebDescriptor.FormControl`, and operation
 parameters can carry it through `ParameterDefinition.web`. Missing presentation
 needs should be added to the shared Schema model first and then mapped through
 `WebSchemaResolver`.
+
+### Web Schema Ordering
+
+The default input order for Entity, Data, View, Aggregate detail, and Operation
+forms is the CML-derived Schema or ParameterDefinition definition order.
+Implementations must preserve this order by passing the ordered
+`ResolvedWebField` vector through to rendering. Maps may be used only for
+lookup; they must not become the authoritative form field order.
+
+When no schema is available and a field list is inferred from runtime records,
+the inferred order is best effort. The current fallback rule moves `id` to the
+first position when present and leaves the remaining inferred fields in their
+observed order.
+
+Management Console list pages may use a different explicit field-ordering
+strategy. The initial list strategy is `FieldOrderStrategy.IdFirst`, which keeps
+`id` visible as the first list column even when a schema was authored in another
+order. Form/detail screens use `FieldOrderStrategy.SchemaOrder`.
+
+WebDescriptor-only fields that do not exist in the schema are extension fields.
+For operation controls they are appended after schema parameters in stable name
+order. For HTML create/edit forms, extra submitted values are rendered after
+schema fields in stable name order.
+
+### Web Schema Merge Rules
+
+WebDescriptor is a presentation and deployment override layer, not a replacement
+schema. Partial overrides must not erase CML/Schema-derived metadata. For
+example, a WebDescriptor field that only supplies `placeholder` must preserve
+the field's schema-derived `label`, `type`, `values`, `required`, and `help`.
+
+The merge rule is:
+
+- `controlType`, `required`, `placeholder`, and `help` are overridden only when
+  the descriptor explicitly supplies a value.
+- `hidden`, `system`, `multiple`, and `readonly` are additive flags.
+- `values` are replaced only when the descriptor supplies a non-empty list.
+- Descriptor-only fields are allowed, but they are treated as extension
+  controls with `WebDescriptor` as their source.
 
 Field entries may be short strings or records:
 

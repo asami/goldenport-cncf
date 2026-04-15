@@ -37,6 +37,10 @@ HTML FORM submission:
 
 ```text
 GET  /form-api/{component}/{service}/{operation}
+GET  /form-api/{component}/admin/entities/{entity}
+GET  /form-api/{component}/admin/data/{data}
+GET  /form-api/{component}/admin/views/{view}
+GET  /form-api/{component}/admin/aggregates/{aggregate}
 POST /form-api/{component}/{service}/{operation}/validate
 ```
 
@@ -184,8 +188,19 @@ generic CNCF behavior and does not contain sample-app-specific page content.
 JSON Form API is an input preparation layer:
 
 - `GET /form-api/...` returns form metadata for an operation.
+- `GET /form-api/{component}/admin/entities/{entity}` returns Management
+  Console entity form metadata from the resolved Web schema.
+- `GET /form-api/{component}/admin/data/{data}` returns Management Console data
+  form metadata from the resolved Web schema.
+- `GET /form-api/{component}/admin/views/{view}` returns Management Console view
+  form metadata from the resolved Web schema.
+- `GET /form-api/{component}/admin/aggregates/{aggregate}` returns Management
+  Console aggregate form metadata from the resolved Web schema.
 - `POST /form-api/.../validate` validates input but does not execute the operation.
 - operation execution still uses the REST operation path.
+
+The stable JSON response contract for the definition endpoints is maintained in
+`docs/design/web-form-api-schema.md`.
 
 Static Form App may use JSON Form API when it needs schema-driven forms, but
 plain HTML pages can submit directly through `/form/...`.
@@ -427,6 +442,14 @@ boundary.
 The Management Console is the first practical driver for Form Web CRUD
 foundation features. The same foundation must be reusable by ordinary Form Web
 applications.
+
+Management Console and ordinary Static Form App input forms use
+`WebSchemaResolver.ResolvedWebSchema` as the effective form schema. The primary
+source is CML-derived `Schema` / `ParameterDefinition` metadata; WebDescriptor
+is a presentation override layer. Form field order follows the resolved schema
+field vector, while list pages may opt into an explicit `id`-first strategy.
+See `docs/notes/cncf-web-descriptor-minimum-schema.md` for the current merge and
+ordering rules.
 
 The required browser-visible flow is:
 

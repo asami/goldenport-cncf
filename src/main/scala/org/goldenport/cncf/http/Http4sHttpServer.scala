@@ -127,6 +127,16 @@ final class Http4sHttpServer(
         _form_index(app)
       case req @ GET -> Root / "form" / app / service / operation =>
         _operation_form(req, app, service, operation)
+      case req @ GET -> Root / "form-api" / app / "admin" / "entities" / entity =>
+        _component_admin_entity_form_api_definition(req, app, entity)
+      case req @ GET -> Root / "form-api" / app / "admin" / "data" / data =>
+        _component_admin_data_form_api_definition(req, app, data)
+      case req @ GET -> Root / "form-api" / app / "admin" / "views" / view =>
+        _component_admin_view_form_api_definition(req, app, view)
+      case req @ GET -> Root / "form-api" / app / "admin" / "aggregates" / aggregate =>
+        _component_admin_aggregate_form_api_definition(req, app, aggregate)
+      case req @ GET -> Root / "form-api" / app / service / operation =>
+        _operation_form_api_definition(req, app, service, operation)
       case req @ GET -> Root / "form" / app / service / operation / "result" =>
         _operation_form_result(req, app, service, operation)
       case req @ GET -> Root / "form" / app / service / operation / "continue" / id =>
@@ -141,6 +151,8 @@ final class Http4sHttpServer(
         _submit_component_admin_data_update(req, app, data, id)
       case req @ POST -> Root / "form" / app / service / operation =>
         _submit_operation_form(req, app, service, operation)
+      case req @ POST -> Root / "form-api" / app / service / operation / "validate" =>
+        _validate_operation_form_api(req, app, service, operation)
       case req @ POST -> Root / "form-api" / app / service / operation =>
         _submit_operation_form_api(req, app, service, operation)
       case req =>
@@ -503,6 +515,89 @@ final class Http4sHttpServer(
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form not found"))
     }
 
+  private[http] def _operation_form_api_definition(
+    req: org.http4s.Request[IO],
+    app: String,
+    service: String,
+    operation: String
+  ): IO[HResponse[IO]] =
+    if (!_is_form_enabled(app, service, operation)) {
+      IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form API not found"))
+    } else if (!_is_web_authorized(app, service, operation, Some(req))) {
+      _forbidden()
+    } else {
+      StaticFormAppRenderer.renderOperationFormDefinition(engine.runtimeSubsystem, app, service, operation, engine.webDescriptor) match {
+        case Some(p) =>
+          _json(p)
+        case None =>
+          IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form API not found"))
+      }
+    }
+
+  private[http] def _component_admin_entity_form_api_definition(
+    req: org.http4s.Request[IO],
+    app: String,
+    entity: String
+  ): IO[HResponse[IO]] =
+    if (!_is_web_authorized(app, "admin.entities", entity, Some(req))) {
+      _forbidden()
+    } else {
+      StaticFormAppRenderer.renderComponentAdminEntityFormDefinition(engine.runtimeSubsystem, app, entity, engine.webDescriptor) match {
+        case Some(p) =>
+          _json(p)
+        case None =>
+          IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity form API not found"))
+      }
+    }
+
+  private[http] def _component_admin_data_form_api_definition(
+    req: org.http4s.Request[IO],
+    app: String,
+    data: String
+  ): IO[HResponse[IO]] =
+    if (!_is_web_authorized(app, "admin.data", data, Some(req))) {
+      _forbidden()
+    } else {
+      StaticFormAppRenderer.renderComponentAdminDataFormDefinition(engine.runtimeSubsystem, app, data, engine.webDescriptor) match {
+        case Some(p) =>
+          _json(p)
+        case None =>
+          IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data form API not found"))
+      }
+    }
+
+  private[http] def _component_admin_view_form_api_definition(
+    req: org.http4s.Request[IO],
+    app: String,
+    view: String
+  ): IO[HResponse[IO]] =
+    if (!_is_web_authorized(app, "admin.views", view, Some(req))) {
+      _forbidden()
+    } else {
+      StaticFormAppRenderer.renderComponentAdminViewFormDefinition(engine.runtimeSubsystem, app, view, engine.webDescriptor) match {
+        case Some(p) =>
+          _json(p)
+        case None =>
+          IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component view form API not found"))
+      }
+    }
+
+  private[http] def _component_admin_aggregate_form_api_definition(
+    req: org.http4s.Request[IO],
+    app: String,
+    aggregate: String
+  ): IO[HResponse[IO]] =
+    if (!_is_web_authorized(app, "admin.aggregates", aggregate, Some(req))) {
+      _forbidden()
+    } else {
+      StaticFormAppRenderer.renderComponentAdminAggregateFormDefinition(engine.runtimeSubsystem, app, aggregate, engine.webDescriptor) match {
+        case Some(p) =>
+          _json(p)
+        case None =>
+          IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component aggregate form API not found"))
+      }
+    }
+
   private[http] def _submit_operation_form(
     req: org.http4s.Request[IO],
     app: String,
@@ -579,6 +674,33 @@ final class Http4sHttpServer(
         )
         out
       }
+    }
+
+  private[http] def _validate_operation_form_api(
+    req: org.http4s.Request[IO],
+    app: String,
+    service: String,
+    operation: String
+  ): IO[HResponse[IO]] =
+    if (!_is_form_enabled(app, service, operation)) {
+      IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form validation API not found"))
+    } else if (!_is_web_authorized(app, service, operation, Some(req))) {
+      _forbidden()
+    } else {
+      for {
+        form <- _to_plain_form_record(req)
+        response <- StaticFormAppRenderer.renderOperationFormValidation(
+          engine.runtimeSubsystem,
+          app,
+          service,
+          operation,
+          _form_values(form),
+          engine.webDescriptor
+        ) match {
+          case Some(p) => _json(p)
+          case None => IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form validation API not found"))
+        }
+      } yield response
     }
 
   private def _operation_form_continue(
@@ -1117,6 +1239,13 @@ final class Http4sHttpServer(
       HResponse[IO](HStatus.Ok)
         .withEntity(p.body)
         .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+    )
+
+  private def _json(p: StaticFormAppRenderer.Page): IO[HResponse[IO]] =
+    IO.pure(
+      HResponse[IO](HStatus.Ok)
+        .withEntity(p.body)
+        .withContentType(`Content-Type`(MediaType.application.json, Some(Charset.`UTF-8`)))
     )
 
   private def _to_plain_form_record(

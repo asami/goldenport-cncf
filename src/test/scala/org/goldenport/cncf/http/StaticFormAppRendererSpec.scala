@@ -24,7 +24,7 @@ import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
-import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, XString}
+import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, XBoolean, XDateTime, XInt, XString}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentDescriptor}
@@ -326,6 +326,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val edit = StaticFormAppRenderer.renderComponentAdminEntityEdit(subsystem, componentName, entityPath, recordId).map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
       list should include ("notice_1")
+      list should include ("<th>id</th><th>title</th><th>author</th><th>Actions</th>")
+      list should include ("board update")
+      list should include ("alice")
       list should include (s"/web/${componentPath}/admin/entities/${entityPath}/${recordId}")
       list should include (s"/web/${componentPath}/admin/entities/${entityPath}/${recordId}/edit")
       list should not include ("No records are currently available")
@@ -506,14 +509,27 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
             partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
             maxPartitions = 4,
             maxEntitiesPerPartition = 100,
-            schema = Some(_schema(Vector(
-              "id" -> WebColumn.empty,
-              "title" -> WebColumn.empty,
-              "body" -> WebColumn(
-                controlType = Some("textarea"),
-                readonly = true,
-                placeholder = Some("Write the notice body."),
-                help = Some("Notice body shown on the board.")
+            schema = Some(Schema(Vector(
+              Column(BaseContent.simple("id"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+              Column(BaseContent.simple("title"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+              Column(
+                BaseContent.Builder("body").label("Notice body").build(),
+                ValueDomain(datatype = XString, multiplicity = Multiplicity.One),
+                web = WebColumn(
+                  controlType = Some("textarea"),
+                  readonly = true,
+                  placeholder = Some("Write the notice body."),
+                  help = Some("Notice body shown on the board.")
+                )
+              ),
+              Column(
+                BaseContent.Builder("status").label("Publication status").build(),
+                ValueDomain(datatype = XString, multiplicity = Multiplicity.One),
+                web = WebColumn(
+                  controlType = Some("select"),
+                  values = Vector("draft", "published"),
+                  required = Some(true)
+                )
               )
             )))
           )
@@ -529,8 +545,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("name=\"id\"")
       html should include ("name=\"title\"")
       html should include ("name=\"body\"")
+      html should include ("name=\"status\"")
+      html should include ("Notice body")
+      html should include ("Publication status")
       html should include ("<textarea")
+      html should include ("<select")
+      html should include ("<option value=\"draft\"")
+      html should include ("<option value=\"published\"")
       html should include ("readonly")
+      html should include ("required")
       html should include ("placeholder=\"Write the notice body.\"")
       html should include ("Notice body shown on the board.")
     }
@@ -619,6 +642,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         val newly = StaticFormAppRenderer.renderComponentAdminDataNew(fixture.subsystem, "notice_board", "audit").map(_.body).getOrElse(fail("component data new admin is missing"))
 
         html should include ("audit_1")
+        html should include ("<th>id</th><th>action</th><th>actor</th><th>Actions</th>")
+        html should include ("created")
+        html should include ("alice")
         html should include ("/web/notice-board/admin/data/audit/audit_1")
         firstPage should include ("Page 1")
         firstPage should include ("page=2&amp;pageSize=1")
@@ -886,7 +912,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("notice")
       html should include ("notice:notice")
       html should include ("Read result")
-      html should include ("notice aggregate")
+      html should include ("<th>id</th><th>Actions</th>")
+      html should include ("notice_1")
       html should include ("/web/notice-board/admin/aggregates/notice-aggregate/notice_1")
       html should include ("Result pages")
       html should include ("Operations")
@@ -1454,9 +1481,317 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       html should include ("<select")
       html should include ("<option value=\"hello\" selected>")
+      html should include ("Notice body")
       html should include ("name=\"body\"")
       html should include ("type=\"hidden\"")
       html should include ("name=\"accessToken\"")
+    }
+
+    "serve operation form definition API from the same resolved Web schema" in {
+      val subsystem = _form_type_fixture_subsystem()
+      val selector = "notice-board.notice.post-secret-notice"
+      val descriptor = WebDescriptor(
+        expose = Map(selector -> WebDescriptor.Exposure.Protected),
+        form = Map(selector -> WebDescriptor.Form(
+          controls = Map(
+            "accessToken" -> WebDescriptor.FormControl(hidden = true),
+            "body" -> WebDescriptor.FormControl(controlType = Some("select"), values = Vector("hello", "world"))
+          )
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+
+      val response = server
+        ._operation_form_api_definition(
+          _get_request("/form-api/notice-board/notice/post-secret-notice"),
+          "notice-board",
+          "notice",
+          "post-secret-notice"
+        )
+        .unsafeRunSync()
+      val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("form definition JSON is invalid"))
+      val fields = json.hcursor.downField("fields")
+
+      response.status.code shouldBe 200
+      response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
+      json.hcursor.downField("selector").as[String].toOption shouldBe Some(selector)
+      json.hcursor.downField("mode").as[String].toOption shouldBe Some("operation")
+      json.hcursor.downField("method").as[String].toOption shouldBe Some("POST")
+      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/form-api/notice-board/notice/post-secret-notice")
+      json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/form/notice-board/notice/post-secret-notice")
+      json.hcursor.downField("actions").downN(2).downField("path").as[String].toOption shouldBe Some("/form-api/notice-board/notice/post-secret-notice/validate")
+      fields.downN(0).downField("name").as[String].toOption shouldBe Some("body")
+      fields.downN(0).downField("label").as[String].toOption shouldBe Some("Notice body")
+      fields.downN(0).downField("type").as[String].toOption shouldBe Some("select")
+      fields.downN(0).downField("required").as[Boolean].toOption shouldBe Some(true)
+      fields.downN(0).downField("values").as[Vector[String]].toOption shouldBe Some(Vector("hello", "world"))
+      fields.downN(1).downField("name").as[String].toOption shouldBe Some("accessToken")
+      fields.downN(1).downField("hidden").as[Boolean].toOption shouldBe Some(true)
+    }
+
+    "serve admin entity form definition API from EntityRuntimeDescriptor schema" in {
+      val descriptor = ComponentDescriptor(
+        componentName = Some("notice_board"),
+        entityRuntimeDescriptors = Vector(
+          EntityRuntimeDescriptor(
+            entityName = "notice",
+            collectionId = EntityCollectionId("sys", "sys", "notice"),
+            memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+            partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+            maxPartitions = 4,
+            maxEntitiesPerPartition = 100,
+            schema = Some(Schema(Vector(
+              Column(BaseContent.simple("id"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+              Column(
+                BaseContent.Builder("body").label("Notice body").build(),
+                ValueDomain(datatype = XString, multiplicity = Multiplicity.One),
+                web = WebColumn(controlType = Some("textarea"), help = Some("Notice body shown on the board."))
+              )
+            )))
+          )
+        )
+      )
+      val component = TestComponentFactory
+        .create("notice_board", Protocol.empty)
+        .withComponentDescriptors(Vector(descriptor))
+      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        ._component_admin_entity_form_api_definition(
+          _get_request("/form-api/notice-board/admin/entities/notice"),
+          "notice-board",
+          "notice"
+        )
+        .unsafeRunSync()
+      val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("entity form definition JSON is invalid"))
+      val fields = json.hcursor.downField("fields")
+
+      response.status.code shouldBe 200
+      response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
+      json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.entity.notice")
+      json.hcursor.downField("surface").as[String].toOption shouldBe Some("entity")
+      json.hcursor.downField("mode").as[String].toOption shouldBe Some("admin-entity")
+      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/form/notice-board/admin/entities/notice/create")
+      json.hcursor.downField("actions").downN(5).downField("path").as[String].toOption shouldBe Some("/form/notice-board/admin/entities/notice/{id}/update")
+      fields.downN(0).downField("name").as[String].toOption shouldBe Some("id")
+      fields.downN(1).downField("name").as[String].toOption shouldBe Some("body")
+      fields.downN(1).downField("label").as[String].toOption shouldBe Some("Notice body")
+      fields.downN(1).downField("type").as[String].toOption shouldBe Some("textarea")
+      fields.downN(1).downField("help").as[String].toOption shouldBe Some("Notice body shown on the board.")
+    }
+
+    "serve admin data form definition API from inferred data fields" in {
+      val fixture = _data_fixture()
+      _with_global_runtime(fixture.runtime) {
+        val server = new Http4sHttpServer(new HttpExecutionEngine(fixture.subsystem))
+
+        val response = server
+          ._component_admin_data_form_api_definition(
+            _get_request("/form-api/notice-board/admin/data/audit"),
+            "notice-board",
+            "audit"
+          )
+          .unsafeRunSync()
+        val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("data form definition JSON is invalid"))
+        val fieldNames = json.hcursor.downField("fields").as[Vector[Json]].toOption.getOrElse(Vector.empty)
+          .flatMap(_.hcursor.downField("name").as[String].toOption)
+
+        response.status.code shouldBe 200
+        response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
+        json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.data.audit")
+        json.hcursor.downField("surface").as[String].toOption shouldBe Some("data")
+        json.hcursor.downField("mode").as[String].toOption shouldBe Some("admin-data")
+        json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/web/notice-board/admin/data/audit/new")
+        fieldNames shouldBe Vector("id", "action", "actor")
+      }
+    }
+
+    "serve admin view form definition API from resolved view schema" in {
+      val subsystem = _view_fixture_subsystem()
+      val descriptor = WebDescriptor(
+        admin = Map(
+          "view.notice-view" -> WebDescriptor.AdminSurface(
+            fields = Vector(
+              WebDescriptor.AdminField("id"),
+              WebDescriptor.AdminField("label"),
+              WebDescriptor.AdminField("note", WebDescriptor.FormControl(controlType = Some("textarea")))
+            )
+          )
+        )
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+
+      val response = server
+        ._component_admin_view_form_api_definition(
+          _get_request("/form-api/notice-board/admin/views/notice-view"),
+          "notice-board",
+          "notice-view"
+        )
+        .unsafeRunSync()
+      val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("view form definition JSON is invalid"))
+      val fields = json.hcursor.downField("fields")
+
+      response.status.code shouldBe 200
+      response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
+      json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.view.notice-view")
+      json.hcursor.downField("surface").as[String].toOption shouldBe Some("view")
+      json.hcursor.downField("mode").as[String].toOption shouldBe Some("admin-view")
+      json.hcursor.downField("method").as[String].toOption shouldBe Some("GET")
+      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/web/notice-board/admin/views/notice-view")
+      fields.downN(0).downField("name").as[String].toOption shouldBe Some("id")
+      fields.downN(1).downField("name").as[String].toOption shouldBe Some("label")
+      fields.downN(2).downField("name").as[String].toOption shouldBe Some("note")
+      fields.downN(2).downField("type").as[String].toOption shouldBe Some("textarea")
+    }
+
+    "serve admin aggregate form definition API from resolved aggregate schema" in {
+      val subsystem = _aggregate_fixture_subsystem()
+      val descriptor = WebDescriptor(
+        admin = Map(
+          "aggregate.notice-aggregate" -> WebDescriptor.AdminSurface(
+            fields = Vector(
+              WebDescriptor.AdminField("id"),
+              WebDescriptor.AdminField("label"),
+              WebDescriptor.AdminField("status", WebDescriptor.FormControl(controlType = Some("select"), values = Vector("draft", "published")))
+            )
+          )
+        )
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+
+      val response = server
+        ._component_admin_aggregate_form_api_definition(
+          _get_request("/form-api/notice-board/admin/aggregates/notice-aggregate"),
+          "notice-board",
+          "notice-aggregate"
+        )
+        .unsafeRunSync()
+      val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("aggregate form definition JSON is invalid"))
+      val fields = json.hcursor.downField("fields")
+
+      response.status.code shouldBe 200
+      response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
+      json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.aggregate.notice-aggregate")
+      json.hcursor.downField("surface").as[String].toOption shouldBe Some("aggregate")
+      json.hcursor.downField("mode").as[String].toOption shouldBe Some("admin-aggregate")
+      json.hcursor.downField("method").as[String].toOption shouldBe Some("GET")
+      json.hcursor.downField("actions").downN(1).downField("path").as[String].toOption shouldBe Some("/web/notice-board/admin/aggregates/notice-aggregate/{id}")
+      fields.downN(0).downField("name").as[String].toOption shouldBe Some("id")
+      fields.downN(1).downField("name").as[String].toOption shouldBe Some("label")
+      fields.downN(2).downField("name").as[String].toOption shouldBe Some("status")
+      fields.downN(2).downField("type").as[String].toOption shouldBe Some("select")
+      fields.downN(2).downField("values").as[Vector[String]].toOption shouldBe Some(Vector("draft", "published"))
+    }
+
+    "validate operation form API input without executing the operation" in {
+      val subsystem = _form_type_fixture_subsystem()
+      val selector = "notice-board.notice.post-secret-notice"
+      val descriptor = WebDescriptor(
+        expose = Map(selector -> WebDescriptor.Exposure.Protected)
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+
+      val invalid = server
+        ._validate_operation_form_api(
+          _post_form_request("/form-api/notice-board/notice/post-secret-notice/validate", "accessToken=abc&extra=value"),
+          "notice-board",
+          "notice",
+          "post-secret-notice"
+        )
+        .unsafeRunSync()
+      val invalidJson = parse(invalid.as[String].unsafeRunSync()).getOrElse(fail("validation JSON is invalid"))
+
+      invalid.status.code shouldBe 200
+      invalid.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
+      invalidJson.hcursor.downField("selector").as[String].toOption shouldBe Some(selector)
+      invalidJson.hcursor.downField("valid").as[Boolean].toOption shouldBe Some(false)
+      invalidJson.hcursor.downField("errors").downN(0).downField("field").as[String].toOption shouldBe Some("body")
+      invalidJson.hcursor.downField("errors").downN(0).downField("code").as[String].toOption shouldBe Some("required")
+      invalidJson.hcursor.downField("warnings").downN(0).downField("field").as[String].toOption shouldBe Some("extra")
+
+      val valid = server
+        ._validate_operation_form_api(
+          _post_form_request("/form-api/notice-board/notice/post-secret-notice/validate", "body=hello&accessToken=abc"),
+          "notice-board",
+          "notice",
+          "post-secret-notice"
+        )
+        .unsafeRunSync()
+      val validJson = parse(valid.as[String].unsafeRunSync()).getOrElse(fail("validation JSON is invalid"))
+
+      valid.status.code shouldBe 200
+      validJson.hcursor.downField("valid").as[Boolean].toOption shouldBe Some(true)
+      validJson.hcursor.downField("errors").as[Vector[Json]].toOption shouldBe Some(Vector.empty)
+    }
+
+    "validate operation form API datatype values and multiplicity" in {
+      val component = new org.goldenport.cncf.component.Component() {}
+      val protocol = Protocol(
+        services = spec.ServiceDefinitionGroup(
+          Vector(
+            spec.ServiceDefinition(
+              name = "notice",
+              operations = spec.OperationDefinitionGroup(
+                operations = NonEmptyVector.of(
+                  _NoopOperation("validate-fields", Vector("count", "published", "publishedAt", "status", "tags"))
+                )
+              )
+            )
+          )
+        )
+      )
+      _initialize_component("notice_board", component, protocol)
+      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+      val selector = "notice-board.notice.validate-fields"
+      val descriptor = WebDescriptor(
+        expose = Map(selector -> WebDescriptor.Exposure.Protected),
+        form = Map(selector -> WebDescriptor.Form(
+          controls = Map(
+            "status" -> WebDescriptor.FormControl(controlType = Some("select"), values = Vector("draft", "published")),
+            "tags" -> WebDescriptor.FormControl(controlType = Some("select"), values = Vector("news", "ops"), multiple = true)
+          )
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+
+      val invalid = server
+        ._validate_operation_form_api(
+          _post_form_request(
+            "/form-api/notice-board/notice/validate-fields/validate",
+            "count=abc&published=maybe&publishedAt=not-date&status=draft,published&tags=news,bad"
+          ),
+          "notice-board",
+          "notice",
+          "validate-fields"
+        )
+        .unsafeRunSync()
+      val invalidJson = parse(invalid.as[String].unsafeRunSync()).getOrElse(fail("validation JSON is invalid"))
+      val errors = invalidJson.hcursor.downField("errors").as[Vector[Json]].toOption.getOrElse(Vector.empty)
+      val errorFields = errors.flatMap(_.hcursor.downField("field").as[String].toOption)
+      val errorCodes = errors.flatMap(_.hcursor.downField("code").as[String].toOption)
+
+      invalidJson.hcursor.downField("valid").as[Boolean].toOption shouldBe Some(false)
+      errorFields should contain allOf ("count", "published", "publishedAt", "status", "tags")
+      errorCodes should contain ("datatype")
+      errorCodes should contain ("invalid-value")
+      errorCodes should contain ("multiplicity")
+
+      val valid = server
+        ._validate_operation_form_api(
+          _post_form_request(
+            "/form-api/notice-board/notice/validate-fields/validate",
+            "count=12&published=true&publishedAt=2026-04-16T10:15:30&status=draft&tags=news,ops"
+          ),
+          "notice-board",
+          "notice",
+          "validate-fields"
+        )
+        .unsafeRunSync()
+      val validJson = parse(valid.as[String].unsafeRunSync()).getOrElse(fail("validation JSON is invalid"))
+
+      validJson.hcursor.downField("valid").as[Boolean].toOption shouldBe Some(true)
+      validJson.hcursor.downField("errors").as[Vector[Json]].toOption shouldBe Some(Vector.empty)
     }
 
     "render aggregate operation form with admin descriptor field controls" in {
@@ -1720,6 +2055,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       method = Method.POST,
       uri = Uri.unsafeFromString(path)
     ).withEntity(body)
+
+  private def _get_request(
+    path: String
+  ): Request[IO] =
+    Request[IO](
+      method = Method.GET,
+      uri = Uri.unsafeFromString(path)
+    )
 
   private final case class _DataFixture(
     subsystem: Subsystem,
@@ -2183,9 +2526,17 @@ private final case class _NoopOperation(
       name = opname,
       request = spec.RequestDefinition(
         parameters = parameters.map { name =>
+          val content =
+            if (name == "body") BaseContent.Builder("body").label("Notice body").build()
+            else BaseContent.simple(name)
+          val web =
+            if (name == "body") WebColumn(help = Some("Body parameter."))
+            else WebColumn.empty
           spec.ParameterDefinition(
-            content = BaseContent.simple(name),
-            kind = spec.ParameterDefinition.Kind.Argument
+            content = content,
+            kind = spec.ParameterDefinition.Kind.Argument,
+            domain = _noop_parameter_domain(name),
+            web = web
           )
         }.toList
       ),
@@ -2194,6 +2545,16 @@ private final case class _NoopOperation(
 
   override def createOperationRequest(req: GRequest): Consequence[OperationRequest] =
     Consequence.notImplemented("not used")
+
+  private def _noop_parameter_domain(
+    name: String
+  ): ValueDomain =
+    name match {
+      case "count" => ValueDomain(datatype = XInt, multiplicity = Multiplicity.One)
+      case "published" => ValueDomain(datatype = XBoolean, multiplicity = Multiplicity.One)
+      case "publishedAt" => ValueDomain(datatype = XDateTime, multiplicity = Multiplicity.One)
+      case _ => ValueDomain(datatype = XString, multiplicity = Multiplicity.One)
+    }
 }
 
 private final case class _SuccessfulAggregateOperation(
