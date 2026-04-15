@@ -751,7 +751,51 @@ object StaticFormAppRenderer {
       requiredError ++
         _validate_multiplicity(field, value) ++
         _validate_field_values(field, value) ++
-        _validate_datatype(field, value)
+        _validate_datatype(field, value) ++
+        _validate_hints(field, value)
+  }
+
+  private def _validate_hints(
+    field: WebSchemaResolver.ResolvedWebField,
+    value: String
+  ): Vector[FormValidationMessage] =
+    _form_field_values(field, value).flatMap { x =>
+      _validate_hint_value(field, x)
+    }
+
+  private def _validate_hint_value(
+    field: WebSchemaResolver.ResolvedWebField,
+    value: String
+  ): Vector[FormValidationMessage] = {
+    val hints = field.validation
+    val label = field.label.getOrElse(field.name)
+    val length = value.length
+    val lengthErrors =
+      Vector(
+        hints.minLength.filter(length < _).map(min => FormValidationMessage(Some(field.name), "min-length", s"${label} must be at least ${min} characters.")),
+        hints.maxLength.filter(length > _).map(max => FormValidationMessage(Some(field.name), "max-length", s"${label} must be at most ${max} characters."))
+      ).flatten
+    val patternErrors =
+      hints.pattern.toVector.flatMap { pattern =>
+        if (scala.util.Try(value.matches(pattern)).getOrElse(false))
+          Vector.empty
+        else
+          Vector(FormValidationMessage(Some(field.name), "pattern", s"${label} does not match the required pattern."))
+      }
+    val numericErrors =
+      if (hints.min.isEmpty && hints.max.isEmpty)
+        Vector.empty
+      else
+        scala.util.Try(BigDecimal(value)).toOption match {
+          case Some(n) =>
+            Vector(
+              hints.min.filter(n < _).map(min => FormValidationMessage(Some(field.name), "min", s"${label} must be greater than or equal to ${min}.")),
+              hints.max.filter(n > _).map(max => FormValidationMessage(Some(field.name), "max", s"${label} must be less than or equal to ${max}."))
+            ).flatten
+          case None =>
+            Vector.empty
+        }
+    lengthErrors ++ patternErrors ++ numericErrors
   }
 
   private def _validate_multiplicity(
@@ -912,9 +956,22 @@ object StaticFormAppRenderer {
       "multiple" -> Json.fromBoolean(control.multiple),
       "placeholder" -> field.placeholder.map(Json.fromString).getOrElse(Json.Null),
       "help" -> field.help.map(Json.fromString).getOrElse(Json.Null),
+      "validation" -> _web_validation_hints_json(field.validation),
       "source" -> Json.fromString(field.source.toString)
     )
   }
+
+  private def _web_validation_hints_json(
+    hints: org.goldenport.schema.WebValidationHints
+  ): Json =
+    Json.obj(
+      "min" -> hints.min.map(Json.fromBigDecimal).getOrElse(Json.Null),
+      "max" -> hints.max.map(Json.fromBigDecimal).getOrElse(Json.Null),
+      "step" -> hints.step.map(Json.fromBigDecimal).getOrElse(Json.Null),
+      "minLength" -> hints.minLength.map(Json.fromInt).getOrElse(Json.Null),
+      "maxLength" -> hints.maxLength.map(Json.fromInt).getOrElse(Json.Null),
+      "pattern" -> hints.pattern.map(Json.fromString).getOrElse(Json.Null)
+    )
 
   private def _web_schema_field_help(
     field: WebSchemaResolver.ResolvedWebField
@@ -973,6 +1030,7 @@ object StaticFormAppRenderer {
   ): String = {
     val displayLabel = label.getOrElse(name)
     val invalidClass = if (validationMessages.nonEmpty) " is-invalid" else ""
+    val validationAttr = _validation_attribute_text(descriptor.map(_.validation).getOrElse(org.goldenport.schema.WebValidationHints.empty))
     val feedback =
       if (validationMessages.isEmpty)
         ""
@@ -989,7 +1047,7 @@ object StaticFormAppRenderer {
       }.mkString("\n")
       s"""<div class="mb-3">
          |  <label class="form-label" for="${_escape(id)}">${_escape(displayLabel)}</label>
-         |  <select class="form-select${invalidClass}" id="${_escape(id)}" name="${_escape(name)}"${required}${multiple}${disabled}>
+         |  <select class="form-select${invalidClass}" id="${_escape(id)}" name="${_escape(name)}"${required}${multiple}${disabled}${validationAttr}>
          |    ${options}
          |  </select>
          |  ${feedback}
@@ -1001,7 +1059,7 @@ object StaticFormAppRenderer {
       val disabled = if (readonly) " disabled" else ""
       s"""<div class="mb-3 form-check">
          |  <input type="hidden" name="${_escape(name)}" value="false">
-         |  <input class="form-check-input${invalidClass}" id="${_escape(id)}" name="${_escape(name)}" type="checkbox" value="true"${checked}${required}${disabled}>
+         |  <input class="form-check-input${invalidClass}" id="${_escape(id)}" name="${_escape(name)}" type="checkbox" value="true"${checked}${required}${disabled}${validationAttr}>
          |  <label class="form-check-label" for="${_escape(id)}">${_escape(displayLabel)}</label>
          |  ${feedback}
          |  <div class="form-text">${_escape(help)}</div>
@@ -1011,7 +1069,7 @@ object StaticFormAppRenderer {
       val placeholderAttr = placeholder.map(x => s""" placeholder="${_escape(x)}"""").getOrElse("")
       s"""<div class="mb-3">
          |  <label class="form-label" for="${_escape(id)}">${_escape(displayLabel)}</label>
-         |  <textarea class="form-control${invalidClass}" id="${_escape(id)}" name="${_escape(name)}" rows="5"${required}${readonlyAttr}${placeholderAttr}>${_escape(value)}</textarea>
+         |  <textarea class="form-control${invalidClass}" id="${_escape(id)}" name="${_escape(name)}" rows="5"${required}${readonlyAttr}${placeholderAttr}${validationAttr}>${_escape(value)}</textarea>
          |  ${feedback}
          |  <div class="form-text">${_escape(help)}</div>
          |</div>""".stripMargin
@@ -1020,11 +1078,28 @@ object StaticFormAppRenderer {
       val placeholderAttr = placeholder.map(x => s""" placeholder="${_escape(x)}"""").getOrElse("")
       s"""<div class="mb-3">
          |  <label class="form-label" for="${_escape(id)}">${_escape(displayLabel)}</label>
-         |  <input class="form-control${invalidClass}" id="${_escape(id)}" name="${_escape(name)}" type="${_escape(inputType)}" value="${_escape(value)}"${required}${readonlyAttr}${placeholderAttr}>
+         |  <input class="form-control${invalidClass}" id="${_escape(id)}" name="${_escape(name)}" type="${_escape(inputType)}" value="${_escape(value)}"${required}${readonlyAttr}${placeholderAttr}${validationAttr}>
          |  ${feedback}
          |  <div class="form-text">${_escape(help)}</div>
          |</div>""".stripMargin
     }
+  }
+
+  private def _validation_attribute_text(
+    hints: org.goldenport.schema.WebValidationHints
+  ): String = {
+    val attrs = Vector(
+      hints.min.map(x => "min" -> x.toString),
+      hints.max.map(x => "max" -> x.toString),
+      hints.step.map(x => "step" -> x.toString),
+      hints.minLength.map(x => "minlength" -> x.toString),
+      hints.maxLength.map(x => "maxlength" -> x.toString),
+      hints.pattern.map(x => "pattern" -> x)
+    ).flatten
+    if (attrs.isEmpty)
+      ""
+    else
+      attrs.map { case (key, value) => s""" ${key}="${_escape(value)}"""" }.mkString
   }
 
   private def _operation_parameter_help(

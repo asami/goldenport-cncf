@@ -24,7 +24,7 @@ import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
-import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, XBoolean, XDateTime, XInt, XString}
+import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, WebValidationHints, XBoolean, XDateTime, XInt, XString}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentDescriptor}
@@ -1845,6 +1845,85 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       validJson.hcursor.downField("errors").as[Vector[Json]].toOption shouldBe Some(Vector.empty)
     }
 
+    "serve and validate operation form validation hints" in {
+      val component = new org.goldenport.cncf.component.Component() {}
+      val protocol = Protocol(
+        services = spec.ServiceDefinitionGroup(
+          Vector(
+            spec.ServiceDefinition(
+              name = "notice",
+              operations = spec.OperationDefinitionGroup(
+                operations = NonEmptyVector.of(
+                  _NoopOperation("validate-hints", Vector("code", "count"))
+                )
+              )
+            )
+          )
+        )
+      )
+      _initialize_component("notice_board", component, protocol)
+      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+      val selector = "notice-board.notice.validate-hints"
+      val descriptor = WebDescriptor(
+        expose = Map(selector -> WebDescriptor.Exposure.Protected),
+        form = Map(selector -> WebDescriptor.Form(
+          controls = Map(
+            "code" -> WebDescriptor.FormControl(
+              validation = WebValidationHints(maxLength = Some(4))
+            )
+          )
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+
+      val definition = server
+        ._operation_form_api_definition(
+          _get_request("/form-api/notice-board/notice/validate-hints"),
+          "notice-board",
+          "notice",
+          "validate-hints"
+        )
+        .unsafeRunSync()
+      val definitionJson = parse(definition.as[String].unsafeRunSync()).getOrElse(fail("hint definition JSON is invalid"))
+      val codeField = definitionJson.hcursor.downField("fields").downN(0)
+
+      codeField.downField("validation").downField("minLength").as[Int].toOption shouldBe Some(2)
+      codeField.downField("validation").downField("maxLength").as[Int].toOption shouldBe Some(4)
+      codeField.downField("validation").downField("pattern").as[String].toOption shouldBe Some("^[A-Z0-9]+$")
+
+      val html = StaticFormAppRenderer.renderOperationForm(
+        subsystem,
+        "notice_board",
+        "notice",
+        "validate_hints",
+        descriptor
+      ).map(_.body).getOrElse(fail("hint operation form is missing"))
+
+      html should include ("minlength=\"2\"")
+      html should include ("maxlength=\"4\"")
+      html should include ("pattern=\"^[A-Z0-9]+$\"")
+
+      val invalid = server
+        ._validate_operation_form_api(
+          _post_form_request(
+            "/form-api/notice-board/notice/validate-hints/validate",
+            "code=toolong&count=101"
+          ),
+          "notice-board",
+          "notice",
+          "validate-hints"
+        )
+        .unsafeRunSync()
+      val invalidJson = parse(invalid.as[String].unsafeRunSync()).getOrElse(fail("hint validation JSON is invalid"))
+      val errorCodes = invalidJson.hcursor.downField("errors").as[Vector[Json]].toOption.getOrElse(Vector.empty)
+        .flatMap(_.hcursor.downField("code").as[String].toOption)
+
+      invalidJson.hcursor.downField("valid").as[Boolean].toOption shouldBe Some(false)
+      errorCodes should contain ("max-length")
+      errorCodes should contain ("pattern")
+      errorCodes should contain ("max")
+    }
+
     "render aggregate operation form with admin descriptor field controls" in {
       val subsystem = _aggregate_fixture_subsystem()
       val descriptor = WebDescriptor(
@@ -2619,6 +2698,8 @@ private final case class _NoopOperation(
             else BaseContent.simple(name)
           val web =
             if (name == "body") WebColumn(help = Some("Body parameter."))
+            else if (name == "code") WebColumn(validation = WebValidationHints(minLength = Some(2), maxLength = Some(8), pattern = Some("^[A-Z0-9]+$")))
+            else if (name == "count") WebColumn(validation = WebValidationHints(min = Some(BigDecimal(0)), max = Some(BigDecimal(100))))
             else WebColumn.empty
           spec.ParameterDefinition(
             content = content,

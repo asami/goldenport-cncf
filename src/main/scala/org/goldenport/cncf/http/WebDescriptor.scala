@@ -163,7 +163,8 @@ object WebDescriptor {
     required: Option[Boolean] = None,
     readonly: Boolean = false,
     placeholder: Option[String] = None,
-    help: Option[String] = None
+    help: Option[String] = None,
+    validation: org.goldenport.schema.WebValidationHints = org.goldenport.schema.WebValidationHints.empty
   )
 
   enum TotalCountPolicy {

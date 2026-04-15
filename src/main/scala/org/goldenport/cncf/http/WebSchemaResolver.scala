@@ -3,7 +3,7 @@ package org.goldenport.cncf.http
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.protocol.spec.ParameterDefinition
-import org.goldenport.schema.Schema
+import org.goldenport.schema.{Schema, WebValidationHints}
 
 /*
  * Resolves CML/domain schema and WebDescriptor presentation overrides into a
@@ -65,6 +65,7 @@ object WebSchemaResolver {
     readonly: Boolean = false,
     placeholder: Option[String] = None,
     help: Option[String] = None,
+    validation: WebValidationHints = WebValidationHints.empty,
     source: Source = Source.Empty
   ) {
     def controlType: String =
@@ -97,7 +98,8 @@ object WebSchemaResolver {
         required = Some(required),
         readonly = readonly,
         placeholder = placeholder,
-        help = help
+        help = help,
+        validation = validation
       )
   }
 
@@ -211,7 +213,8 @@ object WebSchemaResolver {
           required = column.web.required,
           readonly = column.web.readonly,
           placeholder = column.web.placeholder,
-          help = column.web.help
+          help = column.web.help,
+          validation = column.web.validation
         ),
         hidden = column.web.hidden,
         system = column.web.system,
@@ -220,6 +223,7 @@ object WebSchemaResolver {
         readonly = column.web.readonly,
         placeholder = column.web.placeholder,
         help = column.web.help,
+        validation = column.web.validation,
         source = Source.Schema
       )
     }
@@ -299,11 +303,13 @@ object WebSchemaResolver {
         required = parameter.web.required,
         readonly = parameter.web.readonly,
         placeholder = parameter.web.placeholder,
-        help = parameter.web.help
+        help = parameter.web.help,
+        validation = parameter.web.validation
       ),
       readonly = parameter.web.readonly,
       placeholder = parameter.web.placeholder,
       help = parameter.web.help,
+      validation = parameter.web.validation,
       source = Source.Schema
     )
 
@@ -322,6 +328,7 @@ object WebSchemaResolver {
       readonly = mergedControl.readonly,
       placeholder = control.placeholder.orElse(field.placeholder),
       help = control.help.orElse(field.help),
+      validation = mergedControl.validation,
       source = source
     )
   }
@@ -339,8 +346,58 @@ object WebSchemaResolver {
       required = overrideControl.required.orElse(base.required),
       readonly = base.readonly || overrideControl.readonly,
       placeholder = overrideControl.placeholder.orElse(base.placeholder),
-      help = overrideControl.help.orElse(base.help)
+      help = overrideControl.help.orElse(base.help),
+      validation = _merge_validation(base.validation, overrideControl.validation)
     )
+
+  private def _merge_validation(
+    base: WebValidationHints,
+    overrideHints: WebValidationHints
+  ): WebValidationHints =
+    WebValidationHints(
+      min = _max_decimal(base.min, overrideHints.min),
+      max = _min_decimal(base.max, overrideHints.max),
+      step = overrideHints.step.orElse(base.step),
+      minLength = _max_int(base.minLength, overrideHints.minLength),
+      maxLength = _min_int(base.maxLength, overrideHints.maxLength),
+      pattern = overrideHints.pattern.orElse(base.pattern)
+    )
+
+  private def _max_decimal(
+    lhs: Option[BigDecimal],
+    rhs: Option[BigDecimal]
+  ): Option[BigDecimal] =
+    (lhs, rhs) match {
+      case (Some(a), Some(b)) => Some(a.max(b))
+      case _ => lhs.orElse(rhs)
+    }
+
+  private def _min_decimal(
+    lhs: Option[BigDecimal],
+    rhs: Option[BigDecimal]
+  ): Option[BigDecimal] =
+    (lhs, rhs) match {
+      case (Some(a), Some(b)) => Some(a.min(b))
+      case _ => lhs.orElse(rhs)
+    }
+
+  private def _max_int(
+    lhs: Option[Int],
+    rhs: Option[Int]
+  ): Option[Int] =
+    (lhs, rhs) match {
+      case (Some(a), Some(b)) => Some(a.max(b))
+      case _ => lhs.orElse(rhs)
+    }
+
+  private def _min_int(
+    lhs: Option[Int],
+    rhs: Option[Int]
+  ): Option[Int] =
+    (lhs, rhs) match {
+      case (Some(a), Some(b)) => Some(a.min(b))
+      case _ => lhs.orElse(rhs)
+    }
 
   private def _order_fields(
     fields: Vector[ResolvedWebField],

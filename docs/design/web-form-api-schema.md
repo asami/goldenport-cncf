@@ -116,6 +116,8 @@ Field entries:
 - `multiple`: multi-value control intent.
 - `placeholder`: input placeholder, when supplied.
 - `help`: user-facing field help text, when supplied.
+- `validation`: optional validation hints that can be checked before Operation
+  dispatch.
 - `source`: field source classification.
 
 The response shape is deliberately close to `ResolvedWebSchema` so clients can
@@ -223,12 +225,89 @@ The effective merge rule is:
   descriptor explicitly supplies a value.
 - `hidden`, `system`, `multiple`, and `readonly` are additive flags.
 - `values` are replaced only when the descriptor supplies a non-empty list.
+- `validation` constraints are schema-first. WebDescriptor may narrow or add
+  Web admission constraints, but it must not silently relax model constraints.
 - Descriptor-only fields are allowed and treated as extension controls with
   `WebDescriptor` as their source.
 
 If the shared schema model lacks information needed by Web forms, the preferred
 fix is to extend `org.goldenport.schema.Schema` or `ParameterDefinition`, not to
 add a parallel CNCF-only field list.
+
+## Validation Hints
+
+Validation hints are metadata that can be evaluated at the Web input admission
+boundary without executing the target Operation.
+
+The supported design surface is:
+
+```json
+{
+  "validation": {
+    "min": 0,
+    "max": 100,
+    "minLength": 1,
+    "maxLength": 200,
+    "pattern": "^[A-Z0-9-]+$",
+    "step": 1
+  }
+}
+```
+
+Initial hint vocabulary:
+
+- `min` / `max`: numeric or temporal range bounds.
+- `step`: numeric step hint for HTML number controls and Web clients.
+- `minLength` / `maxLength`: string length bounds.
+- `pattern`: regular expression pattern for string values.
+
+The primary source must be the portable model metadata:
+
+```text
+CML field/parameter annotations
+  -> org.goldenport.schema.Schema / ParameterDefinition
+  -> WebSchemaResolver.ResolvedWebField
+  -> Form API JSON and HTML controls
+```
+
+WebDescriptor can provide deployment or presentation-specific admission hints,
+but these hints are secondary. The merge policy is conservative:
+
+- Schema/ParameterDefinition constraints are authoritative model constraints.
+- WebDescriptor may add a missing hint.
+- WebDescriptor may narrow a hint, such as reducing `maxLength` or tightening a
+  numeric range.
+- WebDescriptor must not widen or remove a model constraint. If a descriptor
+  requests relaxation, the resolver should keep the model constraint and record
+  a warning once the warning channel is available.
+
+HTML rendering should map hints to native Bootstrap/browser-friendly
+attributes when possible:
+
+- `min`, `max`, and `step` become `min`, `max`, and `step` attributes on number,
+  date, and datetime controls.
+- `minLength` and `maxLength` become `minlength` and `maxlength` attributes on
+  text controls.
+- `pattern` becomes `pattern` on text-like controls.
+
+The server-side validator remains authoritative for Web input admission. Client
+attributes are usability hints only.
+
+`readonly`, `hidden`, and `system` are not validation hints. They are form
+contract flags:
+
+- `readonly`: value may be displayed and carried through, but client edits are
+  not trusted. Server-side handling must decide whether to ignore, preserve, or
+  reject submitted changes.
+- `hidden`: field is not visible, but still part of the form contract.
+- `system`: field is framework-controlled. Required validation ignores missing
+  system fields, and server-side processing should prefer server-generated
+  values over client-submitted values.
+
+The first implementation step should extend `org.goldenport.schema.Schema` and
+`ParameterDefinition` so these hints are portable across CML, generated
+descriptors, Form API JSON, and Static Form App HTML. Adding CNCF-only parallel
+fields is a fallback only for descriptor-local override metadata.
 
 ## Validation And Execution
 

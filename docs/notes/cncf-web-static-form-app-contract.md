@@ -622,6 +622,15 @@ check runs before admin Operation dispatch; invalid submissions redisplay the
 originating new/edit page as HTML with Bootstrap field feedback and submitted
 values preserved.
 
+Validation hint expansion should keep the same boundary. `min`, `max`, `step`,
+`minLength`, `maxLength`, and `pattern` are Web input admission hints when they
+can be evaluated without Operation dispatch. The canonical source should be CML
+metadata carried through `org.goldenport.schema.Schema` or
+`ParameterDefinition`. WebDescriptor may add or narrow hints for a deployment,
+but should not widen or remove model constraints. HTML attributes generated from
+these hints are client usability aids; server-side validation remains
+authoritative before dispatch.
+
 Edit forms must support optimistic update and stale-form detection. The baseline
 contract uses a hidden version token property:
 

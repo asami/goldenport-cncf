@@ -1,7 +1,7 @@
 package org.goldenport.cncf.http
 
 import org.goldenport.protocol.spec.ParameterDefinition
-import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, XBoolean, XString}
+import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, WebValidationHints, XBoolean, XString}
 import org.goldenport.value.BaseContent
 import org.goldenport.cncf.component.ComponentDescriptor
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy}
@@ -100,6 +100,46 @@ final class WebSchemaResolverSpec extends AnyWordSpec with Matchers {
       status.asControl.required shouldBe Some(true)
       status.placeholder shouldBe Some("Descriptor placeholder")
       status.help shouldBe Some("Schema help")
+    }
+
+    "merge validation hints conservatively from Schema and WebDescriptor" in {
+      val schema = Schema(Vector(
+        Column(
+          BaseContent.simple("code"),
+          ValueDomain(datatype = XString, multiplicity = Multiplicity.One),
+          web = WebColumn(
+            validation = WebValidationHints(
+              minLength = Some(2),
+              maxLength = Some(20),
+              pattern = Some("^[A-Z]+$")
+            )
+          )
+        )
+      ))
+      val component = _component_with_schema(schema)
+      val descriptor = WebDescriptor(
+        admin = Map(
+          "entity.notice" -> WebDescriptor.AdminSurface(fields = Vector(
+            WebDescriptor.AdminField(
+              "code",
+              WebDescriptor.FormControl(
+                validation = WebValidationHints(
+                  minLength = Some(1),
+                  maxLength = Some(12),
+                  pattern = Some("^[A-Z0-9]+$")
+                )
+              )
+            )
+          ))
+        )
+      )
+
+      val resolved = WebSchemaResolver.resolveEntity(component, "notice-board", "notice", descriptor)
+      val code = resolved.fields.find(_.name == "code").getOrElse(fail("code field is missing"))
+
+      code.validation.minLength shouldBe Some(2)
+      code.validation.maxLength shouldBe Some(12)
+      code.validation.pattern shouldBe Some("^[A-Z0-9]+$")
     }
 
     "preserve Schema column order when schema-order strategy is selected" in {

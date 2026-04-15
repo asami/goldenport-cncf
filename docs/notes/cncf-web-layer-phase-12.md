@@ -205,9 +205,9 @@ GET /form-api/{component}/admin/aggregates/{aggregate}
 
 These endpoints return the same `ResolvedWebSchema` field contract used by the
 HTML form renderers: name, label, type, datatype, multiplicity, required,
-readonly, hidden/system, values, multiple, placeholder, and help. This keeps
-Static Form App HTML, JSON-oriented clients, and later SPA/SDK code on the same
-schema source.
+readonly, hidden/system, values, multiple, placeholder, help, and later
+validation hints. This keeps Static Form App HTML, JSON-oriented clients, and
+later SPA/SDK code on the same schema source.
 
 Operation form definitions are resolved from `ParameterDefinition` plus
 WebDescriptor controls. Admin entity, view, and aggregate definitions are
@@ -225,6 +225,10 @@ Domain invariants, state-dependent cross-field rules, instance authorization,
 optimistic locking, and datastore-backed existence/uniqueness checks remain
 Operation-side validation. The normative boundary is maintained in
 `docs/design/web-form-api-schema.md`.
+The next validation hint expansion is min/max, step, minLength/maxLength, and
+pattern. These hints should be carried from CML through
+`org.goldenport.schema.Schema` / `ParameterDefinition`; WebDescriptor is only a
+secondary override layer and must not silently relax model constraints.
 The current POST compatibility route under `/form-api/{component}/{service}/{operation}`
 submits form data and returns the Operation response directly.
 
