@@ -8,7 +8,7 @@ import java.nio.file.Paths
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
 import org.goldenport.Consequence
-import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall, QueryAction, ResourceAccess}
+import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall, QueryAction, ResourceAccess}
 import org.goldenport.cncf.component.{Component, ComponentInit, ComponentOrigin}
 import org.goldenport.cncf.component.ComponentOriginLabel
 import org.goldenport.cncf.component.ComponentCreate
@@ -22,6 +22,10 @@ import org.goldenport.configuration.ConfigurationSources
 import org.goldenport.configuration.ConfigurationOrigin
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.datastore.{DataStore, Query as DataStoreQuery, QueryDirective, QueryLimit}
+import org.goldenport.cncf.directive.{Query as EntityQuery}
+import org.goldenport.cncf.entity.runtime.EntityCollection
+import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.observability.ObservabilityEngine
 import org.goldenport.cncf.projection.{SecurityDeploymentMarkdownProjection, SecurityDeploymentProjection}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAssemblyDescriptorSource, Subsystem}
@@ -41,8 +45,7 @@ import org.goldenport.schema.{DataType, XString}
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
- *  version Apr. 11, 2026
- * @version Apr. 11, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -125,6 +128,56 @@ object AdminComponent {
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
+      val opEntityCreate = new EntityCreateOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(XString)),
+        params.subsystem
+      )
+      val opEntityUpdate = new EntityUpdateOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(XString)),
+        params.subsystem
+      )
+      val opEntityList = new EntityListOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(XString)),
+        params.subsystem
+      )
+      val opEntityRead = new EntityReadOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(XString)),
+        params.subsystem
+      )
+      val opDataCreate = new DataCreateOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(XString)),
+        params.subsystem
+      )
+      val opDataUpdate = new DataUpdateOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(XString)),
+        params.subsystem
+      )
+      val opDataList = new DataListOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(XString)),
+        params.subsystem
+      )
+      val opDataRead = new DataReadOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(XString)),
+        params.subsystem
+      )
+      val opViewRead = new ViewReadOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(DataType.Named("Record"))),
+        params.subsystem
+      )
+      val opAggregateRead = new AggregateReadOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(DataType.Named("Record"))),
+        params.subsystem
+      )
       val serviceSystem = spec.ServiceDefinition(
         name = "system",
         operations = spec.OperationDefinitionGroup(
@@ -187,6 +240,40 @@ object AdminComponent {
           )
         )
       )
+      val serviceEntity = spec.ServiceDefinition(
+        name = "entity",
+        operations = spec.OperationDefinitionGroup(
+          operations = NonEmptyVector.of(
+            opEntityList,
+            opEntityRead,
+            opEntityCreate,
+            opEntityUpdate
+          )
+        )
+      )
+      val serviceData = spec.ServiceDefinition(
+        name = "data",
+        operations = spec.OperationDefinitionGroup(
+          operations = NonEmptyVector.of(
+            opDataList,
+            opDataRead,
+            opDataCreate,
+            opDataUpdate
+          )
+        )
+      )
+      val serviceView = spec.ServiceDefinition(
+        name = "view",
+        operations = spec.OperationDefinitionGroup(
+          operations = NonEmptyVector.of(opViewRead)
+        )
+      )
+      val serviceAggregate = spec.ServiceDefinition(
+        name = "aggregate",
+        operations = spec.OperationDefinitionGroup(
+          operations = NonEmptyVector.of(opAggregateRead)
+        )
+      )
       val services = spec.ServiceDefinitionGroup(
         services = Vector(
           serviceSystem,
@@ -196,7 +283,11 @@ object AdminComponent {
           serviceExtension,
           serviceDeployment,
           serviceAssembly,
-          serviceExecution
+          serviceExecution,
+          serviceEntity,
+          serviceData,
+          serviceView,
+          serviceAggregate
         )
       )
       val protocol = Protocol(
@@ -495,6 +586,150 @@ object AdminComponent {
       Consequence.success(ExecutionHistoryAction(req))
   }
 
+  private final class EntityCreateOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "create",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: Request
+    ): Consequence[OperationRequest] =
+      Consequence.success(EntityCreateAction(req, subsystem))
+  }
+
+  private final class EntityUpdateOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "update",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: Request
+    ): Consequence[OperationRequest] =
+      Consequence.success(EntityUpdateAction(req, subsystem))
+  }
+
+  private final class EntityListOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(name = "list", request = request, response = response)
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(EntityListAction(req, subsystem))
+  }
+
+  private final class EntityReadOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(name = "read", request = request, response = response)
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(EntityReadAction(req, subsystem))
+  }
+
+  private final class DataCreateOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "create",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: Request
+    ): Consequence[OperationRequest] =
+      Consequence.success(DataCreateAction(req, subsystem))
+  }
+
+  private final class DataUpdateOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "update",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: Request
+    ): Consequence[OperationRequest] =
+      Consequence.success(DataUpdateAction(req, subsystem))
+  }
+
+  private final class DataListOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(name = "list", request = request, response = response)
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(DataListAction(req, subsystem))
+  }
+
+  private final class DataReadOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(name = "read", request = request, response = response)
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(DataReadAction(req, subsystem))
+  }
+
+  private final class ViewReadOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(name = "read", request = request, response = response)
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(ViewReadAction(req, subsystem))
+  }
+
+  private final class AggregateReadOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(name = "read", request = request, response = response)
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(AggregateReadAction(req, subsystem))
+  }
+
   private final case class ComponentListAction(
     request: Request,
     subsystem: Subsystem
@@ -535,6 +770,178 @@ object AdminComponent {
         OperationResponse.Scalar(text)
       }
     }
+  }
+
+  private final case class EntityCreateAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends CommandAction() {
+    override def commandExecutionMode: CommandExecutionMode =
+      CommandExecutionMode.SyncDirectNoJob
+
+    def createCall(core: ActionCall.Core): ActionCall =
+      EntityCreateActionCall(core, subsystem)
+  }
+
+  private final case class EntityUpdateAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends CommandAction() {
+    override def commandExecutionMode: CommandExecutionMode =
+      CommandExecutionMode.SyncDirectNoJob
+
+    def createCall(core: ActionCall.Core): ActionCall =
+      EntityUpdateActionCall(core, subsystem)
+  }
+
+  private final case class EntityListAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      EntityListActionCall(core, subsystem)
+  }
+
+  private final case class EntityReadAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      EntityReadActionCall(core, subsystem)
+  }
+
+  private final case class EntityListActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _admin_entity_list(core, subsystem)
+  }
+
+  private final case class EntityReadActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _admin_entity_read(core, subsystem)
+  }
+
+  private final case class EntityCreateActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _admin_entity_put(core, subsystem)
+  }
+
+  private final case class EntityUpdateActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _admin_entity_put(core, subsystem)
+  }
+
+  private final case class DataCreateAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends CommandAction() {
+    override def commandExecutionMode: CommandExecutionMode =
+      CommandExecutionMode.SyncDirectNoJob
+
+    def createCall(core: ActionCall.Core): ActionCall =
+      DataCreateActionCall(core, subsystem)
+  }
+
+  private final case class DataUpdateAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends CommandAction() {
+    override def commandExecutionMode: CommandExecutionMode =
+      CommandExecutionMode.SyncDirectNoJob
+
+    def createCall(core: ActionCall.Core): ActionCall =
+      DataUpdateActionCall(core, subsystem)
+  }
+
+  private final case class DataListAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      DataListActionCall(core, subsystem)
+  }
+
+  private final case class DataReadAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      DataReadActionCall(core, subsystem)
+  }
+
+  private final case class ViewReadAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      ViewReadActionCall(core, subsystem)
+  }
+
+  private final case class AggregateReadAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      AggregateReadActionCall(core, subsystem)
+  }
+
+  private final case class DataCreateActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _admin_data_create(core, subsystem)
+  }
+
+  private final case class DataUpdateActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _admin_data_update(core, subsystem)
+  }
+
+  private final case class DataListActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _admin_data_list(core, subsystem)
+  }
+
+  private final case class DataReadActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _admin_data_read(core, subsystem)
+  }
+
+  private final case class ViewReadActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _admin_view_read(core, subsystem)
+  }
+
+  private final case class AggregateReadActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _admin_aggregate_read(core, subsystem)
   }
 
   private final case class DeploymentSecurityMermaidAction(
@@ -1096,6 +1503,397 @@ object AdminComponent {
     }
     lines.result().mkString("\n").trim
   }
+
+  private def _admin_entity_put(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ): Consequence[OperationResponse] = {
+    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    for {
+      componentName <- _required_string(args, "component")
+      entityName <- _required_string(args, "entity")
+      collection <- Consequence.fromOption(
+        _component_by_name(subsystem, componentName).flatMap(_entity_collection(_, entityName)),
+        s"Entity collection not found: ${entityName}"
+      )
+      _ <- collection.putRecord(_admin_entity_record(args))
+    } yield OperationResponse.Scalar("Entity record was applied.")
+  }
+
+  private def _admin_entity_list(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ): Consequence[OperationResponse] = {
+    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    for {
+      componentName <- _required_string(args, "component")
+      entityName <- _required_string(args, "entity")
+      paging <- _paging(args)
+      collection <- Consequence.fromOption(
+        _component_by_name(subsystem, componentName).flatMap(_entity_collection(_, entityName)),
+        s"Entity collection not found: ${entityName}"
+      )
+    } yield OperationResponse.RecordResponse(
+      _list_response_record(
+        "entity",
+        componentName,
+        entityName,
+        _page_values(_entity_ids(collection), paging),
+        paging
+      )
+    )
+  }
+
+  private def _admin_entity_read(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ): Consequence[OperationResponse] = {
+    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    for {
+      componentName <- _required_string(args, "component")
+      entityName <- _required_string(args, "entity")
+      id <- _required_string(args, "id")
+      collection <- Consequence.fromOption(
+        _component_by_name(subsystem, componentName).flatMap(_entity_collection(_, entityName)),
+        s"Entity collection not found: ${entityName}"
+      )
+      record <- Consequence.fromOption(_entity_record(collection, id), s"Entity record not found: ${id}")
+    } yield OperationResponse.RecordResponse(
+      _read_response_record(
+        "entity",
+        componentName,
+        entityName,
+        id,
+        record
+      )
+    )
+  }
+
+  private def _admin_data_update(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ): Consequence[OperationResponse] = {
+    given org.goldenport.cncf.context.ExecutionContext = core.executionContext
+    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    for {
+      dataName <- _required_string(args, "data")
+      id <- _required_string(args, "id")
+      entry <- DataStore.EntryId.parse(id)
+      ds <- subsystem.globalRuntimeContext.dataStoreSpace.dataStore(DataStore.CollectionId(dataName))
+      _ <- ds.save(DataStore.CollectionId(dataName), entry, _admin_data_record(args))
+    } yield OperationResponse.Scalar("Data record was applied.")
+  }
+
+  private def _admin_data_list(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ): Consequence[OperationResponse] = {
+    given org.goldenport.cncf.context.ExecutionContext = core.executionContext
+    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    for {
+      dataName <- _required_string(args, "data")
+      paging <- _paging(args)
+      result <- subsystem.globalRuntimeContext.dataStoreSpace.search(
+        DataStore.CollectionId(dataName),
+        QueryDirective(DataStoreQuery.Empty, limit = QueryLimit.Limit(paging.fetchSize))
+      )
+    } yield OperationResponse.RecordResponse(
+      _list_response_record(
+        "data",
+        "",
+        dataName,
+        _page_values(_record_ids(result.records), paging),
+        paging
+      )
+    )
+  }
+
+  private def _admin_data_read(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ): Consequence[OperationResponse] = {
+    given org.goldenport.cncf.context.ExecutionContext = core.executionContext
+    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    for {
+      dataName <- _required_string(args, "data")
+      id <- _required_string(args, "id")
+      entry <- DataStore.EntryId.parse(id)
+      ds <- subsystem.globalRuntimeContext.dataStoreSpace.dataStore(DataStore.CollectionId(dataName))
+      record <- ds.load(DataStore.CollectionId(dataName), entry).flatMap {
+        case Some(value) => Consequence.success(value)
+        case None => Consequence.fromOption(None, s"Data record not found: ${id}")
+      }
+    } yield OperationResponse.RecordResponse(
+      _read_response_record(
+        "data",
+        "",
+        dataName,
+        id,
+        record
+      )
+    )
+  }
+
+  private def _admin_view_read(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ): Consequence[OperationResponse] = {
+    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    for {
+      componentName <- _required_string(args, "component")
+      viewName <- _required_string(args, "view")
+      paging <- _paging(args)
+      component <- Consequence.fromOption(_component_by_name(subsystem, componentName), s"Component not found: ${componentName}")
+      browser <- Consequence.fromOption(_view_browser(component, viewName), s"View browser not found: ${viewName}")
+      values <- browser.query(EntityQuery.plan(Record.empty, limit = Some(paging.fetchPageSize), offset = Some(paging.offset)))
+    } yield OperationResponse.RecordResponse(
+      _read_values_response_record(
+        "view",
+        componentName,
+        viewName,
+        _prefetched_page_values(values.map(x => Option(x).map(_.toString).getOrElse("")).toVector, paging),
+        paging
+      )
+    )
+  }
+
+  private def _admin_aggregate_read(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ): Consequence[OperationResponse] = {
+    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    for {
+      componentName <- _required_string(args, "component")
+      aggregateName <- _required_string(args, "aggregate")
+      paging <- _paging(args)
+      component <- Consequence.fromOption(_component_by_name(subsystem, componentName), s"Component not found: ${componentName}")
+      collection <- Consequence.fromOption(_aggregate_collection(component, aggregateName), s"Aggregate collection not found: ${aggregateName}")
+      values <- collection.query(EntityQuery.plan(Record.empty, limit = Some(paging.fetchPageSize), offset = Some(paging.offset)))
+    } yield OperationResponse.RecordResponse(
+      _read_values_response_record(
+        "aggregate",
+        componentName,
+        aggregateName,
+        _prefetched_page_values(values.map(x => Option(x).map(_.toString).getOrElse("")).toVector, paging),
+        paging
+      )
+    )
+  }
+
+  private def _admin_data_create(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ): Consequence[OperationResponse] = {
+    given org.goldenport.cncf.context.ExecutionContext = core.executionContext
+    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    for {
+      dataName <- _required_string(args, "data")
+      id <- _required_string(args, "id")
+      entry <- DataStore.EntryId.parse(id)
+      ds <- subsystem.globalRuntimeContext.dataStoreSpace.dataStore(DataStore.CollectionId(dataName))
+      _ <- ds.create(DataStore.CollectionId(dataName), entry, _admin_data_record(args))
+    } yield OperationResponse.Scalar("Data record was applied.")
+  }
+
+  private def _required_string(
+    args: Map[String, Any],
+    key: String
+  ): Consequence[String] =
+    args.get(key).map(_.toString).filter(_.nonEmpty) match {
+      case Some(value) => Consequence.success(value)
+      case None => Consequence.argumentMissing(key)
+    }
+
+  private final case class _Paging(
+    page: Int,
+    pageSize: Int
+  ) {
+    def offset: Int = (page - 1) * pageSize
+    def fetchPageSize: Int = pageSize + 1
+    def fetchSize: Int = offset + fetchPageSize
+  }
+
+  private def _paging(
+    args: Map[String, Any]
+  ): Consequence[_Paging] =
+    for {
+      page <- _positive_int_arg(args, "page", 1)
+      pageSize <- _positive_int_arg(args, "pageSize", 20)
+    } yield _Paging(page, pageSize)
+
+  private def _positive_int_arg(
+    args: Map[String, Any],
+    key: String,
+    default: Int
+  ): Consequence[Int] =
+    args.get(key).map(_.toString).filter(_.nonEmpty) match {
+      case Some(value) =>
+        value.toIntOption match {
+          case Some(n) if n > 0 =>
+            Consequence.success(n)
+          case _ =>
+            Consequence.argumentInvalid(s"${key} must be a positive integer")
+        }
+      case None =>
+        Consequence.success(default)
+    }
+
+  private def _admin_entity_record(
+    args: Map[String, Any]
+  ): Record =
+    Record.create(args.filterNot {
+      case (key, _) => key == "component" || key == "entity"
+    }.toVector)
+
+  private def _admin_data_record(
+    args: Map[String, Any]
+  ): Record =
+    Record.create(args.filterNot {
+      case (key, _) => key == "component" || key == "data"
+    }.toVector)
+
+  private def _entity_ids[A](
+    collection: EntityCollection[A]
+  ): Vector[String] =
+    _entity_values(collection)
+      .map(x => collection.descriptor.persistent.id(x).value)
+      .toVector
+
+  private def _entity_record[A](
+    collection: EntityCollection[A],
+    id: String
+  ): Option[Record] =
+    _entity_values(collection)
+      .find(x => collection.descriptor.persistent.id(x).value == id)
+      .map(x => collection.descriptor.persistent.toRecord(x))
+
+  private def _entity_values[A](
+    collection: EntityCollection[A]
+  ): Vector[A] =
+    collection.storage.memoryRealm.map(_.values).getOrElse(collection.storage.storeRealm.values)
+
+  private def _record_ids(
+    records: Vector[Record]
+  ): Vector[String] =
+    records.map(x => x.getString("id").getOrElse(x.getAny("id").map(_.toString).getOrElse("unknown")))
+
+  private def _page_values[A](
+    values: Vector[A],
+    paging: _Paging
+  ): _Page[A] = {
+    val source = values.drop(paging.offset)
+    val visible = source.take(paging.pageSize)
+    _Page(visible, source.size > paging.pageSize)
+  }
+
+  private def _prefetched_page_values[A](
+    values: Vector[A],
+    paging: _Paging
+  ): _Page[A] = {
+    val source = values
+    val visible = source.take(paging.pageSize)
+    _Page(visible, source.size > paging.pageSize)
+  }
+
+  private final case class _Page[A](
+    values: Vector[A],
+    hasNext: Boolean
+  )
+
+  private def _list_response_record(
+    kind: String,
+    componentName: String,
+    collectionName: String,
+    page: _Page[String],
+    paging: _Paging
+  ): Record =
+    Record.dataAuto(
+      "kind" -> s"${kind}.list",
+      "component" -> componentName,
+      "collection" -> collectionName,
+      "ids" -> page.values,
+      "page" -> paging.page,
+      "pageSize" -> paging.pageSize,
+      "hasNext" -> page.hasNext
+    )
+
+  private def _read_response_record(
+    kind: String,
+    componentName: String,
+    collectionName: String,
+    id: String,
+    record: Record
+  ): Record =
+    Record.dataAuto(
+      "kind" -> s"${kind}.read",
+      "component" -> componentName,
+      "collection" -> collectionName,
+      "id" -> id,
+      "record" -> record,
+      "fields" -> _record_text(record)
+    )
+
+  private def _read_values_response_record(
+    kind: String,
+    componentName: String,
+    collectionName: String,
+    page: _Page[String],
+    paging: _Paging
+  ): Record =
+    Record.dataAuto(
+      "kind" -> s"${kind}.read",
+      "component" -> componentName,
+      "collection" -> collectionName,
+      "values" -> page.values,
+      "fields" -> page.values.mkString("\n"),
+      "page" -> paging.page,
+      "pageSize" -> paging.pageSize,
+      "hasNext" -> page.hasNext
+    )
+
+  private def _record_text(
+    record: Record
+  ): String =
+    record.asMap.toVector.sortBy(_._1).map {
+      case (key, value) => s"${key}=${Option(value).map(_.toString).getOrElse("")}"
+    }.mkString("\n")
+
+  private def _component_by_name(
+    subsystem: Subsystem,
+    name: String
+  ): Option[Component] =
+    subsystem.components.find(x => NamingConventions.equivalentByNormalized(x.name, name))
+
+  private def _entity_collection(
+    component: Component,
+    entity: String
+  ): Option[EntityCollection[?]] =
+    component.entitySpace.entityOption[Any](entity).orElse {
+      component.componentDescriptors
+        .flatMap(_.entityRuntimeDescriptors)
+        .find(x => NamingConventions.equivalentByNormalized(x.entityName, entity))
+        .flatMap(x => component.entitySpace.entityOption(x.collectionId))
+    }
+
+  private def _view_browser(
+    component: Component,
+    viewName: String
+  ) =
+    component.viewSpace.browserOption[Any](viewName).orElse {
+      component.viewDefinitions
+        .find(x => NamingConventions.equivalentByNormalized(x.name, viewName))
+        .flatMap(x => component.viewSpace.browserOption[Any](x.name))
+    }
+
+  private def _aggregate_collection(
+    component: Component,
+    aggregateName: String
+  ) =
+    component.aggregateSpace.collectionOption[Any](aggregateName).orElse {
+      component.aggregateDefinitions
+        .find(x => NamingConventions.equivalentByNormalized(x.name, aggregateName))
+        .flatMap(x => component.aggregateSpace.collectionOption[Any](x.name))
+    }
 
   private def _value_(value: ConfigurationValue): String = {
     value match {

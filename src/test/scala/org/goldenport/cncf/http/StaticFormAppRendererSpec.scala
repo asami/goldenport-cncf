@@ -15,7 +15,7 @@ import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.http.HttpStatus
 import org.goldenport.bag.Bag
 import org.goldenport.datatype.{ContentType, MimeType}
-import org.goldenport.protocol.{Protocol, Request as GRequest}
+import org.goldenport.protocol.{Argument, Protocol, Request as GRequest}
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.egress.{EgressCollection, RestEgress}
 import org.goldenport.protocol.handler.ingress.{IngressCollection, RestIngress}
@@ -25,7 +25,7 @@ import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall, QueryAction}
-import org.goldenport.cncf.component.ComponentDescriptor
+import org.goldenport.cncf.component.{Component, ComponentDescriptor}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
@@ -289,9 +289,21 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val componentName = "notice_board"
       val componentPath = "notice-board"
       val entityPath = "notice"
-      val recordId = subsystem.components.head.entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id.value
+      val recordId = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id.value
 
       val list = StaticFormAppRenderer.renderComponentAdminEntityType(subsystem, componentName, entityPath).map(_.body).getOrElse(fail("component entity type admin is missing"))
+      val firstPage = StaticFormAppRenderer.renderComponentAdminEntityType(
+        subsystem,
+        componentName,
+        entityPath,
+        StaticFormAppRenderer.PageRequest(page = 1, pageSize = 1)
+      ).map(_.body).getOrElse(fail("component entity first page admin is missing"))
+      val secondPage = StaticFormAppRenderer.renderComponentAdminEntityType(
+        subsystem,
+        componentName,
+        entityPath,
+        StaticFormAppRenderer.PageRequest(page = 2, pageSize = 1)
+      ).map(_.body).getOrElse(fail("component entity second page admin is missing"))
       val detail = StaticFormAppRenderer.renderComponentAdminEntityDetail(subsystem, componentName, entityPath, recordId).map(_.body).getOrElse(fail("component entity detail admin is missing"))
       val edit = StaticFormAppRenderer.renderComponentAdminEntityEdit(subsystem, componentName, entityPath, recordId).map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
@@ -299,6 +311,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       list should include (s"/web/${componentPath}/admin/entities/${entityPath}/${recordId}")
       list should include (s"/web/${componentPath}/admin/entities/${entityPath}/${recordId}/edit")
       list should not include ("No records are currently available")
+      firstPage should include ("Page 1")
+      firstPage should include ("page=2&amp;pageSize=1")
+      firstPage should include ("Next")
+      secondPage should include ("Page 2")
+      secondPage should include ("page=1&amp;pageSize=1")
+      secondPage should include ("page-item disabled\"><a class=\"page-link\" href=\"/web/notice-board/admin/entities/notice?page=3&amp;pageSize=1\">Next")
       detail should include ("board update")
       detail should include ("alice")
       edit should include ("name=\"title\"")
@@ -308,8 +326,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
     "apply component entity update form POST into the EntityCollection fixture" in {
       val subsystem = _management_console_fixture_subsystem()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
-      val collection = subsystem.components.head.entitySpace.entity[_NoticeEntity]("notice")
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
       val recordId = collection.storage.storeRealm.values.head.id.value
       val req = _post_form_request(
         s"/form/notice-board/admin/entities/notice/${recordId}/update",
@@ -326,12 +346,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val updated = collection.storage.storeRealm.values.find(_.id.value == recordId).getOrElse(fail("updated entity is missing"))
       updated.title shouldBe "board updated"
       updated.author shouldBe "bob"
+      dispatcher.paths should contain ("/admin/entity/update")
     }
 
     "apply component entity create form POST into the EntityCollection fixture" in {
       val subsystem = _management_console_fixture_subsystem()
-      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
-      val collection = subsystem.components.head.entitySpace.entity[_NoticeEntity]("notice")
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
       val before = collection.storage.storeRealm.values.size
       val req = _post_form_request(
         "/form/notice-board/admin/entities/notice/create",
@@ -347,6 +370,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Applied</th><td>true")
       collection.storage.storeRealm.values.size shouldBe before + 1
       collection.storage.storeRealm.values.exists(x => x.title == "new notice" && x.author == "bob") shouldBe true
+      dispatcher.paths should contain ("/admin/entity/create")
     }
 
     "render component entity edit page contract" in {
@@ -435,12 +459,28 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val fixture = _data_fixture()
       _with_global_runtime(fixture.runtime) {
         val html = StaticFormAppRenderer.renderComponentAdminDataType(fixture.subsystem, "notice_board", "audit").map(_.body).getOrElse(fail("component data type admin is missing"))
+        val firstPage = StaticFormAppRenderer.renderComponentAdminDataType(
+          fixture.subsystem,
+          "notice_board",
+          "audit",
+          StaticFormAppRenderer.PageRequest(page = 1, pageSize = 1)
+        ).map(_.body).getOrElse(fail("component data first page admin is missing"))
+        val secondPage = StaticFormAppRenderer.renderComponentAdminDataType(
+          fixture.subsystem,
+          "notice_board",
+          "audit",
+          StaticFormAppRenderer.PageRequest(page = 2, pageSize = 1)
+        ).map(_.body).getOrElse(fail("component data second page admin is missing"))
         val detail = StaticFormAppRenderer.renderComponentAdminDataDetail(fixture.subsystem, "notice_board", "audit", "audit_1").map(_.body).getOrElse(fail("component data detail admin is missing"))
         val edit = StaticFormAppRenderer.renderComponentAdminDataEdit(fixture.subsystem, "notice_board", "audit", "audit_1").map(_.body).getOrElse(fail("component data edit admin is missing"))
         val newly = StaticFormAppRenderer.renderComponentAdminDataNew(fixture.subsystem, "notice_board", "audit").map(_.body).getOrElse(fail("component data new admin is missing"))
 
         html should include ("audit_1")
         html should include ("/web/notice-board/admin/data/audit/audit_1")
+        firstPage should include ("Page 1")
+        firstPage should include ("page=2&amp;pageSize=1")
+        secondPage should include ("Page 2")
+        secondPage should include ("page-item disabled\"><a class=\"page-link\" href=\"/web/notice-board/admin/data/audit?page=3&amp;pageSize=1\">Next")
         detail should include ("created")
         detail should include ("alice")
         edit should include ("name=\"action\"")
@@ -452,7 +492,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     "apply component data update/create form POST into the DataStore fixture" in {
       val fixture = _data_fixture()
       _with_global_runtime(fixture.runtime) {
-        val server = new Http4sHttpServer(new HttpExecutionEngine(fixture.subsystem))
+        val engine = new HttpExecutionEngine(fixture.subsystem)
+        val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+        val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
         val updateReq = _post_form_request(
           "/form/notice-board/admin/data/audit/audit_1/update",
           "action=updated&actor=bob"
@@ -466,6 +508,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         updateHtml should include ("Applied</th><td>true")
         _load_data_record(fixture.dataStoreSpace, "audit", "audit_1").getString("action") shouldBe Some("updated")
         _load_data_record(fixture.dataStoreSpace, "audit", "audit_1").getString("actor") shouldBe Some("bob")
+        dispatcher.paths should contain ("/admin/data/update")
 
         val createReq = _post_form_request(
           "/form/notice-board/admin/data/audit/create",
@@ -480,6 +523,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         createHtml should include ("Applied</th><td>true")
         _load_data_record(fixture.dataStoreSpace, "audit", "audit_2").getString("action") shouldBe Some("created")
         _load_data_record(fixture.dataStoreSpace, "audit", "audit_2").getString("actor") shouldBe Some("bob")
+        dispatcher.paths should contain ("/admin/data/create")
       }
     }
 
@@ -543,6 +587,113 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/form/notice-board/notice-aggregate/create-notice-aggregate")
       html should include ("/form/notice-board/notice-aggregate/approve-notice-aggregate")
       html should include ("/web/notice-board/admin/aggregates")
+    }
+
+    "execute admin read/list operations for entity data view and aggregate surfaces" in {
+      val entitySubsystem = _management_console_fixture_subsystem()
+      val entityEngine = new HttpExecutionEngine(entitySubsystem)
+      val entityCollection = _notice_fixture_component(entitySubsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val entityId = entityCollection.storage.storeRealm.values.head.id.value
+
+      val entityList = entityEngine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/entity/list", form = Record.data("component" -> "notice-board", "entity" -> "notice")))
+      val entityRead = entityEngine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/entity/read", form = Record.data("component" -> "notice-board", "entity" -> "notice", "id" -> entityId)))
+
+      entityList.code shouldBe 200
+      entityList.getString.getOrElse("") should include ("notice_1")
+      entityRead.code shouldBe 200
+      entityRead.getString.getOrElse("") should include ("title=board update")
+      val entityListRecord = _admin_record_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice")
+      entityListRecord.getString("kind") shouldBe Some("entity.list")
+      entityListRecord.getAny("ids").map(_.toString).getOrElse("") should include ("notice_1")
+      entityListRecord.getInt("page") shouldBe Some(1)
+      entityListRecord.getInt("pageSize") shouldBe Some(20)
+      entityListRecord.getBoolean("hasNext") shouldBe Some(false)
+      val pagedEntityListRecord = _admin_record_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "page" -> "2", "pageSize" -> "5")
+      pagedEntityListRecord.getInt("page") shouldBe Some(2)
+      pagedEntityListRecord.getInt("pageSize") shouldBe Some(5)
+      val firstEntityPage = _admin_record_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "pageSize" -> "1")
+      firstEntityPage.getAny("ids").map(_.toString).getOrElse("") should include ("notice_1")
+      firstEntityPage.getBoolean("hasNext") shouldBe Some(true)
+      val secondEntityPage = _admin_record_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "page" -> "2", "pageSize" -> "1")
+      secondEntityPage.getAny("ids").map(_.toString).getOrElse("") should not include (entityId)
+      secondEntityPage.getBoolean("hasNext") shouldBe Some(false)
+      val entityReadRecord = _admin_record_response(entitySubsystem, "entity", "read", "component" -> "notice-board", "entity" -> "notice", "id" -> entityId)
+      entityReadRecord.getString("kind") shouldBe Some("entity.read")
+      entityReadRecord.getString("fields").getOrElse("") should include ("title=board update")
+      _admin_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "page" -> "0") match {
+        case Consequence.Failure(_) => succeed
+        case other => fail(s"invalid page should fail: ${other}")
+      }
+
+      val dataFixture = _data_fixture()
+      _with_global_runtime(dataFixture.runtime) {
+        val dataEngine = new HttpExecutionEngine(dataFixture.subsystem)
+        val dataList = dataEngine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/data/list", form = Record.data("component" -> "notice-board", "data" -> "audit")))
+        val dataRead = dataEngine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/data/read", form = Record.data("component" -> "notice-board", "data" -> "audit", "id" -> "audit_1")))
+
+        dataList.code shouldBe 200
+        dataList.getString.getOrElse("") should include ("audit_1")
+        dataRead.code shouldBe 200
+        dataRead.getString.getOrElse("") should include ("actor=alice")
+        val dataListRecord = _admin_record_response(dataFixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit")
+        dataListRecord.getString("kind") shouldBe Some("data.list")
+        dataListRecord.getAny("ids").map(_.toString).getOrElse("") should include ("audit_1")
+        val dataReadRecord = _admin_record_response(dataFixture.subsystem, "data", "read", "component" -> "notice-board", "data" -> "audit", "id" -> "audit_1")
+        dataReadRecord.getString("kind") shouldBe Some("data.read")
+        dataReadRecord.getString("fields").getOrElse("") should include ("actor=alice")
+        val pagedDataListRecord = _admin_record_response(dataFixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "page" -> "3", "pageSize" -> "7")
+        pagedDataListRecord.getInt("page") shouldBe Some(3)
+        pagedDataListRecord.getInt("pageSize") shouldBe Some(7)
+        val firstDataPage = _admin_record_response(dataFixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "pageSize" -> "1")
+        firstDataPage.getAny("ids").map(_.toString).getOrElse("") should include ("audit_1")
+        firstDataPage.getBoolean("hasNext") shouldBe Some(true)
+        val secondDataPage = _admin_record_response(dataFixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "page" -> "2", "pageSize" -> "1")
+        secondDataPage.getAny("ids").map(_.toString).getOrElse("") should include ("audit_existing")
+        secondDataPage.getBoolean("hasNext") shouldBe Some(false)
+      }
+
+      val viewSubsystem = _view_fixture_subsystem()
+      val viewEngine = new HttpExecutionEngine(viewSubsystem)
+      val viewRead = viewEngine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/view/read", form = Record.data("component" -> "notice-board", "view" -> "notice-view")))
+
+      viewRead.code shouldBe 200
+      viewRead.getString.getOrElse("") should include ("notice summary")
+      val viewReadRecord = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view")
+      viewReadRecord.getString("kind") shouldBe Some("view.read")
+      viewReadRecord.getString("fields").getOrElse("") should include ("notice summary")
+      viewReadRecord.getAny("values").map(_.toString).getOrElse("") should include ("notice summary")
+      viewReadRecord.getInt("page") shouldBe Some(1)
+      viewReadRecord.getInt("pageSize") shouldBe Some(20)
+      viewReadRecord.getBoolean("hasNext") shouldBe Some(false)
+      val pagedViewReadRecord = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "page" -> "4", "pageSize" -> "9")
+      pagedViewReadRecord.getInt("page") shouldBe Some(4)
+      pagedViewReadRecord.getInt("pageSize") shouldBe Some(9)
+      val firstViewPage = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "pageSize" -> "1")
+      firstViewPage.getString("fields") shouldBe Some("notice summary")
+      firstViewPage.getBoolean("hasNext") shouldBe Some(true)
+      val secondViewPage = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "page" -> "2", "pageSize" -> "1")
+      secondViewPage.getString("fields") shouldBe Some("notice next")
+      secondViewPage.getBoolean("hasNext") shouldBe Some(false)
+
+      val aggregateSubsystem = _aggregate_fixture_subsystem()
+      val aggregateEngine = new HttpExecutionEngine(aggregateSubsystem)
+      val aggregateRead = aggregateEngine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/aggregate/read", form = Record.data("component" -> "notice-board", "aggregate" -> "notice-aggregate")))
+
+      aggregateRead.code shouldBe 200
+      aggregateRead.getString.getOrElse("") should include ("notice aggregate")
+      val aggregateReadRecord = _admin_record_response(aggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate")
+      aggregateReadRecord.getString("kind") shouldBe Some("aggregate.read")
+      aggregateReadRecord.getString("fields").getOrElse("") should include ("notice aggregate")
+      aggregateReadRecord.getAny("values").map(_.toString).getOrElse("") should include ("notice aggregate")
+      val pagedAggregateReadRecord = _admin_record_response(aggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "page" -> "5", "pageSize" -> "11")
+      pagedAggregateReadRecord.getInt("page") shouldBe Some(5)
+      pagedAggregateReadRecord.getInt("pageSize") shouldBe Some(11)
+      val firstAggregatePage = _admin_record_response(aggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "pageSize" -> "1")
+      firstAggregatePage.getString("fields").getOrElse("") should include ("notice aggregate")
+      firstAggregatePage.getBoolean("hasNext") shouldBe Some(true)
+      val secondAggregatePage = _admin_record_response(aggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "page" -> "2", "pageSize" -> "1")
+      secondAggregatePage.getString("fields").getOrElse("") should include ("notice next")
+      secondAggregatePage.getBoolean("hasNext") shouldBe Some(false)
     }
 
     "submit aggregate create/update actions through the discovered operation form route" in {
@@ -926,6 +1077,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       "action" -> "created",
       "actor" -> "alice"
     )))
+    val _ = dataStoreSpace.inject(cid, Record.create(Vector(
+      "id" -> "audit_existing",
+      "action" -> "updated",
+      "actor" -> "bob"
+    )))
     val runtime = GlobalRuntimeContext.create(
       "data-admin-test",
       RuntimeConfig.default.copy(dataStoreSpace = dataStoreSpace),
@@ -934,7 +1090,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       AliasResolver.empty
     )
     val component = TestComponentFactory.create("notice_board", Protocol.empty)
-    val subsystem = TestComponentFactory.emptySubsystem("sample-web").add(Vector(component))
+    val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
     _DataFixture(subsystem, runtime, dataStoreSpace)
   }
 
@@ -964,6 +1120,32 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     } yield record).toOption.getOrElse(Record.empty)
   }
 
+  private def _admin_record_response(
+    subsystem: Subsystem,
+    service: String,
+    operation: String,
+    args: (String, String)*
+  ): Record = {
+    _admin_response(subsystem, service, operation, args*).toOption.collect {
+      case OperationResponse.RecordResponse(record) => record
+    }.getOrElse(fail(s"admin.${service}.${operation} did not return RecordResponse"))
+  }
+
+  private def _admin_response(
+    subsystem: Subsystem,
+    service: String,
+    operation: String,
+    args: (String, String)*
+  ): Consequence[OperationResponse] = {
+    val request = GRequest.of(
+      component = "admin",
+      service = service,
+      operation = operation,
+      arguments = args.map { case (key, value) => Argument(key, value) }.toList
+    )
+    subsystem.executeOperationResponse(request)
+  }
+
   private def _view_fixture_subsystem(): Subsystem = {
     val component = new org.goldenport.cncf.component.Component() {
       override def viewDefinitions: Vector[ViewDefinition] =
@@ -985,10 +1167,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     )
     val browser = Browser.from(
       collection,
-      _ => Consequence.success(Vector("notice summary"))
+      _ => Consequence.success(Vector("notice summary", "notice next"))
     )
     component.viewSpace.register("notice_view", collection, browser)
-    TestComponentFactory.emptySubsystem("sample-web").add(Vector(component))
+    DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
   }
 
   private def _aggregate_fixture_subsystem(): Subsystem = {
@@ -1006,6 +1188,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     }
     _initialize_component("notice_board", component, _aggregate_protocol())
     val aggregate = _NoticeAggregate("notice aggregate")
+    val nextAggregate = _NoticeAggregate("notice next")
     component.aggregateSpace.register(
       "notice_aggregate",
       new AggregateCollection[_NoticeAggregate](
@@ -1013,10 +1196,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           def build(id: EntityId): Consequence[_NoticeAggregate] =
             Consequence.success(aggregate)
         },
-        _ => Consequence.success(Vector(aggregate))
+        q => Consequence.success(org.goldenport.cncf.directive.Query.sliceValues(Vector(aggregate, nextAggregate), q.offset, q.limit))
       )
     )
-    TestComponentFactory.emptySubsystem("sample-web").add(Vector(component))
+    DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
   }
 
   private def _aggregate_protocol(): Protocol =
@@ -1130,12 +1313,22 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
             EntityId("sample", "notice_1", cid),
             "board update",
             "alice"
+          ),
+          _NoticeEntity(
+            EntityId("sample", "notice_2", cid),
+            "board followup",
+            "bob"
           )
         )
       )
     )
-    TestComponentFactory.emptySubsystem("sample-web").add(Vector(component))
+    DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
   }
+
+  private def _notice_fixture_component(
+    subsystem: Subsystem
+  ): Component =
+    subsystem.components.find(_.name == "notice_board").getOrElse(fail("notice fixture component is missing"))
 
   private def _notice_collection(
     entities: Vector[_NoticeEntity]

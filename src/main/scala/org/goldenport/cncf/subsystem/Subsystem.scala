@@ -36,8 +36,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
- *  version Apr. 11, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -186,8 +185,12 @@ final class Subsystem(
   }
 
   def execute(request: Request): Consequence[Response] = {
+    executeOperationResponse(request).map(_to_response(request, _))
+  }
+
+  def executeOperationResponse(request: Request): Consequence[OperationResponse] = {
     val domainRequest = _domain_request(request)
-    val r: Consequence[Response] = for {
+    val r: Consequence[OperationResponse] = for {
       route <- _resolve_route(request) match {
         case Some(r) =>
           Consequence.success(r)
@@ -200,10 +203,7 @@ final class Subsystem(
           component.logic.makeOperationRequest(domainRequest).flatMap { r =>
           r match {
             case action: Action =>
-              component.logic.executeAction(action, security.executionContext).flatMap { opres =>
-                val rendered = _to_response(request, opres)
-                Consequence.success(rendered)
-              }
+              component.logic.executeAction(action, security.executionContext)
             case _ =>
               Consequence.argumentInvalid("OperationRequest must be Action")
           }
@@ -211,6 +211,14 @@ final class Subsystem(
         }
       }
     } yield response
+    _observe_execute_failure(request, r)
+    r
+  }
+
+  private def _observe_execute_failure[A](
+    request: Request,
+    r: Consequence[A]
+  ): Unit =
     r match {
       case Consequence.Failure(c) =>
         val _ = _subsystem_scope_context.observe_error(
@@ -223,8 +231,6 @@ final class Subsystem(
       case _ =>
         ()
     }
-    r
-  }
 
   def executeWired(
     binding: GenericSubsystemResolvedWiringBinding,

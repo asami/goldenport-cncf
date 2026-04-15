@@ -192,6 +192,67 @@ JSON Form API is the input preparation layer. It provides:
 The Form API must not execute business logic by itself. Execution goes through
 the REST API.
 
+Management Console create/update form submissions follow the same rule. The
+HTML submit route under `/form/{component}/admin/...` builds an Operation
+request and dispatches it through the Web Operation Dispatcher. Current
+implemented write Operations are:
+
+- `admin.entity.create`
+- `admin.entity.update`
+- `admin.data.create`
+- `admin.data.update`
+
+The first read/list Operation surface is also in place:
+
+- `admin.entity.list`
+- `admin.entity.read`
+- `admin.data.list`
+- `admin.data.read`
+- `admin.view.read`
+- `admin.aggregate.read`
+
+Those Operations are synchronous admin commands for browser-native form result
+pages. They are the persistence chokepoints for the current Management Console
+write path; the HTTP server no longer writes EntityCollection or DataStore
+records directly for these forms.
+
+The read/list Operations are query surfaces. Management Console HTML pages now
+consume these Operation results directly for entity, data, view, and aggregate
+read/list rendering. Compatibility fallbacks to direct local runtime reads are
+intentionally not retained.
+
+The current admin query response baseline is:
+
+- `admin.entity.list`: `RecordResponse(kind, component, collection, ids, page,
+  pageSize, hasNext)`
+- `admin.entity.read`: `RecordResponse(kind, component, collection, id, record,
+  fields)`
+- `admin.data.list`: `RecordResponse(kind, component, collection, ids, page,
+  pageSize, hasNext)`
+- `admin.data.read`: `RecordResponse(kind, component, collection, id, record,
+  fields)`
+- `admin.view.read`: `RecordResponse(kind, component, collection, values,
+  fields, page, pageSize, hasNext)`
+- `admin.aggregate.read`: `RecordResponse(kind, component, collection, values,
+  fields, page, pageSize, hasNext)`
+
+`fields` is the browser rendering bridge for the current Static Form App.
+`ids` and `values` are structured data slots for later JSON Form API and richer
+widgets. `page` and `pageSize` are accepted as positive integer Operation
+arguments and reflected in the response shape. Admin query paging uses
+`pageSize + 1` over-fetching to calculate `hasNext` without requiring a total
+count. Entity paging slices the in-memory record id vector. DataStore paging
+fetches enough records for the requested page and then slices locally because
+the current DataStore query directive has no offset slot. View and aggregate
+queries pass both offset and over-fetch limit through the entity query
+directive.
+
+Entity and data Management Console list pages read `page` and `pageSize` from
+the `/web/...` query string and pass them to the admin query Operation. The HTML
+paging navigation uses the returned `page`, `pageSize`, and `hasNext` values, so
+`Next` is disabled when the Operation response reports no following page even
+when no total count is available.
+
 CLI and meta projections remain separate surfaces. Phase 12 Web does not
 replace command-line help, describe/schema output, OpenAPI projection, or the
 CLI `Presentable` result rendering policy. Web paths share operation metadata

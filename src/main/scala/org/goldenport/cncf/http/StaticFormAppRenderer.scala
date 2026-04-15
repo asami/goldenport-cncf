@@ -2,11 +2,11 @@ package org.goldenport.cncf.http
 
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace, Query as DataStoreQuery, QueryDirective, QueryLimit}
-import org.goldenport.cncf.directive.{Query as EntityQuery}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
+import org.goldenport.protocol.{Argument, Request as ProtocolRequest}
+import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
 import io.circe.Json
 import io.circe.parser.parse
@@ -18,6 +18,16 @@ import io.circe.parser.parse
  */
 object StaticFormAppRenderer {
   final case class Page(body: String)
+  final case class PageRequest(
+    page: Int = 1,
+    pageSize: Int = 20
+  ) {
+    def toPairs: Vector[(String, Any)] =
+      Vector(
+        "page" -> page,
+        "pageSize" -> pageSize
+      )
+  }
   final case class FormPageProperties(
     componentName: String,
     serviceName: String,
@@ -276,14 +286,16 @@ object StaticFormAppRenderer {
   def renderComponentAdminEntityType(
     subsystem: Subsystem,
     componentName: String,
-    entityName: String
+    entityName: String,
+    pageRequest: PageRequest = PageRequest()
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val entityPath = NamingConventions.toNormalizedSegment(entityName)
       val entityLabel = _title_label(entityPath)
       val basePath = s"/web/${componentPath}/admin/entities/${entityPath}"
-      val entityIds = _entity_record_ids(component, entityName)
+      val result = _admin_entity_list(subsystem, componentPath, entityPath, pageRequest)
+      val entityIds = result.ids
       val rows =
         if (entityIds.isEmpty) {
           """<tr><td colspan="2">No records are currently available for this entity.</td></tr>"""
@@ -310,7 +322,7 @@ object StaticFormAppRenderer {
              |      ${rows}
              |    </tbody>
              |  </table></div>
-             |  ${_paging_nav(1, 20, None, s"${basePath}?page={page}&pageSize={pageSize}")}
+             |  ${_paging_nav(result.page, result.pageSize, None, s"${basePath}?page={page}&pageSize={pageSize}", Some(result.hasNext))}
              |</article>""".stripMargin
       ))
     }
@@ -326,7 +338,7 @@ object StaticFormAppRenderer {
       val entityPath = NamingConventions.toNormalizedSegment(entityName)
       val entityLabel = _title_label(entityPath)
       val basePath = s"/web/${componentPath}/admin/entities/${entityPath}"
-      val body = _entity_record_table(component, entityName, id)
+      val body = _admin_entity_record_table(subsystem, componentPath, entityPath, id)
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} Detail",
         subtitle = "Entity record detail baseline",
@@ -354,7 +366,7 @@ object StaticFormAppRenderer {
       val entityLabel = _title_label(entityPath)
       val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
       val actionPath = s"/form/${componentPath}/admin/entities/${entityPath}/${id}/update"
-      val fields = _entity_record_fields(component, entityName, id).getOrElse(Vector("id" -> id))
+      val fields = _admin_entity_record_fields(subsystem, componentPath, entityPath, id).getOrElse(Vector("id" -> id))
       val controls = fields.map {
         case (key, value) =>
           s"""<div class="mb-3">
@@ -478,62 +490,229 @@ object StaticFormAppRenderer {
     ))
   }
 
-  private def _entity_record_ids(
-    component: Component,
-    entityName: String
-  ): Vector[String] =
-    _entity_collection(component, entityName).toVector.flatMap { collection =>
-      val values = _entity_collection_values(collection)
-      values.map(entity => collection.descriptor.persistent.id(entity).value)
-    }
+  private final case class _AdminListResult(
+    ids: Vector[String],
+    page: Int,
+    pageSize: Int,
+    hasNext: Boolean
+  )
 
-  private def _entity_record_table(
-    component: Component,
-    entityName: String,
+  private def _admin_entity_list(
+    subsystem: Subsystem,
+    componentPath: String,
+    entityPath: String,
+    pageRequest: PageRequest
+  ): _AdminListResult =
+    _admin_list_result(
+      subsystem,
+      "/admin/entity/list",
+      Record.create(Vector("component" -> componentPath, "entity" -> entityPath) ++ pageRequest.toPairs)
+    )
+
+  private def _admin_entity_record_table(
+    subsystem: Subsystem,
+    componentPath: String,
+    entityPath: String,
     id: String
   ): String =
-    _entity_record_fields(component, entityName, id) match {
-      case Some(fields) =>
-        val rows = fields.map {
-          case (key, value) =>
-            s"""<tr><th>${_escape(key)}</th><td>${_escape(value)}</td></tr>"""
-        }.mkString("\n")
-        s"""<div class="table-responsive"><table class="table table-sm">
-           |  <tbody>${rows}</tbody>
-           |</table></div>""".stripMargin
-      case None =>
-        s"""<p>No record is currently available for id <code>${_escape(id)}</code>.</p>"""
-    }
+    _admin_key_value_table(
+      _admin_operation_lines(
+        subsystem,
+        "/admin/entity/read",
+        Record.data("component" -> componentPath, "entity" -> entityPath, "id" -> id)
+      ),
+      s"""No record is currently available for id <code>${_escape(id)}</code>."""
+    )
 
-  private def _entity_record_fields(
-    component: Component,
-    entityName: String,
+  private def _admin_entity_record_fields(
+    subsystem: Subsystem,
+    componentPath: String,
+    entityPath: String,
     id: String
   ): Option[Vector[(String, String)]] =
-    _entity_collection(component, entityName).flatMap { collection =>
-      val values = _entity_collection_values(collection)
-      values.find(entity => collection.descriptor.persistent.id(entity).value == id).map { entity =>
-        collection.descriptor.persistent.toRecord(entity).asMap.toVector
-          .sortBy(_._1)
-          .map { case (key, value) => key -> Option(value).map(_.toString).getOrElse("") }
-      }
+    _admin_record_fields(
+      subsystem,
+      "/admin/entity/read",
+      Record.data("component" -> componentPath, "entity" -> entityPath, "id" -> id)
+    )
+
+  private def _admin_data_list(
+    subsystem: Subsystem,
+    componentPath: String,
+    dataPath: String,
+    pageRequest: PageRequest
+  ): _AdminListResult =
+    _admin_list_result(
+      subsystem,
+      "/admin/data/list",
+      Record.create(Vector("component" -> componentPath, "data" -> dataPath) ++ pageRequest.toPairs)
+    )
+
+  private def _admin_list_result(
+    subsystem: Subsystem,
+    path: String,
+    form: Record
+  ): _AdminListResult =
+    _admin_operation_record(subsystem, path, form) match {
+      case Some(record) =>
+        val ids = record.getAny("ids") match {
+          case Some(xs: Seq[?]) => xs.toVector.map(_.toString)
+          case _ => Vector.empty
+        }
+        _AdminListResult(
+          ids,
+          record.getInt("page").getOrElse(1),
+          record.getInt("pageSize").getOrElse(20),
+          record.getBoolean("hasNext").getOrElse(false)
+        )
+      case None =>
+        _AdminListResult(Vector.empty, 1, 20, false)
     }
 
-  private def _entity_collection(
-    component: Component,
-    entityName: String
-  ) =
-    component.entitySpace.entityOption[Any](entityName).orElse {
-      component.componentDescriptors
-        .flatMap(_.entityRuntimeDescriptors)
-        .find(x => NamingConventions.equivalentByNormalized(x.entityName, entityName))
-        .flatMap(x => component.entitySpace.entityOption(x.collectionId))
+  private def _admin_data_record_table(
+    subsystem: Subsystem,
+    componentPath: String,
+    dataPath: String,
+    id: String
+  ): String =
+    _admin_key_value_table(
+      _admin_operation_lines(
+        subsystem,
+        "/admin/data/read",
+        Record.data("component" -> componentPath, "data" -> dataPath, "id" -> id)
+      ),
+      s"""No data record is currently available for id <code>${_escape(id)}</code>."""
+    )
+
+  private def _admin_data_record_fields(
+    subsystem: Subsystem,
+    componentPath: String,
+    dataPath: String,
+    id: String
+  ): Option[Vector[(String, String)]] =
+    _admin_record_fields(
+      subsystem,
+      "/admin/data/read",
+      Record.data("component" -> componentPath, "data" -> dataPath, "id" -> id)
+    )
+
+  private def _admin_record_fields(
+    subsystem: Subsystem,
+    path: String,
+    form: Record
+  ): Option[Vector[(String, String)]] =
+    _admin_operation_record(subsystem, path, form)
+      .flatMap(_.getString("fields"))
+      .map(_field_lines)
+
+  private def _admin_operation_lines(
+    subsystem: Subsystem,
+    path: String,
+    form: Record
+  ): Vector[String] =
+    _admin_operation_record(subsystem, path, form) match {
+      case Some(record) =>
+        record.getAny("ids") match {
+          case Some(xs: Seq[?]) =>
+            xs.toVector.map(_.toString)
+          case _ =>
+            record.getString("fields").map(_lines).getOrElse(Vector.empty)
+        }
+      case None =>
+        Vector.empty
     }
 
-  private def _entity_collection_values(
-    collection: org.goldenport.cncf.entity.runtime.EntityCollection[?]
-  ) =
-    collection.storage.memoryRealm.map(_.values).getOrElse(collection.storage.storeRealm.values)
+  private def _admin_operation_record(
+    subsystem: Subsystem,
+    path: String,
+    form: Record
+  ): Option[Record] =
+    _admin_operation_response(subsystem, path, form).collect {
+      case OperationResponse.RecordResponse(record) => record
+    }
+
+  private def _admin_operation_response(
+    subsystem: Subsystem,
+    path: String,
+    form: Record
+  ): Option[OperationResponse] =
+    _admin_protocol_request(path, form).flatMap { request =>
+      subsystem.executeOperationResponse(request).toOption
+    }
+
+  private def _admin_protocol_request(
+    path: String,
+    form: Record
+  ): Option[ProtocolRequest] =
+    path.stripPrefix("/").split("/").toVector match {
+      case Vector(component, service, operation) =>
+        Some(
+          ProtocolRequest.of(
+            component = component,
+            service = service,
+            operation = operation,
+            arguments = form.asMap.toVector.map { case (key, value) => Argument(key, value.toString) }.toList
+          )
+        )
+      case _ =>
+        None
+    }
+
+  private def _admin_read_result_table(
+    subsystem: Subsystem,
+    path: String,
+    form: Record,
+    emptyMessage: String
+  ): String =
+    _admin_operation_value_lines(subsystem, path, form)
+      .filter(_.nonEmpty)
+      .map(_value_table)
+      .getOrElse(s"<p>${_escape(emptyMessage)}</p>")
+
+  private def _admin_operation_value_lines(
+    subsystem: Subsystem,
+    path: String,
+    form: Record
+  ): Option[Vector[String]] =
+    _admin_operation_response(subsystem, path, form).flatMap {
+      case OperationResponse.RecordResponse(record) =>
+        record.getString("fields").map(_lines)
+      case _ =>
+        None
+    }
+
+  private def _lines(text: String): Vector[String] =
+    text.linesIterator.toVector.map(_.trim).filter(_.nonEmpty)
+
+  private def _field_lines(text: String): Vector[(String, String)] =
+    _lines(text).map { line =>
+      val i = line.indexOf("=")
+      if (i < 0) line -> ""
+      else line.take(i) -> line.drop(i + 1)
+    }
+
+  private def _admin_key_value_table(
+    lines: Vector[String],
+    emptyMessage: String
+  ): String =
+    if (lines.isEmpty) {
+      s"<p>${emptyMessage}</p>"
+    } else {
+      _value_table(lines)
+    }
+
+  private def _value_table(lines: Vector[String]): String = {
+    val rows = lines.map { line =>
+      val i = line.indexOf("=")
+      val (key, value) =
+        if (i < 0) "value" -> line
+        else line.take(i) -> line.drop(i + 1)
+      s"""<tr><th>${_escape(key)}</th><td>${_escape(value)}</td></tr>"""
+    }.mkString("\n")
+    s"""<div class="table-responsive"><table class="table table-sm">
+       |  <tbody>${rows}</tbody>
+       |</table></div>""".stripMargin
+  }
 
   private def _submitted_fields_rows(values: Map[String, String]): String =
     if (values.isEmpty) {
@@ -545,118 +724,17 @@ object StaticFormAppRenderer {
       }.mkString("\n")
     }
 
-  private def _data_records(
-    subsystem: Subsystem,
-    dataName: String
-  ): Vector[Record] = {
-    given org.goldenport.cncf.context.ExecutionContext = org.goldenport.cncf.context.ExecutionContext.create()
-    val cid = DataStore.CollectionId(dataName)
-    _data_store_space(subsystem).search(cid, QueryDirective(DataStoreQuery.Empty, limit = QueryLimit.Limit(20))).toOption.map(_.records).getOrElse(Vector.empty)
-  }
-
-  private def _data_record(
-    subsystem: Subsystem,
-    dataName: String,
-    id: String
-  ): Option[Record] = {
-    given org.goldenport.cncf.context.ExecutionContext = org.goldenport.cncf.context.ExecutionContext.create()
-    val cid = DataStore.CollectionId(dataName)
-    for {
-      ds <- _data_store_space(subsystem).dataStore(cid).toOption
-      entry <- DataStore.EntryId.parse(id).toOption
-      record <- ds.load(cid, entry).toOption.flatten
-    } yield record
-  }
-
-  private def _data_store_space(subsystem: Subsystem): DataStoreSpace =
-    scala.util.Try(subsystem.globalRuntimeContext.dataStoreSpace).getOrElse(DataStoreSpace.default())
-
-  private def _data_record_id(record: Record): String =
-    record.getString("id").getOrElse(record.getAny("id").map(_.toString).getOrElse("unknown"))
-
-  private def _data_record_table(
-    subsystem: Subsystem,
-    dataName: String,
-    id: String
-  ): String =
-    _data_record(subsystem, dataName, id) match {
-      case Some(record) =>
-        val rows = _record_fields(record).map {
-          case (key, value) =>
-            s"""<tr><th>${_escape(key)}</th><td>${_escape(value)}</td></tr>"""
-        }.mkString("\n")
-        s"""<div class="table-responsive"><table class="table table-sm">
-           |  <tbody>${rows}</tbody>
-           |</table></div>""".stripMargin
-      case None =>
-        s"""<p>No data record is currently available for id <code>${_escape(id)}</code>.</p>"""
-    }
-
-  private def _record_fields(record: Record): Vector[(String, String)] =
-    record.asMap.toVector
-      .sortBy(_._1)
-      .map { case (key, value) => key -> Option(value).map(_.toString).getOrElse("") }
-
   private def _view_definition(
     component: Component,
     viewName: String
   ) =
     component.viewDefinitions.find(d => NamingConventions.equivalentByNormalized(d.name, viewName))
 
-  private def _view_query_table(
-    component: Component,
-    viewName: String
-  ): String =
-    component.viewSpace.browserOption[Any](viewName) match {
-      case Some(browser) =>
-        val q = EntityQuery.plan(Record.empty, limit = Some(20))
-        browser.query(q) match {
-          case org.goldenport.Consequence.Success(values) if values.isEmpty =>
-            "<p>No view records are currently available.</p>"
-          case org.goldenport.Consequence.Success(values) =>
-            val rows = values.map { value =>
-              s"""<tr><td>${_escape(Option(value).map(_.toString).getOrElse(""))}</td></tr>"""
-            }.mkString("\n")
-            s"""<div class="table-responsive"><table class="table table-sm">
-               |  <thead><tr><th>Value</th></tr></thead>
-               |  <tbody>${rows}</tbody>
-               |</table></div>""".stripMargin
-          case org.goldenport.Consequence.Failure(conclusion) =>
-            s"""<p>View query is not available: ${_escape(conclusion.toString)}</p>"""
-        }
-      case None =>
-        s"""<p>No view browser is registered for <code>${_escape(viewName)}</code>.</p>"""
-    }
-
   private def _aggregate_definition(
     component: Component,
     aggregateName: String
   ) =
     component.aggregateDefinitions.find(d => NamingConventions.equivalentByNormalized(d.name, aggregateName))
-
-  private def _aggregate_query_table(
-    component: Component,
-    aggregateName: String
-  ): String =
-    component.aggregateSpace.collectionOption[Any](aggregateName) match {
-      case Some(collection) =>
-        collection.query(EntityQuery.plan(Record.empty, limit = Some(20))) match {
-          case org.goldenport.Consequence.Success(values) if values.isEmpty =>
-            "<p>No aggregate records are currently available.</p>"
-          case org.goldenport.Consequence.Success(values) =>
-            val rows = values.map { value =>
-              s"""<tr><td>${_escape(Option(value).map(_.toString).getOrElse(""))}</td></tr>"""
-            }.mkString("\n")
-            s"""<div class="table-responsive"><table class="table table-sm">
-               |  <thead><tr><th>Value</th></tr></thead>
-               |  <tbody>${rows}</tbody>
-               |</table></div>""".stripMargin
-          case org.goldenport.Consequence.Failure(conclusion) =>
-            s"""<p>Aggregate query is not available: ${_escape(conclusion.toString)}</p>"""
-        }
-      case None =>
-        s"""<p>No aggregate collection is registered for <code>${_escape(aggregateName)}</code>.</p>"""
-    }
 
   private def _aggregate_operation_actions(
     component: Component,
@@ -821,7 +899,12 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>Read result</h2>
-             |  ${_view_query_table(component, viewName)}
+             |  ${_admin_read_result_table(
+                   subsystem,
+                   "/admin/view/read",
+                   Record.data("component" -> componentPath, "view" -> viewPath),
+                   s"No view records are currently available for ${viewName}."
+                 )}
              |</article>""".stripMargin
       ))
     }
@@ -921,7 +1004,12 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>Read result</h2>
-             |  ${_aggregate_query_table(component, aggregateName)}
+             |  ${_admin_read_result_table(
+                   subsystem,
+                   "/admin/aggregate/read",
+                   Record.data("component" -> componentPath, "aggregate" -> aggregatePath),
+                   s"No aggregate records are currently available for ${aggregateName}."
+                 )}
              |</article>
              |<article>
              |  <h2>Operations</h2>
@@ -954,19 +1042,20 @@ object StaticFormAppRenderer {
   def renderComponentAdminDataType(
     subsystem: Subsystem,
     componentName: String,
-    dataName: String
+    dataName: String,
+    pageRequest: PageRequest = PageRequest()
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val dataPath = NamingConventions.toNormalizedSegment(dataName)
       val basePath = s"/web/${componentPath}/admin/data/${dataPath}"
-      val records = _data_records(subsystem, dataName)
+      val result = _admin_data_list(subsystem, componentPath, dataPath, pageRequest)
+      val recordIds = result.ids
       val rows =
-        if (records.isEmpty) {
+        if (recordIds.isEmpty) {
           """<tr><td colspan="2">No records are currently available for this data collection.</td></tr>"""
         } else {
-          records.map { record =>
-            val id = _data_record_id(record)
+          recordIds.map { id =>
             s"""<tr><td><code>${_escape(id)}</code></td><td><a href="${_escape(basePath)}/${_escape(id)}">Detail</a> · <a href="${_escape(basePath)}/${_escape(id)}/edit">Edit</a></td></tr>"""
           }.mkString("\n")
         }
@@ -986,7 +1075,7 @@ object StaticFormAppRenderer {
              |    <thead><tr><th>Id</th><th>Actions</th></tr></thead>
              |    <tbody>${rows}</tbody>
              |  </table></div>
-             |  ${_paging_nav(1, 20, None, s"${basePath}?page={page}&pageSize={pageSize}")}
+             |  ${_paging_nav(result.page, result.pageSize, None, s"${basePath}?page={page}&pageSize={pageSize}", Some(result.hasNext))}
              |</article>""".stripMargin
       ))
     }
@@ -1011,7 +1100,7 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>${_escape(_title_label(dataPath))} detail</h2>
-             |  ${_data_record_table(subsystem, dataName, id)}
+             |  ${_admin_data_record_table(subsystem, componentPath, dataPath, id)}
              |</article>""".stripMargin
       ))
     }
@@ -1027,8 +1116,8 @@ object StaticFormAppRenderer {
       val dataPath = NamingConventions.toNormalizedSegment(dataName)
       val webBasePath = s"/web/${componentPath}/admin/data/${dataPath}"
       val actionPath = s"/form/${componentPath}/admin/data/${dataPath}/${id}/update"
-      val record = _data_record(subsystem, dataName, id).getOrElse(Record.create(Vector("id" -> id)))
-      val controls = _record_fields(record).map {
+      val fields = _admin_data_record_fields(subsystem, componentPath, dataPath, id).getOrElse(Vector("id" -> id))
+      val controls = fields.map {
         case (key, value) =>
           s"""<div class="mb-3">
              |  <label class="form-label" for="data-field-${_escape(key)}">${_escape(key)}</label>
@@ -1904,13 +1993,14 @@ object StaticFormAppRenderer {
     page: Int,
     pageSize: Int,
     total: Option[Int],
-    href: String
+    href: String,
+    hasNext: Option[Boolean] = None
   ): String = {
     val prev = math.max(1, page - 1)
     val next = page + 1
     val last = total.map(t => math.max(1, (t + pageSize - 1) / pageSize))
     val prevDisabled = page <= 1
-    val nextDisabled = last.exists(page >= _)
+    val nextDisabled = last.exists(page >= _) || hasNext.contains(false)
     val pages = last.map(l => (1 to math.min(l, 5)).toVector).getOrElse(Vector.empty)
     val pageItems = pages.map { p =>
       val active = if (p == page) " active" else ""

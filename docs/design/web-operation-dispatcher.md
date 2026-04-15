@@ -91,16 +91,65 @@ ready.
 
 Initial admin Operation candidates:
 
-- `admin.entity.list`
-- `admin.entity.read`
-- `admin.entity.create`
-- `admin.entity.update`
-- `admin.data.list`
-- `admin.data.read`
-- `admin.data.create`
-- `admin.data.update`
-- `admin.view.read`
-- `admin.aggregate.read`
+- `admin.entity.list`: implemented as the admin entity list query
+- `admin.entity.read`: implemented as the admin entity read query
+- `admin.entity.create`: implemented as the admin entity create command
+- `admin.entity.update`: implemented as the admin entity update command
+- `admin.data.list`: implemented as the admin data list query
+- `admin.data.read`: implemented as the admin data read query
+- `admin.data.create`: implemented as the admin data create command
+- `admin.data.update`: implemented as the admin data update command
+- `admin.view.read`: implemented as the admin view read query
+- `admin.aggregate.read`: implemented as the admin aggregate read query
+
+Implemented admin create/update Operations run synchronously for HTML FORM
+submissions. The Web tier still enters through `web.operation.dispatch`; the
+target admin Operation owns the persistence call to EntityCollection or
+DataStore. This keeps browser-native admin forms compatible with a future REST
+dispatcher topology where the Web tier and Application tier are separate CNCF
+processes.
+
+Implemented admin read/list Operations provide the corresponding query surface
+for EntityCollection, DataStore, ViewSpace, and AggregateSpace. Management
+Console HTML rendering uses these Operations as the read boundary; it must not
+fall back to direct EntityCollection, DataStore, ViewSpace, or AggregateSpace
+reads for compatibility.
+
+### Admin Operation Response Records
+
+Admin query Operations return `OperationResponse.RecordResponse`.
+
+List Operations return a record with:
+
+- `kind`: `{surface}.list`
+- `component`: normalized component name when the surface is component scoped
+- `collection`: normalized entity, data, view, or aggregate name
+- `ids`: visible record ids for entity/data list results
+- `page`: requested page number, default `1`
+- `pageSize`: requested page size, default `20`
+- `hasNext`: whether another page is available, calculated by fetching one
+  extra item beyond `pageSize`
+
+Read Operations return a record with:
+
+- `kind`: `{surface}.read`
+- `component`: normalized component name when the surface is component scoped
+- `collection`: normalized entity, data, view, or aggregate name
+- `id`: requested record id for entity/data read results
+- `record`: structured record for entity/data read results
+- `fields`: newline-delimited display fields used by HTML rendering
+- `values`: display values for view/aggregate read results
+- `page`: requested page number for view/aggregate read results, default `1`
+- `pageSize`: requested page size for view/aggregate read results, default `20`
+- `hasNext`: whether another page is available for view/aggregate read results,
+  calculated by fetching one extra item beyond `pageSize`
+
+`page` and `pageSize` must be positive integers. Invalid values are argument
+errors at the target admin Operation.
+
+Create/update Operations are synchronous browser form commands in the current
+baseline and return a scalar status message. Their persistence effect must occur
+inside the target Operation, not in the Web HTML route.
 
 ## Open Items
 
