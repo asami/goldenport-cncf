@@ -612,6 +612,16 @@ The form must preserve the submitted field values. It must also preserve
 properties so cancel and retry keep the user in the same list context. Plain
 HTML FORM users must not be forced through a JSON-only validation path.
 
+Operation HTML forms use the same Web Form API validation boundary before
+dispatch. If schema-level input validation fails, the Operation is not
+dispatched. The submitted form is redisplayed as HTML with a validation summary,
+field-level Bootstrap feedback, and the original submitted values.
+
+Admin entity/data create and update forms follow the same rule. The schema-level
+check runs before admin Operation dispatch; invalid submissions redisplay the
+originating new/edit page as HTML with Bootstrap field feedback and submitted
+values preserved.
+
 Edit forms must support optimistic update and stale-form detection. The baseline
 contract uses a hidden version token property:
 

@@ -4,6 +4,7 @@ import cats.effect.IO
 import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
+import java.nio.charset.StandardCharsets
 import java.util.UUID
 import scala.collection.concurrent.TrieMap
 import fs2.Pipe
@@ -20,12 +21,12 @@ import org.http4s.multipart.Multipart
 import org.http4s.server.websocket.WebSocketBuilder2
 import org.http4s.websocket.WebSocketFrame
 import org.goldenport.record.Record
-import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse}
+import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.observability.{DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
 import org.goldenport.bag.Bag
-import org.goldenport.datatype.{ContentType, MimeBody}
+import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
 
 /*
  * @since   Jan.  7, 2026
@@ -612,7 +613,60 @@ final class Http4sHttpServer(
     val started = System.nanoTime()
     for {
       form <- _to_plain_form_record(req)
-      res = _dispatch_operation(
+      values = _form_values(form)
+      validation = StaticFormAppRenderer.validateOperationForm(
+        engine.runtimeSubsystem,
+        app,
+        service,
+        operation,
+        values,
+        engine.webDescriptor
+      )
+      response <-
+        validation match {
+          case Some(result) if !result.valid =>
+            val page = StaticFormAppRenderer.renderOperationForm(
+              engine.runtimeSubsystem,
+              app,
+              service,
+              operation,
+              engine.webDescriptor,
+              values,
+              Some(result)
+            ).getOrElse(StaticFormAppRenderer.renderFormResult(
+              _form_result_properties(app, service, operation, HttpResponse.Text(
+                HttpStatus.BadRequest,
+                ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+                Bag.text("Validation failed.", StandardCharsets.UTF_8)
+              ), values)
+            ))
+            _html_status(page, HStatus.BadRequest).map { html =>
+              RuntimeDashboardMetrics.recordHtmlRequest(
+                req.method.name,
+                req.uri.path.renderString,
+                HStatus.BadRequest.code,
+                (System.nanoTime() - started) / 1000000L
+              )
+              html
+            }
+          case _ =>
+            _submit_valid_operation_form(req, app, service, operation, form, values, started)
+        }
+    } yield {
+      response
+    }
+  }
+
+  private def _submit_valid_operation_form(
+    req: org.http4s.Request[IO],
+    app: String,
+    service: String,
+    operation: String,
+    form: Record,
+    values: Map[String, String],
+    started: Long
+  ): IO[HResponse[IO]] = {
+    val res = _dispatch_operation(
         app,
         service,
         operation,
@@ -624,10 +678,9 @@ final class Http4sHttpServer(
           form = form
         )
       )
-      continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
-      properties = _form_result_properties(app, service, operation, res, _form_values(form) ++ _continuation_values(continuation))
-      response <- _form_transition_response(app, service, operation, form, res, properties)
-    } yield {
+    val continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
+    val properties = _form_result_properties(app, service, operation, res, values ++ _continuation_values(continuation))
+    _form_transition_response(app, service, operation, form, res, properties).map { response =>
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
         req.uri.path.renderString,
@@ -779,9 +832,16 @@ final class Http4sHttpServer(
     for {
       form <- _to_plain_form_record(req)
       record = Record.create((form.asMap + ("id" -> id)).toVector)
-      result = _dispatch_component_admin_entity_record("update", app, entity, record)
-      page = StaticFormAppRenderer.renderComponentAdminEntityUpdateResult(app, entity, id, _form_values(record), result.applied, result.message)
-      html <- _admin_form_transition_response(app, "entities", entity, "update", record, result, page)
+      values = _form_values(record)
+      validation = StaticFormAppRenderer.validateComponentAdminEntityForm(engine.runtimeSubsystem, app, entity, values, engine.webDescriptor)
+      html <- validation match {
+        case Some(result) if !result.valid =>
+          _admin_entity_validation_error_response(app, entity, Some(id), values, result)
+        case _ =>
+          val result = _dispatch_component_admin_entity_record("update", app, entity, record)
+          val page = StaticFormAppRenderer.renderComponentAdminEntityUpdateResult(app, entity, id, values, result.applied, result.message)
+          _admin_form_transition_response(app, "entities", entity, "update", record, result, page)
+      }
     } yield {
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
@@ -801,9 +861,16 @@ final class Http4sHttpServer(
     val started = System.nanoTime()
     for {
       form <- _to_plain_form_record(req)
-      result = _dispatch_component_admin_entity_record("create", app, entity, form)
-      page = StaticFormAppRenderer.renderComponentAdminEntityCreateResult(app, entity, _form_values(form), result.applied, result.message)
-      html <- _admin_form_transition_response(app, "entities", entity, "create", form, result, page)
+      values = _form_values(form)
+      validation = StaticFormAppRenderer.validateComponentAdminEntityForm(engine.runtimeSubsystem, app, entity, values, engine.webDescriptor)
+      html <- validation match {
+        case Some(result) if !result.valid =>
+          _admin_entity_validation_error_response(app, entity, None, values, result)
+        case _ =>
+          val result = _dispatch_component_admin_entity_record("create", app, entity, form)
+          val page = StaticFormAppRenderer.renderComponentAdminEntityCreateResult(app, entity, values, result.applied, result.message)
+          _admin_form_transition_response(app, "entities", entity, "create", form, result, page)
+      }
     } yield {
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
@@ -825,9 +892,16 @@ final class Http4sHttpServer(
     for {
       form <- _to_plain_form_record(req)
       record = Record.create((form.asMap + ("id" -> id)).toVector)
-      result = _dispatch_component_admin_data_record("update", app, data, record)
-      page = StaticFormAppRenderer.renderComponentAdminDataUpdateResult(app, data, id, _form_values(record), result.applied, result.message)
-      html <- _admin_form_transition_response(app, "data", data, "update", record, result, page)
+      values = _form_values(record)
+      validation = StaticFormAppRenderer.validateComponentAdminDataForm(engine.runtimeSubsystem, app, data, values, engine.webDescriptor)
+      html <- validation match {
+        case Some(result) if !result.valid =>
+          _admin_data_validation_error_response(app, data, Some(id), values, result)
+        case _ =>
+          val result = _dispatch_component_admin_data_record("update", app, data, record)
+          val page = StaticFormAppRenderer.renderComponentAdminDataUpdateResult(app, data, id, values, result.applied, result.message)
+          _admin_form_transition_response(app, "data", data, "update", record, result, page)
+      }
     } yield {
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
@@ -847,9 +921,16 @@ final class Http4sHttpServer(
     val started = System.nanoTime()
     for {
       form <- _to_plain_form_record(req)
-      result = _dispatch_component_admin_data_record("create", app, data, form)
-      page = StaticFormAppRenderer.renderComponentAdminDataCreateResult(app, data, _form_values(form), result.applied, result.message)
-      html <- _admin_form_transition_response(app, "data", data, "create", form, result, page)
+      values = _form_values(form)
+      validation = StaticFormAppRenderer.validateComponentAdminDataForm(engine.runtimeSubsystem, app, data, values, engine.webDescriptor)
+      html <- validation match {
+        case Some(result) if !result.valid =>
+          _admin_data_validation_error_response(app, data, None, values, result)
+        case _ =>
+          val result = _dispatch_component_admin_data_record("create", app, data, form)
+          val page = StaticFormAppRenderer.renderComponentAdminDataCreateResult(app, data, values, result.applied, result.message)
+          _admin_form_transition_response(app, "data", data, "create", form, result, page)
+      }
     } yield {
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
@@ -940,6 +1021,68 @@ final class Http4sHttpServer(
     }
   }
 
+  private def _admin_entity_validation_error_response(
+    app: String,
+    entity: String,
+    id: Option[String],
+    values: Map[String, String],
+    validation: StaticFormAppRenderer.FormValidationResult
+  ): IO[HResponse[IO]] = {
+    val page = id match {
+      case Some(recordId) =>
+        StaticFormAppRenderer.renderComponentAdminEntityEdit(
+          engine.runtimeSubsystem,
+          app,
+          entity,
+          recordId,
+          values,
+          engine.webDescriptor,
+          Some(validation)
+        )
+      case None =>
+        StaticFormAppRenderer.renderComponentAdminEntityNew(
+          engine.runtimeSubsystem,
+          app,
+          entity,
+          values,
+          engine.webDescriptor,
+          Some(validation)
+        )
+    }
+    _html_status(page.getOrElse(StaticFormAppRenderer.renderSystemAdmin(engine.runtimeSubsystem)), HStatus.BadRequest)
+  }
+
+  private def _admin_data_validation_error_response(
+    app: String,
+    data: String,
+    id: Option[String],
+    values: Map[String, String],
+    validation: StaticFormAppRenderer.FormValidationResult
+  ): IO[HResponse[IO]] = {
+    val page = id match {
+      case Some(recordId) =>
+        StaticFormAppRenderer.renderComponentAdminDataEdit(
+          engine.runtimeSubsystem,
+          app,
+          data,
+          recordId,
+          values,
+          engine.webDescriptor,
+          Some(validation)
+        )
+      case None =>
+        StaticFormAppRenderer.renderComponentAdminDataNew(
+          engine.runtimeSubsystem,
+          app,
+          data,
+          values,
+          engine.webDescriptor,
+          Some(validation)
+        )
+    }
+    _html_status(page.getOrElse(StaticFormAppRenderer.renderSystemAdmin(engine.runtimeSubsystem)), HStatus.BadRequest)
+  }
+
   private def _admin_stay_on_error_response(
     app: String,
     surface: String,
@@ -958,14 +1101,16 @@ final class Http4sHttpServer(
             app,
             collection,
             id,
-            values
+            values,
+            engine.webDescriptor
           )
         case ("entities", "create", _) =>
           StaticFormAppRenderer.renderComponentAdminEntityNew(
             engine.runtimeSubsystem,
             app,
             collection,
-            values
+            values,
+            engine.webDescriptor
           )
         case ("data", "update", Some(id)) =>
           StaticFormAppRenderer.renderComponentAdminDataEdit(
@@ -973,14 +1118,16 @@ final class Http4sHttpServer(
             app,
             collection,
             id,
-            values
+            values,
+            engine.webDescriptor
           )
         case ("data", "create", _) =>
           StaticFormAppRenderer.renderComponentAdminDataNew(
             engine.runtimeSubsystem,
             app,
             collection,
-            values
+            values,
+            engine.webDescriptor
           )
         case _ =>
           Some(fallback)
@@ -1237,6 +1384,13 @@ final class Http4sHttpServer(
   private def _html(p: StaticFormAppRenderer.Page): IO[HResponse[IO]] =
     IO.pure(
       HResponse[IO](HStatus.Ok)
+        .withEntity(p.body)
+        .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+    )
+
+  private def _html_status(p: StaticFormAppRenderer.Page, status: HStatus): IO[HResponse[IO]] =
+    IO.pure(
+      HResponse[IO](status)
         .withEntity(p.body)
         .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
     )

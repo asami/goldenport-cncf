@@ -114,7 +114,7 @@ object StaticFormAppRenderer {
     method: String,
     path: String
   )
-  private final case class FormValidationResult(
+  final case class FormValidationResult(
     webSchema: WebSchemaResolver.ResolvedWebSchema,
     values: Map[String, String],
     errors: Vector[FormValidationMessage],
@@ -122,7 +122,7 @@ object StaticFormAppRenderer {
   ) {
     def valid: Boolean = errors.isEmpty
   }
-  private final case class FormValidationMessage(
+  final case class FormValidationMessage(
     field: Option[String],
     code: String,
     message: String
@@ -182,12 +182,14 @@ object StaticFormAppRenderer {
     serviceName: String,
     operationName: String,
     webDescriptor: WebDescriptor = WebDescriptor.empty,
-    values: Map[String, String] = Map.empty
+    values: Map[String, String] = Map.empty,
+    validation: Option[FormValidationResult] = None
   ): Option[Page] =
     _resolve_operation_web_schema_context(subsystem, componentName, serviceName, operationName, webDescriptor).map { context =>
       val action = s"/form/${context.componentPath}/${context.servicePath}/${context.operationPath}"
-      val controls = _operation_form_controls(context.webSchema, values)
-      val errorPanel = _form_error_panel(values)
+      val effectiveValidation = validation.filter(_.webSchema.selector == context.webSchema.selector)
+      val controls = _operation_form_controls(context.webSchema, values, effectiveValidation)
+      val errorPanel = _form_error_panel(values) + _form_validation_panel(effectiveValidation)
       Page(_simple_page(
         title = s"${_escape(context.component.name)}.${_escape(context.serviceName)}.${_escape(context.operationName)}",
         subtitle = "HTML form operation",
@@ -376,11 +378,84 @@ object StaticFormAppRenderer {
     _resolve_operation_web_schema_context(subsystem, componentName, serviceName, operationName, webDescriptor)
       .map(context => _form_validation_json(_validate_form(context.webSchema, values)))
 
+  def validateOperationForm(
+    subsystem: Subsystem,
+    componentName: String,
+    serviceName: String,
+    operationName: String,
+    values: Map[String, String],
+    webDescriptor: WebDescriptor = WebDescriptor.empty
+  ): Option[FormValidationResult] =
+    _resolve_operation_web_schema_context(subsystem, componentName, serviceName, operationName, webDescriptor)
+      .map(context => _validate_form(context.webSchema, values))
+
+  def validateComponentAdminEntityForm(
+    subsystem: Subsystem,
+    componentName: String,
+    entityName: String,
+    values: Map[String, String],
+    webDescriptor: WebDescriptor = WebDescriptor.empty
+  ): Option[FormValidationResult] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val entityPath = NamingConventions.toNormalizedSegment(entityName)
+      val webSchema = WebSchemaResolver.resolveEntity(
+        component,
+        componentPath,
+        entityPath,
+        webDescriptor,
+        _admin_entity_schema_fields(subsystem, component, componentPath, entityPath),
+        fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
+      )
+      _validate_form(webSchema, values)
+    }
+
+  def validateComponentAdminDataForm(
+    subsystem: Subsystem,
+    componentName: String,
+    dataName: String,
+    values: Map[String, String],
+    webDescriptor: WebDescriptor = WebDescriptor.empty
+  ): Option[FormValidationResult] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val dataPath = NamingConventions.toNormalizedSegment(dataName)
+      val webSchema = WebSchemaResolver.resolveData(
+        componentPath,
+        dataPath,
+        webDescriptor,
+        _admin_data_schema_fields(subsystem, componentPath, dataPath),
+        fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
+      )
+      _validate_form(webSchema, values)
+    }
+
   private def _form_error_panel(values: Map[String, String]): String = {
     val xs = values.filter { case (key, _) => key == "error" || key.startsWith("error.") }
     if (xs.isEmpty) ""
     else s"""<div class="alert alert-danger" role="alert">${_property_rows(xs)}</div>"""
   }
+
+  private def _form_validation_panel(
+    validation: Option[FormValidationResult]
+  ): String =
+    validation match {
+      case Some(result) if !result.valid =>
+        val errors =
+          result.errors.map(x => s"""<li>${_escape(x.message)}</li>""").mkString("\n")
+        val warnings =
+          if (result.warnings.isEmpty)
+            ""
+          else
+            s"""<p class="mb-1">Warnings</p><ul>${result.warnings.map(x => s"<li>${_escape(x.message)}</li>").mkString("\n")}</ul>"""
+        s"""<div class="alert alert-danger" role="alert">
+           |  <p class="mb-1">Validation failed.</p>
+           |  <ul>${errors}</ul>
+           |  ${warnings}
+           |</div>""".stripMargin
+      case _ =>
+        ""
+    }
 
   private def _admin_form_fields(
     defaults: Vector[(String, String)],
@@ -407,17 +482,19 @@ object StaticFormAppRenderer {
     schemaFields: Vector[WebSchemaResolver.ResolvedWebField],
     values: Map[String, String],
     fieldsId: String,
-    placeholder: String
+    placeholder: String,
+    validation: Option[FormValidationResult] = None
   ): String =
     if (schemaFields.isEmpty)
       _admin_fields_textarea(values, fieldsId, placeholder, "Use one name=value pair per line.")
     else {
       val userValues = values.filterNot { case (key, _) => key == "error" || key.startsWith("error.") || key == "fields" }
       val schemaNames = schemaFields.map(_.name).toSet
+      val validationMessages = _validation_messages_by_field(validation)
       val controls = schemaFields.map { field =>
         val key = field.name
         val value = userValues.getOrElse(key, "")
-        _admin_field_control(key, s"new-field-${NamingConventions.toNormalizedSegment(key)}", value, Some(field))
+        _admin_field_control(key, s"new-field-${NamingConventions.toNormalizedSegment(key)}", value, Some(field), validationMessages.getOrElse(key, Vector.empty))
       }.mkString("\n")
       val extras = userValues.filterNot { case (key, _) => schemaNames.contains(key) }
       val extraText = extras.toVector.sortBy(_._1).map { case (key, value) => s"${key}=${value}" }.mkString("\n")
@@ -434,12 +511,14 @@ object StaticFormAppRenderer {
     schemaFields: Vector[WebSchemaResolver.ResolvedWebField],
     defaults: Vector[(String, String)],
     values: Map[String, String],
-    idPrefix: String
+    idPrefix: String,
+    validation: Option[FormValidationResult] = None
   ): String = {
     val fields = _admin_resolved_schema_ordered_fields(schemaFields, _admin_form_fields(defaults, values))
+    val validationMessages = _validation_messages_by_field(validation)
     fields.map {
       case (Some(field), _, value) =>
-        _admin_field_control(field.name, s"${idPrefix}-${NamingConventions.toNormalizedSegment(field.name)}", value, Some(field))
+        _admin_field_control(field.name, s"${idPrefix}-${NamingConventions.toNormalizedSegment(field.name)}", value, Some(field), validationMessages.getOrElse(field.name, Vector.empty))
       case (None, key, value) =>
         _admin_field_control(key, s"${idPrefix}-${NamingConventions.toNormalizedSegment(key)}", value, None)
     }.mkString("\n")
@@ -449,7 +528,8 @@ object StaticFormAppRenderer {
     name: String,
     id: String,
     value: String,
-    webField: Option[WebSchemaResolver.ResolvedWebField]
+    webField: Option[WebSchemaResolver.ResolvedWebField],
+    validationMessages: Vector[FormValidationMessage] = Vector.empty
   ): String = {
     val descriptor = webField.map(_.asControl)
     val inputType = descriptor.flatMap(_.controlType).getOrElse("text")
@@ -464,7 +544,8 @@ object StaticFormAppRenderer {
       descriptor,
       readonly = webField.exists(_.readonly),
       placeholder = webField.flatMap(_.placeholder),
-      label = webField.flatMap(_.label)
+      label = webField.flatMap(_.label),
+      validationMessages = validationMessages
     )
   }
 
@@ -521,13 +602,15 @@ object StaticFormAppRenderer {
 
   private def _operation_form_controls(
     webSchema: WebSchemaResolver.ResolvedWebSchema,
-    values: Map[String, String]
+    values: Map[String, String],
+    validation: Option[FormValidationResult] = None
   ): String = {
     val fields = webSchema.fields
     if (fields.isEmpty)
       _operation_form_fields_textarea(values, "Fields")
     else {
       val fieldNames = fields.map(_.name).toSet
+      val validationMessages = _validation_messages_by_field(validation)
       val controls = fields.map { field =>
         val name = field.name
         val id = s"field-${NamingConventions.toNormalizedSegment(name)}"
@@ -535,6 +618,7 @@ object StaticFormAppRenderer {
         val descriptor = Some(field.asControl)
         val required = if (field.required) " required" else ""
         val help = _web_schema_field_help(field)
+        val fieldMessages = validationMessages.getOrElse(name, Vector.empty)
         _operation_parameter_control(
           name,
           id,
@@ -545,7 +629,8 @@ object StaticFormAppRenderer {
           descriptor,
           readonly = field.readonly,
           placeholder = field.placeholder,
-          label = field.label
+          label = field.label,
+          validationMessages = fieldMessages
         )
       }.mkString("\n")
       val extraValues = values.filterNot { case (key, _) => fieldNames.contains(key) }
@@ -558,6 +643,14 @@ object StaticFormAppRenderer {
          |${extra}""".stripMargin
     }
   }
+
+  private def _validation_messages_by_field(
+    validation: Option[FormValidationResult]
+  ): Map[String, Vector[FormValidationMessage]] =
+    validation.toVector
+      .flatMap(result => result.errors ++ result.warnings)
+      .flatMap(message => message.field.map(_ -> message))
+      .groupMap(_._1)(_._2)
 
   private def _resolve_operation_web_schema_context(
     subsystem: Subsystem,
@@ -875,9 +968,16 @@ object StaticFormAppRenderer {
     descriptor: Option[WebDescriptor.FormControl] = None,
     readonly: Boolean = false,
     placeholder: Option[String] = None,
-    label: Option[String] = None
+    label: Option[String] = None,
+    validationMessages: Vector[FormValidationMessage] = Vector.empty
   ): String = {
     val displayLabel = label.getOrElse(name)
+    val invalidClass = if (validationMessages.nonEmpty) " is-invalid" else ""
+    val feedback =
+      if (validationMessages.isEmpty)
+        ""
+      else
+        s"""<div class="invalid-feedback">${_escape(validationMessages.map(_.message).mkString(" "))}</div>"""
     if (descriptor.exists(_.hidden) || inputType == "hidden") {
       s"""<input type="hidden" id="${_escape(id)}" name="${_escape(name)}" value="${_escape(value)}">"""
     } else if (inputType == "select" || descriptor.exists(_.values.nonEmpty)) {
@@ -889,9 +989,10 @@ object StaticFormAppRenderer {
       }.mkString("\n")
       s"""<div class="mb-3">
          |  <label class="form-label" for="${_escape(id)}">${_escape(displayLabel)}</label>
-         |  <select class="form-select" id="${_escape(id)}" name="${_escape(name)}"${required}${multiple}${disabled}>
+         |  <select class="form-select${invalidClass}" id="${_escape(id)}" name="${_escape(name)}"${required}${multiple}${disabled}>
          |    ${options}
          |  </select>
+         |  ${feedback}
          |  <div class="form-text">${_escape(help)}</div>
          |</div>""".stripMargin
     } else if (inputType == "checkbox") {
@@ -900,8 +1001,9 @@ object StaticFormAppRenderer {
       val disabled = if (readonly) " disabled" else ""
       s"""<div class="mb-3 form-check">
          |  <input type="hidden" name="${_escape(name)}" value="false">
-         |  <input class="form-check-input" id="${_escape(id)}" name="${_escape(name)}" type="checkbox" value="true"${checked}${required}${disabled}>
+         |  <input class="form-check-input${invalidClass}" id="${_escape(id)}" name="${_escape(name)}" type="checkbox" value="true"${checked}${required}${disabled}>
          |  <label class="form-check-label" for="${_escape(id)}">${_escape(displayLabel)}</label>
+         |  ${feedback}
          |  <div class="form-text">${_escape(help)}</div>
          |</div>""".stripMargin
     } else if (inputType == "textarea") {
@@ -909,7 +1011,8 @@ object StaticFormAppRenderer {
       val placeholderAttr = placeholder.map(x => s""" placeholder="${_escape(x)}"""").getOrElse("")
       s"""<div class="mb-3">
          |  <label class="form-label" for="${_escape(id)}">${_escape(displayLabel)}</label>
-         |  <textarea class="form-control" id="${_escape(id)}" name="${_escape(name)}" rows="5"${required}${readonlyAttr}${placeholderAttr}>${_escape(value)}</textarea>
+         |  <textarea class="form-control${invalidClass}" id="${_escape(id)}" name="${_escape(name)}" rows="5"${required}${readonlyAttr}${placeholderAttr}>${_escape(value)}</textarea>
+         |  ${feedback}
          |  <div class="form-text">${_escape(help)}</div>
          |</div>""".stripMargin
     } else {
@@ -917,7 +1020,8 @@ object StaticFormAppRenderer {
       val placeholderAttr = placeholder.map(x => s""" placeholder="${_escape(x)}"""").getOrElse("")
       s"""<div class="mb-3">
          |  <label class="form-label" for="${_escape(id)}">${_escape(displayLabel)}</label>
-         |  <input class="form-control" id="${_escape(id)}" name="${_escape(name)}" type="${_escape(inputType)}" value="${_escape(value)}"${required}${readonlyAttr}${placeholderAttr}>
+         |  <input class="form-control${invalidClass}" id="${_escape(id)}" name="${_escape(name)}" type="${_escape(inputType)}" value="${_escape(value)}"${required}${readonlyAttr}${placeholderAttr}>
+         |  ${feedback}
          |  <div class="form-text">${_escape(help)}</div>
          |</div>""".stripMargin
     }
@@ -1161,7 +1265,8 @@ object StaticFormAppRenderer {
     entityName: String,
     id: String,
     values: Map[String, String] = Map.empty,
-    webDescriptor: WebDescriptor = WebDescriptor.empty
+    webDescriptor: WebDescriptor = WebDescriptor.empty,
+    validation: Option[FormValidationResult] = None
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
@@ -1177,11 +1282,13 @@ object StaticFormAppRenderer {
         _admin_entity_schema_fields(subsystem, component, componentPath, entityPath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
+      val effectiveValidation = validation.filter(_.webSchema.selector == webSchema.selector)
       val controls = _admin_record_controls(
         webSchema.fields,
         _admin_entity_record_fields(subsystem, componentPath, entityPath, id).getOrElse(Vector("id" -> id)),
         values,
-        "field"
+        "field",
+        effectiveValidation
       )
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} Edit",
@@ -1193,7 +1300,7 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>Edit ${_escape(entityLabel)}</h2>
-             |  ${_form_error_panel(values)}
+             |  ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
              |  <form method="post" action="${_escape(actionPath)}">
              |    ${controls}
              |    <button type="submit" class="btn btn-primary">Update</button>
@@ -1208,7 +1315,8 @@ object StaticFormAppRenderer {
     componentName: String,
     entityName: String,
     values: Map[String, String] = Map.empty,
-    webDescriptor: WebDescriptor = WebDescriptor.empty
+    webDescriptor: WebDescriptor = WebDescriptor.empty,
+    validation: Option[FormValidationResult] = None
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
@@ -1224,7 +1332,8 @@ object StaticFormAppRenderer {
         _admin_entity_schema_fields(subsystem, component, componentPath, entityPath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
-      val controls = _admin_new_controls(webSchema.fields, values, "entityFields", "id=sales-order-1&#10;status=draft")
+      val effectiveValidation = validation.filter(_.webSchema.selector == webSchema.selector)
+      val controls = _admin_new_controls(webSchema.fields, values, "entityFields", "id=sales-order-1&#10;status=draft", effectiveValidation)
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} New",
         subtitle = "Entity record create baseline",
@@ -1235,7 +1344,7 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>New ${_escape(entityLabel)}</h2>
-             |  ${_form_error_panel(values)}
+             |  ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
              |  <form method="post" action="${_escape(actionPath)}">
              |    ${controls}
              |    <button type="submit" class="btn btn-primary">Create</button>
@@ -2405,7 +2514,8 @@ object StaticFormAppRenderer {
     dataName: String,
     id: String,
     values: Map[String, String] = Map.empty,
-    webDescriptor: WebDescriptor = WebDescriptor.empty
+    webDescriptor: WebDescriptor = WebDescriptor.empty,
+    validation: Option[FormValidationResult] = None
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
@@ -2419,11 +2529,13 @@ object StaticFormAppRenderer {
         _admin_data_schema_fields(subsystem, componentPath, dataPath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
+      val effectiveValidation = validation.filter(_.webSchema.selector == webSchema.selector)
       val controls = _admin_record_controls(
         webSchema.fields,
         _admin_data_record_fields(subsystem, componentPath, dataPath, id).getOrElse(Vector("id" -> id)),
         values,
-        "data-field"
+        "data-field",
+        effectiveValidation
       )
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data Edit",
@@ -2435,7 +2547,7 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>Edit ${_escape(_title_label(dataPath))}</h2>
-             |  ${_form_error_panel(values)}
+             |  ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
              |  <form method="post" action="${_escape(actionPath)}">
              |    ${controls}
              |    <button type="submit" class="btn btn-primary">Update</button>
@@ -2450,7 +2562,8 @@ object StaticFormAppRenderer {
     componentName: String,
     dataName: String,
     values: Map[String, String] = Map.empty,
-    webDescriptor: WebDescriptor = WebDescriptor.empty
+    webDescriptor: WebDescriptor = WebDescriptor.empty,
+    validation: Option[FormValidationResult] = None
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
@@ -2464,7 +2577,8 @@ object StaticFormAppRenderer {
         _admin_data_schema_fields(subsystem, componentPath, dataPath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
-      val controls = _admin_new_controls(webSchema.fields, values, "dataFields", "id=record-1&#10;status=draft")
+      val effectiveValidation = validation.filter(_.webSchema.selector == webSchema.selector)
+      val controls = _admin_new_controls(webSchema.fields, values, "dataFields", "id=record-1&#10;status=draft", effectiveValidation)
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data New",
         subtitle = "Data record create baseline",
@@ -2475,7 +2589,7 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>New ${_escape(_title_label(dataPath))}</h2>
-             |  ${_form_error_panel(values)}
+             |  ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
              |  <form method="post" action="${_escape(actionPath)}">
              |    ${controls}
              |    <button type="submit" class="btn btn-primary">Create</button>

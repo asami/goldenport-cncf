@@ -558,6 +558,57 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Notice body shown on the board.")
     }
 
+    "redisplay admin entity create validation errors before dispatching" in {
+      val descriptor = ComponentDescriptor(
+        componentName = Some("notice_board"),
+        entityRuntimeDescriptors = Vector(
+          EntityRuntimeDescriptor(
+            entityName = "notice",
+            collectionId = EntityCollectionId("sys", "sys", "notice"),
+            memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+            partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+            maxPartitions = 4,
+            maxEntitiesPerPartition = 100,
+            schema = Some(Schema(Vector(
+              Column(BaseContent.simple("id"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+              Column(BaseContent.simple("title"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+              Column(
+                BaseContent.Builder("status").label("Publication status").build(),
+                ValueDomain(datatype = XString, multiplicity = Multiplicity.One),
+                web = WebColumn(
+                  controlType = Some("select"),
+                  values = Vector("draft", "published"),
+                  required = Some(true)
+                )
+              )
+            )))
+          )
+        )
+      )
+      val component = TestComponentFactory
+        .create("notice_board", Protocol.empty)
+        .withComponentDescriptors(Vector(descriptor))
+      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        ._submit_component_admin_entity_create(
+          _post_form_request("/form/notice-board/admin/entities/notice/create", "id=notice_1&title=hello&status=archived"),
+          "notice-board",
+          "notice"
+        )
+        .unsafeRunSync()
+      val html = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 400
+      html should include ("New Notice")
+      html should include ("Validation failed.")
+      html should include ("archived is not an allowed value for Publication status.")
+      html should include ("is-invalid")
+      html should include ("value=\"notice_1\"")
+      html should include ("value=\"hello\"")
+    }
+
     "render component entity update submission result contract" in {
       val html = StaticFormAppRenderer.renderComponentAdminEntityUpdateResult(
         "admin",
@@ -1903,6 +1954,43 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("400")
       html should include ("invalid approval")
       html should include ("value=\"notice_1\"")
+    }
+
+    "redisplay operation form validation errors before dispatching HTML submit" in {
+      val subsystem = _form_type_fixture_subsystem()
+      val selector = "notice-board.notice.post-secret-notice"
+      val descriptor = WebDescriptor(
+        expose = Map(selector -> WebDescriptor.Exposure.Protected)
+      )
+      val dispatcher = new StaticWebOperationDispatcher(
+        HttpResponse.Text(
+          HttpStatus.Ok,
+          ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+          Bag.text("DISPATCHED", StandardCharsets.UTF_8)
+        )
+      )
+      val server = new Http4sHttpServer(
+        new HttpExecutionEngine(subsystem, Some(descriptor)),
+        operationDispatcherOption = Some(dispatcher)
+      )
+
+      val response = server
+        ._submit_operation_form(
+          _post_form_request("/form/notice-board/notice/post-secret-notice", "accessToken=abc"),
+          "notice-board",
+          "notice",
+          "post-secret-notice"
+        )
+        .unsafeRunSync()
+      val html = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 400
+      html should include ("HTML form operation")
+      html should include ("Validation failed.")
+      html should include ("Notice body is required.")
+      html should include ("is-invalid")
+      html should include ("value=\"abc\"")
+      html should not include ("DISPATCHED")
     }
 
     "merge schema-driven form fields with additional fields on submit" in {

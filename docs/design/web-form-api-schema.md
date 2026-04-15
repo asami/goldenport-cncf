@@ -285,6 +285,19 @@ state except for metadata needed to resolve the form schema. It also must not
 perform domain decisions that belong to the Operation, Aggregate, Entity, or
 UnitOfWork layer.
 
+Plain HTML FORM submission uses the same validation boundary before Operation
+dispatch. If Web input admission fails, the server redisplays the originating
+HTML form with the submitted values, a validation summary, and Bootstrap
+field-level feedback. The target Operation is not dispatched. The response is
+HTML, not JSON, so browser-native form users are not forced through the JSON
+validation endpoint.
+
+Management Console entity/data create and update forms use the same validation
+boundary before admin Operation dispatch. Schema-level errors redisplay the
+originating new/edit page with submitted values and field-level feedback. A
+successful Web input admission check does not replace admin Operation
+validation; it only permits dispatch to proceed.
+
 Operation execution remains the authoritative validation boundary for:
 
 - domain invariants
