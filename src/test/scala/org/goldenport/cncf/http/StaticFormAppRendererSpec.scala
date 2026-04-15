@@ -603,6 +603,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       html should include ("notice_board Notice View View Detail")
       html should include ("notice_1")
+      html should include ("label")
+      html should include ("value")
       html should include ("notice detail notice_1")
       html should include ("/web/notice-board/admin/views/notice-view")
     }
@@ -650,6 +652,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       html should include ("notice_board Notice Aggregate Aggregate Detail")
       html should include ("notice_1")
+      html should include ("label")
+      html should include ("value")
       html should include ("notice aggregate")
       html should include ("Instance operations")
       html should include ("/form/notice-board/notice-aggregate/approve-notice-aggregate?id=notice_1")
@@ -673,6 +677,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val entityListRecord = _admin_record_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice")
       entityListRecord.getString("kind") shouldBe Some("entity.list")
       entityListRecord.getAny("ids").map(_.toString).getOrElse("") should include ("notice_1")
+      entityListRecord.getAny("items").map(_.toString).getOrElse("") should include ("notice_1")
       entityListRecord.getInt("page") shouldBe Some(1)
       entityListRecord.getInt("pageSize") shouldBe Some(20)
       entityListRecord.getBoolean("hasNext") shouldBe Some(false)
@@ -697,6 +702,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       secondEntityPage.getBoolean("hasNext") shouldBe Some(false)
       val entityReadRecord = _admin_record_response(entitySubsystem, "entity", "read", "component" -> "notice-board", "entity" -> "notice", "id" -> entityId)
       entityReadRecord.getString("kind") shouldBe Some("entity.read")
+      entityReadRecord.getString("label") shouldBe Some(entityId)
+      entityReadRecord.getAny("item").map(_.toString).getOrElse("") should include (entityId)
       entityReadRecord.getString("fields").getOrElse("") should include ("title=board update")
       _admin_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "page" -> "0") match {
         case Consequence.Failure(_) => succeed
@@ -716,6 +723,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         val dataListRecord = _admin_record_response(dataFixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit")
         dataListRecord.getString("kind") shouldBe Some("data.list")
         dataListRecord.getAny("ids").map(_.toString).getOrElse("") should include ("audit_1")
+        dataListRecord.getAny("items").map(_.toString).getOrElse("") should include ("audit_1")
         dataListRecord.getInt("total") shouldBe None
         val totalDataListRecord = _admin_record_response(dataFixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
         totalDataListRecord.getInt("total") shouldBe Some(2)
@@ -736,6 +744,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         }
         val dataReadRecord = _admin_record_response(dataFixture.subsystem, "data", "read", "component" -> "notice-board", "data" -> "audit", "id" -> "audit_1")
         dataReadRecord.getString("kind") shouldBe Some("data.read")
+        dataReadRecord.getString("label") shouldBe Some("audit_1")
+        dataReadRecord.getAny("item").map(_.toString).getOrElse("") should include ("audit_1")
         dataReadRecord.getString("fields").getOrElse("") should include ("actor=alice")
         val pagedDataListRecord = _admin_record_response(dataFixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "page" -> "3", "pageSize" -> "7")
         pagedDataListRecord.getInt("page") shouldBe Some(3)
@@ -788,6 +798,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val viewInstanceRecord = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "id" -> "notice_1")
       viewInstanceRecord.getString("kind") shouldBe Some("view.read")
       viewInstanceRecord.getString("id") shouldBe Some("notice_1")
+      viewInstanceRecord.getString("label").getOrElse("") should include ("notice detail notice_1")
+      viewInstanceRecord.getAny("item").map(_.toString).getOrElse("") should include ("notice_1")
       viewInstanceRecord.getString("fields").getOrElse("") should include ("notice detail notice_1")
 
       val aggregateSubsystem = _aggregate_fixture_subsystem()
@@ -827,6 +839,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val aggregateInstanceRecord = _admin_record_response(aggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "id" -> "notice_1")
       aggregateInstanceRecord.getString("kind") shouldBe Some("aggregate.read")
       aggregateInstanceRecord.getString("id") shouldBe Some("notice_1")
+      aggregateInstanceRecord.getString("label") shouldBe Some("notice aggregate")
+      aggregateInstanceRecord.getAny("item").map(_.toString).getOrElse("") should include ("notice_1")
       aggregateInstanceRecord.getString("fields").getOrElse("") should include ("notice aggregate")
     }
 

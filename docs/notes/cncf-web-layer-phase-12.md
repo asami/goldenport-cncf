@@ -223,23 +223,36 @@ intentionally not retained.
 
 The current admin query response baseline is:
 
-- `admin.entity.list`: `RecordResponse(kind, component, collection, ids, page,
-  pageSize, hasNext, total?, totalAvailable)`
+- `admin.entity.list`: `RecordResponse(kind, component, collection, ids,
+  items, page, pageSize, hasNext, total?, totalAvailable)`
 - `admin.entity.read`: `RecordResponse(kind, component, collection, id, record,
-  fields)`
-- `admin.data.list`: `RecordResponse(kind, component, collection, ids, page,
-  pageSize, hasNext, total?, totalAvailable)`
+  label, value, item, fields)`
+- `admin.data.list`: `RecordResponse(kind, component, collection, ids, items,
+  page, pageSize, hasNext, total?, totalAvailable)`
 - `admin.data.read`: `RecordResponse(kind, component, collection, id, record,
-  fields)`
-- `admin.view.read`: `RecordResponse(kind, component, collection, values,
-  fields, page, pageSize, hasNext, total?, totalAvailable)`
-- `admin.aggregate.read`: `RecordResponse(kind, component, collection, values,
-  fields, page, pageSize, hasNext, total?, totalAvailable)`
+  label, value, item, fields)`
+- `admin.view.read` list mode: `RecordResponse(kind, component, collection,
+  items, values, fields, page, pageSize, hasNext, total?, totalAvailable)`
+- `admin.view.read` single mode: `RecordResponse(kind, component, collection,
+  id, label, value, item, fields)`
+- `admin.aggregate.read` list mode: `RecordResponse(kind, component,
+  collection, items, values, fields, page, pageSize, hasNext, total?,
+  totalAvailable)`
+- `admin.aggregate.read` single mode: `RecordResponse(kind, component,
+  collection, id, label, value, item, fields)`
 
 `fields` is the browser rendering bridge for the current Static Form App.
-`ids` and `values` are structured data slots for later JSON Form API and richer
-widgets. `page` and `pageSize` are accepted as positive integer Operation
-arguments and reflected in the response shape. Admin query paging uses
+`ids` remains the entity/data list compatibility id slot. `items` is the
+structured data slot for later JSON Form API and richer widgets across
+entity/data/view/aggregate list results. Each item carries `id`, `label`, and
+`value`; HTML detail links use `id`, while visible table text uses `label`.
+`values` remains a compatibility/display slot for view/aggregate results and
+must not be used as the canonical detail id source when `items` is present. For
+single reads, `item` is the structured result and top-level `id`, `label`, and
+`value` are duplicated for simple renderers. Entity/data read results also keep
+the original structured `record`. `page` and `pageSize` are accepted as positive
+integer Operation arguments and reflected in the response shape. Admin query
+paging uses
 `pageSize + 1` over-fetching to calculate `hasNext` without requiring a total
 count. Entity paging slices the in-memory record id vector. DataStore paging
 fetches enough records for the requested page and then slices locally because

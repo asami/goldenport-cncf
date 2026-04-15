@@ -125,6 +125,11 @@ List Operations return a record with:
 - `component`: normalized component name when the surface is component scoped
 - `collection`: normalized entity, data, view, or aggregate name
 - `ids`: visible record ids for entity/data list results
+- `items`: visible list result items. Each item has `id`, `label`, and `value`.
+  `id` is the stable identifier used by detail navigation; `label` is the
+  browser display label; `value` is the rendered raw value. Entity/data list
+  results keep `ids` as the compatibility id vector and also expose equivalent
+  `items`.
 - `page`: requested page number, default `1`
 - `pageSize`: requested page size, default `20`
 - `hasNext`: whether another page is available, calculated by fetching one
@@ -140,8 +145,11 @@ Read Operations return a record with:
 - `collection`: normalized entity, data, view, or aggregate name
 - `id`: requested record id for entity/data read results
 - `record`: structured record for entity/data read results
+- `item`: structured read item with `id`, `label`, and `value`
+- `label`: browser display label for a single read result
+- `value`: rendered raw value for a single read result
 - `fields`: newline-delimited display fields used by HTML rendering
-- `values`: display values for view/aggregate read results
+- `values`: legacy display values for view/aggregate list read results
 - `page`: requested page number for view/aggregate read results, default `1`
 - `pageSize`: requested page size for view/aggregate read results, default `20`
 - `hasNext`: whether another page is available for view/aggregate read results,
@@ -150,6 +158,17 @@ Read Operations return a record with:
   `includeTotal=true` is requested, `totalCountPolicy` allows it, and the
   surface can calculate it
 - `totalAvailable`: whether `total` is present
+
+For list reads, `items` is the primary structured result shape. HTML rendering
+must use `items[].id` for detail links and `items[].label` for display so that a
+display value does not accidentally become the resource identifier. Entity/data
+`ids` and view/aggregate `values` remain compatibility/display bridges; they
+must not be treated as the canonical detail id source when `items` is present.
+
+For single reads, `item` is the primary structured result shape. Top-level
+`id`, `label`, and `value` are duplicated for simple renderers and form widgets.
+Entity/data read results also expose the original structured `record`.
+`fields` may be derived from the record or item fields for table rendering.
 
 `page` and `pageSize` must be positive integers. Invalid values are argument
 errors at the target admin Operation. `includeTotal` defaults to `false`

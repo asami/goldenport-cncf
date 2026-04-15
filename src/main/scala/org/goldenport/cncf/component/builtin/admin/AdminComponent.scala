@@ -2073,6 +2073,7 @@ object AdminComponent {
           "component" -> componentName,
           "collection" -> collectionName,
           "ids" -> page.values,
+          "items" -> page.values.map(id => _AdminReadItem(id, id, id).toRecord),
           "page" -> paging.page,
           "pageSize" -> paging.pageSize,
           "hasNext" -> page.hasNext
@@ -2087,15 +2088,21 @@ object AdminComponent {
     collectionName: String,
     id: String,
     record: Record
-  ): Record =
+  ): Record = {
+    val text = _record_text(record)
+    val item = _AdminReadItem(id, id, text)
     Record.dataAuto(
       "kind" -> s"${kind}.read",
       "component" -> componentName,
       "collection" -> collectionName,
       "id" -> id,
+      "label" -> id,
+      "value" -> text,
+      "item" -> item.toRecord,
       "record" -> record,
-      "fields" -> _record_text(record)
+      "fields" -> text
     )
+  }
 
   private def _read_values_response_record(
     kind: String,
@@ -2128,14 +2135,16 @@ object AdminComponent {
     id: String,
     value: Any
   ): Record = {
-    val text = Option(value).map(_.toString).getOrElse("")
+    val item = _read_item(value, 0).copy(id = id)
     Record.dataAuto(
       "kind" -> s"${kind}.read",
       "component" -> componentName,
       "collection" -> collectionName,
       "id" -> id,
-      "value" -> text,
-      "fields" -> text
+      "label" -> item.label,
+      "value" -> item.value,
+      "item" -> item.toRecord,
+      "fields" -> _read_item_fields(item)
     )
   }
 
@@ -2153,18 +2162,27 @@ object AdminComponent {
   }
 
   private def _read_items(values: Vector[Any]): Vector[_AdminReadItem] =
-    values.zipWithIndex.map { case (value, index) =>
-      val text = _read_text(value)
-      val id = _read_item_id(value).getOrElse(text) match {
-        case "" => (index + 1).toString
-        case x => x
-      }
-      _AdminReadItem(
-        id = id,
-        label = _read_item_label(value).getOrElse(text),
-        value = text
-      )
+    values.zipWithIndex.map { case (value, index) => _read_item(value, index) }
+
+  private def _read_item(value: Any, index: Int): _AdminReadItem = {
+    val text = _read_text(value)
+    val id = _read_item_id(value).getOrElse(text) match {
+      case "" => (index + 1).toString
+      case x => x
     }
+    _AdminReadItem(
+      id = id,
+      label = _read_item_label(value).getOrElse(text),
+      value = text
+    )
+  }
+
+  private def _read_item_fields(item: _AdminReadItem): String =
+    Vector(
+      "id" -> item.id,
+      "label" -> item.label,
+      "value" -> item.value
+    ).map { case (key, value) => s"${key}=${value}" }.mkString("\n")
 
   private def _read_text(value: Any): String =
     Option(value).map(_.toString).getOrElse("")
