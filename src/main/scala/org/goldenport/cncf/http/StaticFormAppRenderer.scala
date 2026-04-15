@@ -318,14 +318,15 @@ object StaticFormAppRenderer {
         webDescriptor.adminTotalCountPolicy(componentPath, "entity", entityPath)
       )
       val result = _admin_entity_list(subsystem, componentPath, entityPath, effectivePageRequest)
-      val entityIds = result.ids
+      val items = result.items
       val warningHtml = _admin_warnings(result.warnings)
       val rows =
-        if (entityIds.isEmpty) {
-          """<tr><td colspan="2">No records are currently available for this entity.</td></tr>"""
+        if (items.isEmpty) {
+          """<tr><td colspan="3">No records are currently available for this entity.</td></tr>"""
         } else {
-          entityIds.map { id =>
-            s"""<tr><td><code>${_escape(id)}</code></td><td><a href="${_escape(basePath)}/${_escape(id)}">Detail</a> · <a href="${_escape(basePath)}/${_escape(id)}/edit">Edit</a></td></tr>"""
+          items.map { item =>
+            val href = s"${basePath}/${_escape_path_segment(item.id)}"
+            s"""<tr><td><code>${_escape(item.id)}</code></td><td>${_escape(item.label)}</td><td><a href="${_escape(href)}">Detail</a> · <a href="${_escape(href)}/edit">Edit</a></td></tr>"""
           }.mkString("\n")
         }
       Page(_simple_page(
@@ -342,7 +343,7 @@ object StaticFormAppRenderer {
              |  ${warningHtml}
              |  <p><a class="btn btn-primary" href="${_escape(basePath)}/new">New ${_escape(entityLabel)}</a></p>
              |  <div class="table-responsive"><table class="table table-sm">
-             |    <thead><tr><th>Id</th><th>Actions</th></tr></thead>
+             |    <thead><tr><th>ID</th><th>Value</th><th>Actions</th></tr></thead>
              |    <tbody>
              |      ${rows}
              |    </tbody>
@@ -516,13 +517,16 @@ object StaticFormAppRenderer {
   }
 
   private final case class _AdminListResult(
-    ids: Vector[String],
+    items: Vector[_AdminReadListItem],
     page: Int,
     pageSize: Int,
     hasNext: Boolean,
     total: Option[Int],
     warnings: Vector[String]
-  )
+  ) {
+    def ids: Vector[String] =
+      items.map(_.id)
+  }
 
   private def _admin_entity_list(
     subsystem: Subsystem,
@@ -582,12 +586,9 @@ object StaticFormAppRenderer {
   ): _AdminListResult =
     _admin_operation_record(subsystem, path, form) match {
       case Some(record) =>
-        val ids = record.getAny("ids") match {
-          case Some(xs: Seq[?]) => xs.toVector.map(_.toString)
-          case _ => Vector.empty
-        }
+        val items = _admin_record_items(record)
         _AdminListResult(
-          ids,
+          items,
           record.getInt("page").getOrElse(1),
           record.getInt("pageSize").getOrElse(20),
           record.getBoolean("hasNext").getOrElse(false),
@@ -764,7 +765,19 @@ object StaticFormAppRenderer {
       case Some(xs: Seq[?]) => xs.toVector.flatMap(_admin_record_item)
       case Some(xs: java.util.List[?]) => xs.toArray.toVector.flatMap(_admin_record_item)
       case Some(value) => _admin_record_item(value).toVector
-      case None => _admin_record_values(record).map(x => _AdminReadListItem(x, x, x))
+      case None =>
+        _admin_record_ids(record).map(x => _AdminReadListItem(x, x, x)) match {
+          case xs if xs.nonEmpty => xs
+          case _ => _admin_record_values(record).map(x => _AdminReadListItem(x, x, x))
+        }
+    }
+
+  private def _admin_record_ids(record: Record): Vector[String] =
+    record.getAny("ids") match {
+      case Some(xs: Seq[?]) => xs.toVector.map(_.toString)
+      case Some(xs: java.util.List[?]) => xs.toArray.toVector.map(_.toString)
+      case Some(value) => Vector(value.toString)
+      case None => Vector.empty
     }
 
   private def _admin_record_item(value: Any): Option[_AdminReadListItem] =
@@ -1307,14 +1320,15 @@ object StaticFormAppRenderer {
         webDescriptor.adminTotalCountPolicy(componentPath, "data", dataPath)
       )
       val result = _admin_data_list(subsystem, componentPath, dataPath, effectivePageRequest)
-      val recordIds = result.ids
+      val items = result.items
       val warningHtml = _admin_warnings(result.warnings)
       val rows =
-        if (recordIds.isEmpty) {
-          """<tr><td colspan="2">No records are currently available for this data collection.</td></tr>"""
+        if (items.isEmpty) {
+          """<tr><td colspan="3">No records are currently available for this data collection.</td></tr>"""
         } else {
-          recordIds.map { id =>
-            s"""<tr><td><code>${_escape(id)}</code></td><td><a href="${_escape(basePath)}/${_escape(id)}">Detail</a> · <a href="${_escape(basePath)}/${_escape(id)}/edit">Edit</a></td></tr>"""
+          items.map { item =>
+            val href = s"${basePath}/${_escape_path_segment(item.id)}"
+            s"""<tr><td><code>${_escape(item.id)}</code></td><td>${_escape(item.label)}</td><td><a href="${_escape(href)}">Detail</a> · <a href="${_escape(href)}/edit">Edit</a></td></tr>"""
           }.mkString("\n")
         }
       Page(_simple_page(
@@ -1331,7 +1345,7 @@ object StaticFormAppRenderer {
              |  ${warningHtml}
              |  <p><a class="btn btn-primary" href="${_escape(basePath)}/new">New ${_escape(_title_label(dataPath))}</a></p>
              |  <div class="table-responsive"><table class="table table-sm">
-             |    <thead><tr><th>Id</th><th>Actions</th></tr></thead>
+             |    <thead><tr><th>ID</th><th>Value</th><th>Actions</th></tr></thead>
              |    <tbody>${rows}</tbody>
              |  </table></div>
              |  ${_paging_nav(result.page, result.pageSize, result.total, effectivePageRequest.href(basePath), Some(result.hasNext))}
