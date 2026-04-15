@@ -742,6 +742,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         case Consequence.Failure(_) => succeed
         case other => fail(s"required total on view should fail: ${other}")
       }
+      val countedViewSubsystem = _view_fixture_subsystem(totalCountCapability = TotalCountCapability.Supported)
+      val countedViewReadRecord = _admin_record_response(countedViewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
+      countedViewReadRecord.getInt("total") shouldBe Some(2)
+      countedViewReadRecord.getBoolean("totalAvailable") shouldBe Some(true)
       val pagedViewReadRecord = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "page" -> "4", "pageSize" -> "9")
       pagedViewReadRecord.getInt("page") shouldBe Some(4)
       pagedViewReadRecord.getInt("pageSize") shouldBe Some(9)
@@ -772,6 +776,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         case Consequence.Failure(_) => succeed
         case other => fail(s"required total on aggregate should fail: ${other}")
       }
+      val countedAggregateSubsystem = _aggregate_fixture_subsystem(totalCountCapability = TotalCountCapability.Supported)
+      val countedAggregateReadRecord = _admin_record_response(countedAggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
+      countedAggregateReadRecord.getInt("total") shouldBe Some(2)
+      countedAggregateReadRecord.getBoolean("totalAvailable") shouldBe Some(true)
       val pagedAggregateReadRecord = _admin_record_response(aggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "page" -> "5", "pageSize" -> "11")
       pagedAggregateReadRecord.getInt("page") shouldBe Some(5)
       pagedAggregateReadRecord.getInt("pageSize") shouldBe Some(11)
@@ -1306,7 +1314,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     subsystem.executeOperationResponse(request)
   }
 
-  private def _view_fixture_subsystem(): Subsystem = {
+  private def _view_fixture_subsystem(
+    totalCountCapability: TotalCountCapability = TotalCountCapability.Unsupported
+  ): Subsystem = {
     val component = new org.goldenport.cncf.component.Component() {
       override def viewDefinitions: Vector[ViewDefinition] =
         Vector(
@@ -1327,13 +1337,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     )
     val browser = Browser.from(
       collection,
-      _ => Consequence.success(Vector("notice summary", "notice next"))
+      _ => Consequence.success(Vector("notice summary", "notice next")),
+      countfn = if (totalCountCapability.supportsTotalCount) Some(_ => Consequence.success(2)) else None,
+      totalCountCapabilityValue = totalCountCapability
     )
     component.viewSpace.register("notice_view", collection, browser)
     DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
   }
 
-  private def _aggregate_fixture_subsystem(): Subsystem = {
+  private def _aggregate_fixture_subsystem(
+    totalCountCapability: TotalCountCapability = TotalCountCapability.Unsupported
+  ): Subsystem = {
     val component = new org.goldenport.cncf.component.Component() {
       override def aggregateDefinitions: Vector[AggregateDefinition] =
         Vector(
@@ -1356,7 +1370,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           def build(id: EntityId): Consequence[_NoticeAggregate] =
             Consequence.success(aggregate)
         },
-        q => Consequence.success(org.goldenport.cncf.directive.Query.sliceValues(Vector(aggregate, nextAggregate), q.offset, q.limit))
+        q => Consequence.success(org.goldenport.cncf.directive.Query.sliceValues(Vector(aggregate, nextAggregate), q.offset, q.limit)),
+        countfn = if (totalCountCapability.supportsTotalCount) Some(_ => Consequence.success(2)) else None,
+        totalCountCapabilityValue = totalCountCapability
       )
     )
     DefaultSubsystemFactory.default(Some("server")).add(Vector(component))

@@ -8,9 +8,12 @@ import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.protocol.spec as spec
 import org.goldenport.protocol.Request
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.datastore.TotalCountCapability
+import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.goldenport.cncf.entity.runtime.*
-import org.goldenport.cncf.entity.aggregate.AggregateDefinition
+import org.goldenport.cncf.entity.aggregate.{AggregateDefinition, AggregateMemberDefinition}
 import org.goldenport.cncf.entity.view.{ViewDefinition, ViewQueryDefinition}
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.record.Record
@@ -20,8 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 24, 2026
- *  version Apr. 10, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with Matchers {
@@ -45,6 +47,28 @@ final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with 
       component.viewSpace.browserOption[Any]("person_view", "detail").isDefined shouldBe true
       component.viewSpace.browserOption[Any]("person_view", "search_by_city").isDefined shouldBe true
     }
+
+    "provide total count capability for generated default view and aggregate" in {
+      given EntityPersistent[_PersonEntity] = _persistent
+      given ExecutionContext = ExecutionContext.create()
+      val component = _create_component_with_metadata()
+      component.entitySpace.registerEntity("person", _collection(Vector(
+        _PersonEntity(EntityId("m", "a", _cid), "taro", "Tokyo"),
+        _PersonEntity(EntityId("m", "b", _cid), "hanako", "Osaka")
+      )))
+      val factory = new ComponentFactory()
+
+      _invoke_bootstrap_aggregates(factory, component)
+      _invoke_bootstrap_views(factory, component)
+
+      val browser = component.viewSpace.browser[Any]("person_view")
+      browser.totalCountCapability shouldBe TotalCountCapability.Supported
+      browser.count(Query.plan(Record.empty, includeTotal = true)).TAKE shouldBe 2
+
+      val aggregate = component.aggregateSpace.collection[Any]("person_aggregate")
+      aggregate.totalCountCapability shouldBe TotalCountCapability.Supported
+      aggregate.count_with_context(Query.plan(Record.empty, includeTotal = true)).TAKE shouldBe 2
+    }
   }
 
   private def _create_component_with_metadata(): Component = {
@@ -63,7 +87,11 @@ final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with 
 
     val component = new Component() {
       override def aggregateDefinitions: Vector[AggregateDefinition] =
-        Vector(AggregateDefinition(name = "person_aggregate", entityName = "person"))
+        Vector(AggregateDefinition(
+          name = "person_aggregate",
+          entityName = "person",
+          members = Vector(AggregateMemberDefinition("person", "person"))
+        ))
 
       override def viewDefinitions: Vector[ViewDefinition] =
         Vector(

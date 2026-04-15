@@ -3,18 +3,21 @@ package org.goldenport.cncf.entity.view
 import org.goldenport.Consequence
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.directive.Query
+import org.goldenport.cncf.datastore.TotalCountCapability
 import org.goldenport.cncf.entity.runtime.Collection
 
 /*
  * @since   Mar. 15, 2026
  *  version Mar. 24, 2026
- *  version Apr.  4, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Browser[V] {
   def find(id: EntityId): Consequence[V]
   def query(q: Query[_]): Consequence[Vector[V]]
+  def totalCountCapability: TotalCountCapability = TotalCountCapability.Unsupported
+  def count(q: Query[_]): Consequence[Int] =
+    Consequence.operationInvalid(s"View total count is not supported: ${totalCountCapability}")
 }
 
 object Browser {
@@ -31,6 +34,14 @@ object Browser {
     collection: Collection[V],
     queryfn: Query[_] => Consequence[Vector[V]]
   ): Browser[V] =
+    from(collection, queryfn, None, TotalCountCapability.Unsupported)
+
+  def from[V](
+    collection: Collection[V],
+    queryfn: Query[_] => Consequence[Vector[V]],
+    countfn: Option[Query[_] => Consequence[Int]],
+    totalCountCapabilityValue: TotalCountCapability
+  ): Browser[V] =
     new Browser[V] {
       def find(id: EntityId): Consequence[V] =
         collection.resolve(id)
@@ -40,12 +51,27 @@ object Browser {
           case m: ViewCollection[V @unchecked] => m.query(q)(queryfn)
           case _ => queryfn(q)
         }
+
+      override def totalCountCapability: TotalCountCapability =
+        if (countfn.isDefined) totalCountCapabilityValue else TotalCountCapability.Unsupported
+
+      override def count(q: Query[_]): Consequence[Int] =
+        countfn.map(_(q)).getOrElse(super.count(q))
     }
 
   def from[V](
     loadfn: EntityId => Consequence[V],
     collection: Collection[V],
     queryfn: Query[_] => Consequence[Vector[V]]
+  ): Browser[V] =
+    from(loadfn, collection, queryfn, None, TotalCountCapability.Unsupported)
+
+  def from[V](
+    loadfn: EntityId => Consequence[V],
+    collection: Collection[V],
+    queryfn: Query[_] => Consequence[Vector[V]],
+    countfn: Option[Query[_] => Consequence[Int]],
+    totalCountCapabilityValue: TotalCountCapability
   ): Browser[V] =
     new Browser[V] {
       def find(id: EntityId): Consequence[V] =
@@ -56,5 +82,11 @@ object Browser {
           case m: ViewCollection[V @unchecked] => m.query(q)(queryfn)
           case _ => queryfn(q)
         }
+
+      override def totalCountCapability: TotalCountCapability =
+        if (countfn.isDefined) totalCountCapabilityValue else TotalCountCapability.Unsupported
+
+      override def count(q: Query[_]): Consequence[Int] =
+        countfn.map(_(q)).getOrElse(super.count(q))
     }
 }

@@ -1683,17 +1683,21 @@ object AdminComponent {
       componentName <- _required_string(args, "component")
       viewName <- _required_string(args, "view")
       paging <- _paging(args)
-      pagingDecision <- _paging_with_capability(paging, TotalCountCapability.Unsupported, s"view.${viewName}")
-      effectivePaging = pagingDecision.paging
       component <- Consequence.fromOption(_component_by_name(subsystem, componentName), s"Component not found: ${componentName}")
       browser <- Consequence.fromOption(_view_browser(component, viewName), s"View browser not found: ${viewName}")
+      pagingDecision <- _paging_with_capability(paging, browser.totalCountCapability, s"view.${viewName}")
+      effectivePaging = pagingDecision.paging
       values <- browser.query(EntityQuery.plan(Record.empty, limit = Some(effectivePaging.fetchPageSize), offset = Some(effectivePaging.offset)))
+      total <- if (effectivePaging.wantsTotal)
+        browser.count(EntityQuery.plan(Record.empty)).map(Some(_))
+      else
+        Consequence.success(None)
     } yield OperationResponse.RecordResponse(
       _read_values_response_record(
         "view",
         componentName,
         viewName,
-        _prefetched_page_values(values.map(x => Option(x).map(_.toString).getOrElse("")).toVector, effectivePaging, pagingDecision),
+        _prefetched_page_values(values.map(x => Option(x).map(_.toString).getOrElse("")).toVector, effectivePaging, pagingDecision, total),
         effectivePaging
       )
     )
@@ -1708,17 +1712,21 @@ object AdminComponent {
       componentName <- _required_string(args, "component")
       aggregateName <- _required_string(args, "aggregate")
       paging <- _paging(args)
-      pagingDecision <- _paging_with_capability(paging, TotalCountCapability.Unsupported, s"aggregate.${aggregateName}")
-      effectivePaging = pagingDecision.paging
       component <- Consequence.fromOption(_component_by_name(subsystem, componentName), s"Component not found: ${componentName}")
       collection <- Consequence.fromOption(_aggregate_collection(component, aggregateName), s"Aggregate collection not found: ${aggregateName}")
-      values <- collection.query(EntityQuery.plan(Record.empty, limit = Some(effectivePaging.fetchPageSize), offset = Some(effectivePaging.offset)))
+      pagingDecision <- _paging_with_capability(paging, collection.totalCountCapability, s"aggregate.${aggregateName}")
+      effectivePaging = pagingDecision.paging
+      values <- collection.query_with_context(EntityQuery.plan(Record.empty, limit = Some(effectivePaging.fetchPageSize), offset = Some(effectivePaging.offset)))(using core.executionContext)
+      total <- if (effectivePaging.wantsTotal)
+        collection.count_with_context(EntityQuery.plan(Record.empty))(using core.executionContext).map(Some(_))
+      else
+        Consequence.success(None)
     } yield OperationResponse.RecordResponse(
       _read_values_response_record(
         "aggregate",
         componentName,
         aggregateName,
-        _prefetched_page_values(values.map(x => Option(x).map(_.toString).getOrElse("")).toVector, effectivePaging, pagingDecision),
+        _prefetched_page_values(values.map(x => Option(x).map(_.toString).getOrElse("")).toVector, effectivePaging, pagingDecision, total),
         effectivePaging
       )
     )

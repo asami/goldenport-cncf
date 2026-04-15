@@ -3,13 +3,14 @@ package org.goldenport.cncf.entity.aggregate
 import org.goldenport.Consequence
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.datastore.TotalCountCapability
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.runtime.Collection
 
 /*
  * @since   Mar. 14, 2026
  *  version Mar. 30, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 // NOTE:
@@ -30,7 +31,9 @@ trait ContextualAggregateBuilder[A] extends AggregateBuilder[A] {
 
 final class AggregateCollection[A](
   builder: AggregateBuilder[A],
-  queryfn: Query[?] => Consequence[Vector[A]] = _ => Consequence.notImplemented("AggregateCollection.query is not supported")
+  queryfn: Query[?] => Consequence[Vector[A]] = _ => Consequence.notImplemented("AggregateCollection.query is not supported"),
+  countfn: Option[Query[?] => Consequence[Int]] = None,
+  totalCountCapabilityValue: TotalCountCapability = TotalCountCapability.Unsupported
 ) extends Collection[A] {
   def resolve_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[A] =
     builder match {
@@ -49,6 +52,21 @@ final class AggregateCollection[A](
 
   def query(q: Query[?]): Consequence[Vector[A]] =
     queryfn(q)
+
+  def totalCountCapability: TotalCountCapability =
+    if (countfn.isDefined) totalCountCapabilityValue else TotalCountCapability.Unsupported
+
+  def count_with_context(q: Query[?])(using ctx: ExecutionContext): Consequence[Int] =
+    countfn match {
+      case Some(m: ContextualAggregateCount @unchecked) => m.count_with_context(q)
+      case Some(f) => f(q)
+      case None => count(q)
+    }
+
+  def count(q: Query[?]): Consequence[Int] =
+    countfn.map(_(q)).getOrElse {
+      Consequence.operationInvalid(s"Aggregate total count is not supported: ${totalCountCapability}")
+    }
 }
 
 trait ContextualAggregateQuery[A] extends (Query[?] => Consequence[Vector[A]]) {
@@ -56,4 +74,11 @@ trait ContextualAggregateQuery[A] extends (Query[?] => Consequence[Vector[A]]) {
 
   override def apply(q: Query[?]): Consequence[Vector[A]] =
     Consequence.operationInvalid("ExecutionContext is required for contextual aggregate query")
+}
+
+trait ContextualAggregateCount extends (Query[?] => Consequence[Int]) {
+  def count_with_context(q: Query[?])(using ctx: ExecutionContext): Consequence[Int]
+
+  override def apply(q: Query[?]): Consequence[Int] =
+    Consequence.operationInvalid("ExecutionContext is required for contextual aggregate count")
 }

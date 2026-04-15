@@ -13,12 +13,12 @@ import org.goldenport.cncf.collaborator.api
 import org.goldenport.cncf.component.repository.{ComponentRepository, ComponentRepositorySpace}
 import org.goldenport.cncf.component.repository.ComponentSource
 import org.goldenport.cncf.subsystem.Subsystem
-import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.datastore.{DataStore, TotalCountCapability}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityQuery, EntityStore}
-import org.goldenport.cncf.entity.aggregate.{AggregateAssembler, AggregateBuilder, AggregateCollection, AggregateSpace, AggregateDefinition, ContextualAggregateBuilder, ContextualAggregateQuery}
+import org.goldenport.cncf.entity.aggregate.{AggregateAssembler, AggregateBuilder, AggregateCollection, AggregateSpace, AggregateDefinition, ContextualAggregateBuilder, ContextualAggregateCount, ContextualAggregateQuery}
 import org.goldenport.cncf.event.{ActionCallDispatcher, EventBus, EventEngine, EventReception, EventStore, EntitySubscriptionLimit}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimeDescriptor, EntityRuntimePlan, EntitySpace, EntityStorage, PartitionedMemoryRealm, PartitionStrategy, WorkingSetDefinition, WorkingSetInitializer}
 import org.goldenport.cncf.directive.SearchResult
@@ -512,7 +512,17 @@ final class ComponentFactory(
         given ExecutionContext = ExecutionContext.withAggregateInternalRead(ctx, true)
         _search_default_aggregates(component, entityspace, definition, q)
     }
-    new AggregateCollection[Any](builder = builder, queryfn = queryfn)
+    val countfn = new ContextualAggregateCount {
+      def count_with_context(q: Query[?])(using ctx: ExecutionContext): Consequence[Int] =
+        given ExecutionContext = ExecutionContext.withAggregateInternalRead(ctx, true)
+        _count_default_aggregates(component, entityspace, definition, q)
+    }
+    new AggregateCollection[Any](
+      builder = builder,
+      queryfn = queryfn,
+      countfn = Some(countfn),
+      totalCountCapabilityValue = TotalCountCapability.Supported
+    )
   }
 
   private def _default_view_builder(
@@ -532,12 +542,14 @@ final class ComponentFactory(
     collection: ViewCollection[Any]
   ): Browser[Any] = {
     val queryfn = (q: Query[_]) =>
-      _search_view_source_entities(component, entityspace, entityname, Query(_sanitize_query_record(_query_record(q)))).flatMap {
+      _search_view_source_entities(component, entityspace, entityname, _sanitize_query(q)).flatMap {
         _.foldLeft(Consequence.success(Vector.empty[Any])) { (z, entity) =>
           z.flatMap(xs => _entity_to_view(component, entityname, entity).map(xs :+ _))
         }
     }
-    Browser.from(collection, queryfn)
+    val countfn = (q: Query[_]) =>
+      _count_view_source_entities(component, entityspace, entityname, _sanitize_count_query(q))
+    Browser.from(collection, queryfn, Some(countfn), TotalCountCapability.Supported)
   }
 
   private def _default_named_view_browser(
@@ -550,12 +562,14 @@ final class ComponentFactory(
     val loadfn = (id: EntityId) =>
       _load_view_source_entity(component, entityspace, entityname, id).flatMap(_entity_to_view(component, entityname, Some(viewname), _))
     val queryfn = (q: Query[_]) =>
-      _search_view_source_entities(component, entityspace, entityname, Query(_sanitize_query_record(_query_record(q)))).flatMap {
+      _search_view_source_entities(component, entityspace, entityname, _sanitize_query(q)).flatMap {
         _.foldLeft(Consequence.success(Vector.empty[Any])) { (z, entity) =>
           z.flatMap(xs => _entity_to_view(component, entityname, Some(viewname), entity).map(xs :+ _))
         }
       }
-    Browser.from(loadfn, collection, queryfn)
+    val countfn = (q: Query[_]) =>
+      _count_view_source_entities(component, entityspace, entityname, _sanitize_count_query(q))
+    Browser.from(loadfn, collection, queryfn, Some(countfn), TotalCountCapability.Supported)
   }
 
   private def _default_view_query_browser(
@@ -569,7 +583,7 @@ final class ComponentFactory(
       val source = _sanitize_query_record(_query_record(q))
       val filtered = _filter_view_query_record(source, querydef)
       val searchrecord = _searchable_query_record(if (filtered.asMap.nonEmpty) filtered else source)
-      _search_view_source_entities(component, entityspace, entityname, Query(searchrecord)).flatMap { entities =>
+      _search_view_source_entities(component, entityspace, entityname, _with_query_controls(searchrecord, q)).flatMap { entities =>
         val matched =
           if (filtered.asMap.isEmpty) entities
           else entities.filter(entity => _matches_view_query(entity, filtered))
@@ -578,7 +592,13 @@ final class ComponentFactory(
         }
       }
     }
-    Browser.from(collection, queryfn)
+    val countfn = (q: Query[_]) => {
+      val source = _sanitize_query_record(_query_record(q))
+      val filtered = _filter_view_query_record(source, querydef)
+      val searchrecord = _searchable_query_record(if (filtered.asMap.nonEmpty) filtered else source)
+      _count_view_source_entities(component, entityspace, entityname, _with_count_controls(searchrecord, q))
+    }
+    Browser.from(collection, queryfn, Some(countfn), TotalCountCapability.Supported)
   }
 
   private def _load_view_source_entity(
@@ -628,6 +648,17 @@ final class ComponentFactory(
     }
   }
 
+  private def _count_view_source_entities(
+    component: Component,
+    entityspace: EntitySpace,
+    entityname: String,
+    q: Query[?]
+  ): Consequence[Int] = {
+    val ctx0 = ExecutionContext.create()
+    given ExecutionContext = ctx0
+    _count_entities(component, entityspace, entityname, q)
+  }
+
   private def _build_default_aggregate(
     component: Component,
     entityspace: EntitySpace,
@@ -648,7 +679,7 @@ final class ComponentFactory(
     definition: AggregateDefinition,
     q: Query[?]
   )(using ctx: ExecutionContext): Consequence[Vector[Any]] = {
-    val sanitized = Query(_sanitize_query_record(_query_record(q)))
+    val sanitized = _sanitize_query(q)
     for {
       roots <- _search_entities(component, entityspace, definition.entityName, sanitized)
       aggregates <- roots.foldLeft(Consequence.success(Vector.empty[Any])) { (z, root) =>
@@ -656,6 +687,14 @@ final class ComponentFactory(
       }
     } yield aggregates
   }
+
+  private def _count_default_aggregates(
+    component: Component,
+    entityspace: EntitySpace,
+    definition: AggregateDefinition,
+    q: Query[?]
+  )(using ctx: ExecutionContext): Consequence[Int] =
+    _count_entities(component, entityspace, definition.entityName, _sanitize_count_query(q))
 
   private def _attach_aggregate_member(
     component: Component,
@@ -878,6 +917,36 @@ final class ComponentFactory(
         EntityStore.standard().search[Any](query).map(_.data)
     }
   }
+
+  private def _count_entities(
+    component: Component,
+    entityspace: EntitySpace,
+    entityname: String,
+    q: Query[?]
+  )(using ctx: ExecutionContext): Consequence[Int] = {
+    val cid = _bootstrap_collection_id(component, entityname)
+    val query = EntityQuery[Any](cid, _with_count_controls(_sanitize_query_record(_query_record(q)), q))
+    given EntityPersistent[Any] = _bootstrap_entity_persistent(component, entityname)
+    entityspace.entityOption[Any](entityname) match {
+      case Some(collection) =>
+        collection.search(query).flatMap { result =>
+          result.totalCount.map(Consequence.success).getOrElse {
+            EntityStore.standard().search[Any](query).flatMap(_total_count_from_result)
+          }
+        }.recoverWith { case _ =>
+          EntityStore.standard().search[Any](query).flatMap(_total_count_from_result)
+        }
+      case None =>
+        EntityStore.standard().search[Any](query).flatMap(_total_count_from_result)
+    }
+  }
+
+  private def _total_count_from_result(
+    result: SearchResult[Any]
+  ): Consequence[Int] =
+    result.totalCount
+      .map(Consequence.success)
+      .getOrElse(Consequence.operationInvalid("Total count was not returned by entity search"))
 
   private def _entity_to_aggregate(
     component: Component,
@@ -1231,6 +1300,38 @@ final class ComponentFactory(
     }
     Record.create(filtered)
   }
+
+  private def _sanitize_query(q: Query[?]): Query[?] =
+    _with_query_controls(_sanitize_query_record(_query_record(q)), q)
+
+  private def _sanitize_count_query(q: Query[?]): Query[?] =
+    _with_count_controls(_sanitize_query_record(_query_record(q)), q)
+
+  private def _with_query_controls(
+    condition: Record,
+    source: Query[?]
+  ): Query[?] =
+    Query.plan(
+      condition,
+      Query.whereOf(source),
+      Query.sortOf(source),
+      Query.limitOf(source),
+      Query.offsetOf(source),
+      Query.includeTotalOf(source)
+    )
+
+  private def _with_count_controls(
+    condition: Record,
+    source: Query[?]
+  ): Query[?] =
+    Query.plan(
+      condition,
+      Query.whereOf(source),
+      Query.sortOf(source),
+      Some(0),
+      Some(0),
+      includeTotal = true
+    )
 
   private def _searchable_query_record(p: Record): Record =
     Record.create(
