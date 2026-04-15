@@ -8,3 +8,7 @@ Refer to docs/rules/document-lifecycle.md for the expected flow from notes throu
 Current security/authorization design:
 
 - `entity-authorization-model.md`
+
+Current Web/admin design:
+
+- `management-console.md`

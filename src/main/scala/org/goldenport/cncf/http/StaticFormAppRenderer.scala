@@ -74,14 +74,21 @@ object StaticFormAppRenderer {
       page.operationLabel
 
     def nextPageProperties: FormPageProperties =
-      page
+      val base = page
         .withValue("result.status", status.toString)
+        .withValue("result.ok", (status >= 200 && status < 400).toString)
         .withValue("result.contentType", contentType)
         .withValue("result.body", body)
         .withValue("paging.page", page.values.getOrElse("paging.page", "1"))
         .withValue("paging.pageSize", page.values.getOrElse("paging.pageSize", "20"))
         .withValue("paging.chunkSize", page.values.getOrElse("paging.chunkSize", "1000"))
         .withValue("paging.href", page.values.getOrElse("paging.href", _default_paging_href))
+      if (status >= 400)
+        base
+          .withValue("error.status", status.toString)
+          .withValue("error.body", body)
+      else
+        base
 
     private def _default_paging_href: String =
       s"/form/${componentName}/${serviceName}/${operationName}/result?page={page}&pageSize={pageSize}"
@@ -153,24 +160,111 @@ object StaticFormAppRenderer {
       val servicePath = NamingConventions.toNormalizedSegment(service.name)
       val operationPath = NamingConventions.toNormalizedSegment(operation.name)
       val action = s"/form/${componentPath}/${servicePath}/${operationPath}"
-      val initialFields = _form_initial_fields(values)
+      val controls = _operation_form_controls(operation, values)
       Page(_simple_page(
         title = s"${_escape(component.name)}.${_escape(service.name)}.${_escape(operation.name)}",
         subtitle = "HTML form operation",
         body =
           s"""<article>
              |  <form method="post" action="${_escape(action)}">
-             |    <div class="mb-3">
-             |      <label class="form-label" for="formFields">Fields</label>
-             |      <textarea class="form-control" id="formFields" name="fields" rows="6" placeholder="name=value&#10;keyword=sample">${initialFields}</textarea>
-             |      <div class="form-text">Use one name=value pair per line. Query-style values are also accepted.</div>
-             |    </div>
+             |    ${controls}
              |    <button type="submit" class="btn btn-primary">Run</button>
              |    <a class="btn btn-outline-secondary" href="/form/${componentPath}">Operations</a>
              |  </form>
              |</article>""".stripMargin
       ))
     }
+
+  private def _operation_form_controls(
+    operation: org.goldenport.protocol.spec.OperationDefinition,
+    values: Map[String, String]
+  ): String = {
+    val parameters = operation.specification.request.parameters.toVector
+    if (parameters.isEmpty)
+      _operation_form_fields_textarea(values, "Fields")
+    else {
+      val parameterNames = parameters.map(_.name).toSet
+      val fields = parameters.map { parameter =>
+        val name = parameter.name
+        val id = s"field-${NamingConventions.toNormalizedSegment(name)}"
+        val value = values.getOrElse(name, "")
+        val required = if (_operation_parameter_required(parameter)) " required" else ""
+        val inputType = _operation_parameter_input_type(parameter)
+        val help = _operation_parameter_help(parameter)
+        _operation_parameter_control(name, id, inputType, value, required, help)
+      }.mkString("\n")
+      val extraValues = values.filterNot { case (key, _) => parameterNames.contains(key) }
+      val extra =
+        if (extraValues.isEmpty)
+          _operation_form_fields_textarea(Map.empty, "Additional fields", rows = 3)
+        else
+          _operation_form_fields_textarea(extraValues, "Additional fields", rows = 3)
+      s"""${fields}
+         |${extra}""".stripMargin
+    }
+  }
+
+  private def _operation_parameter_required(
+    parameter: org.goldenport.protocol.spec.ParameterDefinition
+  ): Boolean =
+    !Option(parameter.domain.multiplicity).map(_.toString.toLowerCase).exists(x => x.contains("zero"))
+
+  private def _operation_parameter_input_type(
+    parameter: org.goldenport.protocol.spec.ParameterDefinition
+  ): String = {
+    val datatype = Option(parameter.domain.datatype).map(_.toString.toLowerCase).getOrElse("")
+    if (datatype.contains("bool")) "checkbox"
+    else if (datatype.contains("int") || datatype.contains("long") || datatype.contains("decimal") || datatype.contains("number")) "number"
+    else if (datatype.contains("date")) "date"
+    else "text"
+  }
+
+  private def _operation_parameter_control(
+    name: String,
+    id: String,
+    inputType: String,
+    value: String,
+    required: String,
+    help: String
+  ): String =
+    if (inputType == "checkbox") {
+      val checked =
+        if (Set("true", "on", "1", "yes").contains(value.toLowerCase)) " checked" else ""
+      s"""<div class="mb-3 form-check">
+         |  <input type="hidden" name="${_escape(name)}" value="false">
+         |  <input class="form-check-input" id="${_escape(id)}" name="${_escape(name)}" type="checkbox" value="true"${checked}${required}>
+         |  <label class="form-check-label" for="${_escape(id)}">${_escape(name)}</label>
+         |  <div class="form-text">${_escape(help)}</div>
+         |</div>""".stripMargin
+    } else {
+      s"""<div class="mb-3">
+         |  <label class="form-label" for="${_escape(id)}">${_escape(name)}</label>
+         |  <input class="form-control" id="${_escape(id)}" name="${_escape(name)}" type="${_escape(inputType)}" value="${_escape(value)}"${required}>
+         |  <div class="form-text">${_escape(help)}</div>
+         |</div>""".stripMargin
+    }
+
+  private def _operation_parameter_help(
+    parameter: org.goldenport.protocol.spec.ParameterDefinition
+  ): String = {
+    val kind = parameter.kind.toString
+    val datatype = Option(parameter.domain.datatype).map(_.toString).getOrElse("unknown")
+    val multiplicity = Option(parameter.domain.multiplicity).map(_.toString).getOrElse("unknown")
+    s"${kind}; ${datatype}; ${multiplicity}"
+  }
+
+  private def _operation_form_fields_textarea(
+    values: Map[String, String],
+    label: String,
+    rows: Int = 6
+  ): String = {
+    val initialFields = _form_initial_fields(values)
+    s"""<div class="mb-3">
+       |  <label class="form-label" for="formFields">${_escape(label)}</label>
+       |  <textarea class="form-control" id="formFields" name="fields" rows="${rows}" placeholder="name=value&#10;keyword=sample">${initialFields}</textarea>
+       |  <div class="form-text">Use one name=value pair per line. Query-style values are also accepted.</div>
+       |</div>""".stripMargin
+  }
 
   def renderFormResult(
     properties: FormResultProperties
@@ -180,6 +274,7 @@ object StaticFormAppRenderer {
       s"""<article>
          |  <h2>Result</h2>
          |  <p>Content-Type $${result.contentType}</p>
+         |  <textus-error-panel source="error"></textus-error-panel>
          |  <textus-result-view source="result.body"></textus-result-view>
          |  <textus-result-table source="result.body" page="paging.page" page-size="paging.pageSize" total="paging.total" href="paging.href"></textus-result-table>
          |  <textus-property-list source="result"></textus-property-list>

@@ -1,0 +1,93 @@
+# Management Console
+
+## Scope
+
+The Management Console is the browser-facing administration surface under
+`/web/{component}/admin`. It is implemented as HTML pages that call admin
+Operations. HTML rendering must not bypass the Operation boundary to read or
+mutate runtime state directly.
+
+The initial managed surfaces are:
+
+- `/web/{component}/admin/entities`
+- `/web/{component}/admin/data`
+- `/web/{component}/admin/views`
+- `/web/{component}/admin/aggregates`
+
+Entity and data surfaces support list, detail, edit, update, new, and create.
+View surfaces are read-only. Aggregate surfaces expose list/detail reads and
+operation links; create and command behavior is executed through component
+Operations.
+
+## Query Responses
+
+Admin list Operations return `items`. Each item has:
+
+- `id`: canonical detail navigation id
+- `label`: browser display label
+- `value`: rendered raw value
+
+Entity/data list Operations also return `ids` for compatibility. View/aggregate
+list Operations also return `values` for compatibility. HTML rendering must use
+`items[].id` for links and `items[].label` for visible text when `items` is
+present.
+
+Single read Operations return `item` and duplicate `id`, `label`, and `value`
+at the top level for simple form widgets. Entity/data reads also return the
+structured `record`.
+
+Entity, data, view, and aggregate responses use this same read model. Surface
+differences should be expressed as available actions, not as incompatible list
+or detail response shapes.
+
+## Paging And Totals
+
+List pages use `page` and `pageSize`. `hasNext` is calculated with
+`pageSize + 1` over-fetching so total count is not required by default.
+
+`includeTotal` is design-gated by the Web Descriptor. The default is disabled.
+When enabled as optional, unsupported backing stores return no `total` and add a
+warning. When enabled as required, unsupported backing stores fail at the admin
+Operation boundary.
+
+## Forms
+
+Form HTML pages live under `/form`. Operation forms are generated from
+`OperationDefinition.specification.request.parameters` when available. Each
+parameter becomes a normal HTML input with:
+
+- `name` from the parameter name
+- `type` derived from the parameter datatype
+- `required` derived from multiplicity
+- help text containing kind, datatype, and multiplicity
+
+An additional `fields` textarea remains available for extension values and for
+Operations without declared parameters. On submit, normal inputs and the
+textarea are merged into the Operation form record.
+
+Boolean parameters are rendered as checkboxes with an explicit hidden `false`
+value so an unchecked field still submits a value. Numeric and date-like
+datatypes are rendered with HTML `number` and `date` controls when the
+Operation parameter datatype exposes that intent.
+
+Form execution result pages receive properties derived from the Operation
+response:
+
+- `result.status`
+- `result.ok`
+- `result.contentType`
+- `result.body`
+- `error.status` and `error.body` for HTTP error responses
+
+HTML templates use `textus-*` widgets such as `textus-result-view`,
+`textus-result-table`, `textus-property-list`, and `textus-error-panel` to
+render these properties without adding template control syntax.
+
+## Display Labels
+
+Item labels are derived from representative record or product fields when
+available. The current priority is:
+
+`label`, `title`, `name`, `summary`, `displayName`, `caption`
+
+If no representative field is available, the item id is used as the label.

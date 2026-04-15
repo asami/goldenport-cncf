@@ -897,7 +897,12 @@ final class Http4sHttpServer(
       val base =
         if (text.trim.isEmpty) Record.empty
         else HttpRequest.parseQuery(text)
-      base.getString("fields").map(_fields_to_record).getOrElse(base)
+      base.getString("fields") match {
+        case Some(fields) =>
+          Record.create(base.asMap.toVector.filterNot(_._1 == "fields") ++ _fields_to_record(fields).asMap.toVector)
+        case None =>
+          base
+      }
     }
 
   private def _fields_to_record(text: String): Record = {

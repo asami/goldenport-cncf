@@ -1644,7 +1644,7 @@ object AdminComponent {
         "data",
         "",
         dataName,
-        _prefetched_page_values(_record_ids(result.records), effectivePaging, pagingDecision, total),
+        _prefetched_page_values(_record_items(result.records), effectivePaging, pagingDecision, total),
         effectivePaging
       )
     )
@@ -1982,6 +1982,27 @@ object AdminComponent {
   ): Vector[String] =
     records.map(x => x.getString("id").getOrElse(x.getAny("id").map(_.toString).getOrElse("unknown")))
 
+  private def _record_items(
+    records: Vector[Record]
+  ): Vector[_AdminReadItem] =
+    records.map { record =>
+      val id = _record_id(record)
+      val label = _record_label(record).getOrElse(id)
+      _AdminReadItem(id, label, _record_text(record))
+    }
+
+  private def _record_id(
+    record: Record
+  ): String =
+    record.getString("id").getOrElse(record.getAny("id").map(_.toString).getOrElse("unknown"))
+
+  private def _record_label(
+    record: Record
+  ): Option[String] =
+    Vector("label", "title", "name", "summary", "displayName", "caption")
+      .flatMap(key => record.getAny(key).map(_.toString).filter(_.nonEmpty))
+      .headOption
+
   private def _page_values[A](
     values: Vector[A],
     paging: _Paging,
@@ -2003,10 +2024,15 @@ object AdminComponent {
     result: org.goldenport.cncf.directive.SearchResult[A],
     paging: _Paging,
     decision: _PagingCapabilityDecision
-  ): _Page[String] = {
-    val ids = result.data.map(x => collection.descriptor.persistent.id(x).value)
+  ): _Page[_AdminReadItem] = {
+    val items = result.data.map { x =>
+      val id = collection.descriptor.persistent.id(x).value
+      val record = collection.descriptor.persistent.toRecord(x)
+      val label = _record_label(record).getOrElse(id)
+      _AdminReadItem(id, label, _record_text(record))
+    }
     _Page(
-      ids.take(paging.pageSize),
+      items.take(paging.pageSize),
       result.data.size > paging.pageSize,
       if (paging.wantsTotal) result.totalCount else None,
       decision.warning,
@@ -2019,11 +2045,15 @@ object AdminComponent {
     result: org.goldenport.cncf.directive.SearchResult[A],
     paging: _Paging,
     decision: _PagingCapabilityDecision
-  ): _Page[String] =
+  ): _Page[_AdminReadItem] =
     if (result.nonEmpty || _entity_values(collection).isEmpty)
       _search_result_page(collection, result, paging, decision)
     else
-      _page_values(_entity_ids(collection), paging, decision)
+      _page_values(_entity_values(collection).map { x =>
+        val id = collection.descriptor.persistent.id(x).value
+        val record = collection.descriptor.persistent.toRecord(x)
+        _AdminReadItem(id, _record_label(record).getOrElse(id), _record_text(record))
+      }, paging, decision)
 
   private def _prefetched_page_values[A](
     values: Vector[A],
@@ -2063,7 +2093,7 @@ object AdminComponent {
     kind: String,
     componentName: String,
     collectionName: String,
-    page: _Page[String],
+    page: _Page[_AdminReadItem],
     paging: _Paging
   ): Record =
     Record.dataAuto(
@@ -2072,8 +2102,8 @@ object AdminComponent {
           "kind" -> s"${kind}.list",
           "component" -> componentName,
           "collection" -> collectionName,
-          "ids" -> page.values,
-          "items" -> page.values.map(id => _AdminReadItem(id, id, id).toRecord),
+          "ids" -> page.values.map(_.id),
+          "items" -> page.values.map(_.toRecord),
           "page" -> paging.page,
           "pageSize" -> paging.pageSize,
           "hasNext" -> page.hasNext
@@ -2090,13 +2120,14 @@ object AdminComponent {
     record: Record
   ): Record = {
     val text = _record_text(record)
-    val item = _AdminReadItem(id, id, text)
+    val label = _record_label(record).getOrElse(id)
+    val item = _AdminReadItem(id, label, text)
     Record.dataAuto(
       "kind" -> s"${kind}.read",
       "component" -> componentName,
       "collection" -> collectionName,
       "id" -> id,
-      "label" -> id,
+      "label" -> label,
       "value" -> text,
       "item" -> item.toRecord,
       "record" -> record,
@@ -2188,11 +2219,18 @@ object AdminComponent {
     Option(value).map(_.toString).getOrElse("")
 
   private def _read_item_label(value: Any): Option[String] =
-    _product_field(value, "label")
-      .orElse(_product_field(value, "summary"))
-      .orElse(_product_field(value, "name"))
-      .map(_.toString)
-      .filter(_.nonEmpty)
+    _read_label_candidate(value, "label")
+      .orElse(_read_label_candidate(value, "title"))
+      .orElse(_read_label_candidate(value, "name"))
+      .orElse(_read_label_candidate(value, "summary"))
+      .orElse(_read_label_candidate(value, "displayName"))
+      .orElse(_read_label_candidate(value, "caption"))
+
+  private def _read_label_candidate(value: Any, name: String): Option[String] =
+    value match {
+      case record: Record => record.getAny(name).map(_.toString).filter(_.nonEmpty)
+      case _ => _product_field(value, name).map(_.toString).filter(_.nonEmpty)
+    }
 
   private def _read_item_id(value: Any): Option[String] =
     value match {

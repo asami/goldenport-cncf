@@ -15,6 +15,7 @@ import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.http.HttpStatus
 import org.goldenport.bag.Bag
 import org.goldenport.datatype.{ContentType, MimeType}
+import org.goldenport.value.BaseContent
 import org.goldenport.protocol.{Argument, Protocol, Request as GRequest}
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.egress.{EgressCollection, RestEgress}
@@ -678,6 +679,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       entityListRecord.getString("kind") shouldBe Some("entity.list")
       entityListRecord.getAny("ids").map(_.toString).getOrElse("") should include ("notice_1")
       entityListRecord.getAny("items").map(_.toString).getOrElse("") should include ("notice_1")
+      entityListRecord.getAny("items").map(_.toString).getOrElse("") should include ("board update")
       entityListRecord.getInt("page") shouldBe Some(1)
       entityListRecord.getInt("pageSize") shouldBe Some(20)
       entityListRecord.getBoolean("hasNext") shouldBe Some(false)
@@ -702,7 +704,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       secondEntityPage.getBoolean("hasNext") shouldBe Some(false)
       val entityReadRecord = _admin_record_response(entitySubsystem, "entity", "read", "component" -> "notice-board", "entity" -> "notice", "id" -> entityId)
       entityReadRecord.getString("kind") shouldBe Some("entity.read")
-      entityReadRecord.getString("label") shouldBe Some(entityId)
+      entityReadRecord.getString("label") shouldBe Some("board update")
       entityReadRecord.getAny("item").map(_.toString).getOrElse("") should include (entityId)
       entityReadRecord.getString("fields").getOrElse("") should include ("title=board update")
       _admin_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "page" -> "0") match {
@@ -724,6 +726,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         dataListRecord.getString("kind") shouldBe Some("data.list")
         dataListRecord.getAny("ids").map(_.toString).getOrElse("") should include ("audit_1")
         dataListRecord.getAny("items").map(_.toString).getOrElse("") should include ("audit_1")
+        dataListRecord.getAny("items").map(_.toString).getOrElse("") should include ("created")
         dataListRecord.getInt("total") shouldBe None
         val totalDataListRecord = _admin_record_response(dataFixture.subsystem, "data", "list", "component" -> "notice-board", "data" -> "audit", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
         totalDataListRecord.getInt("total") shouldBe Some(2)
@@ -769,6 +772,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       viewReadRecord.getString("fields").getOrElse("") should include ("notice summary")
       viewReadRecord.getAny("values").map(_.toString).getOrElse("") should include ("notice summary")
       viewReadRecord.getAny("items").map(_.toString).getOrElse("") should include ("notice summary")
+      viewReadRecord.getAny("items").map(_.toString).getOrElse("") should include ("label")
       viewReadRecord.getInt("page") shouldBe Some(1)
       viewReadRecord.getInt("pageSize") shouldBe Some(20)
       viewReadRecord.getBoolean("hasNext") shouldBe Some(false)
@@ -813,6 +817,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       aggregateReadRecord.getString("fields").getOrElse("") should include ("notice aggregate")
       aggregateReadRecord.getAny("values").map(_.toString).getOrElse("") should include ("notice aggregate")
       aggregateReadRecord.getAny("items").map(_.toString).getOrElse("") should include ("notice_1")
+      aggregateReadRecord.getAny("items").map(_.toString).getOrElse("") should include ("notice aggregate")
       aggregateReadRecord.getInt("total") shouldBe None
       val totalAggregateReadRecord = _admin_record_response(aggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
       totalAggregateReadRecord.getInt("total") shouldBe None
@@ -1112,7 +1117,31 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         values = Map("id" -> "notice_1")
       ).map(_.body).getOrElse(fail("operation form is missing"))
 
-      html should include ("id=notice_1")
+      html should include ("name=\"id\"")
+      html should include ("type=\"text\"")
+      html should include ("required")
+      html should include ("value=\"notice_1\"")
+      html should include ("Additional fields")
+    }
+
+    "merge schema-driven form fields with additional fields on submit" in {
+      val subsystem = _aggregate_http_fixture_subsystem()
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+
+      val html = server._submit_operation_form(
+        _post_form_request(
+          "/form/notice-board/notice-aggregate/approve-notice-aggregate",
+          "id=notice_1&fields=approved%3Dtrue"
+        ),
+        "notice-board",
+        "notice-aggregate",
+        "approve-notice-aggregate"
+      ).flatMap(_.as[String]).unsafeRunSync()
+
+      html should include ("aggregate-updated:notice_1")
+      dispatcher.forms.lastOption.map(_.getString("approved")) shouldBe Some(Some("true"))
     }
 
     "render textus result widgets with paging links" in {
@@ -1169,6 +1198,28 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Next")
       html should include ("/form/notice-board/notice/search-notices/continue/test-id?page=1&amp;pageSize=10")
       html should include ("/form/notice-board/notice/search-notices/continue/test-id?page=3&amp;pageSize=10")
+    }
+
+    "render form result properties with error panel" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice"
+        ),
+        500,
+        "text/plain",
+        "boom"
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(properties).body
+
+      html should include ("error.status")
+      html should include ("500")
+      html should include ("boom")
+      html should include ("result.ok")
+      html should include ("false")
+      html should not include ("<textus-error-panel")
     }
 
     "provide local Bootstrap 5 assets" in {
@@ -1455,7 +1506,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
               operations = NonEmptyVector.of(
                 _NoopOperation("read-notice-aggregate"),
                 _NoopOperation("create-notice-aggregate"),
-                _NoopOperation("approve-notice-aggregate")
+                _NoopOperation("approve-notice-aggregate", Vector("id"))
               )
             )
           )
@@ -1644,12 +1695,20 @@ private object _NoticeEntity {
 private final case class _NoticeAggregate(id: String, summary: String)
 
 private final case class _NoopOperation(
-  opname: String
+  opname: String,
+  parameters: Vector[String] = Vector.empty
 ) extends spec.OperationDefinition {
   override val specification: spec.OperationDefinition.Specification =
     spec.OperationDefinition.Specification(
       name = opname,
-      request = spec.RequestDefinition(),
+      request = spec.RequestDefinition(
+        parameters = parameters.map { name =>
+          spec.ParameterDefinition(
+            content = BaseContent.simple(name),
+            kind = spec.ParameterDefinition.Kind.Argument
+          )
+        }.toList
+      ),
       response = spec.ResponseDefinition.void
     )
 
@@ -1665,7 +1724,14 @@ private final case class _SuccessfulAggregateOperation(
   override val specification: spec.OperationDefinition.Specification =
     spec.OperationDefinition.Specification(
       name = opname,
-      request = spec.RequestDefinition(),
+      request = spec.RequestDefinition(
+        parameters = List(
+          spec.ParameterDefinition(
+            content = BaseContent.simple(argumentName),
+            kind = spec.ParameterDefinition.Kind.Argument
+          )
+        )
+      ),
       response = spec.ResponseDefinition.void
     )
 
@@ -1697,6 +1763,7 @@ private final class RecordingWebOperationDispatcher(
   delegate: WebOperationDispatcher
 ) extends WebOperationDispatcher {
   private val _paths = ListBuffer.empty[String]
+  private val _forms = ListBuffer.empty[Record]
 
   def targetName: String = "recording"
 
@@ -1704,9 +1771,16 @@ private final class RecordingWebOperationDispatcher(
     _paths.toVector
   }
 
+  def forms: Vector[Record] = _forms.synchronized {
+    _forms.toVector
+  }
+
   def dispatch(request: HttpRequest): HttpResponse = {
     _paths.synchronized {
       _paths += request.path.asString
+    }
+    _forms.synchronized {
+      _forms += request.form
     }
     delegate.dispatch(request)
   }
