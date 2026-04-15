@@ -734,8 +734,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       viewReadRecord.getBoolean("hasNext") shouldBe Some(false)
       viewReadRecord.getInt("total") shouldBe None
       val totalViewReadRecord = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
-      totalViewReadRecord.getInt("total") shouldBe Some(2)
-      totalViewReadRecord.getBoolean("totalAvailable") shouldBe Some(true)
+      totalViewReadRecord.getInt("total") shouldBe None
+      totalViewReadRecord.getBoolean("totalAvailable") shouldBe Some(false)
+      totalViewReadRecord.getString("totalUnavailableReason") shouldBe Some("unsupported")
+      totalViewReadRecord.getAny("warnings").map(_.toString).getOrElse("") should include ("total count is not available for view.notice-view")
+      _admin_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "includeTotal" -> "true", "totalCountPolicy" -> "required") match {
+        case Consequence.Failure(_) => succeed
+        case other => fail(s"required total on view should fail: ${other}")
+      }
       val pagedViewReadRecord = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "page" -> "4", "pageSize" -> "9")
       pagedViewReadRecord.getInt("page") shouldBe Some(4)
       pagedViewReadRecord.getInt("pageSize") shouldBe Some(9)
@@ -758,8 +764,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       aggregateReadRecord.getAny("values").map(_.toString).getOrElse("") should include ("notice aggregate")
       aggregateReadRecord.getInt("total") shouldBe None
       val totalAggregateReadRecord = _admin_record_response(aggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
-      totalAggregateReadRecord.getInt("total") shouldBe Some(2)
-      totalAggregateReadRecord.getBoolean("totalAvailable") shouldBe Some(true)
+      totalAggregateReadRecord.getInt("total") shouldBe None
+      totalAggregateReadRecord.getBoolean("totalAvailable") shouldBe Some(false)
+      totalAggregateReadRecord.getString("totalUnavailableReason") shouldBe Some("unsupported")
+      totalAggregateReadRecord.getAny("warnings").map(_.toString).getOrElse("") should include ("total count is not available for aggregate.notice-aggregate")
+      _admin_response(aggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "includeTotal" -> "true", "totalCountPolicy" -> "required") match {
+        case Consequence.Failure(_) => succeed
+        case other => fail(s"required total on aggregate should fail: ${other}")
+      }
       val pagedAggregateReadRecord = _admin_record_response(aggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "page" -> "5", "pageSize" -> "11")
       pagedAggregateReadRecord.getInt("page") shouldBe Some(5)
       pagedAggregateReadRecord.getInt("pageSize") shouldBe Some(11)
