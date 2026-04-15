@@ -1165,7 +1165,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         ),
         form = Map(
           "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Form(
-            successRedirect = Some("/web/${component}/admin/aggregates/${service}/${id}"),
+            successRedirect = Some("/web/${component}/admin/aggregates/${service}/${result.id}"),
             failureRedirect = Some("/form/${component}/${service}/${operation}")
           )
         )
@@ -1195,6 +1195,45 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         Some("/web/notice-board/admin/aggregates/notice-aggregate/notice_1")
       api.status.code shouldBe 200
       api.as[String].unsafeRunSync() should include ("aggregate-updated:notice_1")
+    }
+
+    "redisplay the operation form with submitted values when stayOnError is enabled" in {
+      val subsystem = _aggregate_http_fixture_subsystem()
+      val descriptor = WebDescriptor(
+        expose = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Exposure.Protected
+        ),
+        form = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Form(
+            stayOnError = true
+          )
+        )
+      )
+      val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
+      val dispatcher = new StaticWebOperationDispatcher(
+        HttpResponse.Text(
+          HttpStatus.BadRequest,
+          ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+          Bag.text("invalid approval", StandardCharsets.UTF_8)
+        )
+      )
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+
+      val html = server
+        ._submit_operation_form(
+          _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      html should include ("HTML form operation")
+      html should include ("error.status")
+      html should include ("400")
+      html should include ("invalid approval")
+      html should include ("value=\"notice_1\"")
     }
 
     "merge schema-driven form fields with additional fields on submit" in {
@@ -1878,6 +1917,17 @@ private final class RecordingWebOperationDispatcher(
       _forms += request.form
     }
     delegate.dispatch(request)
+  }
+}
+
+private final class StaticWebOperationDispatcher(
+  response: HttpResponse
+) extends WebOperationDispatcher {
+  def targetName: String = "static"
+
+  def dispatch(request: HttpRequest): HttpResponse = {
+    val _ = request
+    response
   }
 }
 

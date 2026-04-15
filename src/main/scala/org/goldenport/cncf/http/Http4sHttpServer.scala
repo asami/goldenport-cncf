@@ -19,6 +19,7 @@ import org.http4s.dsl.io.*
 import org.http4s.multipart.Multipart
 import org.http4s.server.websocket.WebSocketBuilder2
 import org.http4s.websocket.WebSocketFrame
+import io.circe.parser.parse
 import org.goldenport.record.Record
 import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse}
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
@@ -859,7 +860,17 @@ final class Http4sHttpServer(
       case Some(template) =>
         IO.pure(_see_other(_render_redirect_template(template, app, service, operation, form, response)))
       case None =>
-        _html(StaticFormAppRenderer.renderFormResult(properties))
+        if (!ok && descriptor.exists(_.stayOnError))
+          _html(StaticFormAppRenderer.renderOperationForm(
+            engine.runtimeSubsystem,
+            app,
+            service,
+            operation,
+            engine.webDescriptor,
+            _form_values(form) ++ _error_values(response)
+          ).getOrElse(StaticFormAppRenderer.renderFormResult(properties)))
+        else
+          _html(StaticFormAppRenderer.renderFormResult(properties))
     }
   }
 
@@ -885,10 +896,35 @@ final class Http4sHttpServer(
         "operation" -> operation,
         "result.status" -> response.code.toString,
         "result.body" -> response.getString.getOrElse("")
-      )
+      ) ++ _result_values(response)
     """\$\{([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(template, m =>
       java.util.regex.Matcher.quoteReplacement(values.getOrElse(m.group(1), ""))
     )
+  }
+
+  private def _error_values(response: HttpResponse): Map[String, String] =
+    Map(
+      "error.status" -> response.code.toString,
+      "error.body" -> response.getString.getOrElse("")
+    )
+
+  private def _result_values(response: HttpResponse): Map[String, String] = {
+    val body = response.getString.getOrElse("")
+    val jsonValues = parse(body).toOption.toVector.flatMap { json =>
+      val cursor = json.hcursor
+      Vector(
+        cursor.get[String]("id").toOption.map("result.id" -> _),
+        cursor.downField("result").get[String]("id").toOption.map("result.id" -> _),
+        cursor.downField("item").get[String]("id").toOption.map("result.id" -> _)
+      ).flatten
+    }.toMap
+    val scalarId =
+      if (jsonValues.contains("result.id")) Map.empty[String, String]
+      else body.split(":", 2).toList match {
+        case _ :: id :: Nil if id.trim.nonEmpty => Map("result.id" -> id.trim)
+        case _ => Map.empty
+      }
+    jsonValues ++ scalarId
   }
 
   private def _see_other(path: String): HResponse[IO] =

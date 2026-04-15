@@ -132,15 +132,18 @@ Descriptor-controlled transitions are available per form:
 
 - `successRedirect`: returns `303 See Other` after a successful Operation.
 - `failureRedirect`: returns `303 See Other` after a failed Operation.
-- `stayOnError`: suppresses failure redirect and renders the result page with
-  `textus-error-panel`.
+- `stayOnError`: suppresses failure redirect and redisplays the original
+  Operation form with submitted values and an error panel.
 
 Redirect templates can reference `${component}`, `${service}`, `${operation}`,
 submitted form fields such as `${id}`, and result properties such as
-`${result.status}`. Aggregate command forms use the same mechanism: create
-forms can redirect to an aggregate list or detail page, while update/command
-forms can redirect to `/web/{component}/admin/aggregates/{aggregate}/{id}` when
-the submitted or returned id is available.
+`${result.status}` and `${result.id}`. `${result.id}` is derived from JSON
+response fields named `id`, `result.id`, or `item.id`; scalar `prefix:id`
+responses are also recognized. Aggregate command forms use the same mechanism:
+create forms can redirect to an aggregate list or detail page, while
+update/command forms can redirect to
+`/web/{component}/admin/aggregates/{aggregate}/{id}` when the submitted or
+returned id is available.
 
 ## Display Labels
 

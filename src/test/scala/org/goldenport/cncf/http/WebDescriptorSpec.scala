@@ -37,6 +37,20 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |  form:
           |    notice-board.notice.search-notices:
           |      enabled: true
+          |      successRedirect: /web/${component}/admin/aggregates/${service}/${result.id}
+          |      failureRedirect: /form/${component}/${service}/${operation}
+          |      stayOnError: true
+          |      controls:
+          |        body:
+          |          type: textarea
+          |          required: true
+          |        status:
+          |          type: select
+          |          values: [Draft, Published]
+          |          multiple: true
+          |        accessToken:
+          |          hidden: true
+          |          system: true
           |
           |  admin:
           |    entity.notice:
@@ -64,6 +78,16 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.authorization("notice-board.notice.post-notice").scopes shouldBe Vector("notice:write")
       descriptor.authorization("notice-board.notice.post-notice").capabilities shouldBe Vector("notice.post")
       descriptor.form("notice-board.notice.search-notices").enabled shouldBe Some(true)
+      descriptor.form("notice-board.notice.search-notices").successRedirect shouldBe Some("/web/${component}/admin/aggregates/${service}/${result.id}")
+      descriptor.form("notice-board.notice.search-notices").failureRedirect shouldBe Some("/form/${component}/${service}/${operation}")
+      descriptor.form("notice-board.notice.search-notices").stayOnError shouldBe true
+      descriptor.form("notice-board.notice.search-notices").controls("body").controlType shouldBe Some("textarea")
+      descriptor.form("notice-board.notice.search-notices").controls("body").required shouldBe Some(true)
+      descriptor.form("notice-board.notice.search-notices").controls("status").controlType shouldBe Some("select")
+      descriptor.form("notice-board.notice.search-notices").controls("status").values shouldBe Vector("Draft", "Published")
+      descriptor.form("notice-board.notice.search-notices").controls("status").multiple shouldBe true
+      descriptor.form("notice-board.notice.search-notices").controls("accessToken").hidden shouldBe true
+      descriptor.form("notice-board.notice.search-notices").controls("accessToken").system shouldBe true
       descriptor.admin("entity.notice").totalCount shouldBe WebDescriptor.TotalCountPolicy.Optional
       descriptor.admin("data.audit").totalCount shouldBe WebDescriptor.TotalCountPolicy.Required
       descriptor.adminTotalCountPolicy("notice_board", "entity", "notice") shouldBe WebDescriptor.TotalCountPolicy.Optional

@@ -162,11 +162,13 @@ object StaticFormAppRenderer {
       val action = s"/form/${componentPath}/${servicePath}/${operationPath}"
       val formDescriptor = webDescriptor.form.get(_operation_selector(component.name, service.name, operation.name))
       val controls = _operation_form_controls(operation, values, formDescriptor.map(_.controls).getOrElse(Map.empty))
+      val errorPanel = _form_error_panel(values)
       Page(_simple_page(
         title = s"${_escape(component.name)}.${_escape(service.name)}.${_escape(operation.name)}",
         subtitle = "HTML form operation",
         body =
           s"""<article>
+             |  ${errorPanel}
              |  <form method="post" action="${_escape(action)}">
              |    ${controls}
              |    <button type="submit" class="btn btn-primary">Run</button>
@@ -175,6 +177,12 @@ object StaticFormAppRenderer {
              |</article>""".stripMargin
       ))
     }
+
+  private def _form_error_panel(values: Map[String, String]): String = {
+    val xs = values.filter { case (key, _) => key == "error" || key.startsWith("error.") }
+    if (xs.isEmpty) ""
+    else s"""<div class="alert alert-danger" role="alert">${_property_rows(xs)}</div>"""
+  }
 
   private def _operation_form_controls(
     operation: org.goldenport.protocol.spec.OperationDefinition,
