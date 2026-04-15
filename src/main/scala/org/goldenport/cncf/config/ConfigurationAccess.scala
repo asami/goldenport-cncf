@@ -40,28 +40,13 @@ object ConfigurationAccess {
     path: java.nio.file.Path,
     key: String
   ): Option[String] =
-    if (!Files.isRegularFile(path)) {
+    if (!Files.isRegularFile(path))
       None
-    } else {
-      import scala.jdk.CollectionConverters.*
-      Files.readAllLines(path).asScala.iterator
-        .map(_.trim)
-        .filterNot(line => line.isEmpty || line.startsWith("#"))
-        .flatMap(_parse_simple_line)
-        .collectFirst {
-          case (`key`, value) => value
-        }
-    }
-
-  private def _parse_simple_line(
-    line: String
-  ): Option[(String, String)] =
-    line.split("=", 2) match {
-      case Array(k, v) =>
-        Some(k.trim -> v.trim)
-      case _ =>
-        None
-    }
+    else
+      new RuntimeFileConfigLoader().load(path).toOption.flatMap(config =>
+        _from_flat_key(ResolvedConfiguration(config, org.goldenport.configuration.ConfigurationTrace.empty), key)
+          .orElse(_from_object_path(ResolvedConfiguration(config, org.goldenport.configuration.ConfigurationTrace.empty), key))
+      )
 
   private def _from_flat_key(
     conf: ResolvedConfiguration,

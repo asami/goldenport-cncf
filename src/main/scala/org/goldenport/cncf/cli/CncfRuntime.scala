@@ -16,13 +16,12 @@ import org.goldenport.bag.Bag
 import org.goldenport.cli.parser.ArgsParser
 import org.goldenport.configuration.{Configuration, ConfigurationOrigin, ConfigurationResolver, ConfigurationSources, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.configuration.source.ConfigurationSource
-import org.goldenport.configuration.source.file.SimpleFileConfigLoader
 import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.cncf.component.builtin.client.{GetQuery, PostCommand}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.assembly.AssemblyReport
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentInit, ComponentOrigin}
-import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig, RuntimeDefaults}
+import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig, RuntimeDefaults, RuntimeFileConfigLoader}
 import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.context.GlobalContext
@@ -59,8 +58,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- *  version Apr. 12, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -700,12 +698,15 @@ object CncfRuntime extends GlobalObservable {
             )
             requestmode match {
               case Some(RunMode.Server) =>
-                startServer(launch.domainArgs.drop(1), extraComponents)
+                val subsystem = buildSubsystem(extraComponents, Some(RunMode.Server), launch.actualArgs)
+                new CncfRuntime().startServer(subsystem, launch.domainArgs.drop(1))
                 0
               case Some(RunMode.Client) =>
-                executeClient(launch.domainArgs.drop(1), extraComponents)
+                val subsystem = buildSubsystem(extraComponents, Some(RunMode.Client), launch.actualArgs)
+                new CncfRuntime().executeClient(subsystem, launch.domainArgs.drop(1))
               case Some(RunMode.Command) =>
-                executeCommand(launch.actualArgs.drop(1), extraComponents)
+                val subsystem = buildSubsystem(extraComponents, Some(RunMode.Command), launch.actualArgs)
+                new CncfRuntime().executeCommand(subsystem, launch.actualArgs.drop(1))
               case Some(RunMode.ServerEmulator) =>
                 executeServerEmulator(launch.domainArgs.drop(1), extraComponents)
               case Some(RunMode.Script) =>
@@ -748,15 +749,18 @@ object CncfRuntime extends GlobalObservable {
             }
             mode match {
               case Some(RunMode.Server) =>
-                startServer(launch.domainArgs.drop(1))
+                val subsystem = buildSubsystem(mode = Some(RunMode.Server), args = launch.actualArgs)
+                new CncfRuntime().startServer(subsystem, launch.domainArgs.drop(1))
                 0
               case Some(RunMode.Client) =>
                 observe_trace(
                   s"[client:trace] run dispatching to client mode args=${launch.domainArgs.drop(1).mkString(" ")}"
                 )
-                executeClient((launch.runtimeParse.consumed ++ launch.domainArgs.drop(1)).toArray)
+                val subsystem = buildSubsystem(mode = Some(RunMode.Client), args = launch.actualArgs)
+                new CncfRuntime().executeClient(subsystem, (launch.runtimeParse.consumed ++ launch.domainArgs.drop(1)).toArray)
               case Some(RunMode.Command) =>
-                executeCommand(launch.actualArgs.drop(1))
+                val subsystem = buildSubsystem(mode = Some(RunMode.Command), args = launch.actualArgs)
+                new CncfRuntime().executeCommand(subsystem, launch.actualArgs.drop(1))
               case Some(RunMode.ServerEmulator) =>
                 executeServerEmulator(launch.domainArgs.drop(1))
               case Some(RunMode.Script) =>
@@ -2149,7 +2153,7 @@ object CncfRuntime extends GlobalObservable {
         origin = ConfigurationOrigin.Arguments,
         path = p,
         rank = ConfigurationSource.Rank.Arguments,
-        loader = new SimpleFileConfigLoader
+        loader = new RuntimeFileConfigLoader
       )
     }.toVector
   }
