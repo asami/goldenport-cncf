@@ -368,6 +368,36 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       dispatcher.paths should contain ("/admin/entity/update")
     }
 
+    "redirect component entity update by admin form descriptor transition" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val descriptor = WebDescriptor(
+        form = Map(
+          "notice-board.admin.entities.notice.update" -> WebDescriptor.Form(
+            successRedirect = Some("/web/${component}/admin/${surface}/${collection}/${id}")
+          )
+        )
+      )
+      val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val recordId = collection.storage.storeRealm.values.head.id.value
+      val req = _post_form_request(
+        s"/form/notice-board/admin/entities/notice/${recordId}/update",
+        "title=board+redirected&author=bob"
+      )
+
+      val response = server
+        ._submit_component_admin_entity_update(req, "notice-board", "notice", recordId)
+        .unsafeRunSync()
+
+      response.status.code shouldBe 303
+      response.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe
+        Some(s"/web/notice-board/admin/entities/notice/${recordId}")
+      collection.storage.storeRealm.values.exists(x => x.id.value == recordId && x.title == "board redirected") shouldBe true
+      dispatcher.paths should contain ("/admin/entity/update")
+    }
+
     "apply component entity create form POST into the EntityCollection fixture" in {
       val subsystem = _management_console_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
@@ -565,6 +595,44 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         _load_data_record(fixture.dataStoreSpace, "audit", "audit_2").getString("actor") shouldBe Some("bob")
         dispatcher.paths should contain ("/admin/data/create")
       }
+    }
+
+    "redirect component data create by admin form descriptor transition" in {
+      val fixture = _data_fixture()
+      _with_global_runtime(fixture.runtime) {
+        val descriptor = WebDescriptor(
+          form = Map(
+            "notice-board.admin.data.audit.create" -> WebDescriptor.Form(
+              successRedirect = Some("/web/${component}/admin/${surface}/${collection}/${result.id}")
+            )
+          )
+        )
+        val engine = new HttpExecutionEngine(fixture.subsystem, Some(descriptor))
+        val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+        val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+        val req = _post_form_request(
+          "/form/notice-board/admin/data/audit/create",
+          "fields=id%3Daudit_3%0Aaction%3Dcreated%0Aactor%3Dbob"
+        )
+
+        val response = server
+          ._submit_component_admin_data_create(req, "notice-board", "audit")
+          .unsafeRunSync()
+
+        response.status.code shouldBe 303
+        response.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe
+          Some("/web/notice-board/admin/data/audit/audit_3")
+        _load_data_record(fixture.dataStoreSpace, "audit", "audit_3").getString("action") shouldBe Some("created")
+        dispatcher.paths should contain ("/admin/data/create")
+      }
+    }
+
+    "extract structured result metadata for form redirect templates" in {
+      FormResultMetadata.fromBody("""{"id":"notice_1"}""").toTemplateValues shouldBe Map("result.id" -> "notice_1")
+      FormResultMetadata.fromBody("""{"result":{"id":"notice_2"}}""").toTemplateValues shouldBe Map("result.id" -> "notice_2")
+      FormResultMetadata.fromBody("""{"item":{"id":"notice_3"}}""").toTemplateValues shouldBe Map("result.id" -> "notice_3")
+      FormResultMetadata.fromBody("created:notice_4").toTemplateValues shouldBe Map("result.id" -> "notice_4")
+      FormResultMetadata.fromBody("""{"message":"created"}""").toTemplateValues shouldBe Map.empty
     }
 
     "render component view administration page" in {

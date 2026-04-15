@@ -137,13 +137,41 @@ Descriptor-controlled transitions are available per form:
 
 Redirect templates can reference `${component}`, `${service}`, `${operation}`,
 submitted form fields such as `${id}`, and result properties such as
-`${result.status}` and `${result.id}`. `${result.id}` is derived from JSON
-response fields named `id`, `result.id`, or `item.id`; scalar `prefix:id`
-responses are also recognized. Aggregate command forms use the same mechanism:
-create forms can redirect to an aggregate list or detail page, while
-update/command forms can redirect to
+`${result.status}` and `${result.id}`. `${result.id}` is extracted by
+`FormResultMetadata` from JSON response fields named `id`, `result.id`, or
+`item.id`; scalar `prefix:id` responses are also recognized.
+
+Admin entity and data create/update forms use the same descriptor mechanism.
+Their descriptor selectors are:
+
+- `{component}.admin.entities.{entity}.create`
+- `{component}.admin.entities.{entity}.update`
+- `{component}.admin.data.{data}.create`
+- `{component}.admin.data.{data}.update`
+
+Admin redirect templates may also reference `${surface}` and `${collection}`.
+For admin create/update, `${result.id}` is the submitted record `id` when
+available, otherwise it falls back to `FormResultMetadata` extraction from the
+Operation result message.
+
+Aggregate command forms use the same mechanism: create forms can redirect to an
+aggregate list or detail page, while update/command forms can redirect to
 `/web/{component}/admin/aggregates/{aggregate}/{id}` when the submitted or
 returned id is available.
+
+## CML And Cozy Generation Contract
+
+CML/Cozy generation should emit Web Descriptor `form` entries rather than
+hard-code HTML behavior in generated pages. Generated descriptors may declare:
+
+- form exposure and transition policy for Operation, admin entity, and admin
+  data forms.
+- control overrides for CML-declared UI intent such as textarea, select,
+  hidden, system, required, and multi-value controls.
+- redirect templates that use the stable property names defined above.
+
+Generated descriptors are defaults. Application descriptors may override them at
+deployment time without regenerating component code.
 
 ## Display Labels
 

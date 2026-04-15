@@ -19,7 +19,6 @@ import org.http4s.dsl.io.*
 import org.http4s.multipart.Multipart
 import org.http4s.server.websocket.WebSocketBuilder2
 import org.http4s.websocket.WebSocketFrame
-import io.circe.parser.parse
 import org.goldenport.record.Record
 import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse}
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
@@ -660,12 +659,12 @@ final class Http4sHttpServer(
       record = Record.create((form.asMap + ("id" -> id)).toVector)
       result = _dispatch_component_admin_entity_record("update", app, entity, record)
       page = StaticFormAppRenderer.renderComponentAdminEntityUpdateResult(app, entity, id, _form_values(record), result._1, result._2)
-      html <- _html(page)
+      html <- _admin_form_transition_response(app, "entities", entity, "update", record, result._1, result._2, page)
     } yield {
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
         req.uri.path.renderString,
-        HStatus.Ok.code,
+        html.status.code,
         (System.nanoTime() - started) / 1000000L
       )
       html
@@ -682,12 +681,12 @@ final class Http4sHttpServer(
       form <- _to_plain_form_record(req)
       result = _dispatch_component_admin_entity_record("create", app, entity, form)
       page = StaticFormAppRenderer.renderComponentAdminEntityCreateResult(app, entity, _form_values(form), result._1, result._2)
-      html <- _html(page)
+      html <- _admin_form_transition_response(app, "entities", entity, "create", form, result._1, result._2, page)
     } yield {
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
         req.uri.path.renderString,
-        HStatus.Ok.code,
+        html.status.code,
         (System.nanoTime() - started) / 1000000L
       )
       html
@@ -706,12 +705,12 @@ final class Http4sHttpServer(
       record = Record.create((form.asMap + ("id" -> id)).toVector)
       result = _dispatch_component_admin_data_record("update", app, data, record)
       page = StaticFormAppRenderer.renderComponentAdminDataUpdateResult(app, data, id, _form_values(record), result._1, result._2)
-      html <- _html(page)
+      html <- _admin_form_transition_response(app, "data", data, "update", record, result._1, result._2, page)
     } yield {
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
         req.uri.path.renderString,
-        HStatus.Ok.code,
+        html.status.code,
         (System.nanoTime() - started) / 1000000L
       )
       html
@@ -728,12 +727,12 @@ final class Http4sHttpServer(
       form <- _to_plain_form_record(req)
       result = _dispatch_component_admin_data_record("create", app, data, form)
       page = StaticFormAppRenderer.renderComponentAdminDataCreateResult(app, data, _form_values(form), result._1, result._2)
-      html <- _html(page)
+      html <- _admin_form_transition_response(app, "data", data, "create", form, result._1, result._2, page)
     } yield {
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
         req.uri.path.renderString,
-        HStatus.Ok.code,
+        html.status.code,
         (System.nanoTime() - started) / 1000000L
       )
       html
@@ -785,6 +784,40 @@ final class Http4sHttpServer(
     }
     (applied, message)
   }
+
+  private def _admin_form_transition_response(
+    app: String,
+    surface: String,
+    collection: String,
+    operation: String,
+    form: Record,
+    applied: Boolean,
+    message: String,
+    fallback: StaticFormAppRenderer.Page
+  ): IO[HResponse[IO]] = {
+    val descriptor = _admin_form_descriptor(app, surface, collection, operation)
+    val redirect =
+      if (applied)
+        descriptor.flatMap(_.successRedirect)
+      else if (descriptor.exists(_.stayOnError))
+        None
+      else
+        descriptor.flatMap(_.failureRedirect)
+    redirect match {
+      case Some(template) =>
+        IO.pure(_see_other(_render_admin_redirect_template(template, app, surface, collection, operation, form, applied, message)))
+      case None =>
+        _html(fallback)
+    }
+  }
+
+  private def _admin_form_descriptor(
+    app: String,
+    surface: String,
+    collection: String,
+    operation: String
+  ): Option[WebDescriptor.Form] =
+    engine.webDescriptor.form.get(Vector(app, "admin", surface, collection, operation).mkString("."))
 
   private def _operation_form_result(
     req: org.http4s.Request[IO],
@@ -909,22 +942,34 @@ final class Http4sHttpServer(
     )
 
   private def _result_values(response: HttpResponse): Map[String, String] = {
-    val body = response.getString.getOrElse("")
-    val jsonValues = parse(body).toOption.toVector.flatMap { json =>
-      val cursor = json.hcursor
-      Vector(
-        cursor.get[String]("id").toOption.map("result.id" -> _),
-        cursor.downField("result").get[String]("id").toOption.map("result.id" -> _),
-        cursor.downField("item").get[String]("id").toOption.map("result.id" -> _)
-      ).flatten
-    }.toMap
-    val scalarId =
-      if (jsonValues.contains("result.id")) Map.empty[String, String]
-      else body.split(":", 2).toList match {
-        case _ :: id :: Nil if id.trim.nonEmpty => Map("result.id" -> id.trim)
-        case _ => Map.empty
-      }
-    jsonValues ++ scalarId
+    FormResultMetadata.fromHttpResponse(response).toTemplateValues
+  }
+
+  private def _render_admin_redirect_template(
+    template: String,
+    app: String,
+    surface: String,
+    collection: String,
+    operation: String,
+    form: Record,
+    applied: Boolean,
+    message: String
+  ): String = {
+    val id = form.getString("id")
+    val resultId = id.orElse(FormResultMetadata.fromBody(message).id)
+    val values =
+      _form_values(form) ++ Map(
+        "component" -> app,
+        "surface" -> surface,
+        "collection" -> collection,
+        "service" -> s"admin.${surface}.${collection}",
+        "operation" -> operation,
+        "result.status" -> (if (applied) "200" else "400"),
+        "result.body" -> message
+      ) ++ id.map("id" -> _).toMap ++ resultId.map("result.id" -> _).toMap
+    """\$\{([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(template, m =>
+      java.util.regex.Matcher.quoteReplacement(values.getOrElse(m.group(1), ""))
+    )
   }
 
   private def _see_other(path: String): HResponse[IO] =
