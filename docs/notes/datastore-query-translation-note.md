@@ -238,6 +238,24 @@ If a DataStore cannot support total count, an optional total request should
 return no total, and a required total request should fail at the caller policy
 layer. EntityStore must not emulate production total count by unbounded fetch.
 
+Default generated View and Aggregate surfaces use this same rule through
+runtime capability resolution. The generated surface is backed by a root entity,
+so its total-count capability is derived from that root entity's EntityStore to
+DataStore mapping in the current `ExecutionContext`. A generated surface may
+have a count implementation but still be unusable for total count when the
+current DataStore reports `Unsupported`.
+
+Runtime callers should use context-aware access APIs for generated surfaces:
+
+- `Browser.query_with_context` and `Browser.count_with_context`
+- `AggregateCollection.query_with_context` and
+  `AggregateCollection.count_with_context`
+
+The context-free APIs are not sufficient for generated default surfaces because
+they cannot see the runtime DataStoreSpace. They remain acceptable for simple
+manual implementations and executable specifications where capability is fixed
+by construction.
+
 ## Next Implementation Steps
 
 1. Extend DataStore `Query` with an expression-bearing case.

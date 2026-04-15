@@ -162,6 +162,30 @@ reports total count support. `optional` degrades to no `total` on unsupported
 stores and returns `totalUnavailableReason` plus a warning message. `required`
 fails with an argument error when total count is unsupported.
 
+View and aggregate read Operations resolve their backing access through the
+runtime `ExecutionContext`. Generated default View and Aggregate surfaces must
+not create a fresh execution context while serving browser reads. The runtime
+context is the authority for EntityStoreSpace, DataStoreSpace, authorization,
+observability, and future Web-tier/Application-tier dispatch separation.
+
+Default generated View browsers use the context-aware Browser API:
+
+- `find_with_context`
+- `query_with_context`
+- `count_with_context`
+
+The context-free `find`, `query`, and `count` methods remain available for
+simple manual Browser implementations and executable specifications, but are
+not the primary runtime path for generated default Views. Generated default
+Views may reject context-free calls when their implementation needs the runtime
+context.
+
+Default generated View and Aggregate total-count capability is resolved from
+the root entity's backing DataStore at runtime. A View or Aggregate can expose a
+count function and still report `Unsupported` for the current runtime if the
+backing DataStore cannot provide total count. Admin paging policy must consult
+the runtime capability before invoking count.
+
 Create/update Operations are synchronous browser form commands in the current
 baseline and return a scalar status message. Their persistence effect must occur
 inside the target Operation, not in the Web HTML route.

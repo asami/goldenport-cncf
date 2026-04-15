@@ -1685,11 +1685,12 @@ object AdminComponent {
       paging <- _paging(args)
       component <- Consequence.fromOption(_component_by_name(subsystem, componentName), s"Component not found: ${componentName}")
       browser <- Consequence.fromOption(_view_browser(component, viewName), s"View browser not found: ${viewName}")
-      pagingDecision <- _paging_with_capability(paging, browser.totalCountCapability, s"view.${viewName}")
+      capability <- browser.totalCountCapabilityWithContext(using core.executionContext)
+      pagingDecision <- _paging_with_capability(paging, capability, s"view.${viewName}")
       effectivePaging = pagingDecision.paging
-      values <- browser.query(EntityQuery.plan(Record.empty, limit = Some(effectivePaging.fetchPageSize), offset = Some(effectivePaging.offset)))
+      values <- browser.query_with_context(EntityQuery.plan(Record.empty, limit = Some(effectivePaging.fetchPageSize), offset = Some(effectivePaging.offset)))(using core.executionContext)
       total <- if (effectivePaging.wantsTotal)
-        browser.count(EntityQuery.plan(Record.empty)).map(Some(_))
+        browser.count_with_context(EntityQuery.plan(Record.empty))(using core.executionContext).map(Some(_))
       else
         Consequence.success(None)
     } yield OperationResponse.RecordResponse(
@@ -1714,7 +1715,8 @@ object AdminComponent {
       paging <- _paging(args)
       component <- Consequence.fromOption(_component_by_name(subsystem, componentName), s"Component not found: ${componentName}")
       collection <- Consequence.fromOption(_aggregate_collection(component, aggregateName), s"Aggregate collection not found: ${aggregateName}")
-      pagingDecision <- _paging_with_capability(paging, collection.totalCountCapability, s"aggregate.${aggregateName}")
+      capability <- collection.totalCountCapabilityWithContext(using core.executionContext)
+      pagingDecision <- _paging_with_capability(paging, capability, s"aggregate.${aggregateName}")
       effectivePaging = pagingDecision.paging
       values <- collection.query_with_context(EntityQuery.plan(Record.empty, limit = Some(effectivePaging.fetchPageSize), offset = Some(effectivePaging.offset)))(using core.executionContext)
       total <- if (effectivePaging.wantsTotal)

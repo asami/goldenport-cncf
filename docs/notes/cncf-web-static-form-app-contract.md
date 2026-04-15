@@ -400,6 +400,28 @@ Descriptor admin surface must declare `totalCount=optional` or
 `totalCount=required`; otherwise `includeTotal` is ignored and the page keeps
 using `hasNext`-only paging.
 
+Management Console view and aggregate list/read pages do not call ViewSpace or
+AggregateSpace directly from HTML rendering. They execute admin Operations and
+render the returned Operation response. Inside those Operations, generated
+default View browsers and Aggregate collections use context-aware runtime
+access:
+
+- View: `find_with_context`, `query_with_context`, `count_with_context`
+- Aggregate: `query_with_context`, `count_with_context`
+
+This is required because generated default surfaces may need the active
+`ExecutionContext` to resolve EntityStoreSpace, DataStoreSpace, authorization,
+observability, and DataStore total-count capability. Context-free Browser
+methods are still useful for simple manual implementations and tests, but the
+Form Web runtime path should use the context-aware API.
+
+The total count policy is evaluated in two stages. First, the Web Descriptor
+admin surface decides whether total count is disabled, optional, or required.
+Second, the runtime backing store decides whether total count is actually
+available. Optional requests degrade to `hasNext` paging with a warning when the
+store reports unsupported; required requests fail at the admin Operation
+boundary.
+
 ## Management Console CRUD Flow
 
 The Management Console is the first practical driver for Form Web CRUD

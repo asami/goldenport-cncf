@@ -2,20 +2,22 @@ package org.goldenport.cncf.component
 
 import cats.data.{NonEmptyVector, State}
 import cats.effect.Ref
+import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.protocol.spec as spec
 import org.goldenport.protocol.Request
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
-import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.datastore.TotalCountCapability
+import org.goldenport.cncf.context.{CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, RuntimeContext, TraceId}
+import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace, TotalCountCapability}
 import org.goldenport.cncf.directive.Query
-import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
+import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.aggregate.{AggregateDefinition, AggregateMemberDefinition}
 import org.goldenport.cncf.entity.view.{ViewDefinition, ViewQueryDefinition}
 import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.goldenport.record.Record
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -62,12 +64,34 @@ final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with 
       _invoke_bootstrap_views(factory, component)
 
       val browser = component.viewSpace.browser[Any]("person_view")
-      browser.totalCountCapability shouldBe TotalCountCapability.Supported
-      browser.count(Query.plan(Record.empty, includeTotal = true)).TAKE shouldBe 2
+      browser.totalCountCapability shouldBe TotalCountCapability.Unsupported
+      browser.totalCountCapabilityWithContext.TAKE shouldBe TotalCountCapability.Supported
+      browser.count_with_context(Query.plan(Record.empty, includeTotal = true)).TAKE shouldBe 2
 
       val aggregate = component.aggregateSpace.collection[Any]("person_aggregate")
-      aggregate.totalCountCapability shouldBe TotalCountCapability.Supported
+      aggregate.totalCountCapability shouldBe TotalCountCapability.Unsupported
+      aggregate.totalCountCapabilityWithContext.TAKE shouldBe TotalCountCapability.Supported
       aggregate.count_with_context(Query.plan(Record.empty, includeTotal = true)).TAKE shouldBe 2
+    }
+
+    "derive unsupported total count capability from a non-searchable datastore" in {
+      given EntityPersistent[_PersonEntity] = _persistent
+      given ExecutionContext = _execution_context(DataStore.noop())
+      val component = _create_component_with_metadata()
+      component.entitySpace.registerEntity("person", _collection(Vector(
+        _PersonEntity(EntityId("m", "a", _cid), "taro", "Tokyo"),
+        _PersonEntity(EntityId("m", "b", _cid), "hanako", "Osaka")
+      )))
+      val factory = new ComponentFactory()
+
+      _invoke_bootstrap_aggregates(factory, component)
+      _invoke_bootstrap_views(factory, component)
+
+      val browser = component.viewSpace.browser[Any]("person_view")
+      browser.totalCountCapabilityWithContext.TAKE shouldBe TotalCountCapability.Unsupported
+
+      val aggregate = component.aggregateSpace.collection[Any]("person_aggregate")
+      aggregate.totalCountCapabilityWithContext.TAKE shouldBe TotalCountCapability.Unsupported
     }
   }
 
@@ -197,6 +221,40 @@ final class ComponentFactoryAggregateViewBootstrapSpec extends AnyWordSpec with 
       def fromRecord(r: Record): Consequence[_PersonEntity] =
         Consequence.notImplemented("not used")
     }
+
+  private def _execution_context(
+    datastore: DataStore
+  ): ExecutionContext = {
+    val datastorespace = new DataStoreSpace().addDataStore(datastore)
+    val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+    val observability = ObservabilityContext(
+      traceId = TraceId("test", "aggregate_view_bootstrap"),
+      spanId = None,
+      correlationId = Some(CorrelationId("test", "aggregate_view_bootstrap"))
+    )
+    lazy val context: ExecutionContext = ExecutionContext.create(runtime)
+    lazy val runtime: RuntimeContext = new RuntimeContext(
+      core = RuntimeContext.core(
+        name = "aggregate-view-bootstrap-runtime",
+        parent = None,
+        observabilityContext = observability,
+        datastore = Some(DataStoreContext(datastorespace)),
+        entitystore = Some(EntityStoreContext(entitystorespace))
+      ),
+      unitOfWorkSupplier = () => new UnitOfWork(context),
+      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+        def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] = {
+          val _ = fa
+          throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in this spec")
+        }
+      },
+      commitAction = _.commit(),
+      abortAction = _.rollback(),
+      disposeAction = _ => (),
+      token = "aggregate-view-bootstrap-runtime"
+    )
+    context
+  }
 }
 
 private final case class _NoopOperation(

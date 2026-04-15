@@ -4,6 +4,7 @@ import scala.collection.mutable
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.EntityId
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.entity.runtime.Collection
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
@@ -11,11 +12,18 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 /*
  * @since   Mar. 14, 2026
  *  version Mar. 24, 2026
- * @version Apr.  4, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ViewBuilder[V] {
   def build(id: EntityId): Consequence[V]
+}
+
+trait ContextualViewBuilder[V] extends ViewBuilder[V] {
+  def build_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[V]
+
+  override def build(id: EntityId): Consequence[V] =
+    Consequence.operationInvalid("ExecutionContext is required for contextual view builder")
 }
 
 final class ViewCollection[V](
@@ -51,6 +59,35 @@ final class ViewCollection[V](
         }
     }
   }
+
+  def resolve_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[V] = synchronized {
+    _entityCache.get(id) match {
+      case Some(v) =>
+        _touch_entity(id, v)
+        _emit_metric("view.load.hit", Record.dataAuto(
+          "entity" -> metricsName,
+          "source" -> "view-cache",
+          "outcome" -> "hit"
+        ))
+        Consequence.success(v)
+      case None =>
+        _build_with_context(id).map { v =>
+          _put_entity(id, v)
+          _emit_metric("view.load.miss", Record.dataAuto(
+            "entity" -> metricsName,
+            "source" -> "view-cache",
+            "outcome" -> "miss"
+          ))
+          v
+        }
+    }
+  }
+
+  private def _build_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[V] =
+    builder match {
+      case m: ContextualViewBuilder[V @unchecked] => m.build_with_context(id)
+      case _ => builder.build(id)
+    }
 
   def query(
     q: Query[_]

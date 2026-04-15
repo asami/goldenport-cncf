@@ -260,6 +260,27 @@ effectively impossible, while `required` fails with a structured argument error.
 Optional degradation returns `totalUnavailableReason` and a warning message for
 HTML rendering. Richer count capability classes remain follow-up work.
 
+The default generated view and aggregate implementation now resolves total
+count capability at runtime from the root entity's backing DataStore. The
+surface-level object can provide a count function, but admin paging treats total
+count as usable only when the current `ExecutionContext` reports a supporting
+DataStore. This keeps the same component definition usable with in-memory,
+SQLite, and future NoSQL backends without pretending that every backend can
+count cheaply.
+
+Generated default View browsers use context-aware access paths:
+
+- `find_with_context`
+- `query_with_context`
+- `count_with_context`
+
+The implementation routes these through the caller's `ExecutionContext` instead
+of creating a new context. That context carries the active EntityStoreSpace,
+DataStoreSpace, authorization, observability, and future Web-tier to
+Application-tier dispatch assumptions. Context-free Browser methods remain
+usable for simple manual fixtures, but generated default Views should be
+accessed through the context-aware API in runtime code.
+
 Entity and data Management Console list pages read `page`, `pageSize`, and
 `includeTotal` from the `/web/...` query string and pass them to the admin query
 Operation together with the Descriptor-derived `totalCountPolicy`. The HTML

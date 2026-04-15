@@ -33,7 +33,8 @@ final class AggregateCollection[A](
   builder: AggregateBuilder[A],
   queryfn: Query[?] => Consequence[Vector[A]] = _ => Consequence.notImplemented("AggregateCollection.query is not supported"),
   countfn: Option[Query[?] => Consequence[Int]] = None,
-  totalCountCapabilityValue: TotalCountCapability = TotalCountCapability.Unsupported
+  totalCountCapabilityValue: TotalCountCapability = TotalCountCapability.Unsupported,
+  totalCountCapabilityWithContextFn: Option[ExecutionContext => Consequence[TotalCountCapability]] = None
 ) extends Collection[A] {
   def resolve_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[A] =
     builder match {
@@ -56,16 +57,28 @@ final class AggregateCollection[A](
   def totalCountCapability: TotalCountCapability =
     if (countfn.isDefined) totalCountCapabilityValue else TotalCountCapability.Unsupported
 
+  def totalCountCapabilityWithContext(using ctx: ExecutionContext): Consequence[TotalCountCapability] =
+    totalCountCapabilityWithContextFn.map(_(ctx)).getOrElse(Consequence.success(totalCountCapability))
+
   def count_with_context(q: Query[?])(using ctx: ExecutionContext): Consequence[Int] =
-    countfn match {
-      case Some(m: ContextualAggregateCount @unchecked) => m.count_with_context(q)
-      case Some(f) => f(q)
-      case None => count(q)
+    totalCountCapabilityWithContext.flatMap {
+      case m if m.supportsTotalCount =>
+        countfn match {
+          case Some(m: ContextualAggregateCount @unchecked) => m.count_with_context(q)
+          case Some(f) => f(q)
+          case None => count(q)
+        }
+      case m =>
+        Consequence.operationInvalid(s"Aggregate total count is not supported: ${m}")
     }
 
   def count(q: Query[?]): Consequence[Int] =
-    countfn.map(_(q)).getOrElse {
+    if (!totalCountCapability.supportsTotalCount) {
       Consequence.operationInvalid(s"Aggregate total count is not supported: ${totalCountCapability}")
+    } else {
+      countfn.map(_(q)).getOrElse {
+        Consequence.operationInvalid(s"Aggregate total count is not supported: ${totalCountCapability}")
+      }
     }
 }
 

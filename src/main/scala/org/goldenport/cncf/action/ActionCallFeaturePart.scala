@@ -519,7 +519,7 @@ trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Cor
     collectionname: String,
     id: EntityId
   ): Consequence[A] =
-    browser.browser[A](collectionname).find(id)
+    browser.browser[A](collectionname).find_with_context(id)(using execution_context)
 
   protected final def view_load_or_throw[A](
     collectionname: String,
@@ -539,7 +539,7 @@ trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Cor
     viewname: String,
     id: EntityId
   ): Consequence[A] =
-    browser.browser[A](collectionname, viewname).find(id)
+    browser.browser[A](collectionname, viewname).find_with_context(id)(using execution_context)
 
   protected final def view_load_or_throw[A](
     collectionname: String,
