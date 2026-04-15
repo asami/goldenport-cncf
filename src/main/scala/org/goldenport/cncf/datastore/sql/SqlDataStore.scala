@@ -1,6 +1,7 @@
 package org.goldenport.cncf.datastore.sql
 
 import java.sql.Connection
+import java.sql.PreparedStatement
 import javax.sql.DataSource
 import com.zaxxer.hikari.{HikariConfig, HikariDataSource}
 import org.goldenport.Consequence
@@ -24,12 +25,12 @@ import org.goldenport.cncf.datastore.{
   TotalCountCapability
 }
 import org.goldenport.cncf.unitofwork.{CommitRecorder, PrepareResult, TransactionContext}
+import org.goldenport.cncf.directive.{Query as EntityQuery}
 
 /*
  * @since   Mar. 12, 2026
  *  version Mar. 19, 2026
  *  version Mar. 31, 2026
- *  version Apr.  3, 2026
  * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -114,7 +115,7 @@ class SqlDataStore(
     directive: QueryDirective
   ): Consequence[SearchResult] =
     directive.query match {
-      case Query.Empty =>
+      case Query.Empty | Query.Expr(_) =>
         _with_connection { conn =>
           _table_exists(conn, collection).flatMap { exists =>
             if (exists)
@@ -438,9 +439,10 @@ class SqlDataStore(
   ): Consequence[SearchResult] =
     Consequence {
       val sql = _search_sql(collection, directive)
-      val stmt = conn.createStatement()
+      val stmt = conn.prepareStatement(sql.sql)
       try {
-        val rs = stmt.executeQuery(sql)
+        _bind(stmt, sql.params)
+        val rs = stmt.executeQuery()
         try {
           val buf = Vector.newBuilder[Record]
           while (rs.next()) {
@@ -463,7 +465,7 @@ class SqlDataStore(
   private def _search_sql(
     collection: CollectionId,
     directive: QueryDirective
-  ): String = {
+  ): SqlDataStore.SqlStatement = {
     val select = directive.projection match {
       case QueryProjection.All =>
         "*"
@@ -487,8 +489,95 @@ class SqlDataStore(
       case QueryLimit.Limit(n) =>
         s" LIMIT ${math.max(0, n)}"
     }
-    s"SELECT $select FROM ${dialect.quote_identifier(_table_name(collection))}$order$limit"
+    val where = _where_sql(directive.query)
+    SqlDataStore.SqlStatement(
+      s"SELECT $select FROM ${dialect.quote_identifier(_table_name(collection))}${where.sql}$order$limit",
+      where.params
+    )
   }
+
+  private def _where_sql(query: Query): SqlDataStore.SqlStatement =
+    query match {
+      case Query.Empty =>
+        SqlDataStore.SqlStatement.empty
+      case Query.Expr(expr) =>
+        _expr_sql(expr) match {
+          case SqlDataStore.SqlStatement.Empty => SqlDataStore.SqlStatement.empty
+          case x => x.copy(sql = s" WHERE ${x.sql}")
+        }
+    }
+
+  private def _expr_sql(expr: EntityQuery.Expr): SqlDataStore.SqlStatement =
+    expr match {
+      case EntityQuery.True =>
+        SqlDataStore.SqlStatement.Empty
+      case EntityQuery.False =>
+        SqlDataStore.SqlStatement("1 = 0")
+      case EntityQuery.And(items) =>
+        _join_expr(items, "AND")
+      case EntityQuery.Or(items) =>
+        _join_expr(items, "OR")
+      case EntityQuery.Not(item) =>
+        val x = _expr_sql(item)
+        if (x.isEmpty) SqlDataStore.SqlStatement.Empty else x.copy(sql = s"NOT (${x.sql})")
+      case EntityQuery.Eq(path, value) =>
+        _binary(path, "=", value)
+      case EntityQuery.Ne(path, value) =>
+        _binary(path, "<>", value)
+      case EntityQuery.Gt(path, value) =>
+        _binary(path, ">", value)
+      case EntityQuery.Gte(path, value) =>
+        _binary(path, ">=", value)
+      case EntityQuery.Lt(path, value) =>
+        _binary(path, "<", value)
+      case EntityQuery.Lte(path, value) =>
+        _binary(path, "<=", value)
+      case EntityQuery.Contains(path, value, caseInsensitive) =>
+        _like(path, s"%$value%", caseInsensitive)
+      case EntityQuery.StartsWith(path, value, caseInsensitive) =>
+        _like(path, s"$value%", caseInsensitive)
+      case EntityQuery.EndsWith(path, value, caseInsensitive) =>
+        _like(path, s"%$value", caseInsensitive)
+      case EntityQuery.Like(path, pattern, caseInsensitive) =>
+        _like(path, pattern, caseInsensitive)
+      case EntityQuery.IsNull(path) =>
+        SqlDataStore.SqlStatement(s"${_column_ref(path)} IS NULL")
+      case EntityQuery.IsNotNull(path) =>
+        SqlDataStore.SqlStatement(s"${_column_ref(path)} IS NOT NULL")
+      case _ =>
+        SqlDataStore.SqlStatement.Empty
+    }
+
+  private def _join_expr(
+    items: Vector[EntityQuery.Expr],
+    op: String
+  ): SqlDataStore.SqlStatement = {
+    val xs = items.map(_expr_sql).filterNot(_.isEmpty)
+    if (xs.isEmpty)
+      SqlDataStore.SqlStatement.Empty
+    else
+      SqlDataStore.SqlStatement(
+        xs.map(x => s"(${x.sql})").mkString(s" $op "),
+        xs.flatMap(_.params)
+      )
+  }
+
+  private def _binary(path: String, op: String, value: Any): SqlDataStore.SqlStatement =
+    SqlDataStore.SqlStatement(s"${_column_ref(path)} $op ?", Vector(_column_value(value)))
+
+  private def _like(path: String, pattern: String, caseInsensitive: Boolean): SqlDataStore.SqlStatement =
+    if (caseInsensitive)
+      SqlDataStore.SqlStatement(s"LOWER(${_column_ref(path)}) LIKE LOWER(?)", Vector(pattern))
+    else
+      SqlDataStore.SqlStatement(s"${_column_ref(path)} LIKE ?", Vector(pattern))
+
+  private def _column_ref(path: String): String =
+    dialect.quote_identifier(_column_name(path))
+
+  private def _bind(stmt: PreparedStatement, params: Vector[Any]): Unit =
+    params.zipWithIndex.foreach { case (value, index) =>
+      stmt.setObject(index + 1, value)
+    }
 
   private def _record_from_result_set(
     rs: java.sql.ResultSet
@@ -564,6 +653,18 @@ class SqlDataStore(
 }
 
 object SqlDataStore {
+  final case class SqlStatement(
+    sql: String,
+    params: Vector[Any] = Vector.empty
+  ) {
+    def isEmpty: Boolean = sql.isEmpty
+  }
+
+  object SqlStatement {
+    val Empty: SqlStatement = SqlStatement("")
+    val empty: SqlStatement = Empty
+  }
+
   final case class Config(
     normalizeColumnNames: Boolean = false
   )

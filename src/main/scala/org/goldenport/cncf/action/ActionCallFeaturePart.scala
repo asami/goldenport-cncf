@@ -30,6 +30,7 @@ import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.cncf.action.AggregateBehavior
 import org.goldenport.cncf.observability.{DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
+import org.goldenport.configuration.ConfigurationValue
 
 /*
  * @since   Jan.  6, 2026
@@ -864,39 +865,87 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     _emit_entity_access("entity.search.start", _entity_search_attributes(query, "unknown", "start"))
     component.flatMap(_.entitySpace.entityOption[T](query.collection.name)) match {
       case Some(collection) =>
-        _emit_entity_access("entity.search.try.entity-space", _entity_search_attributes(query, "entity-space", "try"))
-        val hasresident =
-          collection.storage.storeRealm.values.nonEmpty ||
-            collection.storage.memoryRealm.exists(_.values.nonEmpty)
-        if (hasresident) {
-          _emit_entity_access("entity.search.hit.entity-space", _entity_search_attributes(query, "entity-space", "hit"))
-          val authorization = _entity_uow_authorization(Some(query.collection.name), None, "search/list")
-          exec_from(
-            collection.search(query)(using execution_context).flatMap { result =>
-              authorization
-                .map(OperationAccessPolicy.filterVisibleSearchResult(_, result, tc)(using execution_context))
-                .getOrElse(Consequence.success(result))
-            }
-          )
+        if (_bypass_entity_space_resident_search) {
+          _emit_entity_access("entity.search.bypass.entity-space", _entity_search_attributes(query, "entity-space", "bypass"))
+          _entity_store_search(query, tc)
         } else {
-          _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(query, "entity-store", "fallback"))
-          val op = UnitOfWorkOp.EntityStoreSearch(
-            query,
-            tc,
-            _entity_uow_authorization(Some(query.collection.name), None, "search/list")
-          )
-          ConsequenceT.liftF(Free.liftF(op))
+          _emit_entity_access("entity.search.try.entity-space", _entity_search_attributes(query, "entity-space", "try"))
+          val hasresident =
+            collection.storage.storeRealm.values.nonEmpty ||
+              collection.storage.memoryRealm.exists(_.values.nonEmpty)
+          if (hasresident) {
+            _emit_entity_access("entity.search.hit.entity-space", _entity_search_attributes(query, "entity-space", "hit"))
+            val authorization = _entity_uow_authorization(Some(query.collection.name), None, "search/list")
+            exec_from(
+              collection.search(query)(using execution_context).flatMap { result =>
+                authorization
+                  .map(OperationAccessPolicy.filterVisibleSearchResult(_, result, tc)(using execution_context))
+                  .getOrElse(Consequence.success(result))
+              }
+            )
+          } else {
+            _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(query, "entity-store", "fallback"))
+            val op = UnitOfWorkOp.EntityStoreSearch(
+              query,
+              tc,
+              _entity_uow_authorization(Some(query.collection.name), None, "search/list")
+            )
+            ConsequenceT.liftF(Free.liftF(op))
+          }
         }
       case None =>
         _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(query, "entity-store", "fallback"))
-        val op = UnitOfWorkOp.EntityStoreSearch(
-          query,
-          tc,
-          _entity_uow_authorization(Some(query.collection.name), None, "search/list")
-        )
-        ConsequenceT.liftF(Free.liftF(op))
+        _entity_store_search(query, tc)
     }
   }
+
+  private def _entity_store_search[T](
+    query: EntityQuery[T],
+    tc: EntityPersistent[T]
+  ): ExecUowM[SearchResult[T]] = {
+    val op = UnitOfWorkOp.EntityStoreSearch(
+      query,
+      tc,
+      _entity_uow_authorization(Some(query.collection.name), None, "search/list")
+    )
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  private def _bypass_entity_space_resident_search: Boolean =
+    _bypass_all_resident_search ||
+      _config_bool(
+        "textus.entity.search.bypass-entity-space-resident",
+        "cncf.entity.search.bypass-entity-space-resident"
+      )
+
+  private def _bypass_all_resident_search: Boolean =
+    _config_bool(
+      "textus.entity.search.bypass-resident",
+      "cncf.entity.search.bypass-resident"
+    )
+
+  private def _config_bool(primary: String, compatibility: String): Boolean =
+    _config_bool(primary) || _config_bool(compatibility)
+
+  private def _config_bool(key: String): Boolean =
+    component
+      .flatMap(_.subsystem)
+      .flatMap(_.configurationValue(key))
+      .exists(_truthy)
+
+  private def _truthy(value: ConfigurationValue): Boolean =
+    _config_string(value).exists { x =>
+      val v = x.trim.toLowerCase(java.util.Locale.ROOT)
+      v == "true" || v == "yes" || v == "on" || v == "1"
+    }
+
+  private def _config_string(value: ConfigurationValue): Option[String] =
+    value match {
+      case ConfigurationValue.StringValue(v) => Some(v)
+      case ConfigurationValue.BooleanValue(v) => Some(v.toString)
+      case ConfigurationValue.NumberValue(v) => Some(v.toString)
+      case _ => None
+    }
 
   protected final def entity_search[T](
     collection: EntityCollectionId,

@@ -438,6 +438,7 @@ final case class QueryDirective(
 sealed trait Query
 object Query {
   case object Empty extends Query
+  final case class Expr(where: org.goldenport.cncf.directive.Query.Expr) extends Query
 }
 
 sealed trait QueryProjection

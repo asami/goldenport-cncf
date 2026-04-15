@@ -10,7 +10,7 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.datatype.EntityCollectionId
 import org.goldenport.cncf.directive.{Query as EntityDirectiveQuery, SearchResult}
-import org.goldenport.cncf.datastore.{DataStore, QueryDirective, QueryLimit, QueryOrder, OrderDirection}
+import org.goldenport.cncf.datastore.{DataStore, Query as DataStoreQuery, QueryDirective, QueryLimit, QueryOrder, OrderDirection}
 import org.goldenport.cncf.datastore.DataStore.EntryId
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
@@ -21,7 +21,7 @@ import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
  *  version Jan. 10, 2026
  *  version Feb. 26, 2026
  *  version Mar. 30, 2026
- * @version Apr.  5, 2026
+ * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -249,9 +249,9 @@ class StandardEntityStore(
       raw <- ctx.dataStoreSpace.search(
         cid,
         QueryDirective(
-          query = org.goldenport.cncf.datastore.Query.Empty,
+          query = DataStoreQuery.Expr(EntityDirectiveQuery.whereOf(query.query)),
           order = _to_datastore_order(query.query.sort),
-          limit = QueryLimit.Unbounded
+          limit = _to_datastore_limit(query.query.limit)
         )
       )
       notdeleted = raw.records.toVector.filterNot(_is_logically_deleted_record)
@@ -285,6 +285,11 @@ class StandardEntityStore(
       fetchedCount = values.size
     )
   }
+
+  private def _to_datastore_limit(
+    limit: Option[Int]
+  ): QueryLimit =
+    limit.map(QueryLimit.Limit.apply).getOrElse(QueryLimit.Unbounded)
 
   private final case class _VisibilityPolicy(
     postStatuses: Option[Set[String]],

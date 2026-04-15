@@ -4,6 +4,7 @@ import java.nio.file.Files
 import org.goldenport.Consequence
 import org.goldenport.convert.ValueReader
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.directive.{Query as EntityQuery}
 import org.goldenport.cncf.datastore.sql.SqlDataStore
 import org.goldenport.record.Record
 import org.goldenport.test.matchers.ConsequenceMatchers
@@ -15,8 +16,6 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 12, 2026
  *  version Mar. 12, 2026
- *  version Apr.  3, 2026
- *  version Apr. 14, 2026
  * @version Apr. 15, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -185,6 +184,36 @@ class SqliteDataStoreSpec
           records.map(_.getString("id")) shouldBe Vector(Some("b2"), Some("a1"))
           records.map(_.getString("name")) shouldBe Vector(Some("bravo"), Some("alpha"))
           records.foreach(_.getString("priority") shouldBe None)
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+    }
+
+    "push down query expressions into sqlite search" in {
+      val path = Files.createTempFile("cncf-sqlite-query", ".db").toString
+      val datastore = SqlDataStore.sqlite(path)
+      val collection = DataStore.CollectionId("queryable")
+      val ctx = ExecutionContext.create()
+      given ExecutionContext = ctx
+
+      datastore.create(collection, DataStore.StringEntryId("a1"), Record.data("id" -> "a1", "recipientName" -> "bob", "body" -> "Hello SQLite")) should be_success
+      datastore.create(collection, DataStore.StringEntryId("b2"), Record.data("id" -> "b2", "recipientName" -> "bob", "body" -> "Other text")) should be_success
+      datastore.create(collection, DataStore.StringEntryId("c3"), Record.data("id" -> "c3", "recipientName" -> "alice", "body" -> "Hello SQLite")) should be_success
+
+      val result = datastore.search(
+        collection,
+        QueryDirective(
+          query = Query.Expr(EntityQuery.And(Vector(
+            EntityQuery.Eq("recipientName", "bob"),
+            EntityQuery.Contains("body", "sqlite", caseInsensitive = true)
+          )))
+        )
+      )
+
+      result should be_success
+      result match {
+        case Consequence.Success(SearchResult(records, ResultRange.Exact, None)) =>
+          records.map(_.getString("id")) shouldBe Vector(Some("a1"))
         case other =>
           fail(s"unexpected result: $other")
       }
