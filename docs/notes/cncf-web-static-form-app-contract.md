@@ -451,6 +451,20 @@ field vector, while list pages may opt into an explicit `id`-first strategy.
 See `docs/notes/cncf-web-descriptor-minimum-schema.md` for the current merge and
 ordering rules.
 
+Implementation checkpoint:
+
+- Operation HTML forms and Operation form definition JSON share the same
+  resolved schema.
+- Admin Entity create/update HTML forms and Entity form definition JSON share
+  the same resolved schema.
+- Admin Data create/update HTML forms and Data form definition JSON use the
+  same resolver path. When no declared schema exists, Data can still infer a
+  best-effort field set from admin Data records.
+- Admin View and Aggregate read form definition JSON resolve from their root
+  entity schema plus WebDescriptor admin controls.
+- Aggregate create and command screens remain Operation forms, so their schema
+  source is the Aggregate Operation parameter definition.
+
 The required browser-visible flow is:
 
 - list page with paging

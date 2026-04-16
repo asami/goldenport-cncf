@@ -7,6 +7,7 @@ import cats.effect.IO
 import cats.effect.Ref
 import cats.effect.unsafe.implicits.global
 import cats.data.NonEmptyVector
+import io.circe.HCursor
 import io.circe.Json
 import io.circe.parser.parse
 import org.http4s.{Method, Request, Uri}
@@ -583,6 +584,27 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Use one name=value pair per line")
     }
 
+    "render component entity new page from merged Schema and WebDescriptor controls" in {
+      val (subsystem, descriptor) = _entity_schema_web_descriptor_fixture()
+
+      val html = StaticFormAppRenderer.renderComponentAdminEntityNew(
+        subsystem,
+        "notice_board",
+        "notice",
+        webDescriptor = descriptor
+      ).map(_.body).getOrElse(fail("component entity new admin is missing"))
+
+      html should include ("name=\"id\"")
+      html should include ("name=\"body\"")
+      html should include ("name=\"status\"")
+      html should include ("Notice body")
+      html should include ("<textarea")
+      html should include ("placeholder=\"Descriptor body placeholder.\"")
+      html should include ("Descriptor body help.")
+      html should include ("<select")
+      html should include ("<option value=\"archived\"")
+    }
+
     "redisplay admin entity create validation errors before dispatching" in {
       val descriptor = ComponentDescriptor(
         componentName = Some("notice_board"),
@@ -667,6 +689,47 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/admin/admin/entities/sales-order/new")
     }
 
+    "render component entity edit page from merged Schema and WebDescriptor controls" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val recordId = _notice_fixture_component(subsystem).
+        entitySpace.
+        entity[_NoticeEntity]("notice").
+        storage.
+        storeRealm.
+        values.
+        head.
+        id.
+        value
+      val descriptor = WebDescriptor(admin = Map(
+        "notice-board.entity.notice" -> WebDescriptor.AdminSurface(fields = Vector(
+          WebDescriptor.AdminField("id", WebDescriptor.FormControl(readonly = true)),
+          WebDescriptor.AdminField(
+            "title",
+            WebDescriptor.FormControl(
+              placeholder = Some("Descriptor title placeholder."),
+              help = Some("Descriptor title help.")
+            )
+          ),
+          WebDescriptor.AdminField("author", WebDescriptor.FormControl(hidden = true))
+        ))
+      ))
+
+      val html = StaticFormAppRenderer.renderComponentAdminEntityEdit(
+        subsystem,
+        "notice_board",
+        "notice",
+        recordId,
+        webDescriptor = descriptor
+      ).map(_.body).getOrElse(fail("component entity edit admin is missing"))
+
+      html should include ("id=\"field-id\"")
+      html should include ("readonly")
+      html should include ("value=\"board update\"")
+      html should include ("placeholder=\"Descriptor title placeholder.\"")
+      html should include ("Descriptor title help.")
+      html should include ("type=\"hidden\" id=\"field-author\" name=\"author\" value=\"alice\"")
+    }
+
     "render component data administration page" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
@@ -740,18 +803,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
     "render admin CRUD forms from WebDescriptor field controls" in {
       val fixture = _data_fixture()
-      val descriptor = WebDescriptor(
-        admin = Map(
-          "data.audit" -> WebDescriptor.AdminSurface(
-            fields = Vector(
-              WebDescriptor.AdminField("id"),
-              WebDescriptor.AdminField("action", WebDescriptor.FormControl(controlType = Some("select"), values = Vector("created", "updated"))),
-              WebDescriptor.AdminField("actor", WebDescriptor.FormControl(required = Some(true))),
-              WebDescriptor.AdminField("note", WebDescriptor.FormControl(controlType = Some("textarea")))
-            )
-          )
-        )
-      )
+      val descriptor = _data_schema_web_descriptor()
       _with_global_runtime(fixture.runtime) {
         val edit = StaticFormAppRenderer.renderComponentAdminDataEdit(
           fixture.subsystem,
@@ -772,6 +824,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         edit should include ("<option value=\"created\" selected>")
         edit should include ("name=\"actor\"")
         edit should include ("required")
+        edit should include ("placeholder=\"Descriptor actor placeholder.\"")
+        edit should include ("Descriptor actor help.")
         edit should include ("name=\"note\"")
         edit should include ("<textarea")
         newly should include ("name=\"note\"")
@@ -1541,7 +1595,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         form = Map(selector -> WebDescriptor.Form(
           controls = Map(
             "accessToken" -> WebDescriptor.FormControl(hidden = true),
-            "body" -> WebDescriptor.FormControl(controlType = Some("select"), values = Vector("hello", "world"))
+            "body" -> WebDescriptor.FormControl(
+              controlType = Some("select"),
+              values = Vector("hello", "world"),
+              placeholder = Some("Descriptor body placeholder."),
+              help = Some("Descriptor body help.")
+            )
           )
         ))
       )
@@ -1558,6 +1617,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("<select")
       html should include ("<option value=\"hello\" selected>")
       html should include ("Notice body")
+      html should include ("Descriptor body help.")
       html should include ("name=\"body\"")
       html should include ("type=\"hidden\"")
       html should include ("name=\"accessToken\"")
@@ -1571,7 +1631,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         form = Map(selector -> WebDescriptor.Form(
           controls = Map(
             "accessToken" -> WebDescriptor.FormControl(hidden = true),
-            "body" -> WebDescriptor.FormControl(controlType = Some("select"), values = Vector("hello", "world"))
+            "body" -> WebDescriptor.FormControl(
+              controlType = Some("select"),
+              values = Vector("hello", "world"),
+              placeholder = Some("Descriptor body placeholder."),
+              help = Some("Descriptor body help.")
+            )
           )
         ))
       )
@@ -1601,6 +1666,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       fields.downN(0).downField("type").as[String].toOption shouldBe Some("select")
       fields.downN(0).downField("required").as[Boolean].toOption shouldBe Some(true)
       fields.downN(0).downField("values").as[Vector[String]].toOption shouldBe Some(Vector("hello", "world"))
+      fields.downN(0).downField("placeholder").as[String].toOption shouldBe Some("Descriptor body placeholder.")
+      fields.downN(0).downField("help").as[String].toOption shouldBe Some("Descriptor body help.")
       fields.downN(1).downField("name").as[String].toOption shouldBe Some("accessToken")
       fields.downN(1).downField("hidden").as[Boolean].toOption shouldBe Some(true)
     }
@@ -1690,6 +1757,37 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       names shouldBe Vector("id", "name", "status")
     }
 
+    "serve admin entity form definition API from merged Schema and WebDescriptor controls" in {
+      val (subsystem, descriptor) = _entity_schema_web_descriptor_fixture()
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+
+      val response = server
+        ._component_admin_entity_form_api_definition(
+          _get_request("/form-api/notice-board/admin/entities/notice"),
+          "notice-board",
+          "notice"
+        )
+        .unsafeRunSync()
+      val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("entity form definition JSON is invalid"))
+      val fields = _json_fields(json)
+      val names = _json_field_names(fields)
+      val body = _json_field(fields, "body")
+      val status = _json_field(fields, "status")
+
+      response.status.code shouldBe 200
+      response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
+      json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.entity.notice")
+      json.hcursor.downField("surface").as[String].toOption shouldBe Some("entity")
+      json.hcursor.downField("source").as[String].toOption shouldBe Some("WebDescriptor")
+      names shouldBe Vector("id", "body", "status")
+      body.downField("label").as[String].toOption shouldBe Some("Notice body")
+      body.downField("type").as[String].toOption shouldBe Some("textarea")
+      body.downField("placeholder").as[String].toOption shouldBe Some("Descriptor body placeholder.")
+      body.downField("help").as[String].toOption shouldBe Some("Descriptor body help.")
+      status.downField("values").as[Vector[String]].toOption shouldBe Some(Vector("draft", "published", "archived"))
+      status.downField("required").as[Boolean].toOption shouldBe Some(false)
+    }
+
     "serve admin data form definition API from inferred data fields" in {
       val fixture = _data_fixture()
       _with_global_runtime(fixture.runtime) {
@@ -1713,6 +1811,37 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         json.hcursor.downField("mode").as[String].toOption shouldBe Some("admin-data")
         json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/web/notice-board/admin/data/audit/new")
         fieldNames shouldBe Vector("id", "action", "actor")
+      }
+    }
+
+    "serve admin data form definition API from merged inferred data fields and WebDescriptor controls" in {
+      val fixture = _data_fixture()
+      val descriptor = _data_schema_web_descriptor(includeNote = false)
+      _with_global_runtime(fixture.runtime) {
+        val server = new Http4sHttpServer(new HttpExecutionEngine(fixture.subsystem, Some(descriptor)))
+
+        val response = server
+          ._component_admin_data_form_api_definition(
+            _get_request("/form-api/notice-board/admin/data/audit"),
+            "notice-board",
+            "audit"
+          )
+          .unsafeRunSync()
+        val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("data form definition JSON is invalid"))
+        val fields = _json_fields(json)
+        val names = _json_field_names(fields)
+        val action = _json_field(fields, "action")
+        val actor = _json_field(fields, "actor")
+
+        response.status.code shouldBe 200
+        json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.data.audit")
+        json.hcursor.downField("source").as[String].toOption shouldBe Some("WebDescriptor")
+        names shouldBe Vector("id", "action", "actor")
+        action.downField("type").as[String].toOption shouldBe Some("select")
+        action.downField("values").as[Vector[String]].toOption shouldBe Some(Vector("created", "updated"))
+        actor.downField("required").as[Boolean].toOption shouldBe Some(true)
+        actor.downField("placeholder").as[String].toOption shouldBe Some("Descriptor actor placeholder.")
+        actor.downField("help").as[String].toOption shouldBe Some("Descriptor actor help.")
       }
     }
 
@@ -1748,6 +1877,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       json.hcursor.downField("mode").as[String].toOption shouldBe Some("admin-view")
       json.hcursor.downField("method").as[String].toOption shouldBe Some("GET")
       json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/web/notice-board/admin/views/notice-view")
+      json.hcursor.downField("source").as[String].toOption shouldBe Some("WebDescriptor")
       fields.downN(0).downField("name").as[String].toOption shouldBe Some("id")
       fields.downN(1).downField("name").as[String].toOption shouldBe Some("label")
       fields.downN(2).downField("name").as[String].toOption shouldBe Some("note")
@@ -1786,6 +1916,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       json.hcursor.downField("mode").as[String].toOption shouldBe Some("admin-aggregate")
       json.hcursor.downField("method").as[String].toOption shouldBe Some("GET")
       json.hcursor.downField("actions").downN(1).downField("path").as[String].toOption shouldBe Some("/web/notice-board/admin/aggregates/notice-aggregate/{id}")
+      json.hcursor.downField("source").as[String].toOption shouldBe Some("WebDescriptor")
       fields.downN(0).downField("name").as[String].toOption shouldBe Some("id")
       fields.downN(1).downField("name").as[String].toOption shouldBe Some("label")
       fields.downN(2).downField("name").as[String].toOption shouldBe Some("status")
@@ -2420,6 +2551,25 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     } yield record).toOption.getOrElse(Record.empty)
   }
 
+  private def _json_fields(
+    json: Json
+  ): Vector[Json] =
+    json.hcursor.downField("fields").as[Vector[Json]].toOption.getOrElse(Vector.empty)
+
+  private def _json_field_names(
+    fields: Vector[Json]
+  ): Vector[String] =
+    fields.flatMap(_.hcursor.downField("name").as[String].toOption)
+
+  private def _json_field(
+    fields: Vector[Json],
+    name: String
+  ): HCursor =
+    fields.
+      find(_.hcursor.downField("name").as[String].toOption.contains(name)).
+      map(_.hcursor).
+      getOrElse(fail(s"$name field is missing"))
+
   private def _admin_record_response(
     subsystem: Subsystem,
     service: String,
@@ -2654,6 +2804,101 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       )
     )
     DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+  }
+
+  private def _entity_schema_web_descriptor_fixture(): (Subsystem, WebDescriptor) = {
+    val descriptor = ComponentDescriptor(
+      componentName = Some("notice_board"),
+      entityRuntimeDescriptors = Vector(
+        EntityRuntimeDescriptor(
+          entityName = "notice",
+          collectionId = EntityCollectionId("sys", "sys", "notice"),
+          memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+          partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+          maxPartitions = 4,
+          maxEntitiesPerPartition = 100,
+          schema = Some(Schema(Vector(
+            Column(BaseContent.simple("id"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+            Column(
+              BaseContent.Builder("body").label("Notice body").build(),
+              ValueDomain(datatype = XString, multiplicity = Multiplicity.One),
+              web = WebColumn(
+                controlType = Some("textarea"),
+                placeholder = Some("Schema body placeholder."),
+                help = Some("Schema body help."),
+                required = Some(true)
+              )
+            ),
+            Column(
+              BaseContent.Builder("status").label("Publication status").build(),
+              ValueDomain(datatype = XString, multiplicity = Multiplicity.One),
+              web = WebColumn(
+                controlType = Some("select"),
+                values = Vector("draft", "published"),
+                required = Some(true)
+              )
+            )
+          )))
+        )
+      )
+    )
+    val component = TestComponentFactory
+      .create("notice_board", Protocol.empty)
+      .withComponentDescriptors(Vector(descriptor))
+    val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+    val webDescriptor = WebDescriptor(admin = Map(
+      "notice-board.entity.notice" -> WebDescriptor.AdminSurface(fields = Vector(
+        WebDescriptor.AdminField("id"),
+        WebDescriptor.AdminField(
+          "body",
+          WebDescriptor.FormControl(
+            placeholder = Some("Descriptor body placeholder."),
+            help = Some("Descriptor body help.")
+          )
+        ),
+        WebDescriptor.AdminField(
+          "status",
+          WebDescriptor.FormControl(
+            values = Vector("draft", "published", "archived"),
+            required = Some(false)
+          )
+        )
+      ))
+    ))
+    subsystem -> webDescriptor
+  }
+
+  private def _data_schema_web_descriptor(
+    includeNote: Boolean = true
+  ): WebDescriptor = {
+    val fields = Vector(
+      WebDescriptor.AdminField("id"),
+      WebDescriptor.AdminField(
+        "action",
+        WebDescriptor.FormControl(
+          controlType = Some("select"),
+          values = Vector("created", "updated")
+        )
+      ),
+      WebDescriptor.AdminField(
+        "actor",
+        WebDescriptor.FormControl(
+          required = Some(true),
+          placeholder = Some("Descriptor actor placeholder."),
+          help = Some("Descriptor actor help.")
+        )
+      )
+    ) ++ (
+      if (includeNote)
+        Vector(WebDescriptor.AdminField("note", WebDescriptor.FormControl(controlType = Some("textarea"))))
+      else
+        Vector.empty
+    )
+    WebDescriptor(
+      admin = Map(
+        "data.audit" -> WebDescriptor.AdminSurface(fields = fields)
+      )
+    )
   }
 
   private def _notice_fixture_component(

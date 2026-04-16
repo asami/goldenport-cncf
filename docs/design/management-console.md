@@ -128,6 +128,20 @@ WebDescriptor-level form controls may override generated controls:
 - `placeholder`: supplies input placeholder text.
 - `help`: supplies user-facing field help text.
 
+HTML form rendering and JSON form definition APIs share the same resolved Web
+schema. This is required so a plain browser Form App and a JSON Form client see
+the same fields, labels, requiredness, control type, enum candidates, and help
+metadata for a selector.
+
+Management Console schema resolution currently covers:
+
+- Entity create/update forms through `EntityRuntimeDescriptor.schema`.
+- Data create/update forms through explicit schema metadata or best-effort
+  admin Data record inference.
+- View read forms through the View root entity schema.
+- Aggregate read forms through the Aggregate root entity schema.
+- Aggregate create/command forms through the Operation form path.
+
 Form execution result pages receive properties derived from the Operation
 response:
 

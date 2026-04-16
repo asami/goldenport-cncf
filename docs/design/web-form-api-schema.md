@@ -193,6 +193,22 @@ available, the renderer may infer fields from admin data read/list Operation
 results. Inferred fields are best effort and should be replaced by explicit
 schema metadata for production-grade forms.
 
+The same composition result is used by both browser-facing HTML forms and the
+JSON Form API. Static Form App rendering and `/form-api` endpoints must not
+resolve different field sets for the same selector.
+
+Current covered surfaces are:
+
+- Operation form input parameters.
+- Admin Entity create/update form fields.
+- Admin Data create/update form fields.
+- Admin View read form fields.
+- Admin Aggregate read form fields.
+
+Admin Aggregate create and command flows are still Operation flows. Their input
+schema is therefore resolved through the Operation route, even when the
+Operation is declared as an Aggregate create or command method.
+
 ## Ordering
 
 Input form/detail order is the model definition order:
