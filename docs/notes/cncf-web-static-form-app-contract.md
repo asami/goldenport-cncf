@@ -225,8 +225,18 @@ available.
 
 ## Static Form App Model
 
-A Static Form App is a web app instance made from static pages and convention
-based result resolution.
+A Static Form App is a web app instance made from CML metadata, static HTML
+pages, and convention based result resolution. Its value is that demo
+applications and internal tools can be built in the CML+HTML range without
+writing Web framework code.
+
+The Static Form App boundary is intentionally conservative. The preferred
+approach is to use static pages and filename conventions as far as practical,
+then use WebDescriptor settings only for the parts that cannot be expressed
+cleanly as static files. If an application still needs programming-style
+routing rules, conditional page flow, rich client state management, or other
+advanced Web behavior, it should be implemented with a normal Web framework and
+integrated with CNCF through REST or `/form-api`.
 
 The initial app registry is conceptual:
 
@@ -254,8 +264,9 @@ does not execute operations inline.
 
 The implemented baseline keeps `/web/console` as a controlled operation entry
 page. It does not execute operations inline. It links to component operation
-form indexes under `/form/{component}`, and result rendering is handled by the
-shared HTML result page and `textus-*` result widgets.
+form indexes under `/form/{component}`. Operation form results first resolve
+static result pages by filename convention, then fall back to descriptor-provided
+or built-in result rendering.
 
 Component admin pages also expose managed-data entry points for entity CRUD,
 data CRUD, aggregate CRUD, and view read. These are component-scoped management
@@ -373,6 +384,53 @@ The result page property set is:
 - `error.status`, `error.body` on failed responses
 - paging properties under `paging.*`
 
+`WebDescriptor.Form.resultTemplate` can replace the default result page body
+for a form. The template uses the same property expansion and `textus-*` widget
+contracts as the built-in result page. It is intentionally still expression-only:
+applications should introduce new `textus-*` widgets rather than add control
+syntax when richer rendering is needed.
+
+Static HTML result pages are the default customization mechanism for ordinary
+Form Apps. Given an operation form whose normalized operation name is `xxx`,
+the result page resolver searches the web template root in this order:
+
+Success:
+
+- `xxx__success.html`
+- `xxx__200.html`
+
+Failure:
+
+- `xxx__{status}.html`
+- `xxx__error.html`
+
+If no operation-specific page is found, the resolver may fall back to common
+pages:
+
+Success:
+
+- `__success.html`
+- `__200.html`
+
+Failure:
+
+- `__{status}.html`
+- `__error.html`
+
+This makes shared pages such as a common validation error page or common system
+error page ordinary static files rather than descriptor logic.
+
+The same property expansion and `textus-*` widget contracts are available in
+these files. A full HTML document is returned as-is after expansion; a fragment
+is wrapped in the built-in Bootstrap 5 shell. Descriptor-level
+`resultTemplate`, `successRedirect`, and `failureRedirect` remain available as
+supplemental configuration for gaps in the static convention model. The
+ordinary demo/internal-tool path should prefer CML definitions plus static HTML
+files first, then descriptor settings where the static convention is not enough.
+Applications that require dynamic transition logic or programming-like page
+flow should use an external Web framework and call CNCF through REST or
+`/form-api`.
+
 ## Form Admission Validation
 
 Static Form App validation is performed before Operation dispatch. The same
@@ -388,6 +446,12 @@ Supported admission constraints are:
 - enum/select candidates
 - datatype checks for boolean, numeric, and date-like fields
 - `min`, `max`, `minLength`, `maxLength`, and `pattern`
+
+Schema and `ParameterDefinition` constraints are authoritative. WebDescriptor
+may add or narrow validation hints, but it must not widen model constraints. For
+example, a descriptor can reduce `maxLength` or raise `min`, but a lower
+`minLength`, higher `max`, or looser numeric range is ignored by the effective
+schema.
 
 Validation failures redisplay the HTML form with submitted values and field
 errors. The Operation is not dispatched when admission validation fails.
@@ -409,6 +473,16 @@ Component bootstrap, `ComponentFactory` copies the generated companion schema
 into `EntityRuntimeDescriptor.schema` when the descriptor does not already carry
 an explicit schema. The Web layer must then consume that schema directly; it
 must not recover Web form hints through reflection or a parallel field list.
+
+Cozy generation should therefore emit Web hints as shared schema metadata:
+
+- Entity and Value fields: `Schema.Column.web`
+- Operation parameters: `ParameterDefinition.web`
+- Descriptor/package overrides: `WebDescriptor.Form.controls` and
+  `WebDescriptor.AdminSurface.fields`
+
+The CNCF side treats these as the only supported portable route for CML Web
+extensions.
 
 Paging is part of the initial table contract. A table widget reads the current
 page, page size, optional total count, and page navigation href template through
@@ -510,6 +584,9 @@ Implementation checkpoint:
 - Admin Data create/update HTML forms and Data form definition JSON use the
   same resolver path. When no declared schema exists, Data can still infer a
   best-effort field set from admin Data records.
+- Admin Entity/Data create/update result pages expose the same core
+  `result.status`, `result.ok`, and `result.body` names as ordinary Operation
+  result pages where applicable.
 - Admin View and Aggregate read form definition JSON resolve from their root
   entity schema plus WebDescriptor admin controls.
 - Aggregate create and command screens remain Operation forms, so their schema
@@ -719,6 +796,41 @@ back to the current detail page and originating list page.
 
 Form submission remains under `/form`. User-visible pages remain under `/web`.
 This keeps HTML page navigation separate from execution entry points.
+
+### Standard Hidden Form Context
+
+Plain HTML FORM applications need explicit hidden fields to carry page context
+between list, detail, edit, update, result, and error pages. The baseline
+context names are:
+
+```text
+crud.origin.href
+crud.success.href
+crud.error.href
+paging.page
+paging.pageSize
+paging.chunkSize
+paging.href
+search.*
+continuation.id
+version
+etag
+csrf
+```
+
+`crud.origin.href` is the page the user came from. `crud.success.href` is the
+preferred destination after a successful create/update/operation.
+`crud.error.href` is the page to redisplay or link to after failure when a local
+form redisplay is not available. Paging and search values preserve list
+context. `continuation.id` identifies retained result sets for
+continuation-backed paging. `version` or `etag` supports optimistic update and
+stale-form detection. `csrf` is reserved for session/auth deployments.
+
+The renderer should emit these fields as hidden inputs when values are present.
+Validation error redisplay and result rendering must preserve them. Server-side
+code must not blindly trust client-provided navigation or security values:
+redirect destinations, continuation ids, version tokens, and CSRF values remain
+server-validated.
 
 ## Runtime Hook Rule
 

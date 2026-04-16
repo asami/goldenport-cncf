@@ -15,15 +15,20 @@ The initial managed surfaces are:
 - `/web/{component}/admin/aggregates`
 
 Entity and data surfaces support list, detail, edit, update, new, and create.
-View surfaces are read-only. Aggregate surfaces expose list/detail reads and
-operation links; create and command behavior is executed through component
-Operations.
+View surfaces are read-only: they expose definition metadata, list/read
+results, paging, and detail navigation, but no built-in create/update actions.
+Aggregate surfaces expose list/detail reads and operation links; create and
+command behavior is executed through component Operations.
 
 Aggregate pages classify discovered Operations as:
 
 - `create`: create Operations declared by the Aggregate definition.
 - `read`: read/get/load/search Operations for the Aggregate.
 - `update`: update Operations and Aggregate command Operations.
+
+The built-in aggregate action table must be understandable without any Static
+Form Web App result-page convention. Its action labels are therefore semantic:
+`Create aggregate`, `Read aggregate`, and `Run update command`.
 
 Aggregate instance pages expose only read/update Operations and prefill the
 aggregate id in the Operation form. Aggregate creation is intentionally rooted
@@ -169,6 +174,25 @@ behavior is:
 - provide an explicit link back to the Operation form and the component form
   index.
 
+Management Console forms also need hidden page-context fields so list, detail,
+edit, update, result, and error pages behave as one HTML application. The
+standard context includes:
+
+- `crud.origin.href`
+- `crud.success.href`
+- `crud.error.href`
+- `paging.page`, `paging.pageSize`, `paging.chunkSize`, `paging.href`
+- `search.*`
+- `continuation.id`
+- `version` or `etag`
+- `csrf`
+
+The renderer emits these as hidden inputs when values are available and
+preserves them on validation redisplay and result pages. Navigation and security
+values from hidden fields are hints, not authority; server-side checks still
+validate redirect destinations, continuation ids, stale-update tokens, and CSRF
+tokens.
+
 Descriptor-controlled transitions are available per form:
 
 - `successRedirect`: returns `303 See Other` after a successful Operation.
@@ -183,6 +207,9 @@ submitted form fields such as `${id}`, and result properties such as
 `item.id`; scalar `prefix:id` responses are also recognized.
 
 Admin entity and data create/update forms use the same descriptor mechanism.
+Their built-in result pages also expose the core result property names
+`result.status`, `result.ok`, and `result.body` so Management Console result
+surfaces stay aligned with ordinary Operation result pages where applicable.
 Their descriptor selectors are:
 
 - `{component}.admin.entities.{entity}.create`

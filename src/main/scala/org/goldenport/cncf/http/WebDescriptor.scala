@@ -151,6 +151,7 @@ object WebDescriptor {
     successRedirect: Option[String] = None,
     failureRedirect: Option[String] = None,
     stayOnError: Boolean = false,
+    resultTemplate: Option[String] = None,
     controls: Map[String, FormControl] = Map.empty
   )
 
@@ -288,6 +289,7 @@ object WebDescriptor {
               successRedirect = _string(r, "successRedirect").orElse(_string(r, "success-redirect")),
               failureRedirect = _string(r, "failureRedirect").orElse(_string(r, "failure-redirect")),
               stayOnError = _boolean(r, "stayOnError").orElse(_boolean(r, "stay-on-error")).getOrElse(false),
+              resultTemplate = _string(r, "resultTemplate").orElse(_string(r, "result-template")),
               controls = _form_controls(r)
             )
           }

@@ -40,6 +40,11 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |      successRedirect: /web/${component}/admin/aggregates/${service}/${result.id}
           |      failureRedirect: /form/${component}/${service}/${operation}
           |      stayOnError: true
+          |      resultTemplate: |
+          |        <article>
+          |          <h2>${operation.label}</h2>
+          |          <textus-property-list source="result"></textus-property-list>
+          |        </article>
           |      controls:
           |        body:
           |          type: textarea
@@ -95,6 +100,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.form("notice-board.notice.search-notices").successRedirect shouldBe Some("/web/${component}/admin/aggregates/${service}/${result.id}")
       descriptor.form("notice-board.notice.search-notices").failureRedirect shouldBe Some("/form/${component}/${service}/${operation}")
       descriptor.form("notice-board.notice.search-notices").stayOnError shouldBe true
+      descriptor.form("notice-board.notice.search-notices").resultTemplate.getOrElse(fail("result template is missing")) should include ("<textus-property-list source=\"result\"></textus-property-list>")
       descriptor.form("notice-board.notice.search-notices").controls("body").controlType shouldBe Some("textarea")
       descriptor.form("notice-board.notice.search-notices").controls("body").required shouldBe Some(true)
       descriptor.form("notice-board.notice.search-notices").controls("body").placeholder shouldBe Some("Write a notice.")

@@ -27,38 +27,30 @@ It complements the summary-level phase document (`phase-12.md`).
 
 ## Recommended Work Procedure
 
-Phase 12 implementation proceeds in this order:
+The Phase 12 work has already completed the scope/design, descriptor, and
+Dashboard baseline. The current work order is:
 
-1. WEB-01 (scope and design surface) must be fixed first.
-2. WEB-02 (REST/Form API exposure and Static Form App mechanism) is
-   implemented on top of the operation model.
-3. WEB-03 (Web Descriptor) is defined after the exposure surface is clear.
-4. WEB-04 (read-only dashboard) is defined as the first operational web app on
-   top of the Static Form App mechanism.
-5. WEB-05 (management console) and WEB-06 (manual/reference) are defined as
-   separate web apps on the same mechanism.
-6. WEB-07 (Executable Specifications and runtime hooks) is expanded alongside
-   WEB-02 through WEB-06 and finalized last.
+1. Finish the remaining Form feature work by auditing the existing WEB-02,
+   WEB-07, and WEB-08 checklist items.
+2. Complete the Management Console on top of those Form features.
+3. Move `textus-sample-app` toward a Static Form Web App and use it to find the
+   next gaps.
 
-This order minimizes churn between the API surface, descriptor model, and
-operator-facing web functions.
+This order keeps the current residual work first. Dashboard is treated as done;
+Static Form Web App work is the next validation driver after Form features and
+the Management Console are closed enough.
 
 Practical validation:
 
 - Develop Phase 12 alongside `textus-sample-app`.
-- Use `textus-sample-app` as the first concrete consumer of the Static Form App
-  mechanism.
+- Use `textus-sample-app` as the first concrete consumer of the completed Form
+  feature set, then as the Static Form Web App validation driver.
 - Keep CNCF-side changes generic; sample-specific behavior belongs in
   `textus-sample-app`.
 - Promote only proven common mechanisms from the sample app back into CNCF.
-- Enter the implementation through the Dashboard use case, but do not implement
-  Dashboard as a special server route. The Dashboard path is used to drive the
-  shared Static Form App and Form API mechanism first, then the read-only
-  Dashboard is placed on that mechanism under WEB-04.
-- Use the notice-board sample as the dashboard validation fixture: the baseline
-  must be able to show runtime health/version plus Component / Service /
-  Operation metadata for the sample app before adding management-console or
-  manual behavior.
+- Dashboard-driven validation is complete for this phase slice. Do not reopen
+  Dashboard work unless a Form or Management Console change breaks the
+  dashboard contract.
 
 ---
 
@@ -275,6 +267,79 @@ before broad UI work begins.
 
 ---
 
+## WEB-07A: Current Form Feature Audit
+
+Status: DONE
+
+### Objective
+
+Close the remaining Form feature work before moving deeper into Management
+Console completion or Static Form Web App validation.
+
+This section audits the work already started across WEB-02, WEB-07, and WEB-08.
+It is not a new feature area; it is the current residual stack for Form
+functionality.
+
+### Already Closed
+
+- [x] Separate HTML FORM paths under `/form` from JSON Form API paths under
+      `/form-api`.
+- [x] Generate operation HTML forms from Component / Service / Operation
+      metadata.
+- [x] Serve JSON form definitions for operation forms.
+- [x] Serve JSON form definitions for admin entity, data, view, and aggregate
+      surfaces.
+- [x] Validate HTML operation form input before dispatch.
+- [x] Validate JSON Form API input without dispatch.
+- [x] Redisplay operation forms with submitted values and validation messages.
+- [x] Use `WebSchemaResolver.ResolvedWebSchema` as the shared schema between
+      HTML forms and JSON Form API.
+- [x] Merge CML-derived Schema / ParameterDefinition Web hints with
+      WebDescriptor presentation overrides.
+- [x] Preserve schema field order as the default form field order.
+- [x] Support basic field controls: hidden, readonly, required, select,
+      textarea, placeholder, help, and validation hints.
+- [x] Support operation result property expansion for result pages.
+- [x] Support result widgets: result view, result table, property list, and
+      error panel.
+- [x] Support paging properties and continuation-backed paging for form
+      results.
+- [x] Support optional/required/disabled total count policy for admin list
+      pages.
+- [x] Support descriptor-provided result templates as supplemental Form
+      configuration.
+- [x] Support static result page convention for operation result pages:
+      operation-specific `xxx__success.html`, `xxx__200.html`,
+      `xxx__{status}.html`, `xxx__error.html`, and common `__success.html`,
+      `__200.html`, `__{status}.html`, `__error.html`.
+- [x] Confirm admin entity/data validation uses the same schema merge and
+      validation behavior as operation forms.
+- [x] Confirm admin entity/data validation failures redisplay the submitted
+      edit/new form with field-level messages.
+- [x] Confirm view and aggregate form-definition APIs expose enough schema for
+      their read/operation surfaces.
+- [x] Confirm operation result pages and admin create/update result pages expose
+      the same core property model where applicable.
+- [x] Confirm static result page convention is applied only to ordinary
+      operation Form paths and does not accidentally change admin console
+      built-in flows.
+- [x] Confirm Form API and HTML FORM behavior stay aligned when WebDescriptor
+      narrows validation hints.
+- [x] Add or update executable specifications for any gaps found in this audit.
+- [x] Update `docs/design/management-console.md` and
+      `docs/notes/cncf-web-static-form-app-contract.md` when the audit changes
+      the contract.
+
+### Completion Criteria
+
+- All current Form behavior needed by Management Console CRUD/read/operation
+  flows is covered by executable specifications.
+- The remaining behavior needed only by Static Form Web App is explicitly
+  listed as Static Form Web App work rather than mixed into the Form foundation.
+- Dashboard remains green without reopening Dashboard scope.
+
+---
+
 ## WEB-08: Management Console CRUD Flow
 
 Status: ACTIVE
@@ -352,6 +417,28 @@ for the built-in admin console.
       submission routing.
 - [x] Add executable specifications for successful aggregate operation
       execution with an HTTP ingress-capable fixture.
+- [x] Run a Management Console completion pass after the Form feature audit:
+      entity, data, aggregate, and view routes must still work with the updated
+      validation/result behavior.
+- [x] Confirm the built-in admin result pages and descriptor-controlled admin
+      transitions remain consistent after adding the common result property
+      rows.
+- [x] Define the standard hidden Form context needed for plain HTML FORM app
+      behavior: origin/success/error links, paging state, search state,
+      continuation id, optimistic update token, and security token placeholders.
+- [x] Render standard hidden Form context fields on admin edit/new and
+      operation forms where the values are present.
+- [x] Preserve standard hidden Form context values through validation error
+      redisplay and result rendering.
+- [x] Add executable specifications for list/detail/edit/update/list-back flows
+      that preserve paging/search context through hidden fields.
+- [x] Confirm aggregate create/update/command action rendering is still clear
+      enough for the built-in admin console and does not require Static Form Web
+      App conventions.
+- [x] Confirm view read/list pages are acceptable as the read-only baseline
+      before moving to Static Form Web App validation.
+- [x] Update `docs/design/management-console.md` if the completion pass changes
+      the Management Console contract.
 
 ### Inputs
 
@@ -359,6 +446,45 @@ for the built-in admin console.
 - `docs/journal/2026/04/web-form-api-note.md`
 - `docs/journal/2026/04/web-operational-management-note.md`
 - `textus-sample-app` as the practical validation driver.
+
+---
+
+## WEB-09: Static Form Web App Validation with textus-sample-app
+
+Status: PLANNED
+
+### Objective
+
+After the current Form feature audit and Management Console completion work,
+move `textus-sample-app` toward a Static Form Web App and use it to discover
+the next platform gaps.
+
+This is not the current active work. It starts after WEB-07A and WEB-08 are
+closed enough for the sample app to reuse the Form foundation instead of driving
+unfinished Management Console work.
+
+### Detailed Tasks
+
+- [ ] Build the notice-board sample primarily from CML metadata and static HTML
+      files.
+- [ ] Prefer static result page conventions before descriptor transition
+      settings.
+- [ ] Add operation-specific result pages such as `post-notice__success.html`
+      and `search-notices__200.html`.
+- [ ] Add common result/error pages such as `__400.html`, `__500.html`, and
+      `__error.html`.
+- [ ] Use `textus-*` widgets for result view, table, property list, error
+      display, and paging.
+- [ ] Identify which behavior is missing from the CML+HTML model.
+- [ ] Promote only generic missing behavior back into CNCF; keep
+      sample-specific pages in `textus-sample-app`.
+- [ ] Record gaps as future Form widget, convention, or descriptor candidates.
+
+### Inputs
+
+- `textus-sample-app`
+- `docs/notes/cncf-web-static-form-app-contract.md`
+- `docs/journal/2026/04/web-static-form-app-note.md`
 
 ---
 
@@ -376,6 +502,7 @@ for the built-in admin console.
 
 Phase 12 is complete when:
 
-- WEB-01 through WEB-07 are marked DONE.
+- WEB-01 through WEB-09 are marked DONE, or explicitly deferred to a later
+  phase.
 - `phase-12.md` summary checkboxes are aligned.
 - No item remains ACTIVE or SUSPENDED.

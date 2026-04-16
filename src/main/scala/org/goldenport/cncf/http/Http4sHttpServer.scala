@@ -5,6 +5,7 @@ import cats.effect.std.Queue
 import cats.effect.unsafe.implicits.global
 import cats.syntax.all.*
 import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Path, Paths}
 import java.util.UUID
 import scala.collection.concurrent.TrieMap
 import fs2.Pipe
@@ -23,6 +24,7 @@ import org.http4s.websocket.WebSocketFrame
 import org.goldenport.record.Record
 import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.observability.{DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
 import org.goldenport.bag.Bag
@@ -94,10 +96,10 @@ final class Http4sHttpServer(
         _component_admin_entity_type(req, app, entity)
       case GET -> Root / "web" / app / "admin" / "entities" / entity / "new" =>
         _component_admin_entity_new(app, entity)
-      case GET -> Root / "web" / app / "admin" / "entities" / entity / id / "edit" =>
-        _component_admin_entity_edit(app, entity, id)
-      case GET -> Root / "web" / app / "admin" / "entities" / entity / id =>
-        _component_admin_entity_detail(app, entity, id)
+      case req @ GET -> Root / "web" / app / "admin" / "entities" / entity / id / "edit" =>
+        _component_admin_entity_edit(req, app, entity, id)
+      case req @ GET -> Root / "web" / app / "admin" / "entities" / entity / id =>
+        _component_admin_entity_detail(req, app, entity, id)
       case GET -> Root / "web" / app / "admin" / "data" =>
         _component_admin_data(app)
       case req @ GET -> Root / "web" / app / "admin" / "data" / data =>
@@ -299,7 +301,7 @@ final class Http4sHttpServer(
     }
 
   private def _component_admin_entity_type(req: HRequest[IO], app: String, entity: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminEntityType(engine.runtimeSubsystem, app, entity, _page_request(req), engine.webDescriptor) match {
+    StaticFormAppRenderer.renderComponentAdminEntityType(engine.runtimeSubsystem, app, entity, _page_request(req), engine.webDescriptor, req.uri.query.params.toMap) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
@@ -310,8 +312,8 @@ final class Http4sHttpServer(
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity type admin not found"))
     }
 
-  private def _component_admin_entity_detail(app: String, entity: String, id: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminEntityDetail(engine.runtimeSubsystem, app, entity, id, engine.webDescriptor) match {
+  private def _component_admin_entity_detail(req: HRequest[IO], app: String, entity: String, id: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminEntityDetail(engine.runtimeSubsystem, app, entity, id, engine.webDescriptor, req.uri.query.params.toMap) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
@@ -322,8 +324,8 @@ final class Http4sHttpServer(
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity detail admin not found"))
     }
 
-  private def _component_admin_entity_edit(app: String, entity: String, id: String): IO[HResponse[IO]] =
-    StaticFormAppRenderer.renderComponentAdminEntityEdit(engine.runtimeSubsystem, app, entity, id, webDescriptor = engine.webDescriptor) match {
+  private def _component_admin_entity_edit(req: HRequest[IO], app: String, entity: String, id: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminEntityEdit(engine.runtimeSubsystem, app, entity, id, values = req.uri.query.params.toMap, webDescriptor = engine.webDescriptor) match {
       case Some(p) =>
         IO.pure(
           HResponse[IO](HStatus.Ok)
@@ -839,7 +841,7 @@ final class Http4sHttpServer(
           _admin_entity_validation_error_response(app, entity, Some(id), values, result)
         case _ =>
           val result = _dispatch_component_admin_entity_record("update", app, entity, record)
-          val page = StaticFormAppRenderer.renderComponentAdminEntityUpdateResult(app, entity, id, values, result.applied, result.message)
+          val page = StaticFormAppRenderer.renderComponentAdminEntityUpdateResult(app, entity, id, values, result.applied, result.message, result.response.code)
           _admin_form_transition_response(app, "entities", entity, "update", record, result, page)
       }
     } yield {
@@ -868,7 +870,7 @@ final class Http4sHttpServer(
           _admin_entity_validation_error_response(app, entity, None, values, result)
         case _ =>
           val result = _dispatch_component_admin_entity_record("create", app, entity, form)
-          val page = StaticFormAppRenderer.renderComponentAdminEntityCreateResult(app, entity, values, result.applied, result.message)
+          val page = StaticFormAppRenderer.renderComponentAdminEntityCreateResult(app, entity, values, result.applied, result.message, result.response.code)
           _admin_form_transition_response(app, "entities", entity, "create", form, result, page)
       }
     } yield {
@@ -899,7 +901,7 @@ final class Http4sHttpServer(
           _admin_data_validation_error_response(app, data, Some(id), values, result)
         case _ =>
           val result = _dispatch_component_admin_data_record("update", app, data, record)
-          val page = StaticFormAppRenderer.renderComponentAdminDataUpdateResult(app, data, id, values, result.applied, result.message)
+          val page = StaticFormAppRenderer.renderComponentAdminDataUpdateResult(app, data, id, values, result.applied, result.message, result.response.code)
           _admin_form_transition_response(app, "data", data, "update", record, result, page)
       }
     } yield {
@@ -928,7 +930,7 @@ final class Http4sHttpServer(
           _admin_data_validation_error_response(app, data, None, values, result)
         case _ =>
           val result = _dispatch_component_admin_data_record("create", app, data, form)
-          val page = StaticFormAppRenderer.renderComponentAdminDataCreateResult(app, data, values, result.applied, result.message)
+          val page = StaticFormAppRenderer.renderComponentAdminDataCreateResult(app, data, values, result.applied, result.message, result.response.code)
           _admin_form_transition_response(app, "data", data, "create", form, result, page)
       }
     } yield {
@@ -1169,7 +1171,8 @@ final class Http4sHttpServer(
       )
     )
     val page = StaticFormAppRenderer.renderFormResult(
-      _form_result_properties(app, service, operation, res, values)
+      _form_result_properties(app, service, operation, res, values),
+      _form_result_static_template(app, service, operation, res.code)
     )
     _html(page).map { html =>
       RuntimeDashboardMetrics.recordHtmlRequest(
@@ -1227,9 +1230,71 @@ final class Http4sHttpServer(
             _form_values(form) ++ _error_values(response)
           ).getOrElse(StaticFormAppRenderer.renderFormResult(properties)))
         else
-          _html(StaticFormAppRenderer.renderFormResult(properties))
+          _html(StaticFormAppRenderer.renderFormResult(
+            properties,
+            _form_result_static_template(app, service, operation, response.code).orElse(descriptor.flatMap(_.resultTemplate))
+          ))
     }
   }
+
+  private def _form_result_static_template(
+    app: String,
+    service: String,
+    operation: String,
+    status: Int
+  ): Option[String] =
+    _web_template_roots().view.flatMap { root =>
+      _form_result_template_candidates(app, service, operation, status).flatMap { candidate =>
+        val path = root.resolve(candidate)
+        if (Files.isRegularFile(path))
+          Some(Files.readString(path, StandardCharsets.UTF_8))
+        else
+          None
+      }
+    }.headOption
+
+  private def _form_result_template_candidates(
+    app: String,
+    service: String,
+    operation: String,
+    status: Int
+  ): Vector[Path] = {
+    val operationPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(operation)
+    val servicePath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(service)
+    val appPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(app)
+    val suffixes =
+      if (status >= 200 && status < 400)
+        Vector("success", status.toString)
+      else
+        Vector(status.toString, "error")
+    suffixes.flatMap { suffix =>
+      val filename = s"${operationPath}__${suffix}.html"
+      val common = s"__${suffix}.html"
+      Vector(
+        Paths.get(filename),
+        Paths.get(appPath, servicePath, filename),
+        Paths.get(appPath, filename),
+        Paths.get(common),
+        Paths.get(appPath, servicePath, common),
+        Paths.get(appPath, common)
+      )
+    }
+  }
+
+  private def _web_template_roots(): Vector[Path] =
+    _web_descriptor_config_root().toVector ++ _subsystem_descriptor_web_root().toVector
+
+  private def _web_descriptor_config_root(): Option[Path] =
+    RuntimeConfig.getString(engine.runtimeSubsystem.configuration, RuntimeConfig.WebDescriptorKey).map { value =>
+      val path = Paths.get(value)
+      if (Files.isDirectory(path))
+        path.resolve("web")
+      else
+        path.getParent
+    }
+
+  private def _subsystem_descriptor_web_root(): Option[Path] =
+    engine.runtimeSubsystem.descriptor.map(d => d.path.resolve("web"))
 
   private def _form_descriptor(
     app: String,

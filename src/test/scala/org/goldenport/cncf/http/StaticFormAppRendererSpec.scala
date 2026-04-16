@@ -2,6 +2,7 @@ package org.goldenport.cncf.http
 
 import scala.collection.mutable.ListBuffer
 import java.nio.charset.StandardCharsets
+import java.nio.file.Files
 import cats.data.State
 import cats.effect.IO
 import cats.effect.Ref
@@ -348,6 +349,55 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       edit should include (s"/form/${componentPath}/admin/entities/${entityPath}/${recordId}/update")
     }
 
+    "preserve list paging and search context through entity detail and edit links" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val componentName = "notice_board"
+      val componentPath = "notice-board"
+      val entityPath = "notice"
+      val recordId = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id.value
+      val context = Map(
+        "search.author" -> "alice",
+        "paging.page" -> "2",
+        "paging.pageSize" -> "1",
+        "crud.origin.href" -> s"/web/${componentPath}/admin/entities/${entityPath}?page=2&pageSize=1&search.author=alice"
+      )
+
+      val list = StaticFormAppRenderer.renderComponentAdminEntityType(
+        subsystem,
+        componentName,
+        entityPath,
+        StaticFormAppRenderer.PageRequest(page = 2, pageSize = 1),
+        pageContext = context
+      ).map(_.body).getOrElse(fail("component entity list admin is missing"))
+      val detail = StaticFormAppRenderer.renderComponentAdminEntityDetail(
+        subsystem,
+        componentName,
+        entityPath,
+        recordId,
+        values = context
+      ).map(_.body).getOrElse(fail("component entity detail admin is missing"))
+      val edit = StaticFormAppRenderer.renderComponentAdminEntityEdit(
+        subsystem,
+        componentName,
+        entityPath,
+        recordId,
+        values = context
+      ).map(_.body).getOrElse(fail("component entity edit admin is missing"))
+
+      list should include (s"/web/${componentPath}/admin/entities/${entityPath}/")
+      list should include ("?crud.origin.href=")
+      list should include ("paging.page=2")
+      list should include ("paging.pageSize=1")
+      list should include ("search.author=alice")
+      list should include ("/edit?crud.origin.href=")
+      detail should include (s"/web/${componentPath}/admin/entities/${entityPath}?crud.origin.href=")
+      detail should include (s"/web/${componentPath}/admin/entities/${entityPath}/${recordId}/edit?crud.origin.href=")
+      edit should include ("type=\"hidden\" name=\"crud.origin.href\"")
+      edit should include ("type=\"hidden\" name=\"paging.page\" value=\"2\"")
+      edit should include ("type=\"hidden\" name=\"paging.pageSize\" value=\"1\"")
+      edit should include ("type=\"hidden\" name=\"search.author\" value=\"alice\"")
+    }
+
     "apply component entity update form POST into the EntityCollection fixture" in {
       val subsystem = _management_console_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
@@ -439,6 +489,35 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("value=\"bob\"")
     }
 
+    "redisplay component entity update form with field validation errors before dispatch" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val recordId = collection.storage.storeRealm.values.head.id.value
+      val req = _post_form_request(
+        s"/form/notice-board/admin/entities/notice/${recordId}/update",
+        "title=&author=bob&crud.origin.href=%2Fweb%2Fnotice-board%2Fadmin%2Fentities%2Fnotice%3Fpage%3D2&paging.page=2&search.author=bob"
+      )
+
+      val response = server
+        ._submit_component_admin_entity_update(req, "notice-board", "notice", recordId)
+        .unsafeRunSync()
+      val html = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 400
+      html should include ("Edit Notice")
+      html should include ("Validation failed.")
+      html should include ("title is required.")
+      html should include ("is-invalid")
+      html should include ("value=\"bob\"")
+      html should include ("type=\"hidden\" name=\"crud.origin.href\" value=\"/web/notice-board/admin/entities/notice?page=2\"")
+      html should include ("type=\"hidden\" name=\"paging.page\" value=\"2\"")
+      html should include ("type=\"hidden\" name=\"search.author\" value=\"bob\"")
+      dispatcher.paths should not contain ("/admin/entity/update")
+    }
+
     "apply component entity create form POST into the EntityCollection fixture" in {
       val subsystem = _management_console_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
@@ -463,6 +542,34 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       dispatcher.paths should contain ("/admin/entity/create")
     }
 
+    "keep static result page convention out of built-in admin entity create flow" in {
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
+            "__200.html",
+            "<article><h2>Static Operation Result</h2></article>"
+          ).resolve("web.yaml").toString)
+        ))
+      )
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val req = _post_form_request(
+        "/form/notice-board/admin/entities/notice/create",
+        "fields=id%3Dnotice_static%0Atitle%3Dstatic+guard%0Aauthor%3Dbob"
+      )
+
+      val html = server
+        ._submit_component_admin_entity_create(req, "notice-board", "notice")
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      html should include ("Entity record was applied")
+      html should include ("Create submitted")
+      html should not include ("Static Operation Result")
+      dispatcher.paths should contain ("/admin/entity/create")
+    }
+
     "render component entity edit page contract" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
@@ -479,6 +586,36 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Update")
       html should include ("Cancel")
       html should include (s"/web/${componentPath}/admin/entities/sales-order/missing-id")
+    }
+
+    "render component entity edit page with hidden form context" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+
+      val html = StaticFormAppRenderer.renderComponentAdminEntityEdit(
+        subsystem,
+        component.name,
+        "sales-order",
+        "missing-id",
+        values = Map(
+          "crud.origin.href" -> s"/web/${componentPath}/admin/entities/sales-order?page=2&pageSize=20",
+          "crud.success.href" -> s"/web/${componentPath}/admin/entities/sales-order/missing-id",
+          "paging.page" -> "2",
+          "paging.pageSize" -> "20",
+          "search.status" -> "open",
+          "etag" -> "v1"
+        )
+      ).map(_.body).getOrElse(fail("component entity edit admin is missing"))
+
+      html should include ("type=\"hidden\" name=\"crud.origin.href\"")
+      html should include ("type=\"hidden\" name=\"crud.success.href\"")
+      html should include ("type=\"hidden\" name=\"paging.page\" value=\"2\"")
+      html should include ("type=\"hidden\" name=\"paging.pageSize\" value=\"20\"")
+      html should include ("type=\"hidden\" name=\"search.status\" value=\"open\"")
+      html should include ("type=\"hidden\" name=\"etag\" value=\"v1\"")
+      html should not include ("crud.origin.href=")
+      html should not include ("search.status=")
     }
 
     "render component entity new page contract" in {
@@ -671,6 +808,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("admin Sales Order Update Result")
       html should include ("Update submitted")
       html should include ("Entity update execution is not enabled in this baseline")
+      html should include ("result.status")
+      html should include ("result.ok")
+      html should include ("result.body")
       html should include ("status")
       html should include ("confirmed")
       html should include ("/web/admin/admin/entities/sales-order/sales-order-1")
@@ -687,6 +827,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("admin Sales Order Create Result")
       html should include ("Create submitted")
       html should include ("Entity create execution is not enabled in this baseline")
+      html should include ("result.status")
+      html should include ("result.ok")
+      html should include ("result.body")
       html should include ("status")
       html should include ("draft")
       html should include ("/web/admin/admin/entities/sales-order")
@@ -945,6 +1088,34 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       }
     }
 
+    "redisplay component data create form with descriptor validation errors before dispatch" in {
+      val fixture = _data_fixture()
+      _with_global_runtime(fixture.runtime) {
+        val descriptor = _data_schema_web_descriptor()
+        val engine = new HttpExecutionEngine(fixture.subsystem, Some(descriptor))
+        val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+        val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+        val req = _post_form_request(
+          "/form/notice-board/admin/data/audit/create",
+          "id=audit_invalid&action=created&actor="
+        )
+
+        val response = server
+          ._submit_component_admin_data_create(req, "notice-board", "audit")
+          .unsafeRunSync()
+        val html = response.as[String].unsafeRunSync()
+
+        response.status.code shouldBe 400
+        html should include ("New Audit")
+        html should include ("Validation failed.")
+        html should include ("actor is required.")
+        html should include ("Descriptor actor help.")
+        html should include ("is-invalid")
+        html should include ("audit_invalid")
+        dispatcher.paths should not contain ("/admin/data/create")
+      }
+    }
+
     "extract structured result metadata for form redirect templates" in {
       FormResultMetadata.fromBody("""{"id":"notice_1"}""").toTemplateValues shouldBe Map("result.id" -> "notice_1")
       FormResultMetadata.fromBody("""{"result":{"id":"notice_2"}}""").toTemplateValues shouldBe Map("result.id" -> "notice_2")
@@ -980,6 +1151,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("notice summary")
       html should include ("/web/notice-board/admin/views/notice-view/notice%20summary")
       html should include ("Result pages")
+      html should not include ("Edit")
+      html should not include ("New")
+      html should not include ("Create")
       html should include ("/web/notice-board/admin/views")
     }
 
@@ -993,6 +1167,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("label")
       html should include ("value")
       html should include ("notice detail notice_1")
+      html should not include ("Edit")
+      html should not include ("Update")
       html should include ("/web/notice-board/admin/views/notice-view")
     }
 
@@ -1056,9 +1232,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("read-notice-aggregate")
       html should include ("Create operations construct a new aggregate root")
       html should include ("Update and command operations mutate aggregate state")
+      html should include ("Create aggregate")
+      html should include ("Read aggregate")
+      html should include ("Run update command")
       html should include ("btn-warning")
       html should include ("/form/notice-board/notice-aggregate/create-notice-aggregate")
       html should include ("/form/notice-board/notice-aggregate/approve-notice-aggregate")
+      html should not include ("approve-notice-aggregate__success.html")
       html should include ("/web/notice-board/admin/aggregates")
     }
 
@@ -1098,6 +1278,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("notice aggregate")
       html should include ("Instance operations")
       html should include ("aggregate id prefilled")
+      html should include ("Read aggregate")
+      html should include ("Run update command")
+      html should not include ("Create aggregate")
       html should include ("/form/notice-board/notice-aggregate/approve-notice-aggregate?id=notice_1")
       html should include ("/form/notice-board/notice-aggregate/read-notice-aggregate?id=notice_1")
       html should include ("/web/notice-board/admin/aggregates/notice-aggregate")
@@ -1581,14 +1764,24 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         "notice_board",
         "notice_aggregate",
         "approve_notice_aggregate",
-        values = Map("id" -> "notice_1")
+        values = Map(
+          "id" -> "notice_1",
+          "crud.origin.href" -> "/web/notice-board/admin/aggregates/notice-aggregate?page=2",
+          "paging.page" -> "2",
+          "search.keyword" -> "notice"
+        )
       ).map(_.body).getOrElse(fail("operation form is missing"))
 
       html should include ("name=\"id\"")
       html should include ("type=\"text\"")
       html should include ("required")
       html should include ("value=\"notice_1\"")
+      html should include ("type=\"hidden\" name=\"crud.origin.href\" value=\"/web/notice-board/admin/aggregates/notice-aggregate?page=2\"")
+      html should include ("type=\"hidden\" name=\"paging.page\" value=\"2\"")
+      html should include ("type=\"hidden\" name=\"search.keyword\" value=\"notice\"")
       html should include ("Additional fields")
+      html should not include ("crud.origin.href=")
+      html should not include ("search.keyword=")
     }
 
     "render descriptor-defined select and hidden controls for operation parameters" in {
@@ -2057,10 +2250,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         .unsafeRunSync()
       val definitionJson = parse(definition.as[String].unsafeRunSync()).getOrElse(fail("hint definition JSON is invalid"))
       val codeField = definitionJson.hcursor.downField("fields").downN(0)
+      val countField = definitionJson.hcursor.downField("fields").downN(1)
 
       codeField.downField("validation").downField("minLength").as[Int].toOption shouldBe Some(2)
       codeField.downField("validation").downField("maxLength").as[Int].toOption shouldBe Some(4)
       codeField.downField("validation").downField("pattern").as[String].toOption shouldBe Some("^[A-Z0-9]+$")
+      countField.downField("validation").downField("min").as[BigDecimal].toOption shouldBe Some(BigDecimal(0))
+      countField.downField("validation").downField("max").as[BigDecimal].toOption shouldBe Some(BigDecimal(100))
 
       val html = StaticFormAppRenderer.renderOperationForm(
         subsystem,
@@ -2093,6 +2289,35 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       errorCodes should contain ("max-length")
       errorCodes should contain ("pattern")
       errorCodes should contain ("max")
+    }
+
+    "keep Schema validation constraints when WebDescriptor attempts to relax them" in {
+      val (subsystem, descriptor) = _validation_hints_fixture()
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+
+      val invalid = server
+        ._validate_operation_form_api(
+          _post_form_request(
+            "/form-api/notice-board/notice/validate-hints/validate",
+            "code=A&count=-1"
+          ),
+          "notice-board",
+          "notice",
+          "validate-hints"
+        )
+        .unsafeRunSync()
+      val invalidJson = parse(invalid.as[String].unsafeRunSync()).getOrElse(fail("relax validation JSON is invalid"))
+      val errors = invalidJson.hcursor.downField("errors").as[Vector[Json]].toOption.getOrElse(Vector.empty)
+      val errorPairs = errors.flatMap { json =>
+        for {
+          field <- json.hcursor.downField("field").as[String].toOption
+          code <- json.hcursor.downField("code").as[String].toOption
+        } yield field -> code
+      }
+
+      invalidJson.hcursor.downField("valid").as[Boolean].toOption shouldBe Some(false)
+      errorPairs should contain ("code" -> "min-length")
+      errorPairs should contain ("count" -> "min")
     }
 
     "redisplay operation form validation hint errors before HTML dispatch" in {
@@ -2202,6 +2427,168 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         Some("/web/notice-board/admin/aggregates/notice-aggregate/notice_1")
       api.status.code shouldBe 200
       api.as[String].unsafeRunSync() should include ("aggregate-updated:notice_1")
+    }
+
+    "render operation form result through descriptor result template" in {
+      val subsystem = _aggregate_http_fixture_subsystem()
+      val descriptor = WebDescriptor(
+        expose = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Exposure.Protected
+        ),
+        form = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Form(
+            resultTemplate = Some(
+              """<article>
+                |  <h2>${operation.label} Custom Result</h2>
+                |  <p>Submitted ${form.id}</p>
+                |  <textus-result-view source="result.body"></textus-result-view>
+                |  <textus-property-list source="result"></textus-property-list>
+                |</article>""".stripMargin
+            )
+          )
+        )
+      )
+      val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
+      val server = new Http4sHttpServer(engine)
+
+      val html = server
+        ._submit_operation_form(
+          _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      html should include ("notice-board.notice-aggregate.approve-notice-aggregate Custom Result")
+      html should include ("Submitted notice_1")
+      html should include ("aggregate-updated:notice_1")
+      html should include ("result.status")
+      html should not include ("Submitted Values")
+      html should not include ("${form.id}")
+      html should not include ("<textus-result-view")
+    }
+
+    "render operation form result through static success template convention before descriptor template" in {
+      val subsystem = _aggregate_http_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
+            "approve-notice-aggregate__success.html",
+            """<!doctype html>
+              |<html>
+              |<body>
+              |  <h1>${operation.label} Static Success</h1>
+              |  <p>Submitted ${form.id}</p>
+              |  <textus-result-view source="result.body"></textus-result-view>
+              |</body>
+              |</html>""".stripMargin
+          ).resolve("web.yaml").toString)
+        ))
+      )
+      val descriptor = WebDescriptor(
+        expose = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Exposure.Protected
+        ),
+        form = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Form(
+            resultTemplate = Some("<article><h2>Descriptor Result</h2></article>")
+          )
+        )
+      )
+      val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
+      val server = new Http4sHttpServer(engine)
+
+      val html = server
+        ._submit_operation_form(
+          _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      html should include ("notice-board.notice-aggregate.approve-notice-aggregate Static Success")
+      html should include ("Submitted notice_1")
+      html should include ("aggregate-updated:notice_1")
+      html should not include ("Descriptor Result")
+      html should not include ("${form.id}")
+      html should not include ("<textus-result-view")
+    }
+
+    "render operation form result through static status template convention" in {
+      val subsystem = _aggregate_http_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
+            "approve-notice-aggregate__200.html",
+            """<article>
+              |  <h2>${operation.label} Static 200</h2>
+              |  <textus-property-list source="result"></textus-property-list>
+              |</article>""".stripMargin
+          ).resolve("web.yaml").toString)
+        ))
+      )
+      val descriptor = WebDescriptor(
+        expose = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Exposure.Protected
+        )
+      )
+      val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
+      val server = new Http4sHttpServer(engine)
+
+      val html = server
+        ._submit_operation_form(
+          _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      html should include ("notice-board.notice-aggregate.approve-notice-aggregate Static 200")
+      html should include ("result.status")
+      html should not include ("Submitted Values")
+      html should not include ("<textus-property-list")
+    }
+
+    "render operation form result through common static status template convention" in {
+      val subsystem = _aggregate_http_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
+            "__200.html",
+            """<article>
+              |  <h2>Common Static 200</h2>
+              |  <p>${operation.label}</p>
+              |  <textus-result-view source="result.body"></textus-result-view>
+              |</article>""".stripMargin
+          ).resolve("web.yaml").toString)
+        ))
+      )
+      val descriptor = WebDescriptor(
+        expose = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Exposure.Protected
+        )
+      )
+      val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
+      val server = new Http4sHttpServer(engine)
+
+      val html = server
+        ._submit_operation_form(
+          _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      html should include ("Common Static 200")
+      html should include ("notice-board.notice-aggregate.approve-notice-aggregate")
+      html should include ("aggregate-updated:notice_1")
+      html should not include ("Submitted Values")
+      html should not include ("<textus-result-view")
     }
 
     "redisplay the operation form with submitted values when stayOnError is enabled" in {
@@ -2755,7 +3142,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       form = Map(selector -> WebDescriptor.Form(
         controls = Map(
           "code" -> WebDescriptor.FormControl(
-            validation = WebValidationHints(maxLength = Some(4))
+            validation = WebValidationHints(minLength = Some(1), maxLength = Some(4))
+          ),
+          "count" -> WebDescriptor.FormControl(
+            validation = WebValidationHints(min = Some(BigDecimal(-10)), max = Some(BigDecimal(200)))
           )
         )
       ))
@@ -2779,7 +3169,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       )
     )
 
-  private def _aggregate_http_fixture_subsystem(): Subsystem = {
+  private def _aggregate_http_fixture_subsystem(
+    configuration: Configuration = Configuration.empty
+  ): Subsystem = {
     val component = new org.goldenport.cncf.component.Component() {
       override def aggregateDefinitions: Vector[AggregateDefinition] =
         Vector(
@@ -2793,7 +3185,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
     }
     _initialize_component("notice_board", component, _aggregate_http_protocol())
-    TestComponentFactory.emptySubsystem("sample-web").add(Vector(component))
+    new Subsystem(
+      name = "sample-web",
+      configuration = ResolvedConfiguration(configuration, ConfigurationTrace.empty)
+    ).add(Vector(component))
+  }
+
+  private def _web_template_fixture_root(
+    filename: String,
+    content: String
+  ): java.nio.file.Path = {
+    val root = Files.createTempDirectory("cncf-web-template-")
+    Files.writeString(root.resolve("web.yaml"), "form: {}\n", StandardCharsets.UTF_8)
+    Files.writeString(root.resolve(filename), content, StandardCharsets.UTF_8)
+    root
   }
 
   private def _aggregate_http_protocol(): Protocol =
@@ -2845,7 +3250,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     )
   }
 
-  private def _management_console_fixture_subsystem(): Subsystem = {
+  private def _management_console_fixture_subsystem(
+    configuration: Configuration = Configuration.empty
+  ): Subsystem = {
     given EntityPersistent[_NoticeEntity] = _notice_persistent
     val cid = _NoticeEntity.collectionId
     val descriptor = ComponentDescriptor(
@@ -2882,7 +3289,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
     )
-    DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+    DefaultSubsystemFactory.default(
+      Some("server"),
+      ResolvedConfiguration(configuration, ConfigurationTrace.empty)
+    ).add(Vector(component))
   }
 
   private def _entity_schema_web_descriptor_fixture(): (Subsystem, WebDescriptor) = {

@@ -196,6 +196,7 @@ object StaticFormAppRenderer {
       val action = s"/form/${context.componentPath}/${context.servicePath}/${context.operationPath}"
       val effectiveValidation = validation.filter(_.webSchema.selector == context.webSchema.selector)
       val controls = _operation_form_controls(context.webSchema, values, effectiveValidation)
+      val hiddenContext = _hidden_form_context_inputs(values)
       val errorPanel = _form_error_panel(values) + _form_validation_panel(effectiveValidation)
       Page(_simple_page(
         title = s"${_escape(context.component.name)}.${_escape(context.serviceName)}.${_escape(context.operationName)}",
@@ -205,6 +206,7 @@ object StaticFormAppRenderer {
              |  ${errorPanel}
              |  <form method="post" action="${_escape(action)}">
              |    ${controls}
+             |    ${hiddenContext}
              |    <button type="submit" class="btn btn-primary">Run</button>
              |    <a class="btn btn-outline-secondary" href="/form/${context.componentPath}">Operations</a>
              |  </form>
@@ -478,12 +480,54 @@ object StaticFormAppRenderer {
   private def _admin_new_fields_value(values: Map[String, String]): String =
     values.getOrElse(
       "fields",
-      values.filterNot { case (key, _) => key == "error" || key.startsWith("error.") }
+      _visible_form_values(values)
         .toVector
         .sortBy(_._1)
         .map { case (key, value) => s"${key}=${value}" }
         .mkString("\n")
     )
+
+  private val _hidden_form_context_exact_keys: Set[String] =
+    Set(
+      "crud.origin.href",
+      "crud.success.href",
+      "crud.error.href",
+      "paging.page",
+      "paging.pageSize",
+      "paging.chunkSize",
+      "paging.href",
+      "continuation.id",
+      "version",
+      "etag",
+      "csrf"
+    )
+
+  private def _is_hidden_form_context_key(key: String): Boolean =
+    _hidden_form_context_exact_keys.contains(key) || key.startsWith("search.")
+
+  private def _hidden_form_context_values(values: Map[String, String]): Vector[(String, String)] =
+    values.toVector
+      .filter { case (key, value) => _is_hidden_form_context_key(key) && value.nonEmpty }
+      .sortBy(_._1)
+
+  private def _visible_form_values(values: Map[String, String]): Map[String, String] =
+    values.filterNot { case (key, _) =>
+      key == "error" || key.startsWith("error.") || _is_hidden_form_context_key(key)
+    }
+
+  private def _hidden_form_context_inputs(values: Map[String, String]): String =
+    _hidden_form_context_values(values).map { case (key, value) =>
+      s"""<input type="hidden" name="${_escape(key)}" value="${_escape(value)}">"""
+    }.mkString("\n")
+
+  private def _hidden_form_context_query_suffix(values: Map[String, String]): String =
+    _hidden_form_context_values(values) match {
+      case xs if xs.isEmpty => ""
+      case xs =>
+        xs.map { case (key, value) =>
+          s"${_escape_query(key)}=${_escape_query(value)}"
+        }.mkString("?", "&", "")
+    }
 
   private def _admin_new_controls(
     schemaFields: Vector[WebSchemaResolver.ResolvedWebField],
@@ -495,7 +539,7 @@ object StaticFormAppRenderer {
     if (schemaFields.isEmpty)
       _admin_fields_textarea(values, fieldsId, placeholder, "Use one name=value pair per line.")
     else {
-      val userValues = values.filterNot { case (key, _) => key == "error" || key.startsWith("error.") || key == "fields" }
+      val userValues = _visible_form_values(values).filterNot { case (key, _) => key == "fields" }
       val schemaNames = schemaFields.map(_.name).toSet
       val validationMessages = _validation_messages_by_field(validation)
       val controls = schemaFields.map { field =>
@@ -521,7 +565,7 @@ object StaticFormAppRenderer {
     idPrefix: String,
     validation: Option[FormValidationResult] = None
   ): String = {
-    val fields = _admin_resolved_schema_ordered_fields(schemaFields, _admin_form_fields(defaults, values))
+    val fields = _admin_resolved_schema_ordered_fields(schemaFields, _admin_form_fields(defaults, _visible_form_values(values)))
     val validationMessages = _validation_messages_by_field(validation)
     fields.map {
       case (Some(field), _, value) =>
@@ -640,7 +684,7 @@ object StaticFormAppRenderer {
           validationMessages = fieldMessages
         )
       }.mkString("\n")
-      val extraValues = values.filterNot { case (key, _) => fieldNames.contains(key) }
+      val extraValues = _visible_form_values(values).filterNot { case (key, _) => fieldNames.contains(key) }
       val extra =
         if (extraValues.isEmpty)
           _operation_form_fields_textarea(Map.empty, "Additional fields", rows = 3)
@@ -1133,9 +1177,20 @@ object StaticFormAppRenderer {
 
   def renderFormResult(
     properties: FormResultProperties
+  ): Page =
+    renderFormResult(properties, None)
+
+  def renderFormResult(
+    properties: FormResultProperties,
+    template: String
+  ): Page =
+    renderFormResult(properties, Some(template))
+
+  def renderFormResult(
+    properties: FormResultProperties,
+    template: Option[String]
   ): Page = {
-    val pageProperties = properties.nextPageProperties
-    val template =
+    val effectiveTemplate = template.getOrElse(
       s"""<article>
          |  <h2>$${operation.label} Result</h2>
          |  <p>Content-Type $${result.contentType}</p>
@@ -1147,11 +1202,24 @@ object StaticFormAppRenderer {
          |  <textus-property-list source="form"></textus-property-list>
          |  <p><a href="/form/${_escape(NamingConventions.toNormalizedSegment(properties.componentName))}/${_escape(NamingConventions.toNormalizedSegment(properties.serviceName))}/${_escape(NamingConventions.toNormalizedSegment(properties.operationName))}">Run again</a> · <a href="/form/${_escape(NamingConventions.toNormalizedSegment(properties.componentName))}">Operations</a></p>
          |</article>""".stripMargin
-    Page(_simple_page(
-      title = s"${_escape(properties.operationLabel)} Result",
-      subtitle = s"HTTP ${properties.status}",
-      body = _render_template(template, pageProperties)
-    ))
+    )
+    renderFormResultTemplate(properties, effectiveTemplate)
+  }
+
+  def renderFormResultTemplate(
+    properties: FormResultProperties,
+    template: String
+  ): Page = {
+    val pageProperties = properties.nextPageProperties
+    val rendered = _render_template(template, pageProperties)
+    if (_is_html_document(template))
+      Page(rendered)
+    else
+      Page(_simple_page(
+        title = s"${_escape(properties.operationLabel)} Result",
+        subtitle = s"HTTP ${properties.status}",
+        body = rendered
+      ))
   }
 
   def renderSubsystemDashboard(subsystem: Subsystem): Page =
@@ -1269,7 +1337,8 @@ object StaticFormAppRenderer {
     componentName: String,
     entityName: String,
     pageRequest: PageRequest = PageRequest(),
-    webDescriptor: WebDescriptor = WebDescriptor.empty
+    webDescriptor: WebDescriptor = WebDescriptor.empty,
+    pageContext: Map[String, String] = Map.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
@@ -1294,7 +1363,11 @@ object StaticFormAppRenderer {
         webSchema.fieldNames,
         basePath,
         "No records are currently available for this entity.",
-        includeEdit = true
+        includeEdit = true,
+        linkContext = pageContext ++ Map(
+          "paging.page" -> result.page.toString,
+          "paging.pageSize" -> result.pageSize.toString
+        )
       )
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} Administration",
@@ -1320,13 +1393,15 @@ object StaticFormAppRenderer {
     componentName: String,
     entityName: String,
     id: String,
-    webDescriptor: WebDescriptor = WebDescriptor.empty
+    webDescriptor: WebDescriptor = WebDescriptor.empty,
+    values: Map[String, String] = Map.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val entityPath = NamingConventions.toNormalizedSegment(entityName)
       val entityLabel = _title_label(entityPath)
       val basePath = s"/web/${componentPath}/admin/entities/${entityPath}"
+      val querySuffix = _hidden_form_context_query_suffix(values)
       val body = _admin_entity_record_table(subsystem, component, componentPath, entityPath, id, webDescriptor)
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} Detail",
@@ -1334,7 +1409,7 @@ object StaticFormAppRenderer {
         body =
           s"""<article>
              |  <h2>Navigation</h2>
-             |  <p><a href="${_escape(basePath)}">Back to ${_escape(entityLabel)} records</a> · <a href="${_escape(basePath)}/${_escape(id)}/edit">Edit</a> · <a href="/web/${componentPath}/admin/entities">Entity types</a></p>
+             |  <p><a href="${_escape(basePath + querySuffix)}">Back to ${_escape(entityLabel)} records</a> · <a href="${_escape(basePath + "/" + _escape_path_segment(id) + "/edit" + querySuffix)}">Edit</a> · <a href="/web/${componentPath}/admin/entities">Entity types</a></p>
              |</article>
              |<article>
              |  <h2>${_escape(entityLabel)} detail</h2>
@@ -1367,6 +1442,7 @@ object StaticFormAppRenderer {
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
       val effectiveValidation = validation.filter(_.webSchema.selector == webSchema.selector)
+      val hiddenContext = _hidden_form_context_inputs(values)
       val controls = _admin_record_controls(
         webSchema.fields,
         _admin_entity_record_fields(subsystem, componentPath, entityPath, id).getOrElse(Vector("id" -> id)),
@@ -1387,6 +1463,7 @@ object StaticFormAppRenderer {
              |  ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
              |  <form method="post" action="${_escape(actionPath)}">
              |    ${controls}
+             |    ${hiddenContext}
              |    <button type="submit" class="btn btn-primary">Update</button>
              |    <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}/${_escape(id)}">Cancel</a>
              |  </form>
@@ -1417,6 +1494,7 @@ object StaticFormAppRenderer {
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
       val effectiveValidation = validation.filter(_.webSchema.selector == webSchema.selector)
+      val hiddenContext = _hidden_form_context_inputs(values)
       val controls = _admin_new_controls(webSchema.fields, values, "entityFields", "id=sales-order-1&#10;status=draft", effectiveValidation)
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} New",
@@ -1431,6 +1509,7 @@ object StaticFormAppRenderer {
              |  ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
              |  <form method="post" action="${_escape(actionPath)}">
              |    ${controls}
+             |    ${hiddenContext}
              |    <button type="submit" class="btn btn-primary">Create</button>
              |    <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}">Cancel</a>
              |  </form>
@@ -1444,7 +1523,8 @@ object StaticFormAppRenderer {
     id: String,
     values: Map[String, String],
     applied: Boolean = false,
-    message: String = "Entity update execution is not enabled in this baseline."
+    message: String = "Entity update execution is not enabled in this baseline.",
+    resultStatus: Int = 200
   ): Page = {
     val componentPath = NamingConventions.toNormalizedSegment(componentName)
     val entityPath = NamingConventions.toNormalizedSegment(entityName)
@@ -1463,7 +1543,7 @@ object StaticFormAppRenderer {
            |  <h2>Update submitted</h2>
            |  <p>${_escape(message)}</p>
            |  <div class="table-responsive"><table class="table table-sm">
-           |    <thead><tr><th>Applied</th><td>${applied}</td></tr></thead>
+           |    <thead>${_admin_result_rows(applied, resultStatus, message)}</thead>
            |    <tbody>${rows}</tbody>
            |  </table></div>
            |</article>""".stripMargin
@@ -1475,7 +1555,8 @@ object StaticFormAppRenderer {
     entityName: String,
     values: Map[String, String],
     applied: Boolean = false,
-    message: String = "Entity create execution is not enabled in this baseline."
+    message: String = "Entity create execution is not enabled in this baseline.",
+    resultStatus: Int = 200
   ): Page = {
     val componentPath = NamingConventions.toNormalizedSegment(componentName)
     val entityPath = NamingConventions.toNormalizedSegment(entityName)
@@ -1494,7 +1575,7 @@ object StaticFormAppRenderer {
            |  <h2>Create submitted</h2>
            |  <p>${_escape(message)}</p>
            |  <div class="table-responsive"><table class="table table-sm">
-           |    <thead><tr><th>Applied</th><td>${applied}</td></tr></thead>
+           |    <thead>${_admin_result_rows(applied, resultStatus, message)}</thead>
            |    <tbody>${rows}</tbody>
            |  </table></div>
            |</article>""".stripMargin
@@ -1820,7 +1901,8 @@ object StaticFormAppRenderer {
     schemaFields: Vector[String],
     basePath: String,
     emptyMessage: String,
-    includeEdit: Boolean = false
+    includeEdit: Boolean = false,
+    linkContext: Map[String, String] = Map.empty
   ): String =
     if (schemaFields.isEmpty) {
       val rows =
@@ -1828,7 +1910,7 @@ object StaticFormAppRenderer {
           s"""<tr><td colspan="3">${_escape(emptyMessage)}</td></tr>"""
         } else {
           items.map { item =>
-            val href = s"${basePath}/${_escape_path_segment(item.id)}"
+            val href = s"${basePath}/${_escape_path_segment(item.id)}${_hidden_form_context_query_suffix(linkContext)}"
             val actions = _admin_read_list_actions(href, includeEdit)
             s"""<tr><td><code>${_escape(item.id)}</code></td><td>${_escape(item.label)}</td><td>${actions}</td></tr>"""
           }.mkString("\n")
@@ -1844,7 +1926,7 @@ object StaticFormAppRenderer {
           s"""<tr><td colspan="${schemaFields.size + 1}">${_escape(emptyMessage)}</td></tr>"""
         } else {
           items.map { item =>
-            val href = s"${basePath}/${_escape_path_segment(item.id)}"
+            val href = s"${basePath}/${_escape_path_segment(item.id)}${_hidden_form_context_query_suffix(linkContext)}"
             val values = _admin_read_list_item_fields(item)
             val columns = schemaFields.map { field =>
               val value = {
@@ -1868,10 +1950,21 @@ object StaticFormAppRenderer {
     href: String,
     includeEdit: Boolean
   ): String =
-    if (includeEdit)
-      s"""<a href="${_escape(href)}">Detail</a> · <a href="${_escape(href)}/edit">Edit</a>"""
+    if (includeEdit) {
+      val editHref = _append_path_before_query(href, "/edit")
+      s"""<a href="${_escape(href)}">Detail</a> · <a href="${_escape(editHref)}">Edit</a>"""
+    }
     else
       s"""<a href="${_escape(href)}">Detail</a>"""
+
+  private def _append_path_before_query(
+    href: String,
+    suffix: String
+  ): String =
+    href.indexOf('?') match {
+      case -1 => href + suffix
+      case n => href.substring(0, n) + suffix + href.substring(n)
+    }
 
   private def _admin_read_list_item_fields(
     item: _AdminReadListItem
@@ -2065,7 +2158,8 @@ object StaticFormAppRenderer {
       val rows = bindings.map { binding =>
         val path = _form_operation_path(componentPath, binding.service, binding.operation)
         val style = if (binding.kind == "create") "btn-primary" else if (binding.kind == "update") "btn-warning" else "btn-outline-secondary"
-        s"""<tr><td>${_escape(binding.kind)}</td><td>${_escape(binding.service)}</td><td>${_escape(binding.operation)}</td><td><a class="btn btn-sm ${style}" href="${_escape(path)}">Open form</a></td></tr>"""
+        val label = _aggregate_operation_action_label(binding.kind)
+        s"""<tr><td>${_escape(binding.kind)}</td><td>${_escape(binding.service)}</td><td>${_escape(binding.operation)}</td><td><a class="btn btn-sm ${style}" href="${_escape(path)}">${_escape(label)}</a></td></tr>"""
       }.mkString("\n")
       s"""<ul>${summary}</ul>
          |<div class="table-responsive"><table class="table table-sm">
@@ -2089,7 +2183,8 @@ object StaticFormAppRenderer {
       val rows = bindings.map { binding =>
         val path = _form_operation_path(componentPath, binding.service, binding.operation, Map("id" -> id))
         val style = if (binding.kind == "update") "btn-warning" else "btn-outline-secondary"
-        s"""<tr><td>${_escape(binding.kind)}</td><td>${_escape(binding.service)}</td><td>${_escape(binding.operation)}</td><td><a class="btn btn-sm ${style}" href="${_escape(path)}">Open form</a></td></tr>"""
+        val label = _aggregate_operation_action_label(binding.kind)
+        s"""<tr><td>${_escape(binding.kind)}</td><td>${_escape(binding.service)}</td><td>${_escape(binding.operation)}</td><td><a class="btn btn-sm ${style}" href="${_escape(path)}">${_escape(label)}</a></td></tr>"""
       }.mkString("\n")
       s"""<p>Instance operations are opened as normal Operation forms with the aggregate id prefilled.</p>
          |<div class="table-responsive"><table class="table table-sm">
@@ -2098,6 +2193,14 @@ object StaticFormAppRenderer {
          |</table></div>""".stripMargin
     }
   }
+
+  private def _aggregate_operation_action_label(kind: String): String =
+    kind match {
+      case "create" => "Create aggregate"
+      case "read" => "Read aggregate"
+      case "update" => "Run update command"
+      case _ => "Open operation"
+    }
 
   private def _form_operation_path(
     componentPath: String,
@@ -2614,6 +2717,7 @@ object StaticFormAppRenderer {
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
       val effectiveValidation = validation.filter(_.webSchema.selector == webSchema.selector)
+      val hiddenContext = _hidden_form_context_inputs(values)
       val controls = _admin_record_controls(
         webSchema.fields,
         _admin_data_record_fields(subsystem, componentPath, dataPath, id).getOrElse(Vector("id" -> id)),
@@ -2634,6 +2738,7 @@ object StaticFormAppRenderer {
              |  ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
              |  <form method="post" action="${_escape(actionPath)}">
              |    ${controls}
+             |    ${hiddenContext}
              |    <button type="submit" class="btn btn-primary">Update</button>
              |    <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}/${_escape(id)}">Cancel</a>
              |  </form>
@@ -2662,6 +2767,7 @@ object StaticFormAppRenderer {
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
       val effectiveValidation = validation.filter(_.webSchema.selector == webSchema.selector)
+      val hiddenContext = _hidden_form_context_inputs(values)
       val controls = _admin_new_controls(webSchema.fields, values, "dataFields", "id=record-1&#10;status=draft", effectiveValidation)
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data New",
@@ -2676,6 +2782,7 @@ object StaticFormAppRenderer {
              |  ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
              |  <form method="post" action="${_escape(actionPath)}">
              |    ${controls}
+             |    ${hiddenContext}
              |    <button type="submit" class="btn btn-primary">Create</button>
              |    <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}">Cancel</a>
              |  </form>
@@ -2689,7 +2796,8 @@ object StaticFormAppRenderer {
     id: String,
     values: Map[String, String],
     applied: Boolean,
-    message: String
+    message: String,
+    resultStatus: Int = 200
   ): Page = {
     val componentPath = NamingConventions.toNormalizedSegment(componentName)
     val dataPath = NamingConventions.toNormalizedSegment(dataName)
@@ -2706,7 +2814,7 @@ object StaticFormAppRenderer {
            |  <h2>Update submitted</h2>
            |  <p>${_escape(message)}</p>
            |  <div class="table-responsive"><table class="table table-sm">
-           |    <thead><tr><th>Applied</th><td>${applied}</td></tr></thead>
+           |    <thead>${_admin_result_rows(applied, resultStatus, message)}</thead>
            |    <tbody>${_submitted_fields_rows(values)}</tbody>
            |  </table></div>
            |</article>""".stripMargin
@@ -2718,7 +2826,8 @@ object StaticFormAppRenderer {
     dataName: String,
     values: Map[String, String],
     applied: Boolean,
-    message: String
+    message: String,
+    resultStatus: Int = 200
   ): Page = {
     val componentPath = NamingConventions.toNormalizedSegment(componentName)
     val dataPath = NamingConventions.toNormalizedSegment(dataName)
@@ -2735,12 +2844,26 @@ object StaticFormAppRenderer {
            |  <h2>Create submitted</h2>
            |  <p>${_escape(message)}</p>
            |  <div class="table-responsive"><table class="table table-sm">
-           |    <thead><tr><th>Applied</th><td>${applied}</td></tr></thead>
+           |    <thead>${_admin_result_rows(applied, resultStatus, message)}</thead>
            |    <tbody>${_submitted_fields_rows(values)}</tbody>
            |  </table></div>
            |</article>""".stripMargin
     ))
   }
+
+  private def _admin_result_rows(
+    applied: Boolean,
+    resultStatus: Int,
+    resultBody: String
+  ): String =
+    Vector(
+      "Applied" -> applied.toString,
+      "result.status" -> resultStatus.toString,
+      "result.ok" -> (resultStatus >= 200 && resultStatus < 400).toString,
+      "result.body" -> resultBody
+    ).map { case (key, value) =>
+      s"<tr><th>${_escape(key)}</th><td>${_escape(value)}</td></tr>"
+    }.mkString
 
   def renderComponentAdmin(
     component: Component,
@@ -3414,6 +3537,11 @@ object StaticFormAppRenderer {
   ): String = {
     val widgets = _render_widgets(template, properties)
     _render_property_expansions(widgets, properties)
+  }
+
+  private def _is_html_document(template: String): Boolean = {
+    val text = template.dropWhile(_.isWhitespace).toLowerCase(java.util.Locale.ROOT)
+    text.startsWith("<!doctype html") || text.startsWith("<html")
   }
 
   private def _render_property_expansions(
