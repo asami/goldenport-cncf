@@ -7,10 +7,17 @@ package org.goldenport.cncf.component.entity
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
+import org.goldenport.schema.{Column, Schema, ValueDomain, XString}
+import org.goldenport.value.BaseContent
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 object Order {
   val collectionId: EntityCollectionId = EntityCollectionId("test", "a", "order")
+  val schema: Schema = Schema(Vector(
+    Column(BaseContent.simple("id"), ValueDomain(datatype = XString)),
+    Column(BaseContent.simple("name"), ValueDomain(datatype = XString)),
+    Column(BaseContent.simple("status"), ValueDomain(datatype = XString))
+  ))
 
   given EntityPersistent[Order] with
     def id(e: Order): EntityId = e.id

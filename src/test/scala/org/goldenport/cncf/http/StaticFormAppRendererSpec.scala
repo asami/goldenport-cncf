@@ -27,7 +27,7 @@ import org.goldenport.record.Record
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, WebValidationHints, XBoolean, XDateTime, XInt, XString}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall, QueryAction}
-import org.goldenport.cncf.component.{Component, ComponentDescriptor}
+import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentFactory}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace, QueryDirective, SearchResult, SearchableDataStore, TotalCountCapability}
@@ -556,6 +556,31 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("required")
       html should include ("placeholder=\"Write the notice body.\"")
       html should include ("Notice body shown on the board.")
+    }
+
+    "render component entity new page from generated companion schema" in {
+      val component = TestComponentFactory
+        .create("generated_schema_component", Protocol.empty)
+        .withComponentDescriptors(Vector(ComponentDescriptor(
+          componentName = Some("generated_schema_component"),
+          entityRuntimeDescriptors = Vector(EntityRuntimeDescriptor(
+            entityName = "order",
+            collectionId = EntityCollectionId("test", "a", "order"),
+            memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+            partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+            maxPartitions = 4,
+            maxEntitiesPerPartition = 100
+          ))
+        )))
+      val bootstrapped = new ComponentFactory().bootstrap(component)
+      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(bootstrapped))
+
+      val html = StaticFormAppRenderer.renderComponentAdminEntityNew(subsystem, "generated_schema_component", "order").map(_.body).getOrElse(fail("component entity new admin is missing"))
+
+      html should include ("name=\"id\"")
+      html should include ("name=\"name\"")
+      html should include ("name=\"status\"")
+      html should include ("Use one name=value pair per line")
     }
 
     "redisplay admin entity create validation errors before dispatching" in {
@@ -1630,6 +1655,39 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       fields.downN(1).downField("label").as[String].toOption shouldBe Some("Notice body")
       fields.downN(1).downField("type").as[String].toOption shouldBe Some("textarea")
       fields.downN(1).downField("help").as[String].toOption shouldBe Some("Notice body shown on the board.")
+    }
+
+    "serve admin entity form definition API from generated companion schema" in {
+      val component = TestComponentFactory
+        .create("generated_schema_component", Protocol.empty)
+        .withComponentDescriptors(Vector(ComponentDescriptor(
+          componentName = Some("generated_schema_component"),
+          entityRuntimeDescriptors = Vector(EntityRuntimeDescriptor(
+            entityName = "order",
+            collectionId = EntityCollectionId("test", "a", "order"),
+            memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+            partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+            maxPartitions = 4,
+            maxEntitiesPerPartition = 100
+          ))
+        )))
+      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(new ComponentFactory().bootstrap(component)))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        ._component_admin_entity_form_api_definition(
+          _get_request("/form-api/generated-schema-component/admin/entities/order"),
+          "generated-schema-component",
+          "order"
+        )
+        .unsafeRunSync()
+      val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("entity form definition JSON is invalid"))
+      val fields = json.hcursor.downField("fields").as[Vector[Json]].toOption.getOrElse(Vector.empty)
+      val names = fields.flatMap(_.hcursor.downField("name").as[String].toOption)
+
+      response.status.code shouldBe 200
+      json.hcursor.downField("source").as[String].toOption shouldBe Some("Schema")
+      names shouldBe Vector("id", "name", "status")
     }
 
     "serve admin data form definition API from inferred data fields" in {
