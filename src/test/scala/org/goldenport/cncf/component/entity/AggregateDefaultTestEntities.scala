@@ -1,13 +1,14 @@
 /*
  * @since   Mar. 30, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 16, 2026
  */
 package org.goldenport.cncf.component.entity
 
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
-import org.goldenport.schema.{Column, Schema, ValueDomain, XString}
+import org.goldenport.schema.{Column, Schema, ValueDomain, WebColumn, XString}
 import org.goldenport.value.BaseContent
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
@@ -16,7 +17,16 @@ object Order {
   val schema: Schema = Schema(Vector(
     Column(BaseContent.simple("id"), ValueDomain(datatype = XString)),
     Column(BaseContent.simple("name"), ValueDomain(datatype = XString)),
-    Column(BaseContent.simple("status"), ValueDomain(datatype = XString))
+    Column(
+      BaseContent.Builder("status").label("Order status").build(),
+      ValueDomain(datatype = XString),
+      web = WebColumn(
+        controlType = Some("select"),
+        values = Vector("draft", "submitted", "approved"),
+        required = Some(true),
+        help = Some("CML generated status hint.")
+      )
+    )
   ))
 
   given EntityPersistent[Order] with

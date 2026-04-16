@@ -581,6 +581,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("name=\"id\"")
       html should include ("name=\"name\"")
       html should include ("name=\"status\"")
+      html should include ("Order status")
+      html should include ("<select")
+      html should include ("<option value=\"submitted\"")
+      html should include ("CML generated status hint.")
       html should include ("Use one name=value pair per line")
     }
 
@@ -1755,6 +1759,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       response.status.code shouldBe 200
       json.hcursor.downField("source").as[String].toOption shouldBe Some("Schema")
       names shouldBe Vector("id", "name", "status")
+      fields(2).hcursor.downField("label").as[String].toOption shouldBe Some("Order status")
+      fields(2).hcursor.downField("type").as[String].toOption shouldBe Some("select")
+      fields(2).hcursor.downField("values").as[Vector[String]].toOption shouldBe Some(Vector("draft", "submitted", "approved"))
+      fields(2).hcursor.downField("required").as[Boolean].toOption shouldBe Some(true)
+      fields(2).hcursor.downField("help").as[String].toOption shouldBe Some("CML generated status hint.")
     }
 
     "serve admin entity form definition API from merged Schema and WebDescriptor controls" in {
@@ -2035,34 +2044,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     }
 
     "serve and validate operation form validation hints" in {
-      val component = new org.goldenport.cncf.component.Component() {}
-      val protocol = Protocol(
-        services = spec.ServiceDefinitionGroup(
-          Vector(
-            spec.ServiceDefinition(
-              name = "notice",
-              operations = spec.OperationDefinitionGroup(
-                operations = NonEmptyVector.of(
-                  _NoopOperation("validate-hints", Vector("code", "count"))
-                )
-              )
-            )
-          )
-        )
-      )
-      _initialize_component("notice_board", component, protocol)
-      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
-      val selector = "notice-board.notice.validate-hints"
-      val descriptor = WebDescriptor(
-        expose = Map(selector -> WebDescriptor.Exposure.Protected),
-        form = Map(selector -> WebDescriptor.Form(
-          controls = Map(
-            "code" -> WebDescriptor.FormControl(
-              validation = WebValidationHints(maxLength = Some(4))
-            )
-          )
-        ))
-      )
+      val (subsystem, descriptor) = _validation_hints_fixture()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
 
       val definition = server
@@ -2111,6 +2093,43 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       errorCodes should contain ("max-length")
       errorCodes should contain ("pattern")
       errorCodes should contain ("max")
+    }
+
+    "redisplay operation form validation hint errors before HTML dispatch" in {
+      val (subsystem, descriptor) = _validation_hints_fixture()
+      val dispatcher = new StaticWebOperationDispatcher(
+        HttpResponse.Text(
+          HttpStatus.Ok,
+          ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+          Bag.text("DISPATCHED", StandardCharsets.UTF_8)
+        )
+      )
+      val server = new Http4sHttpServer(
+        new HttpExecutionEngine(subsystem, Some(descriptor)),
+        operationDispatcherOption = Some(dispatcher)
+      )
+
+      val response = server
+        ._submit_operation_form(
+          _post_form_request(
+            "/form/notice-board/notice/validate-hints",
+            "code=toolong&count=101"
+          ),
+          "notice-board",
+          "notice",
+          "validate-hints"
+        )
+        .unsafeRunSync()
+      val html = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 400
+      html should include ("Validation failed.")
+      html should include ("code must be at most 4 characters.")
+      html should include ("code does not match the required pattern.")
+      html should include ("count must be less than or equal to 100.")
+      html should include ("value=\"toolong\"")
+      html should include ("value=\"101\"")
+      html should not include ("DISPATCHED")
     }
 
     "render aggregate operation form with admin descriptor field controls" in {
@@ -2309,6 +2328,34 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/form/notice-board/notice/search-notices/continue/test-id?page=3&amp;pageSize=1")
       html should not include ("<textus-result-table")
       html should not include ("${result.contentType}")
+    }
+
+    "render form result properties from operation response and submitted values" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice",
+          Map(
+            "body" -> "hello",
+            "recipient" -> "taro"
+          )
+        ),
+        201,
+        "application/json",
+        """{"id":"notice_1","message":"created"}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(properties).body
+
+      html should include ("notice-board.notice.post-notice Result")
+      html should include ("result.id")
+      html should include ("notice_1")
+      html should include ("form.body")
+      html should include ("hello")
+      html should include ("form.recipient")
+      html should include ("taro")
+      html should not include ("${operation.label}")
     }
 
     "render textus result table without total count" in {
@@ -2682,6 +2729,38 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     val component = new org.goldenport.cncf.component.Component() {}
     _initialize_component("notice_board", component, _form_type_protocol())
     DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+  }
+
+  private def _validation_hints_fixture(): (Subsystem, WebDescriptor) = {
+    val component = new org.goldenport.cncf.component.Component() {}
+    val protocol = Protocol(
+      services = spec.ServiceDefinitionGroup(
+        Vector(
+          spec.ServiceDefinition(
+            name = "notice",
+            operations = spec.OperationDefinitionGroup(
+              operations = NonEmptyVector.of(
+                _NoopOperation("validate-hints", Vector("code", "count"))
+              )
+            )
+          )
+        )
+      )
+    )
+    _initialize_component("notice_board", component, protocol)
+    val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+    val selector = "notice-board.notice.validate-hints"
+    val descriptor = WebDescriptor(
+      expose = Map(selector -> WebDescriptor.Exposure.Protected),
+      form = Map(selector -> WebDescriptor.Form(
+        controls = Map(
+          "code" -> WebDescriptor.FormControl(
+            validation = WebValidationHints(maxLength = Some(4))
+          )
+        )
+      ))
+    )
+    subsystem -> descriptor
   }
 
   private def _form_type_protocol(): Protocol =

@@ -145,10 +145,13 @@ Management Console schema resolution currently covers:
 Form execution result pages receive properties derived from the Operation
 response:
 
+- `component`, `service`, `operation`, `operation.label`
+- original submitted fields and the same fields under `form.*`
 - `result.status`
 - `result.ok`
 - `result.contentType`
 - `result.body`
+- extracted metadata such as `result.id`
 - `error.status` and `error.body` for HTTP error responses
 
 HTML templates use `textus-*` widgets such as `textus-result-view`,

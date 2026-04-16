@@ -74,15 +74,22 @@ object StaticFormAppRenderer {
       page.operationLabel
 
     def nextPageProperties: FormPageProperties =
-      val base = page
-        .withValue("result.status", status.toString)
-        .withValue("result.ok", (status >= 200 && status < 400).toString)
-        .withValue("result.contentType", contentType)
-        .withValue("result.body", body)
-        .withValue("paging.page", page.values.getOrElse("paging.page", "1"))
-        .withValue("paging.pageSize", page.values.getOrElse("paging.pageSize", "20"))
-        .withValue("paging.chunkSize", page.values.getOrElse("paging.chunkSize", "1000"))
-        .withValue("paging.href", page.values.getOrElse("paging.href", _default_paging_href))
+      val formValues = page.values.map { case (key, value) => s"form.${key}" -> value }
+      val resultValues = Map(
+        "component" -> componentName,
+        "service" -> serviceName,
+        "operation" -> operationName,
+        "operation.label" -> operationLabel,
+        "result.status" -> status.toString,
+        "result.ok" -> (status >= 200 && status < 400).toString,
+        "result.contentType" -> contentType,
+        "result.body" -> body,
+        "paging.page" -> page.values.getOrElse("paging.page", "1"),
+        "paging.pageSize" -> page.values.getOrElse("paging.pageSize", "20"),
+        "paging.chunkSize" -> page.values.getOrElse("paging.chunkSize", "1000"),
+        "paging.href" -> page.values.getOrElse("paging.href", _default_paging_href)
+      ) ++ FormResultMetadata.fromBody(body).toTemplateValues
+      val base = page.copy(values = page.values ++ formValues ++ resultValues)
       if (status >= 400)
         base
           .withValue("error.status", status.toString)
@@ -1130,12 +1137,14 @@ object StaticFormAppRenderer {
     val pageProperties = properties.nextPageProperties
     val template =
       s"""<article>
-         |  <h2>Result</h2>
+         |  <h2>$${operation.label} Result</h2>
          |  <p>Content-Type $${result.contentType}</p>
          |  <textus-error-panel source="error"></textus-error-panel>
          |  <textus-result-view source="result.body"></textus-result-view>
          |  <textus-result-table source="result.body" page="paging.page" page-size="paging.pageSize" total="paging.total" href="paging.href"></textus-result-table>
          |  <textus-property-list source="result"></textus-property-list>
+         |  <h3>Submitted Values</h3>
+         |  <textus-property-list source="form"></textus-property-list>
          |  <p><a href="/form/${_escape(NamingConventions.toNormalizedSegment(properties.componentName))}/${_escape(NamingConventions.toNormalizedSegment(properties.serviceName))}/${_escape(NamingConventions.toNormalizedSegment(properties.operationName))}">Run again</a> · <a href="/form/${_escape(NamingConventions.toNormalizedSegment(properties.componentName))}">Operations</a></p>
          |</article>""".stripMargin
     Page(_simple_page(

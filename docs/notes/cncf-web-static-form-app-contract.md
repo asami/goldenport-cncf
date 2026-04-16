@@ -347,6 +347,8 @@ Static Form App result pages use a small property expansion syntax:
 ```html
 ${operation.label}
 ${result.status}
+${result.id}
+${form.body}
 ```
 
 The template language intentionally does not provide control structures.
@@ -357,8 +359,56 @@ contracts are:
 <textus-result-view source="result.body"></textus-result-view>
 <textus-result-table source="result.body" page="paging.page" page-size="paging.pageSize" total="paging.total" href="paging.href"></textus-result-table>
 <textus-property-list source="result"></textus-property-list>
+<textus-property-list source="form"></textus-property-list>
 <textus-error-panel source="result"></textus-error-panel>
 ```
+
+The result page property set is:
+
+- `component`, `service`, `operation`, `operation.label`
+- submitted form values under their original names
+- submitted form values under `form.*`
+- `result.status`, `result.ok`, `result.contentType`, `result.body`
+- extracted result metadata such as `result.id`
+- `error.status`, `error.body` on failed responses
+- paging properties under `paging.*`
+
+## Form Admission Validation
+
+Static Form App validation is performed before Operation dispatch. The same
+resolved Web schema is used by:
+
+- HTML form submit under `/form`
+- JSON validation API under `/form-api/.../validate`
+- form definition metadata returned by `/form-api`
+
+Supported admission constraints are:
+
+- requiredness from multiplicity or WebDescriptor override
+- enum/select candidates
+- datatype checks for boolean, numeric, and date-like fields
+- `min`, `max`, `minLength`, `maxLength`, and `pattern`
+
+Validation failures redisplay the HTML form with submitted values and field
+errors. The Operation is not dispatched when admission validation fails.
+
+## CML Web Hint Propagation
+
+CML-derived Web extension metadata must travel through the shared schema model:
+
+```text
+CML field/parameter extension
+  -> Schema.Column.web / ParameterDefinition.web
+  -> EntityRuntimeDescriptor.schema / OperationDefinition
+  -> WebSchemaResolver.ResolvedWebSchema
+  -> HTML form and JSON form definition
+```
+
+Generated companion schemas are expected to carry `Schema.Column.web`. During
+Component bootstrap, `ComponentFactory` copies the generated companion schema
+into `EntityRuntimeDescriptor.schema` when the descriptor does not already carry
+an explicit schema. The Web layer must then consume that schema directly; it
+must not recover Web form hints through reflection or a parallel field list.
 
 Paging is part of the initial table contract. A table widget reads the current
 page, page size, optional total count, and page navigation href template through
