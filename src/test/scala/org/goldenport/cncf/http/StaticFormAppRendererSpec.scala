@@ -49,8 +49,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- *  version Apr. 16, 2026
- * @version Apr. 17, 2026
+ * @version Apr. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -1060,6 +1059,52 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("<option value=\"archived\"")
     }
 
+    "expose Schema labels in admin entity Form API and HTML" in {
+      val schema = Schema(Vector(
+        Column(
+          BaseContent.Builder("senderName").label("Sender").build(),
+          ValueDomain(datatype = XString, multiplicity = Multiplicity.One),
+          web = WebColumn(
+            placeholder = Some("Your name"),
+            help = Some("Name displayed as the poster."),
+            validation = WebValidationHints(minLength = Some(1))
+          )
+        ),
+        Column(
+          BaseContent.Builder("body").label("Body").build(),
+          ValueDomain(datatype = XString, multiplicity = Multiplicity.One),
+          web = WebColumn(
+            controlType = Some("textarea"),
+            placeholder = Some("Notice body"),
+            help = Some("Main notice text."),
+            validation = WebValidationHints(minLength = Some(1))
+          )
+        )
+      ))
+      val subsystem = _management_console_fixture_subsystem(schema = schema)
+
+      val definition = parse(StaticFormAppRenderer
+        .renderComponentAdminEntityFormDefinition(subsystem, "notice_board", "notice")
+        .map(_.body)
+        .getOrElse(fail("component entity form definition is missing")))
+        .getOrElse(fail("component entity form definition JSON is invalid"))
+      val fields = definition.hcursor.downField("fields")
+      fields.downN(0).downField("label").as[String].toOption shouldBe Some("Sender")
+      fields.downN(0).downField("placeholder").as[String].toOption shouldBe Some("Your name")
+      fields.downN(0).downField("validation").downField("minLength").as[Int].toOption shouldBe Some(1)
+      fields.downN(1).downField("label").as[String].toOption shouldBe Some("Body")
+      fields.downN(1).downField("type").as[String].toOption shouldBe Some("textarea")
+
+      val html = StaticFormAppRenderer
+        .renderComponentAdminEntityNew(subsystem, "notice_board", "notice")
+        .map(_.body)
+        .getOrElse(fail("component entity new admin is missing"))
+      html should include ("""<label class="form-label" for="new-field-sender-name">Sender</label>""")
+      html should include ("""<label class="form-label" for="new-field-body">Body</label>""")
+      html should include ("""placeholder="Your name"""")
+      html should include ("""minlength="1"""")
+    }
+
     "redisplay admin entity create validation errors before dispatching" in {
       val descriptor = ComponentDescriptor(
         componentName = Some("notice_board"),
@@ -1109,6 +1154,55 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("is-invalid")
       html should include ("value=\"notice_1\"")
       html should include ("value=\"hello\"")
+    }
+
+    "validate admin entity create and update POST values against Schema hints" in {
+      val schema = Schema(Vector(
+        Column(BaseContent.simple("id"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+        Column(
+          BaseContent.Builder("title").label("Title").build(),
+          ValueDomain(datatype = XString, multiplicity = Multiplicity.One),
+          web = WebColumn(validation = WebValidationHints(minLength = Some(3)))
+        ),
+        Column(
+          BaseContent.Builder("author").label("Author").build(),
+          ValueDomain(datatype = XString, multiplicity = Multiplicity.One),
+          web = WebColumn(required = Some(true))
+        )
+      ))
+      val subsystem = _management_console_fixture_subsystem(schema = schema)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val createResponse = server
+        ._submit_component_admin_entity_create(
+          _post_form_request("/form/notice-board/admin/entities/notice/create", "title=Hi&author="),
+          "notice-board",
+          "notice"
+        )
+        .unsafeRunSync()
+      val createHtml = createResponse.as[String].unsafeRunSync()
+
+      createResponse.status.code shouldBe 400
+      createHtml should include ("Validation failed.")
+      createHtml should include ("Title must be at least 3 characters.")
+      createHtml should include ("Author is required.")
+      createHtml should include ("is-invalid")
+
+      val updateResponse = server
+        ._submit_component_admin_entity_update(
+          _post_form_request("/form/notice-board/admin/entities/notice/notice_1/update", "title=No&author="),
+          "notice-board",
+          "notice",
+          "notice_1"
+        )
+        .unsafeRunSync()
+      val updateHtml = updateResponse.as[String].unsafeRunSync()
+
+      updateResponse.status.code shouldBe 400
+      updateHtml should include ("Validation failed.")
+      updateHtml should include ("Title must be at least 3 characters.")
+      updateHtml should include ("Author is required.")
+      updateHtml should include ("is-invalid")
     }
 
     "render component entity update submission result contract" in {
