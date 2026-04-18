@@ -10,6 +10,7 @@ import org.goldenport.record.RecordDecoder
 import org.goldenport.cncf.component.ComponentDescriptor
 import org.goldenport.cncf.component.ComponentDescriptorLoader
 import org.goldenport.cncf.component.DescriptorRecordLoader
+import org.goldenport.cncf.security.OperationAuthorizationRule
 
 /*
  * @since   Apr.  7, 2026
@@ -128,7 +129,8 @@ final case class GenericSubsystemDescriptor(
   wiring: Record = Record.empty,
   assemblyDescriptor: Option[GenericSubsystemAssemblyDescriptorSource] = None,
   security: Option[GenericSubsystemSecurityBinding] = None,
-  builtin: Option[GenericSubsystemBuiltinBinding] = None
+  builtin: Option[GenericSubsystemBuiltinBinding] = None,
+  operationAuthorization: Map[String, OperationAuthorizationRule] = Map.empty
 ) {
   def componentVersion: Option[String] =
     version.orElse(componentBindings.headOption.flatMap(_.componentVersion))
@@ -163,6 +165,11 @@ final case class GenericSubsystemDescriptor(
     GenericSubsystemDescriptor.resolveAssemblyWiringBindings(this)
       .filter(_.nonEmpty)
       .getOrElse(GenericSubsystemDescriptor.resolveWiringBindings(this))
+
+  def operationAuthorizationRule(
+    selector: String
+  ): Option[OperationAuthorizationRule] =
+    operationAuthorization.get(selector)
 }
 
 object GenericSubsystemDescriptor {
@@ -174,7 +181,8 @@ object GenericSubsystemDescriptor {
     config: Map[String, String],
     wiring: Record,
     security: Option[GenericSubsystemSecurityBinding],
-    builtin: Option[GenericSubsystemBuiltinBinding]
+    builtin: Option[GenericSubsystemBuiltinBinding],
+    operationAuthorization: Map[String, OperationAuthorizationRule]
   )
 
   private val _canonical_descriptor_files = Vector(
@@ -358,7 +366,8 @@ object GenericSubsystemDescriptor {
         wiring = Record.empty,
         assemblyDescriptor = loadAdjacentAssemblyDescriptor(path),
         security = None,
-        builtin = None
+        builtin = None,
+        operationAuthorization = Map.empty
       )
     }
 
@@ -381,7 +390,8 @@ object GenericSubsystemDescriptor {
         wiring = s.wiring,
         assemblyDescriptor = assemblyDescriptor0,
         security = s.security,
-        builtin = s.builtin
+        builtin = s.builtin,
+        operationAuthorization = s.operationAuthorization
       )
     }.leftMap { c =>
       c.copy(observation = c.observation.copy(cause = c.observation.cause.withMessage(s"${c.displayMessage} in ${path}")))
@@ -484,6 +494,27 @@ object GenericSubsystemDescriptor {
 
   private def _string_map_value(rec: Record, keys: List[String]): Map[String, String] =
     _record_value(rec, keys).map(_.asMap.collect { case (k, v: String) => k -> v }).getOrElse(Map.empty)
+
+  private def _operation_authorization_value(
+    rec: Record
+  ): Map[String, OperationAuthorizationRule] = {
+    val direct = _record_value(rec, List("operationAuthorization", "operation_authorization"))
+    val nested = _record_value(rec, List("authorization")).flatMap { auth =>
+      _record_value(auth, List("operations", "operation", "operationAuthorization", "operation_authorization"))
+    }
+    direct.orElse(nested).map { rules =>
+      rules.asMap.toVector.flatMap {
+        case (selector, r: Record) =>
+          Some(selector -> OperationAuthorizationRule.fromRecord(r))
+        case (selector, m: Map[?, ?]) =>
+          Some(selector -> OperationAuthorizationRule.fromRecord(_map_to_record(m)))
+        case (selector, m: java.util.Map[?, ?]) =>
+          Some(selector -> OperationAuthorizationRule.fromRecord(_map_to_record(m.asScala.toMap)))
+        case _ =>
+          None
+      }.toMap
+    }.getOrElse(Map.empty)
+  }
 
   private def _wiring_value(rec: Record): Record =
     _record_value(rec, List("wiring")).getOrElse {
@@ -795,7 +826,8 @@ object GenericSubsystemDescriptor {
                 config = _string_map_value(rec, List("config")),
                 wiring = _wiring_value(rec),
                 security = _record_value(rec, List("security")).flatMap(r => summon[RecordDecoder[GenericSubsystemSecurityBinding]].fromRecord(r).toOption),
-                builtin = _record_value(rec, List("builtin", "builtins")).flatMap(r => summon[RecordDecoder[GenericSubsystemBuiltinBinding]].fromRecord(r).toOption)
+                builtin = _record_value(rec, List("builtin", "builtins")).flatMap(r => summon[RecordDecoder[GenericSubsystemBuiltinBinding]].fromRecord(r).toOption),
+                operationAuthorization = _operation_authorization_value(rec)
               )
             )
         case None =>

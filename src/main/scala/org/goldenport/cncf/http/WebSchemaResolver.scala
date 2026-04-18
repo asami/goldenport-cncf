@@ -10,7 +10,8 @@ import org.goldenport.schema.{Schema, WebValidationHints}
  * Web-facing schema contract.
  *
  * @since   Apr. 16, 2026
- * @version Apr. 16, 2026
+ *  version Apr. 16, 2026
+ * @version Apr. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 object WebSchemaResolver {
@@ -111,7 +112,7 @@ object WebSchemaResolver {
     fallbackFields: => Vector[String] = Vector.empty,
     fieldOrderStrategy: FieldOrderStrategy = FieldOrderStrategy.IdFirst
   ): ResolvedWebSchema =
-    resolveEntityLike(component, componentPath, Surface.Entity, "entity", entityName, entityName, webDescriptor, fallbackFields, fieldOrderStrategy)
+    resolveEntityLike(component, componentPath, Surface.Entity, "entity", entityName, entityName, webDescriptor, fallbackFields, None, fieldOrderStrategy)
 
   def resolveView(
     component: Component,
@@ -120,9 +121,10 @@ object WebSchemaResolver {
     entityName: Option[String],
     webDescriptor: WebDescriptor,
     fallbackFields: => Vector[String] = Vector.empty,
+    viewFields: Option[Vector[String]] = None,
     fieldOrderStrategy: FieldOrderStrategy = FieldOrderStrategy.IdFirst
   ): ResolvedWebSchema =
-    resolveEntityLike(component, componentPath, Surface.View, "view", viewName, entityName.getOrElse(viewName), webDescriptor, fallbackFields, fieldOrderStrategy)
+    resolveEntityLike(component, componentPath, Surface.View, "view", viewName, entityName.getOrElse(viewName), webDescriptor, fallbackFields, viewFields, fieldOrderStrategy)
 
   def resolveAggregate(
     component: Component,
@@ -131,9 +133,10 @@ object WebSchemaResolver {
     entityName: Option[String],
     webDescriptor: WebDescriptor,
     fallbackFields: => Vector[String] = Vector.empty,
+    viewFields: Option[Vector[String]] = None,
     fieldOrderStrategy: FieldOrderStrategy = FieldOrderStrategy.IdFirst
   ): ResolvedWebSchema =
-    resolveEntityLike(component, componentPath, Surface.Aggregate, "aggregate", aggregateName, entityName.getOrElse(aggregateName), webDescriptor, fallbackFields, fieldOrderStrategy)
+    resolveEntityLike(component, componentPath, Surface.Aggregate, "aggregate", aggregateName, entityName.getOrElse(aggregateName), webDescriptor, fallbackFields, viewFields, fieldOrderStrategy)
 
   def resolveData(
     componentPath: String,
@@ -201,7 +204,7 @@ object WebSchemaResolver {
     schema.columns.map { column =>
       ResolvedWebField(
         name = column.name.value,
-        label = column.label.map(_.value.displayMessage),
+        label = column.label.orElse(column.baseContent.nameAttributes.label).map(_.value.displayMessage),
         dataType = Some(column.domain.datatype.name),
         multiplicity = Some(column.domain.multiplicity.toString),
         control = WebDescriptor.FormControl(
@@ -237,10 +240,11 @@ object WebSchemaResolver {
     entityName: String,
     webDescriptor: WebDescriptor,
     fallbackFields: => Vector[String],
+    viewFields: Option[Vector[String]],
     fieldOrderStrategy: FieldOrderStrategy
   ): ResolvedWebSchema = {
-    val runtimeDescriptor = component.entityRuntimeDescriptor(entityName)
-    val schemaFields = runtimeDescriptor.flatMap(_.schema).map(fromSchema).getOrElse(Vector.empty)
+    val runtimeDescriptor = _entity_runtime_descriptor(component, entityName, collectionName, surfaceName)
+    val schemaFields = _select_fields(runtimeDescriptor.flatMap(_.schema).map(fromSchema).getOrElse(Vector.empty), viewFields)
     val fallback = if (schemaFields.nonEmpty) Vector.empty else fallbackFields
     val base =
       if (schemaFields.nonEmpty)
@@ -262,6 +266,47 @@ object WebSchemaResolver {
       baseSource = source,
       adminFields = webDescriptor.adminFields(componentPath, surfaceName, collectionName)
     )
+  }
+
+  private def _select_fields(
+    fields: Vector[ResolvedWebField],
+    names: Option[Vector[String]]
+  ): Vector[ResolvedWebField] =
+    names.filter(_.nonEmpty).map { xs =>
+      xs.flatMap(name => fields.find(field => NamingConventions.equivalentByNormalized(field.name, name)))
+    }.filter(_.nonEmpty).getOrElse(fields)
+
+  private def _entity_runtime_descriptor(
+    component: Component,
+    entityName: String,
+    collectionName: String,
+    surfaceName: String
+  ): Option[org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor] =
+    _entity_name_candidates(entityName, collectionName, surfaceName)
+      .iterator
+      .flatMap(component.entityRuntimeDescriptor)
+      .toSeq
+      .headOption
+
+  private def _entity_name_candidates(
+    entityName: String,
+    collectionName: String,
+    surfaceName: String
+  ): Vector[String] = {
+    val suffix = s"-${NamingConventions.toNormalizedSegment(surfaceName)}"
+    Vector(entityName, collectionName) ++
+      Vector(entityName, collectionName).flatMap(_strip_suffix(_, suffix))
+  }.map(_.trim).filter(_.nonEmpty).distinct
+
+  private def _strip_suffix(
+    value: String,
+    suffix: String
+  ): Option[String] = {
+    val normalized = NamingConventions.toNormalizedSegment(value)
+    if (normalized.endsWith(suffix))
+      Some(normalized.dropRight(suffix.length))
+    else
+      None
   }
 
   private def _merge(

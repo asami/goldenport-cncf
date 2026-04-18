@@ -10,6 +10,7 @@ import org.goldenport.log.Logger
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.action.CommandExecutionMode
+import org.goldenport.cncf.config.OperationMode
 import org.goldenport.cncf.http.{FakeHttpDriver, HttpDriver}
 import org.goldenport.cncf.datastore.DataStoreSpace
 import org.goldenport.cncf.entity.EntityStoreSpace
@@ -91,6 +92,7 @@ object ExecutionContext {
       def security: SecurityContext = cncfCore.security
       def observability: ObservabilityContext = cncfCore.observability
       def runtime: RuntimeContext = cncfCore.runtime
+      def operationMode: OperationMode = runtime.operationMode
       def unitOfWork: org.goldenport.cncf.unitofwork.UnitOfWork = runtime.unitOfWork
       def jobContext: org.goldenport.cncf.job.JobContext = cncfCore.jobContext
       def framework: FrameworkParameter = cncfCore.framework

@@ -13,7 +13,8 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 /*
  * @since   Feb. 22, 2026
  *  version Feb. 27, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityPersistent[E] extends RecordCodex[E]
@@ -61,6 +62,10 @@ object EntityPersistentQuery {
 
 trait EntityPersistable extends RecordPresentable {
   def id: EntityId
+}
+
+trait EntityDisplayable extends RecordPresentable {
+  def toDisplayRecord(view: String, fields: Vector[String]): Record
 }
 
 trait EntityPersistableCreate extends RecordPresentable {

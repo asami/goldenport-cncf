@@ -74,6 +74,20 @@ object SecurityContext {
   }
 
   object Privilege {
+    case object Anonymous extends Privilege {
+      val principalId: PrincipalId = PrincipalId("anonymous")
+      val attributes: Map[String, String] = Map(
+        "anonymous" -> "true",
+        "role" -> "anonymous",
+        "privilege" -> "anonymous"
+      )
+      val capabilities: Set[Capability] = Set(
+        Capability("anonymous")
+      )
+      val level: SecurityLevel = SecurityLevel("anonymous")
+      override val subjectKind: SubjectKind = SubjectKind.Anonymous
+    }
+
     case object User extends Privilege {
       val principalId: PrincipalId = PrincipalId("test-user-principal")
       val attributes: Map[String, String] = Map(

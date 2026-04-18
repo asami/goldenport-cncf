@@ -24,11 +24,12 @@ import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.datastore.{DataStore, Query as DataStoreQuery, QueryDirective, QueryLimit, TotalCountCapability}
 import org.goldenport.cncf.directive.{Query as EntityQuery}
-import org.goldenport.cncf.entity.EntityPersistable
+import org.goldenport.cncf.entity.{EntityDisplayable, EntityPersistable}
 import org.goldenport.cncf.entity.runtime.EntityCollection
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.observability.ObservabilityEngine
 import org.goldenport.cncf.projection.{SecurityDeploymentMarkdownProjection, SecurityDeploymentProjection}
+import org.goldenport.cncf.security.{OperationAuthorizationProvider, OperationAuthorizationRule}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAssemblyDescriptorSource, Subsystem}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
@@ -38,7 +39,7 @@ import org.goldenport.protocol.handler.ingress.{IngressCollection, RestIngress}
 import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
-import org.goldenport.record.Record
+import org.goldenport.record.{Record, RecordPresentable}
 import org.goldenport.value.BaseContent
 import org.goldenport.schema.{DataType, XString}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -47,7 +48,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
- * @version Apr. 15, 2026
+ *  version Apr. 15, 2026
+ * @version Apr. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -56,6 +58,13 @@ class AdminComponent() extends Component {
 object AdminComponent {
   val name: String = "admin"
   val componentId = ComponentId(name) // TODO static
+
+  private trait AdminOperationAuthorization extends OperationAuthorizationProvider {
+    def operationAuthorization(
+      runtimeConfig: RuntimeConfig
+    ): OperationAuthorizationRule =
+      OperationAuthorizationRule.developAnonymousAdmin(runtimeConfig)
+  }
 
   object Factory extends Component.Factory {
     protected def create_Components(params: ComponentCreate): Vector[Component] = {
@@ -309,7 +318,7 @@ object AdminComponent {
   private final class PingOperationDefinition(
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "ping",
@@ -329,7 +338,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "list",
@@ -348,7 +357,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "list",
@@ -367,7 +376,7 @@ object AdminComponent {
   private final class VariationDescribeOperationDefinition(
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("describe")
@@ -388,7 +397,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "list",
@@ -407,7 +416,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "show",
@@ -426,7 +435,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("securityMermaid")
@@ -447,7 +456,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("securityMarkdown")
@@ -468,7 +477,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("warnings")
@@ -489,7 +498,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("report")
@@ -510,7 +519,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("descriptor")
@@ -531,7 +540,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("diagram")
@@ -551,7 +560,7 @@ object AdminComponent {
   private final class ExecutionCalltreeOperationDefinition(
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("calltree")
@@ -571,7 +580,7 @@ object AdminComponent {
   private final class ExecutionHistoryOperationDefinition(
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         content = BaseContent.Builder("history")
@@ -592,7 +601,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "create",
@@ -610,7 +619,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "update",
@@ -628,7 +637,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(name = "list", request = request, response = response)
 
@@ -640,7 +649,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(name = "read", request = request, response = response)
 
@@ -652,7 +661,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "create",
@@ -670,7 +679,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "update",
@@ -688,7 +697,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(name = "list", request = request, response = response)
 
@@ -700,7 +709,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(name = "read", request = request, response = response)
 
@@ -712,7 +721,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(name = "read", request = request, response = response)
 
@@ -724,7 +733,7 @@ object AdminComponent {
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     subsystem: Subsystem
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(name = "read", request = request, response = response)
 
@@ -1524,7 +1533,7 @@ object AdminComponent {
         _component_by_name(subsystem, componentName).flatMap(_entity_collection(_, entityName)),
         s"Entity collection not found: ${entityName}"
       )
-      _ <- collection.putRecord(_admin_entity_record(args))
+      _ <- collection.putRecord(_admin_entity_record(collection, args))
     } yield OperationResponse.Scalar("Entity record was applied.")
   }
 
@@ -1539,17 +1548,23 @@ object AdminComponent {
       paging <- _paging(args)
       pagingDecision <- _paging_with_capability(paging, TotalCountCapability.Supported, s"entity.${entityName}")
       effectivePaging = pagingDecision.paging
+      component <- Consequence.fromOption(
+        _component_by_name(subsystem, componentName),
+        s"Component not found: ${componentName}"
+      )
       collection <- Consequence.fromOption(
-        _component_by_name(subsystem, componentName).flatMap(_entity_collection(_, entityName)),
+        _entity_collection(component, entityName),
         s"Entity collection not found: ${entityName}"
       )
+      view = args.get("view").map(_.toString).getOrElse("summary")
+      fields = _entity_view_fields(component, entityName, view)
       result <- _admin_entity_search(core, collection, effectivePaging)
     } yield OperationResponse.RecordResponse(
       _list_response_record(
         "entity",
         componentName,
         entityName,
-        _admin_entity_page(collection, result, effectivePaging, pagingDecision),
+        _admin_entity_page(collection, result, effectivePaging, pagingDecision, fields),
         effectivePaging
       )
     )
@@ -1584,11 +1599,17 @@ object AdminComponent {
       componentName <- _required_string(args, "component")
       entityName <- _required_string(args, "entity")
       id <- _required_string(args, "id")
+      component <- Consequence.fromOption(
+        _component_by_name(subsystem, componentName),
+        s"Component not found: ${componentName}"
+      )
       collection <- Consequence.fromOption(
-        _component_by_name(subsystem, componentName).flatMap(_entity_collection(_, entityName)),
+        _entity_collection(component, entityName),
         s"Entity collection not found: ${entityName}"
       )
-      record <- Consequence.fromOption(_entity_record(collection, id), s"Entity record not found: ${id}")
+      view = args.get("view").map(_.toString).getOrElse("detail")
+      fields = _entity_view_fields(component, entityName, view)
+      record <- Consequence.fromOption(_entity_record(collection, id, fields), s"Entity record not found: ${id}")
     } yield OperationResponse.RecordResponse(
       _read_response_record(
         "entity",
@@ -1748,25 +1769,32 @@ object AdminComponent {
       idOption <- _optional_entity_id(args, "id", componentName, "aggregate", aggregateName)
       response <- idOption match {
         case Some((idText, id)) =>
-          collection.resolve_with_context(id)(using core.executionContext).map { value =>
+          collection.resolve_with_context(id)(using core.executionContext).recoverWith {
+            case c if _is_not_implemented(c) =>
+              _admin_aggregate_entity_read(component, aggregateName, idText)
+            case c =>
+              Consequence.Failure(c)
+          }.map { value =>
+            val displayValue = _admin_aggregate_display_value(component, aggregateName, idText, value)
             OperationResponse.RecordResponse(
               _read_value_response_record(
                 "aggregate",
                 componentName,
                 aggregateName,
                 idText,
-                value
+                displayValue
               )
             )
           }
         case None =>
-          _admin_aggregate_page_response(core, componentName, aggregateName, collection, paging)
+          _admin_aggregate_page_response(core, component, componentName, aggregateName, collection, paging)
       }
     } yield response
   }
 
   private def _admin_aggregate_page_response(
     core: ActionCall.Core,
+    component: Component,
     componentName: String,
     aggregateName: String,
     collection: org.goldenport.cncf.entity.aggregate.AggregateCollection[Any],
@@ -1777,6 +1805,16 @@ object AdminComponent {
       pagingDecision <- _paging_with_capability(paging, capability, s"aggregate.${aggregateName}")
       effectivePaging = pagingDecision.paging
       values <- collection.query_with_context(EntityQuery.plan(Record.empty, limit = Some(effectivePaging.fetchPageSize), offset = Some(effectivePaging.offset)))(using core.executionContext)
+        .flatMap {
+          case xs if xs.nonEmpty => Consequence.success(xs)
+          case _ => _admin_aggregate_entity_list(core, component, aggregateName, effectivePaging)
+        }
+        .recoverWith {
+          case c if _is_not_implemented(c) =>
+            _admin_aggregate_entity_list(core, component, aggregateName, effectivePaging)
+          case c =>
+            Consequence.Failure(c)
+        }
       total <- if (effectivePaging.wantsTotal)
         collection.count_with_context(EntityQuery.plan(Record.empty))(using core.executionContext).map(Some(_))
       else
@@ -1791,6 +1829,53 @@ object AdminComponent {
         effectivePaging
       )
     )
+
+  private def _admin_aggregate_entity_list(
+    core: ActionCall.Core,
+    component: Component,
+    aggregateName: String,
+    paging: _Paging
+  ): Consequence[Vector[Any]] =
+    _aggregate_entity_collection(component, aggregateName) match {
+      case Some((_, collection)) =>
+        _admin_entity_search(core, collection, paging).map { result =>
+          val values =
+            if (result.data.nonEmpty)
+              result.data
+            else
+              _entity_values(collection).drop(paging.offset).take(paging.fetchPageSize)
+          values.map(x => collection.descriptor.persistent.toRecord(x)).asInstanceOf[Vector[Any]]
+        }
+      case None =>
+        Consequence.success(Vector.empty)
+    }
+
+  private def _admin_aggregate_entity_read(
+    component: Component,
+    aggregateName: String,
+    idText: String
+  ): Consequence[Any] =
+    for {
+      entity <- Consequence.fromOption(
+        _aggregate_entity_collection(component, aggregateName),
+        s"Aggregate entity collection not found: ${aggregateName}"
+      )
+      (_, collection) = entity
+      record <- Consequence.fromOption(_entity_record(collection, idText), s"Aggregate entity record not found: ${idText}")
+    } yield record
+
+  private def _admin_aggregate_display_value(
+    component: Component,
+    aggregateName: String,
+    idText: String,
+    value: Any
+  ): Any =
+    _aggregate_entity_collection(component, aggregateName)
+      .flatMap { case (entityName, collection) =>
+        val fields = _entity_view_fields(component, entityName, "detail")
+        _entity_record(collection, idText, fields)
+      }
+      .getOrElse(value)
 
   private def _admin_data_create(
     core: ActionCall.Core,
@@ -1944,11 +2029,21 @@ object AdminComponent {
     }
 
   private def _admin_entity_record(
+    collection: EntityCollection[?],
     args: Map[String, Any]
-  ): Record =
-    Record.create(args.filterNot {
+  ): Record = {
+    val data = args.filterNot {
       case (key, _) => key == "component" || key == "entity"
-    }.toVector)
+    }
+    val withId =
+      data.get("id").map(_.toString).filter(_.nonEmpty) match {
+        case Some(_) => data
+        case None =>
+          val cid = collection.descriptor.collectionId
+          data + ("id" -> EntityId(cid.major, cid.minor, cid).value)
+      }
+    Record.create(withId.toVector)
+  }
 
   private def _admin_data_record(
     args: Map[String, Any]
@@ -1966,11 +2061,53 @@ object AdminComponent {
 
   private def _entity_record[A](
     collection: EntityCollection[A],
-    id: String
+    id: String,
+    fields: Vector[String] = Vector.empty
   ): Option[Record] =
     _entity_values(collection)
       .find(x => collection.descriptor.persistent.id(x).value == id)
-      .map(x => collection.descriptor.persistent.toRecord(x))
+      .map(x => _entity_display_record(x, collection.descriptor.persistent.toRecord(x), fields))
+
+  private def _entity_view_fields(
+    component: Component,
+    entityName: String,
+    view: String
+  ): Vector[String] =
+    component.viewDefinitions
+      .find(d =>
+        NamingConventions.equivalentByNormalized(d.entityName, entityName) ||
+          NamingConventions.equivalentByNormalized(d.name, entityName)
+      )
+      .flatMap(_.fieldsFor(view))
+      .getOrElse(Vector.empty)
+
+  private def _entity_display_record(
+    value: Any,
+    fallback: Record,
+    fields: Vector[String]
+  ): Record =
+    if (fields.isEmpty)
+      fallback
+    else
+      value match {
+        case displayable: EntityDisplayable => displayable.toDisplayRecord("admin", fields)
+        case _ => _filter_record(fallback, fields)
+      }
+
+  private def _filter_record(
+    record: Record,
+    fields: Vector[String]
+  ): Record = {
+    val source = record.asMap
+    val rows = fields.flatMap { field =>
+      source.find { case (key, _) => _normalized_field_name(key) == _normalized_field_name(field) }
+        .map { case (_, value) => field -> value }
+    }
+    Record.dataAuto(rows*)
+  }
+
+  private def _normalized_field_name(name: String): String =
+    name.filter(_.isLetterOrDigit).toLowerCase(java.util.Locale.ROOT)
 
   private def _entity_values[A](
     collection: EntityCollection[A]
@@ -2023,11 +2160,12 @@ object AdminComponent {
     collection: EntityCollection[A],
     result: org.goldenport.cncf.directive.SearchResult[A],
     paging: _Paging,
-    decision: _PagingCapabilityDecision
+    decision: _PagingCapabilityDecision,
+    fields: Vector[String] = Vector.empty
   ): _Page[_AdminReadItem] = {
     val items = result.data.map { x =>
       val id = collection.descriptor.persistent.id(x).value
-      val record = collection.descriptor.persistent.toRecord(x)
+      val record = _entity_display_record(x, collection.descriptor.persistent.toRecord(x), fields)
       val label = _record_label(record).getOrElse(id)
       _AdminReadItem(id, label, _record_text(record))
     }
@@ -2044,14 +2182,15 @@ object AdminComponent {
     collection: EntityCollection[A],
     result: org.goldenport.cncf.directive.SearchResult[A],
     paging: _Paging,
-    decision: _PagingCapabilityDecision
+    decision: _PagingCapabilityDecision,
+    fields: Vector[String] = Vector.empty
   ): _Page[_AdminReadItem] =
     if (result.nonEmpty || _entity_values(collection).isEmpty)
-      _search_result_page(collection, result, paging, decision)
+      _search_result_page(collection, result, paging, decision, fields)
     else
       _page_values(_entity_values(collection).map { x =>
         val id = collection.descriptor.persistent.id(x).value
-        val record = collection.descriptor.persistent.toRecord(x)
+        val record = _entity_display_record(x, collection.descriptor.persistent.toRecord(x), fields)
         _AdminReadItem(id, _record_label(record).getOrElse(id), _record_text(record))
       }, paging, decision)
 
@@ -2165,7 +2304,10 @@ object AdminComponent {
     collectionName: String,
     id: String,
     value: Any
-  ): Record = {
+  ): Record = value match {
+    case record: Record =>
+      _read_response_record(kind, componentName, collectionName, id, record)
+    case _ =>
     val item = _read_item(value, 0).copy(id = id)
     Record.dataAuto(
       "kind" -> s"${kind}.read",
@@ -2216,15 +2358,24 @@ object AdminComponent {
     ).map { case (key, value) => s"${key}=${value}" }.mkString("\n")
 
   private def _read_text(value: Any): String =
-    Option(value).map(_.toString).getOrElse("")
+    value match {
+      case record: Record => _record_text(record)
+      case presentable: RecordPresentable => _record_text(presentable.toRecord())
+      case _ => Option(value).map(_.toString).getOrElse("")
+    }
 
   private def _read_item_label(value: Any): Option[String] =
-    _read_label_candidate(value, "label")
-      .orElse(_read_label_candidate(value, "title"))
-      .orElse(_read_label_candidate(value, "name"))
-      .orElse(_read_label_candidate(value, "summary"))
-      .orElse(_read_label_candidate(value, "displayName"))
-      .orElse(_read_label_candidate(value, "caption"))
+    value match {
+      case record: Record => _record_label(record)
+      case presentable: RecordPresentable => _record_label(presentable.toRecord())
+      case _ =>
+        _read_label_candidate(value, "label")
+          .orElse(_read_label_candidate(value, "title"))
+          .orElse(_read_label_candidate(value, "name"))
+          .orElse(_read_label_candidate(value, "summary"))
+          .orElse(_read_label_candidate(value, "displayName"))
+          .orElse(_read_label_candidate(value, "caption"))
+    }
 
   private def _read_label_candidate(value: Any, name: String): Option[String] =
     value match {
@@ -2238,6 +2389,7 @@ object AdminComponent {
       case id: EntityId => Some(id.value)
       case x: EntityPersistable => Some(x.id.value)
       case record: Record => record.getAny("id").map(_id_text)
+      case presentable: RecordPresentable => presentable.toRecord().getAny("id").map(_id_text)
       case product: Product => _product_field(product, "id").map(_id_text)
       case x: String => Some(x)
       case _ => None
@@ -2285,22 +2437,80 @@ object AdminComponent {
   private def _view_browser(
     component: Component,
     viewName: String
-  ) =
-    component.viewSpace.browserOption[Any](viewName).orElse {
-      component.viewDefinitions
-        .find(x => NamingConventions.equivalentByNormalized(x.name, viewName))
-        .flatMap(x => component.viewSpace.browserOption[Any](x.name))
-    }
+  ) = {
+    val candidates = _surface_name_candidates(viewName, "view")
+    candidates
+      .iterator
+      .flatMap(name => component.viewSpace.browserOption[Any](name))
+      .toSeq
+      .headOption
+      .orElse {
+        component.viewDefinitions
+          .find(x => candidates.exists(candidate => NamingConventions.equivalentByNormalized(x.name, candidate)))
+          .flatMap(x => component.viewSpace.browserOption[Any](x.name))
+      }
+  }
 
   private def _aggregate_collection(
     component: Component,
     aggregateName: String
-  ) =
-    component.aggregateSpace.collectionOption[Any](aggregateName).orElse {
-      component.aggregateDefinitions
-        .find(x => NamingConventions.equivalentByNormalized(x.name, aggregateName))
-        .flatMap(x => component.aggregateSpace.collectionOption[Any](x.name))
-    }
+  ) = {
+    val candidates = _surface_name_candidates(aggregateName, "aggregate")
+    candidates
+      .iterator
+      .flatMap(name => component.aggregateSpace.collectionOption[Any](name))
+      .toSeq
+      .headOption
+      .orElse {
+        component.aggregateDefinitions
+          .find(x => candidates.exists(candidate => NamingConventions.equivalentByNormalized(x.name, candidate)))
+          .flatMap(x => component.aggregateSpace.collectionOption[Any](x.name))
+      }
+  }
+
+  private def _aggregate_entity_name(
+    component: Component,
+    aggregateName: String
+  ): Option[String] = {
+    val candidates = _surface_name_candidates(aggregateName, "aggregate")
+    component.aggregateDefinitions
+      .find(x => candidates.exists(candidate => NamingConventions.equivalentByNormalized(x.name, candidate)))
+      .map(_.entityName)
+  }
+
+  private def _aggregate_entity_collection(
+    component: Component,
+    aggregateName: String
+  ): Option[(String, EntityCollection[?])] = {
+    val names = (
+      _aggregate_entity_name(component, aggregateName).toVector ++
+        _surface_name_candidates(aggregateName, "aggregate")
+    ).distinct
+    names.iterator
+      .flatMap(name => _entity_collection(component, name).map(name -> _))
+      .toSeq
+      .headOption
+  }
+
+  private def _surface_name_candidates(
+    value: String,
+    surface: String
+  ): Vector[String] = {
+    val normalized = NamingConventions.toNormalizedSegment(value)
+    val suffix = s"-${NamingConventions.toNormalizedSegment(surface)}"
+    val base =
+      if (normalized.endsWith(suffix))
+        Vector(normalized.dropRight(suffix.length))
+      else
+        Vector.empty
+    (Vector(value, normalized) ++ base).map(_.trim).filter(_.nonEmpty).distinct
+  }
+
+  private def _is_not_implemented(
+    conclusion: org.goldenport.Conclusion
+  ): Boolean =
+    conclusion.show.contains("NotImplemented") ||
+      conclusion.show.toLowerCase(java.util.Locale.ROOT).contains("not implemented")
 
   private def _value_(value: ConfigurationValue): String = {
     value match {

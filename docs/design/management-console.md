@@ -7,6 +7,71 @@ The Management Console is the browser-facing administration surface under
 Operations. HTML rendering must not bypass the Operation boundary to read or
 mutate runtime state directly.
 
+Management Console access is governed by `OperationMode` and Operation
+authorization. Web/Form routes are only ingress surfaces; command, server,
+client, and REST requests must observe the same Operation policy.
+`RunMode` describes how the runtime is launched (`server`, `client`, `command`,
+`script`, or `server-emulator`). `OperationMode` describes the operational
+policy of the running system:
+
+- `production`: production policy. Anonymous admin access is denied unless the
+  target component/service/operation authorization parameters allow it.
+- `demo`: demonstration policy. Anonymous admin access is denied unless the
+  target component/service/operation authorization parameters allow it.
+- `develop`: development policy. Anonymous admin access may be allowed.
+- `test`: executable-specification and automated test policy. Anonymous admin
+  access may be allowed.
+
+The built-in admin component presents operation authorization parameters for
+its services and operations. `textus.web.develop.anonymous-admin` is one input
+to those parameters: its default is `true`, but the generated admin operation
+parameters allow anonymous access only in `develop` or `test` operation mode.
+This keeps local development usable before the full login/session mechanism
+exists, while preventing the same switch from opening admin surfaces in
+`production` or `demo`.
+
+Component/service/operation authorization definitions are the primary extension
+point. They may declare operation-mode constraints, whether anonymous access is
+allowed, and the operation modes in which anonymous access is allowed. The
+framework evaluates those definitions before dispatching to the Operation
+implementation, so ordinary Operation implementations should not contain ad hoc
+security checks.
+
+The canonical runtime form of these definitions is
+`OperationAuthorizationRule`. Generated or hand-written Operation definitions
+may expose it through `OperationAuthorizationProvider`. The Subsystem dispatch
+path checks that provider after ingress security resolution and before creating
+or executing the `ActionCall`; this is the choke point shared by command,
+server, client, REST, and Web/Form entry roots.
+
+CML and descriptor support should generate or adapt into this same rule shape.
+The intended declaration vocabulary is:
+
+- `operationModes`: operation modes in which the Operation may run.
+- `allowAnonymous`: whether an anonymous subject may invoke the Operation.
+- `anonymousOperationModes`: operation modes in which anonymous invocation is
+  allowed when `allowAnonymous` is true.
+
+WebDescriptor `authorization` is not the source of truth for operation
+authorization. It is a Web ingress override or supplement for browser-facing
+routes. Even when a WebDescriptor entry admits a request, the target Operation
+still passes through the normal Subsystem authorization checkpoint.
+
+`OperationMode` is evaluated from runtime configuration and does not depend on
+the root that started the request. A request reached through command, server,
+client, script, or server-emulator execution must therefore observe the same
+admin policy for the same resolved configuration.
+
+When the request carries session or principal information, the request is not
+treated as anonymous and normal Web authorization rules apply. Until the real
+login/session layer is implemented, tests may use protocol-level principal
+headers or query parameters as a stand-in for session-supplied identity.
+
+Authorization failures from the Subsystem checkpoint remain structured
+`Consequence` failures for command/client/REST style callers. HTTP/Web entry
+points map the same structured denial to an admission failure response such as
+HTTP 403 rather than dispatching the Operation.
+
 The initial managed surfaces are:
 
 - `/web/{component}/admin/entities`
@@ -137,6 +202,58 @@ HTML form rendering and JSON form definition APIs share the same resolved Web
 schema. This is required so a plain browser Form App and a JSON Form client see
 the same fields, labels, requiredness, control type, enum candidates, and help
 metadata for a selector.
+
+Entity forms use field profiles from the effective entity view definition:
+
+- list pages use `summary` fields.
+- detail pages, edit pages, update Form API definitions, and update validation
+  use `detail` fields.
+- new pages, create Form API definitions, and create validation use `create`
+  fields when present, then fall back to `detail`, then to the full effective
+  entity schema.
+
+The entity Form API routes are split by intent:
+
+```text
+GET /form-api/{component}/admin/entities/{entity}
+GET /form-api/{component}/admin/entities/{entity}/{id}/update
+```
+
+The first route returns a create definition. The second route returns an
+id-scoped update definition. This avoids forcing create and update to expose the
+same fields when the application model has different requirements.
+
+When create fields omit `id`, the Management Console does not expose `id` in
+the new page or create Form API. The admin create Operation completes the id
+server-side before persisting through `EntityCollection.putRecord`. Update
+forms still carry the target id through the route and use the `detail` field set
+for admission validation and validation-error redisplay.
+
+Data Form API routes are also split by intent:
+
+```text
+GET /form-api/{component}/admin/data/{data}
+GET /form-api/{component}/admin/data/{data}/{id}/update
+```
+
+The first route returns a create definition. The second route returns an
+id-scoped update definition. Data does not yet have entity-style `create/detail`
+field profiles, so both definitions use the same `resolveData` field set.
+Explicit data schema metadata or WebDescriptor admin controls should be used
+when production-grade field order and control metadata are required.
+
+View and aggregate Form API definitions are read-oriented:
+
+```text
+GET /form-api/{component}/admin/views/{view}
+GET /form-api/{component}/admin/aggregates/{aggregate}
+```
+
+They return `method = GET` and expose list/detail navigation actions only.
+Generic view or aggregate create/update submit actions are not part of these
+definitions. Aggregate creation and mutation stay Operation-backed and are
+surfaced through the matching component Operation form when the aggregate
+metadata exposes a create or command/update Operation.
 
 Management Console schema resolution currently covers:
 

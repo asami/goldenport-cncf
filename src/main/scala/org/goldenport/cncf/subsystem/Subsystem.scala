@@ -17,7 +17,7 @@ import org.goldenport.cncf.component.{
 import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.component.ComponentLocator.NameLocator
 import org.goldenport.cncf.component.builtin.debug.DebugComponent
-import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.event.{EventStore}
@@ -29,7 +29,8 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.protocol.OperationResponseFormatter
-import org.goldenport.cncf.security.IngressSecurityResolver
+import org.goldenport.cncf.security.{IngressSecurityResolver, OperationAuthorization, OperationAuthorizationProvider}
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 
 /*
@@ -200,6 +201,8 @@ final class Subsystem(
       response <- {
         val (component, _, _) = route
         IngressSecurityResolver.resolve(component.logic.executionContext(), request).flatMap { security =>
+          given ExecutionContext = security.executionContext
+          _authorize_operation(route, security.executionContext).flatMap { _ =>
           component.logic.makeOperationRequest(domainRequest).flatMap { r =>
           r match {
             case action: Action =>
@@ -208,6 +211,7 @@ final class Subsystem(
               Consequence.argumentInvalid("OperationRequest must be Action")
           }
         }
+          }
         }
       }
     } yield response
@@ -250,13 +254,70 @@ final class Subsystem(
 
   def executeAction(action: Action): Consequence[OperationResponse] =
     _resolve_route(action.request) match {
-      case Some((component, _, _)) =>
+      case Some((component, service, operation)) =>
         IngressSecurityResolver.resolve(action.request).flatMap { security =>
+          given ExecutionContext = security.executionContext
+          _authorize_operation((component, service, operation), security.executionContext).flatMap { _ =>
           component.logic.executeAction(action, security.executionContext)
+          }
         }
       case None =>
         Consequence.operationNotFound("operation route")
     }
+
+  private def _authorize_operation(
+    route: (Component, ServiceDefinition, OperationDefinition),
+    ctx: ExecutionContext
+  ): Consequence[Unit] = {
+    val (component, service, operation) = route
+    val selector = s"${component.name}.${service.name}.${operation.name}"
+    val runtimeConfig = RuntimeConfig.from(configuration)
+    val rule = operation match {
+      case provider: OperationAuthorizationProvider =>
+        Some(provider.operationAuthorization(runtimeConfig))
+      case _ =>
+        _cml_operation_authorization_rule(component, operation.name)
+          .orElse(descriptor.flatMap(_.operationAuthorizationRule(selector)))
+    }
+    rule match {
+      case Some(r) =>
+        given ExecutionContext = _operation_authorization_context(ctx, runtimeConfig)
+        OperationAuthorization.authorize(selector, r)
+      case _ =>
+        Consequence.unit
+    }
+  }
+
+  private def _cml_operation_authorization_rule(
+    component: Component,
+    operationName: String
+  ): Option[org.goldenport.cncf.security.OperationAuthorizationRule] =
+    component.operationDefinitions
+      .find(x => _normalize_operation_name(x.name) == _normalize_operation_name(operationName))
+      .flatMap(_.operationAuthorization)
+
+  private def _normalize_operation_name(name: String): String =
+    Option(name).getOrElse("").replace("-", "").replace("_", "").toLowerCase(java.util.Locale.ROOT)
+
+  private def _operation_authorization_context(
+    ctx: ExecutionContext,
+    runtimeConfig: RuntimeConfig
+  ): ExecutionContext = {
+    val runtime = new RuntimeContext(
+      core = ctx.runtime.core,
+      unitOfWorkSupplier = () => ctx.unitOfWork,
+      unitOfWorkInterpreterFn = ctx.runtime.unitOfWorkInterpreter,
+      commitAction = _ => (),
+      abortAction = _ => (),
+      disposeAction = _ => (),
+      token = "operation-authorization",
+      context = ctx.runtime.context,
+      operationMode = runtimeConfig.operationMode,
+      transitionValidationHook = ctx.runtime.transitionValidationHook,
+      entityCreateDefaultsPolicy = ctx.runtime.entityCreateDefaultsPolicy
+    )
+    ExecutionContext.withRuntimeContext(ctx, runtime)
+  }
 
   private def _to_response(
     request: Request,
@@ -314,7 +375,8 @@ final class Subsystem(
     request: Request
   ): Request =
     request.copy(
-      properties = request.properties.filterNot(p => _is_framework_or_query_property(p.name))
+      properties = request.properties.filterNot(p => _is_framework_or_query_property(p.name)),
+      arguments = request.arguments.filterNot(p => _is_framework_or_security_argument(p.name))
     )
 
   private def _is_framework_or_query_property(
@@ -323,6 +385,23 @@ final class Subsystem(
     name != null && (
       name.startsWith("textus.") ||
       name.startsWith("cncf.")
+    )
+
+  private def _is_framework_or_security_argument(
+    name: String
+  ): Boolean =
+    name != null && (
+      name.startsWith("textus.") ||
+      name.startsWith("cncf.") ||
+      name.startsWith("security.") ||
+      name.startsWith("crud.") ||
+      name == "principalId" ||
+      name == "principal_id" ||
+      name == "subjectId" ||
+      name == "subject_id" ||
+      name == "privilege" ||
+      name == "capability" ||
+      name == "capabilities"
     )
 
   private def _resolve_route(

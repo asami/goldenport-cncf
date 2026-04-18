@@ -7,11 +7,12 @@ import java.util.Locale
 import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.cncf.http.HttpDriver
-import org.goldenport.cncf.config.ResolvedParameters
+import org.goldenport.cncf.config.{OperationMode, ResolvedParameters, RuntimeConfig}
 import org.goldenport.cncf.entity.EntityCreateDefaultsPolicy
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, EntityStoreContext}
+import org.goldenport.datatype.{I18nBrief, I18nDescription, I18nLabel, I18nString, I18nSummary, I18nText, I18nTitle}
 import org.goldenport.record.{Field, Record}
 import org.goldenport.util.StringUtils
 
@@ -19,7 +20,8 @@ import org.goldenport.util.StringUtils
  * @since   Dec. 21, 2025
  *  version Jan. 18, 2026
  *  version Mar. 31, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version Apr. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -31,6 +33,7 @@ final class RuntimeContext(
   disposeAction: UnitOfWork => Unit,
   token: String,
   val context: RuntimeContext.Context = RuntimeContext.Context.default,
+  val operationMode: OperationMode = RuntimeConfig.DefaultOperationMode,
   val transitionValidationHook: TransitionValidationHook = TransitionValidationHook.noop,
   val entityCreateDefaultsPolicy: EntityCreateDefaultsPolicy = EntityCreateDefaultsPolicy.default
 ) extends ScopeContext() {
@@ -155,6 +158,13 @@ object RuntimeContext {
         case x: Short => numberStyle.formatInteger(x.toLong, locale)
         case x: Int => numberStyle.formatInteger(x.toLong, locale)
         case x: Long => numberStyle.formatInteger(x, locale)
+        case x: I18nString => x.displayMessage(locale)
+        case x: I18nLabel => x.toI18nString.displayMessage(locale)
+        case x: I18nTitle => x.toI18nString.displayMessage(locale)
+        case x: I18nBrief => x.toI18nString.displayMessage(locale)
+        case x: I18nSummary => x.toI18nString.displayMessage(locale)
+        case x: I18nDescription => x.toI18nString.displayMessage(locale)
+        case x: I18nText => x.toI18nString.displayMessage(locale)
         case other => other
       }
 

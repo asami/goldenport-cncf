@@ -37,6 +37,7 @@ import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateCommandDefinition, AggregateCreateDefinition, AggregateDefinition, AggregateMemberDefinition}
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.view.{Browser, ViewBuilder, ViewCollection, ViewDefinition, ViewQueryDefinition}
+import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField}
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
@@ -48,7 +49,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 16, 2026
+ *  version Apr. 16, 2026
+ * @version Apr. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -158,6 +160,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val html = StaticFormAppRenderer.renderSystemAdmin(subsystem).body
 
       html should include ("Runtime Configuration")
+      html should include ("Effective Runtime Policy")
+      html should include ("textus.operation-mode")
+      html should include ("develop")
       html should include ("textus.runtime.mode")
       html should include ("server")
       html should include ("textus.auth.secret")
@@ -518,6 +523,75 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       dispatcher.paths should not contain ("/admin/entity/update")
     }
 
+    "validate component entity update forms by detail view fields before full schema fields" in {
+      val subsystem = _management_console_fixture_subsystem(
+        schema = _schema("id", "title", "author"),
+        viewFields = Map(
+          "summary" -> Vector("id", "title"),
+          "detail" -> Vector("id", "title"),
+          "create" -> Vector("title", "author")
+        )
+      )
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val recordId = collection.storage.storeRealm.values.head.id.value
+      val edit = StaticFormAppRenderer
+        .renderComponentAdminEntityEdit(subsystem, "notice_board", "notice", recordId)
+        .map(_.body)
+        .getOrElse(fail("component entity edit admin is missing"))
+      val req = _post_form_request(
+        s"/form/notice-board/admin/entities/notice/${recordId}/update",
+        "title=detail+only"
+      )
+
+      val html = server
+        ._submit_component_admin_entity_update(req, "notice-board", "notice", recordId)
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      edit should include ("name=\"title\"")
+      edit should not include ("name=\"author\"")
+      html should include ("Entity record was applied")
+      html should include ("Applied</th><td>true")
+      collection.storage.storeRealm.values.exists(x => x.id.value == recordId && x.title == "detail only") shouldBe true
+      dispatcher.paths should contain ("/admin/entity/update")
+    }
+
+    "reject component entity update forms when a required detail view field is empty" in {
+      val subsystem = _management_console_fixture_subsystem(
+        schema = _schema("id", "title", "author"),
+        viewFields = Map(
+          "summary" -> Vector("id", "title"),
+          "detail" -> Vector("id", "title"),
+          "create" -> Vector("title", "author")
+        )
+      )
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val recordId = collection.storage.storeRealm.values.head.id.value
+      val req = _post_form_request(
+        s"/form/notice-board/admin/entities/notice/${recordId}/update",
+        "title=&author=ignored"
+      )
+
+      val response = server
+        ._submit_component_admin_entity_update(req, "notice-board", "notice", recordId)
+        .unsafeRunSync()
+      val html = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 400
+      html should include ("Edit Notice")
+      html should include ("Validation failed.")
+      html should include ("title is required.")
+      html should include ("is-invalid")
+      html should not include ("name=\"author\"")
+      dispatcher.paths should not contain ("/admin/entity/update")
+    }
+
     "apply component entity create form POST into the EntityCollection fixture" in {
       val subsystem = _management_console_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
@@ -540,6 +614,246 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       collection.storage.storeRealm.values.size shouldBe before + 1
       collection.storage.storeRealm.values.exists(x => x.title == "new notice" && x.author == "bob") shouldBe true
       dispatcher.paths should contain ("/admin/entity/create")
+    }
+
+    "render admin entity create and update forms from derived alias schema fields" in {
+      val subsystem = _management_console_fixture_subsystem(schema = _schema("id", "senderName", "recipientName", "subject", "body"))
+      val componentName = "notice_board"
+      val componentPath = "notice-board"
+      val entityPath = "notice"
+      val recordId = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id.value
+
+      val newHtml = StaticFormAppRenderer
+        .renderComponentAdminEntityNew(subsystem, componentName, entityPath)
+        .map(_.body)
+        .getOrElse(fail("component entity new admin is missing"))
+      val editHtml = StaticFormAppRenderer
+        .renderComponentAdminEntityEdit(subsystem, componentName, entityPath, recordId)
+        .map(_.body)
+        .getOrElse(fail("component entity edit admin is missing"))
+
+      newHtml should include (s"/form/${componentPath}/admin/entities/${entityPath}/create")
+      newHtml should include ("name=\"subject\"")
+      newHtml should include ("name=\"body\"")
+      newHtml should not include ("name=\"title\"")
+      newHtml should not include ("name=\"content\"")
+      editHtml should include (s"/form/${componentPath}/admin/entities/${entityPath}/${recordId}/update")
+      editHtml should include ("name=\"subject\"")
+      editHtml should include ("name=\"body\"")
+      editHtml should not include ("name=\"title\"")
+      editHtml should not include ("name=\"content\"")
+    }
+
+    "honor SimpleEntity platform fields when admin schema includes them" in {
+      val subsystem = _management_console_fixture_subsystem(schema = _schema(
+        "id",
+        "nameAttributes",
+        "descriptiveAttributes",
+        "lifecycleAttributes",
+        "publicationAttributes",
+        "securityAttributes",
+        "resourceAttributes",
+        "auditAttributes",
+        "mediaAttributes",
+        "contextualAttribute",
+        "senderName",
+        "subject",
+        "body"
+      ))
+      val componentName = "notice_board"
+      val entityPath = "notice"
+      val recordId = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id.value
+
+      val newHtml = StaticFormAppRenderer
+        .renderComponentAdminEntityNew(subsystem, componentName, entityPath)
+        .map(_.body)
+        .getOrElse(fail("component entity new admin is missing"))
+      val editHtml = StaticFormAppRenderer
+        .renderComponentAdminEntityEdit(subsystem, componentName, entityPath, recordId)
+        .map(_.body)
+        .getOrElse(fail("component entity edit admin is missing"))
+
+      newHtml should include ("name=\"id\"")
+      newHtml should include ("name=\"nameAttributes\"")
+      newHtml should include ("name=\"lifecycleAttributes\"")
+      newHtml should include ("name=\"securityAttributes\"")
+      newHtml should include ("name=\"senderName\"")
+      newHtml should include ("name=\"subject\"")
+      newHtml should include ("name=\"body\"")
+      editHtml should include ("name=\"nameAttributes\"")
+      editHtml should include ("name=\"lifecycleAttributes\"")
+      editHtml should include ("name=\"securityAttributes\"")
+    }
+
+    "render admin entity list and detail with derived alias fields" in {
+      val subsystem = _management_console_fixture_subsystem(schema = _schema("id", "senderName", "recipientName", "subject", "body"))
+      val componentName = "notice_board"
+      val componentPath = "notice-board"
+      val entityPath = "notice"
+      val recordId = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id.value
+
+      val list = StaticFormAppRenderer
+        .renderComponentAdminEntityType(subsystem, componentName, entityPath)
+        .map(_.body)
+        .getOrElse(fail("component entity type admin is missing"))
+      val detail = StaticFormAppRenderer
+        .renderComponentAdminEntityDetail(subsystem, componentName, entityPath, recordId)
+        .map(_.body)
+        .getOrElse(fail("component entity detail admin is missing"))
+
+      list should include ("<th>id</th><th>senderName</th><th>recipientName</th><th>subject</th><th>body</th><th>Actions</th>")
+      list should include ("board update")
+      list should not include ("<th>title</th>")
+      list should not include ("<th>content</th>")
+      detail should include ("<th>subject</th><td>board update</td>")
+      detail should not include ("<th>title</th>")
+      detail should not include ("<th>content</th>")
+    }
+
+    "render admin entity list detail edit and new from view fields before full schema fields" in {
+      val subsystem = _management_console_fixture_subsystem(
+        schema = _schema(
+          "id",
+          "nameAttributes",
+          "lifecycleAttributes",
+          "securityAttributes",
+          "senderName",
+          "recipientName",
+          "subject",
+          "body"
+        ),
+        viewFields = Map(
+          "summary" -> Vector("id", "subject"),
+          "detail" -> Vector("id", "senderName", "recipientName", "subject", "body"),
+          "create" -> Vector("senderName", "recipientName", "subject", "body")
+        )
+      )
+      val componentName = "notice_board"
+      val entityPath = "notice"
+      val recordId = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id.value
+
+      val list = StaticFormAppRenderer
+        .renderComponentAdminEntityType(subsystem, componentName, entityPath)
+        .map(_.body)
+        .getOrElse(fail("component entity type admin is missing"))
+      val detail = StaticFormAppRenderer
+        .renderComponentAdminEntityDetail(subsystem, componentName, entityPath, recordId)
+        .map(_.body)
+        .getOrElse(fail("component entity detail admin is missing"))
+      val edit = StaticFormAppRenderer
+        .renderComponentAdminEntityEdit(subsystem, componentName, entityPath, recordId)
+        .map(_.body)
+        .getOrElse(fail("component entity edit admin is missing"))
+      val newly = StaticFormAppRenderer
+        .renderComponentAdminEntityNew(subsystem, componentName, entityPath)
+        .map(_.body)
+        .getOrElse(fail("component entity new admin is missing"))
+      val formDefinition = parse(StaticFormAppRenderer
+        .renderComponentAdminEntityFormDefinition(subsystem, componentName, entityPath)
+        .map(_.body)
+        .getOrElse(fail("component entity form definition is missing")))
+        .getOrElse(fail("component entity form definition JSON is invalid"))
+      val formDefinitionFields = formDefinition.hcursor.downField("fields")
+
+      list should include ("<th>id</th><th>subject</th><th>Actions</th>")
+      list should not include ("nameAttributes")
+      list should not include ("lifecycleAttributes")
+      detail should include ("<th>senderName</th>")
+      detail should include ("<th>subject</th>")
+      detail should not include ("<th>securityAttributes</th>")
+      edit should include ("name=\"senderName\"")
+      edit should include ("name=\"subject\"")
+      edit should include ("name=\"body\"")
+      edit should not include ("name=\"nameAttributes\"")
+      edit should not include ("name=\"lifecycleAttributes\"")
+      edit should not include ("name=\"securityAttributes\"")
+      newly should include ("name=\"senderName\"")
+      newly should include ("name=\"subject\"")
+      newly should include ("name=\"body\"")
+      newly should not include ("name=\"id\"")
+      newly should not include ("name=\"nameAttributes\"")
+      newly should not include ("name=\"lifecycleAttributes\"")
+      newly should not include ("name=\"securityAttributes\"")
+      formDefinitionFields.downN(0).downField("name").as[String].toOption shouldBe Some("senderName")
+      formDefinitionFields.downN(1).downField("name").as[String].toOption shouldBe Some("recipientName")
+      formDefinitionFields.downN(2).downField("name").as[String].toOption shouldBe Some("subject")
+      formDefinitionFields.downN(3).downField("name").as[String].toOption shouldBe Some("body")
+    }
+
+    "create admin entity records without exposing id when create view fields omit it" in {
+      val subsystem = _management_console_fixture_subsystem(
+        schema = _schema("id", "title", "author"),
+        viewFields = Map(
+          "summary" -> Vector("id", "title"),
+          "detail" -> Vector("id", "title", "author"),
+          "create" -> Vector("title", "author")
+        )
+      )
+      val componentName = "notice_board"
+      val componentPath = "notice-board"
+      val entityPath = "notice"
+      val newHtml = StaticFormAppRenderer
+        .renderComponentAdminEntityNew(subsystem, componentName, entityPath)
+        .map(_.body)
+        .getOrElse(fail("component entity new admin is missing"))
+      val formDefinition = parse(StaticFormAppRenderer
+        .renderComponentAdminEntityFormDefinition(subsystem, componentName, entityPath)
+        .map(_.body)
+        .getOrElse(fail("component entity form definition is missing")))
+        .getOrElse(fail("component entity form definition JSON is invalid"))
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entityPath)
+      val before = collection.storage.storeRealm.values.size
+      val req = _post_form_request(
+        s"/form/${componentPath}/admin/entities/${entityPath}/create",
+        "title=idless+notice&author=carol"
+      )
+
+      val html = server
+        ._submit_component_admin_entity_create(req, componentPath, entityPath)
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      newHtml should include ("name=\"title\"")
+      newHtml should include ("name=\"author\"")
+      newHtml should not include ("name=\"id\"")
+      formDefinition.hcursor.downField("fields").downN(0).downField("name").as[String].toOption shouldBe Some("title")
+      formDefinition.hcursor.downField("fields").downN(1).downField("name").as[String].toOption shouldBe Some("author")
+      formDefinition.hcursor.downField("fields").downN(2).downField("name").as[String].toOption shouldBe None
+      html should include ("Entity record was applied")
+      html should include ("Applied</th><td>true")
+      collection.storage.storeRealm.values.size shouldBe before + 1
+      val created = collection.storage.storeRealm.values.find(_.title == "idless notice").getOrElse(fail("created notice is missing"))
+      created.author shouldBe "carol"
+      created.id.value should not be "notice_1"
+      created.id.collection shouldBe _NoticeEntity.collectionId
+      dispatcher.paths should contain ("/admin/entity/create")
+    }
+
+    "pass derived alias admin entity create fields through to the dispatcher" in {
+      val subsystem = _management_console_fixture_subsystem(schema = _schema("id", "senderName", "recipientName", "subject", "body"))
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val req = _post_form_request(
+        "/form/notice-board/admin/entities/notice/create",
+        "id=notice_alias&senderName=alice&recipientName=bob&subject=Phase+12&body=Alias+body"
+      )
+
+      val html = server
+        ._submit_component_admin_entity_create(req, "notice-board", "notice")
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      html should include ("Entity record was applied")
+      dispatcher.paths should contain ("/admin/entity/create")
+      val submitted = dispatcher.forms.lastOption.getOrElse(fail("admin entity create form was not dispatched"))
+      submitted.getString("subject") shouldBe Some("Phase 12")
+      submitted.getString("body") shouldBe Some("Alias body")
+      submitted.getString("title") shouldBe None
+      submitted.getString("content") shouldBe None
     }
 
     "keep static result page convention out of built-in admin entity create flow" in {
@@ -1222,7 +1536,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("notice")
       html should include ("notice:notice")
       html should include ("Read result")
-      html should include ("<th>id</th><th>Actions</th>")
+      html should include ("<th>id</th><th>label</th><th>status</th><th>Actions</th>")
       html should include ("notice_1")
       html should include ("/web/notice-board/admin/aggregates/notice-aggregate/notice_1")
       html should include ("Result pages")
@@ -1281,8 +1595,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Read aggregate")
       html should include ("Run update command")
       html should not include ("Create aggregate")
-      html should include ("/form/notice-board/notice-aggregate/approve-notice-aggregate?id=notice_1")
-      html should include ("/form/notice-board/notice-aggregate/read-notice-aggregate?id=notice_1")
+      html should include ("/form/notice-board/notice-aggregate/approve-notice-aggregate?")
+      html should include ("/form/notice-board/notice-aggregate/read-notice-aggregate?")
+      html should include ("id=notice_1")
+      html should include ("crud.success.href=")
+      html should not include ("textus.admin.principalId=system")
       html should include ("/web/notice-board/admin/aggregates/notice-aggregate")
     }
 
@@ -1532,6 +1849,33 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       RuntimeDashboardMetrics.dslChokepointSnapshot.summary.cumulative.total should be > before
       dispatcher.paths should contain ("/notice-board/notice-aggregate/create-notice-aggregate")
       dispatcher.paths should contain ("/notice-board/notice-aggregate/approve-notice-aggregate")
+    }
+
+    "keep form control and security values out of operation arguments" in {
+      val subsystem = _aggregate_fixture_subsystem()
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+
+      server
+        ._submit_operation_form(
+          _post_form_request(
+            "/form/notice-board/notice-aggregate/approve-notice-aggregate",
+            "id=notice_1&approved=true&crud.success.href=/web/notice-board/admin/aggregates/notice-aggregate/notice_1&textus.admin.principalId=system&textus.admin.privilege=application_content_manager"
+          ),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      val submitted = dispatcher.forms.lastOption.getOrElse(fail("operation form was not dispatched"))
+      submitted.getString("id") shouldBe Some("notice_1")
+      submitted.getString("approved") shouldBe Some("true")
+      submitted.getString("crud.success.href") shouldBe None
+      submitted.getString("textus.admin.principalId") shouldBe None
+      submitted.getString("textus.admin.privilege") shouldBe None
     }
 
     "execute aggregate create/update actions through an HTTP ingress-capable component" in {
@@ -1869,6 +2213,61 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       fields.downN(1).downField("hidden").as[Boolean].toOption shouldBe Some(true)
     }
 
+    "serve operation form definition API from CML operation parameters when protocol parameters are empty" in {
+      val component = new org.goldenport.cncf.component.Component() {
+        override def operationDefinitions: Vector[CmlOperationDefinition] =
+          Vector(CmlOperationDefinition(
+            name = "search-notices",
+            kind = "QUERY",
+            inputType = "SearchNotices",
+            outputType = "SearchNoticesResult",
+            inputValueKind = "QUERY_VALUE",
+            parameters = Vector(
+              CmlOperationField("recipientName", "name", "1"),
+              CmlOperationField("offset", "integer", "?"),
+              CmlOperationField("limit", "integer", "?")
+            )
+          ))
+      }
+      val protocol = Protocol(
+        services = spec.ServiceDefinitionGroup(
+          Vector(
+            spec.ServiceDefinition(
+              name = "notice",
+              operations = spec.OperationDefinitionGroup(
+                operations = NonEmptyVector.of(_NoopOperation("search-notices"))
+              )
+            )
+          )
+        )
+      )
+      _initialize_component("notice_board", component, protocol)
+      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        ._operation_form_api_definition(
+          _get_request("/form-api/notice-board/notice/search-notices"),
+          "notice-board",
+          "notice",
+          "search-notices"
+        )
+        .unsafeRunSync()
+      val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("form definition JSON is invalid"))
+      val fields = json.hcursor.downField("fields")
+
+      response.status.code shouldBe 200
+      json.hcursor.downField("source").as[String].toOption shouldBe Some("Schema")
+      fields.downN(0).downField("name").as[String].toOption shouldBe Some("recipientName")
+      fields.downN(0).downField("required").as[Boolean].toOption shouldBe Some(true)
+      fields.downN(1).downField("name").as[String].toOption shouldBe Some("offset")
+      fields.downN(1).downField("type").as[String].toOption shouldBe Some("number")
+      fields.downN(1).downField("required").as[Boolean].toOption shouldBe Some(false)
+      fields.downN(2).downField("name").as[String].toOption shouldBe Some("limit")
+      fields.downN(2).downField("type").as[String].toOption shouldBe Some("number")
+      fields.downN(2).downField("required").as[Boolean].toOption shouldBe Some(false)
+    }
+
     "serve admin entity form definition API from EntityRuntimeDescriptor schema" in {
       val descriptor = ComponentDescriptor(
         componentName = Some("notice_board"),
@@ -1919,6 +2318,195 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       fields.downN(1).downField("label").as[String].toOption shouldBe Some("Notice body")
       fields.downN(1).downField("type").as[String].toOption shouldBe Some("textarea")
       fields.downN(1).downField("help").as[String].toOption shouldBe Some("Notice body shown on the board.")
+    }
+
+    "serve admin entity update form definition API from detail view fields" in {
+      val subsystem = _management_console_fixture_subsystem(
+        schema = _schema("id", "title", "author"),
+        viewFields = Map(
+          "summary" -> Vector("id", "title"),
+          "detail" -> Vector("id", "title"),
+          "create" -> Vector("title", "author")
+        )
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        ._component_admin_entity_update_form_api_definition(
+          _get_request("/form-api/notice-board/admin/entities/notice/notice_1/update"),
+          "notice-board",
+          "notice",
+          "notice_1"
+        )
+        .unsafeRunSync()
+      val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("entity update form definition JSON is invalid"))
+      val fields = json.hcursor.downField("fields")
+
+      response.status.code shouldBe 200
+      response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
+      json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.entity.notice")
+      json.hcursor.downField("mode").as[String].toOption shouldBe Some("admin-entity-update")
+      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/form/notice-board/admin/entities/notice/notice_1/update")
+      json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/web/notice-board/admin/entities/notice/notice_1/edit")
+      fields.downN(0).downField("name").as[String].toOption shouldBe Some("id")
+      fields.downN(1).downField("name").as[String].toOption shouldBe Some("title")
+      fields.downN(2).downField("name").as[String].toOption shouldBe None
+    }
+
+    "allow anonymous admin form API by the develop anonymous admin default" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        ._component_admin_entity_form_api_definition(
+          _get_request("/form-api/notice-board/admin/entities/notice"),
+          "notice-board",
+          "notice"
+        )
+        .unsafeRunSync()
+
+      response.status.code shouldBe 200
+    }
+
+    "deny anonymous admin form API when develop anonymous admin is disabled" in {
+      val subsystem = _management_console_fixture_subsystem(
+        configuration = Configuration(Map(
+          RuntimeConfig.WebDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        ._component_admin_entity_form_api_definition(
+          _get_request("/form-api/notice-board/admin/entities/notice"),
+          "notice-board",
+          "notice"
+        )
+        .unsafeRunSync()
+
+      response.status.code shouldBe 403
+    }
+
+    "deny anonymous admin form API in production operation mode" in {
+      val subsystem = _management_console_fixture_subsystem(
+        configuration = Configuration(Map(
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        ._component_admin_entity_form_api_definition(
+          _get_request("/form-api/notice-board/admin/entities/notice"),
+          "notice-board",
+          "notice"
+        )
+        .unsafeRunSync()
+
+      response.status.code shouldBe 403
+    }
+
+    "deny anonymous component admin HTML route in production operation mode" in {
+      val subsystem = _management_console_fixture_subsystem(
+        configuration = Configuration(Map(
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        .routes(null)
+        .orNotFound
+        .run(_get_request("/web/notice-board/admin/entities/notice"))
+        .unsafeRunSync()
+
+      response.status.code shouldBe 403
+    }
+
+    "allow authenticated component admin HTML route in production operation mode" in {
+      val subsystem = _management_console_fixture_subsystem(
+        configuration = Configuration(Map(
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        .routes(null)
+        .orNotFound
+        .run(_get_request("/web/notice-board/admin/entities/notice?principalId=admin-test"))
+        .unsafeRunSync()
+
+      response.status.code shouldBe 200
+    }
+
+    "allow authenticated admin form API when develop anonymous admin is disabled" in {
+      val subsystem = _management_console_fixture_subsystem(
+        configuration = Configuration(Map(
+          RuntimeConfig.WebDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("false")
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        ._component_admin_entity_form_api_definition(
+          _get_request("/form-api/notice-board/admin/entities/notice?principalId=admin-test"),
+          "notice-board",
+          "notice"
+        )
+        .unsafeRunSync()
+
+      response.status.code shouldBe 200
+    }
+
+    "deny anonymous admin entity create POST in production operation mode before dispatch" in {
+      val subsystem = _management_console_fixture_subsystem(
+        configuration = Configuration(Map(
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
+        ))
+      )
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+
+      val response = server
+        ._submit_component_admin_entity_create(
+          _post_form_request(
+            "/form/notice-board/admin/entities/notice/create",
+            "fields=id%3Dnotice_2%0Atitle%3Dnew+notice"
+          ),
+          "notice-board",
+          "notice"
+        )
+        .unsafeRunSync()
+
+      response.status.code shouldBe 403
+      dispatcher.paths should not contain ("/admin/entity/create")
+    }
+
+    "allow authenticated admin entity create POST in production operation mode" in {
+      val subsystem = _management_console_fixture_subsystem(
+        configuration = Configuration(Map(
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
+        ))
+      )
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+
+      val response = server
+        ._submit_component_admin_entity_create(
+          _post_form_request(
+            "/form/notice-board/admin/entities/notice/create?principalId=admin-test",
+            "fields=id%3Dnotice_2%0Atitle%3Dnew+notice%0Aauthor%3Dbob"
+          ),
+          "notice-board",
+          "notice"
+        )
+        .unsafeRunSync()
+
+      response.status.code shouldBe 200
+      dispatcher.paths should contain ("/admin/entity/create")
     }
 
     "serve admin entity form definition API from generated companion schema" in {
@@ -2016,6 +2604,35 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       }
     }
 
+    "serve admin data update form definition API from inferred data fields" in {
+      val fixture = _data_fixture()
+      _with_global_runtime(fixture.runtime) {
+        val server = new Http4sHttpServer(new HttpExecutionEngine(fixture.subsystem))
+
+        val response = server
+          ._component_admin_data_update_form_api_definition(
+            _get_request("/form-api/notice-board/admin/data/audit/audit_1/update"),
+            "notice-board",
+            "audit",
+            "audit_1"
+          )
+          .unsafeRunSync()
+        val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("data update form definition JSON is invalid"))
+        val fieldNames = json.hcursor.downField("fields").as[Vector[Json]].toOption.getOrElse(Vector.empty)
+          .flatMap(_.hcursor.downField("name").as[String].toOption)
+
+        response.status.code shouldBe 200
+        response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
+        json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.data.audit")
+        json.hcursor.downField("surface").as[String].toOption shouldBe Some("data")
+        json.hcursor.downField("mode").as[String].toOption shouldBe Some("admin-data-update")
+        json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/form/notice-board/admin/data/audit/audit_1/update")
+        json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/web/notice-board/admin/data/audit/audit_1/edit")
+        json.hcursor.downField("actions").downN(3).downField("path").as[String].toOption shouldBe Some("/form/notice-board/admin/data/audit/audit_1/update")
+        fieldNames shouldBe Vector("id", "action", "actor")
+      }
+    }
+
     "serve admin data form definition API from merged inferred data fields and WebDescriptor controls" in {
       val fixture = _data_fixture()
       val descriptor = _data_schema_web_descriptor(includeNote = false)
@@ -2045,6 +2662,25 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         actor.downField("placeholder").as[String].toOption shouldBe Some("Descriptor actor placeholder.")
         actor.downField("help").as[String].toOption shouldBe Some("Descriptor actor help.")
       }
+    }
+
+    "serve admin view form definition API from entity schema when the view name carries the view suffix" in {
+      val subsystem = _view_fixture_subsystem()
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        ._component_admin_view_form_api_definition(
+          _get_request("/form-api/notice-board/admin/views/notice-view"),
+          "notice-board",
+          "notice-view"
+        )
+        .unsafeRunSync()
+      val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("view form definition JSON is invalid"))
+      val fields = _json_fields(json)
+
+      response.status.code shouldBe 200
+      json.hcursor.downField("source").as[String].toOption shouldBe Some("Schema")
+      _json_field_names(fields) shouldBe Vector("id", "label", "note")
     }
 
     "serve admin view form definition API from resolved view schema" in {
@@ -2080,10 +2716,32 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       json.hcursor.downField("method").as[String].toOption shouldBe Some("GET")
       json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/web/notice-board/admin/views/notice-view")
       json.hcursor.downField("source").as[String].toOption shouldBe Some("WebDescriptor")
+      json.hcursor.downField("actions").downN(0).downField("name").as[String].toOption shouldBe Some("list")
+      json.hcursor.downField("actions").downN(1).downField("name").as[String].toOption shouldBe Some("detail")
+      json.hcursor.downField("actions").downN(2).downField("name").as[String].toOption shouldBe None
       fields.downN(0).downField("name").as[String].toOption shouldBe Some("id")
       fields.downN(1).downField("name").as[String].toOption shouldBe Some("label")
       fields.downN(2).downField("name").as[String].toOption shouldBe Some("note")
       fields.downN(2).downField("type").as[String].toOption shouldBe Some("textarea")
+    }
+
+    "serve admin aggregate form definition API from entity schema when the aggregate name carries the aggregate suffix" in {
+      val subsystem = _aggregate_fixture_subsystem()
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        ._component_admin_aggregate_form_api_definition(
+          _get_request("/form-api/notice-board/admin/aggregates/notice-aggregate"),
+          "notice-board",
+          "notice-aggregate"
+        )
+        .unsafeRunSync()
+      val json = parse(response.as[String].unsafeRunSync()).getOrElse(fail("aggregate form definition JSON is invalid"))
+      val fields = _json_fields(json)
+
+      response.status.code shouldBe 200
+      json.hcursor.downField("source").as[String].toOption shouldBe Some("Schema")
+      _json_field_names(fields) shouldBe Vector("id", "label", "status")
     }
 
     "serve admin aggregate form definition API from resolved aggregate schema" in {
@@ -2117,7 +2775,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       json.hcursor.downField("surface").as[String].toOption shouldBe Some("aggregate")
       json.hcursor.downField("mode").as[String].toOption shouldBe Some("admin-aggregate")
       json.hcursor.downField("method").as[String].toOption shouldBe Some("GET")
+      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/web/notice-board/admin/aggregates/notice-aggregate")
+      json.hcursor.downField("actions").downN(0).downField("name").as[String].toOption shouldBe Some("list")
+      json.hcursor.downField("actions").downN(1).downField("name").as[String].toOption shouldBe Some("detail")
       json.hcursor.downField("actions").downN(1).downField("path").as[String].toOption shouldBe Some("/web/notice-board/admin/aggregates/notice-aggregate/{id}")
+      json.hcursor.downField("actions").downN(2).downField("name").as[String].toOption shouldBe None
       json.hcursor.downField("source").as[String].toOption shouldBe Some("WebDescriptor")
       fields.downN(0).downField("name").as[String].toOption shouldBe Some("id")
       fields.downN(1).downField("name").as[String].toOption shouldBe Some("label")
@@ -2771,6 +3433,200 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/form/notice-board/notice/search-notices/continue/test-id?page=3&amp;pageSize=10")
     }
 
+    "render textus result table from operation response body fields" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"subject":"Hello","sender_name":"alice"},{"subject":"World","sender_name":"bob"}],"total_count":2}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus-result-table source="result.body.data"></textus-result-table></article>"""
+      ).body
+
+      html should include ("<table")
+      html should include ("subject")
+      html should include ("sender_name")
+      html should include ("Hello")
+      html should include ("bob")
+      html should include ("Page 1")
+      html should not include ("<textus-result-table")
+    }
+
+    "render textus result table from result body shorthand" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"subject":"Hello"}]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus-result-table source="result.data"></textus-result-table></article>"""
+      ).body
+
+      html should include ("<td>Hello</td>")
+      html should not include ("<textus-result-table")
+    }
+
+    "render textus result table with explicit columns" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"id":"notice_1","subject":"Hello","sender_name":"alice","rights":{"owner":{"read":true}}}]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus-result-table source="result.data" columns="sender_name,subject"></textus-result-table></article>"""
+      ).body
+
+      html should include ("<th>sender_name</th><th>subject</th>")
+      html should include ("<td>alice</td>")
+      html should include ("<td>Hello</td>")
+      html should not include ("notice_1")
+      html should not include ("rights")
+      html should not include ("<textus-result-table")
+    }
+
+    "render textus result table with resolved CML table columns" in {
+      val columns = Vector(
+        StaticFormAppRenderer.TableColumn("sender_name", "Sender"),
+        StaticFormAppRenderer.TableColumn("subject", "Subject")
+      )
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"id":"notice_1","subject":"Hello","sender_name":"alice","rights":{"owner":{"read":true}}}]}""",
+        Map("result.data" -> columns)
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus-result-table source="result.data"></textus-result-table></article>"""
+      ).body
+
+      html should include ("<th>Sender</th><th>Subject</th>")
+      html should include ("<td>alice</td>")
+      html should include ("<td>Hello</td>")
+      html should not include ("notice_1")
+      html should not include ("rights")
+      html should not include ("<textus-result-table")
+    }
+
+    "render textus result table with explicit entity and view columns" in {
+      val columns = Vector(
+        StaticFormAppRenderer.TableColumn("sender_name", "Sender"),
+        StaticFormAppRenderer.TableColumn("subject", "Subject")
+      )
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"id":"notice_1","subject":"Hello","sender_name":"alice","body":"hidden"}]}""",
+        Map(StaticFormAppRenderer.tableColumnKey("result.data", "notice", "summary") -> columns)
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus-result-table source="result.data" entity="notice" view="summary"></textus-result-table></article>"""
+      ).body
+
+      html should include ("<th>Sender</th><th>Subject</th>")
+      html should include ("<td>alice</td>")
+      html should include ("<td>Hello</td>")
+      html should not include ("notice_1")
+      html should not include ("hidden")
+      html should not include ("<textus-result-table")
+    }
+
+    "render textus result table with descriptor default view columns" in {
+      val columns = Vector(
+        StaticFormAppRenderer.TableColumn("subject", "Subject")
+      )
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"id":"notice_1","subject":"Hello","sender_name":"alice"}]}""",
+        Map(StaticFormAppRenderer.tableColumnKey("result.data", "notice", "card") -> columns),
+        defaultTableView = "card"
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus-result-table source="result.data" entity="notice"></textus-result-table></article>"""
+      ).body
+
+      html should include ("<th>Subject</th>")
+      html should include ("<td>Hello</td>")
+      html should not include ("alice")
+      html should not include ("<textus-result-table")
+    }
+
+    "let textus result table view attribute override descriptor default view" in {
+      val summaryColumns = Vector(
+        StaticFormAppRenderer.TableColumn("sender_name", "Sender")
+      )
+      val cardColumns = Vector(
+        StaticFormAppRenderer.TableColumn("subject", "Subject")
+      )
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"id":"notice_1","subject":"Hello","sender_name":"alice"}]}""",
+        Map(
+          StaticFormAppRenderer.tableColumnKey("result.data", "notice", "summary") -> summaryColumns,
+          StaticFormAppRenderer.tableColumnKey("result.data", "notice", "card") -> cardColumns
+        ),
+        defaultTableView = "card"
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus-result-table source="result.data" entity="notice" view="summary"></textus-result-table></article>"""
+      ).body
+
+      html should include ("<th>Sender</th>")
+      html should include ("<td>alice</td>")
+      html should not include ("Hello")
+      html should not include ("<textus-result-table")
+    }
+
     "render form result properties with error panel" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
@@ -3045,6 +3901,22 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
     }
     _initialize_component("notice_board", component)
+    component.withComponentDescriptors(Vector(
+      ComponentDescriptor(
+        componentName = Some("notice_board"),
+        entityRuntimeDescriptors = Vector(
+          EntityRuntimeDescriptor(
+            entityName = "notice",
+            collectionId = _NoticeEntity.collectionId,
+            memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+            partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+            maxPartitions = 4,
+            maxEntitiesPerPartition = 100,
+            schema = Some(_schema("id", "label", "note"))
+          )
+        )
+      )
+    ))
     val collection = new ViewCollection[String](
       new ViewBuilder[String] {
         def build(id: EntityId): Consequence[String] =
@@ -3077,6 +3949,22 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
     }
     _initialize_component("notice_board", component, _aggregate_protocol())
+    component.withComponentDescriptors(Vector(
+      ComponentDescriptor(
+        componentName = Some("notice_board"),
+        entityRuntimeDescriptors = Vector(
+          EntityRuntimeDescriptor(
+            entityName = "notice",
+            collectionId = _NoticeEntity.collectionId,
+            memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+            partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+            maxPartitions = 4,
+            maxEntitiesPerPartition = 100,
+            schema = Some(_schema("id", "label", "status"))
+          )
+        )
+      )
+    ))
     val aggregate = _NoticeAggregate("notice_1", "notice aggregate")
     val nextAggregate = _NoticeAggregate("notice_2", "notice next")
     component.aggregateSpace.register(
@@ -3251,7 +4139,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
   }
 
   private def _management_console_fixture_subsystem(
-    configuration: Configuration = Configuration.empty
+    configuration: Configuration = Configuration.empty,
+    schema: Schema = _schema("id", "title", "author"),
+    viewFields: Map[String, Vector[String]] = Map.empty
   ): Subsystem = {
     given EntityPersistent[_NoticeEntity] = _notice_persistent
     val cid = _NoticeEntity.collectionId
@@ -3265,13 +4155,28 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
           maxPartitions = 4,
           maxEntitiesPerPartition = 100,
-          schema = Some(_schema("id", "title", "author"))
+          schema = Some(schema)
         )
       )
     )
-    val component = TestComponentFactory
-      .create("notice_board", Protocol.empty)
-      .withComponentDescriptors(Vector(descriptor))
+    val component =
+      if (viewFields.isEmpty) {
+        TestComponentFactory.create("notice_board", Protocol.empty)
+      } else {
+        val c = new org.goldenport.cncf.component.Component() {
+          override def viewDefinitions: Vector[ViewDefinition] =
+            Vector(
+              ViewDefinition(
+                name = "notice_view",
+                entityName = "notice",
+                viewNames = viewFields.keys.toVector,
+                viewFields = viewFields
+              )
+            )
+        }
+        _initialize_component("notice_board", c, Protocol.empty)
+      }
+    component.withComponentDescriptors(Vector(descriptor))
     component.entitySpace.registerEntity(
       "notice",
       _notice_collection(

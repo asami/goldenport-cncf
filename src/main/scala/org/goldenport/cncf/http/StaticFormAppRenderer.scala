@@ -6,16 +6,20 @@ import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.CncfVersion
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.protocol.{Argument, Request as ProtocolRequest}
+import org.goldenport.protocol.spec.ParameterDefinition
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
+import org.goldenport.value.BaseContent
+import org.goldenport.schema.{Multiplicity, ValueDomain, XBoolean, XDateTime, XInt, XString}
 import io.circe.Json
 import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 16, 2026
+ * @version Apr. 18, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -64,7 +68,9 @@ object StaticFormAppRenderer {
     page: FormPageProperties,
     status: Int,
     contentType: String,
-    body: String
+    body: String,
+    tableColumns: Map[String, Vector[TableColumn]] = Map.empty,
+    defaultTableView: String = WebTableColumnResolver.defaultViewName
   ) {
     def componentName: String = page.componentName
     def serviceName: String = page.serviceName
@@ -100,6 +106,10 @@ object StaticFormAppRenderer {
     private def _default_paging_href: String =
       s"/form/${componentName}/${serviceName}/${operationName}/result?page={page}&pageSize={pageSize}"
   }
+  final case class TableColumn(
+    name: String,
+    label: String
+  )
   private final case class OperationWebSchemaContext(
     component: Component,
     serviceName: String,
@@ -194,10 +204,11 @@ object StaticFormAppRenderer {
   ): Option[Page] =
     _resolve_operation_web_schema_context(subsystem, componentName, serviceName, operationName, webDescriptor).map { context =>
       val action = s"/form/${context.componentPath}/${context.servicePath}/${context.operationPath}"
+      val effectiveValues = _operation_form_prefill_values(subsystem, context, values)
       val effectiveValidation = validation.filter(_.webSchema.selector == context.webSchema.selector)
-      val controls = _operation_form_controls(context.webSchema, values, effectiveValidation)
-      val hiddenContext = _hidden_form_context_inputs(values)
-      val errorPanel = _form_error_panel(values) + _form_validation_panel(effectiveValidation)
+      val controls = _operation_form_controls(context.webSchema, effectiveValues, effectiveValidation)
+      val hiddenContext = _hidden_form_context_inputs(effectiveValues)
+      val errorPanel = _form_error_panel(effectiveValues) + _form_validation_panel(effectiveValidation)
       Page(_simple_page(
         title = s"${_escape(context.component.name)}.${_escape(context.serviceName)}.${_escape(context.operationName)}",
         subtitle = "HTML form operation",
@@ -256,8 +267,9 @@ object StaticFormAppRenderer {
         _admin_entity_schema_fields(subsystem, component, componentPath, entityPath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
+      val displaySchema = _admin_entity_create_schema(component, entityPath, webSchema)
       _form_definition_json(
-        webSchema,
+        displaySchema,
         FormDefinitionNavigation(
           mode = "admin-entity",
           method = "POST",
@@ -270,6 +282,43 @@ object StaticFormAppRenderer {
             FormDefinitionAction("detail", "GET", s"/web/${componentPath}/admin/entities/${entityPath}/{id}"),
             FormDefinitionAction("edit", "GET", s"/web/${componentPath}/admin/entities/${entityPath}/{id}/edit"),
             FormDefinitionAction("update", "POST", s"/form/${componentPath}/admin/entities/${entityPath}/{id}/update")
+          )
+        )
+      )
+    }
+
+  def renderComponentAdminEntityUpdateFormDefinition(
+    subsystem: Subsystem,
+    componentName: String,
+    entityName: String,
+    id: String,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val entityPath = NamingConventions.toNormalizedSegment(entityName)
+      val webSchema = WebSchemaResolver.resolveEntity(
+        component,
+        componentPath,
+        entityPath,
+        webDescriptor,
+        _admin_entity_schema_fields(subsystem, component, componentPath, entityPath),
+        fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
+      )
+      val displayFields = _admin_entity_display_fields(component, entityPath, "detail", webSchema.fieldNames)
+      val displaySchema = webSchema.copy(fields = _admin_display_web_fields(webSchema.fields, displayFields))
+      _form_definition_json(
+        displaySchema,
+        FormDefinitionNavigation(
+          mode = "admin-entity-update",
+          method = "POST",
+          submitPath = s"/form/${componentPath}/admin/entities/${entityPath}/${id}/update",
+          htmlPath = s"/web/${componentPath}/admin/entities/${entityPath}/${id}/edit",
+          actions = Vector(
+            FormDefinitionAction("list", "GET", s"/web/${componentPath}/admin/entities/${entityPath}"),
+            FormDefinitionAction("detail", "GET", s"/web/${componentPath}/admin/entities/${entityPath}/${id}"),
+            FormDefinitionAction("edit", "GET", s"/web/${componentPath}/admin/entities/${entityPath}/${id}/edit"),
+            FormDefinitionAction("update", "POST", s"/form/${componentPath}/admin/entities/${entityPath}/${id}/update")
           )
         )
       )
@@ -310,6 +359,40 @@ object StaticFormAppRenderer {
       )
     }
 
+  def renderComponentAdminDataUpdateFormDefinition(
+    subsystem: Subsystem,
+    componentName: String,
+    dataName: String,
+    id: String,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val dataPath = NamingConventions.toNormalizedSegment(dataName)
+      val webSchema = WebSchemaResolver.resolveData(
+        componentPath,
+        dataPath,
+        webDescriptor,
+        _admin_data_schema_fields(subsystem, componentPath, dataPath),
+        fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
+      )
+      _form_definition_json(
+        webSchema,
+        FormDefinitionNavigation(
+          mode = "admin-data-update",
+          method = "POST",
+          submitPath = s"/form/${componentPath}/admin/data/${dataPath}/${id}/update",
+          htmlPath = s"/web/${componentPath}/admin/data/${dataPath}/${id}/edit",
+          actions = Vector(
+            FormDefinitionAction("list", "GET", s"/web/${componentPath}/admin/data/${dataPath}"),
+            FormDefinitionAction("detail", "GET", s"/web/${componentPath}/admin/data/${dataPath}/${id}"),
+            FormDefinitionAction("edit", "GET", s"/web/${componentPath}/admin/data/${dataPath}/${id}/edit"),
+            FormDefinitionAction("update", "POST", s"/form/${componentPath}/admin/data/${dataPath}/${id}/update")
+          )
+        )
+      )
+    }
+
   def renderComponentAdminViewFormDefinition(
     subsystem: Subsystem,
     componentName: String,
@@ -320,12 +403,14 @@ object StaticFormAppRenderer {
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val viewPath = NamingConventions.toNormalizedSegment(viewName)
       val definition = _view_definition(component, viewName)
+      val entityName = definition.map(_.entityName).getOrElse(_strip_surface_suffix(viewPath, "view").getOrElse(viewPath))
       val webSchema = WebSchemaResolver.resolveView(
         component,
         componentPath,
         viewPath,
-        definition.map(_.entityName),
+        Some(entityName),
         webDescriptor,
+        viewFields = definition.flatMap(_.fieldsFor("summary")).orElse(_admin_entity_view_fields(component, entityName, "summary")),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
       _form_definition_json(
@@ -353,12 +438,14 @@ object StaticFormAppRenderer {
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val aggregatePath = NamingConventions.toNormalizedSegment(aggregateName)
       val definition = _aggregate_definition(component, aggregateName)
+      val entityName = definition.map(_.entityName).getOrElse(_strip_surface_suffix(aggregatePath, "aggregate").getOrElse(aggregatePath))
       val webSchema = WebSchemaResolver.resolveAggregate(
         component,
         componentPath,
         aggregatePath,
-        definition.map(_.entityName),
+        Some(entityName),
         webDescriptor,
+        viewFields = _admin_entity_view_fields(component, entityName, "summary"),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
       _form_definition_json(
@@ -403,7 +490,8 @@ object StaticFormAppRenderer {
     componentName: String,
     entityName: String,
     values: Map[String, String],
-    webDescriptor: WebDescriptor = WebDescriptor.empty
+    webDescriptor: WebDescriptor = WebDescriptor.empty,
+    view: Option[String] = None
   ): Option[FormValidationResult] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
@@ -416,7 +504,14 @@ object StaticFormAppRenderer {
         _admin_entity_schema_fields(subsystem, component, componentPath, entityPath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
-      _validate_form(webSchema, values)
+      val formSchema = view match {
+        case Some("create") => _admin_entity_create_schema(component, entityPath, webSchema)
+        case Some(v) =>
+          val displayFields = _admin_entity_display_fields(component, entityPath, v, webSchema.fieldNames)
+          webSchema.copy(fields = _admin_display_web_fields(webSchema.fields, displayFields))
+        case None => webSchema
+      }
+      _validate_form(formSchema, values)
     }
 
   def validateComponentAdminDataForm(
@@ -497,6 +592,8 @@ object StaticFormAppRenderer {
       "paging.chunkSize",
       "paging.href",
       "continuation.id",
+      "textus.admin.principalId",
+      "textus.admin.subjectId",
       "version",
       "etag",
       "csrf"
@@ -563,9 +660,17 @@ object StaticFormAppRenderer {
     defaults: Vector[(String, String)],
     values: Map[String, String],
     idPrefix: String,
-    validation: Option[FormValidationResult] = None
+    validation: Option[FormValidationResult] = None,
+    includeExtensionFields: Boolean = true
   ): String = {
-    val fields = _admin_resolved_schema_ordered_fields(schemaFields, _admin_form_fields(defaults, _visible_form_values(values)))
+    val submittedValues =
+      if (includeExtensionFields)
+        _visible_form_values(values)
+      else {
+        val schemaNames = schemaFields.map(_.name).toSet
+        _visible_form_values(values).filter { case (key, _) => _is_admin_schema_field(schemaNames, key) }
+      }
+    val fields = _admin_resolved_schema_ordered_fields(schemaFields, _admin_form_fields(defaults, submittedValues))
     val validationMessages = _validation_messages_by_field(validation)
     fields.map {
       case (Some(field), _, value) =>
@@ -606,24 +711,69 @@ object StaticFormAppRenderer {
   ): Vector[(Option[WebSchemaResolver.ResolvedWebField], String, String)] = {
     val values = fields.toMap
     val schemaNames = schemaFields.map(_.name).toSet
-    val schemaRows = schemaFields.map(field => (Some(field), field.name, values.getOrElse(field.name, "")))
+    val schemaRows = schemaFields.map(field => (Some(field), field.name, _admin_display_value(field.name, schemaNames, values)))
     val extensionRows = fields
-      .filterNot { case (key, _) => schemaNames.contains(key) }
+      .filterNot { case (key, _) => _is_admin_schema_field(schemaNames, key) || _is_derived_backing_field(schemaNames, key) }
       .distinctBy(_._1)
       .sortBy(_._1)
       .map { case (key, value) => (None, key, value) }
     schemaRows ++ extensionRows
   }
 
+  private def _is_derived_backing_field(
+    schemaNames: Set[String],
+    key: String
+  ): Boolean =
+    (key == "title" && schemaNames.contains("subject")) ||
+      (key == "content" && schemaNames.contains("body"))
+
+  private def _derived_backing_value(
+    key: String,
+    schemaNames: Set[String],
+    values: Map[String, String]
+  ): Option[String] =
+    key match {
+      case "subject" if schemaNames.contains("subject") => values.get("title")
+      case "body" if schemaNames.contains("body") => values.get("content")
+      case _ => None
+    }
+
   private def _admin_schema_ordered_fields(
     schemaFields: Vector[String],
     fields: Vector[(String, String)]
   ): Vector[(String, String)] = {
     val values = fields.toMap
-    val schemaRows = schemaFields.map(key => key -> values.getOrElse(key, ""))
-    val extensionRows = fields.filterNot { case (key, _) => schemaFields.contains(key) }
+    val schemaNames = schemaFields.toSet
+    val schemaRows = schemaFields.map(key => key -> _admin_display_value(key, schemaNames, values))
+    val extensionRows = fields.filterNot { case (key, _) => _is_admin_schema_field(schemaNames, key) || _is_derived_backing_field(schemaNames, key) }
     (schemaRows ++ extensionRows).distinctBy(_._1)
   }
+
+  private def _is_admin_schema_field(
+    schemaNames: Set[String],
+    key: String
+  ): Boolean =
+    schemaNames.contains(key) ||
+      schemaNames.exists(name => NamingConventions.equivalentByNormalized(name, key))
+
+  private def _admin_display_value(
+    key: String,
+    schemaNames: Set[String],
+    values: Map[String, String]
+  ): String =
+    _admin_value_by_name(values, key)
+      .orElse(_derived_backing_value(key, schemaNames, values))
+      .getOrElse("")
+
+  private def _admin_value_by_name(
+    values: Map[String, String],
+    key: String
+  ): Option[String] =
+    values.get(key).orElse {
+      values.collectFirst {
+        case (candidate, value) if NamingConventions.equivalentByNormalized(candidate, key) => value
+      }
+    }
 
   private def _admin_schema_field_names(
     adminFields: Vector[WebDescriptor.AdminField],
@@ -658,7 +808,7 @@ object StaticFormAppRenderer {
   ): String = {
     val fields = webSchema.fields
     if (fields.isEmpty)
-      _operation_form_fields_textarea(values, "Fields")
+      _operation_form_fields_textarea(_visible_form_values(values), "Fields")
     else {
       val fieldNames = fields.map(_.name).toSet
       val validationMessages = _validation_messages_by_field(validation)
@@ -726,9 +876,15 @@ object StaticFormAppRenderer {
           formDescriptor.map(_.controls).getOrElse(Map.empty)
         else
           _admin_field_controls(adminFields)
+      val operationParameters = operation.specification.request.parameters.toVector
+      val cmlParameters =
+        if (operationParameters.nonEmpty)
+          Vector.empty
+        else
+          _cml_operation_parameters(component, service.name, operation.name)
       val webSchema = WebSchemaResolver.resolveOperationControls(
         _operation_selector(component.name, service.name, operation.name),
-        operation.specification.request.parameters.toVector,
+        operationParameters ++ cmlParameters,
         descriptorControls
       )
       OperationWebSchemaContext(
@@ -741,6 +897,115 @@ object StaticFormAppRenderer {
         webSchema
       )
     }
+
+  private def _cml_operation_parameters(
+    component: Component,
+    serviceName: String,
+    operationName: String
+  ): Vector[ParameterDefinition] =
+    component.operationDefinitions.find { definition =>
+      NamingConventions.equivalentByNormalized(definition.name, operationName)
+    }.toVector.flatMap { definition =>
+      definition.parameters.map { field =>
+        ParameterDefinition(
+          content = field.label.
+            map(label => BaseContent.Builder(field.name).label(label).build()).
+            getOrElse(BaseContent.Builder(field.name).label(_humanize_field_name(field.name)).build()),
+          kind = ParameterDefinition.Kind.Argument,
+          domain = ValueDomain(
+            datatype = _cml_operation_datatype(field.datatype),
+            multiplicity = _cml_operation_multiplicity(field.multiplicity)
+          ),
+          web = org.goldenport.schema.WebColumn(
+            controlType = field.controlType.orElse(_cml_operation_control_type(field.name, field.datatype)),
+            required = field.required,
+            placeholder = field.placeholder,
+            help = field.help
+          )
+        )
+      }
+    }
+
+  private def _humanize_field_name(
+    name: String
+  ): String = {
+    val spaced = name.replace('_', ' ').replace('-', ' ').
+      replaceAll("([a-z0-9])([A-Z])", "$1 $2").
+      trim
+    if (spaced.isEmpty)
+      name
+    else
+      spaced.split("\\s+").map(_.capitalize).mkString(" ")
+  }
+
+  private def _cml_operation_control_type(
+    name: String,
+    datatype: String
+  ): Option[String] = {
+    val n = name.toLowerCase(java.util.Locale.ROOT)
+    val t = Option(datatype).map(_.trim.toLowerCase(java.util.Locale.ROOT)).getOrElse("")
+    if (t == "text" || Vector("body", "content", "description", "comment", "message").exists(n.contains))
+      Some("textarea")
+    else
+      None
+  }
+
+  private def _cml_operation_datatype(
+    datatype: String
+  ): org.goldenport.schema.DataType =
+    Option(datatype).map(_.trim.toLowerCase(java.util.Locale.ROOT)).getOrElse("") match {
+      case "boolean" | "bool" => XBoolean
+      case "int" | "integer" | "long" | "short" => XInt
+      case "datetime" | "date-time" | "timestamp" => XDateTime
+      case _ => XString
+    }
+
+  private def _cml_operation_multiplicity(
+    multiplicity: String
+  ): Multiplicity =
+    Option(multiplicity).map(_.trim.toLowerCase(java.util.Locale.ROOT)).getOrElse("") match {
+      case "?" | "0..1" | "zeroone" | "zero-one" | "zero_one" => Multiplicity.ZeroOne
+      case _ => Multiplicity.One
+    }
+
+  private def _operation_form_prefill_values(
+    subsystem: Subsystem,
+    context: OperationWebSchemaContext,
+    values: Map[String, String]
+  ): Map[String, String] =
+    if (!NamingConventions.equivalentByNormalized(context.serviceName, "aggregate"))
+      values
+    else
+      values.get("id").filter(_.nonEmpty) match {
+        case Some(id) =>
+          _aggregate_name_for_operation(context.component, context.operationName)
+            .flatMap { aggregateName =>
+              _admin_operation_value_lines(
+                subsystem,
+                "/admin/aggregate/read",
+                Record.data(
+                  "component" -> context.componentPath,
+                  "aggregate" -> NamingConventions.toNormalizedSegment(aggregateName),
+                  "id" -> id
+                )
+              ).map(lines => _field_lines(lines.mkString("\n")).toMap)
+            }
+            .map(prefill => prefill ++ values)
+            .getOrElse(values)
+        case None =>
+          values
+      }
+
+  private def _aggregate_name_for_operation(
+    component: Component,
+    operationName: String
+  ): Option[String] = {
+    val operationKey = NamingConventions.toNormalizedSegment(operationName)
+    component.aggregateDefinitions.find { definition =>
+      val names = definition.creates.map(_.name) ++ definition.commands.map(_.name)
+      names.exists(name => NamingConventions.equivalentByNormalized(name, operationKey))
+    }.map(_.name)
+  }
 
   private def _form_definition_json(
     webSchema: WebSchemaResolver.ResolvedWebSchema,
@@ -1197,6 +1462,7 @@ object StaticFormAppRenderer {
          |  <textus-error-panel source="error"></textus-error-panel>
          |  <textus-result-view source="result.body"></textus-result-view>
          |  <textus-result-table source="result.body" page="paging.page" page-size="paging.pageSize" total="paging.total" href="paging.href"></textus-result-table>
+         |  <textus-form-link href="crud.success.href" label="Back to detail"></textus-form-link>
          |  <textus-property-list source="result"></textus-property-list>
          |  <h3>Submitted Values</h3>
          |  <textus-property-list source="form"></textus-property-list>
@@ -1211,7 +1477,12 @@ object StaticFormAppRenderer {
     template: String
   ): Page = {
     val pageProperties = properties.nextPageProperties
-    val rendered = _render_template(template, pageProperties)
+    val rendered = _render_template(
+      template,
+      pageProperties,
+      properties.tableColumns,
+      properties.defaultTableView
+    )
     if (_is_html_document(template))
       Page(rendered)
     else
@@ -1356,11 +1627,17 @@ object StaticFormAppRenderer {
         _admin_entity_schema_fields(subsystem, component, componentPath, entityPath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.IdFirst
       )
+      val displayFields = _admin_entity_display_fields(
+        component,
+        entityPath,
+        WebTableColumnResolver.defaultViewName,
+        webSchema.fieldNames
+      )
       val result = _admin_entity_list(subsystem, componentPath, entityPath, effectivePageRequest)
       val warningHtml = _admin_warnings(result.warnings)
       val table = _admin_read_result_list_table(
         result.items,
-        webSchema.fieldNames,
+        displayFields,
         basePath,
         "No records are currently available for this entity.",
         includeEdit = true,
@@ -1441,14 +1718,17 @@ object StaticFormAppRenderer {
         _admin_entity_schema_fields(subsystem, component, componentPath, entityPath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
-      val effectiveValidation = validation.filter(_.webSchema.selector == webSchema.selector)
+      val displayFields = _admin_entity_display_fields(component, entityPath, "detail", webSchema.fieldNames)
+      val displaySchema = webSchema.copy(fields = _admin_display_web_fields(webSchema.fields, displayFields))
+      val effectiveValidation = validation.filter(_.webSchema.selector == displaySchema.selector)
       val hiddenContext = _hidden_form_context_inputs(values)
       val controls = _admin_record_controls(
-        webSchema.fields,
-        _admin_entity_record_fields(subsystem, componentPath, entityPath, id).getOrElse(Vector("id" -> id)),
+        displaySchema.fields,
+        _admin_entity_record_fields(subsystem, componentPath, entityPath, id, "detail").getOrElse(Vector("id" -> id)),
         values,
         "field",
-        effectiveValidation
+        effectiveValidation,
+        includeExtensionFields = false
       )
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} Edit",
@@ -1493,9 +1773,10 @@ object StaticFormAppRenderer {
         _admin_entity_schema_fields(subsystem, component, componentPath, entityPath),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
-      val effectiveValidation = validation.filter(_.webSchema.selector == webSchema.selector)
+      val displaySchema = _admin_entity_create_schema(component, entityPath, webSchema)
+      val effectiveValidation = validation.filter(_.webSchema.selector == displaySchema.selector)
       val hiddenContext = _hidden_form_context_inputs(values)
-      val controls = _admin_new_controls(webSchema.fields, values, "entityFields", "id=sales-order-1&#10;status=draft", effectiveValidation)
+      val controls = _admin_new_controls(displaySchema.fields, values, "entityFields", "id=sales-order-1&#10;status=draft", effectiveValidation)
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} New",
         subtitle = "Entity record create baseline",
@@ -1603,7 +1884,7 @@ object StaticFormAppRenderer {
     _admin_list_result(
       subsystem,
       "/admin/entity/list",
-      Record.create(Vector("component" -> componentPath, "entity" -> entityPath) ++ pageRequest.toPairs)
+      Record.create(Vector("component" -> componentPath, "entity" -> entityPath, "view" -> WebTableColumnResolver.defaultViewName) ++ pageRequest.toPairs)
     )
 
   private def _admin_entity_record_table(
@@ -1622,9 +1903,10 @@ object StaticFormAppRenderer {
       _admin_entity_schema_fields(subsystem, component, componentPath, entityPath),
       fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
     )
+    val displayFields = _admin_entity_display_fields(component, entityPath, "detail", webSchema.fieldNames)
     _admin_record_table(
-      webSchema.fieldNames,
-      _admin_entity_record_fields(subsystem, componentPath, entityPath, id),
+      displayFields,
+      _admin_entity_record_fields(subsystem, componentPath, entityPath, id, "detail"),
       s"""No record is currently available for id <code>${_escape(id)}</code>."""
     )
   }
@@ -1633,12 +1915,13 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     componentPath: String,
     entityPath: String,
-    id: String
+    id: String,
+    view: String
   ): Option[Vector[(String, String)]] =
     _admin_record_fields(
       subsystem,
       "/admin/entity/read",
-      Record.data("component" -> componentPath, "entity" -> entityPath, "id" -> id)
+      Record.data("component" -> componentPath, "entity" -> entityPath, "id" -> id, "view" -> view)
     )
 
   private def _admin_entity_schema_fields(
@@ -1657,6 +1940,62 @@ object StaticFormAppRenderer {
           Record.data("component" -> componentPath, "entity" -> entityPath)
         )
       }
+
+  private def _admin_entity_display_fields(
+    component: Component,
+    entityPath: String,
+    view: String,
+    fallback: Vector[String]
+  ): Vector[String] =
+    component.viewDefinitions
+      .find(d =>
+        NamingConventions.equivalentByNormalized(d.entityName, entityPath) ||
+        NamingConventions.equivalentByNormalized(d.name, entityPath)
+      )
+      .flatMap(_.fieldsFor(view))
+      .filter(_.nonEmpty)
+      .getOrElse(fallback)
+
+  private def _admin_entity_create_schema(
+    component: Component,
+    entityPath: String,
+    webSchema: WebSchemaResolver.ResolvedWebSchema
+  ): WebSchemaResolver.ResolvedWebSchema = {
+    val displayFields = _admin_entity_create_fields(component, entityPath, webSchema.fieldNames)
+    webSchema.copy(fields = _admin_display_web_fields(webSchema.fields, displayFields))
+  }
+
+  private def _admin_entity_create_fields(
+    component: Component,
+    entityPath: String,
+    fallback: Vector[String]
+  ): Vector[String] =
+    _admin_entity_view_fields(component, entityPath, "create")
+      .orElse(_admin_entity_view_fields(component, entityPath, "detail"))
+      .getOrElse(fallback)
+
+  private def _admin_entity_view_fields(
+    component: Component,
+    entityPath: String,
+    view: String
+  ): Option[Vector[String]] =
+    component.viewDefinitions
+      .find(d =>
+        NamingConventions.equivalentByNormalized(d.entityName, entityPath) ||
+        NamingConventions.equivalentByNormalized(d.name, entityPath)
+      )
+      .flatMap(_.fieldsFor(view))
+      .filter(_.nonEmpty)
+
+  private def _admin_display_web_fields(
+    fields: Vector[WebSchemaResolver.ResolvedWebField],
+    fieldNames: Vector[String]
+  ): Vector[WebSchemaResolver.ResolvedWebField] =
+    fieldNames.map { name =>
+      fields.find(x => NamingConventions.equivalentByNormalized(x.name, name))
+        .map(_.copy(name = name))
+        .getOrElse(WebSchemaResolver.ResolvedWebField(name))
+    }
 
   private def _admin_data_list(
     subsystem: Subsystem,
@@ -1870,6 +2209,21 @@ object StaticFormAppRenderer {
       .map(lines => _field_table(_admin_schema_ordered_fields(schemaFields, _field_lines(lines.mkString("\n")))))
       .getOrElse(s"<p>${_escape(emptyMessage)}</p>")
 
+  private def _admin_read_result_table_web_schema(
+    subsystem: Subsystem,
+    path: String,
+    form: Record,
+    emptyMessage: String,
+    webFields: Vector[WebSchemaResolver.ResolvedWebField]
+  ): String = {
+    val schemaFields = webFields.map(_.name)
+    val labels = _web_field_labels(webFields)
+    _admin_operation_value_lines(subsystem, path, form)
+      .filter(_.nonEmpty)
+      .map(lines => _field_table(_admin_schema_ordered_fields(schemaFields, _field_lines(lines.mkString("\n"))), labels))
+      .getOrElse(s"<p>${_escape(emptyMessage)}</p>")
+  }
+
   private def _admin_read_result_list(
     subsystem: Subsystem,
     path: String,
@@ -1896,9 +2250,38 @@ object StaticFormAppRenderer {
         s"<p>${_escape(emptyMessage)}</p>"
     }
 
-  private def _admin_read_result_list_table(
+  private def _admin_read_result_list_web_schema(
+    subsystem: Subsystem,
+    path: String,
+    form: Record,
+    basePath: String,
+    emptyMessage: String,
+    pageRequest: PageRequest,
+    webFields: Vector[WebSchemaResolver.ResolvedWebField]
+  ): String =
+    _admin_operation_record(subsystem, path, form) match {
+      case Some(record) =>
+        val schemaFields = webFields.map(_.name)
+        val labels = _web_field_labels(webFields)
+        val items = _admin_record_items(record)
+        val warnings = _admin_warnings(_admin_record_warnings(record))
+        val page = record.getInt("page").getOrElse(pageRequest.page)
+        val pageSize = record.getInt("pageSize").getOrElse(pageRequest.pageSize)
+        val total = record.getInt("total")
+        val hasNext = record.getBoolean("hasNext")
+        val table = _admin_read_result_list_table_labeled(items, schemaFields, labels, basePath, emptyMessage)
+        s"""<p>List with paging${total.map(t => s" · total ${_escape(t.toString)}").getOrElse("")}</p>
+           |${warnings}
+           |${table}
+           |${_paging_nav(page, pageSize, total, pageRequest.href(basePath), hasNext)}""".stripMargin
+      case None =>
+        s"<p>${_escape(emptyMessage)}</p>"
+    }
+
+  private def _admin_read_result_list_table_labeled(
     items: Vector[_AdminReadListItem],
     schemaFields: Vector[String],
+    labels: Map[String, String],
     basePath: String,
     emptyMessage: String,
     includeEdit: Boolean = false,
@@ -1920,7 +2303,7 @@ object StaticFormAppRenderer {
          |  <tbody>${rows}</tbody>
          |</table></div>""".stripMargin
     } else {
-      val headings = schemaFields.map(x => s"<th>${_escape(x)}</th>").mkString
+      val headings = schemaFields.map(x => s"<th>${_escape(labels.getOrElse(x, x))}</th>").mkString
       val rows =
         if (items.isEmpty) {
           s"""<tr><td colspan="${schemaFields.size + 1}">${_escape(emptyMessage)}</td></tr>"""
@@ -1933,7 +2316,7 @@ object StaticFormAppRenderer {
                 if (field == "id") values.getOrElse(field, item.id)
                 else if (field == "label") values.getOrElse(field, item.label)
                 else if (field == "value") values.getOrElse(field, item.value)
-                else values.getOrElse(field, "")
+                else _admin_display_value(field, schemaFields.toSet, values)
               }
               s"<td>${_escape(value)}</td>"
             }.mkString
@@ -1945,6 +2328,21 @@ object StaticFormAppRenderer {
          |  <tbody>${rows}</tbody>
          |</table></div>""".stripMargin
     }
+
+  private def _admin_read_result_list_table(
+    items: Vector[_AdminReadListItem],
+    schemaFields: Vector[String],
+    basePath: String,
+    emptyMessage: String,
+    includeEdit: Boolean = false,
+    linkContext: Map[String, String] = Map.empty
+  ): String =
+    _admin_read_result_list_table_labeled(items, schemaFields, Map.empty, basePath, emptyMessage, includeEdit, linkContext)
+
+  private def _web_field_labels(
+    fields: Vector[WebSchemaResolver.ResolvedWebField]
+  ): Map[String, String] =
+    fields.flatMap(field => field.label.map(label => field.name -> label)).toMap
 
   private def _admin_read_list_actions(
     href: String,
@@ -2081,9 +2479,16 @@ object StaticFormAppRenderer {
     }
 
   private def _field_table(fields: Vector[(String, String)]): String = {
+    _field_table(fields, Map.empty)
+  }
+
+  private def _field_table(
+    fields: Vector[(String, String)],
+    labels: Map[String, String]
+  ): String = {
     val rows = fields.map {
       case (key, value) =>
-        s"""<tr><th>${_escape(key)}</th><td>${_escape(value)}</td></tr>"""
+        s"""<tr><th>${_escape(labels.getOrElse(key, key))}</th><td>${_escape(value)}</td></tr>"""
     }.mkString("\n")
     s"""<div class="table-responsive"><table class="table table-sm">
        |  <tbody>${rows}</tbody>
@@ -2130,12 +2535,30 @@ object StaticFormAppRenderer {
     viewName: String
   ) =
     component.viewDefinitions.find(d => NamingConventions.equivalentByNormalized(d.name, viewName))
+      .orElse(_strip_surface_suffix(viewName, "view").flatMap(base =>
+        component.viewDefinitions.find(d => NamingConventions.equivalentByNormalized(d.name, base))
+      ))
 
   private def _aggregate_definition(
     component: Component,
     aggregateName: String
   ) =
     component.aggregateDefinitions.find(d => NamingConventions.equivalentByNormalized(d.name, aggregateName))
+      .orElse(_strip_surface_suffix(aggregateName, "aggregate").flatMap(base =>
+        component.aggregateDefinitions.find(d => NamingConventions.equivalentByNormalized(d.name, base))
+      ))
+
+  private def _strip_surface_suffix(
+    value: String,
+    surface: String
+  ): Option[String] = {
+    val normalized = NamingConventions.toNormalizedSegment(value)
+    val suffix = s"-${NamingConventions.toNormalizedSegment(surface)}"
+    if (normalized.endsWith(suffix))
+      Some(normalized.dropRight(suffix.length))
+    else
+      None
+  }
 
   private def _aggregate_operation_actions(
     component: Component,
@@ -2181,7 +2604,8 @@ object StaticFormAppRenderer {
       "<p>No aggregate instance operations are currently exposed.</p>"
     } else {
       val rows = bindings.map { binding =>
-        val path = _form_operation_path(componentPath, binding.service, binding.operation, Map("id" -> id))
+        val detailPath = s"/web/${componentPath}/admin/aggregates/${NamingConventions.toNormalizedSegment(aggregateName)}/${_escape_path_segment(id)}"
+        val path = _form_operation_path(componentPath, binding.service, binding.operation, _admin_operation_context("id" -> id, "crud.success.href" -> detailPath))
         val style = if (binding.kind == "update") "btn-warning" else "btn-outline-secondary"
         val label = _aggregate_operation_action_label(binding.kind)
         s"""<tr><td>${_escape(binding.kind)}</td><td>${_escape(binding.service)}</td><td>${_escape(binding.operation)}</td><td><a class="btn btn-sm ${style}" href="${_escape(path)}">${_escape(label)}</a></td></tr>"""
@@ -2201,6 +2625,11 @@ object StaticFormAppRenderer {
       case "update" => "Run update command"
       case _ => "Open operation"
     }
+
+  private def _admin_operation_context(
+    values: (String, String)*
+  ): Map[String, String] =
+    values.toMap
 
   private def _form_operation_path(
     componentPath: String,
@@ -2337,12 +2766,14 @@ object StaticFormAppRenderer {
         webDescriptor.adminTotalCountPolicy(componentPath, "view", viewPath)
       )
       val definition = _view_definition(component, viewName)
+      val entityName = definition.map(_.entityName).getOrElse(_strip_surface_suffix(viewPath, "view").getOrElse(viewPath))
       val webSchema = WebSchemaResolver.resolveView(
         component,
         componentPath,
         viewPath,
-        definition.map(_.entityName),
+        Some(entityName),
         webDescriptor,
+        viewFields = definition.flatMap(_.fieldsFor("summary")).orElse(_admin_entity_view_fields(component, entityName, "summary")),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.IdFirst
       )
       val metadata = definition match {
@@ -2374,14 +2805,14 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>Read result</h2>
-             |  ${_admin_read_result_list(
+             |  ${_admin_read_result_list_web_schema(
                    subsystem,
                    "/admin/view/read",
                    Record.create(Vector("component" -> componentPath, "view" -> viewPath) ++ effectivePageRequest.toPairs),
                    basePath,
                    s"No view records are currently available for ${viewName}.",
                    effectivePageRequest,
-                   webSchema.fieldNames
+                   webSchema.fields
                  )}
              |</article>""".stripMargin
       ))
@@ -2399,12 +2830,14 @@ object StaticFormAppRenderer {
       val viewPath = NamingConventions.toNormalizedSegment(viewName)
       val basePath = s"/web/${componentPath}/admin/views/${viewPath}"
       val definition = _view_definition(component, viewName)
+      val entityName = definition.map(_.entityName).getOrElse(_strip_surface_suffix(viewPath, "view").getOrElse(viewPath))
       val webSchema = WebSchemaResolver.resolveView(
         component,
         componentPath,
         viewPath,
-        definition.map(_.entityName),
+        Some(entityName),
         webDescriptor,
+        viewFields = definition.flatMap(_.fieldsFor("detail")).orElse(_admin_entity_view_fields(component, entityName, "detail")),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
       Page(_simple_page(
@@ -2417,12 +2850,12 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>${_escape(id)}</h2>
-             |  ${_admin_read_result_table(
+             |  ${_admin_read_result_table_web_schema(
                    subsystem,
                    "/admin/view/read",
                    Record.data("component" -> componentPath, "view" -> viewPath, "id" -> id),
                    s"No view record is currently available for ${id}.",
-                   webSchema.fieldNames
+                   webSchema.fields
                  )}
              |</article>""".stripMargin
       ))
@@ -2499,12 +2932,14 @@ object StaticFormAppRenderer {
         webDescriptor.adminTotalCountPolicy(componentPath, "aggregate", aggregatePath)
       )
       val definition = _aggregate_definition(component, aggregateName)
+      val entityName = definition.map(_.entityName).getOrElse(_strip_surface_suffix(aggregatePath, "aggregate").getOrElse(aggregatePath))
       val webSchema = WebSchemaResolver.resolveAggregate(
         component,
         componentPath,
         aggregatePath,
-        definition.map(_.entityName),
+        Some(entityName),
         webDescriptor,
+        viewFields = _admin_entity_view_fields(component, entityName, "summary"),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.IdFirst
       )
       val metadata = definition match {
@@ -2537,14 +2972,14 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>Read result</h2>
-             |  ${_admin_read_result_list(
+             |  ${_admin_read_result_list_web_schema(
                    subsystem,
                    "/admin/aggregate/read",
                    Record.create(Vector("component" -> componentPath, "aggregate" -> aggregatePath) ++ effectivePageRequest.toPairs),
                    basePath,
                    s"No aggregate records are currently available for ${aggregateName}.",
                    effectivePageRequest,
-                   webSchema.fieldNames
+                   webSchema.fields
                  )}
              |</article>
              |<article>
@@ -2566,12 +3001,14 @@ object StaticFormAppRenderer {
       val aggregatePath = NamingConventions.toNormalizedSegment(aggregateName)
       val basePath = s"/web/${componentPath}/admin/aggregates/${aggregatePath}"
       val definition = _aggregate_definition(component, aggregateName)
+      val entityName = definition.map(_.entityName).getOrElse(_strip_surface_suffix(aggregatePath, "aggregate").getOrElse(aggregatePath))
       val webSchema = WebSchemaResolver.resolveAggregate(
         component,
         componentPath,
         aggregatePath,
-        definition.map(_.entityName),
+        Some(entityName),
         webDescriptor,
+        viewFields = _admin_entity_view_fields(component, entityName, "detail"),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
       Page(_simple_page(
@@ -2584,12 +3021,12 @@ object StaticFormAppRenderer {
              |</article>
              |<article>
              |  <h2>${_escape(id)}</h2>
-             |  ${_admin_read_result_table(
+             |  ${_admin_read_result_table_web_schema(
                    subsystem,
                    "/admin/aggregate/read",
                    Record.data("component" -> componentPath, "aggregate" -> aggregatePath, "id" -> id),
                    s"No aggregate record is currently available for ${id}.",
-                   webSchema.fieldNames
+                   webSchema.fields
                  )}
              |</article>
              |<article>
@@ -3218,9 +3655,30 @@ object StaticFormAppRenderer {
          |  <h2>Runtime Configuration</h2>
          |  <p>Resolved runtime configuration values are read-only. Sensitive values are masked.</p>
          |  <p>Configuration mutation must use a separate admin action surface with explicit admin authorization and audit logging.</p>
+         |  ${_effective_runtime_configuration_table(config)}
          |  ${_runtime_configuration_table(config)}
          |</article>""".stripMargin
     }.getOrElse("")
+
+  private def _effective_runtime_configuration_table(
+    config: ResolvedConfiguration
+  ): String = {
+    val runtime = RuntimeConfig.from(config)
+    val rows = Vector(
+      "textus.operation-mode" -> runtime.operationMode.name,
+      "textus.mode" -> runtime.mode.name,
+      "textus.web.develop.anonymous-admin" -> runtime.webDevelopAnonymousAdmin.toString,
+      "textus.web.operation.dispatcher" -> runtime.webOperationDispatcher
+    ).map {
+      case (key, value) =>
+        s"""<tr><td><code>${_escape(key)}</code></td><td>${_escape(value)}</td></tr>"""
+    }
+    s"""<h3>Effective Runtime Policy</h3>
+       |<div class="table-responsive"><table class="table table-sm">
+       |  <thead><tr><th>Key</th><th>Value</th></tr></thead>
+       |  <tbody>${rows.mkString("\n")}</tbody>
+       |</table></div>""".stripMargin
+  }
 
   private def _runtime_configuration_table(
     config: ResolvedConfiguration
@@ -3533,9 +3991,11 @@ object StaticFormAppRenderer {
 
   private def _render_template(
     template: String,
-    properties: FormPageProperties
+    properties: FormPageProperties,
+    tableColumns: Map[String, Vector[TableColumn]],
+    defaultTableView: String = WebTableColumnResolver.defaultViewName
   ): String = {
-    val widgets = _render_widgets(template, properties)
+    val widgets = _render_widgets(template, properties, tableColumns, defaultTableView)
     _render_property_expansions(widgets, properties)
   }
 
@@ -3554,47 +4014,70 @@ object StaticFormAppRenderer {
 
   private def _render_widgets(
     template: String,
-    properties: FormPageProperties
+    properties: FormPageProperties,
+    tableColumns: Map[String, Vector[TableColumn]],
+    defaultTableView: String
   ): String = {
     val resultView = """<textus-result-view\s+source="([^"]+)"\s*></textus-result-view>""".r
-    val resultTable = """<textus-result-table\s+source="([^"]+)"\s+page="([^"]+)"\s+page-size="([^"]+)"\s+total="([^"]+)"\s+href="([^"]+)"\s*></textus-result-table>""".r
+    val resultTable = """<textus-result-table\b([^>]*)></textus-result-table>""".r
+    val formLink = """<textus-form-link\s+href="([^"]+)"\s+label="([^"]+)"\s*></textus-form-link>""".r
     val propertyList = """<textus-property-list\s+source="([^"]+)"\s*></textus-property-list>""".r
     val errorPanel = """<textus-error-panel\s+source="([^"]+)"\s*></textus-error-panel>""".r
     val a = resultView.replaceAllIn(template, m =>
       java.util.regex.Matcher.quoteReplacement(_render_result_view(m.group(1), properties))
     )
-    val b = resultTable.replaceAllIn(a, m =>
-      java.util.regex.Matcher.quoteReplacement(_render_result_table(m.group(1), m.group(2), m.group(3), m.group(4), m.group(5), properties))
+    val b = resultTable.replaceAllIn(a, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_result_table(attrs, properties, tableColumns, defaultTableView))
+    })
+    val c = formLink.replaceAllIn(b, m =>
+      java.util.regex.Matcher.quoteReplacement(_render_form_link(m.group(1), m.group(2), properties))
     )
-    val c = propertyList.replaceAllIn(b, m =>
+    val d = propertyList.replaceAllIn(c, m =>
       java.util.regex.Matcher.quoteReplacement(_render_property_list(m.group(1), properties))
     )
-    errorPanel.replaceAllIn(c, m =>
+    errorPanel.replaceAllIn(d, m =>
       java.util.regex.Matcher.quoteReplacement(_render_error_panel(m.group(1), properties))
     )
   }
+
+  private def _render_form_link(
+    hrefPath: String,
+    label: String,
+    properties: FormPageProperties
+  ): String =
+    properties.values.get(hrefPath).filter(_.nonEmpty) match {
+      case Some(href) =>
+        s"""<p><a class="btn btn-outline-primary" href="${_escape(href)}">${_escape(label)}</a></p>"""
+      case None =>
+        ""
+    }
 
   private def _render_result_view(
     source: String,
     properties: FormPageProperties
   ): String = {
-    val value = properties.value(source)
+    val value = _source_text(source, properties).getOrElse("")
     s"""<pre class="mt-3 p-3 bg-light border rounded">${_escape(value)}</pre>"""
   }
 
   private def _render_result_table(
-    source: String,
-    pagePath: String,
-    pageSizePath: String,
-    totalPath: String,
-    hrefPath: String,
-    properties: FormPageProperties
+    attrs: Map[String, String],
+    properties: FormPageProperties,
+    tableColumns: Map[String, Vector[TableColumn]],
+    defaultTableView: String
   ): String = {
+    val source = attrs.getOrElse("source", "result.body")
+    val pagePath = attrs.getOrElse("page", "paging.page")
+    val pageSizePath = attrs.getOrElse("page-size", "paging.pageSize")
+    val totalPath = attrs.getOrElse("total", "paging.total")
+    val hrefPath = attrs.getOrElse("href", "paging.href")
+    val columns = _table_columns(attrs.get("columns")).orElse(_table_columns(source, attrs, tableColumns, defaultTableView))
     val page = _int_property(properties, pagePath, 1)
     val pageSize = _int_property(properties, pageSizePath, 20)
     val total = _optional_int_property(properties, totalPath)
     val href = properties.value(hrefPath)
-    val table = _json_table(properties.value(source), page, pageSize).getOrElse("")
+    val table = _json_table(source, properties, page, pageSize, columns).getOrElse("")
     s"""${table}<div class="mt-3">${_paging_nav(page, pageSize, total, href)}</div>"""
   }
 
@@ -3622,13 +4105,102 @@ object StaticFormAppRenderer {
   }
 
   private def _json_table(
-    body: String,
+    source: String,
+    properties: FormPageProperties,
     page: Int,
-    pageSize: Int
+    pageSize: Int,
+    columns: Option[Vector[TableColumn]]
   ): Option[String] =
-    parse(body).toOption.flatMap { json =>
+    _source_json(source, properties).flatMap { json =>
       val rows = json.asArray.orElse(json.hcursor.downField("result").focus.flatMap(_.asArray))
-      rows.flatMap(xs => _records_table(_page_rows(xs, page, pageSize)))
+      rows.flatMap(xs => _records_table(_page_rows(xs, page, pageSize), columns))
+    }
+
+  private def _table_columns(columns: Option[String]): Option[Vector[TableColumn]] =
+    columns.map(_.split(',').toVector.flatMap(_table_column)).filter(_.nonEmpty)
+
+  private def _table_column(value: String): Option[TableColumn] = {
+    val text = value.trim
+    if (text.isEmpty)
+      None
+    else
+      text.split(":", 2).toList match {
+        case name :: label :: Nil => Some(TableColumn(name.trim, label.trim))
+        case name :: Nil => Some(TableColumn(name.trim, name.trim))
+        case _ => None
+      }
+  }
+
+  private def _table_columns(
+    source: String,
+    attrs: Map[String, String],
+    tableColumns: Map[String, Vector[TableColumn]],
+    defaultTableView: String
+  ): Option[Vector[TableColumn]] =
+    _table_column_key(source, attrs, defaultTableView).flatMap(tableColumns.get)
+      .orElse(tableColumns.get(source))
+      .orElse(tableColumns.get("result.data"))
+      .filter(_.nonEmpty)
+
+  private def _table_column_key(
+    source: String,
+    attrs: Map[String, String],
+    defaultTableView: String
+  ): Option[String] =
+    attrs.get("entity").map { entity =>
+      val view = attrs.getOrElse("view", defaultTableView)
+      _table_column_key(source, entity, view)
+    }
+
+  private[http] def tableColumnKey(
+    source: String,
+    entity: String,
+    view: String = WebTableColumnResolver.defaultViewName
+  ): String =
+    _table_column_key(source, entity, view)
+
+  private def _table_column_key(
+    source: String,
+    entity: String,
+    view: String
+  ): String =
+    s"${source}|entity=${NamingConventions.toNormalizedSegment(entity)}|view=${NamingConventions.toNormalizedSegment(view)}"
+
+  private def _widget_attrs(source: String): Map[String, String] =
+    "([A-Za-z0-9_.:-]+)=\"([^\"]*)\"".r.findAllMatchIn(source).map { m =>
+      m.group(1) -> m.group(2)
+    }.toMap
+
+  private def _source_text(
+    source: String,
+    properties: FormPageProperties
+  ): Option[String] =
+    properties.values.get(source).orElse(_source_json(source, properties).map(_.spaces2))
+
+  private def _source_json(
+    source: String,
+    properties: FormPageProperties
+  ): Option[Json] =
+    properties.values.get(source).flatMap(parse(_).toOption).orElse {
+      val body = properties.values.get("result.body")
+      body.flatMap(parse(_).toOption).flatMap { json =>
+        val path =
+          if (source.startsWith("result.body."))
+            source.stripPrefix("result.body.").split('.').toVector
+          else if (source.startsWith("result."))
+            source.stripPrefix("result.").split('.').toVector
+          else
+            Vector.empty
+        if (path.isEmpty) None else _json_at(json, path)
+      }
+    }
+
+  private def _json_at(
+    json: Json,
+    path: Vector[String]
+  ): Option[Json] =
+    path.foldLeft(Option(json)) { (z, name) =>
+      z.flatMap(_.hcursor.downField(name).focus)
     }
 
   private def _page_rows(
@@ -3640,16 +4212,19 @@ object StaticFormAppRenderer {
     rows.slice(offset, offset + math.max(1, pageSize))
   }
 
-  private def _records_table(rows: Vector[Json]): Option[String] = {
+  private def _records_table(
+    rows: Vector[Json],
+    columns: Option[Vector[TableColumn]]
+  ): Option[String] = {
     val objects = rows.flatMap(_.asObject)
     if (objects.isEmpty) {
       None
     } else {
-      val headers = objects.flatMap(_.keys).distinct
-      val head = headers.map(h => s"<th>${_escape(h)}</th>").mkString
+      val headers = columns.getOrElse(objects.flatMap(_.keys).distinct.map(name => TableColumn(name, name)))
+      val head = headers.map(h => s"<th>${_escape(h.label)}</th>").mkString
       val body = objects.map { obj =>
         val cells = headers.map { h =>
-          val value = obj(h).map(_json_cell).getOrElse("")
+          val value = obj(h.name).map(_json_cell).getOrElse("")
           s"<td>${_escape(value)}</td>"
         }.mkString
         s"<tr>${cells}</tr>"

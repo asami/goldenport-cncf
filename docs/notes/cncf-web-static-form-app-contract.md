@@ -44,6 +44,40 @@ GET  /form-api/{component}/admin/aggregates/{aggregate}
 POST /form-api/{component}/{service}/{operation}/validate
 ```
 
+Admin Form API paths share the Management Console authorization model. Anonymous
+requests may reach admin Form API paths only when both conditions are true:
+
+- `textus.operation-mode` is `develop` or `test`.
+- `textus.web.develop.anonymous-admin` is `true`.
+
+The default is intentionally development-friendly:
+
+```text
+textus.operation-mode = develop
+textus.web.develop.anonymous-admin = true
+```
+
+In `production` and `demo`, the built-in admin component's operation
+authorization parameters deny anonymous admin access even if
+`textus.web.develop.anonymous-admin` is set to `true`. Requests with explicit
+principal/session information are not anonymous and are evaluated by the normal
+Operation/Web authorization rules. Component/service/operation authorization
+definitions may explicitly allow anonymous access or constrain operation modes
+for a selector, and the framework enforces those rules before Operation
+dispatch for every ingress root. The current principal-query/header support is
+a temporary protocol-level stand-in for the future login/session tier.
+
+The shared enforcement shape is `OperationAuthorizationRule`. WebDescriptor
+authorization can narrow or supplement Web/Form admission, but it does not
+replace the Operation checkpoint. Command, server, client, REST, and Web/Form
+requests therefore converge on the same selector policy after ingress security
+resolution.
+
+This policy is independent of `RunMode`. Command, server, client, script, and
+server-emulator roots may reach the same Web/Form API mechanisms, but the
+effective admin policy is taken from `OperationMode` and the resolved runtime
+configuration.
+
 User-facing Static Form App HTML paths are under `/web`:
 
 ```text
@@ -514,6 +548,12 @@ EntitySpace currently keeps many working sets in memory, so total count is
 often available with little or no additional work. That is best-effort behavior,
 not a hard guarantee across all storage backends.
 
+Structured list/search Query field names are resolved through the entity schema,
+not through WebDescriptor-only field lists. See `query-field-resolution.md` for
+the `EntityQueryFieldResolver` boundary. Full-text search and embedding search
+are intentionally outside that resolver and are tracked as future search
+planning work.
+
 The `paging.href` value connects the HTML representation to the operation
 execution mechanism. It is a URL template with `{page}` and `{pageSize}` tokens:
 
@@ -581,9 +621,20 @@ Implementation checkpoint:
   resolved schema.
 - Admin Entity create/update HTML forms and Entity form definition JSON share
   the same resolved schema.
+- Admin Entity create and update use separate JSON definition routes when their
+  field sets differ. The collection-level route describes create; the id-scoped
+  update route describes edit/update.
+- Admin Entity create resolves fields from `create` view fields when present
+  and may omit `id`; the server completes the id before storing through
+  `EntityCollection`.
+- Admin Entity edit/update resolves fields from `detail` view fields and uses
+  that same field set for validation and validation-error redisplay.
 - Admin Data create/update HTML forms and Data form definition JSON use the
   same resolver path. When no declared schema exists, Data can still infer a
   best-effort field set from admin Data records.
+- Admin Data create and update use separate JSON definition routes. Data does
+  not yet define entity-style `create/detail` view fields, so both routes share
+  the same `resolveData` field set for now.
 - Admin Entity/Data create/update result pages expose the same core
   `result.status`, `result.ok`, and `result.body` names as ordinary Operation
   result pages where applicable.
@@ -591,6 +642,9 @@ Implementation checkpoint:
   entity schema plus WebDescriptor admin controls.
 - Aggregate create and command screens remain Operation forms, so their schema
   source is the Aggregate Operation parameter definition.
+- Admin View and Aggregate generic Form API definitions are read-oriented. They
+  expose GET list/detail navigation metadata and do not expose generic
+  create/update submit actions.
 
 The required browser-visible flow is:
 
@@ -632,6 +686,8 @@ GET  /web/{component}/admin/entities/{entityName}/{id}/edit
 POST /form/{component}/admin/entities/{entityName}/{id}/update
 GET  /web/{component}/admin/entities/{entityName}/new
 POST /form/{component}/admin/entities/{entityName}/create
+GET  /form-api/{component}/admin/entities/{entityName}
+GET  /form-api/{component}/admin/entities/{entityName}/{id}/update
 ```
 
 For example, a `SalesOrder` entity uses the normalized entity type segment:
@@ -644,6 +700,26 @@ For example, a `SalesOrder` entity uses the normalized entity type segment:
 lists SalesOrder records with paging. `/web/{component}/admin/entities/sales-order/{id}`
 shows one SalesOrder record.
 
+The entity Form API routes mirror the create/update split:
+
+- `GET /form-api/{component}/admin/entities/{entityName}` returns the create
+  definition (`mode = admin-entity`) and uses `create` view fields when present.
+- `GET /form-api/{component}/admin/entities/{entityName}/{id}/update` returns
+  the update definition (`mode = admin-entity-update`) and uses `detail` view
+  fields.
+
+Entity list/detail/edit/new page rendering uses the same field-profile policy:
+
+- list uses `summary` view fields.
+- detail, edit, and update validation use `detail` view fields.
+- new and create validation use `create` view fields, falling back to `detail`
+  and then to the effective schema.
+
+When `create` view fields omit `id`, the visible HTML form and create Form API
+do not expose `id`. The admin create Operation completes the id server-side
+before persisting the record. This keeps user-facing create forms small while
+preserving a complete entity identity at the `EntityCollection` boundary.
+
 Data and aggregate management also keep their managed-data kind as the first
 level, then add a resource type or collection segment before the record id:
 
@@ -654,8 +730,12 @@ GET  /web/{component}/admin/data/{dataName}/{id}/edit
 POST /form/{component}/admin/data/{dataName}/{id}/update
 GET  /web/{component}/admin/data/{dataName}/new
 POST /form/{component}/admin/data/{dataName}/create
+GET  /form-api/{component}/admin/data/{dataName}
+GET  /form-api/{component}/admin/data/{dataName}/{id}/update
 GET  /web/{component}/admin/aggregates/{aggregateName}
 GET  /web/{component}/admin/aggregates/{aggregateName}/{id}
+GET  /form-api/{component}/admin/aggregates/{aggregateName}
+GET  /form-api/{component}/admin/views/{viewName}
 ```
 
 Aggregate create/command/update flows are operation-backed:
@@ -681,6 +761,11 @@ the discovered `/form/{component}/{service}/{operation}` entry point. A
 successful operation-result fixture still requires an HTTP ingress-capable
 component; a component without HTTP ingress reports the normal operation result
 page with the ingress error instead of mutating aggregate state directly.
+
+The generic aggregate Form API definition is read-oriented. It returns the
+aggregate read/list metadata and list/detail navigation actions. Aggregate
+create/update/command schemas are obtained from the discovered component
+Operation forms, not from a generic aggregate submit definition.
 
 The aggregate operation binding is resolved from aggregate metadata to component
 operation metadata:

@@ -33,6 +33,9 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |      roles: ["moderator"]
           |      scopes: ["notice:write"]
           |      capabilities: ["notice.post"]
+          |      operationModes: ["develop", "test"]
+          |      anonymousOperationModes: ["develop"]
+          |      allowAnonymous: true
           |
           |  form:
           |    notice-board.notice.search-notices:
@@ -96,6 +99,11 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.authorization("notice-board.notice.post-notice").roles shouldBe Vector("moderator")
       descriptor.authorization("notice-board.notice.post-notice").scopes shouldBe Vector("notice:write")
       descriptor.authorization("notice-board.notice.post-notice").capabilities shouldBe Vector("notice.post")
+      descriptor.authorization("notice-board.notice.post-notice").operationModes shouldBe
+        Vector(org.goldenport.cncf.config.OperationMode.Develop, org.goldenport.cncf.config.OperationMode.Test)
+      descriptor.authorization("notice-board.notice.post-notice").anonymousOperationModes shouldBe
+        Vector(org.goldenport.cncf.config.OperationMode.Develop)
+      descriptor.authorization("notice-board.notice.post-notice").allowAnonymous shouldBe true
       descriptor.form("notice-board.notice.search-notices").enabled shouldBe Some(true)
       descriptor.form("notice-board.notice.search-notices").successRedirect shouldBe Some("/web/${component}/admin/aggregates/${service}/${result.id}")
       descriptor.form("notice-board.notice.search-notices").failureRedirect shouldBe Some("/form/${component}/${service}/${operation}")
@@ -232,6 +240,31 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       WebDescriptorAuthorization.isAllowed(descriptor, "notice-board.notice.post-notice", subject) shouldBe false
     }
 
+    "apply operation-mode and anonymous policy from Web Tier authorization rules" in {
+      val descriptor = WebDescriptor(
+        authorization = Map(
+          "notice-board.notice.post-notice" -> WebDescriptor.Authorization(
+            allowAnonymous = true,
+            anonymousOperationModes = Vector(org.goldenport.cncf.config.OperationMode.Develop)
+          )
+        )
+      )
+      val subject = WebDescriptorAuthorization.Subject()
+
+      WebDescriptorAuthorization.isAllowed(
+        descriptor,
+        "notice-board.notice.post-notice",
+        subject,
+        org.goldenport.cncf.config.OperationMode.Develop
+      ) shouldBe true
+      WebDescriptorAuthorization.isAllowed(
+        descriptor,
+        "notice-board.notice.post-notice",
+        subject,
+        org.goldenport.cncf.config.OperationMode.Production
+      ) shouldBe false
+    }
+
     "allow Web Tier authorization when no rule exists for the selector" in {
       val descriptor = WebDescriptor(
         authorization = Map(
@@ -242,6 +275,37 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       )
 
       WebDescriptorAuthorization.isAllowed(descriptor, "notice-board.notice.search-notices", WebDescriptorAuthorization.Subject()) shouldBe true
+    }
+
+    "derive a Web authorization subject from an anonymous security context" in {
+      val security = org.goldenport.cncf.context.ExecutionContext
+        .create(org.goldenport.cncf.context.SecurityContext.Privilege.Anonymous)
+        .security
+
+      val subject = WebDescriptorAuthorization.Subject.from(security)
+
+      subject.isAnonymous shouldBe true
+      subject.roles should contain ("anonymous")
+      subject.capabilities should contain ("anonymous")
+    }
+
+    "derive a Web authorization subject from HTTP query and header values" in {
+      val request = org.http4s.Request[cats.effect.IO](
+        method = org.http4s.Method.GET,
+        uri = org.http4s.Uri.unsafeFromString("/web/notice-board/admin?role=operator&capability=notice.admin&principalId=admin-test")
+      ).putHeaders(
+        org.http4s.Header.Raw(
+          org.typelevel.ci.CIString("x-textus-scope"),
+          "notice:write"
+        )
+      )
+
+      val subject = WebDescriptorAuthorization.Subject.fromHttp(request)
+
+      subject.isAnonymous shouldBe false
+      subject.roles should contain ("operator")
+      subject.scopes should contain ("notice:write")
+      subject.capabilities should contain ("notice.admin")
     }
   }
 }

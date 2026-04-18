@@ -7,14 +7,16 @@ import scala.util.Using
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.DescriptorRecordLoader
+import org.goldenport.cncf.config.OperationMode
 import org.goldenport.record.Record
 
 /*
  * @since   Apr. 14, 2026
- * @version Apr. 16, 2026
+ * @version Apr. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
+  defaultView: String = WebTableColumnResolver.defaultViewName,
   expose: Map[String, WebDescriptor.Exposure] = Map.empty,
   auth: WebDescriptor.Auth = WebDescriptor.Auth(),
   authorization: Map[String, WebDescriptor.Authorization] = Map.empty,
@@ -28,6 +30,7 @@ final case class WebDescriptor(
       form.nonEmpty ||
       apps.nonEmpty ||
       admin.nonEmpty ||
+      defaultView != WebTableColumnResolver.defaultViewName ||
       auth != WebDescriptor.Auth()
 
   def exposureOf(selector: String): WebDescriptor.Exposure =
@@ -143,7 +146,10 @@ object WebDescriptor {
   final case class Authorization(
     roles: Vector[String] = Vector.empty,
     scopes: Vector[String] = Vector.empty,
-    capabilities: Vector[String] = Vector.empty
+    capabilities: Vector[String] = Vector.empty,
+    operationModes: Vector[OperationMode] = Vector.empty,
+    anonymousOperationModes: Vector[OperationMode] = Vector.empty,
+    allowAnonymous: Boolean = false
   )
 
   final case class Form(
@@ -244,6 +250,9 @@ object WebDescriptor {
   def fromRecord(record: Record): WebDescriptor = {
     val web = _record_value(record, "web").getOrElse(record)
     WebDescriptor(
+      defaultView = _string(web, "defaultView")
+        .orElse(_string(web, "default-view"))
+        .getOrElse(WebTableColumnResolver.defaultViewName),
       expose = _expose(web),
       auth = _auth(web),
       authorization = _authorization(web),
@@ -273,11 +282,27 @@ object WebDescriptor {
             key -> Authorization(
               roles = _string_vector(r, "roles"),
               scopes = _string_vector(r, "scopes"),
-              capabilities = _string_vector(r, "capabilities")
+              capabilities = _string_vector(r, "capabilities"),
+              operationModes = _operation_modes(r),
+              anonymousOperationModes = _anonymous_operation_modes(r),
+              allowAnonymous = _boolean(r, "allowAnonymous")
+                .orElse(_boolean(r, "allow-anonymous"))
+                .getOrElse(false)
             )
           }
       }.toMap)
       .getOrElse(Map.empty)
+
+  private def _operation_modes(record: Record): Vector[OperationMode] =
+    (_string_vector(record, "operationModes") ++ _string_vector(record, "operation-modes"))
+      .flatMap(OperationMode.from)
+      .distinct
+
+  private def _anonymous_operation_modes(record: Record): Vector[OperationMode] =
+    (
+      _string_vector(record, "anonymousOperationModes") ++
+        _string_vector(record, "anonymous-operation-modes")
+    ).flatMap(OperationMode.from).distinct
 
   private def _form(record: Record): Map[String, Form] =
     _record_value(record, "form")

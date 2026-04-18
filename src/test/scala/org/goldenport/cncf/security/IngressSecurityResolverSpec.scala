@@ -17,6 +17,19 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
   "IngressSecurityResolver" should {
+    "resolve anonymous privilege when no protocol security attributes are present" in {
+      val request = Request.of(component = "domain", service = "entity", operation = "loadPerson")
+
+      val result = IngressSecurityResolver.resolve(request)
+
+      result shouldBe a[Consequence.Success[_]]
+      val resolved = result.toOption.get
+      resolved.executionContext.security.principal.id.value shouldBe "anonymous"
+      resolved.executionContext.security.level shouldBe SecurityLevel("anonymous")
+      SecuritySubject.from(resolved.executionContext.security).isAnonymous shouldBe true
+      resolved.executionContext.security.hasCapability("anonymous") shouldBe true
+    }
+
     "resolve content-manager privilege from request properties" in {
       val request = Request
         .of(component = "domain", service = "entity", operation = "loadPerson")

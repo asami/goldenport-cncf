@@ -437,7 +437,7 @@ final class ComponentFactory(
           aggregatespace.register(name, binding.collection.asInstanceOf[AggregateCollection[Any]])
         case None =>
           _resolve_aggregate_definition(component, name) match {
-            case Some(definition) if definition.members.nonEmpty =>
+            case Some(definition) =>
               aggregatespace.register(
                 name,
                 _default_aggregate_collection(component, entityspace, definition)

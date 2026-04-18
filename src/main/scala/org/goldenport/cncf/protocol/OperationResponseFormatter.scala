@@ -1,5 +1,6 @@
 package org.goldenport.cncf.protocol
 
+import java.util.Locale
 import org.goldenport.protocol.{Request, Response}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
@@ -15,7 +16,8 @@ import scala.xml.{Elem, NodeSeq, Text}
  * @since   Mar. 13, 2026
  *  version Mar. 28, 2026
  *  version Apr.  5, 2026
- * @version Apr. 15, 2026
+ *  version Apr. 15, 2026
+ * @version Apr. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationResponseFormatter {
@@ -66,7 +68,15 @@ object OperationResponseFormatter {
     _runtime_context.transformRecord(record)
 
   private def _runtime_context: RuntimeContext.Context =
-    RuntimeContext.Context.default
+    _configuration_string("textus.locale")
+      .orElse(_configuration_string("cncf.locale"))
+      .map(locale => RuntimeContext.Context.default.copy(
+        formatting = RuntimeContext.Context.default.formatting.copy(locale = _locale(locale))
+      ))
+      .getOrElse(RuntimeContext.Context.default)
+
+  private def _locale(value: String): Locale =
+    Locale.forLanguageTag(value.trim.replace('_', '-'))
 
   private def _resolve_format(
     request: Request,

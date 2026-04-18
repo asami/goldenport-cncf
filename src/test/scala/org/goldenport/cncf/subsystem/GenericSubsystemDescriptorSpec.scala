@@ -86,6 +86,36 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
       provider.isDefault shouldBe Some(true)
     }
 
+    "load operation authorization rules from the formal YAML schema" in {
+      val path = Files.createTempFile("generic-subsystem-operation-authorization", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: textus-sample
+          |version: 0.1.0-SNAPSHOT
+          |components:
+          |  - component: notice-board
+          |    coordinate: org.textus:notice-board:0.1.0-SNAPSHOT
+          |operationAuthorization:
+          |  notice-board.notice.post-notice:
+          |    allowAnonymous: true
+          |    anonymousOperationModes:
+          |      - develop
+          |      - test
+          |  notice-board.notice.admin-only:
+          |    operationModes: production
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = GenericSubsystemDescriptor.load(path).toOption.get
+      val post = descriptor.operationAuthorizationRule("notice-board.notice.post-notice").get
+      val admin = descriptor.operationAuthorizationRule("notice-board.notice.admin-only").get
+
+      post.allowAnonymous shouldBe true
+      post.anonymousOperationModes.map(_.name) shouldBe Vector("develop", "test")
+      admin.operationModes.map(_.name) shouldBe Vector("production")
+    }
+
 
     "load the textus-identity journal sample with security authentication wiring" in {
       val path = java.nio.file.Path.of("/Users/asami/src/dev2025/cloud-native-component-framework/docs/journal/2026/04/2026-04-09-subsystem-descriptor-textus-identity.yaml")

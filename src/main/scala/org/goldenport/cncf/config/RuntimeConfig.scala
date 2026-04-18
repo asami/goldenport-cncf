@@ -29,8 +29,10 @@ final case class RuntimeConfig(
   dataStoreSpace: DataStoreSpace,
   entityStoreSpace: EntityStoreSpace,
   mode: RunMode,
+  operationMode: OperationMode = RuntimeConfig.DefaultOperationMode,
   webOperationDispatcher: String = RuntimeConfig.DefaultWebOperationDispatcher,
   webOperationDispatcherRestBaseUrl: Option[String] = None,
+  webDevelopAnonymousAdmin: Boolean = RuntimeConfig.DefaultWebDevelopAnonymousAdmin,
   commandExecutionMode: Option[CommandExecutionMode] = None,
   executionHistoryConfig: ObservabilityEngine.ExecutionHistoryConfig =
     ObservabilityEngine.ExecutionHistoryConfig()
@@ -43,6 +45,8 @@ object RuntimeConfig {
   val RuntimeHttpDriverKey = "textus.runtime.http.driver"
   val ModeKey = "textus.mode"
   val RuntimeModeKey = "textus.runtime.mode"
+  val OperationModeKey = "textus.operation-mode"
+  val RuntimeOperationModeKey = "textus.runtime.operation-mode"
   val CommandExecutionModeKey = "textus.command.execution-mode"
   val RuntimeCommandExecutionModeKey = "textus.runtime.command.execution-mode"
   val CallTreeKey = "textus.calltree"
@@ -85,12 +89,16 @@ object RuntimeConfig {
   val RuntimeWebOperationDispatcherKey = "textus.runtime.web.operation.dispatcher"
   val WebOperationDispatcherRestBaseUrlKey = "textus.web.operation.dispatcher.rest.base-url"
   val RuntimeWebOperationDispatcherRestBaseUrlKey = "textus.runtime.web.operation.dispatcher.rest.base-url"
+  val WebDevelopAnonymousAdminKey = "textus.web.develop.anonymous-admin"
+  val RuntimeWebDevelopAnonymousAdminKey = "textus.runtime.web.develop.anonymous-admin"
 
   val DefaultServerEmulatorBaseUrl = "http://localhost/"
   val DefaultHttpDriverName = "real"
   val DefaultMode = "command"
+  val DefaultOperationMode = OperationMode.Develop
   val DefaultLogFilePath = ".textus/data.d/trace.log"
   val DefaultWebOperationDispatcher = "local"
+  val DefaultWebDevelopAnonymousAdmin = true
 
   val default: RuntimeConfig =
     RuntimeConfig(
@@ -101,8 +109,10 @@ object RuntimeConfig {
       dataStoreSpace = DataStoreSpace.default(),
       entityStoreSpace = new EntityStoreSpace(),
       mode = RunMode.Command,
+      operationMode = DefaultOperationMode,
       webOperationDispatcher = DefaultWebOperationDispatcher,
       webOperationDispatcherRestBaseUrl = None,
+      webDevelopAnonymousAdmin = DefaultWebDevelopAnonymousAdmin,
       commandExecutionMode = None,
       executionHistoryConfig = ObservabilityEngine.ExecutionHistoryConfig()
     )
@@ -130,6 +140,10 @@ object RuntimeConfig {
         .getOrElse(DefaultMode)
     val mode =
       modeOverride.orElse(RunMode.from(modeName)).getOrElse(RunMode.Command)
+    val operationMode =
+      _get_string(configuration, OperationModeKey)
+        .flatMap(OperationMode.from)
+        .getOrElse(DefaultOperationMode)
     val commandExecutionMode =
       _get_string(configuration, CommandExecutionModeKey)
         .flatMap(parseCommandExecutionMode)
@@ -164,6 +178,9 @@ object RuntimeConfig {
         .getOrElse(DefaultWebOperationDispatcher)
     val webOperationDispatcherRestBaseUrl =
       _get_string(configuration, WebOperationDispatcherRestBaseUrlKey)
+    val webDevelopAnonymousAdmin =
+      _get_boolean(configuration, WebDevelopAnonymousAdminKey)
+        .getOrElse(DefaultWebDevelopAnonymousAdmin)
     ObservabilityEngine.updateExecutionHistoryConfig(executionHistoryConfig)
     RuntimeConfig(
       logbackend,
@@ -173,8 +190,10 @@ object RuntimeConfig {
       dataStoreSpace = datastorespace,
       entityStoreSpace = entitystorespace,
       mode = mode,
+      operationMode = operationMode,
       webOperationDispatcher = webOperationDispatcher,
       webOperationDispatcherRestBaseUrl = webOperationDispatcherRestBaseUrl,
+      webDevelopAnonymousAdmin = webDevelopAnonymousAdmin,
       commandExecutionMode = commandExecutionMode,
       executionHistoryConfig = executionHistoryConfig
     )
@@ -216,6 +235,21 @@ object RuntimeConfig {
   ): Option[Int] =
     _get_string(configuration, key).flatMap(x => scala.util.Try(x.trim.toInt).toOption)
 
+  private def _get_boolean(
+    configuration: ResolvedConfiguration,
+    key: String
+  ): Option[Boolean] =
+    _get_string(configuration, key).flatMap(_parse_boolean)
+
+  private def _parse_boolean(
+    value: String
+  ): Option[Boolean] =
+    value.trim.toLowerCase(java.util.Locale.ROOT) match {
+      case "true" | "1" | "yes" | "on" => Some(true)
+      case "false" | "0" | "no" | "off" => Some(false)
+      case _ => None
+    }
+
   private def _execution_history_config(
     configuration: ResolvedConfiguration
   ): ObservabilityEngine.ExecutionHistoryConfig = {
@@ -247,6 +281,7 @@ object RuntimeConfig {
         case ServerEmulatorBaseUrlKey => Vector(RuntimeServerEmulatorBaseUrlKey)
         case HttpDriverKey => Vector(RuntimeHttpDriverKey)
         case ModeKey => Vector(RuntimeModeKey)
+        case OperationModeKey => Vector(RuntimeOperationModeKey)
         case CommandExecutionModeKey => Vector(RuntimeCommandExecutionModeKey)
         case CallTreeKey => Vector(RuntimeCallTreeKey)
         case ExecutionHistoryRecentLimitKey => Vector(RuntimeExecutionHistoryRecentLimitKey)
@@ -266,6 +301,7 @@ object RuntimeConfig {
         case LogFilePathKey => Vector(RuntimeLogFilePathKey)
         case WebOperationDispatcherKey => Vector(RuntimeWebOperationDispatcherKey)
         case WebOperationDispatcherRestBaseUrlKey => Vector(RuntimeWebOperationDispatcherRestBaseUrlKey)
+        case WebDevelopAnonymousAdminKey => Vector(RuntimeWebDevelopAnonymousAdminKey)
         case _ => Vector.empty
       }
     val cncfAliases =
@@ -273,5 +309,28 @@ object RuntimeConfig {
         case k if k.startsWith("textus.") => "cncf." + k.stripPrefix("textus.")
       }
     textusRuntime ++ cncfAliases
+  }
+}
+
+enum OperationMode(val name: String) {
+  case Production extends OperationMode("production")
+  case Demo extends OperationMode("demo")
+  case Develop extends OperationMode("develop")
+  case Test extends OperationMode("test")
+
+  def allowsDevelopAnonymousAdmin: Boolean =
+    this == OperationMode.Develop || this == OperationMode.Test
+}
+
+object OperationMode {
+  def from(value: String): Option[OperationMode] = {
+    val normalized = value.trim.toLowerCase(java.util.Locale.ROOT).replace("_", "-")
+    values.find(_.name == normalized).orElse {
+      normalized match {
+        case "prod" => Some(Production)
+        case "dev" => Some(Develop)
+        case _ => None
+      }
+    }
   }
 }

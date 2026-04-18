@@ -2,6 +2,7 @@ package org.goldenport.cncf.subsystem.resolver
 
 import org.goldenport.cncf.component.{Component, ComponentOrigin}
 import org.goldenport.cncf.naming.NamingConventions
+import org.goldenport.protocol.spec.OperationDefinition
 import scala.collection.immutable.ListMap
 
 import OperationResolver._
@@ -51,6 +52,20 @@ final class OperationResolver private (
       case other =>
         other
     }
+  }
+
+  def resolveOperationDefinition(
+    selector: String
+  ): Option[OperationDefinition] = {
+    val parts = selector.trim.split("\\.")
+    if (parts.length != 3)
+      None
+    else
+      _entries.find { entry =>
+        entry.component.matches(parts(0)) &&
+          entry.service.matches(parts(1)) &&
+          entry.operation.matches(parts(2))
+      }.flatMap(_.operationDefinition)
   }
 
   @deprecated("Phase 2.8: use resolve(selector: String). Flags are no longer part of the public API.")
@@ -252,7 +267,8 @@ object OperationResolver {
             component = NameEntry(component.name),
             service = NameEntry(service.name),
             operation = NameEntry(operation.name),
-            origin = component.origin
+            origin = component.origin,
+            operationDefinition = Some(operation)
           )
         }
       }
@@ -282,7 +298,8 @@ object OperationResolver {
         component = NameEntry(componentName),
         service = NameEntry(serviceName),
         operation = NameEntry(operationName, alias),
-        origin = ComponentOrigin.Main
+        origin = ComponentOrigin.Main,
+        operationDefinition = None
       )
     }
     _build_from_entries(entries)
@@ -387,7 +404,8 @@ object OperationResolver {
     component: NameEntry,
     service: NameEntry,
     operation: NameEntry,
-    origin: ComponentOrigin
+    origin: ComponentOrigin,
+    operationDefinition: Option[OperationDefinition]
   ) {
     def fqn: String = s"${component.canonical}.${service.canonical}.${operation.canonical}"
   }

@@ -51,6 +51,10 @@ Practical validation:
 - Dashboard-driven validation is complete for this phase slice. Do not reopen
   Dashboard work unless a Form or Management Console change breaks the
   dashboard contract.
+- Structured Query field name resolution is defined in
+  `docs/design/query-field-resolution.md`. Generated entity/view search paths
+  must use this contract; full-text search, embedding search, and aggregate
+  search are separate future design items.
 
 ---
 
@@ -143,6 +147,10 @@ exposure, security, form behavior, traffic control, and application hosting.
 - [x] Define how descriptor values can be overridden by configuration.
 - [x] Define authorization configuration keys.
 - [x] Decide minimum runtime loading hook for descriptor discovery.
+- [x] Establish Operation authorization as the canonical selector policy and
+      keep WebDescriptor authorization as a Web ingress override/supplement.
+- [x] Verify admin anonymous policy through the Subsystem dispatch checkpoint,
+      not only through Web/Form routes.
 
 ### Inputs
 
@@ -316,8 +324,24 @@ functionality.
       validation behavior as operation forms.
 - [x] Confirm admin entity/data validation failures redisplay the submitted
       edit/new form with field-level messages.
+- [x] Confirm admin entity create and update Form API definitions are separated
+      when their field sets differ.
+- [x] Confirm admin entity create Form API uses `create` view fields and admin
+      entity update Form API uses `detail` view fields.
+- [x] Confirm admin data create and update Form API definitions are separated
+      by route and usage mode while sharing the current `resolveData` field set.
+- [x] Confirm admin entity create can omit `id` from the visible/form-api field
+      set and still persist through server-side id completion.
+- [x] Confirm admin entity update validation is scoped to `detail` view fields:
+      fields outside `detail` are not required, while required fields inside
+      `detail` still fail validation before dispatch.
+- [x] Confirm `textus-sample-app` executes the separated create/update admin
+      entity Form API paths with the published CNCF runtime.
 - [x] Confirm view and aggregate form-definition APIs expose enough schema for
       their read/operation surfaces.
+- [x] Confirm view and aggregate generic Form API definitions are read-oriented:
+      they expose GET list/detail navigation metadata and do not expose generic
+      create/update submit actions.
 - [x] Confirm operation result pages and admin create/update result pages expose
       the same core property model where applicable.
 - [x] Confirm static result page convention is applied only to ordinary
@@ -368,6 +392,31 @@ for the built-in admin console.
 - [x] Implement the first Management Console CRUD page for entity resources.
 - [x] Protect the entity list/detail/edit/new/update/create flow with executable specifications.
 - [x] Add executable specifications that verify entity update/create POST reaches `EntityCollection.putRecord`.
+- [x] Add executable specifications that verify entity create/update Form API
+      field sets follow `create` and `detail` view fields respectively.
+- [x] Add executable specifications that verify id-less entity create forms are
+      accepted and completed by the server before `EntityCollection.putRecord`.
+- [x] Define `OperationMode` (`production`, `demo`, `develop`, `test`) as the
+      runtime operational policy separate from `RunMode`.
+- [x] Define `OperationMode` policy as RunMode-independent so command, server,
+      client, script, and server-emulator roots use the same admin policy for
+      the same resolved configuration.
+- [x] Gate anonymous Management Console access by operation mode and
+      `textus.web.develop.anonymous-admin`: allowed only in `develop`/`test`
+      when the switch is true, denied in `production`/`demo`.
+- [x] Add framework-enforced Web authorization policy fields for
+      component/service/operation selectors: `operationModes` and
+      `allowAnonymous`.
+- [x] Cover admin Form API and HTML admin route authorization with executable
+      specifications for anonymous and explicit-principal requests.
+- [x] Add executable specifications that verify entity update validation uses
+      `detail` view fields and redisplays the same field set on validation
+      error.
+- [x] Add executable specifications that verify data update Form API uses an
+      id-scoped update route and returns the inferred/descriptor-backed data
+      field set.
+- [x] Add executable specifications that verify view and aggregate Form API
+      definitions stay read-oriented and mutation remains operation-backed.
 - [x] Extend data management beyond the entry page to data list/detail/edit/new/update/create against `DataStore`.
 - [x] Add executable specifications that verify data update/create POST reaches `DataStore`.
 - [x] Extend aggregate management beyond the entry page to aggregate definition/read pages where an aggregate collection query contract is available.
@@ -377,9 +426,13 @@ for the built-in admin console.
 ### Current Scope Status
 
 - Entity CRUD baseline: implemented for list, detail, edit, new, update POST,
-  and create POST against `EntityCollection`.
+  and create POST against `EntityCollection`. Form API definitions are split:
+  `/form-api/{component}/admin/entities/{entity}` describes create, and
+  `/form-api/{component}/admin/entities/{entity}/{id}/update` describes update.
 - Data management: implemented for list, detail, edit, new, update POST, and
-  create POST against `DataStore`.
+  create POST against `DataStore`. Form API definitions are split:
+  `/form-api/{component}/admin/data/{data}` describes create, and
+  `/form-api/{component}/admin/data/{data}/{id}/update` describes update.
 - Aggregate management: implemented for definition detail and read result
   against `AggregateSpace` / `AggregateCollection`; create/command/update flow is
   operation-backed and action rendering is available when matching operations
@@ -495,6 +548,15 @@ unfinished Management Console work.
 - Public JavaScript SDK.
 - Advanced dashboard visualization and SVG rendering.
 - External API gateway integration.
+- Full-text search support as a separate search planning layer from structured
+  Query field resolution. This should cover searchable view/field selection,
+  tokenizer/analyzer policy, locale handling, ranking, highlighting, and
+  backend capability dispatch such as in-memory contains, SQL FTS, or an
+  external search engine.
+- Embedding / semantic search support as a future search backend. This should
+  cover embedding target selection from CML/View metadata, vector index
+  lifecycle, update synchronization, similarity threshold/ranking, and
+  interaction with structured Query filters.
 
 ---
 

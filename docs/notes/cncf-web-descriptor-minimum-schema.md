@@ -52,6 +52,25 @@ capability values supplied by request headers or query parameters. The supported
 minimum key names are `role(s)`, `scope(s)`, `capability/capabilities`, plus
 `x-cncf-*` and `x-textus-*` header variants.
 
+Authorization is framework-enforced. Component, service, and operation
+definitions should declare policy; normal Operation implementations should not
+need to inspect `production`/`develop` mode or anonymous-user settings. The
+canonical Operation policy is `OperationAuthorizationRule`, supplied by the
+Operation definition or generated/adapted from CML or component descriptors.
+The Web Descriptor `authorization` entry is only the Web-facing override or
+supplement for the same selector-level policy. It can constrain operation
+modes, allow anonymous access, and constrain the modes in which anonymous access
+is allowed:
+
+```yaml
+web:
+  authorization:
+    notice-board.notice.post-notice:
+      allowAnonymous: true
+      anonymousOperationModes: [develop, test]
+      capabilities: [notice.post]
+```
+
 `apps` is connected to `/web/...` HTML app rendering. If no app entries are
 configured, the built-in HTML apps remain available for compatibility. If app
 entries are configured, `/web/...` rendering uses them as an allow-list by app
@@ -188,6 +207,18 @@ UnitOfWork authorization remain governed by CML `ACCESS` settings, operation
 metadata, `SecuritySubject`, relation rules, natural ABAC conditions, and
 owner/group/other permissions.
 
+Operation authorization fields use the same vocabulary as the canonical rule:
+
+- `operationModes`: allowed operation modes for the selector.
+- `allowAnonymous`: whether anonymous subjects may invoke the selector.
+- `anonymousOperationModes`: operation modes in which anonymous invocation is
+  allowed when `allowAnonymous` is true.
+
+For Web routes, these fields are evaluated before dispatch and are then checked
+again at the Operation checkpoint when the target Operation supplies an
+authorization provider. This keeps command, server, client, REST, and Web/Form
+roots aligned.
+
 The Web Descriptor must not define entity relation rules, natural ABAC
 conditions, DAC-style owner/group/other permissions, or service-internal/system
 access modes. Those remain in the existing security model.
@@ -216,7 +247,9 @@ Management Console form definition endpoints use the same JSON field contract:
 
 ```text
 GET /form-api/{component}/admin/entities/{entity}
+GET /form-api/{component}/admin/entities/{entity}/{id}/update
 GET /form-api/{component}/admin/data/{data}
+GET /form-api/{component}/admin/data/{data}/{id}/update
 GET /form-api/{component}/admin/views/{view}
 GET /form-api/{component}/admin/aggregates/{aggregate}
 ```
@@ -227,6 +260,22 @@ metadata when available and otherwise infer fields from the admin data read/list
 operations. Because inferred fields may pass through unordered map-like
 structures, the fallback route normalizes `id` to the first field when it is
 present.
+
+The admin entity collection route describes create. It uses the entity `create`
+view fields when available, then falls back to `detail`, then to the effective
+schema. The id-scoped `/update` route describes edit/update and uses the entity
+`detail` view fields. This split lets create omit fields such as `id` while
+update keeps the fields required to edit an existing record.
+
+The admin data collection route describes create. The id-scoped data `/update`
+route describes edit/update. Data currently uses the same resolved data field
+set for both routes because data schema metadata does not yet define
+entity-style `create/detail` profiles.
+
+The admin view and aggregate routes are read-oriented definitions. They return
+GET list/detail navigation metadata and do not define generic create/update
+submit actions. Aggregate create and command/update forms are resolved through
+the corresponding component Operation Form API definitions.
 
 If no form entry exists, the default follows exposure:
 

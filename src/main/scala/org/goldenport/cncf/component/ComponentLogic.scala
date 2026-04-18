@@ -340,6 +340,9 @@ case class ComponentLogic(
       },
       disposeAction = _ => (),
       token = "component-runtime-context",
+      operationMode = GlobalRuntimeContext.current
+        .map(_.config.operationMode)
+        .getOrElse(org.goldenport.cncf.config.RuntimeConfig.DefaultOperationMode),
       transitionValidationHook = new PlannedTransitionValidationHook(
         component.stateMachinePlannerProvider
       )

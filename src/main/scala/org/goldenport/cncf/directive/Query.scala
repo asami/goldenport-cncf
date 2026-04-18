@@ -205,6 +205,66 @@ object Query {
       }
   }
 
+  def mapPaths(
+    query: Query[?]
+  )(
+    f: String => String
+  ): Query[?] =
+    query.query match {
+      case p: Plan[?] =>
+        Query(p.copy(
+          condition = _map_condition_paths(p.condition)(f),
+          where = mapExprPaths(p.where)(f),
+          sort = p.sort.map(x => x.copy(path = f(x.path)))
+        ))
+      case other =>
+        Query(_map_condition_paths(other)(f))
+    }
+
+  def mapExprPaths(
+    expr: Expr
+  )(
+    f: String => String
+  ): Expr =
+    expr match {
+      case True => True
+      case False => False
+      case And(items) => And(items.map(mapExprPaths(_)(f)))
+      case Or(items) => Or(items.map(mapExprPaths(_)(f)))
+      case Not(item) => Not(mapExprPaths(item)(f))
+      case FieldCondition(path, condition) => FieldCondition(f(path), condition)
+      case Eq(path, value) => Eq(f(path), value)
+      case Ne(path, value) => Ne(f(path), value)
+      case Gt(path, value) => Gt(f(path), value)
+      case Gte(path, value) => Gte(f(path), value)
+      case Lt(path, value) => Lt(f(path), value)
+      case Lte(path, value) => Lte(f(path), value)
+      case In(path, values) => In(f(path), values)
+      case NotIn(path, values) => NotIn(f(path), values)
+      case IsNull(path) => IsNull(f(path))
+      case IsNotNull(path) => IsNotNull(f(path))
+      case Like(path, pattern, caseInsensitive) => Like(f(path), pattern, caseInsensitive)
+      case StartsWith(path, value, caseInsensitive) => StartsWith(f(path), value, caseInsensitive)
+      case EndsWith(path, value, caseInsensitive) => EndsWith(f(path), value, caseInsensitive)
+      case Contains(path, value, caseInsensitive) => Contains(f(path), value, caseInsensitive)
+    }
+
+  private def _map_condition_paths(
+    condition: Any
+  )(
+    f: String => String
+  ): Any =
+    condition match {
+      case expr: Expr => mapExprPaths(expr)(f)
+      case p: Plan[?] => p.copy(condition = _map_condition_paths(p.condition)(f), where = mapExprPaths(p.where)(f), sort = p.sort.map(x => x.copy(path = f(x.path))))
+      case rec: Record =>
+        Record.create(rec.fields.map(field => f(field.key) -> field.value.single))
+      case m: Map[?, ?] =>
+        m.asInstanceOf[Map[String, Any]].map { case (k, v) => f(k) -> v }
+      case other =>
+        other
+    }
+
   private def _condition_without_legacy_controls(
     condition: Any
   ): Option[Any] =

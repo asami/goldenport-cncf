@@ -2,7 +2,8 @@
 
 /*
  * @since   Apr. 16, 2026
- * @version Apr. 16, 2026
+ *  version Apr. 16, 2026
+ * @version Apr. 17, 2026
  * @author  ASAMI, Tomoharu
  */
 
@@ -29,13 +30,20 @@ The current definition routes are:
 ```text
 GET /form-api/{component}/{service}/{operation}
 GET /form-api/{component}/admin/entities/{entity}
+GET /form-api/{component}/admin/entities/{entity}/{id}/update
 GET /form-api/{component}/admin/data/{data}
+GET /form-api/{component}/admin/data/{data}/{id}/update
 GET /form-api/{component}/admin/views/{view}
 GET /form-api/{component}/admin/aggregates/{aggregate}
 ```
 
 The first route describes a component Operation form. The admin routes describe
 Management Console form/detail metadata for the corresponding surface.
+
+Admin entity create and update definitions are intentionally separate because
+their model field sets may differ. The collection-level entity route describes
+create. The id-scoped update route describes edit/update for an existing entity
+instance.
 
 Plain HTML pages live under `/web` and browser-native HTML form submission lives
 under `/form`. `/form-api` is reserved for JSON-oriented form metadata and
@@ -93,7 +101,7 @@ Top-level fields:
 - `surface`: one of `operation`, `entity`, `data`, `view`, or `aggregate`.
 - `source`: source classification for the resolved schema.
 - `mode`: client-facing usage mode, such as `operation`, `admin-entity`,
-  `admin-data`, `admin-view`, or `admin-aggregate`.
+  `admin-entity-update`, `admin-data`, `admin-view`, or `admin-aggregate`.
 - `method`: default method for the primary path.
 - `submitPath`: default primary path for form submission or read navigation.
 - `htmlPath`: default browser HTML page for the same form surface.
@@ -159,11 +167,69 @@ Operation definitions use:
 Admin entity and data definitions expose list/new/create/detail/edit/update
 actions. Paths that need a runtime id use `{id}` as the path template variable.
 
+Admin entity create definitions use:
+
+```text
+GET /form-api/{component}/admin/entities/{entity}
+```
+
+They return `mode = "admin-entity"`, a create `submitPath`, and fields resolved
+from the entity `create` view fields when present. If no `create` fields are
+declared, the resolver falls back to `detail` fields and then to the effective
+entity schema. This allows application schemas to omit `id` from the user-facing
+create form. The server completes the entity id before writing to the
+`EntityCollection`.
+
+Admin entity update definitions use:
+
+```text
+GET /form-api/{component}/admin/entities/{entity}/{id}/update
+```
+
+They return `mode = "admin-entity-update"`, an id-scoped update `submitPath`,
+and fields resolved from the entity `detail` view fields. Update validation uses
+the same `detail` field set: omitted fields outside `detail` are not required,
+while required fields inside `detail` still fail validation before the update
+Operation is dispatched.
+
 Admin view and aggregate definitions are read-oriented in the current baseline.
 Their primary path is the read/list HTML page, and their actions include list
 and detail path templates. Aggregate create and command execution remains
 Operation-based and is exposed through component Operation forms, not as a
 generic admin aggregate form submit.
+
+Read-oriented admin definitions use:
+
+```text
+GET /form-api/{component}/admin/views/{view}
+GET /form-api/{component}/admin/aggregates/{aggregate}
+```
+
+They return `method = "GET"` and expose only read/list navigation actions in
+the generic admin Form API definition. They do not expose generic create/update
+submit actions. Aggregate mutation remains Operation-backed: when an aggregate
+declares create or command/update Operations, those actions are represented as
+ordinary component Operation forms under `/form/{component}/{service}/{operation}`
+and corresponding Operation Form API definitions.
+
+Admin data create definitions use:
+
+```text
+GET /form-api/{component}/admin/data/{data}
+```
+
+Admin data update definitions use:
+
+```text
+GET /form-api/{component}/admin/data/{data}/{id}/update
+```
+
+The data update route returns `mode = "admin-data-update"` and an id-scoped
+update `submitPath`. Data does not yet have an entity-style `create/detail`
+view-field profile, so create and update definitions currently share the same
+`resolveData` field set. When explicit data schema metadata is unavailable, the
+field set remains best-effort inferred from admin data read/list results and may
+be refined by WebDescriptor admin controls.
 
 ## Source Metadata
 

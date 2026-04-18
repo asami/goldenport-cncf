@@ -337,7 +337,8 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
           commitAction = _ => (),
           abortAction = _ => (),
           disposeAction = _ => (),
-          token = "ingress-security"
+          token = "ingress-security",
+          operationMode = global.config.operationMode
         )
         context
       case None =>
@@ -377,7 +378,8 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
           commitAction = _ => (),
           abortAction = _ => (),
           disposeAction = _ => (),
-          token = "ingress-security"
+          token = "ingress-security",
+          operationMode = global.config.operationMode
         )
         context
       case None =>
@@ -400,9 +402,11 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     attributes: Map[String, String]
   ): Consequence[SecurityContext.Privilege] = {
     val value = _find_first(attributes, _privilege_keys).map(_normalize_token)
-    value match {
+      value match {
       case None =>
-        Consequence.success(SecurityContext.Privilege.User)
+        Consequence.success(SecurityContext.Privilege.Anonymous)
+      case Some("anonymous") =>
+        Consequence.success(SecurityContext.Privilege.Anonymous)
       case Some("user") =>
         Consequence.success(SecurityContext.Privilege.User)
       case Some("applicationcontentmanager") | Some("contentmanager") | Some("contentadmin") =>

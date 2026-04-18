@@ -22,6 +22,7 @@ import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
+import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.service.{Service, ServiceGroup}
 import org.goldenport.cncf.receptor.{Receptor, ReceptorGroup}
 import org.goldenport.cncf.cli.RunMode
@@ -93,10 +94,10 @@ abstract class Component() extends Component.Core.Holder {
   def entityRuntimeDescriptor(
     entityName: String
   ): Option[org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor] = {
-    val normalized = Option(entityName).getOrElse("").trim.toLowerCase(java.util.Locale.ROOT)
+    val name = Option(entityName).getOrElse("").trim
     _component_descriptors.iterator.flatMap(_.entityRuntimeDescriptors).find { d =>
-      d.entityName.trim.toLowerCase(java.util.Locale.ROOT) == normalized ||
-      d.collectionId.name.trim.toLowerCase(java.util.Locale.ROOT) == normalized
+      NamingConventions.equivalentByNormalized(d.entityName, name) ||
+      NamingConventions.equivalentByNormalized(d.collectionId.name, name)
     }
   }
 
