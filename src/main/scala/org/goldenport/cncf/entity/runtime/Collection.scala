@@ -6,11 +6,12 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.entity.EntityQuery
 import org.goldenport.cncf.directive.{Query, SearchResult}
+import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 
 /*
  * @since   Mar. 14, 2026
  *  version Mar. 30, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -30,6 +31,19 @@ final class EntityCollection[E](
     descriptor.persistent.fromRecord(record).map { entity =>
       put(entity)
     }
+
+  def putRecordSynced(
+    record: Record
+  )(using ctx: ExecutionContext): Consequence[Unit] =
+    for {
+      entity <- descriptor.persistent.fromRecord(record)
+      _ <- ctx.entityStoreSpace.save(
+        UnitOfWorkOp.EntityStoreSave(entity, descriptor.persistent)
+      ).recoverWith { case _ =>
+        Consequence.unit
+      }
+      _ = put(entity)
+    } yield ()
 
   // Load-through resolution:
   // 1. Try MemoryRealm (working set cache)

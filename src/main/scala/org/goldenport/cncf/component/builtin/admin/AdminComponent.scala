@@ -48,8 +48,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
- *  version Apr. 15, 2026
- * @version Apr. 17, 2026
+ * @version Apr. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -1533,7 +1532,7 @@ object AdminComponent {
         _component_by_name(subsystem, componentName).flatMap(_entity_collection(_, entityName)),
         s"Entity collection not found: ${entityName}"
       )
-      _ <- collection.putRecord(_admin_entity_record(collection, args))
+      _ <- collection.putRecordSynced(_admin_entity_record(collection, args))(using core.executionContext)
     } yield OperationResponse.Scalar("Entity record was applied.")
   }
 
