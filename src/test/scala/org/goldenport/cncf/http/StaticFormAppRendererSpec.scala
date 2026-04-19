@@ -3517,6 +3517,72 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus-result-view")
     }
 
+    "render form continuation through static status template convention" in {
+      val rows = (1 to 21).map { i =>
+        f"""{"title":"Paging Notice $i%02d","recipient_name":"PagingBob"}"""
+      }.mkString("[", ",", "]")
+      val responseBody = s"""{"data":${rows},"fetched_count":21}"""
+      val subsystem = _aggregate_http_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
+            "approve-notice-aggregate__200.html",
+            """<article>
+              |  <h2>Matching notices</h2>
+              |  <textus-result-table source="result.body" page="paging.page" page-size="paging.pageSize" href="paging.href"></textus-result-table>
+              |</article>""".stripMargin
+          ).resolve("web.yaml").toString)
+        ))
+      )
+      val descriptor = WebDescriptor(
+        expose = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Exposure.Protected
+        )
+      )
+      val dispatcher = new StaticWebOperationDispatcher(
+        HttpResponse.Text(
+          HttpStatus.Ok,
+          ContentType(MimeType("application/json"), Some(StandardCharsets.UTF_8)),
+          Bag.text(responseBody, StandardCharsets.UTF_8)
+        )
+      )
+      val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+
+      val page1 = server
+        ._submit_operation_form(
+          _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+      val continueHref = """href="([^"]*page=2&amp;pageSize=20)""".r
+        .findFirstMatchIn(page1)
+        .map(_.group(1).replace("&amp;", "&"))
+        .getOrElse(fail("continuation link is missing"))
+      val page2 = server
+        ._operation_form_continue(
+          _get_request(continueHref),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate",
+          continueHref.split("/continue/")(1).takeWhile(_ != '?')
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      page1 should include ("Matching notices")
+      page1 should include ("Paging Notice 01")
+      page1 should include ("Page 1")
+      page2 should include ("Matching notices")
+      page2 should include ("Paging Notice 21")
+      page2 should include ("Page 2")
+      page2 should not include ("Content-Type application/json")
+      page2 should not include ("Submitted Values")
+      page2 should not include ("<textus-result-table")
+    }
+
     "render operation failure through exact static status template before error template" in {
       val root = Files.createTempDirectory("cncf-web-template-")
       Files.writeString(root.resolve("web.yaml"), "form: {}\n", StandardCharsets.UTF_8)
@@ -3989,6 +4055,32 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus-result-table")
     }
 
+    "render textus result table from result body object data" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"query":{"condition":{"recipient_name":"Bob"},"include_total":false},"data":[{"title":"Phase12","content":"Static form validation","recipient_name":"Bob"}],"fetched_count":1}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus-result-table source="result.body"></textus-result-table></article>"""
+      ).body
+
+      html should include ("<table")
+      html should include ("<th>title</th>")
+      html should include ("<th>content</th>")
+      html should include ("<td>Phase12</td>")
+      html should include ("<td>Static form validation</td>")
+      html should include ("Page 1")
+      html should not include ("<textus-result-table")
+    }
+
     "render textus result table with explicit columns" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
@@ -4011,6 +4103,36 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("<td>Hello</td>")
       html should not include ("notice_1")
       html should not include ("rights")
+      html should not include ("<textus-result-table")
+    }
+
+    "render textus result table from result body with CML summary columns" in {
+      val columns = Vector(
+        StaticFormAppRenderer.TableColumn("title", "Title"),
+        StaticFormAppRenderer.TableColumn("recipient_name", "Recipient")
+      )
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"id":"notice_1","title":"Phase12","content":"Static form validation","recipient_name":"Bob"}]}""",
+        Map(StaticFormAppRenderer.tableColumnKey("result.body.data", "notice", "summary") -> columns)
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus-result-table source="result.body" entity="notice" view="summary"></textus-result-table></article>"""
+      ).body
+
+      html should include ("<th>Title</th><th>Recipient</th>")
+      html should include ("<td>Phase12</td>")
+      html should include ("<td>Bob</td>")
+      html should not include ("notice_1")
+      html should not include ("Static form validation")
       html should not include ("<textus-result-table")
     }
 

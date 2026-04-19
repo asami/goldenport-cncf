@@ -4248,9 +4248,24 @@ object StaticFormAppRenderer {
     columns: Option[Vector[TableColumn]]
   ): Option[String] =
     _source_json(source, properties).flatMap { json =>
-      val rows = json.asArray.orElse(json.hcursor.downField("result").focus.flatMap(_.asArray))
+      val rows = _table_rows(json)
       rows.flatMap(xs => _records_table(_page_rows(xs, page, pageSize), columns))
     }
+
+  private def _table_rows(
+    json: Json
+  ): Option[Vector[Json]] =
+    json.asArray
+      .orElse(_json_array_at(json, "data"))
+      .orElse(_json_array_at(json, "items"))
+      .orElse(_json_array_at(json, "result"))
+      .orElse(_json_array_at(json, "records"))
+
+  private def _json_array_at(
+    json: Json,
+    name: String
+  ): Option[Vector[Json]] =
+    json.hcursor.downField(name).focus.flatMap(_.asArray)
 
   private def _table_columns(columns: Option[String]): Option[Vector[TableColumn]] =
     columns.map(_.split(',').toVector.flatMap(_table_column)).filter(_.nonEmpty)
@@ -4274,8 +4289,11 @@ object StaticFormAppRenderer {
     defaultTableView: String
   ): Option[Vector[TableColumn]] =
     _table_column_key(source, attrs, defaultTableView).flatMap(tableColumns.get)
+      .orElse(_table_column_key(s"${source}.data", attrs, defaultTableView).flatMap(tableColumns.get))
       .orElse(tableColumns.get(source))
+      .orElse(tableColumns.get(s"${source}.data"))
       .orElse(tableColumns.get("result.data"))
+      .orElse(tableColumns.get("result.body.data"))
       .filter(_.nonEmpty)
 
   private def _table_column_key(

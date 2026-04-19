@@ -805,7 +805,7 @@ final class Http4sHttpServer(
       } yield response
     }
 
-  private def _operation_form_continue(
+  private[http] def _operation_form_continue(
     req: org.http4s.Request[IO],
     app: String,
     service: String,
@@ -825,7 +825,9 @@ final class Http4sHttpServer(
         val res = continuation.response
         val values = _continuation_values(continuation) ++ pagingValues.map { case (k, v) => s"paging.${k}" -> v }
         val page = StaticFormAppRenderer.renderFormResult(
-          _form_result_properties(app, service, operation, res, values)
+          _form_result_properties(app, service, operation, res, values),
+          _form_result_static_template(app, service, operation, res.code)
+            .orElse(_form_descriptor(app, service, operation).flatMap(_.resultTemplate))
         )
         _html(page).map { html =>
           RuntimeDashboardMetrics.recordHtmlRequest(

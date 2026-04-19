@@ -520,7 +520,7 @@ for the built-in admin console.
 
 ## WEB-09: Static Form Web App Validation with textus-sample-app
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 
@@ -528,19 +528,21 @@ After the current Form feature audit and Management Console completion work,
 move `textus-sample-app` toward a Static Form Web App and use it to discover
 the next platform gaps.
 
-This is not the current active work. It starts after WEB-07A and WEB-08 are
-closed enough for the sample app to reuse the Form foundation instead of driving
-unfinished Management Console work.
+This is now the active validation driver. WEB-07A and WEB-08 are closed enough
+for the sample app to reuse the Form foundation instead of driving unfinished
+Management Console work.
 
 ### Detailed Tasks
 
+- [x] Audit the current notice-board Static Form App shape and separate already
+      covered static conventions from remaining widget/platform gaps.
 - [ ] Build the notice-board sample primarily from CML metadata and static HTML
       files.
-- [ ] Prefer static result page conventions before descriptor transition
+- [x] Prefer static result page conventions before descriptor transition
       settings.
-- [ ] Add operation-specific result pages such as `post-notice__200.html`
+- [x] Add operation-specific result pages such as `post-notice__200.html`
       and `search-notices__200.html`.
-- [ ] Add common result/error pages such as `__400.html`, `__500.html`, and
+- [x] Add common result/error pages such as `__400.html`, `__500.html`, and
       `__error.html`.
 - [ ] Use Textus widgets for result view, table, property list, error display,
       action links, and paging. Prefer `textus:xxx` notation while keeping
@@ -549,6 +551,82 @@ unfinished Management Console work.
 - [ ] Promote only generic missing behavior back into CNCF; keep
       sample-specific pages in `textus-sample-app`.
 - [ ] Record gaps as future Form widget, convention, or descriptor candidates.
+
+### Current Audit
+
+`textus-sample-app` already has the Static Form App page set needed for the
+minimal notice-board flow:
+
+- Operation result pages:
+  - `config/post-notice__200.html`
+  - `config/search-notices__200.html`
+  - `config/get-notice__200.html`
+- Common error/result pages:
+  - `config/__400.html`
+  - `config/__500.html`
+  - `config/__error.html`
+- CML metadata currently supplies the operation input shape, required fields,
+  labels, placeholders, and the `Notice` summary/detail display basis.
+- `config/web-descriptor.yaml` is still supplemental: it declares public
+  exposure and the default `summary` view, but the ordinary post/search/get
+  pages do not depend on descriptor transition rules.
+
+Remaining WEB-09 validation work should therefore focus on the generic widget
+surface and app behavior:
+
+- [x] Confirm `textus-result-view`, `textus-property-list`, and
+  `textus:action-link` render clean final HTML in the sample app.
+- [ ] Confirm `textus-error-panel` renders through static error pages for
+  Operation/runtime errors. Admission validation currently redisplays the
+  operation form and does not use `__400.html`.
+- [x] Confirm `textus-result-table` renders both table rows and paging controls
+  for operation result objects.
+- [x] Confirm `textus-result-table view="summary"` obtains its column selection
+  from CML-derived view/schema metadata rather than application reflection.
+- [x] Verify total-count-free paging behavior for `search-notices__200.html`;
+  page 1 renders a table and a `Next` link without total count, and the
+  `/continue/{id}?page=2&pageSize=20` route returns the retained result set.
+- [x] Align continuation result rendering with the original static result page
+  convention. The current `/continue/{id}` route returns the retained result
+  set and reuses the same static status/success template resolution as the
+  original operation form result.
+- Add or verify total-count opt-in paging behavior; the table must
+  work without total count and then with explicit total-count opt-in where the
+  runtime supports it.
+- Confirm the async command path is usable with static pages:
+  `postNotice -> JobId -> await -> result.id -> getNotice detail action`.
+- Record any remaining gaps as generic CNCF widget, convention, or descriptor
+  candidates, not as sample-app-specific runtime behavior.
+
+Runtime verification on Apr. 19, 2026:
+
+- `postNotice` returns a static `post-notice__200.html` page with no unexpanded
+  `textus:` or `textus-` tags. The primary action is an async `Check result`
+  POST action.
+- Awaiting the job returns the same static page with no unexpanded Textus tags.
+  The primary action becomes an `Open detail` GET link synthesized from
+  `result.id`.
+- The synthesized detail link opens `get-notice__200.html` and renders the
+  created notice body through `textus-result-view`.
+- `searchNotices` opens `search-notices__200.html` with no unexpanded Textus
+  tags, and the paging control is rendered without total count.
+- `textus-result-table source="result.body" view="summary"` now renders table
+  rows for the current search result object shape. The table widget accepts
+  operation result objects such as `{data: [...]}` as well as direct arrays, and
+  column lookup can resolve `result.body.data` CML/view metadata from a
+  `source="result.body"` widget.
+- Total-count-free paging was verified with 21 notices addressed to the same
+  recipient. The first search page rendered table rows, omitted total count,
+  and emitted a `Next` link to `/continue/{id}?page=2&pageSize=20`. The
+  continuation route returned the retained result set and showed page 2 context.
+- Continuation rendering now preserves the same static result template
+  convention across pages. The retained result set still supplies the page data,
+  while the response body is rendered through the original operation's
+  `xxx__200.html` / `xxx__success.html` / common static fallback path.
+- Admission validation failure for `postNotice` returns the Bootstrap operation
+  form with field-level errors and submitted values preserved. It does not use
+  the static `__400.html` common error page, so the common error page convention
+  should be verified separately for Operation/runtime errors.
 
 ### Inputs
 
