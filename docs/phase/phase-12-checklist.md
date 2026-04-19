@@ -713,6 +713,91 @@ WEB-09 closure:
 
 ---
 
+## WEB-10: Bootstrap 5 UI Polish
+
+Status: PLANNED
+
+### Objective
+
+Polish the built-in Web pages so the Phase 12 Web foundation looks like a
+normal responsive Bootstrap 5 business/admin application.
+
+This work is visual and structural polish. It must not change the runtime data
+contracts established by Dashboard, Manual, Management Console, Form API, and
+Static Form App.
+
+### Detailed Tasks
+
+- [ ] Apply the Bootstrap 5 UI polish design to built-in Web pages.
+- [ ] Polish Management Console list/detail/edit/new pages with Bootstrap
+      tables, forms, action areas, and validation feedback.
+- [ ] Polish Manual/reference pages with Bootstrap navigation, cards/sections,
+      schema tables, and code/path presentation.
+- [ ] Polish Dashboard cards, tables, tabs, badges, and metric layout while
+      keeping the existing dashboard state contract.
+- [ ] Confirm local Bootstrap assets remain the only baseline dependency.
+- [ ] Confirm responsive behavior on desktop, tablet, and smartphone widths.
+- [ ] Add executable or screenshot-style checks where practical for non-broken
+      Bootstrap rendering.
+
+### Inputs
+
+- `docs/notes/web-bootstrap-ui-polish-design.md`
+- `docs/notes/cncf-web-static-form-app-contract.md`
+- `docs/notes/cncf-web-layer-phase-12.md`
+- `textus-sample-app`
+
+---
+
+## WEB-11: Textus Widget Set Expansion
+
+Status: PLANNED
+
+### Objective
+
+Expand the Textus widget set beyond the Phase 12 baseline widgets so Static
+Form App pages can render readable business/admin screens without control
+structures or custom Web framework code.
+
+Card widgets are the first implementation focus, but the design also includes
+layout, navigation, feedback, content, and form-helper widgets.
+
+### Detailed Tasks
+
+- [ ] Add executable specifications for the general Textus widget rendering
+      contract.
+- [ ] Implement `textus:record-card` / `textus-record-card`.
+- [ ] Implement `textus:card-list` / `textus-card-list`.
+- [ ] Reuse existing result-table paging metadata for `card-list`.
+- [ ] Extract `textus:pagination` if table/card paging rendering starts to
+      duplicate behavior.
+- [ ] Implement `textus:summary-card` for dashboard/admin summary use.
+- [ ] Add feedback widgets such as `textus:alert` and `textus:empty-state`
+      when card/table result pages need consistent messaging.
+- [ ] Keep `textus:xxx` as the preferred notation and `textus-xxx` as the
+      HTML-compatible notation.
+- [ ] Validate the card-list path with `textus-sample-app` notice search
+      results in addition to the current table view.
+
+### Candidate Widget Vocabulary
+
+- Card: `textus:card`, `textus:record-card`, `textus:card-list`,
+  `textus:summary-card`, `textus:action-card`.
+- Layout: `textus:section`, `textus:grid`.
+- Navigation: `textus:breadcrumb`, `textus:nav-list`, `textus:pagination`.
+- Feedback: `textus:alert`, `textus:empty-state`, `textus:status-badge`.
+- Content: `textus:description-list`, `textus:markdown`.
+- Form helpers: `textus:form-errors`, `textus:hidden-context`.
+
+### Inputs
+
+- `docs/notes/web-textus-widget-design.md`
+- `docs/notes/cncf-web-static-form-app-contract.md`
+- `docs/journal/2026/04/web-bootstrap-card-widget-note.md`
+- `textus-sample-app`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting and packaging.
@@ -720,6 +805,7 @@ WEB-09 closure:
 - Public JavaScript SDK.
 - Advanced dashboard visualization and SVG rendering.
 - External API gateway integration.
+- Full Bootstrap theme/customization beyond the local Bootstrap 5 baseline.
 - Full-text search support as a separate search planning layer from structured
   Query field resolution. This should cover searchable view/field selection,
   tokenizer/analyzer policy, locale handling, ranking, highlighting, and
@@ -736,7 +822,7 @@ WEB-09 closure:
 
 Phase 12 is complete when:
 
-- WEB-01 through WEB-09 are marked DONE, or explicitly deferred to a later
+- WEB-01 through WEB-11 are marked DONE, or explicitly deferred to a later
   phase.
 - `phase-12.md` summary checkboxes are aligned.
 - No item remains ACTIVE or SUSPENDED.
