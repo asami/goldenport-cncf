@@ -39,9 +39,7 @@ final class EntityCollection[E](
       entity <- descriptor.persistent.fromRecord(record)
       _ <- ctx.entityStoreSpace.save(
         UnitOfWorkOp.EntityStoreSave(entity, descriptor.persistent)
-      ).recoverWith { case _ =>
-        Consequence.unit
-      }
+      )
       _ = put(entity)
     } yield ()
 

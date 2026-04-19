@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 16, 2026
- * @version Apr. 16, 2026
+ * @version Apr. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebSchemaResolverSpec extends AnyWordSpec with Matchers {
@@ -220,6 +220,41 @@ final class WebSchemaResolverSpec extends AnyWordSpec with Matchers {
       schema.controls("published").required shouldBe Some(false)
       schema.controls("accessToken").hidden shouldBe true
       schema.controls("zeta").hidden shouldBe true
+    }
+
+    "derive form controls from operation parameter schema without a WebDescriptor" in {
+      val schema = WebSchemaResolver.resolveOperationControls(
+        "notice-board.notice.post-notice",
+        Vector(
+          ParameterDefinition(
+            content = BaseContent.Builder("title").label("Notice title").build(),
+            kind = ParameterDefinition.Kind.Argument,
+            domain = ValueDomain(datatype = XString, multiplicity = Multiplicity.One)
+          ),
+          ParameterDefinition(
+            content = BaseContent.Builder("published").label("Published").build(),
+            kind = ParameterDefinition.Kind.Argument,
+            domain = ValueDomain(datatype = XBoolean, multiplicity = Multiplicity.ZeroOne)
+          ),
+          ParameterDefinition(
+            content = BaseContent.Builder("body").label("Notice body").build(),
+            kind = ParameterDefinition.Kind.Argument,
+            domain = ValueDomain(datatype = XString, multiplicity = Multiplicity.One),
+            web = WebColumn(controlType = Some("textarea"), help = Some("Body text."))
+          )
+        ),
+        Map.empty
+      )
+
+      schema.source shouldBe WebSchemaResolver.Source.Schema
+      schema.fieldNames shouldBe Vector("title", "published", "body")
+      schema.fields.find(_.name == "title").flatMap(_.label) shouldBe Some("Notice title")
+      schema.controls("title").controlType shouldBe Some("text")
+      schema.controls("title").required shouldBe Some(true)
+      schema.controls("published").controlType shouldBe Some("checkbox")
+      schema.controls("published").required shouldBe Some(false)
+      schema.controls("body").controlType shouldBe Some("textarea")
+      schema.fields.find(_.name == "body").flatMap(_.help) shouldBe Some("Body text.")
     }
   }
 

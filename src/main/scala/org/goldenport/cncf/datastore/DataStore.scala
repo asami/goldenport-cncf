@@ -15,7 +15,7 @@ import scala.util.control.NonFatal
  * @since   Jan.  6, 2026
  *  version Jan. 10, 2026
  *  version Feb. 25, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {
@@ -243,14 +243,17 @@ object DataStore {
       collection: CollectionId,
       id: EntryId
     )(using ctx: ExecutionContext): Consequence[Option[Record]] =
-      take_collection(collection).flatMap(_.load(id))
+      _collections.get(collectionKey(collection)) match {
+        case Some(c) => c.load(id)
+        case None => Consequence.success(None)
+      }
 
     def save(
       collection: CollectionId,
       id: EntryId,
       record: Record
     )(using ctx: ExecutionContext): Consequence[Unit] =
-      take_collection(collection).flatMap(_.save(id, record))
+      _ensure_collection(collection).flatMap(_.save(id, record))
 
     def update(
       collection: CollectionId,

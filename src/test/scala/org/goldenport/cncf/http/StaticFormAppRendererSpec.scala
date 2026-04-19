@@ -31,7 +31,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentFactory}
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.context.GlobalRuntimeContext
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace, QueryDirective, SearchResult, SearchableDataStore, TotalCountCapability}
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateCommandDefinition, AggregateCreateDefinition, AggregateDefinition, AggregateMemberDefinition}
@@ -402,7 +402,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       edit should include ("type=\"hidden\" name=\"search.author\" value=\"alice\"")
     }
 
-    "apply component entity update form POST into the EntityCollection fixture" in {
+    "apply component entity update form POST through EntityCollection into EntityStoreSpace" in {
       val subsystem = _management_console_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
@@ -424,6 +424,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val updated = collection.storage.storeRealm.values.find(_.id.value == recordId).getOrElse(fail("updated entity is missing"))
       updated.title shouldBe "board updated"
       updated.author shouldBe "bob"
+      val stored = _load_notice_store_record(subsystem, updated.id)
+      stored.getString("title") shouldBe Some("board updated")
+      stored.getString("author") shouldBe Some("bob")
       dispatcher.paths should contain ("/admin/entity/update")
     }
 
@@ -591,7 +594,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       dispatcher.paths should not contain ("/admin/entity/update")
     }
 
-    "apply component entity create form POST into the EntityCollection fixture" in {
+    "apply component entity create form POST through EntityCollection into EntityStoreSpace" in {
       val subsystem = _management_console_fixture_subsystem()
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
@@ -612,6 +615,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Applied</th><td>true")
       collection.storage.storeRealm.values.size shouldBe before + 1
       collection.storage.storeRealm.values.exists(x => x.title == "new notice" && x.author == "bob") shouldBe true
+      val created = collection.storage.storeRealm.values.find(x => x.title == "new notice" && x.author == "bob")
+        .getOrElse(fail("created entity is missing"))
+      val stored = _load_notice_store_record(subsystem, created.id)
+      stored.getString("title") shouldBe Some("new notice")
+      stored.getString("author") shouldBe Some("bob")
       dispatcher.paths should contain ("/admin/entity/create")
     }
 
@@ -4271,27 +4279,33 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         _initialize_component("notice_board", c, Protocol.empty)
       }
     component.withComponentDescriptors(Vector(descriptor))
-    component.entitySpace.registerEntity(
-      "notice",
-      _notice_collection(
-        Vector(
-          _NoticeEntity(
-            EntityId("sample", "notice_1", cid),
-            "board update",
-            "alice"
-          ),
-          _NoticeEntity(
-            EntityId("sample", "notice_2", cid),
-            "board followup",
-            "bob"
-          )
-        )
+    val notices = Vector(
+      _NoticeEntity(
+        EntityId("sample", "notice_1", cid),
+        "board update",
+        "alice"
+      ),
+      _NoticeEntity(
+        EntityId("sample", "notice_2", cid),
+        "board followup",
+        "bob"
       )
     )
-    DefaultSubsystemFactory.default(
+    component.entitySpace.registerEntity(
+      "notice",
+      _notice_collection(notices)
+    )
+    val subsystem = DefaultSubsystemFactory.default(
       Some("server"),
       ResolvedConfiguration(configuration, ConfigurationTrace.empty)
     ).add(Vector(component))
+    given ExecutionContext = component.logic.executionContext()
+    notices.foreach { notice =>
+      summon[ExecutionContext].entityStoreSpace.save(
+        org.goldenport.cncf.unitofwork.UnitOfWorkOp.EntityStoreSave(notice, summon[EntityPersistent[_NoticeEntity]])
+      ).getOrElse(fail(s"notice fixture seed failed: ${notice.id.print}"))
+    }
+    subsystem
   }
 
   private def _entity_schema_web_descriptor_fixture(): (Subsystem, WebDescriptor) = {
@@ -4453,6 +4467,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
   private def _notice_entity_id(value: String): EntityId =
     EntityId.parse(value).toOption.getOrElse(EntityId("sample", value, _NoticeEntity.collectionId))
+
+  private def _load_notice_store_record(
+    subsystem: Subsystem,
+    id: EntityId
+  ): Record = {
+    given ExecutionContext = _notice_fixture_component(subsystem).logic.executionContext()
+    val collectionId = DataStore.CollectionId.EntityStore(id.collection)
+    val entryId = DataStore.EntryId(id)
+    val loaded = for {
+      ds <- summon[ExecutionContext].dataStoreSpace.dataStore(collectionId)
+      record <- ds.load(collectionId, entryId)
+    } yield record
+    loaded.toOption.flatten.getOrElse(fail(s"notice store record is missing: ${id.print}"))
+  }
 }
 
 private final case class _NoticeEntity(
