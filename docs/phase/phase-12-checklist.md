@@ -593,7 +593,7 @@ surface and app behavior:
 - [x] Add or verify total-count opt-in paging behavior; the table must
   work without total count and then with explicit total-count opt-in where the
   runtime supports it.
-- Confirm the async command path is usable with static pages:
+- [x] Confirm the async command path is usable with static pages:
   `postNotice -> JobId -> await -> result.id -> getNotice detail action`.
 - Record any remaining gaps as generic CNCF widget, convention, or descriptor
   candidates, not as sample-app-specific runtime behavior.
@@ -635,6 +635,12 @@ Runtime verification on Apr. 19, 2026:
 - Static error page rendering now verifies `textus-error-panel source="result"`
   for both Operation failure pages and Web HTML error pages. The widget expands
   into final HTML and leaves no `textus-error-panel` tag in the response.
+- The async command path was verified against `textus-sample-app` after
+  publishing the current CNCF snapshot and refreshing the runtime classpath.
+  `postNotice` returned a static `Notice posted` page with a `Check result`
+  POST action and job id, the await page exposed `result.id` and an `Open
+  detail` link, and the generated `getNotice` detail page rendered the created
+  notice title/content without unexpanded Textus widget tags.
 
 ### Inputs
 
