@@ -49,7 +49,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 19, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -84,7 +84,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       c.downField("assembly").downField("warnings").get[Int]("count").isRight shouldBe true
       c.downField("links").get[String]("admin") shouldBe Right("/web/system/admin")
       c.downField("links").get[String]("performance") shouldBe Right("/web/system/performance")
-      c.downField("links").get[String]("manual") shouldBe Right("/web/manual")
+      c.downField("links").get[String]("manual") shouldBe Right("/web/system/manual")
       c.downField("links").get[String]("console") shouldBe Right("/web/console")
       c.downField("links").get[String]("assemblyWarnings") shouldBe Right("/form/admin/assembly/warnings")
     }
@@ -105,6 +105,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       c.downField("authorization").downField("decisions").downField("summary").downField("hour").get[Long]("errors").isRight shouldBe true
       c.downField("dsl").downField("chokepoints").downField("summary").downField("hour").get[Long]("errors").isRight shouldBe true
       c.downField("links").get[String]("admin") shouldBe Right(s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(componentName)}/admin")
+      c.downField("links").get[String]("manual") shouldBe Right(s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(componentName)}/manual")
     }
 
     "render system admin configuration detail page" in {
@@ -119,7 +120,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Subsystem")
       html should include ("/web/system/dashboard")
       html should include ("/web/system/performance")
-      html should include ("/web/manual")
+      html should include ("/web/system/manual")
       html should include ("/web/console")
       html should include ("Web Descriptor")
       html should include ("Using built-in Web HTML app defaults.")
@@ -188,7 +189,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("notice-board.notice.search-notices")
       html should include ("public")
       html should include ("manual")
-      html should include ("/web/manual")
+      html should include ("/web/system/manual")
       html should include ("Admin entries")
       html should include ("Management Console Controls")
       html should include ("entity.notice")
@@ -230,7 +231,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include (component.name)
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/dashboard")
       html should include ("/web/system/performance")
-      html should include ("/web/manual")
+      html should include ("/web/system/manual")
       html should include ("/web/console")
       html should include ("Component Operations")
       html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
@@ -246,6 +247,57 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("Operational Details")
       html should not include ("/form/admin/assembly/warnings")
       html should not include ("/form/admin/execution/history")
+    }
+
+    "render read-only system and component manual pages" in {
+      val subsystem = _aggregate_http_fixture_subsystem()
+
+      val systemHtml = StaticFormAppRenderer.renderSystemManual(subsystem).body
+      val componentHtml = StaticFormAppRenderer.renderComponentManual(subsystem, "notice-board").map(_.body).getOrElse(fail("component manual is missing"))
+      val serviceHtml = StaticFormAppRenderer.renderComponentManualService(subsystem, "notice-board", "notice-aggregate").map(_.body).getOrElse(fail("service manual is missing"))
+      val operationHtml = StaticFormAppRenderer.renderComponentManualOperation(subsystem, "notice-board", "notice-aggregate", "approve-notice-aggregate").map(_.body).getOrElse(fail("operation manual is missing"))
+
+      systemHtml should include ("System Manual")
+      systemHtml should include ("OpenAPI JSON")
+      systemHtml should include ("MCP endpoint")
+      systemHtml should include ("/web/notice-board/manual")
+      componentHtml should include ("notice_board Manual")
+      componentHtml should include ("Help")
+      componentHtml should include ("Describe")
+      componentHtml should include ("Schema")
+      componentHtml should include ("/web/notice-board/manual/notice-aggregate")
+      serviceHtml should include ("Service reference")
+      serviceHtml should include ("/web/notice-board/manual/notice-aggregate/approve-notice-aggregate")
+      operationHtml should include ("Operation reference")
+      operationHtml should include ("approve-notice-aggregate")
+      operationHtml should not include ("admin entity")
+      operationHtml should not include ("method=\"post\"")
+    }
+
+    "serve manual routes and OpenAPI JSON through Web HTML paths" in {
+      val subsystem = _aggregate_http_fixture_subsystem()
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val manualResponse = server
+        .routes(null)
+        .orNotFound
+        .run(_get_request("/web/notice-board/manual/notice-aggregate/approve-notice-aggregate"))
+        .unsafeRunSync()
+      val manualHtml = manualResponse.as[String].unsafeRunSync()
+      val openApiResponse = server
+        .routes(null)
+        .orNotFound
+        .run(_get_request("/web/system/manual/openapi.json"))
+        .unsafeRunSync()
+      val openApiJson = openApiResponse.as[String].unsafeRunSync()
+
+      manualResponse.status.code shouldBe 200
+      manualHtml should include ("Operation reference")
+      manualHtml should include ("approve-notice-aggregate")
+      manualHtml should include ("/mcp")
+      openApiResponse.status.code shouldBe 200
+      openApiJson should include (""""openapi"""")
+      openApiJson should include ("/notice-board/notice-aggregate/approve-notice-aggregate")
     }
 
     "render component entity administration page" in {
@@ -2154,6 +2206,129 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       )
     }
 
+    "specify selector to Web HTML, Form API, and REST operation path mapping" in {
+      val subsystem = _form_type_fixture_subsystem()
+
+      val definition = StaticFormAppRenderer.renderOperationFormDefinition(
+        subsystem,
+        "notice_board",
+        "notice",
+        "post_secret_notice"
+      ).map(_.body).getOrElse(fail("operation form definition is missing"))
+      val json = parse(definition).getOrElse(fail("form definition JSON is invalid"))
+
+      json.hcursor.downField("selector").as[String].toOption shouldBe Some("notice-board.notice.post-secret-notice")
+      json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/form-api/notice-board/notice/post-secret-notice")
+      json.hcursor.downField("htmlPath").as[String].toOption shouldBe Some("/form/notice-board/notice/post-secret-notice")
+      json.hcursor.downField("actions").downN(0).downField("path").as[String].toOption shouldBe Some("/form/notice-board/notice/post-secret-notice")
+      json.hcursor.downField("actions").downN(1).downField("path").as[String].toOption shouldBe Some("/form-api/notice-board/notice/post-secret-notice")
+      org.goldenport.cncf.naming.NamingConventions.toNormalizedPath(
+        "notice_board",
+        "notice",
+        "post_secret_notice"
+      ) shouldBe "/notice-board/notice/post-secret-notice"
+    }
+
+    "dispatch Form API POST to the canonical REST operation request" in {
+      val subsystem = _form_type_fixture_subsystem()
+      val selector = "notice-board.notice.post-secret-notice"
+      val descriptor = WebDescriptor(expose = Map(selector -> WebDescriptor.Exposure.Protected))
+      val dispatcher = new RecordingWebOperationDispatcher(
+        new StaticWebOperationDispatcher(
+          HttpResponse.Text(
+            HttpStatus.Ok,
+            ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+            Bag.text("posted", StandardCharsets.UTF_8)
+          )
+        )
+      )
+      val server = new Http4sHttpServer(
+        new HttpExecutionEngine(subsystem, Some(descriptor)),
+        operationDispatcherOption = Some(dispatcher)
+      )
+
+      val response = server
+        ._submit_operation_form_api(
+          _post_form_request(
+            "/form-api/notice-board/notice/post-secret-notice?dryRun=true",
+            "body=hello&accessToken=abc&crud.origin.href=/web/notice-board"
+          ),
+          "notice-board",
+          "notice",
+          "post-secret-notice"
+        )
+        .unsafeRunSync()
+
+      response.status.code shouldBe 200
+      dispatcher.paths should contain ("/notice-board/notice/post-secret-notice")
+      dispatcher.forms.last.getString("body") shouldBe Some("hello")
+      dispatcher.forms.last.getString("accessToken") shouldBe Some("abc")
+      dispatcher.forms.last.getString("crud.origin.href") shouldBe None
+    }
+
+    "keep internal operations invisible from HTML and Form API surfaces" in {
+      val subsystem = _form_type_fixture_subsystem()
+      val selector = "notice-board.notice.post-secret-notice"
+      val descriptor = WebDescriptor(expose = Map(selector -> WebDescriptor.Exposure.Internal))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem, Some(descriptor)))
+
+      val htmlForm = StaticFormAppRenderer.renderOperationForm(
+        subsystem,
+        "notice-board",
+        "notice",
+        "post-secret-notice",
+        descriptor
+      )
+      val apiResponse = server
+        ._operation_form_api_definition(
+          _get_request("/form-api/notice-board/notice/post-secret-notice"),
+          "notice-board",
+          "notice",
+          "post-secret-notice"
+        )
+        .unsafeRunSync()
+
+      descriptor.isFormEnabled(selector) shouldBe false
+      htmlForm shouldBe None
+      apiResponse.status.code shouldBe 404
+    }
+
+    "record minimal runtime hooks when Web dispatch crosses the operation adapter" in {
+      val subsystem = _form_type_fixture_subsystem()
+      val selector = "notice-board.notice.post-secret-notice"
+      val descriptor = WebDescriptor(expose = Map(selector -> WebDescriptor.Exposure.Protected))
+      val dispatcher = new RecordingWebOperationDispatcher(
+        new StaticWebOperationDispatcher(
+          HttpResponse.Text(
+            HttpStatus.Ok,
+            ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+            Bag.text("posted", StandardCharsets.UTF_8)
+          )
+        )
+      )
+      val server = new Http4sHttpServer(
+        new HttpExecutionEngine(subsystem, Some(descriptor)),
+        operationDispatcherOption = Some(dispatcher)
+      )
+      val beforeHtml = RuntimeDashboardMetrics.htmlSnapshot.summary.cumulative.total
+      val beforeDsl = RuntimeDashboardMetrics.dslChokepointSnapshot.summary.cumulative.total
+      val beforeAuthorization = RuntimeDashboardMetrics.authorizationDecisionSnapshot.summary.cumulative.total
+
+      val response = server
+        ._submit_operation_form_api(
+          _post_form_request("/form-api/notice-board/notice/post-secret-notice", "body=hello"),
+          "notice-board",
+          "notice",
+          "post-secret-notice"
+        )
+        .unsafeRunSync()
+
+      response.status.code shouldBe 200
+      RuntimeDashboardMetrics.htmlSnapshot.summary.cumulative.total shouldBe (beforeHtml + 1)
+      RuntimeDashboardMetrics.dslChokepointSnapshot.summary.cumulative.total shouldBe (beforeDsl + 1)
+      RuntimeDashboardMetrics.authorizationDecisionSnapshot.summary.cumulative.total shouldBe (beforeAuthorization + 1)
+    }
+
     "render resolved Web Descriptor summary on component admin page" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
@@ -2201,7 +2376,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("34 ms")
       html should include ("/web/system/dashboard")
       html should include ("/web/system/admin")
-      html should include ("/web/manual")
+      html should include ("/web/system/manual")
       html should include ("/web/console")
     }
 
@@ -2219,7 +2394,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       manual should include ("do not inline operation actions")
       console should include ("System Console")
       console should include ("/web/system/dashboard")
-      console should include ("/web/manual")
+      console should include ("/web/system/manual")
       console should include ("/form/")
       console should include ("Console links to operation forms")
       console should include ("does not execute operations inline")

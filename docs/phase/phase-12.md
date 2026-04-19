@@ -37,8 +37,8 @@ This document is a progress dashboard, not a design journal.
 - C (DONE): WEB-03 — Define Web Descriptor model and configuration path.
 - D (DONE): WEB-04 — Define read-only dashboard baseline.
 - E (DONE): WEB-05 — Define management console baseline.
-- F (SUSPENDED): WEB-06 — Define manual/reference baseline.
-- G (SUSPENDED): WEB-07 — Add executable specifications and minimal runtime hooks.
+- F (DONE): WEB-06 — Define manual/reference baseline.
+- G (DONE): WEB-07 — Add executable specifications and minimal runtime hooks.
 - H (ACTIVE): WEB-08 — Build Management Console CRUD flow as the Form Web foundation.
   Entity and data CRUD baselines are implemented, and view read baseline is
   implemented; aggregate read baseline and operation-backed
@@ -63,8 +63,8 @@ Current note:
 - [x] WEB-03: Define Web Descriptor model and configuration path.
 - [x] WEB-04: Define read-only dashboard baseline.
 - [x] WEB-05: Define management console baseline.
-- [ ] WEB-06: Define manual/reference baseline.
-- [ ] WEB-07: Add executable specifications and minimal runtime hooks.
+- [x] WEB-06: Define manual/reference baseline.
+- [x] WEB-07: Add executable specifications and minimal runtime hooks.
 - [ ] WEB-08: Build Management Console CRUD flow as the Form Web foundation.
   Entity and data CRUD baselines plus view and aggregate read baselines are
   complete; aggregate create/command/update flow is operation-backed and has a

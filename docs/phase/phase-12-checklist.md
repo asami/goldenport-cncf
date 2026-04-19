@@ -232,7 +232,7 @@ Define the active control web app separately from the read-only Dashboard.
 
 ## WEB-06: Manual / Reference Baseline
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -241,11 +241,26 @@ Console.
 
 ### Detailed Tasks
 
-- [ ] Define manual minimum: help, describe, schema, OpenAPI, MCP links.
-- [ ] Define manual as a Static Form App instance focused on read-only reference navigation.
-- [ ] Define component/service/operation reference navigation.
-- [ ] Define links from dashboard warnings and runtime objects into manual entries.
-- [ ] Keep manual read-only and explanation-oriented.
+- [x] Define manual minimum: help, describe, schema, OpenAPI, MCP links.
+- [x] Define manual as a Static Form App instance focused on read-only reference navigation.
+- [x] Define component/service/operation reference navigation.
+- [x] Define links from dashboard warnings and runtime objects into manual entries.
+- [x] Keep manual read-only and explanation-oriented.
+
+### Current Scope Status
+
+- System manual entry point: `/web/system/manual`.
+- Component manual entry point: `/web/{component}/manual`.
+- Service manual entry point: `/web/{component}/manual/{service}`.
+- Operation manual entry point: `/web/{component}/manual/{service}/{operation}`.
+- OpenAPI JSON reference entry point: `/web/system/manual/openapi.json`.
+- MCP endpoint reference link: `/mcp`.
+- Manual pages render existing `HelpProjection`, `DescribeProjection`, and
+  `SchemaProjection` data. The manual does not execute operations and does not
+  render mutation forms.
+- Dashboard state now exposes the canonical manual link for the current scope:
+  `/web/system/manual` for subsystem scope and `/web/{component}/manual` for
+  component scope.
 
 ### Inputs
 
@@ -257,7 +272,7 @@ Console.
 
 ## WEB-07: Executable Specifications and Minimal Runtime Hooks
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -266,12 +281,31 @@ before broad UI work begins.
 
 ### Detailed Tasks
 
-- [ ] Add spec for selector-to-web-path mapping.
-- [ ] Add spec for REST request-to-operation invocation mapping.
-- [ ] Add spec for Form API definition projection from operation schema.
-- [ ] Add spec for Web Descriptor exposure filtering.
-- [ ] Add spec for protected/internal operation visibility.
-- [ ] Add minimal runtime hook or adapter only after the contract is stable.
+- [x] Add spec for selector-to-web-path mapping.
+- [x] Add spec for REST request-to-operation invocation mapping.
+- [x] Add spec for Form API definition projection from operation schema.
+- [x] Add spec for Web Descriptor exposure filtering.
+- [x] Add spec for protected/internal operation visibility.
+- [x] Add minimal runtime hook or adapter only after the contract is stable.
+
+### Current Scope Status
+
+- `StaticFormAppRendererSpec` fixes the canonical selector mapping from
+  `component.service.operation` to Web HTML, JSON Form API, and REST operation
+  paths.
+- `StaticFormAppRendererSpec` fixes the Form API POST adapter contract: Web
+  submission is converted into a canonical operation `HttpRequest` before
+  crossing the `WebOperationDispatcher`.
+- `StaticFormAppRendererSpec` fixes internal operation visibility: internal
+  exposure is absent from HTML form rendering and returns `404` from JSON Form
+  API definition routes.
+- `StaticFormAppRendererSpec` fixes the minimal runtime hook path: operation
+  adapter dispatch records HTML request, authorization, and DSL chokepoint
+  dashboard metrics.
+- `WebSchemaResolverSpec` and operation form definition specs fix the shared
+  operation-schema-to-form-definition projection.
+- `WebDescriptorSpec` fixes the exposure gate: public/protected selectors are
+  form-visible by default, internal or unlisted selectors are not.
 
 ---
 

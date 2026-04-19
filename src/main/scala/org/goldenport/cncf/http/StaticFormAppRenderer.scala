@@ -7,6 +7,7 @@ import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.projection.{DescribeProjection, HelpProjection, SchemaProjection}
 import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.protocol.{Argument, Request as ProtocolRequest}
 import org.goldenport.protocol.spec.ParameterDefinition
@@ -19,7 +20,7 @@ import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 19, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -1665,6 +1666,71 @@ object StaticFormAppRenderer {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map(renderComponentAdmin(_, webDescriptor))
+
+  def renderSystemManual(
+    subsystem: Subsystem
+  ): Page =
+    subsystem.components.headOption match {
+      case Some(component) =>
+        Page(_system_manual_page(subsystem, component))
+      case None =>
+        Page(_simple_page(
+          title = "System Manual",
+          subtitle = "Read-only runtime reference",
+          body = """<article><h2>No components</h2><p>No component reference entries are available.</p></article>"""
+        ))
+    }
+
+  def renderComponentManual(
+    subsystem: Subsystem,
+    componentName: String
+  ): Option[Page] =
+    for {
+      component <- _find_component(subsystem, componentName)
+    } yield Page(_manual_page(
+      title = s"${_escape(component.name)} Manual",
+      subtitle = "Component reference",
+      component = component,
+      selector = Some(component.name),
+      currentPath = s"/web/${NamingConventions.toNormalizedSegment(component.name)}/manual",
+      childNames = component.protocol.services.services.map(_.name).toVector
+    ))
+
+  def renderComponentManualService(
+    subsystem: Subsystem,
+    componentName: String,
+    serviceName: String
+  ): Option[Page] =
+    for {
+      component <- _find_component(subsystem, componentName)
+      service <- component.protocol.services.services.find(s => NamingConventions.equivalentByNormalized(s.name, serviceName))
+    } yield Page(_manual_page(
+      title = s"${_escape(component.name)}.${_escape(service.name)} Manual",
+      subtitle = "Service reference",
+      component = component,
+      selector = Some(s"${component.name}.${service.name}"),
+      currentPath = s"/web/${NamingConventions.toNormalizedSegment(component.name)}/manual/${NamingConventions.toNormalizedSegment(service.name)}",
+      childNames = service.operations.operations.map(_.name).toVector
+    ))
+
+  def renderComponentManualOperation(
+    subsystem: Subsystem,
+    componentName: String,
+    serviceName: String,
+    operationName: String
+  ): Option[Page] =
+    for {
+      component <- _find_component(subsystem, componentName)
+      service <- component.protocol.services.services.find(s => NamingConventions.equivalentByNormalized(s.name, serviceName))
+      operation <- service.operations.operations.find(o => NamingConventions.equivalentByNormalized(o.name, operationName))
+    } yield Page(_manual_page(
+      title = s"${_escape(component.name)}.${_escape(service.name)}.${_escape(operation.name)} Manual",
+      subtitle = "Operation reference",
+      component = component,
+      selector = Some(s"${component.name}.${service.name}.${operation.name}"),
+      currentPath = s"/web/${NamingConventions.toNormalizedSegment(component.name)}/manual/${NamingConventions.toNormalizedSegment(service.name)}/${NamingConventions.toNormalizedSegment(operation.name)}",
+      childNames = Vector.empty
+    ))
 
   def renderComponentAdminEntities(
     subsystem: Subsystem,
@@ -3429,25 +3495,6 @@ object StaticFormAppRenderer {
   def renderSystemPerformance(subsystem: Subsystem): Page =
     Page(_performance_page(subsystem))
 
-  def renderSystemManual(subsystem: Subsystem): Page =
-    Page(_simple_page(
-      title = "System Manual",
-      subtitle = "Read-only reference",
-      body =
-        s"""<article>
-           |  <h2>Navigation</h2>
-           |  <p><a href="/web/system/dashboard">System dashboard</a> · <a href="/web/system/admin">Admin configuration</a> · <a href="/web/system/performance">Performance details</a> · <a href="/web/console">Console</a></p>
-           |</article>
-           |<article>
-           |  <h2>Components</h2>
-           |  ${_component_reference_list(subsystem.components)}
-           |</article>
-           |<article>
-           |  <h2>Console handoff</h2>
-           |  <p>Use <a href="/web/console">System Console</a> for controlled operation entry. Manual pages remain read-only and do not inline operation actions.</p>
-           |</article>""".stripMargin
-    ))
-
   def renderSystemConsole(subsystem: Subsystem): Page =
     Page(_simple_page(
       title = "System Console",
@@ -3455,7 +3502,7 @@ object StaticFormAppRenderer {
       body =
         s"""<article>
            |  <h2>Navigation</h2>
-           |  <p><a href="/web/system/dashboard">System dashboard</a> · <a href="/web/system/admin">Admin configuration</a> · <a href="/web/system/performance">Performance details</a> · <a href="/web/manual">Manual</a></p>
+           |  <p><a href="/web/system/dashboard">System dashboard</a> · <a href="/web/system/admin">Admin configuration</a> · <a href="/web/system/performance">Performance details</a> · <a href="/web/system/manual">Manual</a></p>
            |</article>
            |<article>
            |  <h2>Operation forms</h2>
@@ -3507,7 +3554,7 @@ object StaticFormAppRenderer {
        |    <section class="row g-3 mb-3">
        |      <div class="col-12 col-lg-4"><article id="healthPanel" class="card h-100 border-success"><div class="card-body"><h2 class="h5 card-title">Health</h2><div class="big" id="healthText">UP</div><p class="text-secondary mb-0" id="healthNote">Starting</p></div></article></div>
        |      <div class="col-12 col-lg-4"><article class="card h-100"><div class="card-body"><h2 class="h5 card-title">Subsystem</h2><p class="mb-1"><strong id="subsystemName">-</strong></p><p class="text-secondary mb-0" id="subsystemVersion">-</p></div></article></div>
-       |      <div class="col-12 col-lg-4"><article class="card h-100"><div class="card-body"><h2 class="h5 card-title">CNCF</h2><p class="mb-1"><strong id="cncfVersion">-</strong></p><p class="mb-0"><a id="detailsLink" href="/web/system/admin">Admin details</a> · <a id="performanceLink" href="/web/system/performance">Performance details</a> · <a id="manualLink" href="/web/manual">Manual</a> · <a id="consoleLink" href="/web/console">Console</a></p></div></article></div>
+       |      <div class="col-12 col-lg-4"><article class="card h-100"><div class="card-body"><h2 class="h5 card-title">CNCF</h2><p class="mb-1"><strong id="cncfVersion">-</strong></p><p class="mb-0"><a id="detailsLink" href="/web/system/admin">Admin details</a> · <a id="performanceLink" href="/web/system/performance">Performance details</a> · <a id="manualLink" href="/web/system/manual">Manual</a> · <a id="consoleLink" href="/web/console">Console</a></p></div></article></div>
        |    </section>
        |    <section class="row g-3 mb-3">
        |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">Components</span><strong id="componentCount">0</strong></div></div></div>
@@ -3722,7 +3769,7 @@ object StaticFormAppRenderer {
            |</article>
            |<article>
            |  <h2>Navigation</h2>
-           |  <p><a href="${_escape(dashboardPath)}">Dashboard</a> · <a href="${_escape(performancePath)}">Performance details</a> · <a href="/web/manual">Manual</a> · <a href="/web/console">Console</a></p>
+           |  <p><a href="${_escape(dashboardPath)}">Dashboard</a> · <a href="${_escape(performancePath)}">Performance details</a> · <a href="/web/system/manual">Manual</a> · <a href="/web/console">Console</a></p>
            |</article>
            |${_admin_operational_details(operationalDetails)}
            |${_component_admin_actions(componentFormsPath)}
@@ -4025,7 +4072,7 @@ object StaticFormAppRenderer {
       body =
         s"""<article>
            |  <h2>Navigation</h2>
-           |  <p><a href="/web/system/dashboard">System dashboard</a> · <a href="/web/system/admin">Admin configuration</a> · <a href="/web/manual">Manual</a> · <a href="/web/console">Console</a></p>
+           |  <p><a href="/web/system/dashboard">System dashboard</a> · <a href="/web/system/admin">Admin configuration</a> · <a href="/web/system/manual">Manual</a> · <a href="/web/console">Console</a></p>
            |</article>
            |<article>
            |  <h2>Assembly warnings</h2>
@@ -4069,6 +4116,129 @@ object StaticFormAppRenderer {
 
   private def _component_dashboard_state(component: Component): String =
     _dashboard_state_json(Vector(component), "component", component.name, component.artifactMetadata.map(_.version), _job_metrics(component), component.subsystem.map(_.name).getOrElse(component.name), component.subsystem.flatMap(_.version), component.subsystem.map(_assembly_warning_count).getOrElse(0))
+
+  private def _manual_page(
+    title: String,
+    subtitle: String,
+    component: Component,
+    selector: Option[String],
+    currentPath: String,
+    childNames: Vector[String]
+  ): String = {
+    val help = HelpProjection.project(component, selector)
+    val describe = DescribeProjection.project(component, selector)
+    val schema = SchemaProjection.project(component, selector)
+    val childLinks = _manual_child_links(currentPath, childNames)
+    val body =
+      s"""<article>
+         |  <h2>Reference navigation</h2>
+         |  <p>This manual is read-only. Use it to inspect help, describe, schema, OpenAPI, and MCP entry points.</p>
+         |  <div class="d-flex flex-wrap gap-2 mt-3">
+         |    <a class="btn btn-outline-primary" href="${_escape(currentPath)}#help">Help</a>
+         |    <a class="btn btn-outline-primary" href="${_escape(currentPath)}#describe">Describe</a>
+         |    <a class="btn btn-outline-primary" href="${_escape(currentPath)}#schema">Schema</a>
+         |    <a class="btn btn-outline-secondary" href="/web/system/manual/openapi.json">OpenAPI JSON</a>
+         |    <a class="btn btn-outline-secondary" href="/mcp">MCP endpoint</a>
+         |    <a class="btn btn-outline-secondary" href="/web/console">Console</a>
+         |  </div>
+         |</article>
+         |<article>
+         |  <h2>Children</h2>
+         |  ${childLinks}
+         |</article>
+         |<article id="help">
+         |  <h2>Help</h2>
+         |  ${_manual_record(help)}
+         |</article>
+         |<article id="describe">
+         |  <h2>Describe</h2>
+         |  ${_manual_record(describe)}
+         |</article>
+         |<article id="schema">
+         |  <h2>Schema</h2>
+         |  ${_manual_record(schema)}
+         |</article>""".stripMargin
+    _simple_page(title, subtitle, body)
+  }
+
+  private def _system_manual_page(
+    subsystem: Subsystem,
+    component: Component
+  ): String = {
+    val help = HelpProjection.project(component, None)
+    val describe = DescribeProjection.project(component, None)
+    val schema = SchemaProjection.project(component, None)
+    val componentLinks = _manual_component_links(subsystem.components)
+    val body =
+      s"""<article>
+         |  <h2>Reference navigation</h2>
+         |  <p>This manual is read-only. Use it to inspect help, describe, schema, OpenAPI, and MCP entry points.</p>
+         |  <div class="d-flex flex-wrap gap-2 mt-3">
+         |    <a class="btn btn-outline-primary" href="/web/system/dashboard">System dashboard</a>
+         |    <a class="btn btn-outline-primary" href="/web/system/admin">Admin configuration</a>
+         |    <a class="btn btn-outline-primary" href="/web/system/performance">Performance details</a>
+         |    <a class="btn btn-outline-secondary" href="/web/system/manual/openapi.json">OpenAPI JSON</a>
+         |    <a class="btn btn-outline-secondary" href="/mcp">MCP endpoint</a>
+         |    <a class="btn btn-outline-secondary" href="/web/console">Console</a>
+         |  </div>
+         |</article>
+         |<article>
+         |  <h2>Components</h2>
+         |  ${componentLinks}
+         |</article>
+         |<article>
+         |  <h2>Console handoff</h2>
+         |  <p>Use <a href="/web/console">System Console</a> for controlled operation entry. Manual pages remain read-only and do not inline operation actions.</p>
+         |</article>
+         |<article id="help">
+         |  <h2>Help</h2>
+         |  ${_manual_record(help)}
+         |</article>
+         |<article id="describe">
+         |  <h2>Describe</h2>
+         |  ${_manual_record(describe)}
+         |</article>
+         |<article id="schema">
+         |  <h2>Schema</h2>
+         |  ${_manual_record(schema)}
+         |</article>""".stripMargin
+    _simple_page("System Manual", "Read-only runtime reference", body)
+  }
+
+  private def _manual_component_links(
+    components: Vector[Component]
+  ): String =
+    if (components.isEmpty)
+      """<p>No component reference entries.</p>"""
+    else
+      components.sortBy(_.name).map { component =>
+        val segment = NamingConventions.toNormalizedSegment(component.name)
+        s"""<a class="btn btn-sm btn-outline-primary me-2 mb-2" href="/web/${_escape(segment)}/manual">${_escape(component.name)}</a>"""
+      }.mkString("\n")
+
+  private def _manual_child_links(
+    currentPath: String,
+    children: Vector[String]
+  ): String =
+    if (children.isEmpty)
+      """<p>No child reference entries.</p>"""
+    else
+      children.map { child =>
+        val segment = NamingConventions.toNormalizedSegment(child)
+        s"""<a class="btn btn-sm btn-outline-primary me-2 mb-2" href="${_escape(currentPath + "/" + segment)}">${_escape(child)}</a>"""
+      }.mkString("\n")
+
+  private def _manual_record(record: Record): String =
+    s"""<dl class="row">${_property_rows(record.asMap.map { case (k, v) => k -> _manual_value(v) })}</dl>"""
+
+  private def _manual_value(value: Any): String =
+    value match {
+      case null => ""
+      case xs: Seq[?] => xs.map(_manual_value).mkString("[", ", ", "]")
+      case m: Map[?, ?] => m.toVector.map { case (k, v) => s"${k}=${_manual_value(v)}" }.mkString("{", ", ", "}")
+      case r: Record => r.asMap.map { case (k, v) => s"${k}=${_manual_value(v)}" }.mkString("{", ", ", "}")
+      case x => x.toString
+    }
 
   private def _simple_page(
     title: String,
@@ -4465,7 +4635,10 @@ object StaticFormAppRenderer {
     val adminPath =
       if (scope == "component") s"/web/${NamingConventions.toNormalizedSegment(name)}/admin"
       else "/web/system/admin"
-    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"dsl":{"chokepoints":${_snapshot_json(dslChokepoints, includeRecent = false)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance","manual":"/web/manual","console":"/web/console","assemblyWarnings":"/form/admin/assembly/warnings"},"components":${componentJson}}"""
+    val manualPath =
+      if (scope == "component") s"/web/${NamingConventions.toNormalizedSegment(name)}/manual"
+      else "/web/system/manual"
+    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"dsl":{"chokepoints":${_snapshot_json(dslChokepoints, includeRecent = false)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance","manual":"${_json(manualPath)}","console":"/web/console","assemblyWarnings":"/form/admin/assembly/warnings"},"components":${componentJson}}"""
   }
 
   private def _snapshot_json(

@@ -28,6 +28,7 @@ import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.observability.{DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
+import org.goldenport.cncf.openapi.OpenApiProjector
 import org.goldenport.bag.Bag
 import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
 
@@ -35,7 +36,7 @@ import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
- * @version Apr. 19, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -95,6 +96,10 @@ final class Http4sHttpServer(
         _dashboard_state(None)
       case GET -> Root / "web" / "system" / "performance" =>
         _system_performance()
+      case GET -> Root / "web" / "system" / "manual" =>
+        _system_manual()
+      case GET -> Root / "web" / "system" / "manual" / "openapi.json" =>
+        _system_manual_openapi()
       case req @ GET -> Root / "web" / "system" / "admin" =>
         if (_is_web_authorized("system", "admin", "index", Some(req))) _system_admin() else _forbidden()
       case req @ GET -> Root / "web" / "system" / "admin" / "descriptor" =>
@@ -135,6 +140,12 @@ final class Http4sHttpServer(
         if (_is_web_authorized(app, "admin.views", view, Some(req))) _component_admin_view_instance_detail(app, view, id) else _forbidden()
       case req @ GET -> Root / "web" / app / "admin" / "views" / view =>
         if (_is_web_authorized(app, "admin.views", view, Some(req))) _component_admin_view_detail(req, app, view) else _forbidden()
+      case GET -> Root / "web" / app / "manual" =>
+        _component_manual(app)
+      case GET -> Root / "web" / app / "manual" / service =>
+        _component_manual_service(app, service)
+      case GET -> Root / "web" / app / "manual" / service / operation =>
+        _component_manual_operation(app, service, operation)
       case GET -> Root / "web" / app =>
         _static_form_app(app, Vector.empty)
       case GET -> Root / "web" / app / page =>
@@ -283,6 +294,41 @@ final class Http4sHttpServer(
         .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
     )
   }
+
+  private def _system_manual(): IO[HResponse[IO]] =
+    _html(StaticFormAppRenderer.renderSystemManual(engine.runtimeSubsystem))
+
+  private def _system_manual_openapi(): IO[HResponse[IO]] =
+    IO.pure(
+      HResponse[IO](HStatus.Ok)
+        .withEntity(OpenApiProjector.forSubsystem(engine.runtimeSubsystem))
+        .withContentType(`Content-Type`(MediaType.application.json, Some(Charset.`UTF-8`)))
+    )
+
+  private def _component_manual(app: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentManual(engine.runtimeSubsystem, app) match {
+      case Some(p) => _html(p)
+      case None => IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component manual not found"))
+    }
+
+  private def _component_manual_service(
+    app: String,
+    service: String
+  ): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentManualService(engine.runtimeSubsystem, app, service) match {
+      case Some(p) => _html(p)
+      case None => IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Service manual not found"))
+    }
+
+  private def _component_manual_operation(
+    app: String,
+    service: String,
+    operation: String
+  ): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentManualOperation(engine.runtimeSubsystem, app, service, operation) match {
+      case Some(p) => _html(p)
+      case None => IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation manual not found"))
+    }
 
   private def _component_admin(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdmin(engine.runtimeSubsystem, app, engine.webDescriptor) match {

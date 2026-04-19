@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 14, 2026
- * @version Apr. 16, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers {
@@ -202,6 +202,28 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       val descriptor = WebDescriptorResolver.resolve(configuration).toOption.get
 
       descriptor shouldBe WebDescriptor.empty
+    }
+
+    "treat exposure as the contract gate for public Web form surfaces" in {
+      val publicSelector = "notice-board.notice.search-notices"
+      val protectedSelector = "notice-board.notice.post-notice"
+      val internalSelector = "notice-board.notice.rebuild-index"
+      val descriptor = WebDescriptor(
+        expose = Map(
+          publicSelector -> WebDescriptor.Exposure.Public,
+          protectedSelector -> WebDescriptor.Exposure.Protected,
+          internalSelector -> WebDescriptor.Exposure.Internal
+        )
+      )
+
+      descriptor.exposureOf(publicSelector) shouldBe WebDescriptor.Exposure.Public
+      descriptor.exposureOf(protectedSelector) shouldBe WebDescriptor.Exposure.Protected
+      descriptor.exposureOf(internalSelector) shouldBe WebDescriptor.Exposure.Internal
+      descriptor.exposureOf("notice-board.notice.unlisted") shouldBe WebDescriptor.Exposure.Internal
+      descriptor.isFormEnabled(publicSelector) shouldBe true
+      descriptor.isFormEnabled(protectedSelector) shouldBe true
+      descriptor.isFormEnabled(internalSelector) shouldBe false
+      descriptor.isFormEnabled("notice-board.notice.unlisted") shouldBe false
     }
 
     "allow Web Tier authorization when every configured category matches at least one subject value" in {
