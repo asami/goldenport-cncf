@@ -319,6 +319,8 @@ functionality.
       explicit result waiting.
 - [x] Add Form job await route
       `/form/{component}/{service}/{operation}/jobs/{jobId}/await`.
+- [x] Generate a conservative `result.action.detail.*` link from command
+      `result.id` for `post-*`, `create-*`, and `update-*` operations.
 - [x] Support paging properties and continuation-backed paging for form
       results.
 - [x] Support optional/required/disabled total count policy for admin list

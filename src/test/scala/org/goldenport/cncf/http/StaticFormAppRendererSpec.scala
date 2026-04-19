@@ -3890,6 +3890,32 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus-action-link")
     }
 
+    "render detail action link from command result id" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice"
+        ),
+        200,
+        "application/json",
+        """{"id":"notice_1"}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:action-link source="result.action.primary" class="btn btn-primary"></textus:action-link>
+          |  <textus-action-link source="result.action.detail" class="btn btn-outline-primary"></textus-action-link>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("""<a class="btn btn-primary" href="/form/notice-board/notice/get-notice/result?id=notice_1">Open detail</a>""")
+      html should include ("""<a class="btn btn-outline-primary" href="/form/notice-board/notice/get-notice/result?id=notice_1">Open detail</a>""")
+      html should not include ("<textus:action-link")
+      html should not include ("<textus-action-link")
+    }
+
     "render textus result table without total count" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(

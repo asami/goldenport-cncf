@@ -95,7 +95,7 @@ object StaticFormAppRenderer {
         "paging.pageSize" -> page.values.getOrElse("paging.pageSize", "20"),
         "paging.chunkSize" -> page.values.getOrElse("paging.chunkSize", "1000"),
         "paging.href" -> page.values.getOrElse("paging.href", _default_paging_href)
-      ) ++ metadata.toTemplateValues ++ _job_action_values(metadata)
+      ) ++ metadata.toTemplateValues ++ _detail_action_values(metadata) ++ _job_action_values(metadata)
       val base = page.copy(values = page.values ++ formValues ++ resultValues)
       if (status >= 400)
         base
@@ -135,6 +135,41 @@ object StaticFormAppRenderer {
         case None =>
           Map.empty
       }
+
+    private def _detail_action_values(metadata: FormResultMetadata): Map[String, String] =
+      metadata.id.flatMap(id => _detail_operation_name.map(_ -> id)) match {
+        case Some((detailOperation, id)) =>
+          val href = s"/form/${componentName}/${serviceName}/${detailOperation}/result?id=${_escape_query(id)}"
+          val common = Map(
+            "result.action.detail.name" -> "detail",
+            "result.action.detail.label" -> "Open detail",
+            "result.action.detail.href" -> href,
+            "result.action.detail.method" -> "GET"
+          )
+          if (metadata.actions.isEmpty && metadata.jobId.isEmpty)
+            common ++ Map(
+              "result.actions.count" -> "1",
+              "result.action.0.name" -> "detail",
+              "result.action.0.label" -> "Open detail",
+              "result.action.0.href" -> href,
+              "result.action.0.method" -> "GET",
+              "result.action.primary.name" -> "detail",
+              "result.action.primary.label" -> "Open detail",
+              "result.action.primary.href" -> href,
+              "result.action.primary.method" -> "GET"
+            )
+          else
+            common
+        case None =>
+          Map.empty
+      }
+
+    private def _detail_operation_name: Option[String] = {
+      val name = NamingConventions.toNormalizedSegment(operationName)
+      Vector("post-", "create-", "update-").collectFirst {
+        case prefix if name.startsWith(prefix) => s"get-${name.drop(prefix.length)}"
+      }
+    }
   }
   final case class TableColumn(
     name: String,

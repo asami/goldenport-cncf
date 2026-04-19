@@ -438,6 +438,28 @@ Apps a synchronous-feeling path without making command execution itself
 synchronous. The user may submit the await action only when they need the final
 operation result.
 
+When a command result contains `result.id`, the renderer may synthesize a detail
+action by naming convention. For operations named `post-xxx`, `create-xxx`, or
+`update-xxx`, the detail action points to:
+
+```text
+/form/{component}/{service}/get-xxx/result?id={result.id}
+```
+
+The generated properties are:
+
+```text
+result.action.detail.name
+result.action.detail.label
+result.action.detail.href
+result.action.detail.method
+```
+
+If the result has no explicit actions and no pending JobId, `result.action.primary`
+also points to this detail action. This convention is intentionally conservative;
+applications that need another read operation should return explicit action
+metadata or use descriptor/static-template overrides.
+
 The baseline await endpoint is:
 
 ```text
