@@ -544,7 +544,7 @@ Management Console work.
       and `search-notices__200.html`.
 - [x] Add common result/error pages such as `__400.html`, `__500.html`, and
       `__error.html`.
-- [ ] Use Textus widgets for result view, table, property list, error display,
+- [x] Use Textus widgets for result view, table, property list, error display,
       action links, and paging. Prefer `textus:xxx` notation while keeping
       `textus-xxx` compatible.
 - [ ] Identify which behavior is missing from the CML+HTML model.
@@ -576,7 +576,7 @@ surface and app behavior:
 
 - [x] Confirm `textus-result-view`, `textus-property-list`, and
   `textus:action-link` render clean final HTML in the sample app.
-- [ ] Confirm `textus-error-panel` renders through static error pages for
+- [x] Confirm `textus-error-panel` renders through static error pages for
   Operation/runtime errors. Admission validation currently redisplays the
   operation form and does not use `__400.html`.
 - [x] Confirm `textus-result-table` renders both table rows and paging controls
@@ -627,6 +627,9 @@ Runtime verification on Apr. 19, 2026:
   form with field-level errors and submitted values preserved. It does not use
   the static `__400.html` common error page, so the common error page convention
   should be verified separately for Operation/runtime errors.
+- Static error page rendering now verifies `textus-error-panel source="result"`
+  for both Operation failure pages and Web HTML error pages. The widget expands
+  into final HTML and leaves no `textus-error-panel` tag in the response.
 
 ### Inputs
 

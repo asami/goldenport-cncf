@@ -3642,8 +3642,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
             "__error.html",
             """<article>
               |  <h2>Common Static Error</h2>
-              |  <p>${result.status}</p>
-              |  <p>${error.body}</p>
+              |  <textus-error-panel source="result"></textus-error-panel>
               |</article>""".stripMargin
           ).resolve("web.yaml").toString)
         ))
@@ -3676,6 +3675,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Common Static Error")
       html should include ("500")
       html should include ("aggregate service failed")
+      html should include ("result.status")
+      html should include ("result.body")
+      html should not include ("<textus-error-panel")
       html should not include ("Submitted Values")
     }
 
@@ -3721,8 +3723,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
             """<article>
               |  <h2>Global Web Error</h2>
               |  <p>${component}</p>
-              |  <p>${error.status}</p>
-              |  <p>${error.path}</p>
+              |  <textus-error-panel source="result"></textus-error-panel>
+              |  <textus-property-list source="error"></textus-property-list>
               |</article>""".stripMargin
           ).resolve("web.yaml").toString)
         ))
@@ -3739,6 +3741,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("notice-board")
       html should include ("404")
       html should include ("/web/notice-board/missing")
+      html should include ("result.status")
+      html should include ("result.body")
+      html should include ("error.path")
+      html should not include ("<textus-error-panel")
     }
 
     "redisplay the operation form with submitted values when stayOnError is enabled" in {
