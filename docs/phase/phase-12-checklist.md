@@ -928,6 +928,10 @@ owns the portal route, while Component apps keep their component-scoped routes.
       - framework assets under `/web/assets/...`
       - app-local CAR assets under
         `/web/{componentName}/{webAppName}/assets/...`.
+      - Static HTML should link framework assets through `/web/assets/...` and
+        app-local assets through the canonical
+        `/web/{componentName}/{webAppName}/assets/...` route, even when the page
+        is reached through an SAR alias or implicit `/web` route.
 - [x] Define how static Web app HTML is served:
       - CAR `/web/{webAppName}/index.html` is available at
         `/web/{componentName}/{webAppName}`.

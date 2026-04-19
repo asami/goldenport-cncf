@@ -298,12 +298,36 @@ Lookup precedence is executable-speced as:
 Framework assets are served under `/web/assets/...` and are owned by the
 runtime. Bootstrap 5 local assets currently use this route.
 
+Static Web app HTML should link framework assets through the framework route:
+
+```html
+<link href="/web/assets/bootstrap.min.css" rel="stylesheet">
+<script src="/web/assets/bootstrap.bundle.min.js"></script>
+```
+
+The framework asset route is stable across canonical component routes, SAR
+aliases, and implicit single-CAR aliases. Static pages must not use CDN URLs
+for baseline Bootstrap behavior.
+
 App-local assets are served from the canonical component Web app route:
 
 ```text
 CAR: /web/{webApp}/assets/{asset}
 URL: /web/{component}/{webApp}/assets/{asset}
 ```
+
+Static Web app HTML should link app-local assets by canonical component route:
+
+```html
+<link href="/web/{component}/{webApp}/assets/app.css" rel="stylesheet">
+```
+
+Even when a page is reached through `/web/{webApp}` or `/web`, app-local asset
+links should still point at the canonical `/web/{component}/{webApp}/...`
+route. This keeps browser-visible pages, descriptor inspection, executable
+checks, and operator debugging aligned with the resource owner. Alias routes
+may serve app-local assets for convenience, but generated/static HTML should
+prefer the canonical route.
 
 Static Web app HTML is served from the same canonical component Web app route:
 
