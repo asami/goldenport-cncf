@@ -999,6 +999,45 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       dispatcher.paths should contain ("/admin/entity/create")
     }
 
+    "define Static Form Web App template lookup precedence as route-local before common templates" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      server._form_result_template_candidates("notice-board", "notice", "post-notice", 200) shouldBe Vector(
+        java.nio.file.Paths.get("notice-board", "notice", "post-notice__200.html"),
+        java.nio.file.Paths.get("notice-board", "post-notice__200.html"),
+        java.nio.file.Paths.get("notice-board", "notice", "post-notice__success.html"),
+        java.nio.file.Paths.get("notice-board", "post-notice__success.html"),
+        java.nio.file.Paths.get("notice-board", "notice", "__200.html"),
+        java.nio.file.Paths.get("notice-board", "__200.html"),
+        java.nio.file.Paths.get("notice-board", "notice", "__success.html"),
+        java.nio.file.Paths.get("notice-board", "__success.html"),
+        java.nio.file.Paths.get("post-notice__200.html"),
+        java.nio.file.Paths.get("__200.html"),
+        java.nio.file.Paths.get("post-notice__success.html"),
+        java.nio.file.Paths.get("__success.html")
+      )
+    }
+
+    "load Static Form Web App result templates from the descriptor root with route-local precedence" in {
+      val root = Files.createTempDirectory("cncf-web-template-root-")
+      Files.writeString(root.resolve("web-descriptor.yaml"), "web:\n  apps:\n    - name: notice-board\n", StandardCharsets.UTF_8)
+      Files.createDirectories(root.resolve("notice-board").resolve("notice"))
+      Files.writeString(root.resolve("post-notice__200.html"), "ROOT OPERATION", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("notice-board").resolve("__200.html"), "APP COMMON", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("notice-board").resolve("post-notice__200.html"), "APP OPERATION", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("notice-board").resolve("notice").resolve("post-notice__200.html"), "SERVICE OPERATION", StandardCharsets.UTF_8)
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      server._web_template_roots() shouldBe Vector(root)
+      server._form_result_static_template("notice-board", "notice", "post-notice", 200) shouldBe Some("SERVICE OPERATION")
+    }
+
     "render component entity edit page contract" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))

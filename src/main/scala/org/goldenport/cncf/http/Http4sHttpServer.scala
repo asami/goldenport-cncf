@@ -1488,7 +1488,7 @@ final class Http4sHttpServer(
     }
   }
 
-  private def _form_result_static_template(
+  private[http] def _form_result_static_template(
     app: String,
     service: String,
     operation: String,
@@ -1504,7 +1504,7 @@ final class Http4sHttpServer(
       }
     }.headOption
 
-  private def _form_result_template_candidates(
+  private[http] def _form_result_template_candidates(
     app: String,
     service: String,
     operation: String,
@@ -1518,21 +1518,32 @@ final class Http4sHttpServer(
         Vector(status.toString, "success")
       else
         Vector(status.toString, "error")
-    suffixes.flatMap { suffix =>
+    val routeLocalOperation = suffixes.flatMap { suffix =>
       val filename = s"${operationPath}__${suffix}.html"
+      Vector(
+        Paths.get(appPath, servicePath, filename),
+        Paths.get(appPath, filename)
+      )
+    }
+    val routeLocalCommon = suffixes.flatMap { suffix =>
       val common = s"__${suffix}.html"
       Vector(
-        Paths.get(filename),
-        Paths.get(appPath, servicePath, filename),
-        Paths.get(appPath, filename),
-        Paths.get(common),
         Paths.get(appPath, servicePath, common),
         Paths.get(appPath, common)
       )
     }
+    val common = suffixes.flatMap { suffix =>
+      val filename = s"${operationPath}__${suffix}.html"
+      val common = s"__${suffix}.html"
+      Vector(
+        Paths.get(filename),
+        Paths.get(common)
+      )
+    }
+    routeLocalOperation ++ routeLocalCommon ++ common
   }
 
-  private def _web_error_template(
+  private[http] def _web_error_template(
     app: Option[String],
     status: Int
   ): Option[String] =
@@ -1546,7 +1557,7 @@ final class Http4sHttpServer(
       }
     }.headOption
 
-  private def _web_error_template_candidates(
+  private[http] def _web_error_template_candidates(
     app: Option[String],
     status: Int
   ): Vector[Path] = {
@@ -1558,10 +1569,10 @@ final class Http4sHttpServer(
     } ++ Vector(Paths.get(statusName), Paths.get(errorName))
   }
 
-  private def _web_template_roots(): Vector[Path] =
+  private[http] def _web_template_roots(): Vector[Path] =
     _web_descriptor_config_root().toVector ++ _subsystem_descriptor_web_root().toVector
 
-  private def _web_descriptor_config_root(): Option[Path] =
+  private[http] def _web_descriptor_config_root(): Option[Path] =
     RuntimeConfig.getString(engine.runtimeSubsystem.configuration, RuntimeConfig.WebDescriptorKey).map { value =>
       val path = Paths.get(value)
       if (Files.isDirectory(path))
@@ -1570,7 +1581,7 @@ final class Http4sHttpServer(
         path.getParent
     }
 
-  private def _subsystem_descriptor_web_root(): Option[Path] =
+  private[http] def _subsystem_descriptor_web_root(): Option[Path] =
     engine.runtimeSubsystem.descriptor.map(d => d.path.resolve("web"))
 
   private def _form_descriptor(

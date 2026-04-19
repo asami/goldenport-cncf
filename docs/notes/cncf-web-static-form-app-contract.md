@@ -544,28 +544,44 @@ Static HTML result pages are the default customization mechanism for ordinary
 Form Apps. Given an operation form whose normalized operation name is `xxx`,
 the result page resolver searches the web template root in this order:
 
+Route-local operation-specific success:
+
+- `{app}/{service}/xxx__200.html`
+- `{app}/xxx__200.html`
+- `{app}/{service}/xxx__success.html`
+- `{app}/xxx__success.html`
+
+Route-local operation-specific failure:
+
+- `{app}/{service}/xxx__{status}.html`
+- `{app}/xxx__{status}.html`
+- `{app}/{service}/xxx__error.html`
+- `{app}/xxx__error.html`
+
+If no route-local operation-specific page is found, the resolver falls back to
+route-local common pages:
+
 Success:
 
-- `xxx__200.html`
-- `xxx__success.html`
+- `{app}/{service}/__200.html`
+- `{app}/__200.html`
+- `{app}/{service}/__success.html`
+- `{app}/__success.html`
 
 Failure:
+
+- `{app}/{service}/__{status}.html`
+- `{app}/__{status}.html`
+- `{app}/{service}/__error.html`
+- `{app}/__error.html`
+
+Finally, the resolver checks component/subsystem common templates under the
+template root:
 
 - `xxx__{status}.html`
-- `xxx__error.html`
-
-If no operation-specific page is found, the resolver may fall back to common
-pages:
-
-Success:
-
-- `__200.html`
-- `__success.html`
-
-Failure:
-
 - `__{status}.html`
-- `__error.html`
+- `xxx__success.html` or `xxx__error.html`
+- `__success.html` or `__error.html`
 
 This makes shared pages such as a common validation error page or common system
 error page ordinary static files rather than descriptor logic.

@@ -913,28 +913,29 @@ owns the portal route, while Component apps keep their component-scoped routes.
       - support the same alias behavior for an implicit SAR created from a
         single CAR.
       - reject or require explicit resolution for conflicting aliases.
-- [ ] Migrate the current `config/web-descriptor.yaml` and `config/*.html`
+- [x] Migrate the current `config/web-descriptor.yaml` and `config/*.html`
       validation shape to the canonical `/web` layout.
       - Do not preserve `config/` as a packaging compatibility contract.
       - Package to CAR/SAR `/web` for distributable applications.
       - Prefer a product-facing `textus` naming convention over `cncf` naming.
-- [ ] Define discovery precedence for Web app roots:
+- [x] Define discovery precedence for Web app roots:
       explicit `textus.web.descriptor`, project `.textus/config.*`, packaged
       component/subsystem metadata, and CAR/SAR `/web` roots.
 - [ ] Define how Web app assets are served:
       - framework assets under `/web/assets/...`
       - app-local CAR assets under
         `/web/{componentName}/{webAppName}/assets/...`.
-- [ ] Define template lookup precedence for route-local operation-specific
+- [x] Define template lookup precedence for route-local operation-specific
       templates, route-local common status templates, component/subsystem common
       templates, and descriptor-provided result templates.
 - [ ] Define how `/web` is included and discovered in CAR/SAR archives.
-- [ ] Add executable specifications for descriptor/template/asset discovery.
-- [ ] Update `textus-sample-app` to use the chosen canonical packaging layout,
+- [x] Add executable specifications for descriptor/template discovery and
+      Web app route/package mapping.
+- [x] Update `textus-sample-app` to use the chosen canonical packaging layout,
       replacing the current `config/` Web app layout.
-- [ ] Validate deployment with `textus-sample-app`:
+- [x] Validate deployment with `textus-sample-app`:
       post/search/get result templates, common error pages, public exposure,
-      admin policy, local assets, and optional island assets.
+      admin policy, and completed descriptor visibility.
 
 ### Inputs
 

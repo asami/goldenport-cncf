@@ -155,7 +155,24 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       app.completed.route shouldBe Some("/web/{component}/notice-board")
     }
 
-    "load /web/web.yaml from a directory descriptor root" in {
+    "discover /web/web-descriptor.yaml from a directory descriptor root" in {
+      val root = Files.createTempDirectory("cncf-web-descriptor-root")
+      val web = Files.createDirectories(root.resolve("web"))
+      Files.writeString(
+        web.resolve("web-descriptor.yaml"),
+        """web:
+          |  expose:
+          |    notice-board.notice.search-notices: public
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = WebDescriptor.load(root).toOption.get
+
+      descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
+    }
+
+    "keep /web/web.yaml as the secondary directory descriptor name" in {
       val root = Files.createTempDirectory("cncf-web-descriptor-root")
       val web = Files.createDirectories(root.resolve("web"))
       Files.writeString(
@@ -172,7 +189,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.expose("admin.system.ping") shouldBe WebDescriptor.Exposure.Protected
     }
 
-    "load /web/web.yaml from an archive descriptor root" in {
+    "discover /web/web-descriptor.yaml from an archive descriptor root" in {
       val path = Files.createTempFile("cncf-web-descriptor-archive", ".sar")
       val yaml =
         """web:
@@ -181,7 +198,7 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |""".stripMargin
       val zip = new ZipOutputStream(Files.newOutputStream(path))
       try {
-        zip.putNextEntry(new ZipEntry("web/web.yaml"))
+        zip.putNextEntry(new ZipEntry("web/web-descriptor.yaml"))
         zip.write(yaml.getBytes(StandardCharsets.UTF_8))
         zip.closeEntry()
       } finally {
@@ -191,6 +208,15 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       val descriptor = WebDescriptor.load(path).toOption.get
 
       descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
+    }
+
+    "complete CAR Web app package routes from descriptor app entries" in {
+      val app = WebDescriptor.App("notice-board").completedFor(Some("notice-board"))
+
+      app.effectiveRoot shouldBe "/web/notice-board"
+      app.route shouldBe Some("/web/notice-board/notice-board")
+      app.effectiveKind shouldBe "static-form"
+      app.matches("notice-board", Vector.empty) shouldBe true
     }
 
     "resolve the runtime descriptor path from RuntimeConfig" in {

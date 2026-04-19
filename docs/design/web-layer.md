@@ -89,7 +89,7 @@ client router is outside the Static Form Web App baseline.
 
 Static Form Web App resources need an explicit packaging and deployment model.
 
-The current `textus-sample-app` development shape still uses:
+The early `textus-sample-app` validation shape used:
 
 ```text
 .textus/config.yaml              runtime configuration
@@ -100,9 +100,10 @@ config/__500.html                common server-error page
 config/__error.html              common fallback error page
 ```
 
-When `textus.web.descriptor` points at `config/web-descriptor.yaml`, the
-descriptor parent directory acts as the static template root. This was useful
-for early validation, but it is not the target compatibility contract.
+When `textus.web.descriptor` pointed at `config/web-descriptor.yaml`, the
+descriptor parent directory acted as the static template root. This was useful
+for early validation, but it is not the target compatibility contract and is
+not preserved as a packaging compatibility rule.
 
 The canonical archive layout places Web application resources under `/web` in
 both CAR and SAR packages.
@@ -121,6 +122,14 @@ CAR `/web` packages a Component-local Web app. SAR `/web` packages a
 Subsystem-level Web app and may also include subsystem-owned app assets or
 composition pages. Runtime extraction should treat the archive `/web` directory
 as the Web app root.
+
+Descriptor discovery uses `web/web-descriptor.yaml` as the canonical packaged
+descriptor name. `web/web.yaml` is accepted as a secondary descriptor name for
+existing tests and small fixtures. When `textus.web.descriptor` points directly
+at a descriptor file, the descriptor parent directory is the static template
+root. When it points at a descriptor root, the runtime discovers the descriptor
+under the root `/web` directory and uses that `/web` directory as the template
+root.
 
 At runtime, Component-local CAR resources are mounted under the component URL
 scope:
@@ -245,6 +254,18 @@ directly under `/web/notice-board`:
 /web/notice-board/__400.html
 /web/__500.html
 ```
+
+Lookup precedence is executable-speced as:
+
+1. Route-local operation-specific templates, such as
+   `/web/notice-board/notice/post-notice__200.html` and
+   `/web/notice-board/post-notice__200.html`.
+2. Route-local common status/outcome templates, such as
+   `/web/notice-board/notice/__200.html` and `/web/notice-board/__200.html`.
+3. Component/subsystem common templates under the template root, such as
+   `/web/post-notice__200.html` and `/web/__200.html`.
+4. Descriptor-provided `resultTemplate`.
+5. Built-in rendering.
 
 The `config/` shape should be migrated to the canonical `/web` layout rather
 than preserved as a compatibility packaging contract. Packaged and generated

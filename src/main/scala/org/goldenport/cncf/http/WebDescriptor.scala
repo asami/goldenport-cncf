@@ -266,11 +266,10 @@ object WebDescriptor {
     if (!Files.exists(path))
       Consequence.resourceNotFound(s"web descriptor path does not exist: ${path}")
     else if (Files.isDirectory(path)) {
-      val file = path.resolve("web").resolve("web.yaml")
-      if (Files.isRegularFile(file))
-        load(file)
-      else
-        Consequence.resourceNotFound(s"web descriptor not found: ${file}")
+      _descriptor_files(path).find(Files.isRegularFile(_)) match {
+        case Some(file) => load(file)
+        case None => Consequence.resourceNotFound(s"web descriptor not found: ${path.resolve("web")}")
+      }
     } else if (_is_archive_file(path)) {
       _load_archive_file(path)
     } else {
@@ -511,14 +510,19 @@ object WebDescriptor {
     name.endsWith(".sar") || name.endsWith(".car") || name.endsWith(".zip")
   }
 
+  private def _descriptor_files(root: Path): Vector[Path] =
+    Vector(
+      root.resolve("web").resolve("web-descriptor.yaml"),
+      root.resolve("web").resolve("web.yaml")
+    )
+
   private def _load_archive_file(path: Path): Consequence[WebDescriptor] = {
     val uri = URI.create(s"jar:${path.toUri}")
     Using.resource(FileSystems.newFileSystem(uri, Map.empty[String, String].asJava)) { fs =>
-      val file = fs.getPath("/").resolve("web").resolve("web.yaml")
-      if (Files.isRegularFile(file))
-        load(file)
-      else
-        Consequence.resourceNotFound(s"web descriptor not found in archive: ${path}")
+      _descriptor_files(fs.getPath("/")).find(Files.isRegularFile(_)) match {
+        case Some(file) => load(file)
+        case None => Consequence.resourceNotFound(s"web descriptor not found in archive: ${path}")
+      }
     }
   }
 }
