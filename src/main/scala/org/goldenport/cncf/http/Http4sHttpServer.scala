@@ -148,12 +148,22 @@ final class Http4sHttpServer(
         _component_manual_service(app, service)
       case GET -> Root / "web" / app / "manual" / service / operation =>
         _component_manual_operation(app, service, operation)
+      case GET -> Root / "web" =>
+        _web_route_alias(Vector("web")).flatMap {
+          case Some(response) => IO.pure(response)
+          case None => IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Web app route not found"))
+        }
       case GET -> Root / "web" / component / webApp / "assets" / asset =>
         _web_app_asset(component, webApp, asset)
+      case GET -> Root / "web" / app / "assets" / asset =>
+        _web_route_alias_asset(app, asset)
       case GET -> Root / "web" / component / webApp / page =>
         _component_web_app(component, webApp, Vector(page))
       case GET -> Root / "web" / app =>
-        _static_form_app(app, Vector.empty)
+        _web_route_alias(Vector("web", app)).flatMap {
+          case Some(response) => IO.pure(response)
+          case None => _static_form_app(app, Vector.empty)
+        }
       case GET -> Root / "web" / first / second =>
         _component_web_app_or_static_form_app(first, second)
       case GET -> Root / "form" / app =>
@@ -357,6 +367,31 @@ final class Http4sHttpServer(
           IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component Web app asset not found"))
       }
 
+  private[http] def _web_route_alias(
+    path: Vector[String]
+  ): IO[Option[HResponse[IO]]] =
+    engine.webDescriptor.webRouteFor(path) match {
+      case Some(route) =>
+        _component_web_app(
+          route.target.normalizedComponent,
+          route.target.normalizedApp,
+          route.remainingPath
+        ).map(Some(_))
+      case None =>
+        IO.pure(None)
+    }
+
+  private[http] def _web_route_alias_asset(
+    app: String,
+    assetName: String
+  ): IO[HResponse[IO]] =
+    engine.webDescriptor.webRouteFor(Vector("web", app)) match {
+      case Some(route) if route.remainingPath.isEmpty =>
+        _web_app_asset(route.target.normalizedComponent, route.target.normalizedApp, assetName)
+      case _ =>
+        _static_form_app(app, Vector("assets", assetName))
+    }
+
   private[http] def _component_web_app(
     componentName: String,
     webAppName: String,
@@ -387,8 +422,12 @@ final class Http4sHttpServer(
   ): IO[HResponse[IO]] =
     if (_component_exists(first) && _web_app_static_html_content(second, Vector.empty).nonEmpty)
       _component_web_app(first, second, Vector.empty)
-    else
+    else engine.webDescriptor.webRouteFor(Vector("web", first, second)) match {
+      case Some(route) =>
+        _component_web_app(route.target.normalizedComponent, route.target.normalizedApp, route.remainingPath)
+      case None =>
       _static_form_app(first, Vector(second))
+    }
 
   private def _component_admin(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdmin(engine.runtimeSubsystem, app, engine.webDescriptor) match {

@@ -87,6 +87,18 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |    - name: console
           |      path: /web/console
           |      kind: console
+          |
+          |  routes:
+          |    - path: /web/notice-board
+          |      kind: alias
+          |      target:
+          |        component: notice-board
+          |        app: notice-board
+          |    - path: /web
+          |      kind: default
+          |      target:
+          |        component: notice-board
+          |        app: notice-board
           |""".stripMargin,
         StandardCharsets.UTF_8
       )
@@ -132,6 +144,14 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.adminFields("notice_board", "data", "audit").map(_.name) shouldBe Vector("id", "action", "actor")
       descriptor.apps.map(_.name) shouldBe Vector("manual", "console")
       descriptor.apps.map(_.path) shouldBe Vector("/web/manual", "/web/console")
+      descriptor.routes.map(_.path) shouldBe Vector("/web/notice-board", "/web")
+      descriptor.routes.map(_.kind) shouldBe Vector(WebDescriptor.RouteKind.Alias, WebDescriptor.RouteKind.Default)
+      descriptor.routes.head.target.component shouldBe "notice-board"
+      descriptor.routes.head.target.app shouldBe "notice-board"
+      descriptor.webRouteFor(Vector("web", "notice-board")).map(_.target.app) shouldBe Some("notice-board")
+      descriptor.webRouteFor(Vector("web", "notice-board", "about")).map(_.remainingPath) shouldBe Some(Vector("about"))
+      descriptor.webRouteFor(Vector("web", "notice-board", "about")).map(_.kind) shouldBe Some(WebDescriptor.RouteKind.Alias)
+      descriptor.webRouteFor(Vector("web", "other")).map(_.kind) shouldBe Some(WebDescriptor.RouteKind.Default)
     }
 
     "complete obvious Static Form Web app defaults from a minimal app entry" in {
@@ -217,6 +237,69 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       app.route shouldBe Some("/web/notice-board/notice-board")
       app.effectiveKind shouldBe "static-form"
       app.matches("notice-board", Vector.empty) shouldBe true
+    }
+
+    "reject conflicting Web route aliases during descriptor load" in {
+      val path = Files.createTempFile("cncf-web-descriptor-route-conflict", ".yaml")
+      Files.writeString(
+        path,
+        """web:
+          |  routes:
+          |    - path: /web/board
+          |      target:
+          |        component: notice-board
+          |        app: notice-board
+          |    - path: /web/board
+          |      target:
+          |        component: inventory
+          |        app: catalog
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val result = WebDescriptor.load(path)
+
+      result shouldBe a[org.goldenport.Consequence.Failure[_]]
+      result match {
+        case org.goldenport.Consequence.Failure(conclusion) =>
+          conclusion.show should include ("web route conflict")
+          conclusion.show should include ("/web/board")
+        case _ =>
+          fail("expected descriptor conflict failure")
+      }
+    }
+
+    "deduplicate identical Web route aliases during descriptor load" in {
+      val path = Files.createTempFile("cncf-web-descriptor-route-duplicate", ".yaml")
+      Files.writeString(
+        path,
+        """web:
+          |  routes:
+          |    - path: /web/board
+          |      target:
+          |        component: notice-board
+          |        app: notice-board
+          |    - path: /web/board
+          |      target:
+          |        component: notice-board
+          |        app: notice-board
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = WebDescriptor.load(path).toOption.get
+
+      descriptor.routes.size shouldBe 1
+      descriptor.routes.head.normalizedPathText shouldBe "/web/board"
+    }
+
+    "derive implicit SAR routes when a Web app matches one component among several candidates" in {
+      val descriptor = WebDescriptor(
+        apps = Vector(WebDescriptor.App("notice-board"))
+      ).withImplicitSarRoutes(Vector("admin", "NoticeBoard", "metrics"))
+
+      descriptor.routes.map(_.path) shouldBe Vector("/web/notice-board", "/web")
+      descriptor.routes.map(_.target.component).distinct shouldBe Vector("notice-board")
     }
 
     "resolve the runtime descriptor path from RuntimeConfig" in {

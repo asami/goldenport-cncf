@@ -913,8 +913,9 @@ owns the portal route, while Component apps keep their component-scoped routes.
       - support the same alias behavior for an implicit SAR created from a
         single CAR.
       - reject or require explicit resolution for conflicting aliases.
-      Implementation remains a separate task; canonical component routes are
-      available now.
+      Explicit descriptor aliases and implicit SAR convenience aliases are
+      implemented when the target is unambiguous by single component or a unique
+      component/Web-app name match.
 - [x] Migrate the current `config/web-descriptor.yaml` and `config/*.html`
       validation shape to the canonical `/web` layout.
       - Do not preserve `config/` as a packaging compatibility contract.

@@ -3,13 +3,14 @@ package org.goldenport.cncf.http
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.Consequence
 import org.goldenport.protocol.{Request, Response}
+import org.goldenport.cncf.component.ComponentOrigin
 import org.goldenport.cncf.subsystem.Subsystem
 
 /*
  * @since   Jan.  8, 2026
  *  version Jan.  9, 2026
  *  version Mar. 19, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class HttpExecutionEngine(
@@ -21,6 +22,7 @@ final class HttpExecutionEngine(
       .resolve(subsystem)
       .toOption
       .getOrElse(WebDescriptor.empty))
+      .withImplicitSarRoutes(_application_component_names)
 
   def execute(req: HttpRequest): HttpResponse =
     subsystem.executeHttp(req)
@@ -29,6 +31,14 @@ final class HttpExecutionEngine(
     subsystem.execute(req)
 
   def runtimeSubsystem: Subsystem = subsystem
+
+  private def _application_component_names: Vector[String] = {
+    val appComponents = subsystem.components.filterNot(_.origin == ComponentOrigin.Builtin)
+    if (appComponents.nonEmpty)
+      appComponents.map(_.name)
+    else
+      subsystem.components.map(_.name)
+  }
 }
 
 object HttpExecutionEngine {

@@ -4060,11 +4060,13 @@ object StaticFormAppRenderer {
        |    <tr><th>Authorization entries</th><td>${descriptor.authorization.size}</td></tr>
        |    <tr><th>Form entries</th><td>${descriptor.form.size}</td></tr>
        |    <tr><th>App entries</th><td>${descriptor.apps.size}</td></tr>
+       |    <tr><th>Route entries</th><td>${descriptor.routes.size}</td></tr>
        |    <tr><th>Admin entries</th><td>${descriptor.admin.size}</td></tr>
        |  </tbody>
        |</table></div>
        |<p><a href="${_escape(descriptorPath)}">Completed descriptor JSON</a></p>
        |${_web_descriptor_app_list(descriptor)}
+       |${_web_descriptor_route_list(descriptor)}
        |${_web_descriptor_exposure_list(descriptor)}
        |${_web_descriptor_admin_list(descriptor)}""".stripMargin
 
@@ -4144,6 +4146,9 @@ object StaticFormAppRenderer {
         descriptor.apps.map { app =>
           _web_descriptor_app_json(if (completed) app.completedFor(componentSegment) else app)
         }*
+      ),
+      "routes" -> Json.arr(
+        descriptor.routes.map(_web_descriptor_route_json)*
       )
     ).spaces2
 
@@ -4177,6 +4182,33 @@ object StaticFormAppRenderer {
       }.mkString("\n")
       s"""<h3>Apps</h3><div class="table-responsive"><table class="table table-sm">
          |  <thead><tr><th>Name</th><th>Path</th><th>Root</th><th>Route</th><th>Kind</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
+
+  private def _web_descriptor_route_json(
+    route: WebDescriptor.Route
+  ): Json =
+    Json.obj(
+      "path" -> Json.fromString(route.path),
+      "kind" -> Json.fromString(route.kind.name),
+      "target" -> Json.obj(
+        "component" -> Json.fromString(route.target.component),
+        "app" -> Json.fromString(route.target.app)
+      )
+    )
+
+  private def _web_descriptor_route_list(
+    descriptor: WebDescriptor
+  ): String =
+    if (descriptor.routes.isEmpty) {
+      "<p>No subsystem Web route aliases are configured.</p>"
+    } else {
+      val rows = descriptor.routes.map { route =>
+        s"""<tr><td><code>${_escape(route.path)}</code></td><td>${_escape(route.kind.name)}</td><td><code>${_escape(route.target.component)}</code></td><td><code>${_escape(route.target.app)}</code></td></tr>"""
+      }.mkString("\n")
+      s"""<h3>Routes</h3><div class="table-responsive"><table class="table table-sm">
+         |  <thead><tr><th>Path</th><th>Kind</th><th>Target component</th><th>Target app</th></tr></thead>
          |  <tbody>${rows}</tbody>
          |</table></div>""".stripMargin
     }

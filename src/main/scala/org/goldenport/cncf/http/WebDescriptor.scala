@@ -22,6 +22,7 @@ final case class WebDescriptor(
   authorization: Map[String, WebDescriptor.Authorization] = Map.empty,
   form: Map[String, WebDescriptor.Form] = Map.empty,
   apps: Vector[WebDescriptor.App] = Vector.empty,
+  routes: Vector[WebDescriptor.Route] = Vector.empty,
   admin: Map[String, WebDescriptor.AdminSurface] = Map.empty
 ) {
   def hasControls: Boolean =
@@ -29,6 +30,7 @@ final case class WebDescriptor(
       authorization.nonEmpty ||
       form.nonEmpty ||
       apps.nonEmpty ||
+      routes.nonEmpty ||
       admin.nonEmpty ||
       defaultView != WebTableColumnResolver.defaultViewName ||
       auth != WebDescriptor.Auth()
@@ -51,6 +53,45 @@ final case class WebDescriptor(
       true
     else
       apps.exists(_.matches(name, path))
+
+  def webRouteFor(path: Vector[String]): Option[WebDescriptor.ResolvedRoute] =
+    routes.view
+      .flatMap(route => route.resolve(path).map(route.normalizedPath.length -> _))
+      .toVector
+      .sortBy { case (length, _) => -length }
+      .headOption
+      .map(_._2)
+
+  def withImplicitSarRoutes(componentNames: Vector[String]): WebDescriptor =
+    if (routes.nonEmpty || apps.size != 1)
+      this
+    else {
+      val app = apps.head
+      _implicit_sar_component_name(app, componentNames) match {
+        case Some(componentName) =>
+          val target = WebDescriptor.RouteTarget(componentName, app.name)
+          copy(routes = Vector(
+            WebDescriptor.Route(s"/web/${app.normalizedName}", target, WebDescriptor.RouteKind.Alias),
+            WebDescriptor.Route("/web", target, WebDescriptor.RouteKind.Default)
+          ))
+        case None =>
+          this
+      }
+    }
+
+  private def _implicit_sar_component_name(
+    app: WebDescriptor.App,
+    componentNames: Vector[String]
+  ): Option[String] = {
+    def normalize(value: String): String =
+      org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(value)
+    val matched = componentNames.filter(name => normalize(name) == app.normalizedName)
+    matched match {
+      case Vector(name) => Some(normalize(name))
+      case _ if componentNames.size == 1 => componentNames.headOption.map(normalize)
+      case _ => None
+    }
+  }
 
   def adminTotalCountPolicy(
     componentName: String,
@@ -260,6 +301,74 @@ object WebDescriptor {
     }
   }
 
+  enum RouteKind {
+    case Alias
+    case Default
+
+    def name: String =
+      this match {
+        case Alias => "alias"
+        case Default => "default"
+      }
+  }
+
+  object RouteKind {
+    def parse(value: String): Option[RouteKind] =
+      value.trim.toLowerCase match {
+        case "alias" => Some(RouteKind.Alias)
+        case "default" => Some(RouteKind.Default)
+        case _ => None
+      }
+  }
+
+  final case class RouteTarget(
+    component: String,
+    app: String
+  ) {
+    def normalizedComponent: String =
+      _normalize_app_segment(component)
+
+    def normalizedApp: String =
+      _normalize_app_segment(app)
+  }
+
+  final case class Route(
+    path: String,
+    target: RouteTarget,
+    kind: RouteKind = RouteKind.Alias
+  ) {
+    def normalizedPath: Vector[String] =
+      path.split("/").toVector.filter(_.nonEmpty).map(_normalize_app_segment)
+
+    def normalizedPathText: String =
+      "/" + normalizedPath.mkString("/")
+
+    def conflictSignature: (RouteKind, String, String) =
+      (kind, target.normalizedComponent, target.normalizedApp)
+
+    def resolve(requestPath: Vector[String]): Option[ResolvedRoute] = {
+      val routePath = normalizedPath
+      val normalizedRequest = requestPath.map(_normalize_app_segment)
+      Option.when(
+        routePath.nonEmpty &&
+          normalizedRequest.startsWith(routePath) &&
+          routePath.headOption.contains("web")
+      ) {
+        ResolvedRoute(
+          target,
+          kind,
+          normalizedRequest.drop(routePath.length)
+        )
+      }
+    }
+  }
+
+  final case class ResolvedRoute(
+    target: RouteTarget,
+    kind: RouteKind,
+    remainingPath: Vector[String]
+  )
+
   val empty: WebDescriptor = WebDescriptor()
 
   def load(path: Path): Consequence[WebDescriptor] =
@@ -275,7 +384,7 @@ object WebDescriptor {
     } else {
       DescriptorRecordLoader.load(path).flatMap { records =>
         records.headOption match {
-          case Some(record) => Consequence.success(fromRecord(record))
+          case Some(record) => _validate(fromRecord(record), path)
           case None => Consequence.resourceInvalid(s"web descriptor is empty: ${path}")
         }
       }
@@ -292,8 +401,40 @@ object WebDescriptor {
       authorization = _authorization(web),
       form = _form(web),
       apps = _apps(web),
+      routes = _routes(web),
       admin = _admin(web)
     )
+  }
+
+  private def _validate(
+    descriptor: WebDescriptor,
+    path: Path
+  ): Consequence[WebDescriptor] =
+    _validate_routes(descriptor.routes, path).map { routes =>
+      descriptor.copy(routes = routes)
+    }
+
+  private def _validate_routes(
+    routes: Vector[Route],
+    path: Path
+  ): Consequence[Vector[Route]] = {
+    val conflicts = routes
+      .groupBy(_.normalizedPathText)
+      .toVector
+      .flatMap {
+        case (routePath, xs) =>
+          val signatures = xs.map(_.conflictSignature).distinct
+          Option.when(signatures.size > 1)(routePath -> xs)
+      }
+    conflicts.headOption match {
+      case Some((routePath, xs)) =>
+        val targets = xs.map { route =>
+          s"${route.kind.name}:${route.target.normalizedComponent}/${route.target.normalizedApp}"
+        }.distinct.mkString(", ")
+        Consequence.resourceInvalid(s"web route conflict in ${path}: ${routePath} -> ${targets}")
+      case None =>
+        Consequence.success(routes.distinctBy(route => route.normalizedPathText -> route.conflictSignature))
+    }
   }
 
   private def _expose(record: Record): Map[String, Exposure] =
@@ -396,6 +537,31 @@ object WebDescriptor {
         route = record.getString("route").map(_.trim).filter(_.nonEmpty)
       )
     }
+
+  private def _routes(record: Record): Vector[Route] =
+    record.getAny("routes") match {
+      case Some(xs: Seq[?]) => xs.toVector.flatMap(_any_to_record).flatMap(_route)
+      case Some(xs: java.util.List[?]) => xs.asScala.toVector.flatMap(_any_to_record).flatMap(_route)
+      case _ => Vector.empty
+    }
+
+  private def _route(record: Record): Option[Route] =
+    for {
+      path <- record.getString("path").map(_.trim).filter(_.nonEmpty)
+      target <- _record_value(record, "target").flatMap(_route_target)
+    } yield {
+      Route(
+        path = path,
+        target = target,
+        kind = record.getString("kind").flatMap(RouteKind.parse).getOrElse(RouteKind.Alias)
+      )
+    }
+
+  private def _route_target(record: Record): Option[RouteTarget] =
+    for {
+      component <- record.getString("component").map(_.trim).filter(_.nonEmpty)
+      app <- record.getString("app").map(_.trim).filter(_.nonEmpty)
+    } yield RouteTarget(component, app)
 
   private def _admin(record: Record): Map[String, AdminSurface] =
     _record_value(record, "admin")

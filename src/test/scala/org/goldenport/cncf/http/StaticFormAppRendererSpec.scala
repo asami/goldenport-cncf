@@ -1087,6 +1087,86 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       missingComponent.status.code shouldBe 404
     }
 
+    "serve static Web app HTML and assets through descriptor route aliases" in {
+      val root = Files.createTempDirectory("cncf-web-alias-root-")
+      Files.writeString(
+        root.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: notice-board
+          |  routes:
+          |    - path: /web/board
+          |      kind: alias
+          |      target:
+          |        component: notice-board
+          |        app: notice-board
+          |    - path: /web
+          |      kind: default
+          |      target:
+          |        component: notice-board
+          |        app: notice-board
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.createDirectories(root.resolve("notice-board").resolve("assets"))
+      Files.writeString(root.resolve("notice-board").resolve("index.html"), "<h1>Aliased Notice Board</h1>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("notice-board").resolve("about.html"), "<h1>Aliased About</h1>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("notice-board").resolve("assets").resolve("app.css"), ".alias-notice-board { color: #14532d; }\n", StandardCharsets.UTF_8)
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val index = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board"))).unsafeRunSync()
+      val about = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/about"))).unsafeRunSync()
+      val asset = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/assets/app.css"))).unsafeRunSync()
+      val default = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
+
+      index.status.code shouldBe 200
+      index.as[String].unsafeRunSync() should include ("Aliased Notice Board")
+      about.status.code shouldBe 200
+      about.as[String].unsafeRunSync() should include ("Aliased About")
+      asset.status.code shouldBe 200
+      asset.as[String].unsafeRunSync() should include ("alias-notice-board")
+      default.status.code shouldBe 200
+      default.as[String].unsafeRunSync() should include ("Aliased Notice Board")
+    }
+
+    "serve single component Web app through implicit SAR convenience aliases" in {
+      val root = Files.createTempDirectory("cncf-web-implicit-alias-root-")
+      Files.writeString(root.resolve("web-descriptor.yaml"), "web:\n  apps:\n    - name: notice-board\n", StandardCharsets.UTF_8)
+      Files.createDirectories(root.resolve("notice-board").resolve("assets"))
+      Files.writeString(root.resolve("notice-board").resolve("index.html"), "<h1>Implicit Notice Board</h1>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("notice-board").resolve("assets").resolve("app.css"), ".implicit-notice-board { color: #14532d; }\n", StandardCharsets.UTF_8)
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        )),
+        ConfigurationTrace.empty
+      )
+      val component = TestComponentFactory.create("notice_board", Protocol.empty)
+      val subsystem = new Subsystem(
+        name = "implicit-web",
+        configuration = configuration
+      ).add(Vector(component))
+      val engine = new HttpExecutionEngine(subsystem)
+      val server = new Http4sHttpServer(engine)
+
+      engine.webDescriptor.routes.map(_.path) shouldBe Vector("/web/notice-board", "/web")
+      val alias = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notice-board"))).unsafeRunSync()
+      val default = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
+      val asset = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/notice-board/assets/app.css"))).unsafeRunSync()
+
+      alias.status.code shouldBe 200
+      alias.as[String].unsafeRunSync() should include ("Implicit Notice Board")
+      default.status.code shouldBe 200
+      default.as[String].unsafeRunSync() should include ("Implicit Notice Board")
+      asset.status.code shouldBe 200
+      asset.as[String].unsafeRunSync() should include ("implicit-notice-board")
+    }
+
     "load Static Form Web App descriptor, templates, and assets from a CAR archive Web root" in {
       val path = _web_archive_fixture(
         "sample.car",
