@@ -419,6 +419,34 @@ The first widget contracts are:
 an anchor for `GET` actions and an inline POST form for non-GET actions. If the
 referenced action has no `href`, it renders nothing.
 
+Command operations keep the CQRS default: command submission is asynchronous
+unless the operation explicitly chooses a synchronous mode. A plain HTML Form
+submission that receives a JobId exposes job metadata and an await action:
+
+```text
+result.job.id
+result.job.href
+result.action.await.name
+result.action.await.label
+result.action.await.href
+result.action.await.method
+```
+
+When the command result does not provide any explicit actions,
+`result.action.primary` points to the same await action. This gives Static Form
+Apps a synchronous-feeling path without making command execution itself
+synchronous. The user may submit the await action only when they need the final
+operation result.
+
+The baseline await endpoint is:
+
+```text
+POST /form/{component}/{service}/{operation}/jobs/{jobId}/await
+```
+
+It calls the framework job-control operation and renders the final result using
+the original operation result-page convention.
+
 The result page property set is:
 
 - `component`, `service`, `operation`, `operation.label`
@@ -426,6 +454,8 @@ The result page property set is:
 - submitted form values under `form.*`
 - `result.status`, `result.ok`, `result.contentType`, `result.body`
 - extracted result metadata such as `result.id`
+- extracted asynchronous command metadata such as `result.job.id` and
+  `result.job.href`
 - extracted result outcome/message metadata as `result.outcome` and
   `result.message`
 - extracted action metadata as `result.actions.count`, `result.action.0.*`,

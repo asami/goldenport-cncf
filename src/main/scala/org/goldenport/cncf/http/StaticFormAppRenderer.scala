@@ -81,6 +81,7 @@ object StaticFormAppRenderer {
 
     def nextPageProperties: FormPageProperties =
       val formValues = page.values.map { case (key, value) => s"form.${key}" -> value }
+      val metadata = FormResultMetadata.fromBody(body)
       val resultValues = Map(
         "component" -> componentName,
         "service" -> serviceName,
@@ -94,7 +95,7 @@ object StaticFormAppRenderer {
         "paging.pageSize" -> page.values.getOrElse("paging.pageSize", "20"),
         "paging.chunkSize" -> page.values.getOrElse("paging.chunkSize", "1000"),
         "paging.href" -> page.values.getOrElse("paging.href", _default_paging_href)
-      ) ++ FormResultMetadata.fromBody(body).toTemplateValues
+      ) ++ metadata.toTemplateValues ++ _job_action_values(metadata)
       val base = page.copy(values = page.values ++ formValues ++ resultValues)
       if (status >= 400)
         base
@@ -105,6 +106,35 @@ object StaticFormAppRenderer {
 
     private def _default_paging_href: String =
       s"/form/${componentName}/${serviceName}/${operationName}/result?page={page}&pageSize={pageSize}"
+
+    private def _job_action_values(metadata: FormResultMetadata): Map[String, String] =
+      metadata.jobId match {
+        case Some(jobid) =>
+          val href = s"/form/${componentName}/${serviceName}/${operationName}/jobs/${jobid}/await"
+          val common = Map(
+            "result.job.href" -> href,
+            "result.action.await.name" -> "await",
+            "result.action.await.label" -> "Check result",
+            "result.action.await.href" -> href,
+            "result.action.await.method" -> "POST"
+          )
+          if (metadata.actions.isEmpty)
+            common ++ Map(
+              "result.actions.count" -> "1",
+              "result.action.0.name" -> "await",
+              "result.action.0.label" -> "Check result",
+              "result.action.0.href" -> href,
+              "result.action.0.method" -> "POST",
+              "result.action.primary.name" -> "await",
+              "result.action.primary.label" -> "Check result",
+              "result.action.primary.href" -> href,
+              "result.action.primary.method" -> "POST"
+            )
+          else
+            common
+        case None =>
+          Map.empty
+      }
   }
   final case class TableColumn(
     name: String,

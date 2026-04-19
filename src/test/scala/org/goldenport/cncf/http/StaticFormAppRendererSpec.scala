@@ -1542,6 +1542,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         "result.outcome" -> "created",
         "result.message" -> "Notice created"
       )
+      FormResultMetadata.fromBody("cncf-job-job-1776566553930-2NnWI1ze2dLoQU4t6hALAa").toTemplateValues shouldBe Map(
+        "result.job.id" -> "cncf-job-job-1776566553930-2NnWI1ze2dLoQU4t6hALAa"
+      )
+      FormResultMetadata.fromBody("""{"jobId":"cncf-job-job-1"}""").toTemplateValues shouldBe Map(
+        "result.job.id" -> "cncf-job-job-1"
+      )
       FormResultMetadata.fromBody(
         """{"actions":[{"name":"detail","label":"Open detail","href":"/web/notice-board/admin/entities/notice/notice_1","method":"GET"}]}"""
       ).toTemplateValues should contain allOf (
@@ -2059,6 +2065,36 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       submitted.getString("csrf") shouldBe None
       submitted.getString("version") shouldBe None
       submitted.getString("etag") shouldBe None
+    }
+
+    "await asynchronous command job result through the form job route" in {
+      val subsystem = _aggregate_http_fixture_subsystem()
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(new StaticWebOperationDispatcher(
+        HttpResponse.Text(
+          HttpStatus.Ok,
+          ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+          Bag.text("created:notice_1", StandardCharsets.UTF_8)
+        )
+      ))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+
+      val html = server
+        ._await_operation_form_job(
+          _post_form_request("/form/notice-board/notice/post-notice/jobs/cncf-job-job-1/await", ""),
+          "notice-board",
+          "notice",
+          "post-notice",
+          "cncf-job-job-1"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      dispatcher.paths.lastOption shouldBe Some("/job_control/job/await_job_result")
+      dispatcher.forms.lastOption.flatMap(_.getString("id")) shouldBe Some("cncf-job-job-1")
+      html should include ("created:notice_1")
+      html should include ("result.id")
+      html should include ("notice_1")
     }
 
     "execute aggregate create/update actions through an HTTP ingress-capable component" in {
@@ -3824,6 +3860,34 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus-action-link")
       html should not include ("<textus:action-link")
       html should not include ("result.action.missing")
+    }
+
+    "render await action link from asynchronous command job result" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice"
+        ),
+        200,
+        "text/plain",
+        "cncf-job-job-1776566553930-2NnWI1ze2dLoQU4t6hALAa"
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <p>${result.job.id}</p>
+          |  <textus:action-link source="result.action.primary" class="btn btn-primary"></textus:action-link>
+          |  <textus-action-link source="result.action.await" class="btn btn-outline-primary"></textus-action-link>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("cncf-job-job-1776566553930-2NnWI1ze2dLoQU4t6hALAa")
+      html should include ("""<form method="post" action="/form/notice-board/notice/post-notice/jobs/cncf-job-job-1776566553930-2NnWI1ze2dLoQU4t6hALAa/await" class="d-inline"><button type="submit" class="btn btn-primary">Check result</button></form>""")
+      html should include ("""<form method="post" action="/form/notice-board/notice/post-notice/jobs/cncf-job-job-1776566553930-2NnWI1ze2dLoQU4t6hALAa/await" class="d-inline"><button type="submit" class="btn btn-outline-primary">Check result</button></form>""")
+      html should not include ("<textus:action-link")
+      html should not include ("<textus-action-link")
     }
 
     "render textus result table without total count" in {

@@ -314,6 +314,11 @@ functionality.
       notation and compatible `textus-action-link` notation.
 - [x] Extract operation result metadata for static pages: `result.id`,
       `result.outcome`, `result.message`, and `result.action.*`.
+- [x] Treat Command Form submission as asynchronous by default and expose
+      JobId-based `result.job.*` / `result.action.await.*` metadata for
+      explicit result waiting.
+- [x] Add Form job await route
+      `/form/{component}/{service}/{operation}/jobs/{jobId}/await`.
 - [x] Support paging properties and continuation-backed paging for form
       results.
 - [x] Support optional/required/disabled total count policy for admin list

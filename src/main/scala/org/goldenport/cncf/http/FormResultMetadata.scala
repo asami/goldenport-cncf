@@ -14,6 +14,7 @@ import org.goldenport.cncf.naming.NamingConventions
  */
 final case class FormResultMetadata(
   id: Option[String] = None,
+  jobId: Option[String] = None,
   outcome: Option[String] = None,
   message: Option[String] = None,
   actions: Vector[FormResultMetadata.Action] = Vector.empty
@@ -21,6 +22,7 @@ final case class FormResultMetadata(
   def toTemplateValues: Map[String, String] = {
     val scalar =
       id.map("result.id" -> _).toMap ++
+        jobId.map("result.job.id" -> _).toMap ++
         outcome.map("result.outcome" -> _).toMap ++
         message.map("result.message" -> _).toMap ++
         (if (actions.nonEmpty) Map("result.actions.count" -> actions.length.toString) else Map.empty)
@@ -62,13 +64,19 @@ object FormResultMetadata {
     fromBody(response.getString.getOrElse(""))
 
   def fromBody(body: String): FormResultMetadata =
-    _json_metadata_or_empty(body).getOrElse(FormResultMetadata(id = _scalar_id(body)))
+    _json_metadata_or_empty(body).getOrElse(
+      FormResultMetadata(
+        id = _scalar_id(body),
+        jobId = _scalar_job_id(body)
+      )
+    )
 
   private def _json_metadata_or_empty(body: String): Option[FormResultMetadata] =
     parse(body).toOption.map { json =>
       val cursor = json.hcursor
       FormResultMetadata(
         id = _first_string(cursor, Vector("id", "result.id", "item.id")),
+        jobId = _first_string(cursor, Vector("jobId", "job-id", "job.id", "result.jobId", "result.job-id", "result.job.id")),
         outcome = _first_string(cursor, Vector("outcome", "result.outcome")),
         message = _first_string(cursor, Vector("message", "result.message", "error.message")),
         actions = _actions(cursor)
@@ -80,6 +88,9 @@ object FormResultMetadata {
       case _ :: id :: Nil => Some(id.trim).filter(_.nonEmpty)
       case _ => None
     }
+
+  private def _scalar_job_id(body: String): Option[String] =
+    Some(body.trim).filter(_.startsWith("cncf-job-")).filter(_.nonEmpty)
 
   private def _first_string(
     cursor: HCursor,

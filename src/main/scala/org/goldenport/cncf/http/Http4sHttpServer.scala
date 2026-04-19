@@ -161,6 +161,8 @@ final class Http4sHttpServer(
         _operation_form_result(req, app, service, operation)
       case req @ GET -> Root / "form" / app / service / operation / "continue" / id =>
         _operation_form_continue(req, app, service, operation, id)
+      case req @ POST -> Root / "form" / app / service / operation / "jobs" / jobId / "await" =>
+        _await_operation_form_job(req, app, service, operation, jobId)
       case req @ POST -> Root / "form" / app / "admin" / "entities" / entity / "create" =>
         _submit_component_admin_entity_create(req, app, entity)
       case req @ POST -> Root / "form" / app / "admin" / "entities" / entity / id / "update" =>
@@ -1250,6 +1252,50 @@ final class Http4sHttpServer(
       html
     }
   }
+
+  private[http] def _await_operation_form_job(
+    req: org.http4s.Request[IO],
+    app: String,
+    service: String,
+    operation: String,
+    jobId: String
+  ): IO[HResponse[IO]] =
+    if (!_is_form_enabled(app, service, operation)) {
+      IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form not found"))
+    } else if (!_is_web_authorized(app, service, operation, Some(req))) {
+      _forbidden()
+    } else {
+      val started = System.nanoTime()
+      val values = Map(
+        "result.job.id" -> jobId,
+        "result.job.href" -> s"/form/${app}/${service}/${operation}/jobs/${jobId}/await"
+      )
+      val res = _dispatch_operation(
+        "job_control",
+        "job",
+        "await_job_result",
+        HttpRequest.fromPath(
+          method = HttpRequest.POST,
+          path = "/job_control/job/await_job_result",
+          query = Record.empty,
+          header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value)),
+          form = Record.data("id" -> jobId)
+        )
+      )
+      val page = StaticFormAppRenderer.renderFormResult(
+        _form_result_properties(app, service, operation, res, values),
+        _form_result_static_template(app, service, operation, res.code)
+      )
+      _html(page).map { html =>
+        RuntimeDashboardMetrics.recordHtmlRequest(
+          req.method.name,
+          req.uri.path.renderString,
+          res.code,
+          (System.nanoTime() - started) / 1000000L
+        )
+        html
+      }
+    }
 
   private def _form_result_properties(
     app: String,
