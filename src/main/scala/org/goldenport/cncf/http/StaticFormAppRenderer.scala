@@ -19,7 +19,7 @@ import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 18, 2026
+ * @version Apr. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -599,8 +599,11 @@ object StaticFormAppRenderer {
       "csrf"
     )
 
-  private def _is_hidden_form_context_key(key: String): Boolean =
+  def isHiddenFormContextKey(key: String): Boolean =
     _hidden_form_context_exact_keys.contains(key) || key.startsWith("search.")
+
+  private def _is_hidden_form_context_key(key: String): Boolean =
+    isHiddenFormContextKey(key)
 
   private def _hidden_form_context_values(values: Map[String, String]): Vector[(String, String)] =
     values.toVector
@@ -1489,6 +1492,41 @@ object StaticFormAppRenderer {
       Page(_simple_page(
         title = s"${_escape(properties.operationLabel)} Result",
         subtitle = s"HTTP ${properties.status}",
+        body = rendered
+      ))
+  }
+
+  def renderErrorTemplate(
+    app: Option[String],
+    status: Int,
+    message: String,
+    path: String,
+    template: String
+  ): Page = {
+    val appName = app.getOrElse("system")
+    val properties = FormPageProperties(
+      appName,
+      "web",
+      "error",
+      Map(
+        "app" -> appName,
+        "component" -> appName,
+        "error.status" -> status.toString,
+        "error.message" -> message,
+        "error.body" -> message,
+        "error.path" -> path,
+        "result.status" -> status.toString,
+        "result.ok" -> "false",
+        "result.body" -> message
+      )
+    )
+    val rendered = _render_template(template, properties, Map.empty)
+    if (_is_html_document(template))
+      Page(rendered)
+    else
+      Page(_simple_page(
+        title = s"HTTP ${status}",
+        subtitle = _escape(path),
         body = rendered
       ))
   }
@@ -4021,6 +4059,7 @@ object StaticFormAppRenderer {
     val resultView = """<textus-result-view\s+source="([^"]+)"\s*></textus-result-view>""".r
     val resultTable = """<textus-result-table\b([^>]*)></textus-result-table>""".r
     val formLink = """<textus-form-link\s+href="([^"]+)"\s+label="([^"]+)"\s*></textus-form-link>""".r
+    val actionLink = """<textus(?::action-link|-action-link)\b([^>]*)></textus(?::action-link|-action-link)>""".r
     val propertyList = """<textus-property-list\s+source="([^"]+)"\s*></textus-property-list>""".r
     val errorPanel = """<textus-error-panel\s+source="([^"]+)"\s*></textus-error-panel>""".r
     val a = resultView.replaceAllIn(template, m =>
@@ -4033,13 +4072,45 @@ object StaticFormAppRenderer {
     val c = formLink.replaceAllIn(b, m =>
       java.util.regex.Matcher.quoteReplacement(_render_form_link(m.group(1), m.group(2), properties))
     )
-    val d = propertyList.replaceAllIn(c, m =>
+    val d = actionLink.replaceAllIn(c, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_action_link(attrs, properties))
+    })
+    val e = propertyList.replaceAllIn(d, m =>
       java.util.regex.Matcher.quoteReplacement(_render_property_list(m.group(1), properties))
     )
-    errorPanel.replaceAllIn(d, m =>
+    errorPanel.replaceAllIn(e, m =>
       java.util.regex.Matcher.quoteReplacement(_render_error_panel(m.group(1), properties))
     )
   }
+
+  private def _render_action_link(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String = {
+    val source = attrs.getOrElse("source", "result.action.primary")
+    val href = properties.value(s"${source}.href")
+    if (href.isEmpty) {
+      ""
+    } else {
+      val label = attrs.get("label")
+        .orElse(_property_non_empty(properties, s"${source}.label"))
+        .orElse(_property_non_empty(properties, s"${source}.name"))
+        .getOrElse("Open")
+      val css = attrs.getOrElse("class", "btn btn-primary")
+      val method = _property_non_empty(properties, s"${source}.method").getOrElse("GET")
+      if (method.equalsIgnoreCase("GET"))
+        s"""<a class="${_escape(css)}" href="${_escape(href)}">${_escape(label)}</a>"""
+      else
+        s"""<form method="${_escape(method.toLowerCase(java.util.Locale.ROOT))}" action="${_escape(href)}" class="d-inline"><button type="submit" class="${_escape(css)}">${_escape(label)}</button></form>"""
+    }
+  }
+
+  private def _property_non_empty(
+    properties: FormPageProperties,
+    name: String
+  ): Option[String] =
+    properties.values.get(name).map(_.trim).filter(_.nonEmpty)
 
   private def _render_form_link(
     hrefPath: String,

@@ -310,6 +310,10 @@ functionality.
 - [x] Support operation result property expansion for result pages.
 - [x] Support result widgets: result view, result table, property list, and
       error panel.
+- [x] Support action-link result widgets in both preferred `textus:action-link`
+      notation and compatible `textus-action-link` notation.
+- [x] Extract operation result metadata for static pages: `result.id`,
+      `result.outcome`, `result.message`, and `result.action.*`.
 - [x] Support paging properties and continuation-backed paging for form
       results.
 - [x] Support optional/required/disabled total count policy for admin list
@@ -317,9 +321,14 @@ functionality.
 - [x] Support descriptor-provided result templates as supplemental Form
       configuration.
 - [x] Support static result page convention for operation result pages:
-      operation-specific `xxx__success.html`, `xxx__200.html`,
-      `xxx__{status}.html`, `xxx__error.html`, and common `__success.html`,
-      `__200.html`, `__{status}.html`, `__error.html`.
+      operation-specific `xxx__200.html`, `xxx__success.html`,
+      `xxx__{status}.html`, `xxx__error.html`, and common `__200.html`,
+      `__success.html`, `__{status}.html`, `__error.html`.
+- [x] Prefer exact status static result pages over success/error aliases.
+- [x] Support common static error pages for Web HTML errors through
+      app-specific and global `__{status}.html` / `__error.html`.
+- [x] Preserve standard hidden form context for validation redisplay and result
+      templates while stripping it before Operation dispatch.
 - [x] Confirm admin entity/data validation uses the same schema merge and
       validation behavior as operation forms.
 - [x] Confirm admin entity/data validation failures redisplay the submitted
@@ -522,12 +531,13 @@ unfinished Management Console work.
       files.
 - [ ] Prefer static result page conventions before descriptor transition
       settings.
-- [ ] Add operation-specific result pages such as `post-notice__success.html`
+- [ ] Add operation-specific result pages such as `post-notice__200.html`
       and `search-notices__200.html`.
 - [ ] Add common result/error pages such as `__400.html`, `__500.html`, and
       `__error.html`.
-- [ ] Use `textus-*` widgets for result view, table, property list, error
-      display, and paging.
+- [ ] Use Textus widgets for result view, table, property list, error display,
+      action links, and paging. Prefer `textus:xxx` notation while keeping
+      `textus-xxx` compatible.
 - [ ] Identify which behavior is missing from the CML+HTML model.
 - [ ] Promote only generic missing behavior back into CNCF; keep
       sample-specific pages in `textus-sample-app`.

@@ -35,7 +35,7 @@ import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
- * @version Apr. 17, 2026
+ * @version Apr. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -486,7 +486,7 @@ final class Http4sHttpServer(
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component aggregate instance detail admin not found"))
     }
 
-  private def _static_form_app(
+  private[http] def _static_form_app(
     app: String,
     page: Vector[String]
   ): IO[HResponse[IO]] =
@@ -498,7 +498,12 @@ final class Http4sHttpServer(
             .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
         )
       case None =>
-        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Static Form App not found"))
+        _web_error_response(
+          Some(app),
+          HStatus.NotFound,
+          "Static Form App not found",
+          s"/web/${app}${page.map(p => s"/${p}").mkString}"
+        )
     }
 
   private def _form_index(app: String): IO[HResponse[IO]] =
@@ -1395,7 +1400,7 @@ final class Http4sHttpServer(
     val appPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(app)
     val suffixes =
       if (status >= 200 && status < 400)
-        Vector("success", status.toString)
+        Vector(status.toString, "success")
       else
         Vector(status.toString, "error")
     suffixes.flatMap { suffix =>
@@ -1410,6 +1415,32 @@ final class Http4sHttpServer(
         Paths.get(appPath, common)
       )
     }
+  }
+
+  private def _web_error_template(
+    app: Option[String],
+    status: Int
+  ): Option[String] =
+    _web_template_roots().view.flatMap { root =>
+      _web_error_template_candidates(app, status).flatMap { candidate =>
+        val path = root.resolve(candidate)
+        if (Files.isRegularFile(path))
+          Some(Files.readString(path, StandardCharsets.UTF_8))
+        else
+          None
+      }
+    }.headOption
+
+  private def _web_error_template_candidates(
+    app: Option[String],
+    status: Int
+  ): Vector[Path] = {
+    val statusName = s"__${status}.html"
+    val errorName = "__error.html"
+    val appPath = app.map(org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment)
+    appPath.toVector.flatMap { x =>
+      Vector(Paths.get(x, statusName), Paths.get(x, errorName))
+    } ++ Vector(Paths.get(statusName), Paths.get(errorName))
   }
 
   private def _web_template_roots(): Vector[Path] =
@@ -1556,6 +1587,22 @@ final class Http4sHttpServer(
   private def _forbidden(): IO[HResponse[IO]] =
     IO.pure(HResponse[IO](HStatus.Forbidden).withEntity("Forbidden"))
 
+  private[http] def _web_error_response(
+    app: Option[String],
+    status: HStatus,
+    message: String,
+    path: String
+  ): IO[HResponse[IO]] =
+    _web_error_template(app, status.code) match {
+      case Some(template) =>
+        _html_status(
+          StaticFormAppRenderer.renderErrorTemplate(app, status.code, message, path, template),
+          status
+        )
+      case None =>
+        IO.pure(HResponse[IO](status).withEntity(message))
+    }
+
   private def _create_form_continuation(
     app: String,
     service: String,
@@ -1589,7 +1636,7 @@ final class Http4sHttpServer(
   private def _strip_framework_form_values(
     values: Map[String, Any]
   ): Map[String, Any] =
-    values.filterNot { case (k, _) => _is_framework_or_security_form_key(k) || _is_crud_control_form_key(k) }
+    values.filterNot { case (k, _) => _is_framework_or_security_form_key(k) || _is_form_context_key(k) }
 
   private def _strip_security_form_values(
     values: Map[String, Any]
@@ -1610,10 +1657,10 @@ final class Http4sHttpServer(
       key == "capability" ||
       key == "capabilities"
 
-  private def _is_crud_control_form_key(
+  private def _is_form_context_key(
     key: String
   ): Boolean =
-    key.startsWith("crud.")
+    StaticFormAppRenderer.isHiddenFormContextKey(key)
 
   private def _html(p: StaticFormAppRenderer.Page): IO[HResponse[IO]] =
     IO.pure(

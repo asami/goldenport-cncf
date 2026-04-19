@@ -6,7 +6,7 @@ import org.goldenport.cncf.security.SecuritySubject
 
 /*
  * @since   Apr. 14, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 object WebDescriptorAuthorization {
@@ -24,7 +24,11 @@ object WebDescriptorAuthorization {
         anonymous
       )
 
-    def isAnonymous: Boolean = anonymous
+    def isAnonymous: Boolean =
+      anonymous && {
+        val values = roles ++ scopes ++ capabilities
+        values.isEmpty || values.forall(x => SecuritySubject.normalize(x) == "anonymous")
+      }
   }
 
   object Subject {

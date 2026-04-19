@@ -70,6 +70,8 @@ lazy val root = project
     Compile / packageDoc / publishArtifact := false,
 
     Test / fork := false,
+    Test / parallelExecution := false,
+    Test / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.Flat,
     (Test / test / testOptions) += Tests.Argument(TestFrameworks.ScalaTest, "-l", "org.goldenport.tags.ManualSpec"),
     Test / testOnly / fork := true,
     Test / testOnly / testOptions := Seq.empty

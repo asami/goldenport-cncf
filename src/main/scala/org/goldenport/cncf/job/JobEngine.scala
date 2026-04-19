@@ -4,7 +4,10 @@ import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import scala.concurrent.{ExecutionContext as ScalaExecutionContext, Future}
 import org.goldenport.{Conclusion, Consequence}
+import org.goldenport.consequence.Failures
 import org.goldenport.id.UniversalId
+import org.goldenport.observation.Descriptor
+import org.goldenport.provisional.observation.Taxonomy
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentLogic}
@@ -14,7 +17,7 @@ import org.goldenport.cncf.event.{EventId, EventLane, EventRecord, EventStore}
 /*
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -796,7 +799,13 @@ final class InMemoryJobEngine(
     Consequence.operationInvalid(s"job.control: $message")
 
   private def _control_timeout[A](message: String): Consequence[A] =
-    Consequence.serviceUnavailable(s"job.control: $message")
+    Failures.fail(
+      Taxonomy(Taxonomy.Category.Operation, Taxonomy.Symptom.Unavailable),
+      Seq(
+        Descriptor.Facet.Operation("job.control"),
+        Descriptor.Facet.Message(s"job.control: $message")
+      )
+    )
 
   private def _append_task_running_(
     jobid: JobId,

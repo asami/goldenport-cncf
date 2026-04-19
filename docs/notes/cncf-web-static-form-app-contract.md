@@ -397,8 +397,13 @@ ${form.body}
 ```
 
 The template language intentionally does not provide control structures.
-Structured views are rendered through `textus-*` widgets. The first widget
-contracts are:
+Structured views are rendered through Textus widgets. The namespace form
+`textus:xxx` is the preferred notation because it makes the server-side widget
+boundary explicit. The hyphen form `textus-xxx` is also accepted for HTML-tooling
+compatibility. Widgets are consumed before the response HTML is returned; an
+unexpanded `textus:` or `textus-` tag in the final HTML is a rendering error.
+
+The first widget contracts are:
 
 ```html
 <textus-result-view source="result.body"></textus-result-view>
@@ -406,7 +411,13 @@ contracts are:
 <textus-property-list source="result"></textus-property-list>
 <textus-property-list source="form"></textus-property-list>
 <textus-error-panel source="result"></textus-error-panel>
+<textus:action-link source="result.action.primary"></textus:action-link>
+<textus-action-link source="result.action.primary"></textus-action-link>
 ```
+
+`textus:action-link` and `textus-action-link` are equivalent. The widget renders
+an anchor for `GET` actions and an inline POST form for non-GET actions. If the
+referenced action has no `href`, it renders nothing.
 
 The result page property set is:
 
@@ -415,14 +426,18 @@ The result page property set is:
 - submitted form values under `form.*`
 - `result.status`, `result.ok`, `result.contentType`, `result.body`
 - extracted result metadata such as `result.id`
+- extracted result outcome/message metadata as `result.outcome` and
+  `result.message`
+- extracted action metadata as `result.actions.count`, `result.action.0.*`,
+  `result.action.primary.*`, and `result.action.{name}.*`
 - `error.status`, `error.body` on failed responses
 - paging properties under `paging.*`
 
 `WebDescriptor.Form.resultTemplate` can replace the default result page body
-for a form. The template uses the same property expansion and `textus-*` widget
-contracts as the built-in result page. It is intentionally still expression-only:
-applications should introduce new `textus-*` widgets rather than add control
-syntax when richer rendering is needed.
+for a form. The template uses the same property expansion and Textus widget
+contracts as the built-in result page. It is intentionally still
+expression-only: applications should introduce new Textus widgets rather than
+add control syntax when richer rendering is needed.
 
 Static HTML result pages are the default customization mechanism for ordinary
 Form Apps. Given an operation form whose normalized operation name is `xxx`,
@@ -430,8 +445,8 @@ the result page resolver searches the web template root in this order:
 
 Success:
 
-- `xxx__success.html`
 - `xxx__200.html`
+- `xxx__success.html`
 
 Failure:
 
@@ -443,8 +458,8 @@ pages:
 
 Success:
 
-- `__success.html`
 - `__200.html`
+- `__success.html`
 
 Failure:
 
@@ -454,9 +469,9 @@ Failure:
 This makes shared pages such as a common validation error page or common system
 error page ordinary static files rather than descriptor logic.
 
-The same property expansion and `textus-*` widget contracts are available in
-these files. A full HTML document is returned as-is after expansion; a fragment
-is wrapped in the built-in Bootstrap 5 shell. Descriptor-level
+The same property expansion and Textus widget contracts are available in these
+files. A full HTML document is returned as-is after expansion; a fragment is
+wrapped in the built-in Bootstrap 5 shell. Descriptor-level
 `resultTemplate`, `successRedirect`, and `failureRedirect` remain available as
 supplemental configuration for gaps in the static convention model. The
 ordinary demo/internal-tool path should prefer CML definitions plus static HTML
@@ -916,6 +931,13 @@ Validation error redisplay and result rendering must preserve them. Server-side
 code must not blindly trust client-provided navigation or security values:
 redirect destinations, continuation ids, version tokens, and CSRF values remain
 server-validated.
+
+Hidden form context is page context, not operation input. `/form` submission
+handling preserves these values for validation redisplay and result templates,
+but strips them before dispatching to the target Operation or admin mutation
+handler. This keeps ordinary HTML FORM navigation state from leaking into
+business parameters while still allowing static result pages to render links
+back to the originating list/detail context.
 
 ## Runtime Hook Rule
 

@@ -7,14 +7,13 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
-import org.goldenport.cncf.observability.ObservabilityEngine
 import org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.value.SecurityAttributes
 
 /*
  * @since   Apr.  6, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 19, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationAccessPolicy {
@@ -403,8 +402,7 @@ object OperationAccessPolicy {
           s"${evaluation.conditionText}:${if (applicable) "applicable" else "not-applicable"}:${if (evaluation.matched) "matched" else "missed"}:actual=${actual}:expected=${expected}"
       }
       val applicableEvaluations = evaluations.filter(_._2)
-      val _ = ObservabilityEngine.emitDebug(
-        ctx.observability,
+      val _ = ctx.observability.emitInfo(
         ctx.cncfCore.scope,
         "authorization.abac.diagnostics",
         Record.dataAuto(
@@ -443,8 +441,7 @@ object OperationAccessPolicy {
         case (rule, applicable, matched) =>
           s"${rule.entityField}=subject.${rule.subjectAttribute}:${if (applicable) "applicable" else "not-applicable"}:${if (matched) "matched" else "missed"}"
       }
-      val _ = ObservabilityEngine.emitDebug(
-        ctx.observability,
+      val _ = ctx.observability.emitInfo(
         ctx.cncfCore.scope,
         "authorization.relation.diagnostics",
         Record.dataAuto(
