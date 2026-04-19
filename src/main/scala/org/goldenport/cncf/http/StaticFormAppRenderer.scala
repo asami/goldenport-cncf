@@ -603,7 +603,11 @@ object StaticFormAppRenderer {
   private def _form_error_panel(values: Map[String, String]): String = {
     val xs = values.filter { case (key, _) => key == "error" || key.startsWith("error.") }
     if (xs.isEmpty) ""
-    else s"""<div class="alert alert-danger" role="alert">${_property_rows(xs)}</div>"""
+    else
+      s"""<div class="alert alert-danger admin-feedback" role="alert">
+         |  <p class="alert-heading fw-semibold mb-2">Form submission failed.</p>
+         |  <dl class="row mb-0">${_property_rows(xs)}</dl>
+         |</div>""".stripMargin
   }
 
   private def _form_validation_panel(
@@ -618,9 +622,9 @@ object StaticFormAppRenderer {
             ""
           else
             s"""<p class="mb-1">Warnings</p><ul>${result.warnings.map(x => s"<li>${_escape(x.message)}</li>").mkString("\n")}</ul>"""
-        s"""<div class="alert alert-danger" role="alert">
-           |  <p class="mb-1">Validation failed.</p>
-           |  <ul>${errors}</ul>
+        s"""<div class="alert alert-danger admin-feedback" role="alert">
+           |  <p class="alert-heading fw-semibold mb-2">Validation failed.</p>
+           |  <ul class="mb-0">${errors}</ul>
            |  ${warnings}
            |</div>""".stripMargin
       case _ =>
@@ -1648,15 +1652,21 @@ object StaticFormAppRenderer {
   ): Page =
     Page(_simple_page(
       title = "System Web Descriptor",
-      subtitle = "Resolved Web Descriptor JSON view",
+      subtitle = "Management Console descriptor view",
       body =
         s"""<article>
            |  <h2>Navigation</h2>
            |  <p><a href="/web/system/admin">System admin</a> · <a href="/web/system/dashboard">System dashboard</a></p>
            |</article>
            |<article>
-           |  <h2>Resolved Descriptor</h2>
-           |  <pre class="bg-light border rounded p-3"><code>${_escape(_web_descriptor_json(webDescriptor))}</code></pre>
+           |  <h2>Completed Descriptor</h2>
+           |  <p>The completed view applies framework defaults so the descriptor can be inspected as the runtime sees it.</p>
+           |  <pre class="bg-light border rounded p-3"><code>${_escape(_web_descriptor_json(webDescriptor, completed = true))}</code></pre>
+           |</article>
+           |<article>
+           |  <h2>Configured Descriptor</h2>
+           |  <p>The configured view keeps explicit descriptor entries for comparison.</p>
+           |  <pre class="bg-light border rounded p-3"><code>${_escape(_web_descriptor_json(webDescriptor, completed = false))}</code></pre>
            |</article>""".stripMargin
     ))
 
@@ -1666,6 +1676,34 @@ object StaticFormAppRenderer {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map(renderComponentAdmin(_, webDescriptor))
+
+  def renderComponentAdminDescriptor(
+    subsystem: Subsystem,
+    componentName: String,
+    webDescriptor: WebDescriptor = WebDescriptor.empty
+  ): Option[Page] =
+    _find_component(subsystem, componentName).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      Page(_simple_page(
+        title = s"${_escape(component.name)} Web Descriptor",
+        subtitle = "Component Management Console descriptor view",
+        body =
+          s"""<article>
+             |  <h2>Navigation</h2>
+             |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/web/system/admin/descriptor">System descriptor</a></p>
+             |</article>
+             |<article>
+             |  <h2>Completed Descriptor</h2>
+             |  <p>The completed view applies framework defaults and resolves component route placeholders for this component.</p>
+             |  <pre class="bg-light border rounded p-3"><code>${_escape(_web_descriptor_json(webDescriptor, completed = true, componentSegment = Some(componentPath)))}</code></pre>
+             |</article>
+             |<article>
+             |  <h2>Configured Descriptor</h2>
+             |  <p>The configured view keeps explicit descriptor entries for comparison.</p>
+             |  <pre class="bg-light border rounded p-3"><code>${_escape(_web_descriptor_json(webDescriptor, completed = false))}</code></pre>
+             |</article>""".stripMargin
+      ))
+    }
 
   def renderSystemManual(
     subsystem: Subsystem
@@ -1751,25 +1789,23 @@ object StaticFormAppRenderer {
       }.mkString("\n")
       val body =
         if (rows.isEmpty) {
-          "<p>No entity runtime descriptors are registered for this component.</p>"
+          _admin_empty_state("No entity runtime descriptors are registered for this component.")
         } else {
-          s"""<div class="table-responsive"><table class="table table-sm">
+          s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
              |  <thead><tr><th>Entity</th><th>Collection</th><th>Usage</th><th>Operation</th><th>Domain</th><th>Working set</th></tr></thead>
              |  <tbody>${rows}</tbody>
              |</table></div>""".stripMargin
         }
+      val nav = _admin_nav_card(Vector(
+        "Component admin" -> s"/web/${componentPath}/admin",
+        "Operation forms" -> s"/form/${componentPath}"
+      ))
       Page(_simple_page(
         title = s"${_escape(component.name)} Entity Administration",
         subtitle = "Entity CRUD management baseline",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/form/${componentPath}">Operation forms</a></p>
-             |</article>
-             |<article>
-             |  <h2>Entity CRUD</h2>
-             |  ${body}
-             |</article>""".stripMargin
+          s"""${nav}
+             |${_admin_card("Entity CRUD", body)}""".stripMargin
       ))
     }
 
@@ -1816,21 +1852,29 @@ object StaticFormAppRenderer {
           "paging.pageSize" -> result.pageSize.toString
         )
       )
+      val nav = _admin_nav_card(Vector(
+        "Component admin" -> s"/web/${componentPath}/admin",
+        "Entity types" -> s"/web/${componentPath}/admin/entities",
+        "Operation forms" -> s"/form/${componentPath}"
+      ))
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} Administration",
         subtitle = "Entity record list baseline",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/web/${componentPath}/admin/entities">Entity types</a> · <a href="/form/${componentPath}">Operation forms</a></p>
-             |</article>
-             |<article>
-             |  <h2>${_escape(entityLabel)} records</h2>
-             |  <p>List with paging${result.total.map(t => s" · total ${_escape(t.toString)}").getOrElse("")}</p>
-             |  ${warningHtml}
-             |  <p><a class="btn btn-primary" href="${_escape(basePath)}/new">New ${_escape(entityLabel)}</a></p>
-             |  ${table}
-             |  ${_paging_nav(result.page, result.pageSize, result.total, effectivePageRequest.href(basePath), Some(result.hasNext))}
+          s"""${nav}
+             |<article class="card admin-card">
+             |  <div class="card-body">
+             |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+             |      <div>
+             |        <h2 class="card-title mb-1">${_escape(entityLabel)} records</h2>
+             |        <p class="card-text text-body-secondary">List with paging${result.total.map(t => s" · total ${_escape(t.toString)}").getOrElse("")}</p>
+             |      </div>
+             |      <a class="btn btn-primary" href="${_escape(basePath)}/new">New ${_escape(entityLabel)}</a>
+             |    </div>
+             |    ${warningHtml}
+             |    ${table}
+             |    ${_paging_nav(result.page, result.pageSize, result.total, effectivePageRequest.href(basePath), Some(result.hasNext))}
+             |  </div>
              |</article>""".stripMargin
       ))
     }
@@ -1850,17 +1894,23 @@ object StaticFormAppRenderer {
       val basePath = s"/web/${componentPath}/admin/entities/${entityPath}"
       val querySuffix = _hidden_form_context_query_suffix(values)
       val body = _admin_entity_record_table(subsystem, component, componentPath, entityPath, id, webDescriptor)
+      val nav = _admin_nav_card(Vector(
+        s"Back to ${entityLabel} records" -> s"${basePath}${querySuffix}",
+        "Entity types" -> s"/web/${componentPath}/admin/entities"
+      ))
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} Detail",
         subtitle = "Entity record detail baseline",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="${_escape(basePath + querySuffix)}">Back to ${_escape(entityLabel)} records</a> · <a href="${_escape(basePath + "/" + _escape_path_segment(id) + "/edit" + querySuffix)}">Edit</a> · <a href="/web/${componentPath}/admin/entities">Entity types</a></p>
-             |</article>
-             |<article>
-             |  <h2>${_escape(entityLabel)} detail</h2>
-             |  ${body}
+          s"""${nav}
+             |<article class="card admin-card">
+             |  <div class="card-body">
+             |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+             |      <h2 class="card-title mb-0">${_escape(entityLabel)} detail</h2>
+             |      <a class="btn btn-primary" href="${_escape(basePath + "/" + _escape_path_segment(id) + "/edit" + querySuffix)}">Edit</a>
+             |    </div>
+             |    ${body}
+             |  </div>
              |</article>""".stripMargin
       ))
     }
@@ -1900,23 +1950,28 @@ object StaticFormAppRenderer {
         effectiveValidation,
         includeExtensionFields = false
       )
+      val nav = _admin_nav_card(Vector(
+        "Detail" -> s"${webBasePath}/${id}",
+        s"Back to ${entityLabel} records" -> webBasePath
+      ))
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} Edit",
         subtitle = "Entity record edit baseline",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="${_escape(webBasePath)}/${_escape(id)}">Detail</a> · <a href="${_escape(webBasePath)}">Back to ${_escape(entityLabel)} records</a></p>
-             |</article>
-             |<article>
-             |  <h2>Edit ${_escape(entityLabel)}</h2>
-             |  ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
-             |  <form method="post" action="${_escape(actionPath)}">
-             |    ${controls}
-             |    ${hiddenContext}
-             |    <button type="submit" class="btn btn-primary">Update</button>
-             |    <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}/${_escape(id)}">Cancel</a>
-             |  </form>
+          s"""${nav}
+             |<article class="card admin-card">
+             |  <div class="card-body">
+             |    <h2 class="card-title">Edit ${_escape(entityLabel)}</h2>
+             |    ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
+             |    <form method="post" action="${_escape(actionPath)}" class="admin-form">
+             |      ${controls}
+             |      ${hiddenContext}
+             |      <div class="d-flex flex-wrap gap-2">
+             |        <button type="submit" class="btn btn-primary">Update</button>
+             |        <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}/${_escape(id)}">Cancel</a>
+             |      </div>
+             |    </form>
+             |  </div>
              |</article>""".stripMargin
       ))
     }
@@ -1947,23 +2002,28 @@ object StaticFormAppRenderer {
       val effectiveValidation = validation.filter(_.webSchema.selector == displaySchema.selector)
       val hiddenContext = _hidden_form_context_inputs(values)
       val controls = _admin_new_controls(displaySchema.fields, values, "entityFields", "id=sales-order-1&#10;status=draft", effectiveValidation)
+      val nav = _admin_nav_card(Vector(
+        s"Back to ${entityLabel} records" -> webBasePath,
+        "Entity types" -> s"/web/${componentPath}/admin/entities"
+      ))
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(entityLabel)} New",
         subtitle = "Entity record create baseline",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="${_escape(webBasePath)}">Back to ${_escape(entityLabel)} records</a> · <a href="/web/${componentPath}/admin/entities">Entity types</a></p>
-             |</article>
-             |<article>
-             |  <h2>New ${_escape(entityLabel)}</h2>
-             |  ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
-             |  <form method="post" action="${_escape(actionPath)}">
-             |    ${controls}
-             |    ${hiddenContext}
-             |    <button type="submit" class="btn btn-primary">Create</button>
-             |    <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}">Cancel</a>
-             |  </form>
+          s"""${nav}
+             |<article class="card admin-card">
+             |  <div class="card-body">
+             |    <h2 class="card-title">New ${_escape(entityLabel)}</h2>
+             |    ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
+             |    <form method="post" action="${_escape(actionPath)}" class="admin-form">
+             |      ${controls}
+             |      ${hiddenContext}
+             |      <div class="d-flex flex-wrap gap-2">
+             |        <button type="submit" class="btn btn-primary">Create</button>
+             |        <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}">Cancel</a>
+             |      </div>
+             |    </form>
+             |  </div>
              |</article>""".stripMargin
       ))
     }
@@ -2216,7 +2276,54 @@ object StaticFormAppRenderer {
     if (warnings.isEmpty)
       ""
     else
-      s"""<div class="alert alert-warning" role="alert">${warnings.map(_escape).mkString("<br>")}</div>"""
+      s"""<div class="alert alert-warning admin-feedback" role="alert">
+         |  <p class="alert-heading fw-semibold mb-2">Warning</p>
+         |  <p class="mb-0">${warnings.map(_escape).mkString("<br>")}</p>
+         |</div>""".stripMargin
+
+  private def _admin_empty_state(
+    message: String
+  ): String =
+    _web_empty_state(message, "admin-empty-state")
+
+  private def _web_empty_state(
+    message: String,
+    cssClass: String = "web-empty-state"
+  ): String =
+    s"""<div class="alert alert-info ${_escape(cssClass)}" role="status">
+       |  <p class="mb-0">${_escape(message)}</p>
+       |</div>""".stripMargin
+
+  private def _admin_empty_table_cell(
+    colspan: Int,
+    message: String
+  ): String =
+    s"""<tr><td colspan="${colspan}"><div class="admin-empty-state text-body-secondary py-3">${_escape(message)}</div></td></tr>"""
+
+  private def _admin_nav_card(
+    links: Vector[(String, String)]
+  ): String = {
+    val items = links.map { case (label, href) =>
+      s"""<a class="btn btn-outline-secondary btn-sm" href="${_escape(href)}">${_escape(label)}</a>"""
+    }.mkString("\n")
+    s"""<article class="card admin-card admin-nav">
+       |  <div class="card-body">
+       |    <h2 class="card-title h5">Navigation</h2>
+       |    <div class="d-flex flex-wrap gap-2">${items}</div>
+       |  </div>
+       |</article>""".stripMargin
+  }
+
+  private def _admin_card(
+    title: String,
+    body: String
+  ): String =
+    s"""<article class="card admin-card">
+       |  <div class="card-body">
+       |    <h2 class="card-title">${_escape(title)}</h2>
+       |    ${body}
+       |  </div>
+       |</article>""".stripMargin
 
   private def _admin_data_record_table(
     subsystem: Subsystem,
@@ -2377,7 +2484,7 @@ object StaticFormAppRenderer {
     _admin_operation_value_lines(subsystem, path, form)
       .filter(_.nonEmpty)
       .map(lines => _field_table(_admin_schema_ordered_fields(schemaFields, _field_lines(lines.mkString("\n")))))
-      .getOrElse(s"<p>${_escape(emptyMessage)}</p>")
+      .getOrElse(_admin_empty_state(emptyMessage))
 
   private def _admin_read_result_table_web_schema(
     subsystem: Subsystem,
@@ -2391,7 +2498,7 @@ object StaticFormAppRenderer {
     _admin_operation_value_lines(subsystem, path, form)
       .filter(_.nonEmpty)
       .map(lines => _field_table(_admin_schema_ordered_fields(schemaFields, _field_lines(lines.mkString("\n"))), labels))
-      .getOrElse(s"<p>${_escape(emptyMessage)}</p>")
+      .getOrElse(_admin_empty_state(emptyMessage))
   }
 
   private def _admin_read_result_list(
@@ -2417,7 +2524,7 @@ object StaticFormAppRenderer {
            |${table}
            |${_paging_nav(page, pageSize, total, pageRequest.href(basePath), hasNext)}""".stripMargin
       case None =>
-        s"<p>${_escape(emptyMessage)}</p>"
+        _admin_empty_state(emptyMessage)
     }
 
   private def _admin_read_result_list_web_schema(
@@ -2445,7 +2552,7 @@ object StaticFormAppRenderer {
            |${table}
            |${_paging_nav(page, pageSize, total, pageRequest.href(basePath), hasNext)}""".stripMargin
       case None =>
-        s"<p>${_escape(emptyMessage)}</p>"
+        _admin_empty_state(emptyMessage)
     }
 
   private def _admin_read_result_list_table_labeled(
@@ -2460,7 +2567,7 @@ object StaticFormAppRenderer {
     if (schemaFields.isEmpty) {
       val rows =
         if (items.isEmpty) {
-          s"""<tr><td colspan="3">${_escape(emptyMessage)}</td></tr>"""
+          _admin_empty_table_cell(3, emptyMessage)
         } else {
           items.map { item =>
             val href = s"${basePath}/${_escape_path_segment(item.id)}${_hidden_form_context_query_suffix(linkContext)}"
@@ -2468,7 +2575,7 @@ object StaticFormAppRenderer {
             s"""<tr><td><code>${_escape(item.id)}</code></td><td>${_escape(item.label)}</td><td>${actions}</td></tr>"""
           }.mkString("\n")
         }
-      s"""<div class="table-responsive"><table class="table table-sm">
+      s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
          |  <thead><tr><th>ID</th><th>Value</th><th>Actions</th></tr></thead>
          |  <tbody>${rows}</tbody>
          |</table></div>""".stripMargin
@@ -2476,7 +2583,7 @@ object StaticFormAppRenderer {
       val headings = schemaFields.map(x => s"<th>${_escape(labels.getOrElse(x, x))}</th>").mkString
       val rows =
         if (items.isEmpty) {
-          s"""<tr><td colspan="${schemaFields.size + 1}">${_escape(emptyMessage)}</td></tr>"""
+          _admin_empty_table_cell(schemaFields.size + 1, emptyMessage)
         } else {
           items.map { item =>
             val href = s"${basePath}/${_escape_path_segment(item.id)}${_hidden_form_context_query_suffix(linkContext)}"
@@ -2493,7 +2600,7 @@ object StaticFormAppRenderer {
             s"""<tr>${columns}<td>${_admin_read_list_actions(href, includeEdit)}</td></tr>"""
           }.mkString("\n")
         }
-      s"""<div class="table-responsive"><table class="table table-sm">
+      s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
          |  <thead><tr>${headings}<th>Actions</th></tr></thead>
          |  <tbody>${rows}</tbody>
          |</table></div>""".stripMargin
@@ -2520,10 +2627,10 @@ object StaticFormAppRenderer {
   ): String =
     if (includeEdit) {
       val editHref = _append_path_before_query(href, "/edit")
-      s"""<a href="${_escape(href)}">Detail</a> · <a href="${_escape(editHref)}">Edit</a>"""
+      s"""<div class="btn-group btn-group-sm" role="group" aria-label="Record actions"><a class="btn btn-outline-primary" href="${_escape(href)}">Detail</a><a class="btn btn-outline-secondary" href="${_escape(editHref)}">Edit</a></div>"""
     }
     else
-      s"""<a href="${_escape(href)}">Detail</a>"""
+      s"""<a class="btn btn-outline-primary btn-sm" href="${_escape(href)}">Detail</a>"""
 
   private def _append_path_before_query(
     href: String,
@@ -2631,7 +2738,7 @@ object StaticFormAppRenderer {
     emptyMessage: String
   ): String =
     if (lines.isEmpty) {
-      s"<p>${emptyMessage}</p>"
+      _admin_empty_state(emptyMessage)
     } else {
       _value_table(lines)
     }
@@ -2645,7 +2752,7 @@ object StaticFormAppRenderer {
       case Some(xs) if xs.nonEmpty =>
         _field_table(_admin_schema_ordered_fields(schemaFields, xs))
       case _ =>
-        s"<p>${emptyMessage}</p>"
+        _admin_empty_state(emptyMessage)
     }
 
   private def _field_table(fields: Vector[(String, String)]): String = {
@@ -2660,7 +2767,7 @@ object StaticFormAppRenderer {
       case (key, value) =>
         s"""<tr><th>${_escape(labels.getOrElse(key, key))}</th><td>${_escape(value)}</td></tr>"""
     }.mkString("\n")
-    s"""<div class="table-responsive"><table class="table table-sm">
+    s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
        |  <tbody>${rows}</tbody>
        |</table></div>""".stripMargin
   }
@@ -2673,7 +2780,7 @@ object StaticFormAppRenderer {
         else line.take(i) -> line.drop(i + 1)
       s"""<tr><th>${_escape(key)}</th><td>${_escape(value)}</td></tr>"""
     }.mkString("\n")
-    s"""<div class="table-responsive"><table class="table table-sm">
+    s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
        |  <tbody>${rows}</tbody>
        |</table></div>""".stripMargin
   }
@@ -2737,7 +2844,7 @@ object StaticFormAppRenderer {
     val componentPath = NamingConventions.toNormalizedSegment(component.name)
     val bindings = _aggregate_operation_bindings(component, aggregateName)
     if (bindings.isEmpty) {
-      "<p>No aggregate operations are currently exposed.</p>"
+      _admin_empty_state("No aggregate operations are currently exposed.")
     } else {
       val grouped = bindings.groupBy(_.kind).withDefaultValue(Vector.empty)
       val summary = Vector(
@@ -2771,7 +2878,7 @@ object StaticFormAppRenderer {
     val bindings = _aggregate_operation_bindings(component, aggregateName)
       .filter(x => x.kind == "read" || x.kind == "update")
     if (bindings.isEmpty) {
-      "<p>No aggregate instance operations are currently exposed.</p>"
+      _admin_empty_state("No aggregate instance operations are currently exposed.")
     } else {
       val rows = bindings.map { binding =>
         val detailPath = s"/web/${componentPath}/admin/aggregates/${NamingConventions.toNormalizedSegment(aggregateName)}/${_escape_path_segment(id)}"
@@ -2899,25 +3006,23 @@ object StaticFormAppRenderer {
       }.mkString("\n")
       val body =
         if (rows.isEmpty) {
-          "<p>No view definitions are registered for this component.</p>"
+          _admin_empty_state("No view definitions are registered for this component.")
         } else {
-          s"""<div class="table-responsive"><table class="table table-sm">
+          s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
              |  <thead><tr><th>View</th><th>Entity</th><th>Names</th><th>Queries</th><th>Source events</th><th>Rebuildable</th></tr></thead>
              |  <tbody>${rows}</tbody>
              |</table></div>""".stripMargin
         }
+      val nav = _admin_nav_card(Vector(
+        "Component admin" -> s"/web/${componentPath}/admin",
+        "Operation forms" -> s"/form/${componentPath}"
+      ))
       Page(_simple_page(
         title = s"${_escape(component.name)} View Administration",
         subtitle = "View read management baseline",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/form/${componentPath}">Operation forms</a></p>
-             |</article>
-             |<article>
-             |  <h2>View read</h2>
-             |  ${body}
-             |</article>""".stripMargin
+          s"""${nav}
+             |${_admin_card("View read", body)}""".stripMargin
       ))
     }
 
@@ -2948,7 +3053,7 @@ object StaticFormAppRenderer {
       )
       val metadata = definition match {
         case Some(d) =>
-          s"""<div class="table-responsive"><table class="table table-sm">
+          s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
              |  <tbody>
              |    <tr><th>View</th><td>${_escape(d.name)}</td></tr>
              |    <tr><th>Entity</th><td>${_escape(d.entityName)}</td></tr>
@@ -2959,32 +3064,29 @@ object StaticFormAppRenderer {
              |  </tbody>
              |</table></div>""".stripMargin
         case None =>
-          s"""<p>No view definition is registered for <code>${_escape(viewName)}</code>.</p>"""
+          _admin_empty_state(s"No view definition is registered for ${viewName}.")
       }
+      val nav = _admin_nav_card(Vector(
+        "View definitions" -> s"/web/${componentPath}/admin/views",
+        "Component admin" -> s"/web/${componentPath}/admin",
+        "Operation forms" -> s"/form/${componentPath}"
+      ))
+      val readResult = _admin_read_result_list_web_schema(
+        subsystem,
+        "/admin/view/read",
+        Record.create(Vector("component" -> componentPath, "view" -> viewPath) ++ effectivePageRequest.toPairs),
+        basePath,
+        s"No view records are currently available for ${viewName}.",
+        effectivePageRequest,
+        webSchema.fields
+      )
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(viewPath))} View",
         subtitle = "View read baseline",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="/web/${componentPath}/admin/views">View definitions</a> · <a href="/web/${componentPath}/admin">Component admin</a> · <a href="/form/${componentPath}">Operation forms</a></p>
-             |</article>
-             |<article>
-             |  <h2>${_escape(_title_label(viewPath))} metadata</h2>
-             |  ${metadata}
-             |</article>
-             |<article>
-             |  <h2>Read result</h2>
-             |  ${_admin_read_result_list_web_schema(
-                   subsystem,
-                   "/admin/view/read",
-                   Record.create(Vector("component" -> componentPath, "view" -> viewPath) ++ effectivePageRequest.toPairs),
-                   basePath,
-                   s"No view records are currently available for ${viewName}.",
-                   effectivePageRequest,
-                   webSchema.fields
-                 )}
-             |</article>""".stripMargin
+          s"""${nav}
+             |${_admin_card(s"${_title_label(viewPath)} metadata", metadata)}
+             |${_admin_card("Read result", readResult)}""".stripMargin
       ))
     }
 
@@ -3010,24 +3112,24 @@ object StaticFormAppRenderer {
         viewFields = definition.flatMap(_.fieldsFor("detail")).orElse(_admin_entity_view_fields(component, entityName, "detail")),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
+      val nav = _admin_nav_card(Vector(
+        s"Back to ${_title_label(viewPath)} view" -> basePath,
+        "View definitions" -> s"/web/${componentPath}/admin/views",
+        "Component admin" -> s"/web/${componentPath}/admin"
+      ))
+      val body = _admin_read_result_table_web_schema(
+        subsystem,
+        "/admin/view/read",
+        Record.data("component" -> componentPath, "view" -> viewPath, "id" -> id),
+        s"No view record is currently available for ${id}.",
+        webSchema.fields
+      )
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(viewPath))} View Detail",
         subtitle = "View instance read baseline",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="${_escape(basePath)}">Back to ${_escape(_title_label(viewPath))} view</a> · <a href="/web/${componentPath}/admin/views">View definitions</a> · <a href="/web/${componentPath}/admin">Component admin</a></p>
-             |</article>
-             |<article>
-             |  <h2>${_escape(id)}</h2>
-             |  ${_admin_read_result_table_web_schema(
-                   subsystem,
-                   "/admin/view/read",
-                   Record.data("component" -> componentPath, "view" -> viewPath, "id" -> id),
-                   s"No view record is currently available for ${id}.",
-                   webSchema.fields
-                 )}
-             |</article>""".stripMargin
+          s"""${nav}
+             |${_admin_card(id, body)}""".stripMargin
       ))
     }
 
@@ -3065,25 +3167,23 @@ object StaticFormAppRenderer {
       }.mkString("\n")
       val body =
         if (rows.isEmpty) {
-          "<p>No aggregate definitions are registered for this component.</p>"
+          _admin_empty_state("No aggregate definitions are registered for this component.")
         } else {
-          s"""<div class="table-responsive"><table class="table table-sm">
+          s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
              |  <thead><tr><th>Aggregate</th><th>Entity</th><th>Members</th><th>Creates</th><th>Commands</th><th>State</th><th>Invariants</th></tr></thead>
              |  <tbody>${rows}</tbody>
              |</table></div>""".stripMargin
         }
+      val nav = _admin_nav_card(Vector(
+        "Component admin" -> s"/web/${componentPath}/admin",
+        "Operation forms" -> s"/form/${componentPath}"
+      ))
       Page(_simple_page(
         title = s"${_escape(component.name)} Aggregate Administration",
         subtitle = "Aggregate CRUD management baseline",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/form/${componentPath}">Operation forms</a></p>
-             |</article>
-             |<article>
-             |  <h2>Aggregate CRUD</h2>
-             |  ${body}
-             |</article>""".stripMargin
+          s"""${nav}
+             |${_admin_card("Aggregate CRUD", body)}""".stripMargin
       ))
     }
 
@@ -3114,7 +3214,7 @@ object StaticFormAppRenderer {
       )
       val metadata = definition match {
         case Some(d) =>
-          s"""<div class="table-responsive"><table class="table table-sm">
+          s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
              |  <tbody>
              |    <tr><th>Aggregate</th><td>${_escape(d.name)}</td></tr>
              |    <tr><th>Entity</th><td>${_escape(d.entityName)}</td></tr>
@@ -3126,36 +3226,31 @@ object StaticFormAppRenderer {
              |  </tbody>
              |</table></div>""".stripMargin
         case None =>
-          s"""<p>No aggregate definition is registered for <code>${_escape(aggregateName)}</code>.</p>"""
+          _admin_empty_state(s"No aggregate definition is registered for ${aggregateName}.")
       }
+      val nav = _admin_nav_card(Vector(
+        "Aggregate definitions" -> s"/web/${componentPath}/admin/aggregates",
+        "Component admin" -> s"/web/${componentPath}/admin",
+        "Operation forms" -> s"/form/${componentPath}"
+      ))
+      val readResult = _admin_read_result_list_web_schema(
+        subsystem,
+        "/admin/aggregate/read",
+        Record.create(Vector("component" -> componentPath, "aggregate" -> aggregatePath) ++ effectivePageRequest.toPairs),
+        basePath,
+        s"No aggregate records are currently available for ${aggregateName}.",
+        effectivePageRequest,
+        webSchema.fields
+      )
+      val operations = _aggregate_operation_actions(component, aggregateName)
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(aggregatePath))} Aggregate",
         subtitle = "Aggregate read baseline",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="/web/${componentPath}/admin/aggregates">Aggregate definitions</a> · <a href="/web/${componentPath}/admin">Component admin</a> · <a href="/form/${componentPath}">Operation forms</a></p>
-             |</article>
-             |<article>
-             |  <h2>${_escape(_title_label(aggregatePath))} metadata</h2>
-             |  ${metadata}
-             |</article>
-             |<article>
-             |  <h2>Read result</h2>
-             |  ${_admin_read_result_list_web_schema(
-                   subsystem,
-                   "/admin/aggregate/read",
-                   Record.create(Vector("component" -> componentPath, "aggregate" -> aggregatePath) ++ effectivePageRequest.toPairs),
-                   basePath,
-                   s"No aggregate records are currently available for ${aggregateName}.",
-                   effectivePageRequest,
-                   webSchema.fields
-                 )}
-             |</article>
-             |<article>
-             |  <h2>Operations</h2>
-             |  ${_aggregate_operation_actions(component, aggregateName)}
-             |</article>""".stripMargin
+          s"""${nav}
+             |${_admin_card(s"${_title_label(aggregatePath)} metadata", metadata)}
+             |${_admin_card("Read result", readResult)}
+             |${_admin_card("Operations", operations)}""".stripMargin
       ))
     }
 
@@ -3181,28 +3276,26 @@ object StaticFormAppRenderer {
         viewFields = _admin_entity_view_fields(component, entityName, "detail"),
         fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
       )
+      val nav = _admin_nav_card(Vector(
+        s"Back to ${_title_label(aggregatePath)} aggregate" -> basePath,
+        "Aggregate definitions" -> s"/web/${componentPath}/admin/aggregates",
+        "Component admin" -> s"/web/${componentPath}/admin"
+      ))
+      val body = _admin_read_result_table_web_schema(
+        subsystem,
+        "/admin/aggregate/read",
+        Record.data("component" -> componentPath, "aggregate" -> aggregatePath, "id" -> id),
+        s"No aggregate record is currently available for ${id}.",
+        webSchema.fields
+      )
+      val operations = _aggregate_instance_operation_actions(component, aggregateName, id)
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(aggregatePath))} Aggregate Detail",
         subtitle = "Aggregate instance read baseline",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="${_escape(basePath)}">Back to ${_escape(_title_label(aggregatePath))} aggregate</a> · <a href="/web/${componentPath}/admin/aggregates">Aggregate definitions</a> · <a href="/web/${componentPath}/admin">Component admin</a></p>
-             |</article>
-             |<article>
-             |  <h2>${_escape(id)}</h2>
-             |  ${_admin_read_result_table_web_schema(
-                   subsystem,
-                   "/admin/aggregate/read",
-                   Record.data("component" -> componentPath, "aggregate" -> aggregatePath, "id" -> id),
-                   s"No aggregate record is currently available for ${id}.",
-                   webSchema.fields
-                 )}
-             |</article>
-             |<article>
-             |  <h2>Instance operations</h2>
-             |  ${_aggregate_instance_operation_actions(component, aggregateName, id)}
-             |</article>""".stripMargin
+          s"""${nav}
+             |${_admin_card(id, body)}
+             |${_admin_card("Instance operations", operations)}""".stripMargin
       ))
     }
 
@@ -3212,18 +3305,16 @@ object StaticFormAppRenderer {
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val nav = _admin_nav_card(Vector(
+        "Component admin" -> s"/web/${componentPath}/admin",
+        "Operation forms" -> s"/form/${componentPath}"
+      ))
       Page(_simple_page(
         title = s"${_escape(component.name)} Data Administration",
         subtitle = "Data CRUD management baseline",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/form/${componentPath}">Operation forms</a></p>
-             |</article>
-             |<article>
-             |  <h2>Data CRUD</h2>
-             |  <p>Data CRUD execution is not enabled in this baseline. This page reserves the component-scoped management entry point for datastore records and document-level data operations.</p>
-             |</article>""".stripMargin
+          s"""${nav}
+             |${_admin_card("Data CRUD", "Data CRUD execution is not enabled in this baseline. This page reserves the component-scoped management entry point for datastore records and document-level data operations.")}""".stripMargin
       ))
     }
 
@@ -3257,21 +3348,29 @@ object StaticFormAppRenderer {
         "No records are currently available for this data collection.",
         includeEdit = true
       )
+      val nav = _admin_nav_card(Vector(
+        "Component admin" -> s"/web/${componentPath}/admin",
+        "Data CRUD" -> s"/web/${componentPath}/admin/data",
+        "Operation forms" -> s"/form/${componentPath}"
+      ))
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data Administration",
         subtitle = "Data record list baseline",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/web/${componentPath}/admin/data">Data CRUD</a> · <a href="/form/${componentPath}">Operation forms</a></p>
-             |</article>
-             |<article>
-             |  <h2>${_escape(_title_label(dataPath))} records</h2>
-             |  <p>List with paging${result.total.map(t => s" · total ${_escape(t.toString)}").getOrElse("")}</p>
-             |  ${warningHtml}
-             |  <p><a class="btn btn-primary" href="${_escape(basePath)}/new">New ${_escape(_title_label(dataPath))}</a></p>
-             |  ${table}
-             |  ${_paging_nav(result.page, result.pageSize, result.total, effectivePageRequest.href(basePath), Some(result.hasNext))}
+          s"""${nav}
+             |<article class="card admin-card">
+             |  <div class="card-body">
+             |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+             |      <div>
+             |        <h2 class="card-title mb-1">${_escape(_title_label(dataPath))} records</h2>
+             |        <p class="card-text text-body-secondary">List with paging${result.total.map(t => s" · total ${_escape(t.toString)}").getOrElse("")}</p>
+             |      </div>
+             |      <a class="btn btn-primary" href="${_escape(basePath)}/new">New ${_escape(_title_label(dataPath))}</a>
+             |    </div>
+             |    ${warningHtml}
+             |    ${table}
+             |    ${_paging_nav(result.page, result.pageSize, result.total, effectivePageRequest.href(basePath), Some(result.hasNext))}
+             |  </div>
              |</article>""".stripMargin
       ))
     }
@@ -3287,17 +3386,23 @@ object StaticFormAppRenderer {
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val dataPath = NamingConventions.toNormalizedSegment(dataName)
       val basePath = s"/web/${componentPath}/admin/data/${dataPath}"
+      val nav = _admin_nav_card(Vector(
+        s"Back to ${_title_label(dataPath)} records" -> basePath
+      ))
+      val body = _admin_data_record_table(subsystem, componentPath, dataPath, id, webDescriptor)
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data Detail",
         subtitle = "Data record detail baseline",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="${_escape(basePath)}">Back to ${_escape(_title_label(dataPath))} records</a> · <a href="${_escape(basePath)}/${_escape(id)}/edit">Edit</a></p>
-             |</article>
-             |<article>
-             |  <h2>${_escape(_title_label(dataPath))} detail</h2>
-             |  ${_admin_data_record_table(subsystem, componentPath, dataPath, id, webDescriptor)}
+          s"""${nav}
+             |<article class="card admin-card">
+             |  <div class="card-body">
+             |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+             |      <h2 class="card-title mb-0">${_escape(_title_label(dataPath))} detail</h2>
+             |      <a class="btn btn-primary" href="${_escape(basePath)}/${_escape(id)}/edit">Edit</a>
+             |    </div>
+             |    ${body}
+             |  </div>
              |</article>""".stripMargin
       ))
     }
@@ -3332,23 +3437,28 @@ object StaticFormAppRenderer {
         "data-field",
         effectiveValidation
       )
+      val nav = _admin_nav_card(Vector(
+        "Detail" -> s"${webBasePath}/${id}",
+        s"Back to ${_title_label(dataPath)} records" -> webBasePath
+      ))
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data Edit",
         subtitle = "Data record edit baseline",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="${_escape(webBasePath)}/${_escape(id)}">Detail</a> · <a href="${_escape(webBasePath)}">Back to ${_escape(_title_label(dataPath))} records</a></p>
-             |</article>
-             |<article>
-             |  <h2>Edit ${_escape(_title_label(dataPath))}</h2>
-             |  ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
-             |  <form method="post" action="${_escape(actionPath)}">
-             |    ${controls}
-             |    ${hiddenContext}
-             |    <button type="submit" class="btn btn-primary">Update</button>
-             |    <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}/${_escape(id)}">Cancel</a>
-             |  </form>
+          s"""${nav}
+             |<article class="card admin-card">
+             |  <div class="card-body">
+             |    <h2 class="card-title">Edit ${_escape(_title_label(dataPath))}</h2>
+             |    ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
+             |    <form method="post" action="${_escape(actionPath)}" class="admin-form">
+             |      ${controls}
+             |      ${hiddenContext}
+             |      <div class="d-flex flex-wrap gap-2">
+             |        <button type="submit" class="btn btn-primary">Update</button>
+             |        <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}/${_escape(id)}">Cancel</a>
+             |      </div>
+             |    </form>
+             |  </div>
              |</article>""".stripMargin
       ))
     }
@@ -3376,23 +3486,28 @@ object StaticFormAppRenderer {
       val effectiveValidation = validation.filter(_.webSchema.selector == webSchema.selector)
       val hiddenContext = _hidden_form_context_inputs(values)
       val controls = _admin_new_controls(webSchema.fields, values, "dataFields", "id=record-1&#10;status=draft", effectiveValidation)
+      val nav = _admin_nav_card(Vector(
+        s"Back to ${_title_label(dataPath)} records" -> webBasePath,
+        "Data CRUD" -> s"/web/${componentPath}/admin/data"
+      ))
       Page(_simple_page(
         title = s"${_escape(component.name)} ${_escape(_title_label(dataPath))} Data New",
         subtitle = "Data record create baseline",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="${_escape(webBasePath)}">Back to ${_escape(_title_label(dataPath))} records</a> · <a href="/web/${componentPath}/admin/data">Data CRUD</a></p>
-             |</article>
-             |<article>
-             |  <h2>New ${_escape(_title_label(dataPath))}</h2>
-             |  ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
-             |  <form method="post" action="${_escape(actionPath)}">
-             |    ${controls}
-             |    ${hiddenContext}
-             |    <button type="submit" class="btn btn-primary">Create</button>
-             |    <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}">Cancel</a>
-             |  </form>
+          s"""${nav}
+             |<article class="card admin-card">
+             |  <div class="card-body">
+             |    <h2 class="card-title">New ${_escape(_title_label(dataPath))}</h2>
+             |    ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
+             |    <form method="post" action="${_escape(actionPath)}" class="admin-form">
+             |      ${controls}
+             |      ${hiddenContext}
+             |      <div class="d-flex flex-wrap gap-2">
+             |        <button type="submit" class="btn btn-primary">Create</button>
+             |        <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}">Cancel</a>
+             |      </div>
+             |    </form>
+             |  </div>
              |</article>""".stripMargin
       ))
     }
@@ -3552,20 +3667,20 @@ object StaticFormAppRenderer {
       body =
         s"""|    <div class="status mb-3"><span class="pulse"></span><span id="statusText">Connecting</span></div>
        |    <section class="row g-3 mb-3">
-       |      <div class="col-12 col-lg-4"><article id="healthPanel" class="card h-100 border-success"><div class="card-body"><h2 class="h5 card-title">Health</h2><div class="big" id="healthText">UP</div><p class="text-secondary mb-0" id="healthNote">Starting</p></div></article></div>
-       |      <div class="col-12 col-lg-4"><article class="card h-100"><div class="card-body"><h2 class="h5 card-title">Subsystem</h2><p class="mb-1"><strong id="subsystemName">-</strong></p><p class="text-secondary mb-0" id="subsystemVersion">-</p></div></article></div>
-       |      <div class="col-12 col-lg-4"><article class="card h-100"><div class="card-body"><h2 class="h5 card-title">CNCF</h2><p class="mb-1"><strong id="cncfVersion">-</strong></p><p class="mb-0"><a id="detailsLink" href="/web/system/admin">Admin details</a> · <a id="performanceLink" href="/web/system/performance">Performance details</a> · <a id="manualLink" href="/web/system/manual">Manual</a> · <a id="consoleLink" href="/web/console">Console</a></p></div></article></div>
+       |      <div class="col-12 col-lg-4"><article id="healthPanel" class="card h-100 shadow-sm border-success"><div class="card-body"><h2 class="h5 card-title">Health</h2><div class="big"><span id="healthText" class="badge text-bg-success">UP</span></div><p class="text-secondary mb-0 mt-2" id="healthNote">Starting</p></div></article></div>
+       |      <div class="col-12 col-lg-4"><article class="card h-100 shadow-sm"><div class="card-body"><h2 class="h5 card-title">Subsystem</h2><p class="mb-1"><strong id="subsystemName">-</strong></p><p class="text-secondary mb-0" id="subsystemVersion">-</p></div></article></div>
+       |      <div class="col-12 col-lg-4"><article class="card h-100 shadow-sm"><div class="card-body"><h2 class="h5 card-title">CNCF</h2><p class="mb-1"><strong id="cncfVersion">-</strong></p><p class="mb-0"><a id="detailsLink" href="/web/system/admin">Admin details</a> · <a id="performanceLink" href="/web/system/performance">Performance details</a> · <a id="manualLink" href="/web/system/manual">Manual</a> · <a id="consoleLink" href="/web/console">Console</a></p></div></article></div>
        |    </section>
        |    <section class="row g-3 mb-3">
-       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">Components</span><strong id="componentCount">0</strong></div></div></div>
-       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">Services</span><strong id="serviceCount">0</strong></div></div></div>
-       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">Operations</span><strong id="operationCount">0</strong></div></div></div>
-       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">HTML requests</span><strong id="requestCount">0</strong><small class="text-secondary" id="requestErrors">errors 0</small></div></div></div>
-       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">Jobs</span><strong id="jobCount">0</strong><small class="text-secondary" id="jobErrors">errors 0</small></div></div></div>
-       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100"><div class="card-body"><span class="text-secondary">Assembly warnings</span><strong id="assemblyWarningCount">0</strong><small><a id="assemblyWarningsLink" href="/form/admin/assembly/warnings">details</a></small></div></div></div>
+       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100 shadow-sm"><div class="card-body"><span class="text-secondary">Components</span><strong id="componentCount">0</strong></div></div></div>
+       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100 shadow-sm"><div class="card-body"><span class="text-secondary">Services</span><strong id="serviceCount">0</strong></div></div></div>
+       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100 shadow-sm"><div class="card-body"><span class="text-secondary">Operations</span><strong id="operationCount">0</strong></div></div></div>
+       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100 shadow-sm"><div class="card-body"><span class="text-secondary">HTML requests</span><strong id="requestCount">0</strong><small class="text-secondary" id="requestErrors">errors 0</small></div></div></div>
+       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100 shadow-sm"><div class="card-body"><span class="text-secondary">Jobs</span><strong id="jobCount">0</strong><small class="text-secondary" id="jobErrors">errors 0</small></div></div></div>
+       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100 shadow-sm"><div class="card-body"><span class="text-secondary">Assembly warnings</span><strong id="assemblyWarningCount">0</strong><small><a id="assemblyWarningsLink" href="/form/admin/assembly/warnings">details</a></small></div></div></div>
        |    </section>
        |    <section class="row g-3 mb-3">
-       |      <div class="col-12 col-xl-6"><article class="card h-100"><div class="card-body">
+       |      <div class="col-12 col-xl-6"><article class="card h-100 shadow-sm"><div class="card-body">
        |        <h2 class="h5 card-title">Traffic</h2>
        |        <div class="btn-group mb-3" id="graphTabs" role="group">
        |          <button type="button" class="btn btn-outline-primary btn-sm" data-window="minute">1 minute</button>
@@ -3574,22 +3689,22 @@ object StaticFormAppRenderer {
        |        </div>
        |        <div class="spark" id="requestSpark"></div>
        |      </div></article></div>
-       |      <div class="col-12 col-xl-6"><article class="card h-100"><div class="card-body">
+       |      <div class="col-12 col-xl-6"><article class="card h-100 shadow-sm"><div class="card-body">
        |        <h2 class="h5 card-title">Activity counts</h2>
        |        <div id="activityCounts"></div>
        |      </div></article></div>
        |    </section>
        |    <section class="row g-3 mb-3">
-       |      <div class="col-12 col-xl-6"><article class="card h-100"><div class="card-body">
+       |      <div class="col-12 col-xl-6"><article class="card h-100 shadow-sm"><div class="card-body">
        |        <h2 class="h5 card-title">ActionCall jobs</h2>
        |        <div class="bars" id="jobBars"></div>
        |      </div></article></div>
-       |      <div class="col-12 col-xl-6"><article class="card h-100"><div class="card-body">
+       |      <div class="col-12 col-xl-6"><article class="card h-100 shadow-sm"><div class="card-body">
        |        <h2 class="h5 card-title">Components</h2>
        |        <div class="bars" id="componentBars"></div>
        |      </div></article></div>
        |    </section>
-       |    <article class="card"><div class="card-body">
+       |    <article class="card shadow-sm"><div class="card-body">
        |      <h2 class="h5 card-title">Configuration summary</h2>
        |      <div id="configSummary"></div>
        |    </div></article>
@@ -3639,6 +3754,7 @@ object StaticFormAppRenderer {
        |      const health = (failedJobs > 0 || recentFailures > 0 || recentDenials > 0 || assemblyWarnings > 0) ? "WARN" : data.status;
        |      healthPanel.classList.toggle("border-success", health == "UP");
        |      healthPanel.classList.toggle("border-warning", health != "UP");
+       |      healthText.className = health == "UP" ? "badge text-bg-success" : "badge text-bg-warning";
        |      healthText.textContent = health;
        |      healthNote.textContent = `jobs failed: $${failedJobs}, recent failures: $${recentFailures}, recent denials: $${recentDenials}, assembly warnings: $${assemblyWarnings}`;
        |      subsystemName.textContent = data.subsystem.name;
@@ -3683,7 +3799,7 @@ object StaticFormAppRenderer {
        |        ["Authorization", data.authorization.decisions.summary]
        |      ];
        |      const cells = rows.map(([name, summary]) => `<tr><td>$${name}</td><td>$${summary.cumulative.count}</td><td>$${summary.cumulative.errors}</td><td>$${summary.day.count}</td><td>$${summary.day.errors}</td><td>$${summary.hour.count}</td><td>$${summary.hour.errors}</td><td>$${summary.minute.count}</td><td>$${summary.minute.errors}</td></tr>`).join("");
-       |      return `<table class="table table-sm"><thead><tr><th>Level</th><th>Total</th><th>Total err</th><th>1d</th><th>1d err</th><th>1h</th><th>1h err</th><th>1m</th><th>1m err</th></tr></thead><tbody>$${cells}</tbody></table>`;
+       |      return `<div class="table-responsive"><table class="table table-sm table-hover align-middle"><thead><tr><th>Level</th><th>Total</th><th>Total err</th><th>1d</th><th>1d err</th><th>1h</th><th>1h err</th><th>1m</th><th>1m err</th></tr></thead><tbody>$${cells}</tbody></table></div>`;
        |    }
        |
        |    function renderGraph() {
@@ -3734,9 +3850,13 @@ object StaticFormAppRenderer {
     performancePath: String,
     webDescriptor: WebDescriptor,
     runtimeConfiguration: Option[ResolvedConfiguration],
-    operationalDetails: Option[String],
-    componentFormsPath: Option[String]
+      operationalDetails: Option[String],
+      componentFormsPath: Option[String]
   ): String = {
+    val descriptorPath = componentFormsPath
+      .map(_.stripPrefix("/form/"))
+      .map(componentPath => s"/web/${componentPath}/admin/descriptor")
+      .getOrElse("/web/system/admin/descriptor")
     val componentBlocks = components.map { component =>
       val services = component.protocol.services.services.map { service =>
         val operations = service.operations.operations.toVector.map { operation =>
@@ -3775,7 +3895,7 @@ object StaticFormAppRenderer {
            |${_component_admin_actions(componentFormsPath)}
            |<article>
            |  <h2>Web Descriptor</h2>
-           |  ${_web_descriptor_summary(webDescriptor)}
+           |  ${_web_descriptor_summary(webDescriptor, descriptorPath)}
            |</article>
            |${_admin_runtime_configuration(runtimeConfiguration)}
            |${_admin_job_control(runtimeConfiguration)}
@@ -3929,7 +4049,8 @@ object StaticFormAppRenderer {
   }
 
   private def _web_descriptor_summary(
-    descriptor: WebDescriptor
+    descriptor: WebDescriptor,
+    descriptorPath: String
   ): String =
     s"""<div class="table-responsive"><table class="table table-sm">
        |  <tbody>
@@ -3942,7 +4063,7 @@ object StaticFormAppRenderer {
        |    <tr><th>Admin entries</th><td>${descriptor.admin.size}</td></tr>
        |  </tbody>
        |</table></div>
-       |<p><a href="/web/system/admin/descriptor">Resolved descriptor JSON</a></p>
+       |<p><a href="${_escape(descriptorPath)}">Completed descriptor JSON</a></p>
        |${_web_descriptor_app_list(descriptor)}
        |${_web_descriptor_exposure_list(descriptor)}
        |${_web_descriptor_admin_list(descriptor)}""".stripMargin
@@ -3966,10 +4087,13 @@ object StaticFormAppRenderer {
     }
 
   private def _web_descriptor_json(
-    descriptor: WebDescriptor
+    descriptor: WebDescriptor,
+    completed: Boolean = false,
+    componentSegment: Option[String] = None
   ): String =
     Json.obj(
       "status" -> Json.fromString(if (descriptor.hasControls) "configured" else "default"),
+      "defaultView" -> Json.fromString(descriptor.defaultView),
       "auth" -> Json.obj(
         "mode" -> Json.fromString(descriptor.auth.mode)
       ),
@@ -4018,14 +4142,28 @@ object StaticFormAppRenderer {
       ),
       "apps" -> Json.arr(
         descriptor.apps.map { app =>
-          Json.obj(
-            "name" -> Json.fromString(app.name),
-            "path" -> Json.fromString(app.path),
-            "kind" -> Json.fromString(app.kind)
-          )
+          _web_descriptor_app_json(if (completed) app.completedFor(componentSegment) else app)
         }*
       )
     ).spaces2
+
+  private def _web_descriptor_app_json(
+    app: WebDescriptor.App
+  ): Json = {
+    val configured = Json.obj(
+      "name" -> Json.fromString(app.name),
+      "path" -> Json.fromString(app.path),
+      "kind" -> Json.fromString(app.kind)
+    )
+    val optionalFields = Vector(
+      app.root.map("root" -> Json.fromString(_)),
+      app.route.map("route" -> Json.fromString(_))
+    ).flatten
+    if (optionalFields.isEmpty)
+      configured
+    else
+      configured.deepMerge(Json.obj(optionalFields*))
+  }
 
   private def _web_descriptor_app_list(
     descriptor: WebDescriptor
@@ -4034,10 +4172,11 @@ object StaticFormAppRenderer {
       "<p>Using built-in Web HTML app defaults.</p>"
     } else {
       val rows = descriptor.apps.map { app =>
-        s"""<tr><td>${_escape(app.name)}</td><td><code>${_escape(app.path)}</code></td><td>${_escape(app.kind)}</td></tr>"""
+        val completed = app.completed
+        s"""<tr><td>${_escape(completed.name)}</td><td><code>${_escape(completed.effectivePath)}</code></td><td><code>${_escape(completed.effectiveRoot)}</code></td><td><code>${_escape(completed.effectiveRoute)}</code></td><td>${_escape(completed.effectiveKind)}</td></tr>"""
       }.mkString("\n")
       s"""<h3>Apps</h3><div class="table-responsive"><table class="table table-sm">
-         |  <thead><tr><th>Name</th><th>Path</th><th>Kind</th></tr></thead>
+         |  <thead><tr><th>Name</th><th>Path</th><th>Root</th><th>Route</th><th>Kind</th></tr></thead>
          |  <tbody>${rows}</tbody>
          |</table></div>""".stripMargin
     }
@@ -4130,34 +4269,20 @@ object StaticFormAppRenderer {
     val schema = SchemaProjection.project(component, selector)
     val childLinks = _manual_child_links(currentPath, childNames)
     val body =
-      s"""<article>
-         |  <h2>Reference navigation</h2>
-         |  <p>This manual is read-only. Use it to inspect help, describe, schema, OpenAPI, and MCP entry points.</p>
-         |  <div class="d-flex flex-wrap gap-2 mt-3">
-         |    <a class="btn btn-outline-primary" href="${_escape(currentPath)}#help">Help</a>
-         |    <a class="btn btn-outline-primary" href="${_escape(currentPath)}#describe">Describe</a>
-         |    <a class="btn btn-outline-primary" href="${_escape(currentPath)}#schema">Schema</a>
-         |    <a class="btn btn-outline-secondary" href="/web/system/manual/openapi.json">OpenAPI JSON</a>
-         |    <a class="btn btn-outline-secondary" href="/mcp">MCP endpoint</a>
-         |    <a class="btn btn-outline-secondary" href="/web/console">Console</a>
-         |  </div>
-         |</article>
-         |<article>
-         |  <h2>Children</h2>
-         |  ${childLinks}
-         |</article>
-         |<article id="help">
-         |  <h2>Help</h2>
-         |  ${_manual_record(help)}
-         |</article>
-         |<article id="describe">
-         |  <h2>Describe</h2>
-         |  ${_manual_record(describe)}
-         |</article>
-         |<article id="schema">
-         |  <h2>Schema</h2>
-         |  ${_manual_record(schema)}
-         |</article>""".stripMargin
+      s"""${_manual_card("Reference navigation",
+         s"""<p>This manual is read-only. Use it to inspect help, describe, schema, OpenAPI, and MCP entry points.</p>
+            |<div class="d-flex flex-wrap gap-2 mt-3">
+            |  <a class="btn btn-outline-primary" href="${_escape(currentPath)}#help">Help</a>
+            |  <a class="btn btn-outline-primary" href="${_escape(currentPath)}#describe">Describe</a>
+            |  <a class="btn btn-outline-primary" href="${_escape(currentPath)}#schema">Schema</a>
+            |  <a class="btn btn-outline-secondary" href="/web/system/manual/openapi.json">OpenAPI JSON</a>
+            |  <a class="btn btn-outline-secondary" href="/mcp">MCP endpoint</a>
+            |  <a class="btn btn-outline-secondary" href="/web/console">Console</a>
+            |</div>""".stripMargin)}
+         |${_manual_card("Children", childLinks)}
+         |${_manual_card("Help", _manual_record(help), Some("help"))}
+         |${_manual_card("Describe", _manual_record(describe), Some("describe"))}
+         |${_manual_card("Schema", _manual_record(schema), Some("schema"))}""".stripMargin
     _simple_page(title, subtitle, body)
   }
 
@@ -4170,38 +4295,21 @@ object StaticFormAppRenderer {
     val schema = SchemaProjection.project(component, None)
     val componentLinks = _manual_component_links(subsystem.components)
     val body =
-      s"""<article>
-         |  <h2>Reference navigation</h2>
-         |  <p>This manual is read-only. Use it to inspect help, describe, schema, OpenAPI, and MCP entry points.</p>
-         |  <div class="d-flex flex-wrap gap-2 mt-3">
-         |    <a class="btn btn-outline-primary" href="/web/system/dashboard">System dashboard</a>
-         |    <a class="btn btn-outline-primary" href="/web/system/admin">Admin configuration</a>
-         |    <a class="btn btn-outline-primary" href="/web/system/performance">Performance details</a>
-         |    <a class="btn btn-outline-secondary" href="/web/system/manual/openapi.json">OpenAPI JSON</a>
-         |    <a class="btn btn-outline-secondary" href="/mcp">MCP endpoint</a>
-         |    <a class="btn btn-outline-secondary" href="/web/console">Console</a>
-         |  </div>
-         |</article>
-         |<article>
-         |  <h2>Components</h2>
-         |  ${componentLinks}
-         |</article>
-         |<article>
-         |  <h2>Console handoff</h2>
-         |  <p>Use <a href="/web/console">System Console</a> for controlled operation entry. Manual pages remain read-only and do not inline operation actions.</p>
-         |</article>
-         |<article id="help">
-         |  <h2>Help</h2>
-         |  ${_manual_record(help)}
-         |</article>
-         |<article id="describe">
-         |  <h2>Describe</h2>
-         |  ${_manual_record(describe)}
-         |</article>
-         |<article id="schema">
-         |  <h2>Schema</h2>
-         |  ${_manual_record(schema)}
-         |</article>""".stripMargin
+      s"""${_manual_card("Reference navigation",
+         s"""<p>This manual is read-only. Use it to inspect help, describe, schema, OpenAPI, and MCP entry points.</p>
+            |<div class="d-flex flex-wrap gap-2 mt-3">
+            |  <a class="btn btn-outline-primary" href="/web/system/dashboard">System dashboard</a>
+            |  <a class="btn btn-outline-primary" href="/web/system/admin">Admin configuration</a>
+            |  <a class="btn btn-outline-primary" href="/web/system/performance">Performance details</a>
+            |  <a class="btn btn-outline-secondary" href="/web/system/manual/openapi.json">OpenAPI JSON</a>
+            |  <a class="btn btn-outline-secondary" href="/mcp">MCP endpoint</a>
+            |  <a class="btn btn-outline-secondary" href="/web/console">Console</a>
+            |</div>""".stripMargin)}
+         |${_manual_card("Components", componentLinks)}
+         |${_manual_card("Console handoff", """<p class="mb-0">Use <a href="/web/console">System Console</a> for controlled operation entry. Manual pages remain read-only and do not inline operation actions.</p>""")}
+         |${_manual_card("Help", _manual_record(help), Some("help"))}
+         |${_manual_card("Describe", _manual_record(describe), Some("describe"))}
+         |${_manual_card("Schema", _manual_record(schema), Some("schema"))}""".stripMargin
     _simple_page("System Manual", "Read-only runtime reference", body)
   }
 
@@ -4209,27 +4317,41 @@ object StaticFormAppRenderer {
     components: Vector[Component]
   ): String =
     if (components.isEmpty)
-      """<p>No component reference entries.</p>"""
+      _web_empty_state("No component reference entries.")
     else
       components.sortBy(_.name).map { component =>
         val segment = NamingConventions.toNormalizedSegment(component.name)
-        s"""<a class="btn btn-sm btn-outline-primary me-2 mb-2" href="/web/${_escape(segment)}/manual">${_escape(component.name)}</a>"""
-      }.mkString("\n")
+        s"""<a class="btn btn-sm btn-outline-primary" href="/web/${_escape(segment)}/manual">${_escape(component.name)}</a>"""
+      }.mkString("""<div class="d-flex flex-wrap gap-2">""", "\n", "</div>")
 
   private def _manual_child_links(
     currentPath: String,
     children: Vector[String]
   ): String =
     if (children.isEmpty)
-      """<p>No child reference entries.</p>"""
+      _web_empty_state("No child reference entries.")
     else
       children.map { child =>
         val segment = NamingConventions.toNormalizedSegment(child)
-        s"""<a class="btn btn-sm btn-outline-primary me-2 mb-2" href="${_escape(currentPath + "/" + segment)}">${_escape(child)}</a>"""
-      }.mkString("\n")
+        s"""<a class="btn btn-sm btn-outline-primary" href="${_escape(currentPath + "/" + segment)}">${_escape(child)}</a>"""
+      }.mkString("""<div class="d-flex flex-wrap gap-2">""", "\n", "</div>")
 
   private def _manual_record(record: Record): String =
-    s"""<dl class="row">${_property_rows(record.asMap.map { case (k, v) => k -> _manual_value(v) })}</dl>"""
+    s"""<dl class="row mb-0">${_property_rows(record.asMap.map { case (k, v) => k -> _manual_value(v) })}</dl>"""
+
+  private def _manual_card(
+    title: String,
+    body: String,
+    id: Option[String] = None
+  ): String = {
+    val idText = id.map(x => s""" id="${_escape(x)}"""").getOrElse("")
+    s"""<article${idText} class="card manual-card shadow-sm">
+       |  <div class="card-body">
+       |    <h2 class="card-title h5">${_escape(title)}</h2>
+       |    ${body}
+       |  </div>
+       |</article>""".stripMargin
+  }
 
   private def _manual_value(value: Any): String =
     value match {
@@ -4685,7 +4807,7 @@ object StaticFormAppRenderer {
   }
 
   private def _summary_table(summary: RuntimeDashboardMetrics.CountSummary): String =
-    s"""<div class="table-responsive"><table class="table table-sm">
+    s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
        |  <thead><tr><th>Window</th><th>Count</th><th>Errors</th></tr></thead>
        |  <tbody>
        |    ${_summary_row("Total", summary.cumulative)}
@@ -4703,7 +4825,7 @@ object StaticFormAppRenderer {
 
   private def _jobs_table(jobs: (Int, Int, Int, Int)): String = {
     val (running, queued, completed, failed) = jobs
-    s"""<div class="table-responsive"><table class="table table-sm">
+    s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
        |  <thead><tr><th>Status</th><th>Count</th></tr></thead>
        |  <tbody>
        |    <tr><td>Total</td><td>${running + queued + completed + failed}</td></tr>
@@ -4723,7 +4845,7 @@ object StaticFormAppRenderer {
     val max =
       if (recent.isEmpty) 0L
       else recent.map(_.elapsedMillis).max
-    s"""<div class="table-responsive"><table class="table table-sm">
+    s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
        |  <thead><tr><th>Metric</th><th>Value</th></tr></thead>
        |  <tbody>
        |    <tr><td>Recent samples</td><td>${count}</td></tr>
@@ -4744,12 +4866,12 @@ object StaticFormAppRenderer {
     emptyMessage: String
   ): String =
     if (requests.isEmpty) {
-      s"<p>${_escape(emptyMessage)}</p>"
+      _web_empty_state(emptyMessage)
     } else {
       val rows = requests.map { x =>
         s"""<tr><td>${_escape(_instant_text(x.observedAt))}</td><td>${_escape(x.method)}</td><td><code>${_escape(x.path)}</code></td><td>${x.status}</td><td>${x.elapsedMillis} ms</td></tr>"""
       }.mkString("\n")
-      s"""<div class="table-responsive"><table class="table table-sm">
+      s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
          |  <thead><tr><th>Observed at</th><th>Method</th><th>Path</th><th>Status</th><th>Elapsed</th></tr></thead>
          |  <tbody>${rows}</tbody>
          |</table></div>""".stripMargin

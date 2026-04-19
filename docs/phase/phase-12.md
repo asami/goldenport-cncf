@@ -55,6 +55,10 @@ This document is a progress dashboard, not a design journal.
   Card widgets are the first focus, followed by layout, navigation, feedback,
   content, and form-helper widgets that keep Static Form App expression-oriented
   rather than control-structure based.
+- L (PLANNED): WEB-12 — Define Web app packaging and deployment.
+  Static Form Web App packaging should cover descriptor discovery, static
+  result templates, local assets, optional island scripts, and archive/project
+  deployment without requiring a SPA framework.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
@@ -97,11 +101,17 @@ Current note:
   Implement the next Static Form App widget group, starting with
   `textus:record-card` and `textus:card-list`, then adding layout, navigation,
   feedback, content, and form-helper widgets as needed.
+- [ ] WEB-12: Define Web app packaging and deployment.
+  Specify and implement how Static Form Web App resources are packaged and
+  deployed: Web Descriptor, static result templates, app-local assets, optional
+  island scripts, project discovery, and packaged component/subsystem archive
+  discovery.
 
 ## 6. Next Phase Candidates
 
 - NP-1201: Rich UI generation from wireframe DSL.
-- NP-1202: Web application hosting and SPA packaging integration.
+- NP-1202: SPA hosting as a separate mode beyond Static Form Web App plus
+  islands.
 - NP-1203: Advanced dashboard visualization such as SVG assembly diagrams.
 - NP-1204: Public JavaScript SDK and generated client helpers.
 

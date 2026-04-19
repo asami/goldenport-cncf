@@ -2,6 +2,10 @@
 
 status = draft
 
+Current stable Web Layer design is maintained in
+`docs/design/web-layer.md`. This note remains as Phase 12 development context
+and rollout history.
+
 ## Purpose
 
 This document fixes the Phase 12 Web Layer design surface before runtime
@@ -63,6 +67,14 @@ It is a lightweight web app model based on:
 - Form API for schema-driven form definition and validation
 - REST execution for operation invocation
 - convention-based result page resolution
+
+The longer-term Web shape is Static Form Web App plus Island Architecture:
+server-rendered pages remain the baseline, while local interactive islands can
+be attached to specific page regions for dashboard refresh, field assistance,
+async command status, or richer filtering. Islands are optional enhancement and
+must not replace Operation/Form API contracts, authorization, persistence, or
+server-rendered fallback behavior. The stable design is maintained in
+`docs/design/web-layer.md`.
 
 Bootstrap 5 is the default UI basis for Static Form App pages, including
 dashboard, admin, performance, console, and manual pages. The assets are served
@@ -160,7 +172,7 @@ Dashboard navigation may link to:
 
 - `/web/system/admin`
 - `/web/system/performance`
-- `/web/manual`
+- `/web/system/manual`
 - `/web/console`
 
 Those links do not make Dashboard an execution surface. Console operation

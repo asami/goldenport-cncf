@@ -214,7 +214,8 @@ Define the active control web app separately from the read-only Dashboard.
 - [x] Define resolved runtime configuration visibility and masking rules.
 - [x] Define assembly report / warning drill-down links from admin pages.
 - [x] Define execution history and calltree drill-down links from admin pages.
-- [x] Define Web Descriptor drill-down or resolved descriptor JSON view.
+- [x] Define Web Descriptor drill-down with completed descriptor JSON and configured descriptor comparison.
+- [x] Link component admin pages to `/web/{component}/admin/descriptor` and resolve component route placeholders there.
 - [x] Define job control entry points and minimum safety boundaries.
 - [x] Define configuration mutation/view split and required authorization boundary.
 - [x] Define links from dashboard/manual into console actions without making them inline dashboard/manual behavior.
@@ -715,7 +716,7 @@ WEB-09 closure:
 
 ## WEB-10: Bootstrap 5 UI Polish
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -728,20 +729,51 @@ Static Form App.
 
 ### Detailed Tasks
 
-- [ ] Apply the Bootstrap 5 UI polish design to built-in Web pages.
-- [ ] Polish Management Console list/detail/edit/new pages with Bootstrap
+- [x] Apply the Bootstrap 5 UI polish design to built-in Web pages.
+- [x] Polish Management Console list/detail/edit/new pages with Bootstrap
       tables, forms, action areas, and validation feedback.
-- [ ] Polish Manual/reference pages with Bootstrap navigation, cards/sections,
+      - [x] First pass for entity admin list/detail/edit/new pages:
+            card layout, action buttons, hover tables, and form action areas.
+      - [x] Apply the same polish pass to data, aggregate, and view admin
+            pages where the page type supports equivalent controls.
+      - [x] Polish empty, warning, error, and validation feedback surfaces with
+            Bootstrap alert/empty-state conventions.
+- [x] Polish Manual/reference pages with Bootstrap navigation, cards/sections,
       schema tables, and code/path presentation.
-- [ ] Polish Dashboard cards, tables, tabs, badges, and metric layout while
+- [x] Polish Dashboard cards, tables, tabs, badges, and metric layout while
       keeping the existing dashboard state contract.
-- [ ] Confirm local Bootstrap assets remain the only baseline dependency.
-- [ ] Confirm responsive behavior on desktop, tablet, and smartphone widths.
-- [ ] Add executable or screenshot-style checks where practical for non-broken
+- [x] Confirm local Bootstrap assets remain the only baseline dependency.
+- [x] Confirm responsive behavior on desktop, tablet, and smartphone widths.
+- [x] Add executable or screenshot-style checks where practical for non-broken
       Bootstrap rendering.
+
+### Closure
+
+WEB-10 is complete as the Phase 12 first-pass Bootstrap polish scope.
+
+Completed scope:
+
+- built-in Management Console list/detail/edit/new pages use Bootstrap cards,
+  responsive tables, grouped actions, form action areas, and feedback surfaces.
+- Manual/reference pages use Bootstrap navigation and card sections while
+  remaining read-only.
+- Dashboard pages use Bootstrap cards, badges, responsive tables, and the
+  existing one-second dashboard state refresh contract.
+- local Bootstrap assets remain the only baseline dependency.
+- executable checks cover local asset usage, viewport metadata, no CDN
+  references, and responsive Bootstrap structure.
+
+Deferred scope:
+
+- reusable Textus card/layout/feedback widgets are tracked by WEB-11.
+- richer theme customization, visual identity, and screenshot-level responsive
+  regression checks are future polish work recorded in
+  `docs/journal/2026/04/web-bootstrap-polish-quality-future-note.md`.
 
 ### Inputs
 
+- `docs/design/web-layer.md`
+- `docs/spec/textus-widget.md`
 - `docs/notes/web-bootstrap-ui-polish-design.md`
 - `docs/notes/cncf-web-static-form-app-contract.md`
 - `docs/notes/cncf-web-layer-phase-12.md`
@@ -792,15 +824,131 @@ layout, navigation, feedback, content, and form-helper widgets.
 ### Inputs
 
 - `docs/notes/web-textus-widget-design.md`
+- `docs/spec/textus-widget.md`
 - `docs/notes/cncf-web-static-form-app-contract.md`
 - `docs/journal/2026/04/web-bootstrap-card-widget-note.md`
 - `textus-sample-app`
 
 ---
 
+## WEB-12: Web App Packaging And Deployment
+
+Status: PLANNED
+
+### Objective
+
+Define and implement how a Static Form Web App is packaged, discovered, and
+deployed with a Component/Subystem application.
+
+The current `textus-sample-app` uses `config/` as the practical Web app root:
+`config/web-descriptor.yaml` supplies the Web Descriptor and the same directory
+contains static result templates such as `post-notice__200.html`. This works
+as an early validation shape, but it is not a compatibility requirement. Phase
+12 should move Web app packaging to an explicit `/web` layout before Static
+Form Web App plus Island Architecture becomes a normal application delivery
+path.
+
+Canonical package placement is `/web` inside both CAR and SAR. CAR `/web`
+contains Component-local Web app resources. SAR `/web` contains Subsystem-level
+Web app resources and composition assets.
+
+For a CAR, packaged `/web/{webAppName}/...` resources are mounted as
+`/web/{componentName}/{webAppName}/...` at runtime.
+SAR configuration, including the implicit SAR created for CAR-only execution,
+may alias that canonical route to `/web/{webAppName}/...` or `/web/...` for a
+selected default Web app.
+
+A typical SAR `/web` application is a subsystem portal or composition page that
+links to Component-local Web apps. This is separate from aliasing: the SAR app
+owns the portal route, while Component apps keep their component-scoped routes.
+
+### Design Direction
+
+- Static Form Web App remains the baseline: server-rendered HTML, generated
+  forms, static result templates, and Textus widgets.
+- Island Architecture is supported by allowing local, scoped JS/CSS assets to
+  be packaged beside static pages. Islands are optional progressive enhancement
+  and must not replace Operation/Form API contracts.
+- Web app packaging must not require a SPA framework or application-wide client
+  router.
+- The packaging model must work for development projects and for packaged
+  component/subsystem archives.
+
+### Detailed Tasks
+
+- [ ] Define the canonical `/web` Web app root layout for CAR and SAR.
+      Baseline shape:
+      - `/web/web-descriptor.yaml`
+      - `/web/{webAppName}/index.html`
+      - `/web/{webAppName}/*.html` for route-local result templates
+      - `/web/{webAppName}/assets/**` for app-local CSS/JS/images
+      - `/web/{webAppName}/islands/**` for scoped island scripts when needed
+      - `/web/*.html` for component/subsystem common fallback templates
+      - `/web/assets/**` for component/subsystem common assets
+- [ ] Define the Web Descriptor app/route vocabulary.
+      Baseline shape:
+      - `web.apps[].name`
+      - `web.apps[].kind`
+      - `web.apps[].root`
+      - `web.apps[].route`
+      - `web.routes[].path`
+      - `web.routes[].target.component`
+      - `web.routes[].target.app`
+- [ ] Define the mount rule:
+      - CAR `/web/{webAppName}/...` becomes
+        `/web/{componentName}/{webAppName}/...`.
+      - SAR `/web/{webAppName}/...` is mounted under the subsystem/system Web
+        scope according to the SAR Web Descriptor.
+- [ ] Define the SAR portal/composition pattern:
+      - SAR `/web/{webAppName}/...` may render navigation/cards to Component
+        Web apps.
+      - Component Web apps remain mounted at
+        `/web/{componentName}/{webAppName}/...` unless explicitly aliased.
+      - Portal links must not change Component ownership, authorization,
+        templates, or assets.
+- [ ] Define SAR Web route aliases:
+      - map `/web/{componentName}/{webAppName}/...` to
+        `/web/{webAppName}/...`.
+      - map one selected default Web app to `/web/...`.
+      - support the same alias behavior for an implicit SAR created from a
+        single CAR.
+      - reject or require explicit resolution for conflicting aliases.
+- [ ] Migrate the current `config/web-descriptor.yaml` and `config/*.html`
+      validation shape to the canonical `/web` layout.
+      - Do not preserve `config/` as a packaging compatibility contract.
+      - Package to CAR/SAR `/web` for distributable applications.
+      - Prefer a product-facing `textus` naming convention over `cncf` naming.
+- [ ] Define discovery precedence for Web app roots:
+      explicit `textus.web.descriptor`, project `.textus/config.*`, packaged
+      component/subsystem metadata, and CAR/SAR `/web` roots.
+- [ ] Define how Web app assets are served:
+      - framework assets under `/web/assets/...`
+      - app-local CAR assets under
+        `/web/{componentName}/{webAppName}/assets/...`.
+- [ ] Define template lookup precedence for route-local operation-specific
+      templates, route-local common status templates, component/subsystem common
+      templates, and descriptor-provided result templates.
+- [ ] Define how `/web` is included and discovered in CAR/SAR archives.
+- [ ] Add executable specifications for descriptor/template/asset discovery.
+- [ ] Update `textus-sample-app` to use the chosen canonical packaging layout,
+      replacing the current `config/` Web app layout.
+- [ ] Validate deployment with `textus-sample-app`:
+      post/search/get result templates, common error pages, public exposure,
+      admin policy, local assets, and optional island assets.
+
+### Inputs
+
+- `docs/design/web-layer.md`
+- `docs/spec/textus-widget.md`
+- `docs/spec/config-resolution.md`
+- `docs/notes/cncf-web-static-form-app-contract.md`
+- `textus-sample-app`
+
+---
+
 ## Deferred / Next Phase Candidates
 
-- SPA hosting and packaging.
+- SPA hosting as a separate mode beyond Static Form Web App plus islands.
 - Wireframe DSL and UI generation.
 - Public JavaScript SDK.
 - Advanced dashboard visualization and SVG rendering.

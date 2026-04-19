@@ -108,6 +108,8 @@ final class Http4sHttpServer(
         _dashboard_state(Some(app))
       case req @ GET -> Root / "web" / app / "admin" =>
         if (_is_web_authorized(app, "admin", "index", Some(req))) _component_admin(app) else _forbidden()
+      case req @ GET -> Root / "web" / app / "admin" / "descriptor" =>
+        if (_is_web_authorized(app, "admin", "descriptor", Some(req))) _component_admin_descriptor(app) else _forbidden()
       case req @ GET -> Root / "web" / app / "admin" / "entities" =>
         if (_is_web_authorized(app, "admin.entities", "index", Some(req))) _component_admin_entities(app) else _forbidden()
       case req @ GET -> Root / "web" / app / "admin" / "entities" / entity =>
@@ -340,6 +342,18 @@ final class Http4sHttpServer(
         )
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component admin not found"))
+    }
+
+  private def _component_admin_descriptor(app: String): IO[HResponse[IO]] =
+    StaticFormAppRenderer.renderComponentAdminDescriptor(engine.runtimeSubsystem, app, engine.webDescriptor) match {
+      case Some(p) =>
+        IO.pure(
+          HResponse[IO](HStatus.Ok)
+            .withEntity(p.body)
+            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+        )
+      case None =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component descriptor admin not found"))
     }
 
   private def _component_admin_entities(app: String): IO[HResponse[IO]] =

@@ -134,6 +134,27 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.apps.map(_.path) shouldBe Vector("/web/manual", "/web/console")
     }
 
+    "complete obvious Static Form Web app defaults from a minimal app entry" in {
+      val path = Files.createTempFile("cncf-web-descriptor-minimal-app", ".yaml")
+      Files.writeString(
+        path,
+        """web:
+          |  apps:
+          |    - name: notice-board
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = WebDescriptor.load(path).toOption.get
+      val app = descriptor.apps.headOption.getOrElse(fail("app is missing"))
+
+      app.name shouldBe "notice-board"
+      app.kind shouldBe "static-form"
+      app.effectivePath shouldBe "/web/notice-board"
+      app.completed.root shouldBe Some("/web/notice-board")
+      app.completed.route shouldBe Some("/web/{component}/notice-board")
+    }
+
     "load /web/web.yaml from a directory descriptor root" in {
       val root = Files.createTempDirectory("cncf-web-descriptor-root")
       val web = Files.createDirectories(root.resolve("web"))

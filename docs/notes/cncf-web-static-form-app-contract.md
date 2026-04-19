@@ -163,6 +163,29 @@ The System Admin page also links to the resolved Web Descriptor drill-down:
 This page renders the effective descriptor as read-only JSON for operator
 inspection. It is an HTML admin page, not a business execution endpoint.
 
+The page shows the completed descriptor first. Completion applies framework
+conventions before display, so a descriptor app entry such as:
+
+```yaml
+apps:
+  - name: notice-board
+```
+
+is visible to operators as a Static Form Web app with the default root
+`/web/notice-board` and canonical component route
+`/web/{component}/notice-board`. The configured descriptor is shown separately
+for comparison and troubleshooting.
+
+Component admin pages link to the component-scoped descriptor view:
+
+```text
+/web/{component}/admin/descriptor
+```
+
+This view uses the same Management Console layout, but resolves component route
+placeholders for the selected component. It is intended as the local inspection
+point while working from `/web/{component}/admin`.
+
 The System Admin page may expose resolved runtime configuration values for
 operator inspection. The WEB-05 baseline applies these rules:
 

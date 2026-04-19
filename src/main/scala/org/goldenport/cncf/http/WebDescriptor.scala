@@ -12,7 +12,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Apr. 14, 2026
- * @version Apr. 17, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
@@ -212,16 +212,51 @@ object WebDescriptor {
 
   final case class App(
     name: String,
-    path: String,
-    kind: String
+    path: String = "",
+    kind: String = "static-form",
+    root: Option[String] = None,
+    route: Option[String] = None
   ) {
+    def normalizedName: String =
+      _normalize_app_segment(name)
+
+    def effectiveKind: String =
+      Option(kind).map(_.trim).filter(_.nonEmpty).getOrElse("static-form")
+
+    def effectiveRoot: String =
+      root.map(_.trim).filter(_.nonEmpty).getOrElse(s"/web/${normalizedName}")
+
+    def effectiveRoute: String =
+      route.map(_.trim).filter(_.nonEmpty).getOrElse(s"/web/{component}/${normalizedName}")
+
+    def effectivePath: String =
+      Option(path).map(_.trim).filter(_.nonEmpty).getOrElse(effectiveRoot)
+
+    def completed: App =
+      copy(
+        path = effectivePath,
+        kind = effectiveKind,
+        root = Some(effectiveRoot),
+        route = Some(effectiveRoute)
+      )
+
+    def completedFor(componentSegment: Option[String]): App = {
+      val c = completed
+      componentSegment.map(_.trim).filter(_.nonEmpty) match {
+        case Some(component) =>
+          c.copy(route = c.route.map(_.replace("{component}", component)))
+        case None =>
+          c
+      }
+    }
+
     def matches(requestName: String, requestPath: Vector[String]): Boolean = {
       val normalizedRequestName = _normalize_app_segment(requestName)
       val normalizedRequestPath = requestPath.map(_normalize_app_segment)
-      val appPath = path.split("/").toVector.filter(_.nonEmpty).map(_normalize_app_segment)
-      _normalize_app_segment(name) == normalizedRequestName ||
+      val appPath = effectivePath.split("/").toVector.filter(_.nonEmpty).map(_normalize_app_segment)
+      normalizedName == normalizedRequestName ||
         appPath == ("web" +: normalizedRequestName +: normalizedRequestPath) ||
-        appPath == ("web" +: normalizedRequestName +: Vector(_normalize_app_segment(kind)))
+        appPath == ("web" +: normalizedRequestName +: Vector(_normalize_app_segment(effectiveKind)))
     }
   }
 
@@ -352,9 +387,16 @@ object WebDescriptor {
   private def _app(record: Record): Option[App] =
     for {
       name <- record.getString("name").map(_.trim).filter(_.nonEmpty)
-      path <- record.getString("path").map(_.trim).filter(_.nonEmpty)
-      kind <- record.getString("kind").map(_.trim).filter(_.nonEmpty)
-    } yield App(name, path, kind)
+    } yield {
+      val root = record.getString("root").map(_.trim).filter(_.nonEmpty)
+      App(
+        name = name,
+        path = record.getString("path").map(_.trim).filter(_.nonEmpty).orElse(root).getOrElse(""),
+        kind = record.getString("kind").map(_.trim).filter(_.nonEmpty).getOrElse("static-form"),
+        root = root,
+        route = record.getString("route").map(_.trim).filter(_.nonEmpty)
+      )
+    }
 
   private def _admin(record: Record): Map[String, AdminSurface] =
     _record_value(record, "admin")

@@ -1,5 +1,9 @@
 # Web Textus Widget Design
 
+The current widget specification is maintained in
+`docs/spec/textus-widget.md`. This note remains as the design discussion and
+implementation-planning context behind that spec.
+
 ## Purpose
 
 This note defines the Textus widget contract for Static Form App and Bootstrap

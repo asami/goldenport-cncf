@@ -65,6 +65,67 @@ The default layout should remain conservative. It should improve readability
 without making the generated page look like an embedded preview or a decorative
 marketing page.
 
+## Design Quality Criteria
+
+For the current Phase 12 implementation, `polish` means Bootstrap-backed page
+composition that is more readable and operable than raw Bootstrap components
+placed directly on a page.
+
+The framework should not introduce a separate visual design system in this
+phase. Instead, it should apply stable composition rules on top of Bootstrap 5.
+
+Required criteria:
+
+- information hierarchy is explicit:
+  page title, subtitle, navigation, primary content, and secondary actions are
+  visually distinct.
+- navigation and actions are separated:
+  top navigation links, page-level primary actions, and row/detail actions use
+  different placement and button treatment.
+- data density matches the page type:
+  list pages use compact responsive tables, while detail pages use readable
+  property sections and forms use grouped controls.
+- primary actions are discoverable:
+  create/update/edit actions use Bootstrap button styles and are placed near the
+  content they affect.
+- status and validation are visible:
+  warnings, errors, validation messages, and empty states use Bootstrap
+  feedback components rather than plain text where practical.
+- responsive behavior is preserved:
+  tables stay inside responsive wrappers and action groups must wrap on narrow
+  screens.
+- local Bootstrap remains sufficient:
+  generated pages must be usable with the local `/web/assets` Bootstrap files
+  without CDN access or application-specific CSS.
+- runtime contracts do not change:
+  visual polish must not alter Web/Form/API/REST paths, form field names,
+  result properties, pagination parameters, or operation dispatch behavior.
+
+For the Management Console entity pages currently being implemented, these
+criteria map to:
+
+- card sections for navigation and main content
+- responsive hover tables for list/detail data
+- grouped row actions for detail/edit links
+- explicit form action areas for create/update/cancel controls
+- existing validation and hidden-form context behavior preserved unchanged
+
+Executable checks cover the current non-screenshot baseline:
+
+- generated built-in Web pages include only local Bootstrap CSS and JavaScript
+  asset paths and do not reference CDN URLs.
+- generated built-in Web pages include the viewport meta tag required for
+  tablet and smartphone rendering.
+- generated built-in Web pages expose responsive Bootstrap structure such as
+  `.table-responsive`, wrapping action groups, cards, and shadowed section
+  surfaces.
+- dashboard and manual polish checks assert Bootstrap health badges,
+  card-based manual sections, and responsive tables without changing the
+  dashboard JSON state contract or manual read-only behavior.
+
+Future UI quality work beyond these fixed criteria is tracked in
+`docs/journal/2026/04/web-bootstrap-polish-quality-future-note.md`.
+
 ## Dashboard Polish
 
 Dashboard is the real-time operational view.
@@ -173,3 +234,4 @@ Recommended order:
 - `docs/design/management-console.md`
 - `docs/design/web-form-api-schema.md`
 - `docs/journal/2026/04/web-bootstrap-card-widget-note.md`
+- `docs/journal/2026/04/web-bootstrap-polish-quality-future-note.md`

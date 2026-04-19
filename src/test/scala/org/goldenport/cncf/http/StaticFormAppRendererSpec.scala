@@ -108,6 +108,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       c.downField("links").get[String]("manual") shouldBe Right(s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(componentName)}/manual")
     }
 
+    "render dashboard pages with Bootstrap health hierarchy without changing links" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+
+      val html = StaticFormAppRenderer.renderSubsystemDashboard(subsystem).body
+
+      html should include ("CNCF Health")
+      html should include ("class=\"card h-100 shadow-sm border-success\"")
+      html should include ("class=\"badge text-bg-success\"")
+      html should include ("table table-sm table-hover align-middle")
+      html should include ("/web/system/admin")
+      html should include ("/web/system/performance")
+      html should include ("/web/system/manual")
+    }
+
     "render system admin configuration detail page" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
 
@@ -208,7 +222,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val html = StaticFormAppRenderer.renderSystemAdminDescriptor(descriptor).body
 
       html should include ("System Web Descriptor")
-      html should include ("Resolved Descriptor")
+      html should include ("Completed Descriptor")
+      html should include ("Configured Descriptor")
       html should include ("/web/system/admin")
       html should include ("&quot;status&quot; : &quot;configured&quot;")
       html should include ("&quot;notice-board.notice.search-notices&quot; : &quot;public&quot;")
@@ -218,6 +233,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("&quot;reader&quot;")
       html should include ("&quot;enabled&quot; : true")
       html should include ("&quot;path&quot; : &quot;/web/manual&quot;")
+      html should include ("&quot;root&quot; : &quot;/web/manual&quot;")
+      html should include ("&quot;route&quot; : &quot;/web/{component}/manual&quot;")
     }
 
     "render component admin configuration detail page" in {
@@ -235,6 +252,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/console")
       html should include ("Component Operations")
       html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
+      html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin/descriptor")
       html should include ("Managed Data")
       html should include ("Entity CRUD")
       html should include ("Data CRUD")
@@ -249,6 +267,28 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("/form/admin/execution/history")
     }
 
+    "render component-scoped Web Descriptor drill-down page" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      val descriptor = WebDescriptor(
+        apps = Vector(WebDescriptor.App("notice-board")),
+        expose = Map(s"${componentPath}.notice.search-notices" -> WebDescriptor.Exposure.Public)
+      )
+
+      val html = StaticFormAppRenderer.renderComponentAdminDescriptor(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("component descriptor admin is missing"))
+
+      html should include (s"${component.name} Web Descriptor")
+      html should include ("Component Management Console descriptor view")
+      html should include (s"/web/${componentPath}/admin")
+      html should include ("/web/system/admin/descriptor")
+      html should include ("Completed Descriptor")
+      html should include ("Configured Descriptor")
+      html should include ("&quot;root&quot; : &quot;/web/notice-board&quot;")
+      html should include (s"&quot;route&quot; : &quot;/web/${componentPath}/notice-board&quot;")
+      html should include ("&quot;kind&quot; : &quot;static-form&quot;")
+    }
+
     "render read-only system and component manual pages" in {
       val subsystem = _aggregate_http_fixture_subsystem()
 
@@ -261,15 +301,18 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       systemHtml should include ("OpenAPI JSON")
       systemHtml should include ("MCP endpoint")
       systemHtml should include ("/web/notice-board/manual")
+      systemHtml should include ("class=\"card manual-card shadow-sm\"")
       componentHtml should include ("notice_board Manual")
       componentHtml should include ("Help")
       componentHtml should include ("Describe")
       componentHtml should include ("Schema")
       componentHtml should include ("/web/notice-board/manual/notice-aggregate")
+      componentHtml should include ("class=\"row mb-0\"")
       serviceHtml should include ("Service reference")
       serviceHtml should include ("/web/notice-board/manual/notice-aggregate/approve-notice-aggregate")
       operationHtml should include ("Operation reference")
       operationHtml should include ("approve-notice-aggregate")
+      operationHtml should include ("web-empty-state")
       operationHtml should not include ("admin entity")
       operationHtml should not include ("method=\"post\"")
     }
@@ -309,14 +352,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       html should include (s"${component.name} Entity Administration")
       html should include ("Entity CRUD")
+      html should include ("class=\"card admin-card")
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin")
       html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
       html should include ("entity runtime descriptors")
       component.componentDescriptors.flatMap(_.entityRuntimeDescriptors).headOption match {
         case Some(descriptor) =>
+          html should include ("class=\"table table-sm table-hover align-middle\"")
           html should include (s"/web/${componentPath}/admin/entities/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(descriptor.entityName)}")
         case None =>
           html should include ("No entity runtime descriptors")
+          html should include ("admin-empty-state")
       }
     }
 
@@ -330,9 +376,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include (s"${component.name} Sales Order Administration")
       html should include ("Sales Order records")
       html should include ("List with paging")
+      html should include ("class=\"card admin-card")
+      html should include ("class=\"table table-sm table-hover align-middle\"")
+      html should include ("class=\"btn btn-primary\"")
       html should include (s"/web/${componentPath}/admin/entities")
       html should include (s"/web/${componentPath}/admin/entities/sales-order/new")
       html should include ("No records are currently available")
+      html should include ("admin-empty-state")
       html should not include ("sample-id")
       html should include ("Previous")
       html should include ("Next")
@@ -347,9 +397,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       html should include (s"${component.name} Sales Order Detail")
       html should include ("Sales Order detail")
+      html should include ("class=\"card admin-card")
+      html should include ("class=\"btn btn-primary\"")
       html should include (s"/web/${componentPath}/admin/entities/sales-order")
       html should include (s"/web/${componentPath}/admin/entities/sales-order/missing-id/edit")
       html should include ("No record is currently available")
+      html should include ("admin-empty-state")
       html should include ("missing-id")
     }
 
@@ -385,6 +438,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       list should include ("notice_1")
       list should include ("<th>id</th><th>title</th><th>author</th><th>Actions</th>")
+      list should include ("class=\"btn-group btn-group-sm\"")
       list should include ("board update")
       list should include ("alice")
       list should include (s"/web/${componentPath}/admin/entities/${entityPath}/${recordId}")
@@ -568,6 +622,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       response.status.code shouldBe 400
       html should include ("Edit Notice")
       html should include ("Validation failed.")
+      html should include ("admin-feedback")
       html should include ("title is required.")
       html should include ("is-invalid")
       html should include ("value=\"bob\"")
@@ -640,6 +695,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       response.status.code shouldBe 400
       html should include ("Edit Notice")
       html should include ("Validation failed.")
+      html should include ("admin-feedback")
       html should include ("title is required.")
       html should include ("is-invalid")
       html should not include ("name=\"author\"")
@@ -953,6 +1009,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include (s"${component.name} Sales Order Edit")
       html should include ("Edit Sales Order")
       html should include ("<form method=\"post\"")
+      html should include ("class=\"admin-form\"")
+      html should include ("class=\"card admin-card")
       html should include (s"/form/${componentPath}/admin/entities/sales-order/missing-id/update")
       html should include ("name=\"id\"")
       html should include ("value=\"missing-id\"")
@@ -1001,6 +1059,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include (s"${component.name} Sales Order New")
       html should include ("New Sales Order")
       html should include ("<form method=\"post\"")
+      html should include ("class=\"admin-form\"")
+      html should include ("class=\"card admin-card")
       html should include (s"/form/${componentPath}/admin/entities/sales-order/create")
       html should include ("name=\"fields\"")
       html should include ("Use one name=value pair per line")
@@ -1244,6 +1304,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       createResponse.status.code shouldBe 400
       createHtml should include ("Validation failed.")
+      createHtml should include ("admin-feedback")
       createHtml should include ("Title must be at least 3 characters.")
       createHtml should include ("Author is required.")
       createHtml should include ("is-invalid")
@@ -1260,6 +1321,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       updateResponse.status.code shouldBe 400
       updateHtml should include ("Validation failed.")
+      updateHtml should include ("admin-feedback")
       updateHtml should include ("Title must be at least 3 characters.")
       updateHtml should include ("Author is required.")
       updateHtml should include ("is-invalid")
@@ -1353,6 +1415,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       html should include (s"${component.name} Data Administration")
       html should include ("Data CRUD")
+      html should include ("class=\"card admin-card")
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin")
       html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
       html should include ("not enabled in this baseline")
@@ -1397,6 +1460,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
         html should include ("audit_1")
         html should include ("<th>id</th><th>action</th><th>actor</th><th>Actions</th>")
+        html should include ("class=\"card admin-card")
+        html should include ("class=\"table table-sm table-hover align-middle\"")
+        html should include ("class=\"btn-group btn-group-sm\"")
         html should include ("created")
         html should include ("alice")
         html should include ("/web/notice-board/admin/data/audit/audit_1")
@@ -1407,12 +1473,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         totalPage should include ("total 2")
         totalPage should include ("includeTotal=true")
         unsupportedTotalPage should include ("alert-warning")
+        unsupportedTotalPage should include ("admin-feedback")
         unsupportedTotalPage should include ("total count is not available for data.audit")
         detail should include ("created")
         detail should include ("alice")
+        detail should include ("class=\"card admin-card")
+        detail should include ("class=\"btn btn-primary\"")
         edit should include ("name=\"action\"")
         edit should include ("value=\"created\"")
+        edit should include ("class=\"admin-form\"")
         newly should include ("/form/notice-board/admin/data/audit/create")
+        newly should include ("class=\"admin-form\"")
       }
     }
 
@@ -1576,6 +1647,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         response.status.code shouldBe 400
         html should include ("New Audit")
         html should include ("Validation failed.")
+        html should include ("admin-feedback")
         html should include ("actor is required.")
         html should include ("Descriptor actor help.")
         html should include ("is-invalid")
@@ -1621,6 +1693,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       html should include (s"${component.name} View Administration")
       html should include ("View read")
+      html should include ("class=\"card admin-card")
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin")
       html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
       html should include ("view definitions")
@@ -1633,6 +1706,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       html should include ("notice_board Notice View View")
       html should include ("Notice View metadata")
+      html should include ("class=\"card admin-card")
+      html should include ("class=\"table table-sm table-hover align-middle\"")
       html should include ("notice_view")
       html should include ("notice")
       html should include ("recent")
@@ -1652,6 +1727,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val html = StaticFormAppRenderer.renderComponentAdminViewInstanceDetail(subsystem, "notice_board", "notice_view", "notice_1").map(_.body).getOrElse(fail("component view instance detail admin is missing"))
 
       html should include ("notice_board Notice View View Detail")
+      html should include ("class=\"card admin-card")
       html should include ("notice_1")
       html should include ("label")
       html should include ("value")
@@ -1695,6 +1771,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       html should include (s"${component.name} Aggregate Administration")
       html should include ("Aggregate CRUD")
+      html should include ("class=\"card admin-card")
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin")
       html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
       html should include ("aggregate definitions")
@@ -1707,6 +1784,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       html should include ("notice_board Notice Aggregate Aggregate")
       html should include ("Notice Aggregate metadata")
+      html should include ("class=\"card admin-card")
+      html should include ("class=\"table table-sm table-hover align-middle\"")
       html should include ("notice_aggregate")
       html should include ("notice")
       html should include ("notice:notice")
@@ -1761,6 +1840,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val html = StaticFormAppRenderer.renderComponentAdminAggregateInstanceDetail(subsystem, "notice_board", "notice_aggregate", "notice_1").map(_.body).getOrElse(fail("component aggregate instance detail admin is missing"))
 
       html should include ("notice_board Notice Aggregate Aggregate Detail")
+      html should include ("class=\"card admin-card")
       html should include ("notice_1")
       html should include ("label")
       html should include ("value")
@@ -4569,6 +4649,31 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/assets/bootstrap.bundle.min.js")
       html should include ("<form><input class=\"form-control\"></form>")
       html should not include ("cdn.jsdelivr")
+    }
+
+    "keep WEB-10 built-in pages offline-ready and responsive" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      val pages = Vector(
+        StaticFormAppRenderer.renderSubsystemDashboard(subsystem).body,
+        StaticFormAppRenderer.renderSystemAdmin(subsystem).body,
+        StaticFormAppRenderer.renderSystemPerformance(subsystem).body,
+        StaticFormAppRenderer.renderSystemManual(subsystem).body,
+        StaticFormAppRenderer.renderComponentManual(subsystem, componentPath).map(_.body).getOrElse(fail("component manual is missing")),
+        StaticFormAppRenderer.renderComponentAdmin(subsystem, componentPath).map(_.body).getOrElse(fail("component admin is missing"))
+      )
+
+      pages.foreach { html =>
+        html should include ("""<meta name="viewport" content="width=device-width, initial-scale=1">""")
+        html should include ("/web/assets/bootstrap.min.css")
+        html should include ("/web/assets/bootstrap.bundle.min.js")
+        html should not include ("cdn.jsdelivr")
+      }
+      pages.mkString("\n") should include ("table-responsive")
+      pages.mkString("\n") should include ("d-flex flex-wrap")
+      pages.mkString("\n") should include ("card")
+      pages.mkString("\n") should include ("shadow-sm")
     }
   }
 

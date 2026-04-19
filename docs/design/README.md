@@ -12,6 +12,7 @@ Current security/authorization design:
 
 Current Web/admin design:
 
+- `web-layer.md`
 - `management-console.md`
 - `web-form-api-schema.md`
 - `web-operation-dispatcher.md`

@@ -129,6 +129,20 @@ web:
       kind: console
 ```
 
+Static Form Web app entries may omit convention-derived fields. When only
+`name` is supplied, the runtime completes the entry as:
+
+```yaml
+name: notice-board
+kind: static-form
+root: /web/notice-board
+route: /web/{component}/notice-board
+path: /web/notice-board
+```
+
+The completed descriptor can be inspected from the Management Console at
+`/web/system/admin/descriptor`.
+
 ## Selectors
 
 Operation selectors use the normalized logical form:
