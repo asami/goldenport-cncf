@@ -148,6 +148,8 @@ final class Http4sHttpServer(
         _component_manual_service(app, service)
       case GET -> Root / "web" / app / "manual" / service / operation =>
         _component_manual_operation(app, service, operation)
+      case GET -> Root / "web" / component / webApp / "assets" / asset =>
+        _web_app_asset(component, webApp, asset)
       case GET -> Root / "web" / app =>
         _static_form_app(app, Vector.empty)
       case GET -> Root / "web" / app / page =>
@@ -331,6 +333,27 @@ final class Http4sHttpServer(
       case Some(p) => _html(p)
       case None => IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation manual not found"))
     }
+
+  private[http] def _web_app_asset(
+    componentName: String,
+    webAppName: String,
+    assetName: String
+  ): IO[HResponse[IO]] =
+    if (!_component_exists(componentName))
+      IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component Web app asset not found"))
+    else if (!_safe_asset_name(assetName))
+      IO.pure(HResponse[IO](HStatus.BadRequest).withEntity("Invalid Web app asset path"))
+    else
+      _web_app_asset_content(webAppName, assetName) match {
+        case Some((content, mediaType)) =>
+          IO.pure(
+            HResponse[IO](HStatus.Ok)
+              .withEntity(content)
+              .withContentType(`Content-Type`(mediaType, Some(Charset.`UTF-8`)))
+          )
+        case None =>
+          IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component Web app asset not found"))
+      }
 
   private def _component_admin(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdmin(engine.runtimeSubsystem, app, engine.webDescriptor) match {
@@ -1571,6 +1594,41 @@ final class Http4sHttpServer(
 
   private[http] def _web_template_roots(): Vector[Path] =
     _web_descriptor_config_root().toVector ++ _subsystem_descriptor_web_root().toVector
+
+  private[http] def _web_app_asset_content(
+    webAppName: String,
+    assetName: String
+  ): Option[(String, MediaType)] =
+    _web_template_roots().view.flatMap { root =>
+      val path = root.resolve(org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName)).resolve("assets").resolve(assetName)
+      if (Files.isRegularFile(path))
+        Some(Files.readString(path, StandardCharsets.UTF_8) -> _asset_media_type(assetName))
+      else
+        None
+    }.headOption
+
+  private def _component_exists(
+    componentName: String
+  ): Boolean =
+    engine.runtimeSubsystem.components.exists(x =>
+      org.goldenport.cncf.naming.NamingConventions.equivalentByNormalized(x.name, componentName)
+    )
+
+  private def _safe_asset_name(
+    assetName: String
+  ): Boolean =
+    assetName.nonEmpty && !assetName.contains("..") && !assetName.contains("/") && !assetName.contains("\\")
+
+  private def _asset_media_type(
+    assetName: String
+  ): MediaType =
+    assetName.toLowerCase(java.util.Locale.ROOT) match {
+      case x if x.endsWith(".css") => MediaType.text.css
+      case x if x.endsWith(".js") => MediaType.application.javascript
+      case x if x.endsWith(".json") => MediaType.application.json
+      case x if x.endsWith(".html") => MediaType.text.html
+      case _ => MediaType.text.plain
+    }
 
   private[http] def _web_descriptor_config_root(): Option[Path] =
     RuntimeConfig.getString(engine.runtimeSubsystem.configuration, RuntimeConfig.WebDescriptorKey).map { value =>

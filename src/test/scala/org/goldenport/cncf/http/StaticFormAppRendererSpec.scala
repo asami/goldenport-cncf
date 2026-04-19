@@ -11,7 +11,7 @@ import cats.data.NonEmptyVector
 import io.circe.HCursor
 import io.circe.Json
 import io.circe.parser.parse
-import org.http4s.{Method, Request, Uri}
+import org.http4s.{MediaType, Method, Request, Uri}
 import org.goldenport.Consequence
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.http.HttpStatus
@@ -1036,6 +1036,29 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       server._web_template_roots() shouldBe Vector(root)
       server._form_result_static_template("notice-board", "notice", "post-notice", 200) shouldBe Some("SERVICE OPERATION")
+    }
+
+    "serve app-local assets from the canonical component Web app route" in {
+      val root = Files.createTempDirectory("cncf-web-asset-root-")
+      Files.writeString(root.resolve("web-descriptor.yaml"), "web:\n  apps:\n    - name: notice-board\n", StandardCharsets.UTF_8)
+      Files.createDirectories(root.resolve("notice-board").resolve("assets"))
+      Files.writeString(root.resolve("notice-board").resolve("assets").resolve("app.css"), ".notice-board { color: #14532d; }\n", StandardCharsets.UTF_8)
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        ._web_app_asset("notice-board", "notice-board", "app.css")
+        .unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 200
+      body should include (".notice-board")
+      response.contentType.map(_.mediaType) shouldBe Some(MediaType.text.css)
+      server._web_app_asset("missing", "notice-board", "app.css").unsafeRunSync().status.code shouldBe 404
     }
 
     "render component entity edit page contract" in {

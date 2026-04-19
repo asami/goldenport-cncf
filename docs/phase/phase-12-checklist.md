@@ -921,7 +921,7 @@ owns the portal route, while Component apps keep their component-scoped routes.
 - [x] Define discovery precedence for Web app roots:
       explicit `textus.web.descriptor`, project `.textus/config.*`, packaged
       component/subsystem metadata, and CAR/SAR `/web` roots.
-- [ ] Define how Web app assets are served:
+- [x] Define how Web app assets are served:
       - framework assets under `/web/assets/...`
       - app-local CAR assets under
         `/web/{componentName}/{webAppName}/assets/...`.

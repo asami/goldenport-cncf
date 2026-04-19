@@ -267,6 +267,20 @@ Lookup precedence is executable-speced as:
 4. Descriptor-provided `resultTemplate`.
 5. Built-in rendering.
 
+Framework assets are served under `/web/assets/...` and are owned by the
+runtime. Bootstrap 5 local assets currently use this route.
+
+App-local assets are served from the canonical component Web app route:
+
+```text
+CAR: /web/{webApp}/assets/{asset}
+URL: /web/{component}/{webApp}/assets/{asset}
+```
+
+The asset lookup uses the same Web template root as result templates and keeps
+component ownership in the URL. An alias may point to the same app later, but
+the canonical component route remains the descriptor/debugging reference.
+
 The `config/` shape should be migrated to the canonical `/web` layout rather
 than preserved as a compatibility packaging contract. Packaged and generated
 applications should place Web app resources under `/web`.
