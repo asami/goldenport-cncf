@@ -257,6 +257,13 @@ may add local CSS or JavaScript, but the baseline layout, responsive grid,
 cards, buttons, tables, and form controls should assume Bootstrap 5 classes are
 available.
 
+Bootstrap 5 polish is a shared Web UI concern rather than a widget-specific
+contract. The design direction is recorded in
+`docs/notes/web-bootstrap-ui-polish-design.md`. Built-in Dashboard,
+Management Console, Manual, and Static Form App pages should use that note for
+layout and responsive UI conventions while keeping their runtime contracts
+unchanged.
+
 ## Static Form App Model
 
 A Static Form App is a web app instance made from CML metadata, static HTML
@@ -418,6 +425,25 @@ The first widget contracts are:
 `textus:action-link` and `textus-action-link` are equivalent. The widget renders
 an anchor for `GET` actions and an inline POST form for non-GET actions. If the
 referenced action has no `href`, it renders nothing.
+
+These widgets are the Phase 12 baseline. The widget set is expected to grow
+through the Textus widget design described in
+`docs/notes/web-textus-widget-design.md`. That design keeps the same core rules:
+
+- `textus:xxx` is the preferred semantic notation.
+- `textus-xxx` remains the HTML-compatible notation.
+- widgets are rendered server-side before the final HTML response.
+- Bootstrap 5 HTML is the default output vocabulary.
+- CML-derived schema/view metadata is the primary data-display source.
+- WebDescriptor is supplemental presentation/deployment metadata.
+
+The next widget group is expected to include card, layout, navigation,
+feedback, and form-helper widgets such as `textus:record-card`,
+`textus:card-list`, `textus:summary-card`, `textus:breadcrumb`,
+`textus:pagination`, `textus:alert`, `textus:empty-state`, and
+`textus:hidden-context`. These extensions must not introduce template control
+structures; when a page needs structured rendering, the preferred path is to
+add or reuse a Textus widget.
 
 Command operations keep the CQRS default: command submission is asynchronous
 unless the operation explicitly chooses a synchronous mode. A plain HTML Form

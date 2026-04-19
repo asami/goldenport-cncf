@@ -39,10 +39,15 @@ This document is a progress dashboard, not a design journal.
 - E (DONE): WEB-05 — Define management console baseline.
 - F (DONE): WEB-06 — Define manual/reference baseline.
 - G (DONE): WEB-07 — Add executable specifications and minimal runtime hooks.
-- H (ACTIVE): WEB-08 — Build Management Console CRUD flow as the Form Web foundation.
+- H (DONE): WEB-08 — Build Management Console CRUD flow as the Form Web foundation.
   Entity and data CRUD baselines are implemented, and view read baseline is
   implemented; aggregate read baseline and operation-backed
   create/command/update flow are implemented.
+- I (DONE): WEB-09 — Validate Static Form Web App behavior with
+  `textus-sample-app`.
+  The notice-board sample runs on CML metadata and static HTML conventions,
+  including result widgets, paging, total-count opt-in, error pages, and async
+  command result waiting.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
@@ -65,11 +70,18 @@ Current note:
 - [x] WEB-05: Define management console baseline.
 - [x] WEB-06: Define manual/reference baseline.
 - [x] WEB-07: Add executable specifications and minimal runtime hooks.
-- [ ] WEB-08: Build Management Console CRUD flow as the Form Web foundation.
-  Entity and data CRUD baselines plus view and aggregate read baselines are
-  complete; aggregate create/command/update flow is operation-backed and has a
-  successful HTTP ingress-capable fixture. The remaining WEB-08 work is focused
-  on follow-up tuning.
+- [x] WEB-08: Build Management Console CRUD flow as the Form Web foundation.
+  Entity and data CRUD baselines cover list, detail, edit/update, new/create,
+  Form API definitions, validation redisplay, hidden context preservation, and
+  descriptor transitions. View and aggregate surfaces cover the read-oriented
+  baseline, and aggregate create/update/command flows are operation-backed.
+  Remaining work is management-console polish outside WEB-08.
+- [x] WEB-09: Validate Static Form Web App behavior with `textus-sample-app`.
+  The notice-board sample uses CML-derived operation/schema metadata and static
+  HTML result conventions for post/search/get flows. Generic widget behavior
+  covers result view, tables, property lists, error panels, action links,
+  paging without total count, explicit total-count opt-in, and async command
+  await/detail navigation.
 
 ## 6. Next Phase Candidates
 
