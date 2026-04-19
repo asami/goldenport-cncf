@@ -382,7 +382,7 @@ functionality.
 
 ## WEB-08: Management Console CRUD Flow
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -516,11 +516,29 @@ for the built-in admin console.
 - `docs/journal/2026/04/web-operational-management-note.md`
 - `textus-sample-app` as the practical validation driver.
 
+### WEB-08 Closure
+
+- Entity and data surfaces cover list, detail, edit/update, new/create, Form API
+  definition, validation redisplay, hidden context preservation, and descriptor
+  transition behavior.
+- View and aggregate surfaces cover the read-oriented baseline. Aggregate
+  mutation is intentionally operation-backed: the console discovers exposed
+  create/update/command operations and routes submissions through the matching
+  Component / Service / Operation entry point instead of mutating aggregate
+  state directly.
+- Authorization, operation mode policy, anonymous develop/test shortcuts, and
+  explicit-principal production access are covered by executable
+  specifications across admin HTML and Form API routes.
+- The completion pass after the Static Form feature audit confirmed the
+  Management Console does not depend on Static Form Web App result page
+  conventions. Remaining refinements are future management-console polish, not
+  WEB-08 blockers.
+
 ---
 
 ## WEB-09: Static Form Web App Validation with textus-sample-app
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -528,15 +546,15 @@ After the current Form feature audit and Management Console completion work,
 move `textus-sample-app` toward a Static Form Web App and use it to discover
 the next platform gaps.
 
-This is now the active validation driver. WEB-07A and WEB-08 are closed enough
-for the sample app to reuse the Form foundation instead of driving unfinished
-Management Console work.
+This became the active validation driver after WEB-07A and WEB-08 were closed
+enough for the sample app to reuse the Form foundation instead of driving
+unfinished Management Console work.
 
 ### Detailed Tasks
 
 - [x] Audit the current notice-board Static Form App shape and separate already
       covered static conventions from remaining widget/platform gaps.
-- [ ] Build the notice-board sample primarily from CML metadata and static HTML
+- [x] Build the notice-board sample primarily from CML metadata and static HTML
       files.
 - [x] Prefer static result page conventions before descriptor transition
       settings.
@@ -547,10 +565,10 @@ Management Console work.
 - [x] Use Textus widgets for result view, table, property list, error display,
       action links, and paging. Prefer `textus:xxx` notation while keeping
       `textus-xxx` compatible.
-- [ ] Identify which behavior is missing from the CML+HTML model.
-- [ ] Promote only generic missing behavior back into CNCF; keep
+- [x] Identify which behavior is missing from the CML+HTML model.
+- [x] Promote only generic missing behavior back into CNCF; keep
       sample-specific pages in `textus-sample-app`.
-- [ ] Record gaps as future Form widget, convention, or descriptor candidates.
+- [x] Record gaps as future Form widget, convention, or descriptor candidates.
 
 ### Current Audit
 
@@ -571,8 +589,7 @@ minimal notice-board flow:
   exposure and the default `summary` view, but the ordinary post/search/get
   pages do not depend on descriptor transition rules.
 
-Remaining WEB-09 validation work should therefore focus on the generic widget
-surface and app behavior:
+The WEB-09 validation focused on the generic widget surface and app behavior:
 
 - [x] Confirm `textus-result-view`, `textus-property-list`, and
   `textus:action-link` render clean final HTML in the sample app.
@@ -595,7 +612,7 @@ surface and app behavior:
   runtime supports it.
 - [x] Confirm the async command path is usable with static pages:
   `postNotice -> JobId -> await -> result.id -> getNotice detail action`.
-- Record any remaining gaps as generic CNCF widget, convention, or descriptor
+- [x] Record any remaining gaps as generic CNCF widget, convention, or descriptor
   candidates, not as sample-app-specific runtime behavior.
 
 Runtime verification on Apr. 19, 2026:
@@ -641,6 +658,18 @@ Runtime verification on Apr. 19, 2026:
   POST action and job id, the await page exposed `result.id` and an `Open
   detail` link, and the generated `getNotice` detail page rendered the created
   notice title/content without unexpanded Textus widget tags.
+
+WEB-09 closure:
+
+- The minimal notice-board sample now works as a Static Form Web App based on
+  CML metadata plus static HTML result/error pages.
+- Generic gaps found during validation were promoted into CNCF: result widgets,
+  action links, static status/error page conventions, continuation rendering,
+  CML-derived table columns, total-count-free paging, total-count opt-in
+  propagation, and async command result/detail navigation.
+- Remaining work is not a WEB-09 blocker. Broader Static Form App refinement,
+  admin console completion, richer search, and embedding support are tracked as
+  next-phase candidates or subsequent WEB-10 work.
 
 ### Inputs
 
