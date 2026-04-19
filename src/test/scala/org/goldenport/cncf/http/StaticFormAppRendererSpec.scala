@@ -3583,6 +3583,76 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       page2 should not include ("<textus-result-table")
     }
 
+    "render form continuation with explicit total-count paging" in {
+      val rows = (1 to 21).map { i =>
+        f"""{"title":"Total Paging Notice $i%02d","recipient_name":"PagingBob"}"""
+      }.mkString("[", ",", "]")
+      val responseBody = s"""{"data":${rows},"total_count":21}"""
+      val subsystem = _aggregate_http_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
+            "approve-notice-aggregate__200.html",
+            """<article>
+              |  <h2>Matching notices</h2>
+              |  <textus-result-table source="result.body" page="paging.page" page-size="paging.pageSize" total="paging.total" href="paging.href"></textus-result-table>
+              |</article>""".stripMargin
+          ).resolve("web.yaml").toString)
+        ))
+      )
+      val descriptor = WebDescriptor(
+        expose = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Exposure.Protected
+        )
+      )
+      val dispatcher = new StaticWebOperationDispatcher(
+        HttpResponse.Text(
+          HttpStatus.Ok,
+          ContentType(MimeType("application/json"), Some(StandardCharsets.UTF_8)),
+          Bag.text(responseBody, StandardCharsets.UTF_8)
+        )
+      )
+      val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+
+      val page1 = server
+        ._submit_operation_form(
+          _post_form_request(
+            "/form/notice-board/notice-aggregate/approve-notice-aggregate",
+            "id=notice_1&paging.includeTotal=true"
+          ),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+      val continueHref = """href="([^"]*page=2&amp;pageSize=20&amp;includeTotal=true)""".r
+        .findFirstMatchIn(page1)
+        .map(_.group(1).replace("&amp;", "&"))
+        .getOrElse(fail("total-count continuation link is missing"))
+      val page2 = server
+        ._operation_form_continue(
+          _get_request(continueHref),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate",
+          continueHref.split("/continue/")(1).takeWhile(_ != '?')
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      page1 should include ("Matching notices")
+      page1 should include ("Total Paging Notice 01")
+      page1 should include ("includeTotal=true")
+      page1 should not include ("Page 1")
+      page2 should include ("Matching notices")
+      page2 should include ("Total Paging Notice 21")
+      page2 should include ("includeTotal=true")
+      page2 should not include ("Content-Type application/json")
+      page2 should not include ("Submitted Values")
+      page2 should not include ("<textus-result-table")
+    }
+
     "render operation failure through exact static status template before error template" in {
       val root = Files.createTempDirectory("cncf-web-template-")
       Files.writeString(root.resolve("web.yaml"), "form: {}\n", StandardCharsets.UTF_8)
@@ -4019,7 +4089,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
           "notice",
-          "search-notices"
+          "search-notices",
+          Map(
+            "paging.pageSize" -> "1"
+          )
         ),
         200,
         "application/json",
@@ -4028,15 +4101,23 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val html = StaticFormAppRenderer.renderFormResult(
         properties,
-        """<article><textus-result-table source="result.body.data"></textus-result-table></article>"""
+        """<article>
+          |  <p>${result.totalCount}</p>
+          |  <p>${paging.total}</p>
+          |  <textus-result-table source="result.body.data"></textus-result-table>
+          |</article>""".stripMargin
       ).body
 
       html should include ("<table")
       html should include ("subject")
       html should include ("sender_name")
       html should include ("Hello")
-      html should include ("bob")
-      html should include ("Page 1")
+      html should not include ("bob")
+      html should include ("<p>2</p>")
+      html should not include ("result.totalCount")
+      html should not include ("paging.total")
+      html should include ("/form/notice-board/notice/search-notices/result?page=2&amp;pageSize=1")
+      html should not include ("Page 1")
       html should not include ("<textus-result-table")
     }
 

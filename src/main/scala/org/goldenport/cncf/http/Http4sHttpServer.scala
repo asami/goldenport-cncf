@@ -823,7 +823,14 @@ final class Http4sHttpServer(
         val queryValues = req.uri.query.params.toMap
         val pagingValues = queryValues.filter { case (k, _) => k == "page" || k == "pageSize" || k == "includeTotal" }
         val res = continuation.response
-        val values = _continuation_values(continuation) ++ pagingValues.map { case (k, v) => s"paging.${k}" -> v }
+        val continuationValues =
+          if (_boolean_param(queryValues, "includeTotal"))
+            _continuation_values(continuation) + (
+              "paging.href" -> s"/form/${continuation.app}/${continuation.service}/${continuation.operation}/continue/${continuation.id}?page={page}&pageSize={pageSize}&includeTotal=true"
+            )
+          else
+            _continuation_values(continuation)
+        val values = continuationValues ++ pagingValues.map { case (k, v) => s"paging.${k}" -> v }
         val page = StaticFormAppRenderer.renderFormResult(
           _form_result_properties(app, service, operation, res, values),
           _form_result_static_template(app, service, operation, res.code)
@@ -1671,11 +1678,25 @@ final class Http4sHttpServer(
     Map(
       "form.continuation" -> continuation.id,
       "paging.chunkSize" -> continuation.chunkSize.toString,
-      "paging.href" -> s"/form/${continuation.app}/${continuation.service}/${continuation.operation}/continue/${continuation.id}?page={page}&pageSize={pageSize}"
+      "paging.href" -> s"/form/${continuation.app}/${continuation.service}/${continuation.operation}/continue/${continuation.id}?page={page}&pageSize={pageSize}${_continuation_total_query(continuation)}"
     )
+
+  private def _continuation_total_query(
+    continuation: Http4sHttpServer.FormContinuation
+  ): String =
+    if (_form_boolean(continuation.form, "paging.includeTotal") || _form_boolean(continuation.form, "includeTotal"))
+      "&includeTotal=true"
+    else
+      ""
 
   private def _form_chunk_size(form: Record): Int =
     form.getString("paging.chunkSize").flatMap(_.toIntOption).getOrElse(1000)
+
+  private def _form_boolean(
+    form: Record,
+    key: String
+  ): Boolean =
+    form.getString(key).exists(_is_truthy)
 
   private def _form_values(form: Record): Map[String, String] =
     _strip_security_form_values(form.asMap)
@@ -1911,7 +1932,10 @@ final class Http4sHttpServer(
     params: Map[String, String],
     key: String
   ): Boolean =
-    params.get(key).map(_.trim.toLowerCase).exists {
+    params.get(key).exists(_is_truthy)
+
+  private def _is_truthy(value: String): Boolean =
+    value.trim.toLowerCase match {
       case "true" | "yes" | "on" | "1" => true
       case _ => false
     }

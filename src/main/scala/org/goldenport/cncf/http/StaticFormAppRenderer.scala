@@ -655,6 +655,7 @@ object StaticFormAppRenderer {
       "paging.page",
       "paging.pageSize",
       "paging.chunkSize",
+      "paging.includeTotal",
       "paging.href",
       "continuation.id",
       "textus.admin.principalId",

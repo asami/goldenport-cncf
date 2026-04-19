@@ -17,6 +17,7 @@ final case class FormResultMetadata(
   jobId: Option[String] = None,
   outcome: Option[String] = None,
   message: Option[String] = None,
+  totalCount: Option[Long] = None,
   actions: Vector[FormResultMetadata.Action] = Vector.empty
 ) {
   def toTemplateValues: Map[String, String] = {
@@ -25,6 +26,8 @@ final case class FormResultMetadata(
         jobId.map("result.job.id" -> _).toMap ++
         outcome.map("result.outcome" -> _).toMap ++
         message.map("result.message" -> _).toMap ++
+        totalCount.map(x => "result.totalCount" -> x.toString).toMap ++
+        totalCount.map(x => "paging.total" -> x.toString).toMap ++
         (if (actions.nonEmpty) Map("result.actions.count" -> actions.length.toString) else Map.empty)
     scalar ++ _action_values
   }
@@ -79,6 +82,7 @@ object FormResultMetadata {
         jobId = _first_string(cursor, Vector("jobId", "job-id", "job.id", "result.jobId", "result.job-id", "result.job.id")),
         outcome = _first_string(cursor, Vector("outcome", "result.outcome")),
         message = _first_string(cursor, Vector("message", "result.message", "error.message")),
+        totalCount = _first_long(cursor, Vector("totalCount", "total_count", "total-count", "result.totalCount", "result.total_count", "result.total-count")),
         actions = _actions(cursor)
       )
     }
@@ -107,6 +111,23 @@ object FormResultMetadata {
       .orElse(c.as[String].toOption)
       .map(_.trim)
       .filter(_.nonEmpty)
+  }
+
+  private def _first_long(
+    cursor: HCursor,
+    paths: Vector[String]
+  ): Option[Long] =
+    paths.view.flatMap(path => _long_at(cursor, path)).headOption
+
+  private def _long_at(
+    cursor: HCursor,
+    path: String
+  ): Option[Long] = {
+    val c = path.split("\\.").foldLeft(cursor: ACursor) { case (z, name) => z.downField(name) }
+    c.get[Long]("value").toOption
+      .orElse(c.as[Long].toOption)
+      .orElse(c.as[String].toOption.flatMap(_.trim.toLongOption))
+      .filter(_ >= 0)
   }
 
   private def _actions(cursor: HCursor): Vector[Action] =

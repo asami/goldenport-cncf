@@ -590,7 +590,7 @@ surface and app behavior:
   convention. The current `/continue/{id}` route returns the retained result
   set and reuses the same static status/success template resolution as the
   original operation form result.
-- Add or verify total-count opt-in paging behavior; the table must
+- [x] Add or verify total-count opt-in paging behavior; the table must
   work without total count and then with explicit total-count opt-in where the
   runtime supports it.
 - Confirm the async command path is usable with static pages:
@@ -623,6 +623,11 @@ Runtime verification on Apr. 19, 2026:
   convention across pages. The retained result set still supplies the page data,
   while the response body is rendered through the original operation's
   `xxx__200.html` / `xxx__success.html` / common static fallback path.
+- Explicit total-count paging now uses only operation response fields that
+  actually represent total count, such as `total_count` / `totalCount`.
+  `fetched_count` remains a fetched-row count and does not drive last-page
+  navigation. When a form posts `paging.includeTotal=true`, continuation links
+  retain `includeTotal=true` across pages.
 - Admission validation failure for `postNotice` returns the Bootstrap operation
   form with field-level errors and submitted values preserved. It does not use
   the static `__400.html` common error page, so the common error page convention
