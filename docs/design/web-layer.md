@@ -131,6 +131,13 @@ root. When it points at a descriptor root, the runtime discovers the descriptor
 under the root `/web` directory and uses that `/web` directory as the template
 root.
 
+The runtime represents each filesystem or archive Web root as a Web resource
+root. Static result templates, common error pages, and app-local assets are read
+through this root abstraction instead of direct filesystem `Path` access. For
+CAR/SAR/ZIP archives, the archive `/web` directory is the resource root and the
+same descriptor, template, and asset lookup rules apply as they do for a
+development filesystem directory.
+
 At runtime, Component-local CAR resources are mounted under the component URL
 scope:
 
@@ -201,6 +208,18 @@ template lookup, and asset lookup still resolve to the original Component Web
 app. Alias conflicts must be rejected or made explicit in the SAR Web
 Descriptor.
 
+Alias resolution is a SAR responsibility. The canonical component route is
+always present; SAR aliases are additional routes selected by the SAR
+descriptor or by the implicit SAR created for single-CAR execution. Alias
+resolution must run before the built-in Static Form App fallback so
+`/web/{webApp}` can select a component Web app when a SAR route explicitly
+binds that path. If multiple component Web apps could claim the same alias, the
+runtime must reject the descriptor unless one route is selected explicitly.
+
+The implicit SAR may provide a convenience alias only when it can prove that
+there is exactly one component and one exposed Web app. Otherwise it keeps only
+the canonical `/web/{component}/{webApp}` route.
+
 The descriptor route vocabulary is:
 
 ```yaml
@@ -218,10 +237,12 @@ web:
       target:
         component: abc
         app: notice-board
+      kind: alias
     - path: /web
       target:
         component: abc
         app: notice-board
+      kind: default
 ```
 
 `apps` declares packaged Web apps. `root` is the archive-local resource root.
@@ -229,6 +250,13 @@ web:
 resources. `routes` declares SAR-level aliases or the selected default Web app.
 The target always identifies the owning Component and Web app so alias routes
 do not change ownership.
+
+Route entries are subsystem-level routing declarations. `path` is the visible
+URL prefix. `target.component` and `target.app` identify the canonical owner.
+`kind: alias` is a named subsystem-level shortcut to a component Web app.
+`kind: default` selects the Web app served at `/web` and its descendants. The
+default route is optional; if absent, `/web` remains reserved for built-in Web
+layer paths and explicit subsystem Web apps.
 
 The Management Console exposes the completed Web Descriptor at
 `/web/system/admin/descriptor`. This page is the operator-facing reference for
@@ -275,6 +303,16 @@ App-local assets are served from the canonical component Web app route:
 ```text
 CAR: /web/{webApp}/assets/{asset}
 URL: /web/{component}/{webApp}/assets/{asset}
+```
+
+Static Web app HTML is served from the same canonical component Web app route:
+
+```text
+CAR: /web/{webApp}/index.html
+URL: /web/{component}/{webApp}
+
+CAR: /web/{webApp}/{page}.html
+URL: /web/{component}/{webApp}/{page}
 ```
 
 The asset lookup uses the same Web template root as result templates and keeps

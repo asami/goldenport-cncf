@@ -150,10 +150,12 @@ final class Http4sHttpServer(
         _component_manual_operation(app, service, operation)
       case GET -> Root / "web" / component / webApp / "assets" / asset =>
         _web_app_asset(component, webApp, asset)
+      case GET -> Root / "web" / component / webApp / page =>
+        _component_web_app(component, webApp, Vector(page))
       case GET -> Root / "web" / app =>
         _static_form_app(app, Vector.empty)
-      case GET -> Root / "web" / app / page =>
-        _static_form_app(app, Vector(page))
+      case GET -> Root / "web" / first / second =>
+        _component_web_app_or_static_form_app(first, second)
       case GET -> Root / "form" / app =>
         _form_index(app)
       case req @ GET -> Root / "form" / app / service / operation =>
@@ -354,6 +356,39 @@ final class Http4sHttpServer(
         case None =>
           IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component Web app asset not found"))
       }
+
+  private[http] def _component_web_app(
+    componentName: String,
+    webAppName: String,
+    page: Vector[String]
+  ): IO[HResponse[IO]] =
+    if (!_component_exists(componentName))
+      IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component Web app not found"))
+    else
+      _web_app_static_html_content(webAppName, page) match {
+        case Some(content) =>
+          IO.pure(
+            HResponse[IO](HStatus.Ok)
+              .withEntity(content)
+              .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
+          )
+        case None =>
+          _web_error_response(
+            Some(webAppName),
+            HStatus.NotFound,
+            "Component Web app page not found",
+            s"/web/${componentName}/${webAppName}${page.map(p => s"/${p}").mkString}"
+          )
+      }
+
+  private[http] def _component_web_app_or_static_form_app(
+    first: String,
+    second: String
+  ): IO[HResponse[IO]] =
+    if (_component_exists(first) && _web_app_static_html_content(second, Vector.empty).nonEmpty)
+      _component_web_app(first, second, Vector.empty)
+    else
+      _static_form_app(first, Vector(second))
 
   private def _component_admin(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdmin(engine.runtimeSubsystem, app, engine.webDescriptor) match {
@@ -1517,13 +1552,9 @@ final class Http4sHttpServer(
     operation: String,
     status: Int
   ): Option[String] =
-    _web_template_roots().view.flatMap { root =>
+    _web_resource_roots().view.flatMap { root =>
       _form_result_template_candidates(app, service, operation, status).flatMap { candidate =>
-        val path = root.resolve(candidate)
-        if (Files.isRegularFile(path))
-          Some(Files.readString(path, StandardCharsets.UTF_8))
-        else
-          None
+        root.readText(candidate)
       }
     }.headOption
 
@@ -1570,13 +1601,9 @@ final class Http4sHttpServer(
     app: Option[String],
     status: Int
   ): Option[String] =
-    _web_template_roots().view.flatMap { root =>
+    _web_resource_roots().view.flatMap { root =>
       _web_error_template_candidates(app, status).flatMap { candidate =>
-        val path = root.resolve(candidate)
-        if (Files.isRegularFile(path))
-          Some(Files.readString(path, StandardCharsets.UTF_8))
-        else
-          None
+        root.readText(candidate)
       }
     }.headOption
 
@@ -1592,20 +1619,68 @@ final class Http4sHttpServer(
     } ++ Vector(Paths.get(statusName), Paths.get(errorName))
   }
 
-  private[http] def _web_template_roots(): Vector[Path] =
+  private[http] def _web_resource_roots(): Vector[WebResourceRoot] =
     _web_descriptor_config_root().toVector ++ _subsystem_descriptor_web_root().toVector
 
   private[http] def _web_app_asset_content(
     webAppName: String,
     assetName: String
   ): Option[(String, MediaType)] =
-    _web_template_roots().view.flatMap { root =>
-      val path = root.resolve(org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName)).resolve("assets").resolve(assetName)
-      if (Files.isRegularFile(path))
-        Some(Files.readString(path, StandardCharsets.UTF_8) -> _asset_media_type(assetName))
-      else
-        None
+    _web_resource_roots().view.flatMap { root =>
+      val path = Paths.get(
+        org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName),
+        "assets",
+        assetName
+      )
+      root.readText(path).map(_ -> _asset_media_type(assetName))
     }.headOption
+
+  private[http] def _web_app_static_html_content(
+    webAppName: String,
+    page: Vector[String]
+  ): Option[String] =
+    if (!_safe_web_page_path(page))
+      None
+    else
+      _web_resource_roots().view.flatMap { root =>
+        _web_app_static_html_candidates(webAppName, page).flatMap(root.readText)
+      }.headOption
+
+  private[http] def _web_app_static_html_candidates(
+    webAppName: String,
+    page: Vector[String]
+  ): Vector[Path] = {
+    val webAppPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName)
+    if (page.isEmpty)
+      Vector(Paths.get(webAppPath, "index.html"))
+    else {
+      val normalized = page.map(org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment)
+      val exact =
+        if (normalized.last.endsWith(".html"))
+          Vector(Paths.get(webAppPath, normalized*))
+        else
+          Vector.empty
+      val html =
+        if (normalized.last.endsWith(".html"))
+          Vector.empty
+        else {
+          val withHtml = normalized.init :+ s"${normalized.last}.html"
+          Vector(Paths.get(webAppPath, withHtml*))
+        }
+      val index = Vector(Paths.get(webAppPath, (normalized :+ "index.html")*))
+      exact ++ html ++ index
+    }
+  }
+
+  private def _safe_web_page_path(
+    page: Vector[String]
+  ): Boolean =
+    page.forall { segment =>
+      segment.nonEmpty &&
+        !segment.contains("..") &&
+        !segment.contains("/") &&
+        !segment.contains("\\")
+    }
 
   private def _component_exists(
     componentName: String
@@ -1630,17 +1705,24 @@ final class Http4sHttpServer(
       case _ => MediaType.text.plain
     }
 
-  private[http] def _web_descriptor_config_root(): Option[Path] =
+  private[http] def _web_descriptor_config_root(): Option[WebResourceRoot] =
     RuntimeConfig.getString(engine.runtimeSubsystem.configuration, RuntimeConfig.WebDescriptorKey).map { value =>
       val path = Paths.get(value)
-      if (Files.isDirectory(path))
-        path.resolve("web")
+      if (WebResourceRoot.isArchiveFile(path))
+        WebResourceRoot.archive(path)
+      else if (Files.isDirectory(path))
+        WebResourceRoot.directory(path.resolve("web"))
       else
-        path.getParent
+        WebResourceRoot.directory(Option(path.getParent).getOrElse(Paths.get(".")))
     }
 
-  private[http] def _subsystem_descriptor_web_root(): Option[Path] =
-    engine.runtimeSubsystem.descriptor.map(d => d.path.resolve("web"))
+  private[http] def _subsystem_descriptor_web_root(): Option[WebResourceRoot] =
+    engine.runtimeSubsystem.descriptor.map { d =>
+      if (WebResourceRoot.isArchiveFile(d.path))
+        WebResourceRoot.archive(d.path)
+      else
+        WebResourceRoot.directory(d.path.resolve("web"))
+    }
 
   private def _form_descriptor(
     app: String,

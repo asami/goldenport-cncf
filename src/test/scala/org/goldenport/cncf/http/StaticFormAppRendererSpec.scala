@@ -3,6 +3,8 @@ package org.goldenport.cncf.http
 import scala.collection.mutable.ListBuffer
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.nio.file.Path
+import java.util.zip.{ZipEntry, ZipOutputStream}
 import cats.data.State
 import cats.effect.IO
 import cats.effect.Ref
@@ -1034,7 +1036,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
-      server._web_template_roots() shouldBe Vector(root)
+      server._web_resource_roots().map(_.name) shouldBe Vector(root.toString)
       server._form_result_static_template("notice-board", "notice", "post-notice", 200) shouldBe Some("SERVICE OPERATION")
     }
 
@@ -1059,6 +1061,55 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       body should include (".notice-board")
       response.contentType.map(_.mediaType) shouldBe Some(MediaType.text.css)
       server._web_app_asset("missing", "notice-board", "app.css").unsafeRunSync().status.code shouldBe 404
+    }
+
+    "serve static Web app HTML from the canonical component Web app route" in {
+      val root = Files.createTempDirectory("cncf-web-html-root-")
+      Files.writeString(root.resolve("web-descriptor.yaml"), "web:\n  apps:\n    - name: notice-board\n", StandardCharsets.UTF_8)
+      Files.createDirectories(root.resolve("notice-board"))
+      Files.writeString(root.resolve("notice-board").resolve("index.html"), "<h1>Notice Board</h1>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("notice-board").resolve("about.html"), "<h1>About Notice Board</h1>", StandardCharsets.UTF_8)
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val index = server._component_web_app("notice-board", "notice-board", Vector.empty).unsafeRunSync()
+      val about = server._component_web_app("notice-board", "notice-board", Vector("about")).unsafeRunSync()
+      val missingComponent = server._component_web_app("missing", "notice-board", Vector.empty).unsafeRunSync()
+
+      index.status.code shouldBe 200
+      index.as[String].unsafeRunSync() should include ("Notice Board")
+      about.status.code shouldBe 200
+      about.as[String].unsafeRunSync() should include ("About Notice Board")
+      missingComponent.status.code shouldBe 404
+    }
+
+    "load Static Form Web App descriptor, templates, and assets from a CAR archive Web root" in {
+      val path = _web_archive_fixture(
+        "sample.car",
+        Vector(
+          "web/web-descriptor.yaml" -> "web:\n  apps:\n    - name: notice-board\n",
+          "web/notice-board/index.html" -> "<h1>Archive Notice Board</h1>",
+          "web/notice-board/notice/post-notice__200.html" -> "ARCHIVE SERVICE OPERATION",
+          "web/notice-board/assets/app.css" -> ".archive-notice-board { color: #14532d; }\n"
+        )
+      )
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(path.toString)
+        ))
+      )
+      val engine = new HttpExecutionEngine(subsystem)
+      val server = new Http4sHttpServer(engine)
+
+      engine.webDescriptor.apps.map(_.name) should contain ("notice-board")
+      server._web_resource_roots().map(_.name) shouldBe Vector(path.toString)
+      server._component_web_app("notice-board", "notice-board", Vector.empty).unsafeRunSync().as[String].unsafeRunSync() should include ("Archive Notice Board")
+      server._form_result_static_template("notice-board", "notice", "post-notice", 200) shouldBe Some("ARCHIVE SERVICE OPERATION")
+      server._web_app_asset_content("notice-board", "app.css").map(_._1) shouldBe Some(".archive-notice-board { color: #14532d; }\n")
     }
 
     "render component entity edit page contract" in {
@@ -5147,6 +5198,26 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     Files.writeString(root.resolve("web.yaml"), "form: {}\n", StandardCharsets.UTF_8)
     Files.writeString(root.resolve(filename), content, StandardCharsets.UTF_8)
     root
+  }
+
+  private def _web_archive_fixture(
+    filename: String,
+    entries: Vector[(String, String)]
+  ): Path = {
+    val root = Files.createTempDirectory("cncf-web-archive-")
+    val path = root.resolve(filename)
+    val out = new ZipOutputStream(Files.newOutputStream(path))
+    try {
+      entries.foreach {
+        case (name, content) =>
+          out.putNextEntry(new ZipEntry(name))
+          out.write(content.getBytes(StandardCharsets.UTF_8))
+          out.closeEntry()
+      }
+    } finally {
+      out.close()
+    }
+    path
   }
 
   private def _aggregate_http_protocol(): Protocol =

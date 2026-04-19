@@ -885,7 +885,7 @@ owns the portal route, while Component apps keep their component-scoped routes.
       - `/web/{webAppName}/islands/**` for scoped island scripts when needed
       - `/web/*.html` for component/subsystem common fallback templates
       - `/web/assets/**` for component/subsystem common assets
-- [ ] Define the Web Descriptor app/route vocabulary.
+- [x] Define the Web Descriptor app/route vocabulary.
       Baseline shape:
       - `web.apps[].name`
       - `web.apps[].kind`
@@ -894,25 +894,27 @@ owns the portal route, while Component apps keep their component-scoped routes.
       - `web.routes[].path`
       - `web.routes[].target.component`
       - `web.routes[].target.app`
-- [ ] Define the mount rule:
+- [x] Define the mount rule:
       - CAR `/web/{webAppName}/...` becomes
         `/web/{componentName}/{webAppName}/...`.
       - SAR `/web/{webAppName}/...` is mounted under the subsystem/system Web
         scope according to the SAR Web Descriptor.
-- [ ] Define the SAR portal/composition pattern:
+- [x] Define the SAR portal/composition pattern:
       - SAR `/web/{webAppName}/...` may render navigation/cards to Component
         Web apps.
       - Component Web apps remain mounted at
         `/web/{componentName}/{webAppName}/...` unless explicitly aliased.
       - Portal links must not change Component ownership, authorization,
         templates, or assets.
-- [ ] Define SAR Web route aliases:
+- [x] Define SAR Web route aliases:
       - map `/web/{componentName}/{webAppName}/...` to
         `/web/{webAppName}/...`.
       - map one selected default Web app to `/web/...`.
       - support the same alias behavior for an implicit SAR created from a
         single CAR.
       - reject or require explicit resolution for conflicting aliases.
+      Implementation remains a separate task; canonical component routes are
+      available now.
 - [x] Migrate the current `config/web-descriptor.yaml` and `config/*.html`
       validation shape to the canonical `/web` layout.
       - Do not preserve `config/` as a packaging compatibility contract.
@@ -925,10 +927,18 @@ owns the portal route, while Component apps keep their component-scoped routes.
       - framework assets under `/web/assets/...`
       - app-local CAR assets under
         `/web/{componentName}/{webAppName}/assets/...`.
+- [x] Define how static Web app HTML is served:
+      - CAR `/web/{webAppName}/index.html` is available at
+        `/web/{componentName}/{webAppName}`.
+      - CAR `/web/{webAppName}/{page}.html` is available at
+        `/web/{componentName}/{webAppName}/{page}`.
 - [x] Define template lookup precedence for route-local operation-specific
       templates, route-local common status templates, component/subsystem common
       templates, and descriptor-provided result templates.
-- [ ] Define how `/web` is included and discovered in CAR/SAR archives.
+- [x] Define how `/web` is included and discovered in CAR/SAR archives.
+      CAR/SAR/ZIP archive `/web` is treated as a Web resource root, so
+      descriptor, template, and app-local asset discovery use the same rules as
+      filesystem Web roots.
 - [x] Add executable specifications for descriptor/template discovery and
       Web app route/package mapping.
 - [x] Update `textus-sample-app` to use the chosen canonical packaging layout,
