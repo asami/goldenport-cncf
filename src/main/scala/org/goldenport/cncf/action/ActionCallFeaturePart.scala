@@ -797,11 +797,23 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       case Some(authorization) =>
         OperationAccessPolicy.authorizeUnitOfWorkDefault(
           authorization,
-          _ => Consequence.success(Some(tc.toRecord(entity)))
+          _ => _entity_store_record(id).map(_.orElse(Some(tc.toRecord(entity))))
         ).map(_ => Some(entity))
       case None =>
         Consequence.success(Some(entity))
     }
+  }
+
+  private def _entity_store_record(
+    id: EntityId
+  ): Consequence[Option[Record]] = {
+    given ExecutionContext = execution_context
+    for {
+      cid <- execution_context.entityStoreSpace.dataStoreCollection(id)
+      dsid <- execution_context.entityStoreSpace.dataStoreEntryId(id)
+      ds <- execution_context.dataStoreSpace.dataStore(cid)
+      rec <- ds.load(cid, dsid)
+    } yield rec
   }
 
   protected final def entity_load[T](
