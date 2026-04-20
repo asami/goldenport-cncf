@@ -1379,7 +1379,7 @@ final class Http4sHttpServer(
   ): Option[WebDescriptor.Form] =
     engine.webDescriptor.form.get(Vector(app, "admin", surface, collection, operation).mkString("."))
 
-  private def _operation_form_result(
+  private[http] def _operation_form_result(
     req: org.http4s.Request[IO],
     app: String,
     service: String,
@@ -1407,6 +1407,7 @@ final class Http4sHttpServer(
     val page = StaticFormAppRenderer.renderFormResult(
       _form_result_properties(app, service, operation, res, values),
       _form_result_static_template(app, service, operation, res.code)
+        .orElse(_form_descriptor(app, service, operation).flatMap(_.resultTemplate))
     )
     _html(page).map { html =>
       RuntimeDashboardMetrics.recordHtmlRequest(
@@ -1451,6 +1452,7 @@ final class Http4sHttpServer(
       val page = StaticFormAppRenderer.renderFormResult(
         _form_result_properties(app, service, operation, res, values),
         _form_result_static_template(app, service, operation, res.code)
+          .orElse(_form_descriptor(app, service, operation).flatMap(_.resultTemplate))
       )
       _html(page).map { html =>
         RuntimeDashboardMetrics.recordHtmlRequest(

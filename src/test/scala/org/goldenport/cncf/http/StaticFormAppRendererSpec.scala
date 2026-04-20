@@ -2422,6 +2422,55 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("notice_1")
     }
 
+    "render awaited job result through descriptor result template when static template is absent" in {
+      val subsystem = _aggregate_http_fixture_subsystem()
+      val descriptor = WebDescriptor(
+        expose = Map(
+          "notice-board.notice.post-notice" -> WebDescriptor.Exposure.Protected
+        ),
+        form = Map(
+          "notice-board.notice.post-notice" -> WebDescriptor.Form(
+            resultTemplate = Some(
+              """<article>
+                |  <h2>Descriptor Await Result</h2>
+                |  <p>${result.job.id}</p>
+                |  <p>${result.id}</p>
+                |  <textus-result-view source="result.body"></textus-result-view>
+                |</article>""".stripMargin
+            )
+          )
+        )
+      )
+      val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
+      val dispatcher = new RecordingWebOperationDispatcher(new StaticWebOperationDispatcher(
+        HttpResponse.Text(
+          HttpStatus.Ok,
+          ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+          Bag.text("created:notice_1", StandardCharsets.UTF_8)
+        )
+      ))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+
+      val html = server
+        ._await_operation_form_job(
+          _post_form_request("/form/notice-board/notice/post-notice/jobs/cncf-job-job-1/await", ""),
+          "notice-board",
+          "notice",
+          "post-notice",
+          "cncf-job-job-1"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      html should include ("Descriptor Await Result")
+      html should include ("cncf-job-job-1")
+      html should include ("notice_1")
+      html should include ("created:notice_1")
+      html should not include ("Submitted Values")
+      html should not include ("<textus-result-view")
+      dispatcher.paths.lastOption shouldBe Some("/job_control/job/await_job_result")
+    }
+
     "execute aggregate create/update actions through an HTTP ingress-capable component" in {
       val subsystem = _aggregate_http_fixture_subsystem()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -3794,6 +3843,53 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Submitted notice_1")
       html should include ("aggregate-updated:notice_1")
       html should include ("result.status")
+      html should not include ("Submitted Values")
+      html should not include ("${form.id}")
+      html should not include ("<textus-result-view")
+    }
+
+    "render operation form result route through descriptor result template when static template is absent" in {
+      val subsystem = _aggregate_http_fixture_subsystem()
+      val descriptor = WebDescriptor(
+        expose = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Exposure.Protected
+        ),
+        form = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Form(
+            resultTemplate = Some(
+              """<article>
+                |  <h2>Descriptor Result Route</h2>
+                |  <p>${form.id}</p>
+                |  <p>${result.id}</p>
+                |  <textus-result-view source="result.body"></textus-result-view>
+                |</article>""".stripMargin
+            )
+          )
+        )
+      )
+      val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
+      val dispatcher = new StaticWebOperationDispatcher(
+        HttpResponse.Text(
+          HttpStatus.Ok,
+          ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+          Bag.text("created:notice_1", StandardCharsets.UTF_8)
+        )
+      )
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+
+      val html = server
+        ._operation_form_result(
+          _get_request("/form/notice-board/notice-aggregate/approve-notice-aggregate/result?id=notice_1"),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      html should include ("Descriptor Result Route")
+      html should include ("notice_1")
+      html should include ("created:notice_1")
       html should not include ("Submitted Values")
       html should not include ("${form.id}")
       html should not include ("<textus-result-view")

@@ -516,7 +516,22 @@ POST /form/{component}/{service}/{operation}/jobs/{jobId}/await
 ```
 
 It calls the framework job-control operation and renders the final result using
-the original operation result-page convention.
+the original operation result-page convention. The await endpoint uses the same
+template selection order as a normal form submission: static result template,
+then descriptor `resultTemplate`, then the built-in result page.
+
+Read-style result pages are available through:
+
+```text
+GET /form/{component}/{service}/{operation}/result
+```
+
+The query parameters are treated as page/form properties and as the operation
+query input. The rendered result uses the same property expansion, Textus
+widget, and template selection model as a submitted form. This keeps synthesized
+detail actions such as
+`/form/{component}/{service}/get-xxx/result?id={result.id}` on the same Static
+Form App result-page path.
 
 The result page property set is:
 
@@ -535,10 +550,10 @@ The result page property set is:
 - paging properties under `paging.*`
 
 `WebDescriptor.Form.resultTemplate` can replace the default result page body
-for a form. The template uses the same property expansion and Textus widget
-contracts as the built-in result page. It is intentionally still
-expression-only: applications should introduce new Textus widgets rather than
-add control syntax when richer rendering is needed.
+for a form when no static result template is found. The template uses the same
+property expansion and Textus widget contracts as the built-in result page. It
+is intentionally still expression-only: applications should introduce new
+Textus widgets rather than add control syntax when richer rendering is needed.
 
 Static HTML result pages are the default customization mechanism for ordinary
 Form Apps. Given an operation form whose normalized operation name is `xxx`,
@@ -596,6 +611,15 @@ files first, then descriptor settings where the static convention is not enough.
 Applications that require dynamic transition logic or programming-like page
 flow should use an external Web framework and call CNCF through REST or
 `/form-api`.
+
+The effective result-page fallback order is therefore:
+
+1. Static result template by status/outcome convention.
+2. Descriptor `resultTemplate`.
+3. Built-in Bootstrap result page.
+
+This order applies to plain HTML form submissions, `GET /form/.../result`,
+form continuation pages, and job await result pages.
 
 ## Form Admission Validation
 
