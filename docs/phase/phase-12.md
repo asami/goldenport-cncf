@@ -79,6 +79,13 @@ This document is a progress dashboard, not a design journal.
   `textus-sample-app` has an executable check that posts real Static Form
   requests and verifies the result pages include Bootstrap and Textus widget
   framework assets with all Textus widget tags expanded.
+- R (DONE): WEB-18 — Connect descriptor-declared assets to result rendering.
+  Static Form result rendering now uses `web.assets.autoComplete`, `css`, and
+  `js` when deciding whether to insert framework widget assets.
+- S (DONE): WEB-19 — Insert descriptor assets into Static Form result pages.
+  Descriptor-declared CSS/JS are now inserted into full HTML and fragment
+  result pages with duplicate suppression. Framework assets remain first,
+  followed by app/page composition assets.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational

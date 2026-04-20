@@ -1547,8 +1547,18 @@ final class Http4sHttpServer(
       response.mime.value,
       response.getString.getOrElse(""),
       _form_result_table_columns(app, service, operation),
-      engine.webDescriptor.defaultView
+      engine.webDescriptor.defaultView,
+      _form_result_asset_completion_options
     )
+
+  private def _form_result_asset_completion_options: StaticFormAppLayout.AssetCompletionOptions = {
+    val assets = engine.webDescriptor.assets
+    StaticFormAppLayout.AssetCompletionOptions(
+      autoComplete = assets.autoComplete,
+      declaredCss = assets.css,
+      declaredJs = assets.js
+    )
+  }
 
   private def _form_result_table_columns(
     app: String,

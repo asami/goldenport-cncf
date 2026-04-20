@@ -5186,7 +5186,184 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("/web/assets/textus-widgets.js")
     }
 
-    "honor descriptor-declared widget assets during completion" in {
+    "honor descriptor-disabled result asset auto-completion" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"title":"Phase12","recipient_name":"Bob"}]}""",
+        assetCompletion = StaticFormAppLayout.AssetCompletionOptions(autoComplete = false)
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<!doctype html>
+          |<html lang="en">
+          |<head><title>Search result</title></head>
+          |<body>
+          |  <textus:card-list source="result.body" columns="title,recipient_name"></textus:card-list>
+          |</body>
+          |</html>""".stripMargin
+      ).body
+
+      html should include ("row row-cols-1 row-cols-md-2")
+      html should not include ("<textus:card-list")
+      html should not include ("/web/assets/bootstrap.min.css")
+      html should not include ("/web/assets/bootstrap.bundle.min.js")
+      html should not include ("/web/assets/textus-widgets.css")
+      html should not include ("/web/assets/textus-widgets.js")
+    }
+
+    "insert descriptor-declared result assets without duplicating framework assets" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"title":"Phase12","recipient_name":"Bob"}]}""",
+        assetCompletion = StaticFormAppLayout.AssetCompletionOptions(
+          declaredCss = Vector(
+            "/web/assets/bootstrap.min.css",
+            "/web/assets/textus-widgets.css"
+          ),
+          declaredJs = Vector(
+            "/web/assets/bootstrap.bundle.min.js",
+            "/web/assets/textus-widgets.js"
+          )
+        )
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<!doctype html>
+          |<html lang="en">
+          |<head><title>Search result</title></head>
+          |<body>
+          |  <textus-result-table source="result.body"></textus-result-table>
+          |</body>
+          |</html>""".stripMargin
+      ).body
+
+      html should include ("<table")
+      html should not include ("<textus-result-table")
+      _count_occurrences(html, "/web/assets/bootstrap.min.css") shouldBe 1
+      _count_occurrences(html, "/web/assets/bootstrap.bundle.min.js") shouldBe 1
+      _count_occurrences(html, "/web/assets/textus-widgets.css") shouldBe 1
+      _count_occurrences(html, "/web/assets/textus-widgets.js") shouldBe 1
+    }
+
+    "insert descriptor app assets after framework assets in full HTML result pages" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"title":"Phase12","recipient_name":"Bob"}]}""",
+        assetCompletion = StaticFormAppLayout.AssetCompletionOptions(
+          declaredCss = Vector("/web/notice-board/notice-board/assets/app.css"),
+          declaredJs = Vector("/web/notice-board/notice-board/assets/app.js")
+        )
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<!doctype html>
+          |<html lang="en">
+          |<head><title>Search result</title></head>
+          |<body>
+          |  <textus:card-list source="result.body" columns="title,recipient_name"></textus:card-list>
+          |</body>
+          |</html>""".stripMargin
+      ).body
+
+      html should include ("row row-cols-1 row-cols-md-2")
+      html.indexOf("/web/assets/bootstrap.min.css") should be < html.indexOf("/web/assets/textus-widgets.css")
+      html.indexOf("/web/assets/textus-widgets.css") should be < html.indexOf("/web/notice-board/notice-board/assets/app.css")
+      html.indexOf("/web/assets/bootstrap.bundle.min.js") should be < html.indexOf("/web/assets/textus-widgets.js")
+      html.indexOf("/web/assets/textus-widgets.js") should be < html.indexOf("/web/notice-board/notice-board/assets/app.js")
+    }
+
+    "insert descriptor app assets even when framework auto-completion is disabled" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"title":"Phase12","recipient_name":"Bob"}]}""",
+        assetCompletion = StaticFormAppLayout.AssetCompletionOptions(
+          autoComplete = false,
+          declaredCss = Vector("/web/notice-board/notice-board/assets/app.css"),
+          declaredJs = Vector("/web/notice-board/notice-board/assets/app.js")
+        )
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<!doctype html>
+          |<html lang="en">
+          |<head><title>Search result</title></head>
+          |<body>
+          |  <textus-result-table source="result.body"></textus-result-table>
+          |</body>
+          |</html>""".stripMargin
+      ).body
+
+      html should include ("<table")
+      html should include ("/web/notice-board/notice-board/assets/app.css")
+      html should include ("/web/notice-board/notice-board/assets/app.js")
+      html should not include ("/web/assets/bootstrap.min.css")
+      html should not include ("/web/assets/bootstrap.bundle.min.js")
+      html should not include ("/web/assets/textus-widgets.css")
+      html should not include ("/web/assets/textus-widgets.js")
+    }
+
+    "insert descriptor app assets into fragment result pages" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"title":"Phase12","recipient_name":"Bob"}]}""",
+        assetCompletion = StaticFormAppLayout.AssetCompletionOptions(
+          declaredCss = Vector("/web/notice-board/notice-board/assets/app.css"),
+          declaredJs = Vector("/web/notice-board/notice-board/assets/app.js")
+        )
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <h2>Fragment result</h2>
+          |  <textus-result-table source="result.body"></textus-result-table>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("/web/assets/bootstrap.min.css")
+      html should include ("/web/assets/textus-widgets.css")
+      html should include ("/web/notice-board/notice-board/assets/app.css")
+      html should include ("/web/assets/bootstrap.bundle.min.js")
+      html should include ("/web/assets/textus-widgets.js")
+      html should include ("/web/notice-board/notice-board/assets/app.js")
+      html should not include ("<textus-result-table")
+    }
+
+    "insert descriptor-declared widget assets once during completion" in {
       val html = StaticFormAppLayout.completeWidgetAssets(
         """<!doctype html>
           |<html lang="en">
@@ -5207,10 +5384,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       )
 
-      html should not include ("/web/assets/bootstrap.min.css")
-      html should not include ("/web/assets/bootstrap.bundle.min.js")
-      html should not include ("/web/assets/textus-widgets.css")
-      html should not include ("/web/assets/textus-widgets.js")
+      _count_occurrences(html, "/web/assets/bootstrap.min.css") shouldBe 1
+      _count_occurrences(html, "/web/assets/bootstrap.bundle.min.js") shouldBe 1
+      _count_occurrences(html, "/web/assets/textus-widgets.css") shouldBe 1
+      _count_occurrences(html, "/web/assets/textus-widgets.js") shouldBe 1
     }
 
     "load packaged Textus widget assets" in {

@@ -95,9 +95,17 @@ web:
       - /web/notice-board/assets/app.js
 ```
 
-Descriptor-declared assets are treated as already supplied by the surrounding
-page/app composition. If they include Bootstrap or Textus widget assets, widget
-asset completion must not insert another copy.
+Descriptor-declared assets are page/app composition inputs. Static Form result
+rendering inserts descriptor CSS before `</head>` and descriptor JavaScript
+before `</body>`, unless the final page already contains the same asset.
+Framework assets are placed first, followed by descriptor-declared application
+assets.
+
+If `web.assets.autoComplete` is `false`, Static Form result rendering must not
+insert framework widget assets automatically. Widget expansion still runs; the
+application is then responsible for supplying any CSS/JS needed by the final
+page. Explicit descriptor CSS/JS are still inserted because they are declared
+composition assets, not inferred framework dependencies.
 
 Fragment templates are normally wrapped by the built-in Bootstrap page layout,
 so they already receive the local Bootstrap and Textus widget baseline through

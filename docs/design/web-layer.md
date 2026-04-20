@@ -311,6 +311,13 @@ The framework asset route is stable across canonical component routes, SAR
 aliases, and implicit single-CAR aliases. Static pages must not use CDN URLs
 for baseline Bootstrap behavior or Textus widget behavior.
 
+Static Form result rendering uses `web.assets` as composition input:
+
+- `autoComplete: false` disables automatic framework asset insertion.
+- `css` and `js` entries are inserted into result pages as application
+  composition assets, with duplicate suppression.
+- framework assets are inserted first, followed by descriptor-declared assets.
+
 App-local assets are served from the canonical component Web app route:
 
 ```text

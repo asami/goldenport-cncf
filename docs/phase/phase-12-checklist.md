@@ -1411,6 +1411,111 @@ widgets before returning HTML.
 
 ---
 
+## WEB-18: Descriptor Asset Completion Control
+
+Status: DONE
+
+### Objective
+
+Connect Web Descriptor asset settings to Static Form result rendering.
+
+WEB-16 introduced framework-owned Bootstrap/Textus widget asset completion and
+WEB-17 validated it end to end in the sample app. WEB-18 makes the descriptor
+control path real: `web.assets.autoComplete`, `web.assets.css`, and
+`web.assets.js` now influence the renderer options used for result pages.
+
+### Design Direction
+
+- Descriptor settings are app/page composition hints for the Static Form path.
+- `web.assets.autoComplete: false` disables automatic framework asset
+  insertion for result HTML documents.
+- `web.assets.css` and `web.assets.js` are treated as assets already supplied
+  by the surrounding app/page composition.
+- Widget rendering still runs even when asset completion is disabled.
+- Omitted descriptor settings preserve the zero-configuration default:
+  Textus widget pages receive local Bootstrap and Textus widget assets.
+
+### Detailed Tasks
+
+- [x] Add an `autoComplete` switch to the renderer asset completion options.
+- [x] Carry asset completion options through `FormResultProperties`.
+- [x] Build result asset options from `engine.webDescriptor.assets`.
+- [x] Use descriptor-declared CSS/JS as duplicate-suppression inputs.
+- [x] Add executable specifications for disabled auto-completion.
+- [x] Add executable specifications for descriptor-declared Bootstrap and
+      Textus widget assets.
+- [x] Keep direct renderer usage backward compatible through default options.
+
+### Closure
+
+WEB-18 is complete for Static Form result rendering. Descriptor-declared assets
+now participate in the result-page asset completion decision without requiring
+template programming. Broader route-level insertion of arbitrary descriptor
+assets remains separate app/page composition work.
+
+### Inputs
+
+- `docs/spec/textus-widget.md`
+- `docs/design/web-layer.md`
+- `docs/phase/phase-12.md`
+
+---
+
+## WEB-19: Descriptor Asset Insertion
+
+Status: DONE
+
+### Objective
+
+Use Web Descriptor asset declarations as actual Static Form result page
+composition input.
+
+WEB-18 connected `web.assets` to the asset completion decision. WEB-19 extends
+that path so descriptor-declared CSS/JS are inserted into generated result
+HTML, with duplicate suppression, for both full HTML document templates and
+fragment templates wrapped by the built-in layout.
+
+### Design Direction
+
+- `web.assets.css` entries are inserted before `</head>`.
+- `web.assets.js` entries are inserted before `</body>`.
+- Framework assets remain first: Bootstrap, then Textus widget assets.
+- Descriptor app/page composition assets are inserted after framework assets.
+- Existing page declarations are not duplicated.
+- `autoComplete: false` disables framework asset auto-completion only.
+  Explicit descriptor CSS/JS are still inserted because they are not automatic
+  inference; they are application composition declarations.
+- WEB-19 implements global `web.assets`. App/form/page scoped assets remain
+  future composition work.
+
+### Detailed Tasks
+
+- [x] Add descriptor asset insertion after framework asset completion.
+- [x] Keep descriptor insertion active when `autoComplete` is false.
+- [x] Apply descriptor insertion to full HTML document result templates.
+- [x] Apply descriptor insertion to fragment result templates after built-in
+      page wrapping.
+- [x] Suppress duplicates when the page already contains a descriptor asset.
+- [x] Add executable specifications for framework ordering, disabled
+      auto-completion with explicit assets, and fragment pages.
+- [x] Validate descriptor asset insertion with `textus-sample-app` result-page
+      checks.
+- [x] Update Web/widget design documentation.
+
+### Closure
+
+WEB-19 is complete for global Static Form result asset composition. The runtime
+can now combine framework assets and descriptor-declared application assets
+without requiring template authors to repeat shared links on every result page.
+
+### Inputs
+
+- `docs/spec/textus-widget.md`
+- `docs/design/web-layer.md`
+- `docs/phase/phase-12.md`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.

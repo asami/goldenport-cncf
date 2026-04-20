@@ -7,6 +7,7 @@ package org.goldenport.cncf.http
  */
 object StaticFormAppLayout {
   final case class AssetCompletionOptions(
+    autoComplete: Boolean = true,
     requiresBootstrap: Boolean = false,
     requiresTextusWidgets: Boolean = false,
     declaredCss: Vector[String] = Vector.empty,
@@ -18,6 +19,7 @@ object StaticFormAppLayout {
     subtitle: String,
     body: String,
     extraHead: String = "",
+    extraHeadHtml: String = "",
     extraScript: String = "",
     containerClass: String = "container-fluid px-4 py-4"
   )
@@ -31,6 +33,7 @@ object StaticFormAppLayout {
        |  <title>${escape(options.title)}</title>
        |  <link href="/web/assets/bootstrap.min.css" rel="stylesheet">
        |  <link href="/web/assets/textus-widgets.css" rel="stylesheet">
+       |${options.extraHeadHtml}
        |  <style>
        |    body { background: #f6f7f9; color: #1f252b; }
        |    header { background: #ffffff; border-bottom: 1px solid #d9dee5; }
@@ -59,10 +62,11 @@ object StaticFormAppLayout {
   def completeWidgetAssets(
     html: String,
     options: AssetCompletionOptions
-  ): String =
-    if (!options.requiresBootstrap && !options.requiresTextusWidgets)
-      html
-    else {
+  ): String = {
+    val withFramework =
+      if (!options.autoComplete || (!options.requiresBootstrap && !options.requiresTextusWidgets))
+        html
+      else {
       val withBootstrapCss = _insert_css_if_needed(
         html,
         options.requiresBootstrap,
@@ -88,6 +92,20 @@ object StaticFormAppLayout {
         """/web/assets/textus-widgets.js"""
       )
     }
+    completeDeclaredAssets(withFramework, options)
+  }
+
+  def completeDeclaredAssets(
+    html: String,
+    options: AssetCompletionOptions
+  ): String = {
+    val withCss = options.declaredCss.distinct.foldLeft(html) { (z, href) =>
+      _insert_css_asset_if_absent(z, href)
+    }
+    options.declaredJs.distinct.foldLeft(withCss) { (z, src) =>
+      _insert_js_asset_if_absent(z, src)
+    }
+  }
 
   def escape(value: String): String =
     value
@@ -100,39 +118,43 @@ object StaticFormAppLayout {
   private def _has_bootstrap_css(
     html: String,
     declaredCss: Vector[String]
-  ): Boolean =
+  ): Boolean = {
+    val _ = declaredCss
     html.contains("/web/assets/bootstrap.min.css") ||
-      html.toLowerCase(java.util.Locale.ROOT).contains("bootstrap.min.css") ||
-      declaredCss.exists(_.toLowerCase(java.util.Locale.ROOT).contains("bootstrap"))
+      html.toLowerCase(java.util.Locale.ROOT).contains("bootstrap.min.css")
+  }
 
   private def _has_bootstrap_js(
     html: String,
     declaredJs: Vector[String]
-  ): Boolean =
+  ): Boolean = {
+    val _ = declaredJs
     html.contains("/web/assets/bootstrap.bundle.min.js") ||
-      html.toLowerCase(java.util.Locale.ROOT).contains("bootstrap.bundle.min.js") ||
-      declaredJs.exists(_.toLowerCase(java.util.Locale.ROOT).contains("bootstrap"))
+      html.toLowerCase(java.util.Locale.ROOT).contains("bootstrap.bundle.min.js")
+  }
 
   private def _has_textus_widgets_css(
     html: String,
     declaredCss: Vector[String]
-  ): Boolean =
-    _has_asset(html, declaredCss, "textus-widgets.css")
+  ): Boolean = {
+    val _ = declaredCss
+    _has_asset(html, "textus-widgets.css")
+  }
 
   private def _has_textus_widgets_js(
     html: String,
     declaredJs: Vector[String]
-  ): Boolean =
-    _has_asset(html, declaredJs, "textus-widgets.js")
+  ): Boolean = {
+    val _ = declaredJs
+    _has_asset(html, "textus-widgets.js")
+  }
 
   private def _has_asset(
     html: String,
-    declaredAssets: Vector[String],
     assetName: String
   ): Boolean = {
     val name = assetName.toLowerCase(java.util.Locale.ROOT)
-    html.toLowerCase(java.util.Locale.ROOT).contains(name) ||
-      declaredAssets.exists(_.toLowerCase(java.util.Locale.ROOT).contains(name))
+    html.toLowerCase(java.util.Locale.ROOT).contains(name)
   }
 
   private def _insert_css_if_needed(
@@ -166,6 +188,44 @@ object StaticFormAppLayout {
         s"""  <script src="${src}"></script>
            |""".stripMargin
       )
+
+  private def _insert_css_asset_if_absent(
+    html: String,
+    href: String
+  ): String = {
+    val asset = href.trim
+    if (asset.isEmpty || _has_declared_asset(html, asset))
+      html
+    else
+      _insert_before(
+        html,
+        "</head>",
+        s"""  <link href="${escape(asset)}" rel="stylesheet">
+           |""".stripMargin
+      )
+  }
+
+  private def _insert_js_asset_if_absent(
+    html: String,
+    src: String
+  ): String = {
+    val asset = src.trim
+    if (asset.isEmpty || _has_declared_asset(html, asset))
+      html
+    else
+      _insert_before(
+        html,
+        "</body>",
+        s"""  <script src="${escape(asset)}"></script>
+           |""".stripMargin
+      )
+  }
+
+  private def _has_declared_asset(
+    html: String,
+    asset: String
+  ): Boolean =
+    html.toLowerCase(java.util.Locale.ROOT).contains(asset.toLowerCase(java.util.Locale.ROOT))
 
   private def _insert_before(
     html: String,

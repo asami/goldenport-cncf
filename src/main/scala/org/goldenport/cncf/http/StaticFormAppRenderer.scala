@@ -72,7 +72,9 @@ object StaticFormAppRenderer {
     contentType: String,
     body: String,
     tableColumns: Map[String, Vector[TableColumn]] = Map.empty,
-    defaultTableView: String = WebTableColumnResolver.defaultViewName
+    defaultTableView: String = WebTableColumnResolver.defaultViewName,
+    assetCompletion: StaticFormAppLayout.AssetCompletionOptions =
+      StaticFormAppLayout.AssetCompletionOptions()
   ) {
     def componentName: String = page.componentName
     def serviceName: String = page.serviceName
@@ -1564,12 +1566,15 @@ object StaticFormAppRenderer {
       properties.defaultTableView
     )
     if (_is_html_document(template))
-      Page(_complete_widget_assets(template, rendered))
+      Page(_complete_widget_assets(template, rendered, properties.assetCompletion))
     else
-      Page(_simple_page(
-        title = s"${_escape(properties.operationLabel)} Result",
-        subtitle = s"HTTP ${properties.status}",
-        body = rendered
+      Page(StaticFormAppLayout.completeDeclaredAssets(
+        _simple_page(
+          title = s"${_escape(properties.operationLabel)} Result",
+          subtitle = s"HTTP ${properties.status}",
+          body = rendered
+        ),
+        properties.assetCompletion
       ))
   }
 
@@ -4525,12 +4530,13 @@ object StaticFormAppRenderer {
 
   private def _complete_widget_assets(
     template: String,
-    rendered: String
+    rendered: String,
+    options: StaticFormAppLayout.AssetCompletionOptions
   ): String = {
     val hasTextusWidgets = _has_textus_widgets(template)
     StaticFormAppLayout.completeWidgetAssets(
       rendered,
-      StaticFormAppLayout.AssetCompletionOptions(
+      options.copy(
         requiresBootstrap = hasTextusWidgets,
         requiresTextusWidgets = hasTextusWidgets
       )
