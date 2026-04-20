@@ -5269,6 +5269,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """<article>
           |  <textus-record-card source="result.body" columns="title,recipient_name"></textus-record-card>
           |  <textus:card-list source="result.body" columns="title,recipient_name"></textus:card-list>
+          |  <textus:card title="Widget Card" subtitle="result.message"><p>${result.count} record</p></textus:card>
           |  <textus-summary-card title="Matches" value="result.count"></textus-summary-card>
           |  <textus:alert message="result.message"></textus:alert>
           |  <textus-pagination></textus-pagination>
@@ -5277,11 +5278,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       html should include ("textus-record-card")
       html should include ("row row-cols-1 row-cols-md-2")
+      html should include ("textus-card")
+      html should include ("Widget Card")
       html should include ("textus-summary-card")
       html should include ("textus-alert")
       html should include ("Result pages")
       html should not include ("<textus-record-card")
       html should not include ("<textus:card-list")
+      html should not include ("<textus:card")
       html should not include ("<textus-summary-card")
       html should not include ("<textus:alert")
       html should not include ("<textus-pagination")

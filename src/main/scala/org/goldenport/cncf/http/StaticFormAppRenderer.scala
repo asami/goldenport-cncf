@@ -5051,6 +5051,7 @@ object StaticFormAppRenderer {
   ): String = {
     val resultView = """<textus-result-view\s+source="([^"]+)"\s*></textus-result-view>""".r
     val resultTable = """<textus-result-table\b([^>]*)></textus-result-table>""".r
+    val card = """(?s)<textus(?::card(?!-)|-card(?!-))\b([^>]*)>(.*?)</textus(?::card|-card)>""".r
     val recordCard = """<textus(?::record-card|-record-card)\b([^>]*)></textus(?::record-card|-record-card)>""".r
     val cardList = """<textus(?::card-list|-card-list)\b([^>]*)></textus(?::card-list|-card-list)>""".r
     val summaryCard = """<textus(?::summary-card|-summary-card)\b([^>]*)></textus(?::summary-card|-summary-card)>""".r
@@ -5072,7 +5073,11 @@ object StaticFormAppRenderer {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_result_table(attrs, properties, tableColumns, defaultTableView))
     })
-    val c = recordCard.replaceAllIn(b, m => {
+    val b1 = card.replaceAllIn(b, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_card(attrs, m.group(2), properties))
+    })
+    val c = recordCard.replaceAllIn(b1, m => {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_record_card(attrs, properties, tableColumns, defaultTableView))
     })
@@ -5269,6 +5274,27 @@ object StaticFormAppRenderer {
     val href = properties.value(hrefPath)
     val table = _json_table(source, properties, page, pageSize, columns).getOrElse("")
     s"""${table}<div class="mt-3">${_render_pagination(attrs, properties)}</div>"""
+  }
+
+  private def _render_card(
+    attrs: Map[String, String],
+    inner: String,
+    properties: FormPageProperties
+  ): String = {
+    val title = _attr_value(attrs, "title", properties)
+    val subtitle = _attr_value(attrs, "subtitle", properties)
+    val footer = _attr_value(attrs, "footer", properties)
+    val extraClass = attrs.get("class").map(x => s" ${_escape(x)}").getOrElse("")
+    val titleHtml = title.filter(_.nonEmpty).map { x =>
+      s"""<h3 class="h5 card-title">${_escape(x)}</h3>"""
+    }.getOrElse("")
+    val subtitleHtml = subtitle.filter(_.nonEmpty).map { x =>
+      s"""<p class="card-subtitle text-secondary mb-2">${_escape(x)}</p>"""
+    }.getOrElse("")
+    val footerHtml = footer.filter(_.nonEmpty).map { x =>
+      s"""<div class="card-footer text-secondary">${_escape(x)}</div>"""
+    }.getOrElse("")
+    s"""<article class="card textus-card${extraClass}"><div class="card-body">${titleHtml}${subtitleHtml}${inner}</div>${footerHtml}</article>"""
   }
 
   private def _render_record_card(

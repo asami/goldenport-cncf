@@ -2309,6 +2309,176 @@ model.
 
 ---
 
+## WEB-39 — Admin Console CRUD Navigation Polish
+
+Status: DONE
+
+### Goal
+
+Confirm the built-in Management Console entity CRUD flow is usable as a real
+browser flow, not only as isolated create/list/detail endpoints.
+
+### Scope
+
+- Recheck entity create from the admin new form.
+- Follow list-to-detail navigation.
+- Follow detail-to-edit navigation.
+- Submit the edit form through the admin update endpoint.
+- Confirm the updated detail page reflects the submitted values.
+
+### Detailed Tasks
+
+- [x] Extend the sample admin CRUD script from create/detail to edit/update.
+- [x] Assert the detail page exposes the edit link.
+- [x] Assert the edit page exposes update and cancel controls.
+- [x] Submit update through the generated `/form/.../update` action.
+- [x] Reopen detail and confirm updated title/content render.
+
+### Closure
+
+WEB-39 closes the first practical Admin Console UX pass for entity CRUD. The
+remaining polish is visual refinement, not missing route continuity for the
+current entity path.
+
+### Inputs
+
+- `textus-sample-app/scripts/check-admin-crud.sh`
+- `docs/design/management-console.md`
+
+---
+
+## WEB-40 — Static Form Result Transition Convention Recheck
+
+Status: DONE
+
+### Goal
+
+Confirm the simple Static Form Web App convention remains the primary result
+transition mechanism: operation result status selects static HTML templates and
+the framework supplies result/form properties for that page.
+
+### Scope
+
+- Verify operation-specific `xxx__200.html` result pages for post/search flows.
+- Verify hidden form context can be preserved into subsequent POST actions.
+- Verify async command pages expose job await links.
+- Keep descriptor redirects/templates as supplemental configuration rather than
+  the default sample path.
+
+### Detailed Tasks
+
+- [x] Keep `post-notice__200.html` and `search-notices__200.html` as the sample
+      result pages.
+- [x] Check rendered result pages include result text from those templates.
+- [x] Check search result refresh carries `recipientName` through POST body via
+      hidden form fields.
+- [x] Check command result pages expose a generated job await action.
+
+### Closure
+
+WEB-40 confirms that the Static Form Web App sample can express useful
+application flow through static result conventions plus framework-provided
+properties, without requiring descriptor redirects as the normal path.
+
+### Inputs
+
+- `textus-sample-app/web/notice-board/post-notice__200.html`
+- `textus-sample-app/web/notice-board/search-notices__200.html`
+- `textus-sample-app/scripts/check-static-form-result-assets.sh`
+- `docs/notes/cncf-web-static-form-app-contract.md`
+
+---
+
+## WEB-41 — Textus Widget Expansion Recheck
+
+Status: DONE
+
+### Goal
+
+Validate the current Textus widget set against the sample app so future widget
+expansion keeps both namespace and HTML-compatible notation working in actual
+Static Form result pages.
+
+### Scope
+
+- Exercise result table and card-list widgets from search results.
+- Exercise job-ticket, generic card, and action-link widgets from command
+  result pages.
+- Exercise property-list, error-panel, and hidden-context widgets from existing
+  sample templates.
+- Add the missing generic `textus:card` runtime renderer.
+
+### Detailed Tasks
+
+- [x] Implement generic `textus:card` / `textus-card` rendering as a Bootstrap
+      card container.
+- [x] Add renderer specification coverage for generic card expansion.
+- [x] Add a generic card with a nested action-link to the sample post result
+      template.
+- [x] Extend sample checks so rendered pages contain card/action output and no
+      unexpanded `textus` tags.
+
+### Closure
+
+WEB-41 confirms the current widget baseline is usable from Static Form result
+pages. The widget contract remains intentionally small: table/card result
+rendering, job actions, alerts/errors, properties, hidden context, and generic
+Bootstrap card composition.
+
+### Inputs
+
+- `docs/spec/textus-widget.md`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+- `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`
+- `textus-sample-app/web/notice-board/post-notice__200.html`
+- `textus-sample-app/scripts/check-static-form-result-assets.sh`
+
+---
+
+## WEB-42 — Web Packaging and Descriptor Route Recheck
+
+Status: DONE
+
+### Goal
+
+Keep Web application packaging executable in the sample app after the Admin
+Console, Static Form, and widget changes.
+
+### Scope
+
+- Recheck canonical `/web/{component}/{webApp}` routing.
+- Recheck implicit single-app aliases.
+- Recheck framework, app, and form-scoped asset routing.
+- Recheck completed descriptor admin inspection.
+- Recheck admin surface entrypoints and operation form links.
+
+### Detailed Tasks
+
+- [x] Keep sample package file checks for `.textus/config.yaml`,
+      `web/web-descriptor.yaml`, result pages, error pages, and local assets.
+- [x] Confirm canonical and implicit Web app routes return the same application
+      content and Bootstrap/app asset links.
+- [x] Confirm framework Textus widget assets are served from `/web/assets`.
+- [x] Confirm descriptor admin pages expose completed/configured descriptor
+      sections, control tables, asset tables, and admin surface links.
+- [x] Confirm admin entity, data, aggregate, and view entrypoints remain
+      reachable from the packaged sample.
+
+### Closure
+
+WEB-42 confirms the current CAR-style Web package layout remains coherent:
+`/web/{component}/{webApp}` is canonical, aliases are available for the
+single-app sample, local assets resolve, and descriptor/admin inspection remains
+available.
+
+### Inputs
+
+- `textus-sample-app/scripts/check-web-packaging.sh`
+- `textus-sample-app/web/web-descriptor.yaml`
+- `docs/design/web-layer.md`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.
@@ -2333,7 +2503,7 @@ model.
 
 Phase 12 is complete when:
 
-- WEB-01 through WEB-38 are marked DONE, or explicitly deferred to a later
+- WEB-01 through WEB-42 are marked DONE, or explicitly deferred to a later
   phase.
 - `phase-12.md` summary checkboxes are aligned.
 - No item remains ACTIVE or SUSPENDED.

@@ -149,6 +149,20 @@ This document is a progress dashboard, not a design journal.
   The current notice-board CAR sample has no meaningful data collection
   fixture, so full Data CRUD E2E remains deferred until a data-oriented sample
   or fixture is added. Current checks keep the data admin entrypoint visible.
+- AM (DONE): WEB-39 — Polish Admin Console CRUD navigation by E2E.
+  The sample app now verifies entity detail-to-edit navigation, edit form
+  cancel/update actions, update result output, and post-update detail display.
+- AN (DONE): WEB-40 — Validate Static Form result transition conventions.
+  Static Form result pages are checked through the `xxx__200.html` convention,
+  hidden context handoff, result properties, and async command await links.
+- AO (DONE): WEB-41 — Validate Textus widget expansion in the sample app.
+  The sample app now exercises table, card-list, generic card, job-ticket,
+  action-link, property-list, error-panel, and hidden-context widgets with both
+  namespace and HTML-compatible notation.
+- AP (DONE): WEB-42 — Recheck Web packaging and descriptor routes.
+  The sample app packaging check covers canonical and implicit Web app routes,
+  framework/app/form assets, descriptor admin inspection, and admin surface
+  entrypoints.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
@@ -246,6 +260,19 @@ Current note:
 - [x] WEB-38: Record Data CRUD fixture boundary.
   Data admin route validation remains in place, while full Data CRUD E2E is
   explicitly held for a future data collection fixture/sample.
+- [x] WEB-39: Polish Admin Console CRUD navigation by E2E.
+  Entity CRUD validation covers create, list/detail navigation, edit form
+  rendering, update submission, and updated detail output.
+- [x] WEB-40: Validate Static Form result transition conventions.
+  Sample checks confirm operation-specific `__200` result pages, hidden
+  context handoff, job await links, and result property/widget expansion.
+- [x] WEB-41: Validate Textus widget expansion in the sample app.
+  Sample result templates exercise table, card-list, generic card, job-ticket,
+  action-link, property-list, error-panel, and hidden-context widgets.
+- [x] WEB-42: Recheck Web packaging and descriptor routes.
+  Packaging validation covers canonical `/web/{component}/{webApp}` routing,
+  implicit aliases, asset routing, descriptor admin pages, and admin surface
+  entrypoints.
 
 ## 6. Next Phase Candidates
 
