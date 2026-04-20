@@ -211,6 +211,55 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       app.completed.route shouldBe Some("/web/{component}/notice-board")
     }
 
+    "merge scoped assets in global app and form order without duplicates" in {
+      val path = Files.createTempFile("cncf-web-descriptor-scoped-assets", ".yaml")
+      Files.writeString(
+        path,
+        """web:
+          |  assets:
+          |    css:
+          |      - /web/assets/site.css
+          |    js:
+          |      - /web/assets/site.js
+          |
+          |  apps:
+          |    - name: notice-board
+          |      assets:
+          |        css:
+          |          - /web/assets/site.css
+          |          - /web/notice-board/notice-board/assets/app.css
+          |        js:
+          |          - /web/notice-board/notice-board/assets/app.js
+          |
+          |  form:
+          |    notice-board.notice.search-notices:
+          |      assets:
+          |        autoComplete: false
+          |        css:
+          |          - /web/notice-board/notice-board/assets/app.css
+          |          - /web/notice-board/notice-board/assets/search.css
+          |        js:
+          |          - /web/notice-board/notice-board/assets/search.js
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = WebDescriptor.load(path).toOption.get
+      val assets = descriptor.resultAssets("notice-board", "notice", "search-notices")
+
+      assets.autoComplete shouldBe false
+      assets.css shouldBe Vector(
+        "/web/assets/site.css",
+        "/web/notice-board/notice-board/assets/app.css",
+        "/web/notice-board/notice-board/assets/search.css"
+      )
+      assets.js shouldBe Vector(
+        "/web/assets/site.js",
+        "/web/notice-board/notice-board/assets/app.js",
+        "/web/notice-board/notice-board/assets/search.js"
+      )
+    }
+
     "discover /web/web-descriptor.yaml from a directory descriptor root" in {
       val root = Files.createTempDirectory("cncf-web-descriptor-root")
       val web = Files.createDirectories(root.resolve("web"))

@@ -1568,6 +1568,56 @@ scope.
 
 ---
 
+## WEB-21: Form-Scoped Asset Sample E2E
+
+Status: DONE
+
+### Objective
+
+Validate form/operation-scoped descriptor assets with `textus-sample-app`.
+
+WEB-20 added the runtime mechanism for global, app, and form asset scopes.
+WEB-21 fixes the form-scope behavior in the sample application so the feature
+is covered by real Static Form result pages, not only descriptor parsing specs.
+
+### Design Direction
+
+- App-scoped assets provide the notice-board Web app baseline.
+- Form-scoped assets are used only for the `search-notices` result flow.
+- `post-notice` result pages must keep app-scoped assets but must not receive
+  `search-notices` form assets.
+- Static Form result E2E checks should verify both inclusion and exclusion.
+
+### Detailed Tasks
+
+- [x] Add `web.form.notice-board.notice.search-notices.assets` to
+      `textus-sample-app`.
+- [x] Add search-result-specific CSS/JS under the notice-board Web app assets.
+- [x] Extend result-page E2E checks so `search-notices` includes form-scoped
+      assets.
+- [x] Extend result-page E2E checks so `post-notice` excludes form-scoped
+      assets.
+- [x] Extend packaging checks so the form-scoped assets are served from both
+      canonical and implicit app-local asset routes.
+- [x] Add descriptor merge specs for global/app/form order, duplicate
+      suppression, and scoped `autoComplete=false`.
+
+### Closure
+
+WEB-21 is complete as the practical sample validation for form-scoped assets.
+The sample app now demonstrates the intended split: app assets apply to every
+notice-board result page, while search result assets apply only to the
+`search-notices` operation.
+
+### Inputs
+
+- `textus-sample-app/web/web-descriptor.yaml`
+- `textus-sample-app/scripts/check-static-form-result-assets.sh`
+- `textus-sample-app/scripts/check-web-packaging.sh`
+- `docs/spec/textus-widget.md`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.

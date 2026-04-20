@@ -89,6 +89,9 @@ This document is a progress dashboard, not a design journal.
 - T (DONE): WEB-20 — Add scoped descriptor assets.
   Static Form result asset composition now merges global, app, and form
   descriptor assets so multi-app Web packages can avoid global over-application.
+- U (DONE): WEB-21 — Validate form-scoped assets in the sample app.
+  `textus-sample-app` declares `search-notices`-specific assets at form scope
+  and verifies that they appear only on the search result flow.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
