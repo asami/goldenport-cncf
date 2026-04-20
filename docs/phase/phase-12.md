@@ -48,9 +48,9 @@ This document is a progress dashboard, not a design journal.
   The notice-board sample runs on CML metadata and static HTML conventions,
   including result widgets, paging, total-count opt-in, error pages, and async
   command result waiting.
-- J (PLANNED): WEB-10 — Polish built-in Web pages with Bootstrap 5.
-  Management Console, Dashboard, Manual, and Static Form App should use the
-  local Bootstrap 5 baseline to provide clean responsive business/admin pages.
+- J (DONE): WEB-10 — Polish built-in Web pages with Bootstrap 5.
+  Management Console, Dashboard, Manual, and Static Form App use the local
+  Bootstrap 5 baseline as the first-pass responsive business/admin polish.
 - K (PLANNED): WEB-11 — Expand the Textus widget set.
   Card widgets are the first focus, followed by layout, navigation, feedback,
   content, and form-helper widgets that keep Static Form App expression-oriented
@@ -93,10 +93,10 @@ Current note:
   covers result view, tables, property lists, error panels, action links,
   paging without total count, explicit total-count opt-in, and async command
   await/detail navigation.
-- [ ] WEB-10: Polish built-in Web pages with Bootstrap 5.
-  Apply the Bootstrap 5 UI polish design to Management Console, Dashboard,
+- [x] WEB-10: Polish built-in Web pages with Bootstrap 5.
+  First-pass Bootstrap 5 polish is complete for Management Console, Dashboard,
   Manual, and Static Form App pages without changing their runtime data
-  contracts.
+  contracts. Reusable card/layout/feedback widgets are tracked by WEB-11.
 - [ ] WEB-11: Expand the Textus widget set.
   Implement the next Static Form App widget group, starting with
   `textus:record-card` and `textus:card-list`, then adding layout, navigation,
