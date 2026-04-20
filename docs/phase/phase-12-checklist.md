@@ -1938,6 +1938,79 @@ to render eagerly.
 
 ---
 
+## WEB-30 — Make Raw Descriptor JSON Auxiliary
+
+Status: DONE
+
+### Goal
+
+Keep raw descriptor JSON available for exact debugging while making table-based
+inspection the default path.
+
+### Scope
+
+- Descriptor admin pages include section navigation for controls, asset
+  composition, completed JSON, and configured JSON.
+- Completed descriptor JSON is placed in a `details` panel.
+- Configured descriptor JSON is placed in a `details` panel.
+- Raw JSON section anchors are stable for direct links and future table-to-JSON
+  navigation.
+
+### Detailed Tasks
+
+- [x] Add descriptor section navigation.
+- [x] Add stable anchors for completed and configured JSON.
+- [x] Render completed/configured JSON in collapsible panels.
+- [x] Add executable specification checks for navigation and details panels.
+
+### Closure
+
+WEB-30 is complete for the raw JSON visibility shift. JSON remains present in
+the page, but the primary admin surface is now the rendered tables.
+
+### Inputs
+
+- `docs/phase/phase-12.md`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+
+---
+
+## WEB-31 — Polish Descriptor Admin Sections
+
+Status: DONE
+
+### Goal
+
+Improve descriptor admin page readability without changing the descriptor data
+contract.
+
+### Scope
+
+- Section navigation uses Bootstrap navigation pills.
+- Descriptor Controls and Asset Composition headings link to completed JSON.
+- Descriptor sections have stable anchors for browser navigation.
+- JSON panels are visually distinct and collapsed by default.
+
+### Detailed Tasks
+
+- [x] Add Bootstrap section navigation styling.
+- [x] Add table-to-completed-JSON links.
+- [x] Add stable section anchors.
+- [x] Add executable specification checks for the polished section surface.
+
+### Closure
+
+WEB-31 is complete for first-pass descriptor admin polish. Further visual
+layout work can proceed with screenshots after the broader admin console flow
+settles.
+
+### Inputs
+
+- `docs/phase/phase-12.md`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.

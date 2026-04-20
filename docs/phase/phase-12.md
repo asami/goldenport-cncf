@@ -118,6 +118,12 @@ This document is a progress dashboard, not a design journal.
 - AC (DONE): WEB-29 — Add descriptor table counts and filter empty state.
   Descriptor control tables now show row counts and the local filter reports
   when no descriptor rows match.
+- AD (DONE): WEB-30 — Make raw descriptor JSON auxiliary.
+  Descriptor admin pages now provide section navigation and fold completed/
+  configured raw JSON behind details panels.
+- AE (DONE): WEB-31 — Polish descriptor admin sections.
+  Descriptor admin pages now expose Bootstrap navigation pills, section anchors,
+  and table-to-JSON links so the tables remain the primary inspection surface.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational

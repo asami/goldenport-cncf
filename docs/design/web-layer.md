@@ -288,7 +288,9 @@ scope-aware: app rows are shown when the app name matches the component or a
 route targets the component/app pair, route rows are shown when
 `target.component` matches, form rows are shown when the selector's first
 segment matches, and admin surface rows accept both component-local
-`entity.notice` style selectors and component-qualified selectors.
+`entity.notice` style selectors and component-qualified selectors. Raw JSON is
+rendered in collapsible completed/configured descriptor panels with stable
+anchors so it remains available without dominating the normal inspection flow.
 
 Static result template lookup is route-local under the Web app root. For a
 Component app `abc:/web/notice-board`, operation result templates are placed

@@ -1746,18 +1746,21 @@ object StaticFormAppRenderer {
            |  <h2>Navigation</h2>
            |  <p><a href="/web/system/admin">System admin</a> · <a href="/web/system/dashboard">System dashboard</a></p>
            |</article>
+           |${_web_descriptor_section_nav}
            |${_web_descriptor_control_tables(webDescriptor)}
            |${_web_descriptor_asset_composition_table(webDescriptor)}
-           |<article>
-           |  <h2>Completed Descriptor</h2>
-           |  <p>The completed view applies framework defaults so the descriptor can be inspected as the runtime sees it.</p>
-           |  <pre class="bg-light border rounded p-3"><code>${_escape(_web_descriptor_json(webDescriptor, completed = true))}</code></pre>
-           |</article>
-           |<article>
-           |  <h2>Configured Descriptor</h2>
-           |  <p>The configured view keeps explicit descriptor entries for comparison.</p>
-           |  <pre class="bg-light border rounded p-3"><code>${_escape(_web_descriptor_json(webDescriptor, completed = false))}</code></pre>
-           |</article>""".stripMargin
+           |${_web_descriptor_json_panel(
+             "completed-descriptor",
+             "Completed Descriptor JSON",
+             "The completed view applies framework defaults so the descriptor can be inspected as the runtime sees it.",
+             _web_descriptor_json(webDescriptor, completed = true)
+           )}
+           |${_web_descriptor_json_panel(
+             "configured-descriptor",
+             "Configured Descriptor JSON",
+             "The configured view keeps explicit descriptor entries for comparison.",
+             _web_descriptor_json(webDescriptor, completed = false)
+           )}""".stripMargin
     ))
 
   def renderComponentAdmin(
@@ -1782,18 +1785,21 @@ object StaticFormAppRenderer {
              |  <h2>Navigation</h2>
              |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/web/system/admin/descriptor">System descriptor</a></p>
              |</article>
+             |${_web_descriptor_section_nav}
              |${_web_descriptor_control_tables(webDescriptor, Some(componentPath))}
              |${_web_descriptor_asset_composition_table(webDescriptor, Some(componentPath))}
-             |<article>
-             |  <h2>Completed Descriptor</h2>
-             |  <p>The completed view applies framework defaults and resolves component route placeholders for this component.</p>
-             |  <pre class="bg-light border rounded p-3"><code>${_escape(_web_descriptor_json(webDescriptor, completed = true, componentSegment = Some(componentPath)))}</code></pre>
-             |</article>
-             |<article>
-             |  <h2>Configured Descriptor</h2>
-             |  <p>The configured view keeps explicit descriptor entries for comparison.</p>
-             |  <pre class="bg-light border rounded p-3"><code>${_escape(_web_descriptor_json(webDescriptor, completed = false))}</code></pre>
-             |</article>""".stripMargin
+             |${_web_descriptor_json_panel(
+               "completed-descriptor",
+               "Completed Descriptor JSON",
+               "The completed view applies framework defaults and resolves component route placeholders for this component.",
+               _web_descriptor_json(webDescriptor, completed = true, componentSegment = Some(componentPath))
+             )}
+             |${_web_descriptor_json_panel(
+               "configured-descriptor",
+               "Configured Descriptor JSON",
+               "The configured view keeps explicit descriptor entries for comparison.",
+               _web_descriptor_json(webDescriptor, completed = false)
+             )}""".stripMargin
       ))
     }
 
@@ -4327,7 +4333,7 @@ object StaticFormAppRenderer {
     componentSegment: Option[String] = None
   ): String = {
     s"""<article>
-       |  <h2>Descriptor Controls</h2>
+       |  <h2 id="descriptor-controls">Descriptor Controls <a class="btn btn-sm btn-outline-secondary ms-2" href="#completed-descriptor">Completed JSON</a></h2>
        |  <p>Completed apps, routes, form access, authorization, and admin surfaces.</p>
        |  ${_web_descriptor_filter_control}
        |  ${_web_descriptor_apps_table(descriptor, componentSegment)}
@@ -4337,6 +4343,31 @@ object StaticFormAppRenderer {
        |  ${_web_descriptor_filter_script}
        |</article>""".stripMargin
   }
+
+  private def _web_descriptor_section_nav: String =
+    """<article class="descriptor-section-nav">
+      |  <h2>Descriptor Sections</h2>
+      |  <nav class="nav nav-pills flex-column flex-sm-row gap-2">
+      |    <a class="nav-link border" href="#descriptor-controls">Descriptor Controls</a>
+      |    <a class="nav-link border" href="#asset-composition">Asset Composition</a>
+      |    <a class="nav-link border" href="#completed-descriptor">Completed JSON</a>
+      |    <a class="nav-link border" href="#configured-descriptor">Configured JSON</a>
+      |  </nav>
+      |</article>""".stripMargin
+
+  private def _web_descriptor_json_panel(
+    id: String,
+    title: String,
+    description: String,
+    json: String
+  ): String =
+    s"""<article id="${_escape(id)}">
+       |  <details class="descriptor-json-details">
+       |    <summary class="h2 mb-3">${_escape(title)}</summary>
+       |    <p>${_escape(description)}</p>
+       |    <pre class="bg-light border rounded p-3 mt-3"><code>${_escape(json)}</code></pre>
+       |  </details>
+       |</article>""".stripMargin
 
   private def _web_descriptor_filter_control: String =
     """<div class="mb-3">
@@ -4651,7 +4682,7 @@ object StaticFormAppRenderer {
       else
         resolvedRows.mkString("\n")
     s"""<article>
-       |  <h2>Asset Composition</h2>
+       |  <h2 id="asset-composition">Asset Composition <a class="btn btn-sm btn-outline-secondary ms-2" href="#completed-descriptor">Completed JSON</a></h2>
        |  <p>Configured descriptor asset scopes and completed Static Form page asset lists.</p>
        |  <h3>Configured Scopes</h3>
        |  <div class="table-responsive"><table class="table table-sm align-middle">

@@ -142,7 +142,10 @@ known, and the page provides a local filter input for descriptor control rows.
 Component descriptor tables must apply the component scope rules for apps,
 routes, form selectors, and local or component-qualified admin surfaces. Table
 headings should expose rendered row counts, and the filter should show a
-no-match state when every descriptor control row is hidden.
+no-match state when every descriptor control row is hidden. Raw completed and
+configured descriptor JSON should be available in collapsible anchored panels,
+and descriptor table sections should link to completed JSON for exact
+inspection.
 
 If `web.assets.autoComplete` is `false`, Static Form result rendering must not
 insert framework widget assets automatically. Widget expansion still runs; the
