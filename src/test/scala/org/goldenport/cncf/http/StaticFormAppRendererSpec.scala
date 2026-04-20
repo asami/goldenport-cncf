@@ -4953,6 +4953,34 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus-job-actions")
     }
 
+    "render application job panel with local and system job actions" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice"
+        ),
+        200,
+        "application/json",
+        """{"jobId":"cncf-job-job-1","jobStatus":"accepted","message":"Queued"}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:job-panel title="Notice command" actions="await"></textus:job-panel>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("textus-job-panel")
+      html should include ("Notice command")
+      html should include ("Queued")
+      html should include ("textus-job-ticket")
+      html should include ("/form/notice-board/notice/post-notice/jobs/cncf-job-job-1/await")
+      html should include ("/web/system/jobs/cncf-job-job-1")
+      html should not include ("<textus:job-panel")
+    }
+
     "render system job ticket page with fixed system await link" in {
       val html = StaticFormAppRenderer.renderSystemJobTicket("cncf-job-job-1").body
 

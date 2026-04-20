@@ -617,6 +617,32 @@ operation semantics allow it. The Web response may expose a `jobId` plus
 tracking identifiers such as an entity id, allowing a static page to offer an
 await/detail link without forcing every command to be synchronous.
 
+Static Form Web Apps should use the convention path first:
+
+1. operation-specific static result templates such as `post-notice__200.html`
+2. common app/static status templates such as `__200.html` and `__error.html`
+3. descriptor `resultTemplate` or redirect settings for advanced cases
+4. built-in framework fallback page
+
+This keeps simple demo/internal applications writable with CML plus static
+HTML. Descriptor-driven transitions remain an escape hatch, not a prerequisite
+for ordinary form flows.
+
+## Job Result UX
+
+Command results commonly produce a job rather than a synchronous business
+result. Framework-provided result properties expose the job id, job status, and
+available actions. Static pages can render those properties with:
+
+- `textus:job-ticket` for a compact job summary
+- `textus:job-actions` for local await/detail actions
+- `textus:job-panel` for an application-embedded complete job panel
+
+The job panel also links to `/web/system/jobs/{jobId}`. That system page is for
+applications that do not want to own the full job-result UX. The widget only
+renders framework-provided links/forms; job ownership and access control remain
+enforced by the operation/job routes.
+
 ## Paging And Total Count
 
 List surfaces use `page`, `pageSize`, and `hasNext`. The default list behavior

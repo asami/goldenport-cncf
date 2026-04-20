@@ -175,6 +175,21 @@ This document is a progress dashboard, not a design journal.
 - AT (DONE): WEB-46 — Validate the sample app as a minimal Static Form Web App.
   The sample app now has an end-to-end browser-style check for the no-login
   notice-board flow from the public Web app entry point.
+- AU (DONE): WEB-47 — Fix Static Form page transition contract.
+  Static result pages remain convention-first: `xxx__200.html` and common
+  status templates are the primary mechanism, while descriptor templates remain
+  supplemental.
+- AV (DONE): WEB-48 — Add application job result UX baseline.
+  `textus:job-panel` now composes job ticket, local await action, and system
+  job page handoff for applications that want a complete embedded job UX.
+- AW (DONE): WEB-49 — Consolidate Textus widget catalog baseline.
+  Widget coverage is documented around result, card/action, job, feedback,
+  pagination, and hidden-context families with namespace and HTML-compatible
+  notation.
+- AX (DONE): WEB-50 — Polish the sample Static Form Web App.
+  The notice-board sample result pages now use Bootstrap-oriented result
+  sections, status badges, and job panels, with scripts checking the composed
+  widgets.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
@@ -297,6 +312,18 @@ Current note:
 - [x] WEB-46: Validate the sample app as a minimal Static Form Web App.
   `textus-sample-app` now verifies the no-login notice-board flow from the Web
   app entry point through posting, waiting, searching, and opening a notice.
+- [x] WEB-47: Fix Static Form page transition contract.
+  Static page conventions remain the default result transition mechanism for
+  demo/internal applications.
+- [x] WEB-48: Add application job result UX baseline.
+  `textus:job-panel` provides an embeddable job UX and a system job page
+  handoff.
+- [x] WEB-49: Consolidate Textus widget catalog baseline.
+  The widget spec records the current implemented catalog and future widget
+  families.
+- [x] WEB-50: Polish the sample Static Form Web App.
+  Notice-board result pages use Bootstrap-oriented sections and composed
+  widgets while staying static-template based.
 
 ## 6. Next Phase Candidates
 

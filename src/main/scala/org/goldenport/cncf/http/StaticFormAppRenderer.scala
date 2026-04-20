@@ -5056,6 +5056,7 @@ object StaticFormAppRenderer {
     val cardList = """<textus(?::card-list|-card-list)\b([^>]*)></textus(?::card-list|-card-list)>""".r
     val summaryCard = """<textus(?::summary-card|-summary-card)\b([^>]*)></textus(?::summary-card|-summary-card)>""".r
     val actionCard = """<textus(?::action-card|-action-card)\b([^>]*)></textus(?::action-card|-action-card)>""".r
+    val jobPanel = """<textus(?::job-panel|-job-panel)\b([^>]*)></textus(?::job-panel|-job-panel)>""".r
     val jobTicket = """<textus(?::job-ticket|-job-ticket)\b([^>]*)></textus(?::job-ticket|-job-ticket)>""".r
     val jobActions = """<textus(?::job-actions|-job-actions)\b([^>]*)></textus(?::job-actions|-job-actions)>""".r
     val alert = """<textus(?::alert|-alert)\b([^>]*)></textus(?::alert|-alert)>""".r
@@ -5095,7 +5096,11 @@ object StaticFormAppRenderer {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_action_card(attrs, properties))
     })
-    val f0 = jobTicket.replaceAllIn(e1, m => {
+    val e2 = jobPanel.replaceAllIn(e1, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_job_panel(attrs, properties))
+    })
+    val f0 = jobTicket.replaceAllIn(e2, m => {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_job_ticket(attrs, properties))
     })
@@ -5437,6 +5442,28 @@ object StaticFormAppRenderer {
         else
           ""
       s"""<article class="card textus-job-ticket border-${_escape(variant)} mb-3"><div class="card-body"><div class="d-flex flex-wrap align-items-start justify-content-between gap-2"><div><h3 class="h5 card-title mb-1">${_escape(title)}</h3><p class="text-secondary mb-2">${_escape(message)}</p></div><span class="badge text-bg-${_escape(variant)}">${_escape(status)}</span></div><dl class="row mb-3"><dt class="col-sm-3">Job ID</dt><dd class="col-sm-9"><code>${_escape(jobId)}</code></dd></dl>${actions}</div></article>"""
+    }
+  }
+
+  private def _render_job_panel(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String = {
+    val source = attrs.getOrElse("source", "result.job")
+    val jobId = properties.value(s"${source}.id")
+    if (jobId.isEmpty)
+      ""
+    else {
+      val title = _attr_value(attrs, "title", properties).getOrElse("Command accepted")
+      val description = _attr_value(attrs, "description", properties)
+        .orElse(_attr_value(attrs, "subtitle", properties))
+        .orElse(_property_non_empty(properties, "result.message"))
+        .getOrElse("The command is running asynchronously.")
+      val ticketAttrs = attrs + ("actions" -> "false")
+      val ticket = _render_job_ticket(ticketAttrs, properties)
+      val actions = _render_job_actions(attrs, properties)
+      val systemHref = s"/web/system/jobs/${_escape_path_segment(jobId)}"
+      s"""<section class="textus-job-panel border rounded p-3 mb-3 bg-light"><div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3"><div><h3 class="h5 mb-1">${_escape(title)}</h3><p class="text-secondary mb-0">${_escape(description)}</p></div><a class="btn btn-outline-secondary btn-sm" href="${_escape(systemHref)}">Open job page</a></div>${ticket}${actions}</section>"""
     }
   }
 

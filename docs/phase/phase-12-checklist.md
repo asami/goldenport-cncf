@@ -2640,6 +2640,169 @@ not only by admin console route coverage.
 
 ---
 
+## WEB-47 — Static Form Page Transition Contract Recheck
+
+Status: DONE
+
+### Goal
+
+Freeze the practical Static Form page transition contract before adding more
+application polish.
+
+### Scope
+
+- Keep operation-specific static status templates as the default result
+  transition mechanism.
+- Keep descriptor `resultTemplate` and redirects supplemental rather than
+  required for ordinary Static Form Web Apps.
+- Confirm hidden context and operation result properties are enough for the
+  current notice-board flow.
+- Keep POST/Body handoff for action widgets that wait for command results.
+
+### Detailed Tasks
+
+- [x] Reconfirm that public post/search/detail uses static `xxx__200.html`
+      templates.
+- [x] Reconfirm result action widgets submit POST for await actions.
+- [x] Reconfirm hidden context is preserved by framework-owned widgets and is
+      not dispatched as operation arguments.
+- [x] Record that descriptor transitions are optional escape hatches for
+      advanced applications.
+
+### Closure
+
+WEB-47 keeps the framework optimized for CML + static HTML development. The
+default path does not require programmable descriptor routing; descriptor-level
+transition controls remain available for applications that outgrow the static
+convention.
+
+### Inputs
+
+- `docs/notes/cncf-web-static-form-app-contract.md`
+- `docs/design/web-layer.md`
+- `textus-sample-app/scripts/check-static-form-app-flow.sh`
+
+---
+
+## WEB-48 — Application Job Result UX Baseline
+
+Status: DONE
+
+### Goal
+
+Provide an embeddable job UX that application pages can use without rebuilding
+the same job ticket, wait action, and system fallback link by hand.
+
+### Scope
+
+- Add a composed job widget for Static Form result pages.
+- Keep local await actions POST-based.
+- Provide a system job page handoff for applications that do not want to own the
+  full job UX.
+- Preserve job ownership enforcement in the underlying job routes.
+
+### Detailed Tasks
+
+- [x] Implement `textus:job-panel` / `textus-job-panel`.
+- [x] Compose the panel from job ticket data and selected job actions.
+- [x] Add a system job page link to `/web/system/jobs/{jobId}`.
+- [x] Add renderer spec coverage for the composed job panel.
+- [x] Use the job panel from the sample post result page.
+
+### Closure
+
+WEB-48 establishes the application job-result baseline: pages can embed the job
+UX directly, or link to the system job page. In both cases, the actual job
+access check remains in the framework job routes, not in the template.
+
+### Inputs
+
+- `docs/spec/textus-widget.md`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+- `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`
+- `textus-sample-app/web/notice-board/post-notice__200.html`
+
+---
+
+## WEB-49 — Textus Widget Catalog Baseline Consolidation
+
+Status: DONE
+
+### Goal
+
+Consolidate the current Textus widget surface into a catalog that can guide
+Static Form Web App work without implying a full UI framework.
+
+### Scope
+
+- Keep namespace notation and HTML-compatible notation equivalent.
+- Organize widgets by use: result display, cards/actions, jobs, feedback,
+  pagination, and hidden context.
+- Record future layout/navigation/content widgets as candidates, not required
+  baseline features.
+- Keep Bootstrap 5 as the default rendering target.
+
+### Detailed Tasks
+
+- [x] Document the implemented result/table/card/action/job/feedback/paging
+      widget families.
+- [x] Add the job-panel widget to the catalog.
+- [x] Keep future layout/navigation widgets documented as deferred candidates.
+- [x] Verify sample pages contain no unexpanded Textus widget tags.
+
+### Closure
+
+WEB-49 makes the widget catalog usable as the reference for Phase 12 work. New
+widgets should be added when they remove repeated static-template markup or
+connect framework-owned properties to Bootstrap-friendly HTML.
+
+### Inputs
+
+- `docs/spec/textus-widget.md`
+- `docs/notes/web-textus-widget-design.md`
+- `textus-sample-app/scripts/check-static-form-result-assets.sh`
+
+---
+
+## WEB-50 — Sample Static Form Web App Polish
+
+Status: DONE
+
+### Goal
+
+Polish the notice-board sample enough to validate that Static Form Web Apps can
+look like usable Bootstrap 5 applications while remaining static-template based.
+
+### Scope
+
+- Improve public result page structure without introducing application code.
+- Use framework widgets for status and job UX.
+- Keep the sample minimal: post, await, search, detail.
+- Keep admin console checks separate from public app checks.
+
+### Detailed Tasks
+
+- [x] Add Bootstrap-oriented result sections to post/search/detail templates.
+- [x] Add status badges to public result pages.
+- [x] Use the job panel on the post result page.
+- [x] Add sample CSS for result-page framing and mobile-friendly spacing.
+- [x] Extend sample scripts to check the polished composed widgets.
+
+### Closure
+
+WEB-50 confirms the sample app can be used as a realistic Static Form Web App
+driver while keeping the implementation intentionally simple: CML operations,
+static HTML templates, Bootstrap assets, and Textus widgets.
+
+### Inputs
+
+- `textus-sample-app/web/notice-board/*.html`
+- `textus-sample-app/web/notice-board/assets/app.css`
+- `textus-sample-app/scripts/check-static-form-app-flow.sh`
+- `textus-sample-app/scripts/check-static-form-result-assets.sh`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.
@@ -2664,7 +2827,7 @@ not only by admin console route coverage.
 
 Phase 12 is complete when:
 
-- WEB-01 through WEB-46 are marked DONE, or explicitly deferred to a later
+- WEB-01 through WEB-50 are marked DONE, or explicitly deferred to a later
   phase.
 - `phase-12.md` summary checkboxes are aligned.
 - No item remains ACTIVE or SUSPENDED.

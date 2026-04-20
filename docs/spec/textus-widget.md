@@ -333,6 +333,29 @@ Required behavior:
   not `GET`.
 - includes hidden context in form-rendered actions.
 
+### `textus:job-panel` / `textus-job-panel`
+
+Renders an application-embedded job result panel. It is intended for Static Form
+Web App pages that want a complete job UX without hand-composing job ticket,
+await button, and fallback system job link.
+
+Example:
+
+```html
+<textus:job-panel title="Notice command" actions="await"></textus:job-panel>
+```
+
+Required behavior:
+
+- renders nothing when `result.job.id` is absent.
+- embeds the same job ticket data used by `textus:job-ticket`.
+- embeds selected local job actions using the same action metadata as
+  `textus:job-actions`.
+- provides a link to `/web/system/jobs/{jobId}` for applications that want to
+  hand off the job result UX to the system page.
+- enforces job ownership through the underlying job routes; the widget only
+  renders links/forms from framework-provided action metadata.
+
 ### System Job Page
 
 Applications that do not want to compose a job UX into their own page may link
