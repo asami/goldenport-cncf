@@ -81,7 +81,9 @@ object StaticFormAppRenderer {
       page.operationLabel
 
     def nextPageProperties: FormPageProperties =
-      val formValues = page.values.map { case (key, value) => s"form.${key}" -> value }
+      val formValues = page.values.collect {
+        case (key, value) if !isHiddenFormContextKey(key) => s"form.${key}" -> value
+      }
       val metadata = FormResultMetadata.fromBody(body)
       val resultValues = Map(
         "component" -> componentName,
@@ -4450,6 +4452,8 @@ object StaticFormAppRenderer {
     val resultTable = """<textus-result-table\b([^>]*)></textus-result-table>""".r
     val formLink = """<textus-form-link\s+href="([^"]+)"\s+label="([^"]+)"\s*></textus-form-link>""".r
     val actionLink = """<textus(?::action-link|-action-link)\b([^>]*)></textus(?::action-link|-action-link)>""".r
+    val actionForm = """<textus(?::action-form|-action-form)\b([^>]*)></textus(?::action-form|-action-form)>""".r
+    val hiddenContext = """<textus(?::hidden-context|-hidden-context)\b([^>]*)></textus(?::hidden-context|-hidden-context)>""".r
     val propertyList = """<textus-property-list\s+source="([^"]+)"\s*></textus-property-list>""".r
     val errorPanel = """<textus-error-panel\s+source="([^"]+)"\s*></textus-error-panel>""".r
     val a = resultView.replaceAllIn(template, m =>
@@ -4466,35 +4470,119 @@ object StaticFormAppRenderer {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_action_link(attrs, properties))
     })
-    val e = propertyList.replaceAllIn(d, m =>
+    val e = actionForm.replaceAllIn(d, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_action_form(attrs, properties))
+    })
+    val f = hiddenContext.replaceAllIn(e, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_hidden_context(attrs, properties))
+    })
+    val g = propertyList.replaceAllIn(f, m =>
       java.util.regex.Matcher.quoteReplacement(_render_property_list(m.group(1), properties))
     )
-    errorPanel.replaceAllIn(e, m =>
+    errorPanel.replaceAllIn(g, m =>
       java.util.regex.Matcher.quoteReplacement(_render_error_panel(m.group(1), properties))
     )
   }
+
+  private def _render_hidden_context(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String = {
+    val standard = properties.values.toVector.collect {
+      case (key, value) if isHiddenFormContextKey(key) && value.nonEmpty => key -> value
+    }.sortBy(_._1)
+    val standardKeys = standard.map(_._1).toSet
+    val explicit = attrs.get("keys").toVector.flatMap(_hidden_context_keys).flatMap { key =>
+      properties.values.get(key).filter(_.nonEmpty).map(key -> _)
+    }.filterNot { case (key, _) => standardKeys.contains(key) }
+    (standard ++ explicit).map { case (key, value) =>
+      s"""<input type="hidden" name="${_escape(key)}" value="${_escape(value)}">"""
+    }.mkString("\n")
+  }
+
+  private def _hidden_context_keys(value: String): Vector[String] =
+    value.split(',').toVector.map(_.trim).filter(_.nonEmpty).distinct
 
   private def _render_action_link(
     attrs: Map[String, String],
     properties: FormPageProperties
   ): String = {
+    val action = _resolve_action(attrs, properties)
+    action.map {
+      case ActionWidgetValue(href, label, css, method) if method.equalsIgnoreCase("GET") =>
+        s"""<a class="${_escape(css)}" href="${_escape(href)}">${_escape(label)}</a>"""
+      case ActionWidgetValue(href, label, css, method) =>
+        _action_form_html(method, href, css, label, _render_hidden_context(Map.empty, properties))
+    }.getOrElse("")
+  }
+
+  private def _render_action_form(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String =
+    _resolve_action(attrs, properties).map {
+      case ActionWidgetValue(href, label, css, method) =>
+        val effectiveMethod = attrs.getOrElse("method", method)
+        val context =
+          if (_widget_bool(attrs, "context", default = true))
+            _render_hidden_context(Map.empty, properties)
+          else
+            ""
+        _action_form_html(effectiveMethod, href, css, label, context)
+    }.getOrElse("")
+
+  private final case class ActionWidgetValue(
+    href: String,
+    label: String,
+    css: String,
+    method: String
+  )
+
+  private def _resolve_action(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): Option[ActionWidgetValue] = {
     val source = attrs.getOrElse("source", "result.action.primary")
     val href = properties.value(s"${source}.href")
-    if (href.isEmpty) {
-      ""
-    } else {
+    Option.when(href.nonEmpty) {
       val label = attrs.get("label")
         .orElse(_property_non_empty(properties, s"${source}.label"))
         .orElse(_property_non_empty(properties, s"${source}.name"))
         .getOrElse("Open")
       val css = attrs.getOrElse("class", "btn btn-primary")
       val method = _property_non_empty(properties, s"${source}.method").getOrElse("GET")
-      if (method.equalsIgnoreCase("GET"))
-        s"""<a class="${_escape(css)}" href="${_escape(href)}">${_escape(label)}</a>"""
-      else
-        s"""<form method="${_escape(method.toLowerCase(java.util.Locale.ROOT))}" action="${_escape(href)}" class="d-inline"><button type="submit" class="${_escape(css)}">${_escape(label)}</button></form>"""
+      ActionWidgetValue(href, label, css, method)
     }
   }
+
+  private def _action_form_html(
+    method: String,
+    href: String,
+    css: String,
+    label: String,
+    hiddenContext: String
+  ): String = {
+    val inputs =
+      if (hiddenContext.isEmpty)
+        ""
+      else
+        s"${hiddenContext}\n"
+    s"""<form method="${_escape(method.toLowerCase(java.util.Locale.ROOT))}" action="${_escape(href)}" class="d-inline">${inputs}<button type="submit" class="${_escape(css)}">${_escape(label)}</button></form>"""
+  }
+
+  private def _widget_bool(
+    attrs: Map[String, String],
+    name: String,
+    default: Boolean
+  ): Boolean =
+    attrs.get(name).map(_.trim.toLowerCase(java.util.Locale.ROOT)) match {
+      case Some("false" | "no" | "off" | "0") => false
+      case Some("true" | "yes" | "on" | "1") => true
+      case Some(_) => default
+      case None => default
+    }
 
   private def _property_non_empty(
     properties: FormPageProperties,

@@ -443,11 +443,20 @@ The first widget contracts are:
 <textus-error-panel source="result"></textus-error-panel>
 <textus:action-link source="result.action.primary"></textus:action-link>
 <textus-action-link source="result.action.primary"></textus-action-link>
+<textus:action-form source="result.action.await"></textus:action-form>
+<textus-action-form source="result.action.await"></textus-action-form>
 ```
 
 `textus:action-link` and `textus-action-link` are equivalent. The widget renders
 an anchor for `GET` actions and an inline POST form for non-GET actions. If the
 referenced action has no `href`, it renders nothing.
+
+`textus:action-form` and `textus-action-form` always render a form. They use
+the action metadata method unless the widget has a `method` override. Form
+rendering action widgets include standard hidden page context by default so a
+result page can submit an await/retry/update action without losing paging,
+origin, version, or CSRF context. `context="false"` suppresses the hidden
+context when an action must be isolated.
 
 These widgets are the Phase 12 baseline. The widget set is expected to grow
 through the Textus widget design described in
@@ -620,6 +629,17 @@ The effective result-page fallback order is therefore:
 
 This order applies to plain HTML form submissions, `GET /form/.../result`,
 form continuation pages, and job await result pages.
+
+All result-page paths receive the same page-property model. Submitted
+operation values are exposed under `form.*`, for example `form.title` or
+`form.id`. Framework page context is exposed by its original key, for example
+`crud.origin.href`, `paging.page`, `paging.pageSize`, `paging.href`,
+`search.keyword`, `continuation.id`, `version`, `etag`, and `csrf`. Framework
+context is not duplicated under `form.*`.
+
+This split is intentional. Static templates and widgets can render navigation,
+paging, retry, optimistic-locking, and CSRF-related fields from page context,
+while the target Operation receives only operation input values.
 
 ## Form Admission Validation
 
@@ -1079,6 +1099,12 @@ but strips them before dispatching to the target Operation or admin mutation
 handler. This keeps ordinary HTML FORM navigation state from leaking into
 business parameters while still allowing static result pages to render links
 back to the originating list/detail context.
+
+Validation redisplay follows the same rule. The validation engine receives only
+operation input values, so hidden context keys are not reported as unknown form
+fields. The redisplayed HTML form still receives the original page context and
+renders it as hidden inputs, allowing the next submit to continue from the same
+list/detail/result context.
 
 ## Runtime Hook Rule
 

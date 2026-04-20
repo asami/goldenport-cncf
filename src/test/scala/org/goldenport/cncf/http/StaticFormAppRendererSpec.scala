@@ -2345,6 +2345,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
                 |  <p>${paging.href}</p>
                 |  <p>${search.keyword}</p>
                 |  <p>${csrf}</p>
+                |  <p>form id: ${form.id}</p>
+                |  <p>form page: ${form.paging.page}</p>
                 |</article>""".stripMargin
             )
           )
@@ -2376,6 +2378,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("1000")
       html should include ("phase12")
       html should include ("token-1")
+      html should include ("form id: notice_1")
+      html should include ("form page: </p>")
       html should not include ("${crud.origin.href}")
       val submitted = dispatcher.forms.lastOption.getOrElse(fail("operation form was not dispatched"))
       submitted.getString("id") shouldBe Some("notice_1")
@@ -3532,7 +3536,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val valid = server
         ._validate_operation_form_api(
-          _post_form_request("/form-api/notice-board/notice/post-secret-notice/validate", "body=hello&accessToken=abc"),
+          _post_form_request(
+            "/form-api/notice-board/notice/post-secret-notice/validate",
+            "body=hello&accessToken=abc&paging.page=2&paging.pageSize=20&crud.origin.href=/web/notice-board&csrf=token-1"
+          ),
           "notice-board",
           "notice",
           "post-secret-notice"
@@ -3543,6 +3550,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       valid.status.code shouldBe 200
       validJson.hcursor.downField("valid").as[Boolean].toOption shouldBe Some(true)
       validJson.hcursor.downField("errors").as[Vector[Json]].toOption shouldBe Some(Vector.empty)
+      validJson.hcursor.downField("warnings").as[Vector[Json]].toOption shouldBe Some(Vector.empty)
     }
 
     "validate operation form API datatype values and multiplicity" in {
@@ -3716,7 +3724,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         ._submit_operation_form(
           _post_form_request(
             "/form/notice-board/notice/validate-hints",
-            "code=toolong&count=101"
+            "code=toolong&count=101&crud.origin.href=/web/notice-board&paging.page=3&csrf=token-1"
           ),
           "notice-board",
           "notice",
@@ -3732,6 +3740,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("count must be less than or equal to 100.")
       html should include ("value=\"toolong\"")
       html should include ("value=\"101\"")
+      html should include ("type=\"hidden\" name=\"crud.origin.href\" value=\"/web/notice-board\"")
+      html should include ("type=\"hidden\" name=\"paging.page\" value=\"3\"")
+      html should include ("type=\"hidden\" name=\"csrf\" value=\"token-1\"")
       html should not include ("DISPATCHED")
     }
 
@@ -4210,6 +4221,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         """<article>
           |  <h2>${operation.label} Static 400 Exact</h2>
           |  <p>${error.body}</p>
+          |  <p>${crud.origin.href}</p>
+          |  <p>form id: ${form.id}</p>
+          |  <p>form page: ${form.paging.page}</p>
+          |  <form method="post" action="/form/notice-board/notice-aggregate/approve-notice-aggregate">
+          |    <textus:hidden-context></textus:hidden-context>
+          |    <input type="hidden" name="id" value="${form.id}">
+          |  </form>
           |</article>""".stripMargin,
         StandardCharsets.UTF_8
       )
@@ -4235,7 +4253,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val html = server
         ._submit_operation_form(
-          _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
+          _post_form_request(
+            "/form/notice-board/notice-aggregate/approve-notice-aggregate",
+            "id=notice_1&crud.origin.href=/web/notice-board/admin/aggregates/notice-aggregate&paging.page=2&paging.pageSize=20&csrf=token-1"
+          ),
           "notice-board",
           "notice-aggregate",
           "approve-notice-aggregate"
@@ -4245,7 +4266,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       html should include ("notice-board.notice-aggregate.approve-notice-aggregate Static 400 Exact")
       html should include ("invalid approval")
+      html should include ("/web/notice-board/admin/aggregates/notice-aggregate")
+      html should include ("form id: notice_1")
+      html should include ("form page: </p>")
+      html should include ("type=\"hidden\" name=\"paging.page\" value=\"2\"")
+      html should include ("type=\"hidden\" name=\"csrf\" value=\"token-1\"")
       html should not include ("Static Error Alias")
+      html should not include ("${crud.origin.href}")
+      html should not include ("<textus:hidden-context")
       html should not include ("Submitted Values")
     }
 
@@ -4256,6 +4284,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
             "__error.html",
             """<article>
               |  <h2>Common Static Error</h2>
+              |  <p>${crud.origin.href}</p>
+              |  <p>${form.id}</p>
+              |  <p>${form.paging.page}</p>
               |  <textus-error-panel source="result"></textus-error-panel>
               |</article>""".stripMargin
           ).resolve("web.yaml").toString)
@@ -4278,7 +4309,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val html = server
         ._submit_operation_form(
-          _post_form_request("/form/notice-board/notice-aggregate/approve-notice-aggregate", "id=notice_1"),
+          _post_form_request(
+            "/form/notice-board/notice-aggregate/approve-notice-aggregate",
+            "id=notice_1&crud.origin.href=/web/notice-board/admin/aggregates/notice-aggregate&paging.page=2"
+          ),
           "notice-board",
           "notice-aggregate",
           "approve-notice-aggregate"
@@ -4287,10 +4321,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         .unsafeRunSync()
 
       html should include ("Common Static Error")
+      html should include ("/web/notice-board/admin/aggregates/notice-aggregate")
+      html should include ("notice_1")
       html should include ("500")
       html should include ("aggregate service failed")
       html should include ("result.status")
       html should include ("result.body")
+      html should not include ("${form.paging.page}")
       html should not include ("<textus-error-panel")
       html should not include ("Submitted Values")
     }
@@ -4542,10 +4579,97 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       ).body
 
       html should include ("""<a class="btn btn-primary" href="/web/notice-board/admin/entities/notice/notice_1">Open detail</a>""")
-      html should include ("""<form method="post" action="/form/notice-board/notice/approve" class="d-inline"><button type="submit" class="btn btn-warning">Approve</button></form>""")
+      html should include ("""<form method="post" action="/form/notice-board/notice/approve" class="d-inline">""")
+      html should include ("type=\"hidden\" name=\"paging.page\" value=\"1\"")
+      html should include ("""<button type="submit" class="btn btn-warning">Approve</button>""")
       html should not include ("<textus-action-link")
       html should not include ("<textus:action-link")
       html should not include ("result.action.missing")
+    }
+
+    "render action widgets with hidden page context for post actions" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice",
+          Map(
+            "crud.origin.href" -> "/web/notice-board/admin/entities/notice?page=2",
+            "paging.page" -> "2",
+            "paging.pageSize" -> "20",
+            "csrf" -> "token-1",
+            "recipientName" -> "bob"
+          )
+        ),
+        201,
+        "application/json",
+        """{"actions":[{"name":"approve","label":"Approve","href":"/form/notice-board/notice/approve","method":"POST"},{"name":"detail","label":"Open detail","href":"/web/notice-board/admin/entities/notice/notice_1","method":"GET"}]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:action-link source="result.action.approve" class="btn btn-warning"></textus:action-link>
+          |  <textus:action-form source="result.action.approve" class="btn btn-danger" label="Approve again"></textus:action-form>
+          |  <textus-action-form source="result.action.detail" class="btn btn-outline-primary" method="POST" context="false"></textus-action-form>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("""<form method="post" action="/form/notice-board/notice/approve" class="d-inline"><input type="hidden" name="crud.origin.href" value="/web/notice-board/admin/entities/notice?page=2">""")
+      html should include ("""<input type="hidden" name="paging.page" value="2">""")
+      html should include ("""<input type="hidden" name="paging.pageSize" value="20">""")
+      html should include ("""<input type="hidden" name="csrf" value="token-1">""")
+      html should include ("""<button type="submit" class="btn btn-warning">Approve</button>""")
+      html should include ("""<button type="submit" class="btn btn-danger">Approve again</button>""")
+      html should include ("""<form method="post" action="/web/notice-board/admin/entities/notice/notice_1" class="d-inline"><button type="submit" class="btn btn-outline-primary">Open detail</button></form>""")
+      html should not include ("""name="recipientName"""")
+      html should not include ("<textus:action-link")
+      html should not include ("<textus:action-form")
+      html should not include ("<textus-action-form")
+    }
+
+    "render textus hidden context inputs from page context without operation values" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices",
+          Map(
+            "recipientName" -> "bob",
+            "crud.origin.href" -> "/web/notice-board/admin/entities/notice?page=2",
+            "paging.page" -> "2",
+            "paging.pageSize" -> "20",
+            "search.recipientName" -> "bob",
+            "csrf" -> "token-1",
+            "version" -> "7",
+            "ui.tab" -> "summary",
+            "empty.context" -> ""
+          )
+        ),
+        200,
+        "application/json",
+        """{"data":[]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<form method="post" action="/form/notice-board/notice/search-notices">
+          |  <textus:hidden-context keys="ui.tab,empty.context,missing"></textus:hidden-context>
+          |  <textus-hidden-context></textus-hidden-context>
+          |</form>""".stripMargin
+      ).body
+
+      html should include ("""<input type="hidden" name="crud.origin.href" value="/web/notice-board/admin/entities/notice?page=2">""")
+      html should include ("""<input type="hidden" name="paging.page" value="2">""")
+      html should include ("""<input type="hidden" name="paging.pageSize" value="20">""")
+      html should include ("""<input type="hidden" name="search.recipientName" value="bob">""")
+      html should include ("""<input type="hidden" name="csrf" value="token-1">""")
+      html should include ("""<input type="hidden" name="version" value="7">""")
+      html should include ("""<input type="hidden" name="ui.tab" value="summary">""")
+      html should not include ("""name="recipientName"""")
+      html should not include ("""name="empty.context"""")
+      html should not include ("<textus:hidden-context")
+      html should not include ("<textus-hidden-context")
     }
 
     "render await action link from asynchronous command job result" in {
@@ -4570,8 +4694,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       ).body
 
       html should include ("cncf-job-job-1776566553930-2NnWI1ze2dLoQU4t6hALAa")
-      html should include ("""<form method="post" action="/form/notice-board/notice/post-notice/jobs/cncf-job-job-1776566553930-2NnWI1ze2dLoQU4t6hALAa/await" class="d-inline"><button type="submit" class="btn btn-primary">Check result</button></form>""")
-      html should include ("""<form method="post" action="/form/notice-board/notice/post-notice/jobs/cncf-job-job-1776566553930-2NnWI1ze2dLoQU4t6hALAa/await" class="d-inline"><button type="submit" class="btn btn-outline-primary">Check result</button></form>""")
+      html should include ("""<form method="post" action="/form/notice-board/notice/post-notice/jobs/cncf-job-job-1776566553930-2NnWI1ze2dLoQU4t6hALAa/await" class="d-inline">""")
+      html should include ("type=\"hidden\" name=\"paging.page\" value=\"1\"")
+      html should include ("""<button type="submit" class="btn btn-primary">Check result</button>""")
+      html should include ("""<button type="submit" class="btn btn-outline-primary">Check result</button>""")
       html should not include ("<textus:action-link")
       html should not include ("<textus-action-link")
     }

@@ -137,20 +137,28 @@ The following widgets are the baseline compatibility set:
 - `textus-error-panel`
 - `textus:action-link`
 - `textus-action-link`
+- `textus:action-form`
+- `textus-action-form`
+- `textus:hidden-context`
+- `textus-hidden-context`
 
 New widgets must reuse the same property expansion, source lookup, action, and
 paging conventions where applicable.
 
 ## Action Widgets
 
-`textus:action-link` and `textus-action-link` are the baseline action widgets.
-Other widgets should compose with them rather than introduce a separate action
-model.
+`textus:action-link`, `textus-action-link`, `textus:action-form`, and
+`textus-action-form` are the baseline action widgets. Other widgets should
+compose with them rather than introduce a separate action model.
 
 Action rendering rules:
 
 - `GET` action renders as an anchor/button link.
-- non-`GET` action renders as an inline POST form.
+- non-`GET` `textus:action-link` renders as an inline form.
+- `textus:action-form` always renders a form; the action metadata method is
+  used unless the widget has a `method` override.
+- form-rendered action widgets include standard hidden page context by default.
+  Set `context="false"` to suppress hidden context.
 - missing or unauthorized `href` renders nothing.
 
 Example:
@@ -159,7 +167,54 @@ Example:
 <textus:record-card source="result" view="detail">
   <textus:action-link source="result.action.primary"></textus:action-link>
 </textus:record-card>
+<textus:action-form source="result.action.await"></textus:action-form>
 ```
+
+## Hidden Context Widget
+
+`textus:hidden-context` and `textus-hidden-context` render hidden form inputs
+for Static Form App page context. They are intended to be placed inside a plain
+HTML `form` element.
+
+Example:
+
+```html
+<form method="post" action="/form/notice-board/notice/search-notices">
+  <textus:hidden-context></textus:hidden-context>
+  <input class="form-control" name="recipientName">
+  <button class="btn btn-primary" type="submit">Search again</button>
+</form>
+```
+
+The widget renders only framework-defined hidden context properties by default:
+
+- `crud.origin.href`
+- `crud.success.href`
+- `crud.error.href`
+- `paging.page`
+- `paging.pageSize`
+- `paging.chunkSize`
+- `paging.includeTotal`
+- `paging.href`
+- `continuation.id`
+- `textus.admin.principalId`
+- `textus.admin.subjectId`
+- `version`
+- `etag`
+- `csrf`
+- properties under `search.*`
+
+These properties are page context, not operation input. The submit handler must
+continue to filter them out before operation dispatch.
+
+Additional explicit keys may be included with `keys`:
+
+```html
+<textus:hidden-context keys="return.href,ui.tab"></textus:hidden-context>
+```
+
+The `keys` attribute is for application-defined page context. It must not be
+used to smuggle ordinary operation arguments around the form schema.
 
 ## Paging
 

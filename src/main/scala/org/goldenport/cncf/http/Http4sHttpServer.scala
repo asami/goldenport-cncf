@@ -819,13 +819,14 @@ final class Http4sHttpServer(
     val started = System.nanoTime()
     for {
       form <- _to_plain_form_record(req)
-      values = _form_values(form)
+      operationValues = _operation_form_values(form)
+      pageValues = _form_values(form)
       validation = StaticFormAppRenderer.validateOperationForm(
         engine.runtimeSubsystem,
         app,
         service,
         operation,
-        values,
+        operationValues,
         engine.webDescriptor
       )
       response <-
@@ -837,14 +838,14 @@ final class Http4sHttpServer(
               service,
               operation,
               engine.webDescriptor,
-              values,
+              pageValues,
               Some(result)
             ).getOrElse(StaticFormAppRenderer.renderFormResult(
               _form_result_properties(app, service, operation, HttpResponse.Text(
                 HttpStatus.BadRequest,
                 ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
                 Bag.text("Validation failed.", StandardCharsets.UTF_8)
-              ), values)
+              ), pageValues)
             ))
             _html_status(page, HStatus.BadRequest).map { html =>
               RuntimeDashboardMetrics.recordHtmlRequest(
@@ -856,7 +857,7 @@ final class Http4sHttpServer(
               html
             }
           case _ =>
-            _submit_valid_operation_form(req, app, service, operation, form, values, started)
+            _submit_valid_operation_form(req, app, service, operation, form, pageValues, started)
         }
     } yield {
       response
@@ -953,7 +954,7 @@ final class Http4sHttpServer(
           app,
           service,
           operation,
-          _form_values(form),
+          _operation_form_values(form),
           engine.webDescriptor
         ) match {
           case Some(p) => _json(p)
@@ -1049,6 +1050,11 @@ final class Http4sHttpServer(
     }
     Record.create((_strip_framework_form_values(form.asMap) ++ adminContext).toVector)
   }
+
+  private def _operation_dispatch_record(
+    record: Record
+  ): Record =
+    Record.create(_strip_framework_form_values(record.asMap).toVector)
 
   private[http] def _submit_component_admin_entity_update(
     req: org.http4s.Request[IO],
@@ -1391,7 +1397,7 @@ final class Http4sHttpServer(
       _forbidden()
     } else {
     val started = System.nanoTime()
-    val query = Record.create(req.uri.query.params.toVector)
+    val query = _operation_dispatch_record(Record.create(req.uri.query.params.toVector))
     val values = req.uri.query.params.toMap
     val res = _dispatch_operation(
       app,
@@ -1577,7 +1583,7 @@ final class Http4sHttpServer(
             service,
             operation,
             engine.webDescriptor,
-            _form_values(form) ++ _error_values(response)
+            _operation_form_values(form) ++ _error_values(response)
           ).getOrElse(StaticFormAppRenderer.renderFormResult(properties)))
         else
           _html(StaticFormAppRenderer.renderFormResult(
@@ -1952,6 +1958,10 @@ final class Http4sHttpServer(
 
   private def _form_values(form: Record): Map[String, String] =
     _strip_security_form_values(form.asMap)
+      .map { case (k, v) => k -> v.toString }
+
+  private def _operation_form_values(form: Record): Map[String, String] =
+    _strip_framework_form_values(form.asMap)
       .map { case (k, v) => k -> v.toString }
 
   private def _strip_framework_form_values(

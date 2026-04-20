@@ -535,14 +535,26 @@ Static result templates use status-specific names:
 {form}__200.html
 {form}__404.html
 {form}__500.html
-{form}_success.html
-{form}_error.html
+{form}__success.html
+{form}__error.html
 ```
 
 The exact status template wins before the broader success/error template.
 Common error/status templates may be used when an app-specific template is not
 present. Operation results and submitted values are exposed as properties for
 result-page embedding and Textus widgets.
+
+Result-page rendering receives a single page-property context across static
+templates, descriptor `resultTemplate`, and the built-in fallback. Operation
+input values are exposed under `form.*`. Framework page context is exposed by
+its original names, such as `crud.origin.href`, `paging.page`,
+`paging.pageSize`, `paging.href`, `search.*`, `continuation.id`, `version`,
+`etag`, and `csrf`. Framework context is not copied into `form.*` and is
+stripped before Operation dispatch.
+
+Validation redisplay uses the same split. The rendered form keeps framework
+context as hidden fields, while validation and Operation dispatch see only the
+operation input values.
 
 Command-style operation execution should prefer asynchronous execution when the
 operation semantics allow it. The Web response may expose a `jobId` plus

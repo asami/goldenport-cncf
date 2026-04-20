@@ -138,6 +138,8 @@ The existing widgets remain valid and are the baseline compatibility set:
 - `textus-error-panel`
 - `textus:action-link`
 - `textus-action-link`
+- `textus:action-form`
+- `textus-action-form`
 
 New widgets should use the same property expansion, source lookup, action, and
 paging conventions where applicable.
