@@ -1,6 +1,6 @@
 # Phase 12 — Web Layer
 
-status = open
+status = complete
 
 ## 1. Purpose of This Document
 
@@ -8,6 +8,9 @@ This work document tracks the active stack of work items for Phase 12.
 It is authoritative for current progress, scope, and execution order.
 
 This document is a progress dashboard, not a design journal.
+
+Phase 12 is complete. WEB-01 through WEB-65 are closed in the phase checklist;
+remaining items are explicitly carried as next-phase candidates.
 
 ## 2. Phase Scope
 
@@ -309,6 +312,49 @@ Current note:
   Full HTML document templates that use Textus widgets receive local Bootstrap
   5 CSS/JS when missing. Existing page declarations and descriptor-declared
   assets are not duplicated, and pages without widgets are left unchanged.
+- [x] WEB-16: Provide Textus widget local assets.
+  Framework-owned Textus widget CSS/JS are served locally and inserted after
+  Bootstrap where Textus widgets are used.
+- [x] WEB-17: Validate Static Form result asset completion end to end.
+  The sample app verifies result pages include local Bootstrap and Textus
+  widget assets and expand Textus widget tags.
+- [x] WEB-18: Connect descriptor-declared assets to result rendering.
+  Static Form result rendering honors descriptor asset completion controls.
+- [x] WEB-19: Insert descriptor assets into Static Form result pages.
+  Descriptor CSS/JS are composed into full and fragment result pages with
+  duplicate suppression.
+- [x] WEB-20: Add scoped descriptor assets.
+  Global, app, and form asset scopes are merged for result pages.
+- [x] WEB-21: Validate form-scoped assets in the sample app.
+  The sample app verifies form-scoped assets are applied only to the matching
+  flow.
+- [x] WEB-22: Apply scoped assets to input form pages.
+  Operation input pages and component form indexes receive scoped descriptor
+  assets.
+- [x] WEB-23: Expose descriptor asset composition in admin.
+  Completed Web descriptor inspection reports configured and resolved asset
+  composition.
+- [x] WEB-24: Render descriptor asset composition tables.
+  Descriptor admin pages show readable asset composition tables before raw
+  JSON.
+- [x] WEB-25: Render descriptor control tables.
+  Descriptor apps, routes, form access, authorization, and admin surfaces are
+  shown as readable tables.
+- [x] WEB-26: Link descriptor admin table rows.
+  Descriptor tables link apps, routes, forms, and admin surfaces to their
+  runtime/admin destinations.
+- [x] WEB-27: Add descriptor admin filtering.
+  Descriptor admin pages provide lightweight filtering across control tables.
+- [x] WEB-28: Specify component descriptor scope rules.
+  Component descriptor pages apply explicit scope rules for apps, routes,
+  forms, and admin surfaces.
+- [x] WEB-29: Add descriptor table counts and filter empty state.
+  Descriptor control tables show row counts and filter no-match state.
+- [x] WEB-30: Make raw descriptor JSON auxiliary.
+  Completed/configured raw JSON is folded behind details panels.
+- [x] WEB-31: Polish descriptor admin sections.
+  Descriptor admin pages provide navigation pills, section anchors, and
+  table-to-JSON links.
 - [x] WEB-32: Recheck Management Console CRUD routes with the sample app.
   `textus-sample-app` verifies entity/admin entry pages and an actual admin
   entity create/list/detail flow. This keeps the current work order anchored on
@@ -412,8 +458,23 @@ Current note:
   islands.
 - NP-1203: Advanced dashboard visualization such as SVG assembly diagrams.
 - NP-1204: Public JavaScript SDK and generated client helpers.
+- NP-1205: External API gateway integration.
+- NP-1206: Full Bootstrap theme/customization beyond the local Bootstrap 5
+  baseline.
+- NP-1207: Full-text search as a structured search planning layer with
+  analyzer, locale, ranking, highlighting, and backend capability dispatch.
+- NP-1208: Embedding / semantic search as a future search backend with vector
+  index lifecycle, synchronization, ranking, and structured-query interaction.
 
-## 7. References
+## 7. Completion Confirmation
+
+- `docs/phase/phase-12-checklist.md` marks WEB-01 through WEB-65 as DONE.
+- `docs/phase/phase-12-checklist.md` has no ACTIVE or SUSPENDED item.
+- The summary checklist in this document marks WEB-01 through WEB-65 as done.
+- Deferred work is listed under Next Phase Candidates rather than left as
+  Phase 12 open scope.
+
+## 8. References
 
 - `docs/journal/2026/04/web-application-integration-note.md`
 - `docs/journal/2026/04/web-operational-management-note.md`
@@ -423,4 +484,5 @@ Current note:
 - `docs/journal/2026/04/web-integration-spa.md`
 - `docs/journal/2026/04/web-wireframe-dsl-note.md`
 - `docs/journal/2026/04/web-cml-wireframe-generation-note.md`
+- `docs/notes/phase-12-web-closure.md`
 - `docs/phase/phase-12-checklist.md`
