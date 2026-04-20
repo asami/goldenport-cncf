@@ -26,7 +26,7 @@ import org.goldenport.cncf.security.OperationAccessPolicy
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 29, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -345,8 +345,14 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
   private def _is_entity_not_found(
     conclusion: org.goldenport.Conclusion
-  ): Boolean =
-    conclusion.show.toLowerCase.contains("not found")
+  ): Boolean = {
+    val symptom = conclusion.observation.taxonomy.symptom
+    val message = conclusion.show.toLowerCase
+    symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.NotFound ||
+      message.contains("not found") ||
+      message.contains("not-found") ||
+      message.contains("notfound")
+  }
 
   private def _shell_command_executor: ShellCommandExecutor =
     uow.shellCommandExecutor
