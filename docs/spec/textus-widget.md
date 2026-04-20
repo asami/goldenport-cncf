@@ -129,6 +129,11 @@ Static Form input pages use the same descriptor asset scopes. Component form
 indexes use global and app assets. Operation input forms use global, app, and
 the matching form/operation assets.
 
+The completed Web descriptor exposed from the management console must include
+the configured asset scopes and resolved asset composition for component form
+indexes, operation input pages, and operation result pages. This descriptor
+surface is the debugging contract for descriptor-driven asset insertion.
+
 If `web.assets.autoComplete` is `false`, Static Form result rendering must not
 insert framework widget assets automatically. Widget expansion still runs; the
 application is then responsible for supplying any CSS/JS needed by the final

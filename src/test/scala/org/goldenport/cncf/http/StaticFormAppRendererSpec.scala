@@ -191,10 +191,29 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     "render resolved Web Descriptor summary on system admin page" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val descriptor = WebDescriptor(
+        assets = WebDescriptor.Assets(
+          autoComplete = false,
+          css = Vector("/web/assets/site.css"),
+          js = Vector("/web/assets/site.js")
+        ),
         expose = Map("notice-board.notice.search-notices" -> WebDescriptor.Exposure.Public),
         authorization = Map("notice-board.notice.search-notices" -> WebDescriptor.Authorization(roles = Vector("reader"))),
-        form = Map("notice-board.notice.search-notices" -> WebDescriptor.Form(enabled = Some(true))),
-        apps = Vector(WebDescriptor.App("manual", "/web/manual", "manual")),
+        form = Map("notice-board.notice.search-notices" -> WebDescriptor.Form(
+          enabled = Some(true),
+          assets = WebDescriptor.Assets(
+            css = Vector("/web/notice-board/notice-board/assets/search-notices.css"),
+            js = Vector("/web/notice-board/notice-board/assets/search-notices.js")
+          )
+        )),
+        apps = Vector(WebDescriptor.App(
+          "notice-board",
+          "/web/notice-board",
+          "static-form",
+          assets = WebDescriptor.Assets(
+            css = Vector("/web/notice-board/notice-board/assets/app.css"),
+            js = Vector("/web/notice-board/notice-board/assets/app.js")
+          )
+        )),
         admin = Map("entity.notice" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional))
       )
 
@@ -214,10 +233,29 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
     "render resolved Web Descriptor drill-down page" in {
       val descriptor = WebDescriptor(
+        assets = WebDescriptor.Assets(
+          autoComplete = false,
+          css = Vector("/web/assets/site.css"),
+          js = Vector("/web/assets/site.js")
+        ),
         expose = Map("notice-board.notice.search-notices" -> WebDescriptor.Exposure.Public),
         authorization = Map("notice-board.notice.search-notices" -> WebDescriptor.Authorization(roles = Vector("reader"))),
-        form = Map("notice-board.notice.search-notices" -> WebDescriptor.Form(enabled = Some(true))),
-        apps = Vector(WebDescriptor.App("manual", "/web/manual", "manual")),
+        form = Map("notice-board.notice.search-notices" -> WebDescriptor.Form(
+          enabled = Some(true),
+          assets = WebDescriptor.Assets(
+            css = Vector("/web/notice-board/notice-board/assets/search-notices.css"),
+            js = Vector("/web/notice-board/notice-board/assets/search-notices.js")
+          )
+        )),
+        apps = Vector(WebDescriptor.App(
+          "notice-board",
+          "/web/notice-board",
+          "static-form",
+          assets = WebDescriptor.Assets(
+            css = Vector("/web/notice-board/notice-board/assets/app.css"),
+            js = Vector("/web/notice-board/notice-board/assets/app.js")
+          )
+        )),
         admin = Map("entity.notice" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional))
       )
 
@@ -234,9 +272,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("&quot;roles&quot;")
       html should include ("&quot;reader&quot;")
       html should include ("&quot;enabled&quot; : true")
-      html should include ("&quot;path&quot; : &quot;/web/manual&quot;")
-      html should include ("&quot;root&quot; : &quot;/web/manual&quot;")
-      html should include ("&quot;route&quot; : &quot;/web/{component}/manual&quot;")
+      html should include ("&quot;path&quot; : &quot;/web/notice-board&quot;")
+      html should include ("&quot;root&quot; : &quot;/web/notice-board&quot;")
+      html should include ("&quot;route&quot; : &quot;/web/{component}/notice-board&quot;")
+      html should include ("&quot;assetComposition&quot;")
+      html should include ("&quot;global&quot;")
+      html should include ("&quot;apps&quot;")
+      html should include ("&quot;forms&quot;")
+      html should include ("&quot;resolvedForms&quot;")
+      html should include ("&quot;componentFormIndex&quot;")
+      html should include ("&quot;operationInput&quot;")
+      html should include ("&quot;operationResult&quot;")
+      html should include ("/web/assets/site.css")
+      html should include ("/web/notice-board/notice-board/assets/app.css")
+      html should include ("/web/notice-board/notice-board/assets/search-notices.css")
     }
 
     "render component admin configuration detail page" in {

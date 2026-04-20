@@ -1664,6 +1664,46 @@ operation result pages.
 
 ---
 
+## WEB-23 — Expose Descriptor Asset Composition In Admin
+
+Status: DONE
+
+### Goal
+
+Make descriptor-driven asset behavior inspectable from the management console.
+Package authors need to see the configured scopes and the completed
+composition used by Static Form pages without reading runtime code.
+
+### Scope
+
+- Completed descriptor JSON exposes global, app, and form asset scopes.
+- Completed descriptor JSON exposes resolved form composition for component
+  form indexes, operation input pages, and operation result pages.
+- Configured descriptor JSON keeps the explicit asset entries for comparison.
+- Component descriptor views filter resolved form composition to the component
+  scope while preserving app scope visibility.
+
+### Detailed Tasks
+
+- [x] Add descriptor helper for component form index asset composition.
+- [x] Include app assets in descriptor app JSON.
+- [x] Include completed asset composition in admin descriptor JSON.
+- [x] Add executable specification coverage for descriptor asset composition.
+
+### Closure
+
+WEB-23 is complete for descriptor/admin visibility. The management console now
+shows which descriptor asset scopes are configured and which merged asset lists
+are used by Static Form index, input, and result pages.
+
+### Inputs
+
+- `docs/phase/phase-12.md`
+- `src/main/scala/org/goldenport/cncf/http/WebDescriptor.scala`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.

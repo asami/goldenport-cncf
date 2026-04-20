@@ -246,8 +246,17 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
 
       val descriptor = WebDescriptor.load(path).toOption.get
       val assets = descriptor.resultAssets("notice-board", "notice", "search-notices")
+      val indexAssets = descriptor.formIndexAssets("notice-board")
 
       assets.autoComplete shouldBe false
+      indexAssets.css shouldBe Vector(
+        "/web/assets/site.css",
+        "/web/notice-board/notice-board/assets/app.css"
+      )
+      indexAssets.js shouldBe Vector(
+        "/web/assets/site.js",
+        "/web/notice-board/notice-board/assets/app.js"
+      )
       assets.css shouldBe Vector(
         "/web/assets/site.css",
         "/web/notice-board/notice-board/assets/app.css",

@@ -71,6 +71,11 @@ final case class WebDescriptor(
       .map(_.assets)
       .getOrElse(WebDescriptor.Assets())
 
+  def formIndexAssets(
+    componentName: String
+  ): WebDescriptor.Assets =
+    assets.merge(appAssets(componentName))
+
   def resultAssets(
     componentName: String,
     serviceName: String,

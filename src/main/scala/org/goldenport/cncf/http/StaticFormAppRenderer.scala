@@ -4203,6 +4203,13 @@ object StaticFormAppRenderer {
       "auth" -> Json.obj(
         "mode" -> Json.fromString(descriptor.auth.mode)
       ),
+      "assets" -> _web_descriptor_assets_json(descriptor.assets),
+      "assetComposition" -> (
+        if (completed)
+          _web_descriptor_asset_composition_json(descriptor, componentSegment)
+        else
+          Json.Null
+      ),
       "expose" -> Json.fromFields(
         descriptor.expose.toVector.sortBy(_._1).map {
           case (selector, exposure) => selector -> Json.fromString(exposure.name)
@@ -4222,7 +4229,8 @@ object StaticFormAppRenderer {
         descriptor.form.toVector.sortBy(_._1).map {
           case (selector, form) =>
             selector -> Json.obj(
-              "enabled" -> form.enabled.map(Json.fromBoolean).getOrElse(Json.Null)
+              "enabled" -> form.enabled.map(Json.fromBoolean).getOrElse(Json.Null),
+              "assets" -> _web_descriptor_assets_json(form.assets)
             )
         }
       ),
@@ -4256,13 +4264,68 @@ object StaticFormAppRenderer {
       )
     ).spaces2
 
+  private def _web_descriptor_assets_json(
+    assets: WebDescriptor.Assets
+  ): Json =
+    Json.obj(
+      "autoComplete" -> Json.fromBoolean(assets.autoComplete),
+      "css" -> Json.arr(assets.css.map(Json.fromString)*),
+      "js" -> Json.arr(assets.js.map(Json.fromString)*)
+    )
+
+  private def _web_descriptor_asset_composition_json(
+    descriptor: WebDescriptor,
+    componentSegment: Option[String]
+  ): Json = {
+    val forms = _web_descriptor_form_asset_entries(descriptor, componentSegment)
+    Json.obj(
+      "global" -> _web_descriptor_assets_json(descriptor.assets),
+      "apps" -> Json.fromFields(
+        descriptor.apps.map(app => app.normalizedName -> _web_descriptor_assets_json(app.assets))
+      ),
+      "forms" -> Json.fromFields(
+        forms.map {
+          case (selector, _, _, _, form) => selector -> _web_descriptor_assets_json(form.assets)
+        }
+      ),
+      "resolvedForms" -> Json.fromFields(
+        forms.map {
+          case (selector, component, service, operation, _) =>
+            selector -> Json.obj(
+              "component" -> Json.fromString(component),
+              "service" -> Json.fromString(service),
+              "operation" -> Json.fromString(operation),
+              "componentFormIndex" -> _web_descriptor_assets_json(descriptor.formIndexAssets(component)),
+              "operationInput" -> _web_descriptor_assets_json(descriptor.resultAssets(component, service, operation)),
+              "operationResult" -> _web_descriptor_assets_json(descriptor.resultAssets(component, service, operation))
+            )
+        }
+      )
+    )
+  }
+
+  private def _web_descriptor_form_asset_entries(
+    descriptor: WebDescriptor,
+    componentSegment: Option[String]
+  ): Vector[(String, String, String, String, WebDescriptor.Form)] =
+    descriptor.form.toVector.sortBy(_._1).flatMap {
+      case (selector, form) =>
+        selector.split("\\.", 3).toVector match {
+          case Vector(component, service, operation) if componentSegment.forall(_ == component) =>
+            Some((selector, component, service, operation, form))
+          case _ =>
+            None
+        }
+    }
+
   private def _web_descriptor_app_json(
     app: WebDescriptor.App
   ): Json = {
     val configured = Json.obj(
       "name" -> Json.fromString(app.name),
       "path" -> Json.fromString(app.path),
-      "kind" -> Json.fromString(app.kind)
+      "kind" -> Json.fromString(app.kind),
+      "assets" -> _web_descriptor_assets_json(app.assets)
     )
     val optionalFields = Vector(
       app.root.map("root" -> Json.fromString(_)),

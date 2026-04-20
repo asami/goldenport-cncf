@@ -271,6 +271,9 @@ Component Management Console pages expose the same descriptor reference under
 descriptor for comparison and resolves component route placeholders such as
 `{component}` against the selected component, so operators can inspect the
 effective route for that component without leaving the component admin context.
+Completed descriptor JSON also exposes descriptor asset composition diagnostics:
+global assets, app assets, form assets, and the resolved asset lists used by
+component form indexes, operation input pages, and operation result pages.
 
 Static result template lookup is route-local under the Web app root. For a
 Component app `abc:/web/notice-board`, operation result templates are placed

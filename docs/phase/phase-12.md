@@ -96,6 +96,10 @@ This document is a progress dashboard, not a design journal.
   Static Form operation input pages and component form indexes now receive the
   same scoped descriptor assets as result pages, with form-specific assets kept
   off the component form index.
+- W (DONE): WEB-23 — Expose descriptor asset composition in admin.
+  Completed Web descriptor inspection now reports global, app, form, and
+  resolved input/result asset composition so package authors can debug
+  descriptor-driven asset behavior from the management console.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
