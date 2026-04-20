@@ -206,6 +206,19 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - No distributed saga/orchestration engine.
 - Artifact (notes): `docs/notes/event-foundation.md`.
 
+### Phase 6: Job and CQRS Foundation
+- Goal: establish the job execution baseline and separate command/query handling
+  as the runtime foundation for later aggregate/view and Web work.
+- Scope:
+- Define job lifecycle, persistence/read model, and async execution contract.
+- Introduce the first practical CQRS split between command processing and query
+  visibility.
+- Align runtime, projections, and observability with job-aware execution.
+- Non-goals:
+- No distributed workflow/saga engine.
+- No multi-node scheduling/orchestration guarantees in this phase.
+- Artifact (work): `docs/phase/phase-6.md`.
+
 ### Phase 7: Aggregate and View Completion
 - Goal: finalize aggregate/view runtime model and complete CQRS separation after Job CQRS baseline.
 - Scope:
@@ -268,6 +281,22 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - No external service-bus integration in this phase.
 - Artifact (work): `docs/phase/phase-11.md`.
 
+### Phase 12: Web Layer
+- Goal: establish CNCF Web as an operation-centric integration surface on top
+  of the existing runtime, with Static Form App as the first application shape.
+- Scope:
+- Define REST/Form API exposure and the Static Form App mechanism.
+- Define Web Descriptor responsibilities for exposure, security, and asset
+  composition.
+- Build Dashboard, Management Console, and Manual as shared Web applications on
+  the same mechanism.
+- Validate the result with `textus-sample-app`, Bootstrap 5 baseline polish,
+  Textus widgets, packaging, and executable smoke coverage.
+- Non-goals:
+- No full SPA framework commitment in this phase.
+- No broad UI generation beyond the convention-first Static Form baseline.
+- Artifact (work): `docs/phase/phase-12.md`.
+
 ## 4. Relationship Between Phases
 - Later phases depend on earlier phases.
 - Phase 1.5 constrains Phase 2 and Phase 3.
@@ -282,8 +311,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Active phase dashboard: `docs/phase/phase-12.md`
-- Active phase checklist: `docs/phase/phase-12-checklist.md`
+- Current phase selection: pending after Phase 12 closure
+- Latest closed phase dashboard: `docs/phase/phase-12.md`
+- Latest closed phase checklist: `docs/phase/phase-12-checklist.md`
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
 ## 6. Explicit Non-Goals
@@ -302,24 +332,31 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 9: closed (`docs/phase/phase-9.md`)
 - Phase 10: closed (`docs/phase/phase-10.md`)
 - Phase 11: closed (`docs/phase/phase-11.md`)
-- Phase 12: active/open (`docs/phase/phase-12.md`)
+- Phase 12: closed (`docs/phase/phase-12.md`)
 
 ## 8. Development Item Status
 
 This section lists active and future development areas. Once a work area is
 completed, it moves to the completed development item history below.
 
-### 8.1 Web Layer
-Promoted to Phase 12.
-
-- Active dashboard: `docs/phase/phase-12.md`
-- Active checklist: `docs/phase/phase-12-checklist.md`
-- Current focus:
-  - operation-centric web integration surface
-  - REST/Form API exposure
-  - Web Descriptor model
-  - dashboard / management console / manual baseline
-  - executable specifications and minimal runtime hooks
+### 8.1 Web Next Stage Candidates
+- Static Form Web App next step:
+  - Island Architecture introduction on top of the convention-first static baseline
+  - richer Textus widget families where concrete application pressure exists
+  - stronger application-level job UX and dialog-style reusable surfaces
+- Search:
+  - full-text search planning layer
+  - embedding / semantic search backend strategy
+  - CML / View / Query alignment for search-facing metadata
+- Web/UI generation:
+  - wireframe/UI generation strategy above Static Form primitives
+  - clarify responsibility split between generated UI and hand-written static pages
+- SPA hosting and API gateway remain separate modes, not implicit extensions of
+  the current Static Form baseline.
+- Source references:
+  - `docs/phase/phase-12.md`
+  - `docs/phase/phase-12-checklist.md`
+  - `docs/notes/phase-12-web-closure.md`
 
 ### 8.2 Event Mechanism Extension
 - Subsystem-level shared event wiring
@@ -380,7 +417,33 @@ Promoted to Phase 12.
 
 ## 9. Completed Development Item History
 
-### 9.1 Component Wiring and Subsystem Construction
+This section is different from the Phase Overview above.
+
+- Phase Overview explains the intended role of each numbered phase in the
+  long-term development sequence.
+- Completed Development Item History records major work areas that have already
+  been closed and points to the concrete phase/checklist/closure documents.
+- A history item usually corresponds to one phase-sized development area, but
+  this section is written from the viewpoint of completed work areas rather
+  than from the viewpoint of chronological planning.
+
+### 9.1 Web Layer
+Completed in Phase 12.
+
+- Closed dashboard: `docs/phase/phase-12.md`
+- Closed checklist: `docs/phase/phase-12-checklist.md`
+- Closure note: `docs/notes/phase-12-web-closure.md`
+- Completed scope:
+  - operation-centric Web integration surface
+  - REST/Form API exposure and Static Form App mechanism
+  - Web Descriptor model and runtime completion
+  - dashboard / management console / manual baseline
+  - Bootstrap 5 baseline and first-pass Textus widget set
+  - Web app packaging, local assets, and descriptor-scoped asset composition
+  - shortid, job UX baseline, result/detail navigation, and action metadata normalization
+  - executable specifications and sample-app smoke validation through `textus-sample-app`
+
+### 9.2 Component Wiring and Subsystem Construction
 Completed in Phase 11.
 
 - Closed dashboard: `docs/phase/phase-11.md`
