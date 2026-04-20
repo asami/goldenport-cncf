@@ -2795,6 +2795,80 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("cdn.jsdelivr")
     }
 
+    "apply app-scoped assets to the component HTML form index" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      val descriptor = WebDescriptor(
+        apps = Vector(WebDescriptor.App(
+          componentPath,
+          assets = WebDescriptor.Assets(
+            css = Vector("/web/component/assets/forms.css"),
+            js = Vector("/web/component/assets/forms.js")
+          )
+        )),
+        form = Map(
+          s"${componentPath}.service.operation" -> WebDescriptor.Form(
+            assets = WebDescriptor.Assets(
+              css = Vector("/web/component/assets/operation.css"),
+              js = Vector("/web/component/assets/operation.js")
+            )
+          )
+        )
+      )
+
+      val html = StaticFormAppRenderer.renderFormIndex(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("form index is missing"))
+
+      html should include ("/web/component/assets/forms.css")
+      html should include ("/web/component/assets/forms.js")
+      html should not include ("/web/component/assets/operation.css")
+      html should not include ("/web/component/assets/operation.js")
+    }
+
+    "apply app and form scoped assets to operation input forms" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val service = component.protocol.services.services.headOption.getOrElse(fail("service is missing"))
+      val operation = service.operations.operations.toVector.headOption.getOrElse(fail("operation is missing"))
+      val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
+      val servicePath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(service.name)
+      val operationPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(operation.name)
+      val selector = Vector(componentPath, servicePath, operationPath).mkString(".")
+      val descriptor = WebDescriptor(
+        apps = Vector(WebDescriptor.App(
+          componentPath,
+          assets = WebDescriptor.Assets(
+            css = Vector("/web/component/assets/forms.css"),
+            js = Vector("/web/component/assets/forms.js")
+          )
+        )),
+        form = Map(
+          selector -> WebDescriptor.Form(
+            enabled = Some(true),
+            assets = WebDescriptor.Assets(
+              css = Vector("/web/component/assets/operation.css"),
+              js = Vector("/web/component/assets/operation.js")
+            )
+          ),
+          s"${componentPath}.other.operation" -> WebDescriptor.Form(
+            assets = WebDescriptor.Assets(
+              css = Vector("/web/component/assets/other.css"),
+              js = Vector("/web/component/assets/other.js")
+            )
+          )
+        )
+      )
+
+      val html = StaticFormAppRenderer.renderOperationForm(subsystem, component.name, service.name, operation.name, descriptor).map(_.body).getOrElse(fail("operation form is missing"))
+
+      html should include ("/web/component/assets/forms.css")
+      html should include ("/web/component/assets/forms.js")
+      html should include ("/web/component/assets/operation.css")
+      html should include ("/web/component/assets/operation.js")
+      html should not include ("/web/component/assets/other.css")
+      html should not include ("/web/component/assets/other.js")
+    }
+
     "filter HTML form operations by WebDescriptor form controls" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))

@@ -262,7 +262,11 @@ object StaticFormAppRenderer {
              |  <h2>Navigation</h2>
              |  <p><a href="/web/${componentPath}/dashboard">Dashboard</a> · <a href="/web/${componentPath}/admin">Admin configuration</a></p>
              |</article>
-             |${services}""".stripMargin
+             |${services}""".stripMargin,
+        assetCompletion = StaticFormAppLayout.AssetCompletionOptions(
+          declaredCss = webDescriptor.assets.merge(webDescriptor.appAssets(component.name)).css,
+          declaredJs = webDescriptor.assets.merge(webDescriptor.appAssets(component.name)).js
+        )
       ))
     }
 
@@ -294,7 +298,11 @@ object StaticFormAppRenderer {
              |    <button type="submit" class="btn btn-primary">Run</button>
              |    <a class="btn btn-outline-secondary" href="/form/${context.componentPath}">Operations</a>
              |  </form>
-             |</article>""".stripMargin
+             |</article>""".stripMargin,
+        assetCompletion = StaticFormAppLayout.AssetCompletionOptions(
+          declaredCss = webDescriptor.resultAssets(context.component.name, context.serviceName, context.operationName).css,
+          declaredJs = webDescriptor.resultAssets(context.component.name, context.serviceName, context.operationName).js
+        )
       ))
     }
 
@@ -4493,20 +4501,25 @@ object StaticFormAppRenderer {
   private def _simple_page(
     title: String,
     subtitle: String,
-    body: String
+    body: String,
+    assetCompletion: StaticFormAppLayout.AssetCompletionOptions =
+      StaticFormAppLayout.AssetCompletionOptions()
   ): String =
-    StaticFormAppLayout.bootstrapPage(StaticFormAppLayout.Options(
-      title = title,
-      subtitle = subtitle,
-      body = body,
-      extraHead =
-        """|    article { background: #ffffff; border: 1px solid #d9dee5; border-radius: 8px; padding: 20px; }
-           |    h2 { margin: 0 0 14px; font-size: 20px; }
-           |    h3 { margin: 16px 0 8px; font-size: 16px; }
-           |    p { margin: 0; color: #4d5662; }
-           |    li { margin: 6px 0; }
-           |""".stripMargin
-    ))
+    StaticFormAppLayout.completeDeclaredAssets(
+      StaticFormAppLayout.bootstrapPage(StaticFormAppLayout.Options(
+        title = title,
+        subtitle = subtitle,
+        body = body,
+        extraHead =
+          """|    article { background: #ffffff; border: 1px solid #d9dee5; border-radius: 8px; padding: 20px; }
+             |    h2 { margin: 0 0 14px; font-size: 20px; }
+             |    h3 { margin: 16px 0 8px; font-size: 16px; }
+             |    p { margin: 0; color: #4d5662; }
+             |    li { margin: 6px 0; }
+             |""".stripMargin
+      )),
+      assetCompletion
+    )
 
   private def _property_rows(properties: Map[String, String]): String =
     properties.toVector.sortBy(_._1).map { case (key, value) =>

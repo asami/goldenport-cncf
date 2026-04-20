@@ -1618,6 +1618,52 @@ notice-board result page, while search result assets apply only to the
 
 ---
 
+## WEB-22: Input Form Scoped Assets
+
+Status: DONE
+
+### Objective
+
+Apply descriptor asset composition to Static Form input pages, not only result
+pages.
+
+WEB-18 through WEB-21 established framework, descriptor, app, and form scoped
+assets for result pages. WEB-22 extends the same asset model to the operation
+input form surface.
+
+### Design Direction
+
+- Component form indexes use global and app scoped assets.
+- Operation input forms use global, app, and form scoped assets.
+- Form scoped assets must not appear on unrelated operation input forms.
+- Form scoped assets must not appear on the component form index.
+- Built-in Static Form layout still supplies the local framework baseline.
+
+### Detailed Tasks
+
+- [x] Insert app scoped descriptor assets into component form indexes.
+- [x] Insert app and form scoped descriptor assets into operation input forms.
+- [x] Add executable specifications for form index app assets.
+- [x] Add executable specifications for operation input form app/form assets
+      and selector mismatch exclusion.
+- [x] Extend `textus-sample-app` E2E checks for form index and input forms.
+- [x] Verify `search-notices` form scoped assets do not appear on
+      `post-notice` input/result pages.
+
+### Closure
+
+WEB-22 is complete for the Static Form input side. Descriptor asset scopes now
+apply consistently across component form indexes, operation input forms, and
+operation result pages.
+
+### Inputs
+
+- `docs/spec/textus-widget.md`
+- `docs/design/web-layer.md`
+- `textus-sample-app/scripts/check-static-form-result-assets.sh`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.

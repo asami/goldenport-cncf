@@ -92,6 +92,10 @@ This document is a progress dashboard, not a design journal.
 - U (DONE): WEB-21 — Validate form-scoped assets in the sample app.
   `textus-sample-app` declares `search-notices`-specific assets at form scope
   and verifies that they appear only on the search result flow.
+- V (DONE): WEB-22 — Apply scoped assets to input form pages.
+  Static Form operation input pages and component form indexes now receive the
+  same scoped descriptor assets as result pages, with form-specific assets kept
+  off the component form index.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational

@@ -125,6 +125,10 @@ web:
 Static Form result rendering merges scopes in this order: global, app, then
 form/operation. Duplicate asset URLs are inserted once.
 
+Static Form input pages use the same descriptor asset scopes. Component form
+indexes use global and app assets. Operation input forms use global, app, and
+the matching form/operation assets.
+
 If `web.assets.autoComplete` is `false`, Static Form result rendering must not
 insert framework widget assets automatically. Widget expansion still runs; the
 application is then responsible for supplying any CSS/JS needed by the final

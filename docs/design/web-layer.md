@@ -341,6 +341,10 @@ Result rendering merges asset scopes in the order `web.assets`,
 assets available while allowing multi-app CAR/SAR packages to avoid applying
 app-specific CSS/JS to unrelated pages.
 
+Static Form input pages use the same scopes. Component form indexes receive
+global and app assets. Operation input forms receive global, app, and matching
+form assets.
+
 App-local assets are served from the canonical component Web app route:
 
 ```text

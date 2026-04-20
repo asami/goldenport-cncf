@@ -57,7 +57,10 @@ final case class WebDescriptor(
       apps.exists(_.matches(name, path))
 
   def appAssets(name: String): WebDescriptor.Assets =
-    apps.find(_.matches(name, Vector.empty)).map(_.assets).getOrElse(WebDescriptor.Assets())
+    apps.find(app =>
+      app.matches(name, Vector.empty) ||
+        app.normalizedName == org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(name)
+    ).map(_.assets).getOrElse(WebDescriptor.Assets())
 
   def formAssets(
     componentName: String,
@@ -414,7 +417,9 @@ object WebDescriptor {
     serviceName: String,
     operationName: String
   ): String =
-    _normalize_selector(Vector(componentName, serviceName, operationName).mkString("."))
+    Vector(componentName, serviceName, operationName)
+      .map(org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment)
+      .mkString(".")
 
   def load(path: Path): Consequence[WebDescriptor] =
     if (!Files.exists(path))
