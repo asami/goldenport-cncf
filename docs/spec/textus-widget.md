@@ -139,6 +139,10 @@ The descriptor admin page also renders descriptor controls such as apps,
 routes, form access, authorization, and admin surfaces as tables before the raw
 JSON. These rows link to runtime/admin destinations when the destination is
 known, and the page provides a local filter input for descriptor control rows.
+Component descriptor tables must apply the component scope rules for apps,
+routes, form selectors, and local or component-qualified admin surfaces. Table
+headings should expose rendered row counts, and the filter should show a
+no-match state when every descriptor control row is hidden.
 
 If `web.assets.autoComplete` is `false`, Static Form result rendering must not
 insert framework widget assets automatically. Widget expansion still runs; the

@@ -283,7 +283,12 @@ inspection surface; the raw descriptor JSON remains available for exact
 debugging and copy/paste. Table rows link to the corresponding Web app,
 route, Static Form, or component admin page when the destination is known. A
 local filter input narrows the descriptor control rows without another server
-request.
+request and shows an explicit no-match state. Component descriptor tables are
+scope-aware: app rows are shown when the app name matches the component or a
+route targets the component/app pair, route rows are shown when
+`target.component` matches, form rows are shown when the selector's first
+segment matches, and admin surface rows accept both component-local
+`entity.notice` style selectors and component-qualified selectors.
 
 Static result template lookup is route-local under the Web app root. For a
 Component app `abc:/web/notice-board`, operation result templates are placed

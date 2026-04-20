@@ -4342,6 +4342,7 @@ object StaticFormAppRenderer {
     """<div class="mb-3">
       |  <label class="form-label" for="web-descriptor-filter">Filter descriptor tables</label>
       |  <input class="form-control" id="web-descriptor-filter" type="search" placeholder="Filter apps, routes, forms, authorization, and admin surfaces" data-textus-descriptor-filter>
+      |  <p class="alert alert-warning mt-2 mb-0 d-none" data-textus-descriptor-filter-empty>No descriptor rows match the filter.</p>
       |</div>""".stripMargin
 
   private def _web_descriptor_filter_script: String =
@@ -4350,11 +4351,16 @@ object StaticFormAppRenderer {
       |  const input = document.querySelector("[data-textus-descriptor-filter]");
       |  if (!input) return;
       |  const rows = Array.from(document.querySelectorAll("[data-descriptor-row]"));
+      |  const empty = document.querySelector("[data-textus-descriptor-filter-empty]");
       |  input.addEventListener("input", () => {
       |    const query = input.value.trim().toLowerCase();
+      |    let visible = 0;
       |    rows.forEach((row) => {
-      |      row.classList.toggle("d-none", query.length > 0 && !row.textContent.toLowerCase().includes(query));
+      |      const hidden = query.length > 0 && !row.textContent.toLowerCase().includes(query);
+      |      row.classList.toggle("d-none", hidden);
+      |      if (!hidden) visible += 1;
       |    });
+      |    if (empty) empty.classList.toggle("d-none", query.length === 0 || visible > 0);
       |  });
       |})();
       |</script>""".stripMargin
@@ -4363,7 +4369,8 @@ object StaticFormAppRenderer {
     descriptor: WebDescriptor,
     componentSegment: Option[String]
   ): String = {
-    val rows = descriptor.apps.map { app =>
+    val apps = _web_descriptor_scoped_apps(descriptor, componentSegment)
+    val rows = apps.map { app =>
       val completed = app.completedFor(componentSegment)
       s"""<tr data-descriptor-row>
          |  <td><code>${_escape(completed.name)}</code></td>
@@ -4378,12 +4385,28 @@ object StaticFormAppRenderer {
         """<tr><td colspan="5" class="text-secondary">No Web app descriptor entries are configured.</td></tr>"""
       else
         rows.mkString("\n")
-    s"""<h3>Apps</h3>
+    s"""<h3>Apps <span class="badge text-bg-secondary">${rows.size}</span></h3>
        |<div class="table-responsive"><table class="table table-sm align-middle">
        |  <thead><tr><th>Name</th><th>Path</th><th>Root</th><th>Route</th><th>Kind</th></tr></thead>
        |  <tbody>${body}</tbody>
        |</table></div>""".stripMargin
   }
+
+  private def _web_descriptor_scoped_apps(
+    descriptor: WebDescriptor,
+    componentSegment: Option[String]
+  ): Vector[WebDescriptor.App] =
+    componentSegment match {
+      case None => descriptor.apps
+      case Some(component) =>
+        descriptor.apps.filter { app =>
+          NamingConventions.equivalentByNormalized(app.name, component) ||
+            descriptor.routes.exists(route =>
+              NamingConventions.equivalentByNormalized(route.target.component, component) &&
+                NamingConventions.equivalentByNormalized(route.target.app, app.name)
+            )
+        }
+    }
 
   private def _web_descriptor_routes_table(
     descriptor: WebDescriptor,
@@ -4405,7 +4428,7 @@ object StaticFormAppRenderer {
         """<tr><td colspan="4" class="text-secondary">No Web route descriptor entries are configured for this scope.</td></tr>"""
       else
         rows.mkString("\n")
-    s"""<h3>Routes</h3>
+    s"""<h3>Routes <span class="badge text-bg-secondary">${rows.size}</span></h3>
        |<div class="table-responsive"><table class="table table-sm align-middle">
        |  <thead><tr><th>Path</th><th>Kind</th><th>Target component</th><th>Target app</th></tr></thead>
        |  <tbody>${body}</tbody>
@@ -4441,7 +4464,7 @@ object StaticFormAppRenderer {
         """<tr><td colspan="9" class="text-secondary">No form, exposure, or authorization entries are configured for this scope.</td></tr>"""
       else
         rows.mkString("\n")
-    s"""<h3>Form Access And Authorization</h3>
+    s"""<h3>Form Access And Authorization <span class="badge text-bg-secondary">${rows.size}</span></h3>
        |<div class="table-responsive"><table class="table table-sm align-middle">
        |  <thead><tr><th>Selector</th><th>Exposure</th><th>Form</th><th>Roles</th><th>Scopes</th><th>Capabilities</th><th>Anonymous</th><th>Operation modes</th><th>Anonymous modes</th></tr></thead>
        |  <tbody>${body}</tbody>
@@ -4472,7 +4495,7 @@ object StaticFormAppRenderer {
         """<tr><td colspan="3" class="text-secondary">No Management Console surfaces are configured.</td></tr>"""
       else
         rows.mkString("\n")
-    s"""<h3>Admin Surfaces</h3>
+    s"""<h3>Admin Surfaces <span class="badge text-bg-secondary">${rows.size}</span></h3>
        |<div class="table-responsive"><table class="table table-sm align-middle">
        |  <thead><tr><th>Surface</th><th>Total count</th><th>Fields</th></tr></thead>
        |  <tbody>${body}</tbody>

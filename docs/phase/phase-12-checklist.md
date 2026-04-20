@@ -1860,6 +1860,84 @@ descriptor pages become too large to render eagerly.
 
 ---
 
+## WEB-28 — Specify Component Descriptor Scope Rules
+
+Status: DONE
+
+### Goal
+
+Make component descriptor pages scope-aware by a documented rule instead of
+ad-hoc display behavior.
+
+### Scope
+
+- Component Apps table shows app entries that match the component name or are
+  targeted by a route for the component.
+- Component Routes table shows routes whose `target.component` matches the
+  selected component.
+- Component Form Access And Authorization table shows selectors whose first
+  selector segment matches the component.
+- Component Admin Surfaces table shows component-local surfaces such as
+  `entity.notice` and component-qualified surfaces that match the component.
+
+### Detailed Tasks
+
+- [x] Add component-scoped app matching.
+- [x] Keep route and form selector matching component-qualified.
+- [x] Keep admin surface matching local and component-qualified.
+- [x] Add executable specification checks that other-component links are not
+      emitted from component descriptor tables.
+
+### Closure
+
+WEB-28 is complete for the current descriptor admin rules. Raw JSON still shows
+the configured descriptor for comparison, while tables are the scope-aware
+inspection surface.
+
+### Inputs
+
+- `docs/phase/phase-12.md`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+
+---
+
+## WEB-29 — Add Descriptor Table Counts And Filter Empty State
+
+Status: DONE
+
+### Goal
+
+Improve descriptor table readability and make client-side filtering less
+ambiguous.
+
+### Scope
+
+- Descriptor control table headings show the number of rendered rows.
+- The filter surface shows an explicit no-match message when every descriptor
+  control row is hidden.
+- Existing raw JSON and table content remain unchanged apart from the count and
+  filter affordance.
+
+### Detailed Tasks
+
+- [x] Add row-count badges to descriptor control table headings.
+- [x] Add no-match message to the descriptor filter surface.
+- [x] Update the client-side filter script to toggle no-match state.
+- [x] Add executable specification checks for the no-match surface.
+
+### Closure
+
+WEB-29 is complete for first-pass descriptor table usability. More advanced
+server-side filtering remains deferred until descriptor pages become too large
+to render eagerly.
+
+### Inputs
+
+- `docs/phase/phase-12.md`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.

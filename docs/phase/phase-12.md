@@ -112,6 +112,12 @@ This document is a progress dashboard, not a design journal.
 - AA (DONE): WEB-27 — Add descriptor admin filtering.
   Descriptor admin pages now provide a lightweight client-side filter across
   descriptor control tables and tighten component-scope rows.
+- AB (DONE): WEB-28 — Specify component descriptor scope rules.
+  Component descriptor pages now apply explicit scope rules for apps, routes,
+  form selectors, and local or component-qualified admin surfaces.
+- AC (DONE): WEB-29 — Add descriptor table counts and filter empty state.
+  Descriptor control tables now show row counts and the local filter reports
+  when no descriptor rows match.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
