@@ -296,18 +296,20 @@ Lookup precedence is executable-speced as:
 5. Built-in rendering.
 
 Framework assets are served under `/web/assets/...` and are owned by the
-runtime. Bootstrap 5 local assets currently use this route.
+runtime. Bootstrap 5 and Textus widget local assets currently use this route.
 
 Static Web app HTML should link framework assets through the framework route:
 
 ```html
 <link href="/web/assets/bootstrap.min.css" rel="stylesheet">
+<link href="/web/assets/textus-widgets.css" rel="stylesheet">
 <script src="/web/assets/bootstrap.bundle.min.js"></script>
+<script src="/web/assets/textus-widgets.js"></script>
 ```
 
 The framework asset route is stable across canonical component routes, SAR
 aliases, and implicit single-CAR aliases. Static pages must not use CDN URLs
-for baseline Bootstrap behavior.
+for baseline Bootstrap behavior or Textus widget behavior.
 
 App-local assets are served from the canonical component Web app route:
 

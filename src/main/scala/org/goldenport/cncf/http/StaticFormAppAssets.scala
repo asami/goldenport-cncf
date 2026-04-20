@@ -4,7 +4,7 @@ import scala.io.Source
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 12, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppAssets {
@@ -15,6 +15,12 @@ object StaticFormAppAssets {
 
   val bootstrapBundleJs: String =
     _resource_text("org/goldenport/cncf/http/assets/bootstrap.bundle.min.js")
+
+  val textusWidgetsCss: String =
+    _resource_text("org/goldenport/cncf/http/assets/textus-widgets.css")
+
+  val textusWidgetsJs: String =
+    _resource_text("org/goldenport/cncf/http/assets/textus-widgets.js")
 
   private def _resource_text(path: String): String = {
     val stream = Option(Thread.currentThread.getContextClassLoader.getResourceAsStream(path))

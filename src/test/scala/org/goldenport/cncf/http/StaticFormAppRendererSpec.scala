@@ -5084,7 +5084,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus-pagination")
     }
 
-    "complete local Bootstrap assets for HTML document templates that use Textus widgets" in {
+    "complete local widget assets for HTML document templates that use Textus widgets" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -5112,13 +5112,19 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       html should include ("/web/assets/bootstrap.min.css")
       html should include ("/web/assets/bootstrap.bundle.min.js")
+      html should include ("/web/assets/textus-widgets.css")
+      html should include ("/web/assets/textus-widgets.js")
       html should include ("row row-cols-1 row-cols-md-2")
       html should not include ("<textus:card-list")
       html.indexOf("/web/assets/bootstrap.min.css") should be < html.indexOf("</head>")
+      html.indexOf("/web/assets/textus-widgets.css") should be < html.indexOf("</head>")
+      html.indexOf("/web/assets/bootstrap.min.css") should be < html.indexOf("/web/assets/textus-widgets.css")
       html.indexOf("/web/assets/bootstrap.bundle.min.js") should be < html.indexOf("</body>")
+      html.indexOf("/web/assets/textus-widgets.js") should be < html.indexOf("</body>")
+      html.indexOf("/web/assets/bootstrap.bundle.min.js") should be < html.indexOf("/web/assets/textus-widgets.js")
     }
 
-    "not duplicate existing local Bootstrap assets in HTML document templates" in {
+    "not duplicate existing local widget assets in HTML document templates" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
           "notice-board",
@@ -5136,16 +5142,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           |<html lang="en">
           |<head>
           |  <link href="/web/assets/bootstrap.min.css" rel="stylesheet">
+          |  <link href="/web/assets/textus-widgets.css" rel="stylesheet">
           |</head>
           |<body>
           |  <textus-result-table source="result.body"></textus-result-table>
           |  <script src="/web/assets/bootstrap.bundle.min.js"></script>
+          |  <script src="/web/assets/textus-widgets.js"></script>
           |</body>
           |</html>""".stripMargin
       ).body
 
       _count_occurrences(html, "/web/assets/bootstrap.min.css") shouldBe 1
       _count_occurrences(html, "/web/assets/bootstrap.bundle.min.js") shouldBe 1
+      _count_occurrences(html, "/web/assets/textus-widgets.css") shouldBe 1
+      _count_occurrences(html, "/web/assets/textus-widgets.js") shouldBe 1
       html should not include ("<textus-result-table")
     }
 
@@ -5172,6 +5182,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html shouldBe template
       html should not include ("/web/assets/bootstrap.min.css")
       html should not include ("/web/assets/bootstrap.bundle.min.js")
+      html should not include ("/web/assets/textus-widgets.css")
+      html should not include ("/web/assets/textus-widgets.js")
     }
 
     "honor descriptor-declared widget assets during completion" in {
@@ -5183,13 +5195,27 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           |</html>""".stripMargin,
         StaticFormAppLayout.AssetCompletionOptions(
           requiresBootstrap = true,
-          declaredCss = Vector("/web/assets/bootstrap.min.css"),
-          declaredJs = Vector("/web/assets/bootstrap.bundle.min.js")
+          requiresTextusWidgets = true,
+          declaredCss = Vector(
+            "/web/assets/bootstrap.min.css",
+            "/web/assets/textus-widgets.css"
+          ),
+          declaredJs = Vector(
+            "/web/assets/bootstrap.bundle.min.js",
+            "/web/assets/textus-widgets.js"
+          )
         )
       )
 
       html should not include ("/web/assets/bootstrap.min.css")
       html should not include ("/web/assets/bootstrap.bundle.min.js")
+      html should not include ("/web/assets/textus-widgets.css")
+      html should not include ("/web/assets/textus-widgets.js")
+    }
+
+    "load packaged Textus widget assets" in {
+      StaticFormAppAssets.textusWidgetsCss should include ("textus-widget")
+      StaticFormAppAssets.textusWidgetsJs should include ("textusWidgets")
     }
 
     "render textus result table from result body object data" in {

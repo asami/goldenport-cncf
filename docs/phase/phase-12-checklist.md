@@ -1232,7 +1232,7 @@ Deferred scope:
 
 ## WEB-15: Textus Widget Asset Auto-Completion
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -1294,7 +1294,7 @@ Deferred scope:
 - wiring descriptor-declared custom CSS/JS into every Static Form App route is
   future packaging/composition work.
 - richer widget-specific dependency sets beyond the Bootstrap baseline are
-  deferred until those widgets require them.
+  handled by WEB-16.
 
 ### Inputs
 
@@ -1302,6 +1302,64 @@ Deferred scope:
 - `docs/spec/textus-widget.md`
 - `docs/notes/web-bootstrap-ui-polish-design.md`
 - `textus-sample-app`
+
+---
+
+## WEB-16: Textus Widget Local Assets
+
+Status: DONE
+
+### Objective
+
+Provide local Textus widget CSS/JS assets as a framework-owned baseline and
+complete them automatically for Static Form Web App pages that use Textus
+widgets.
+
+WEB-15 established Bootstrap 5 asset completion. WEB-16 adds the Textus
+widget-specific asset family so widgets can evolve beyond raw Bootstrap markup
+without requiring every static page to repeat the same asset declarations.
+
+### Design Direction
+
+- Textus widget assets are packaged with the framework and served offline.
+- Widget assets are added only when Textus widgets are present, unless a
+  built-in framework page layout already includes them.
+- Bootstrap remains the base visual/runtime dependency. Textus widget assets
+  are layered after Bootstrap.
+- Existing page declarations and descriptor-declared assets are treated as
+  already supplied and must not be duplicated.
+- The asset names are stable framework URLs:
+  - `/web/assets/textus-widgets.css`
+  - `/web/assets/textus-widgets.js`
+
+### Detailed Tasks
+
+- [x] Package `textus-widgets.css` and `textus-widgets.js` as local resources.
+- [x] Serve the assets from `/web/assets`.
+- [x] Extend Static Form App asset completion to add Textus widget assets for
+      full HTML document templates that contain `textus:` or `textus-` widgets.
+- [x] Keep insertion order deterministic: Bootstrap first, Textus widget assets
+      second.
+- [x] Avoid duplicate insertion when a page or descriptor already supplies the
+      assets.
+- [x] Include Textus widget assets in the built-in Bootstrap page layout used
+      for framework-generated and fragment-wrapped pages.
+- [x] Add executable specifications for insertion, duplicate suppression,
+      no-widget pages, and packaged asset loading.
+- [x] Update the widget specification.
+
+### Closure
+
+WEB-16 is complete as the first framework-owned Textus widget asset layer.
+Future widget families may add more granular dependency metadata, but current
+Static Form Web App pages can rely on local Bootstrap plus local Textus widget
+assets without descriptor boilerplate.
+
+### Inputs
+
+- `docs/spec/textus-widget.md`
+- `docs/phase/phase-12.md`
+- `docs/phase/phase-12-checklist.md`
 
 ---
 

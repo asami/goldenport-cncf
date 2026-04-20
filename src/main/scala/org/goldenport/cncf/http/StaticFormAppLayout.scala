@@ -8,6 +8,7 @@ package org.goldenport.cncf.http
 object StaticFormAppLayout {
   final case class AssetCompletionOptions(
     requiresBootstrap: Boolean = false,
+    requiresTextusWidgets: Boolean = false,
     declaredCss: Vector[String] = Vector.empty,
     declaredJs: Vector[String] = Vector.empty
   )
@@ -29,6 +30,7 @@ object StaticFormAppLayout {
        |  <meta name="viewport" content="width=device-width, initial-scale=1">
        |  <title>${escape(options.title)}</title>
        |  <link href="/web/assets/bootstrap.min.css" rel="stylesheet">
+       |  <link href="/web/assets/textus-widgets.css" rel="stylesheet">
        |  <style>
        |    body { background: #f6f7f9; color: #1f252b; }
        |    header { background: #ffffff; border-bottom: 1px solid #d9dee5; }
@@ -48,6 +50,7 @@ object StaticFormAppLayout {
        |${options.body}
        |  </main>
        |  <script src="/web/assets/bootstrap.bundle.min.js"></script>
+       |  <script src="/web/assets/textus-widgets.js"></script>
        |${options.extraScript}
        |</body>
        |</html>
@@ -57,28 +60,33 @@ object StaticFormAppLayout {
     html: String,
     options: AssetCompletionOptions
   ): String =
-    if (!options.requiresBootstrap)
+    if (!options.requiresBootstrap && !options.requiresTextusWidgets)
       html
     else {
-      val withCss =
-        if (_has_bootstrap_css(html, options.declaredCss))
-          html
-        else
-          _insert_before(
-            html,
-            "</head>",
-            """  <link href="/web/assets/bootstrap.min.css" rel="stylesheet">
-              |""".stripMargin
-          )
-      if (_has_bootstrap_js(withCss, options.declaredJs))
-        withCss
-      else
-        _insert_before(
-          withCss,
-          "</body>",
-          """  <script src="/web/assets/bootstrap.bundle.min.js"></script>
-            |""".stripMargin
-        )
+      val withBootstrapCss = _insert_css_if_needed(
+        html,
+        options.requiresBootstrap,
+        _has_bootstrap_css(html, options.declaredCss),
+        """/web/assets/bootstrap.min.css"""
+      )
+      val withTextusCss = _insert_css_if_needed(
+        withBootstrapCss,
+        options.requiresTextusWidgets,
+        _has_textus_widgets_css(withBootstrapCss, options.declaredCss),
+        """/web/assets/textus-widgets.css"""
+      )
+      val withBootstrapJs = _insert_js_if_needed(
+        withTextusCss,
+        options.requiresBootstrap,
+        _has_bootstrap_js(withTextusCss, options.declaredJs),
+        """/web/assets/bootstrap.bundle.min.js"""
+      )
+      _insert_js_if_needed(
+        withBootstrapJs,
+        options.requiresTextusWidgets,
+        _has_textus_widgets_js(withBootstrapJs, options.declaredJs),
+        """/web/assets/textus-widgets.js"""
+      )
     }
 
   def escape(value: String): String =
@@ -104,6 +112,60 @@ object StaticFormAppLayout {
     html.contains("/web/assets/bootstrap.bundle.min.js") ||
       html.toLowerCase(java.util.Locale.ROOT).contains("bootstrap.bundle.min.js") ||
       declaredJs.exists(_.toLowerCase(java.util.Locale.ROOT).contains("bootstrap"))
+
+  private def _has_textus_widgets_css(
+    html: String,
+    declaredCss: Vector[String]
+  ): Boolean =
+    _has_asset(html, declaredCss, "textus-widgets.css")
+
+  private def _has_textus_widgets_js(
+    html: String,
+    declaredJs: Vector[String]
+  ): Boolean =
+    _has_asset(html, declaredJs, "textus-widgets.js")
+
+  private def _has_asset(
+    html: String,
+    declaredAssets: Vector[String],
+    assetName: String
+  ): Boolean = {
+    val name = assetName.toLowerCase(java.util.Locale.ROOT)
+    html.toLowerCase(java.util.Locale.ROOT).contains(name) ||
+      declaredAssets.exists(_.toLowerCase(java.util.Locale.ROOT).contains(name))
+  }
+
+  private def _insert_css_if_needed(
+    html: String,
+    required: Boolean,
+    alreadySupplied: Boolean,
+    href: String
+  ): String =
+    if (!required || alreadySupplied)
+      html
+    else
+      _insert_before(
+        html,
+        "</head>",
+        s"""  <link href="${href}" rel="stylesheet">
+           |""".stripMargin
+      )
+
+  private def _insert_js_if_needed(
+    html: String,
+    required: Boolean,
+    alreadySupplied: Boolean,
+    src: String
+  ): String =
+    if (!required || alreadySupplied)
+      html
+    else
+      _insert_before(
+        html,
+        "</body>",
+        s"""  <script src="${src}"></script>
+           |""".stripMargin
+      )
 
   private def _insert_before(
     html: String,

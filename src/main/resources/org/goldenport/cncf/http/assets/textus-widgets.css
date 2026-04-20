@@ -1,0 +1,29 @@
+/*! Textus widget baseline */
+.textus-widget {
+  min-width: 0;
+}
+
+.textus-empty-state {
+  border: 1px dashed #b8c0c9;
+  border-radius: 8px;
+  color: #5c6670;
+  padding: 1rem;
+}
+
+.textus-job-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+.textus-action-row {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+.textus-card-list {
+  --bs-gutter-x: 1rem;
+  --bs-gutter-y: 1rem;
+}

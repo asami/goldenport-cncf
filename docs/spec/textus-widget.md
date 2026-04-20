@@ -43,11 +43,13 @@ returned.
 
 Widgets render ordinary Bootstrap 5 markup. They must not require a separate
 client-side widget framework and must remain useful with only local Bootstrap
-assets:
+assets plus local Textus widget assets:
 
 ```text
 /web/assets/bootstrap.min.css
 /web/assets/bootstrap.bundle.min.js
+/web/assets/textus-widgets.css
+/web/assets/textus-widgets.js
 ```
 
 Applications may add local CSS, but widget output must not depend on CDN access
@@ -60,15 +62,20 @@ templates.
 
 When a full HTML document template contains any supported `textus:` or
 `textus-` widget and the page does not already declare Bootstrap 5 assets, the
-renderer inserts:
+renderer inserts the local Bootstrap baseline. When the page does not already
+declare Textus widget assets, the renderer also inserts the local Textus widget
+baseline:
 
 ```html
 <link href="/web/assets/bootstrap.min.css" rel="stylesheet">
+<link href="/web/assets/textus-widgets.css" rel="stylesheet">
 <script src="/web/assets/bootstrap.bundle.min.js"></script>
+<script src="/web/assets/textus-widgets.js"></script>
 ```
 
-The CSS link is inserted before `</head>`. The JavaScript bundle is inserted
-before `</body>`.
+CSS links are inserted before `</head>`. JavaScript bundles are inserted before
+`</body>`. Bootstrap assets are inserted first and Textus widget assets are
+inserted after them.
 
 The renderer must not add duplicates. A page that already declares Bootstrap
 CSS or JS keeps its declaration. A Web Descriptor may also declare page/app
@@ -80,18 +87,21 @@ web:
     autoComplete: true
     css:
       - /web/assets/bootstrap.min.css
+      - /web/assets/textus-widgets.css
       - /web/notice-board/assets/app.css
     js:
       - /web/assets/bootstrap.bundle.min.js
+      - /web/assets/textus-widgets.js
       - /web/notice-board/assets/app.js
 ```
 
 Descriptor-declared assets are treated as already supplied by the surrounding
-page/app composition. If they include Bootstrap, widget asset completion must
-not insert another Bootstrap asset.
+page/app composition. If they include Bootstrap or Textus widget assets, widget
+asset completion must not insert another copy.
 
 Fragment templates are normally wrapped by the built-in Bootstrap page layout,
-so they already receive the local Bootstrap baseline through that layout.
+so they already receive the local Bootstrap and Textus widget baseline through
+that layout.
 
 If a full HTML document contains no Textus widget, asset completion must leave
 the document unchanged.

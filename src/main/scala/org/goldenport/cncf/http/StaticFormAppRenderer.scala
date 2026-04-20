@@ -4526,13 +4526,16 @@ object StaticFormAppRenderer {
   private def _complete_widget_assets(
     template: String,
     rendered: String
-  ): String =
+  ): String = {
+    val hasTextusWidgets = _has_textus_widgets(template)
     StaticFormAppLayout.completeWidgetAssets(
       rendered,
       StaticFormAppLayout.AssetCompletionOptions(
-        requiresBootstrap = _has_textus_widgets(template)
+        requiresBootstrap = hasTextusWidgets,
+        requiresTextusWidgets = hasTextusWidgets
       )
     )
+  }
 
   private def _has_textus_widgets(template: String): Boolean =
     """<textus(?::|-)[A-Za-z0-9-]+\b""".r.findFirstIn(template).nonEmpty

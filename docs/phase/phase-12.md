@@ -70,6 +70,11 @@ This document is a progress dashboard, not a design journal.
   Textus widget rendering supplies local Bootstrap 5 CSS/JS for full HTML
   document templates that use widgets, while skipping duplicates and honoring
   descriptor-declared assets.
+- P (DONE): WEB-16 — Provide Textus widget local assets.
+  Textus widget rendering supplies framework-owned `/web/assets/textus-widgets.css`
+  and `/web/assets/textus-widgets.js` after the local Bootstrap baseline.
+  Built-in layouts include them, and full HTML document templates receive them
+  automatically when they use Textus widgets.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational

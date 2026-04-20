@@ -90,6 +90,10 @@ final class Http4sHttpServer(
         _bootstrap_css()
       case GET -> Root / "web" / "assets" / "bootstrap.bundle.min.js" =>
         _bootstrap_bundle_js()
+      case GET -> Root / "web" / "assets" / "textus-widgets.css" =>
+        _textus_widgets_css()
+      case GET -> Root / "web" / "assets" / "textus-widgets.js" =>
+        _textus_widgets_js()
       case GET -> Root / "web" / "system" / "dashboard" =>
         _subsystem_dashboard()
       case GET -> Root / "web" / "system" / "dashboard" / "state" =>
@@ -262,6 +266,20 @@ final class Http4sHttpServer(
     IO.pure(
       HResponse[IO](HStatus.Ok)
         .withEntity(StaticFormAppAssets.bootstrapBundleJs)
+        .withContentType(`Content-Type`(MediaType.application.javascript, Some(Charset.`UTF-8`)))
+    )
+
+  private def _textus_widgets_css(): IO[HResponse[IO]] =
+    IO.pure(
+      HResponse[IO](HStatus.Ok)
+        .withEntity(StaticFormAppAssets.textusWidgetsCss)
+        .withContentType(`Content-Type`(MediaType.text.css, Some(Charset.`UTF-8`)))
+    )
+
+  private def _textus_widgets_js(): IO[HResponse[IO]] =
+    IO.pure(
+      HResponse[IO](HStatus.Ok)
+        .withEntity(StaticFormAppAssets.textusWidgetsJs)
         .withContentType(`Content-Type`(MediaType.application.javascript, Some(Charset.`UTF-8`)))
     )
 
