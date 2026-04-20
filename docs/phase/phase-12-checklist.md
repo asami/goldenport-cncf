@@ -1784,6 +1784,82 @@ the major descriptor contracts as Bootstrap tables.
 
 ---
 
+## WEB-26 — Link Descriptor Admin Table Rows
+
+Status: DONE
+
+### Goal
+
+Turn descriptor admin tables from passive inspection tables into navigation
+surfaces for the related Web and admin functions.
+
+### Scope
+
+- Apps table links Web app paths when they are runtime Web paths.
+- Routes table links route paths when they are runtime Web paths.
+- Form Access And Authorization table links operation selectors to Static Form
+  input pages.
+- Admin Surfaces table links component-scoped surfaces to entity/data/
+  aggregate/view admin pages.
+
+### Detailed Tasks
+
+- [x] Add Web path links to Apps table.
+- [x] Add Web path links to Routes table.
+- [x] Add Static Form links for component/service/operation selectors.
+- [x] Add admin surface links when a component scope is known.
+- [x] Add executable specification checks for descriptor admin links.
+
+### Closure
+
+WEB-26 is complete for first-pass descriptor navigation. The descriptor admin
+page can now be used to jump from descriptor declarations to the runtime/admin
+surface they configure.
+
+### Inputs
+
+- `docs/phase/phase-12.md`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+
+---
+
+## WEB-27 — Add Descriptor Admin Filtering
+
+Status: DONE
+
+### Goal
+
+Improve descriptor admin usability when descriptor tables grow beyond a small
+sample application.
+
+### Scope
+
+- Descriptor Controls section provides a client-side filter field.
+- The filter applies to descriptor control table rows.
+- Component descriptor pages keep component-scoped selectors and admin
+  surfaces focused on the selected component context.
+
+### Detailed Tasks
+
+- [x] Add filter input to Descriptor Controls.
+- [x] Add lightweight client-side row filtering for descriptor tables.
+- [x] Tighten component-scoped admin surface matching for local and
+      component-qualified selectors.
+- [x] Add executable specification checks for the filter surface.
+
+### Closure
+
+WEB-27 is complete for the initial descriptor table filtering path. It is a
+local page filter; server-side query/filter parameters can be added later if
+descriptor pages become too large to render eagerly.
+
+### Inputs
+
+- `docs/phase/phase-12.md`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.

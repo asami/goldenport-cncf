@@ -221,6 +221,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
             js = Vector("/web/notice-board/notice-board/assets/app.js")
           )
         )),
+        routes = Vector(WebDescriptor.Route(
+          "/web/board",
+          WebDescriptor.RouteTarget("notice-board", "notice-board")
+        )),
         admin = Map("entity.notice" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional))
       )
 
@@ -270,6 +274,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
             js = Vector("/web/notice-board/notice-board/assets/app.js")
           )
         )),
+        routes = Vector(WebDescriptor.Route(
+          "/web/board",
+          WebDescriptor.RouteTarget("notice-board", "notice-board")
+        )),
         admin = Map("entity.notice" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional))
       )
 
@@ -277,10 +285,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       html should include ("System Web Descriptor")
       html should include ("Descriptor Controls")
+      html should include ("Filter descriptor tables")
+      html should include ("data-textus-descriptor-filter")
       html should include ("Apps")
       html should include ("Routes")
       html should include ("Form Access And Authorization")
       html should include ("Admin Surfaces")
+      html should include ("href=\"/web/notice-board\"")
+      html should include ("href=\"/web/board\"")
+      html should include ("href=\"/form/notice-board/notice/search-notices\"")
       html should include ("notice:read")
       html should include ("notice.search")
       html should include ("develop")
@@ -353,7 +366,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val componentPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)
       val descriptor = WebDescriptor(
         apps = Vector(WebDescriptor.App("notice-board")),
-        expose = Map(s"${componentPath}.notice.search-notices" -> WebDescriptor.Exposure.Public)
+        expose = Map(s"${componentPath}.notice.search-notices" -> WebDescriptor.Exposure.Public),
+        admin = Map("entity.notice" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional))
       )
 
       val html = StaticFormAppRenderer.renderComponentAdminDescriptor(subsystem, component.name, descriptor).map(_.body).getOrElse(fail("component descriptor admin is missing"))
@@ -365,10 +379,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Completed Descriptor")
       html should include ("Configured Descriptor")
       html should include ("Descriptor Controls")
+      html should include ("Filter descriptor tables")
       html should include ("Apps")
       html should include ("Routes")
       html should include ("Form Access And Authorization")
       html should include ("Admin Surfaces")
+      html should include (s"href=\"/web/${componentPath}/notice-board\"")
+      html should include (s"href=\"/form/${componentPath}/notice/search-notices\"")
+      html should include (s"href=\"/web/${componentPath}/admin/entities/notice\"")
       html should include ("Asset Composition")
       html should include ("Configured Scopes")
       html should include ("Resolved Form Pages")

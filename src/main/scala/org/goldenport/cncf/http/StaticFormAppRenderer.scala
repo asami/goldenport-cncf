@@ -4329,12 +4329,35 @@ object StaticFormAppRenderer {
     s"""<article>
        |  <h2>Descriptor Controls</h2>
        |  <p>Completed apps, routes, form access, authorization, and admin surfaces.</p>
+       |  ${_web_descriptor_filter_control}
        |  ${_web_descriptor_apps_table(descriptor, componentSegment)}
        |  ${_web_descriptor_routes_table(descriptor, componentSegment)}
        |  ${_web_descriptor_form_controls_table(descriptor, componentSegment)}
-       |  ${_web_descriptor_admin_surfaces_table(descriptor)}
+       |  ${_web_descriptor_admin_surfaces_table(descriptor, componentSegment)}
+       |  ${_web_descriptor_filter_script}
        |</article>""".stripMargin
   }
+
+  private def _web_descriptor_filter_control: String =
+    """<div class="mb-3">
+      |  <label class="form-label" for="web-descriptor-filter">Filter descriptor tables</label>
+      |  <input class="form-control" id="web-descriptor-filter" type="search" placeholder="Filter apps, routes, forms, authorization, and admin surfaces" data-textus-descriptor-filter>
+      |</div>""".stripMargin
+
+  private def _web_descriptor_filter_script: String =
+    """<script>
+      |(() => {
+      |  const input = document.querySelector("[data-textus-descriptor-filter]");
+      |  if (!input) return;
+      |  const rows = Array.from(document.querySelectorAll("[data-descriptor-row]"));
+      |  input.addEventListener("input", () => {
+      |    const query = input.value.trim().toLowerCase();
+      |    rows.forEach((row) => {
+      |      row.classList.toggle("d-none", query.length > 0 && !row.textContent.toLowerCase().includes(query));
+      |    });
+      |  });
+      |})();
+      |</script>""".stripMargin
 
   private def _web_descriptor_apps_table(
     descriptor: WebDescriptor,
@@ -4342,11 +4365,11 @@ object StaticFormAppRenderer {
   ): String = {
     val rows = descriptor.apps.map { app =>
       val completed = app.completedFor(componentSegment)
-      s"""<tr>
+      s"""<tr data-descriptor-row>
          |  <td><code>${_escape(completed.name)}</code></td>
-         |  <td><code>${_escape(completed.effectivePath)}</code></td>
+         |  <td>${_web_descriptor_path_link(completed.effectivePath)}</td>
          |  <td><code>${_escape(completed.effectiveRoot)}</code></td>
-         |  <td><code>${_escape(completed.effectiveRoute)}</code></td>
+         |  <td>${_web_descriptor_route_link(completed.effectiveRoute)}</td>
          |  <td>${_escape(completed.effectiveKind)}</td>
          |</tr>""".stripMargin
     }
@@ -4370,8 +4393,8 @@ object StaticFormAppRenderer {
       componentSegment.forall(component => NamingConventions.equivalentByNormalized(route.target.component, component))
     )
     val rows = filtered.map { route =>
-      s"""<tr>
-         |  <td><code>${_escape(route.path)}</code></td>
+      s"""<tr data-descriptor-row>
+         |  <td>${_web_descriptor_path_link(route.path)}</td>
          |  <td>${_escape(route.kind.name)}</td>
          |  <td><code>${_escape(route.target.component)}</code></td>
          |  <td><code>${_escape(route.target.app)}</code></td>
@@ -4401,8 +4424,8 @@ object StaticFormAppRenderer {
       val exposure = descriptor.exposureOf(selector).name
       val form = descriptor.form.get(selector)
       val authorization = descriptor.authorization.get(selector)
-      s"""<tr>
-         |  <td><code>${_escape(selector)}</code></td>
+      s"""<tr data-descriptor-row>
+         |  <td>${_web_descriptor_form_link(selector)}</td>
          |  <td>${_escape(exposure)}</td>
          |  <td>${form.flatMap(_.enabled).map(_.toString).getOrElse("default")}</td>
          |  <td>${_escape(_web_descriptor_csv(authorization.map(_.roles).getOrElse(Vector.empty)))}</td>
@@ -4426,17 +4449,20 @@ object StaticFormAppRenderer {
   }
 
   private def _web_descriptor_admin_surfaces_table(
-    descriptor: WebDescriptor
+    descriptor: WebDescriptor,
+    componentSegment: Option[String]
   ): String = {
-    val rows = descriptor.admin.toVector.sortBy(_._1).map {
+    val rows = descriptor.admin.toVector.sortBy(_._1).filter {
+      case (selector, _) => _admin_selector_matches_component(selector, componentSegment)
+    }.map {
       case (selector, admin) =>
         val fields = admin.fields.map { field =>
           val control = field.control.controlType.getOrElse("default")
           val required = field.control.required.map(value => s", required=${value}").getOrElse("")
           s"${field.name}:${control}${required}"
         }
-        s"""<tr>
-           |  <td><code>${_escape(selector)}</code></td>
+        s"""<tr data-descriptor-row>
+           |  <td>${_web_descriptor_admin_surface_link(selector, componentSegment)}</td>
            |  <td>${_escape(admin.totalCount.name)}</td>
            |  <td>${_escape(_web_descriptor_csv(fields))}</td>
            |</tr>""".stripMargin
@@ -4463,6 +4489,21 @@ object StaticFormAppRenderer {
       )
     }
 
+  private def _admin_selector_matches_component(
+    selector: String,
+    componentSegment: Option[String]
+  ): Boolean =
+    componentSegment.forall { component =>
+      selector.split("\\.", 2).toVector match {
+        case Vector(surface, _) if _admin_surface_path(surface).isDefined =>
+          true
+        case Vector(head, _) =>
+          NamingConventions.equivalentByNormalized(head, component)
+        case _ =>
+          true
+      }
+    }
+
   private def _web_descriptor_csv(
     values: Vector[String]
   ): String =
@@ -4470,6 +4511,77 @@ object StaticFormAppRenderer {
       "none"
     else
       values.mkString(", ")
+
+  private def _web_descriptor_path_link(
+    path: String
+  ): String =
+    if (path.startsWith("/web"))
+      s"""<a href="${_escape(path)}"><code>${_escape(path)}</code></a>"""
+    else
+      s"""<code>${_escape(path)}</code>"""
+
+  private def _web_descriptor_route_link(
+    route: String
+  ): String =
+    if (route.startsWith("/web") && !route.contains("{"))
+      s"""<a href="${_escape(route)}"><code>${_escape(route)}</code></a>"""
+    else
+      s"""<code>${_escape(route)}</code>"""
+
+  private def _web_descriptor_form_link(
+    selector: String
+  ): String =
+    selector.split("\\.", 3).toVector match {
+      case Vector(component, service, operation) =>
+        val path = s"/form/${component}/${service}/${operation}"
+        s"""<a href="${_escape(path)}"><code>${_escape(selector)}</code></a>"""
+      case _ =>
+        s"""<code>${_escape(selector)}</code>"""
+    }
+
+  private def _web_descriptor_admin_surface_link(
+    selector: String,
+    componentSegment: Option[String]
+  ): String = {
+    def component_from_selector: Option[(String, String)] =
+      selector.split("\\.", 3).toVector match {
+        case Vector(component, surface, name) => Some(component -> s"${surface}.${name}")
+        case _ => None
+      }
+    val maybePath =
+      component_from_selector.flatMap {
+        case (component, rest) => _admin_surface_relative_path(rest).map(path => s"/web/${component}/admin/${path}")
+      }.orElse(
+        componentSegment.flatMap(component =>
+          _admin_surface_relative_path(selector).map(path => s"/web/${component}/admin/${path}")
+        )
+      )
+    maybePath match {
+      case Some(path) => s"""<a href="${_escape(path)}"><code>${_escape(selector)}</code></a>"""
+      case None => s"""<code>${_escape(selector)}</code>"""
+    }
+  }
+
+  private def _admin_surface_relative_path(
+    selector: String
+  ): Option[String] =
+    selector.split("\\.", 2).toVector match {
+      case Vector(surface, name) =>
+        _admin_surface_path(surface).map(path => s"${path}/${NamingConventions.toNormalizedSegment(name)}")
+      case _ =>
+        None
+    }
+
+  private def _admin_surface_path(
+    surface: String
+  ): Option[String] =
+    NamingConventions.toNormalizedSegment(surface) match {
+      case "entity" | "entities" => Some("entities")
+      case "data" => Some("data")
+      case "aggregate" | "aggregates" => Some("aggregates")
+      case "view" | "views" => Some("views")
+      case _ => None
+    }
 
   private def _web_descriptor_asset_composition_table(
     descriptor: WebDescriptor,

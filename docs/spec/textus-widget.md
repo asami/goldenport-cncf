@@ -137,7 +137,8 @@ management console must also render that information as tables so the common
 inspection path does not require reading JSON.
 The descriptor admin page also renders descriptor controls such as apps,
 routes, form access, authorization, and admin surfaces as tables before the raw
-JSON.
+JSON. These rows link to runtime/admin destinations when the destination is
+known, and the page provides a local filter input for descriptor control rows.
 
 If `web.assets.autoComplete` is `false`, Static Form result rendering must not
 insert framework widget assets automatically. Widget expansion still runs; the

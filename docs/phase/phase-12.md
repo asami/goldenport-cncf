@@ -106,6 +106,12 @@ This document is a progress dashboard, not a design journal.
 - Y (DONE): WEB-25 — Render descriptor control tables.
   Management Console descriptor pages now show apps, routes, form access,
   authorization, and admin surfaces as readable tables before the raw JSON.
+- Z (DONE): WEB-26 — Link descriptor admin table rows.
+  Descriptor admin tables now link apps, routes, Static Forms, and component
+  admin surfaces to their runtime/admin destinations.
+- AA (DONE): WEB-27 — Add descriptor admin filtering.
+  Descriptor admin pages now provide a lightweight client-side filter across
+  descriptor control tables and tighten component-scope rows.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational

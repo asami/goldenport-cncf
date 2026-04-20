@@ -280,7 +280,10 @@ without reading the descriptor structure directly.
 Descriptor pages also render Apps, Routes, Form Access And Authorization, and
 Admin Surfaces tables before the raw JSON. These tables are the primary admin
 inspection surface; the raw descriptor JSON remains available for exact
-debugging and copy/paste.
+debugging and copy/paste. Table rows link to the corresponding Web app,
+route, Static Form, or component admin page when the destination is known. A
+local filter input narrows the descriptor control rows without another server
+request.
 
 Static result template lookup is route-local under the Web app root. For a
 Component app `abc:/web/notice-board`, operation result templates are placed
