@@ -51,14 +51,23 @@ This document is a progress dashboard, not a design journal.
 - J (DONE): WEB-10 — Polish built-in Web pages with Bootstrap 5.
   Management Console, Dashboard, Manual, and Static Form App use the local
   Bootstrap 5 baseline as the first-pass responsive business/admin polish.
-- K (PLANNED): WEB-11 — Expand the Textus widget set.
-  Card widgets are the first focus, followed by layout, navigation, feedback,
-  content, and form-helper widgets that keep Static Form App expression-oriented
-  rather than control-structure based.
+- K (DONE): WEB-11 — Expand the Textus widget set.
+  Static Form App has first-pass Textus widgets for action/form helpers,
+  result/pagination rendering, cards, summaries, alerts, and empty states.
 - L (PLANNED): WEB-12 — Define Web app packaging and deployment.
   Static Form Web App packaging should cover descriptor discovery, static
   result templates, local assets, optional island scripts, and archive/project
   deployment without requiring a SPA framework.
+- M (PLANNED): WEB-13 — Add shortid support for Web-facing entity references.
+  EntityId remains the canonical identifier, but Web-facing routes and screens
+  need a shorter entity-local identifier when the entity kind is already known.
+- N (PLANNED): WEB-14 — Define application-user job result UX.
+  Async command execution should expose a natural way for users to follow,
+  wait for, and inspect job results without forcing all Form flows to become
+  synchronous.
+- O (PLANNED): WEB-15 — Auto-complete required widget assets.
+  Textus widget rendering should be able to supply required CSS/JS dependencies
+  such as local Bootstrap 5 assets when a page has not already declared them.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
@@ -97,15 +106,28 @@ Current note:
   First-pass Bootstrap 5 polish is complete for Management Console, Dashboard,
   Manual, and Static Form App pages without changing their runtime data
   contracts. Reusable card/layout/feedback widgets are tracked by WEB-11.
-- [ ] WEB-11: Expand the Textus widget set.
-  Implement the next Static Form App widget group, starting with
-  `textus:record-card` and `textus:card-list`, then adding layout, navigation,
-  feedback, content, and form-helper widgets as needed.
+- [x] WEB-11: Expand the Textus widget set.
+  First-pass widget expansion is complete for action/form helpers,
+  result/pagination rendering, record/card-list/summary cards, alerts, and
+  empty states. Richer layout/navigation/content widgets are future work.
 - [ ] WEB-12: Define Web app packaging and deployment.
   Specify and implement how Static Form Web App resources are packaged and
   deployed: Web Descriptor, static result templates, app-local assets, optional
   island scripts, project discovery, and packaged component/subsystem archive
   discovery.
+- [ ] WEB-13: Add shortid support for Web-facing entity references.
+  Introduce a `shortid` value derived from the entity-local entropy portion of
+  EntityId, define when it is safe to use it, and define how `id` and
+  `shortid` are exposed in Web URLs, forms, lists, detail pages, and admin
+  screens.
+- [ ] WEB-14: Define application-user job result UX.
+  Design and implement the user-facing result reference flow for async Command
+  execution: job id handoff, optional wait/action buttons, result pages, and
+  trace references such as entity id or shortid when available.
+- [ ] WEB-15: Auto-complete required widget assets.
+  Define and implement asset dependency completion for Textus widgets. Required
+  CSS/JS such as local Bootstrap 5 should be inserted when absent, and skipped
+  when already declared by the page or descriptor.
 
 ## 6. Next Phase Candidates
 

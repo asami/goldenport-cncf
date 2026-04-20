@@ -141,6 +141,8 @@ The following widgets are the baseline compatibility set:
 - `textus-action-form`
 - `textus:hidden-context`
 - `textus-hidden-context`
+- `textus:pagination`
+- `textus-pagination`
 
 New widgets must reuse the same property expansion, source lookup, action, and
 paging conventions where applicable.
@@ -283,6 +285,17 @@ Required behavior:
 - renders remaining fields as a compact property/description list.
 - allows nested `textus:action-link` widgets for actions.
 
+Implemented baseline attributes:
+
+- `source`: record source. Defaults to `result.body`.
+- `entity`: entity name used to resolve CML/Web view columns.
+- `view`: view name. Defaults to the renderer default view when omitted.
+- `columns`: comma-separated fallback column list.
+- `title`: field name used as card title. Defaults to `title`, `subject`,
+  `name`, `label`, then `id` when present.
+- `subtitle`: field name used as card subtitle. Defaults to common secondary
+  fields such as `recipient_name`, `sender_name`, `status`, and `updated_at`.
+
 ### `textus:card-list` / `textus-card-list`
 
 Renders a collection as Bootstrap cards.
@@ -302,6 +315,16 @@ Required behavior:
 - works when total count is absent.
 - renders paging controls when continuation/page metadata is available.
 
+Implemented baseline attributes:
+
+- `source`: collection source. Defaults to `result.body`.
+- `entity`: entity name used to resolve CML/Web view columns.
+- `view`: view name. Defaults to the renderer default view when omitted.
+- `columns`: comma-separated fallback column list.
+- `page`, `page-size`, `total`, `href`, `has-next`: same metadata attributes
+  as `textus:pagination`.
+- `title`, `subtitle`: forwarded to each record card.
+
 ### `textus:summary-card` / `textus-summary-card`
 
 Renders a compact metric/status card.
@@ -317,6 +340,15 @@ Required behavior:
 - renders one prominent value with a title and optional subtitle.
 - maps variants conservatively to Bootstrap contextual classes.
 - is suitable for Dashboard and admin overview pages.
+
+Implemented baseline attributes:
+
+- `title`: literal title or property reference.
+- `value`: literal value, property name, or `${property.name}` reference.
+- `subtitle`: optional literal subtitle, property name, or `${property.name}`
+  reference.
+- `source`: fallback property/JSON source for the value when `value` is absent.
+- `variant`: Bootstrap contextual variant. `error` maps to `danger`.
 
 ### `textus:action-card` / `textus-action-card`
 
@@ -390,6 +422,17 @@ Required behavior:
 - supports no-total-count paging.
 - may be embedded by result-table, card-list, or custom static pages.
 
+Default attributes:
+
+- `page="paging.page"`
+- `page-size="paging.pageSize"`
+- `total="paging.total"`
+- `href="paging.href"`
+- `has-next="paging.hasNext"`
+
+`total` is optional. When total count is absent, the widget renders the current
+page and previous/next controls. `has-next="false"` disables the next link.
+
 ## Feedback Widgets
 
 ### `textus:alert` / `textus-alert`
@@ -402,6 +445,13 @@ Required behavior:
 - maps variants conservatively to Bootstrap alert classes.
 - supports success, warning, error, and information messages.
 
+Implemented baseline attributes:
+
+- `title`: optional literal title or property reference.
+- `message`: literal message, property name, or `${property.name}` reference.
+- `source`: fallback property/JSON source for the message.
+- `variant` or `type`: Bootstrap contextual variant. `error` maps to `danger`.
+
 ### `textus:empty-state` / `textus-empty-state`
 
 Empty result state.
@@ -411,6 +461,12 @@ Required behavior:
 - renders a friendly message when a source collection is empty.
 - optionally renders a primary action.
 - can be used by table and card-list widgets.
+
+Implemented baseline attributes:
+
+- `source`: optional collection source. If the source resolves to a non-empty
+  collection, nothing is rendered.
+- `message`: literal message, property name, or `${property.name}` reference.
 
 ### `textus:status-badge` / `textus-status-badge`
 

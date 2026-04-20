@@ -4450,6 +4450,12 @@ object StaticFormAppRenderer {
   ): String = {
     val resultView = """<textus-result-view\s+source="([^"]+)"\s*></textus-result-view>""".r
     val resultTable = """<textus-result-table\b([^>]*)></textus-result-table>""".r
+    val recordCard = """<textus(?::record-card|-record-card)\b([^>]*)></textus(?::record-card|-record-card)>""".r
+    val cardList = """<textus(?::card-list|-card-list)\b([^>]*)></textus(?::card-list|-card-list)>""".r
+    val summaryCard = """<textus(?::summary-card|-summary-card)\b([^>]*)></textus(?::summary-card|-summary-card)>""".r
+    val alert = """<textus(?::alert|-alert)\b([^>]*)></textus(?::alert|-alert)>""".r
+    val emptyState = """<textus(?::empty-state|-empty-state)\b([^>]*)></textus(?::empty-state|-empty-state)>""".r
+    val pagination = """<textus(?::pagination|-pagination)\b([^>]*)></textus(?::pagination|-pagination)>""".r
     val formLink = """<textus-form-link\s+href="([^"]+)"\s+label="([^"]+)"\s*></textus-form-link>""".r
     val actionLink = """<textus(?::action-link|-action-link)\b([^>]*)></textus(?::action-link|-action-link)>""".r
     val actionForm = """<textus(?::action-form|-action-form)\b([^>]*)></textus(?::action-form|-action-form)>""".r
@@ -4463,25 +4469,49 @@ object StaticFormAppRenderer {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_result_table(attrs, properties, tableColumns, defaultTableView))
     })
-    val c = formLink.replaceAllIn(b, m =>
+    val c = recordCard.replaceAllIn(b, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_record_card(attrs, properties, tableColumns, defaultTableView))
+    })
+    val d = cardList.replaceAllIn(c, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_card_list(attrs, properties, tableColumns, defaultTableView))
+    })
+    val e = summaryCard.replaceAllIn(d, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_summary_card(attrs, properties))
+    })
+    val f = alert.replaceAllIn(e, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_alert(attrs, properties))
+    })
+    val g = emptyState.replaceAllIn(f, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_empty_state(attrs, properties))
+    })
+    val h = pagination.replaceAllIn(g, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_pagination(attrs, properties))
+    })
+    val i = formLink.replaceAllIn(h, m =>
       java.util.regex.Matcher.quoteReplacement(_render_form_link(m.group(1), m.group(2), properties))
     )
-    val d = actionLink.replaceAllIn(c, m => {
+    val j = actionLink.replaceAllIn(i, m => {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_action_link(attrs, properties))
     })
-    val e = actionForm.replaceAllIn(d, m => {
+    val k = actionForm.replaceAllIn(j, m => {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_action_form(attrs, properties))
     })
-    val f = hiddenContext.replaceAllIn(e, m => {
+    val l = hiddenContext.replaceAllIn(k, m => {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_hidden_context(attrs, properties))
     })
-    val g = propertyList.replaceAllIn(f, m =>
+    val n = propertyList.replaceAllIn(l, m =>
       java.util.regex.Matcher.quoteReplacement(_render_property_list(m.group(1), properties))
     )
-    errorPanel.replaceAllIn(g, m =>
+    errorPanel.replaceAllIn(n, m =>
       java.util.regex.Matcher.quoteReplacement(_render_error_panel(m.group(1), properties))
     )
   }
@@ -4627,7 +4657,182 @@ object StaticFormAppRenderer {
     val total = _optional_int_property(properties, totalPath)
     val href = properties.value(hrefPath)
     val table = _json_table(source, properties, page, pageSize, columns).getOrElse("")
-    s"""${table}<div class="mt-3">${_paging_nav(page, pageSize, total, href)}</div>"""
+    s"""${table}<div class="mt-3">${_render_pagination(attrs, properties)}</div>"""
+  }
+
+  private def _render_record_card(
+    attrs: Map[String, String],
+    properties: FormPageProperties,
+    tableColumns: Map[String, Vector[TableColumn]],
+    defaultTableView: String
+  ): String = {
+    val source = attrs.getOrElse("source", "result.body")
+    val columns = _table_columns(attrs.get("columns")).orElse(_table_columns(source, attrs, tableColumns, defaultTableView))
+    _source_json(source, properties).flatMap(_record_json).flatMap(_.asObject).map { obj =>
+      _record_card_html(obj.toMap, columns, attrs)
+    }.getOrElse(_empty_state(attrs.getOrElse("empty", "No record")))
+  }
+
+  private def _render_card_list(
+    attrs: Map[String, String],
+    properties: FormPageProperties,
+    tableColumns: Map[String, Vector[TableColumn]],
+    defaultTableView: String
+  ): String = {
+    val source = attrs.getOrElse("source", "result.body")
+    val pagePath = attrs.getOrElse("page", "paging.page")
+    val pageSizePath = attrs.getOrElse("page-size", "paging.pageSize")
+    val columns = _table_columns(attrs.get("columns")).orElse(_table_columns(source, attrs, tableColumns, defaultTableView))
+    val page = _int_property(properties, pagePath, 1)
+    val pageSize = _int_property(properties, pageSizePath, 20)
+    val cards = _source_json(source, properties).flatMap(_table_rows).map { rows =>
+      val objects = _page_rows(rows, page, pageSize).flatMap(_.asObject).map(_.toMap)
+      if (objects.isEmpty)
+        _empty_state(attrs.getOrElse("empty", "No records"))
+      else {
+        val body = objects.map { obj =>
+          s"""<div class="col">${_record_card_html(obj, columns, attrs)}</div>"""
+        }.mkString("\n")
+        s"""<div class="row row-cols-1 row-cols-md-2 g-3 mt-3">${body}</div>"""
+      }
+    }.getOrElse(_empty_state(attrs.getOrElse("empty", "No records")))
+    s"""${cards}<div class="mt-3">${_render_pagination(attrs, properties)}</div>"""
+  }
+
+  private def _record_json(json: Json): Option[Json] =
+    json.asObject.map(_ => json).orElse {
+      _table_rows(json).flatMap(_.headOption)
+    }
+
+  private def _record_card_html(
+    obj: Map[String, Json],
+    columns: Option[Vector[TableColumn]],
+    attrs: Map[String, String]
+  ): String = {
+    val fields = columns.getOrElse(obj.keys.toVector.map(name => TableColumn(name, name)))
+    val titleField = attrs.get("title").orElse(_first_existing_field(obj, Vector("title", "subject", "name", "label", "id")))
+    val subtitleField = attrs.get("subtitle").orElse(_first_existing_field(obj, Vector("recipient_name", "sender_name", "status", "updated_at")))
+    val title = titleField.flatMap(obj.get).map(_json_cell).filter(_.nonEmpty).getOrElse(attrs.getOrElse("label", "Record"))
+    val subtitle = subtitleField.flatMap(obj.get).map(_json_cell).filter(_.nonEmpty)
+    val rows = fields.map { column =>
+      val value = obj.get(column.name).map(_json_cell).getOrElse("")
+      s"""<dt class="col-sm-4">${_escape(column.label)}</dt><dd class="col-sm-8">${_escape(value)}</dd>"""
+    }.mkString
+    val subtitleHtml = subtitle.map(x => s"""<p class="card-subtitle text-secondary mb-2">${_escape(x)}</p>""").getOrElse("")
+    s"""<article class="card h-100 textus-record-card"><div class="card-body"><h3 class="h5 card-title">${_escape(title)}</h3>${subtitleHtml}<dl class="row mb-0">${rows}</dl></div></article>"""
+  }
+
+  private def _first_existing_field(
+    obj: Map[String, Json],
+    names: Vector[String]
+  ): Option[String] =
+    names.find(obj.contains)
+
+  private def _empty_state(
+    message: String
+  ): String =
+    s"""<div class="alert alert-secondary textus-empty-state" role="status">${_escape(message)}</div>"""
+
+  private def _render_summary_card(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String = {
+    val title = _attr_value(attrs, "title", properties).getOrElse("Summary")
+    val value = _attr_value(attrs, "value", properties)
+      .orElse(attrs.get("source").flatMap(source => _source_text(source, properties)))
+      .getOrElse("")
+    val subtitle = _attr_value(attrs, "subtitle", properties)
+    val variant = _bootstrap_variant(attrs.getOrElse("variant", "primary"))
+    val subtitleHtml = subtitle.filter(_.nonEmpty).map { x =>
+      s"""<p class="text-secondary mb-0">${_escape(x)}</p>"""
+    }.getOrElse("")
+    s"""<article class="card h-100 textus-summary-card border-${_escape(variant)}"><div class="card-body"><p class="text-secondary mb-1">${_escape(title)}</p><strong class="display-6 text-${_escape(variant)}">${_escape(value)}</strong>${subtitleHtml}</div></article>"""
+  }
+
+  private def _render_alert(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String = {
+    val variant = _bootstrap_variant(attrs.getOrElse("variant", attrs.getOrElse("type", "info")))
+    val title = _attr_value(attrs, "title", properties)
+    val message = _attr_value(attrs, "message", properties)
+      .orElse(attrs.get("source").flatMap(source => _source_text(source, properties)))
+      .orElse(_property_non_empty(properties, "error.message"))
+      .orElse(_property_non_empty(properties, "result.message"))
+      .getOrElse("")
+    if (title.exists(_.nonEmpty) || message.nonEmpty) {
+      val titleHtml = title.filter(_.nonEmpty).map(x => s"""<p class="alert-heading fw-semibold mb-1">${_escape(x)}</p>""").getOrElse("")
+      s"""<div class="alert alert-${_escape(variant)} textus-alert" role="alert">${titleHtml}${_escape(message)}</div>"""
+    } else {
+      ""
+    }
+  }
+
+  private def _render_empty_state(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String = {
+    val shouldRender = attrs.get("source") match {
+      case Some(source) =>
+        _source_json(source, properties).flatMap(_table_rows).forall(_.isEmpty)
+      case None =>
+        true
+    }
+    if (shouldRender) {
+      val message = _attr_value(attrs, "message", properties).getOrElse("No records")
+      _empty_state(message)
+    } else {
+      ""
+    }
+  }
+
+  private def _attr_value(
+    attrs: Map[String, String],
+    name: String,
+    properties: FormPageProperties
+  ): Option[String] =
+    attrs.get(name).map(_resolve_attr_value(_, properties)).filter(_.nonEmpty)
+
+  private def _resolve_attr_value(
+    value: String,
+    properties: FormPageProperties
+  ): String = {
+    val propertyPattern = """^\$\{([A-Za-z0-9_.-]+)\}$""".r
+    value match {
+      case propertyPattern(name) => properties.value(name)
+      case _ => properties.values.get(value).filter(_.nonEmpty).getOrElse(value)
+    }
+  }
+
+  private def _bootstrap_variant(
+    value: String
+  ): String =
+    value.trim.toLowerCase(java.util.Locale.ROOT) match {
+      case "error" | "danger" => "danger"
+      case "warn" | "warning" => "warning"
+      case "success" => "success"
+      case "primary" => "primary"
+      case "secondary" => "secondary"
+      case "light" => "light"
+      case "dark" => "dark"
+      case _ => "info"
+    }
+
+  private def _render_pagination(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String = {
+    val pagePath = attrs.getOrElse("page", "paging.page")
+    val pageSizePath = attrs.getOrElse("page-size", "paging.pageSize")
+    val totalPath = attrs.getOrElse("total", "paging.total")
+    val hrefPath = attrs.getOrElse("href", "paging.href")
+    val hasNextPath = attrs.getOrElse("has-next", "paging.hasNext")
+    val page = _int_property(properties, pagePath, 1)
+    val pageSize = _int_property(properties, pageSizePath, 20)
+    val total = _optional_int_property(properties, totalPath)
+    val href = properties.value(hrefPath)
+    val hasNext = _optional_bool_property(properties, hasNextPath)
+    _paging_nav(page, pageSize, total, href, hasNext)
   }
 
   private def _render_property_list(
@@ -4852,6 +5057,16 @@ object StaticFormAppRenderer {
     name: String
   ): Option[Int] =
     properties.value(name).toIntOption
+
+  private def _optional_bool_property(
+    properties: FormPageProperties,
+    name: String
+  ): Option[Boolean] =
+    properties.value(name).trim.toLowerCase(java.util.Locale.ROOT) match {
+      case "true" | "yes" | "on" | "1" => Some(true)
+      case "false" | "no" | "off" | "0" => Some(false)
+      case _ => None
+    }
 
   private def _dashboard_state_json(
     components: Vector[Component],

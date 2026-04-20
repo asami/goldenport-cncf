@@ -4812,6 +4812,220 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus-result-table")
     }
 
+    "render standalone textus pagination from shared paging metadata" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices",
+          Map(
+            "paging.page" -> "2",
+            "paging.pageSize" -> "20",
+            "paging.total" -> "45",
+            "paging.href" -> "/form/notice-board/notice/search-notices/continue/result-1?page={page}&pageSize={pageSize}",
+            "paging.hasNext" -> "true"
+          )
+        ),
+        200,
+        "application/json",
+        """{"data":[]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:pagination></textus:pagination>
+          |  <textus-pagination page="paging.page" page-size="paging.pageSize" total="paging.total" href="paging.href" has-next="paging.hasNext"></textus-pagination>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("""<nav aria-label="Result pages">""")
+      html should include ("""page=1&amp;pageSize=20""")
+      html should include ("""page=3&amp;pageSize=20""")
+      html should include ("""<li class="page-item active"><a class="page-link" href="/form/notice-board/notice/search-notices/continue/result-1?page=2&amp;pageSize=20">2</a></li>""")
+      html should not include ("<textus:pagination")
+      html should not include ("<textus-pagination")
+    }
+
+    "render standalone textus pagination without total count" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices",
+          Map(
+            "paging.page" -> "1",
+            "paging.pageSize" -> "20",
+            "paging.href" -> "/form/notice-board/notice/search-notices/result?page={page}&pageSize={pageSize}",
+            "paging.hasNext" -> "false"
+          )
+        ),
+        200,
+        "application/json",
+        """{"data":[]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus:pagination></textus:pagination></article>"""
+      ).body
+
+      html should include ("Page 1")
+      html should include ("""<li class="page-item disabled"><a class="page-link" href="/form/notice-board/notice/search-notices/result?page=2&amp;pageSize=20">Next</a></li>""")
+      html should not include ("<textus:pagination")
+    }
+
+    "render textus record card with CML summary columns" in {
+      val columns = Vector(
+        StaticFormAppRenderer.TableColumn("title", "Title"),
+        StaticFormAppRenderer.TableColumn("recipient_name", "Recipient")
+      )
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "get-notice"
+        ),
+        200,
+        "application/json",
+        """{"id":"notice_1","title":"Phase12","content":"Static form validation","recipient_name":"Bob"}""",
+        Map(StaticFormAppRenderer.tableColumnKey("result.body", "notice", "summary") -> columns)
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus:record-card source="result.body" entity="notice" view="summary"></textus:record-card></article>"""
+      ).body
+
+      html should include ("class=\"card h-100 textus-record-card\"")
+      html should include ("<h3 class=\"h5 card-title\">Phase12</h3>")
+      html should include ("<dt class=\"col-sm-4\">Title</dt><dd class=\"col-sm-8\">Phase12</dd>")
+      html should include ("<dt class=\"col-sm-4\">Recipient</dt><dd class=\"col-sm-8\">Bob</dd>")
+      html should not include ("Static form validation")
+      html should not include ("<textus:record-card")
+    }
+
+    "render textus card list with shared paging metadata" in {
+      val columns = Vector(
+        StaticFormAppRenderer.TableColumn("title", "Title"),
+        StaticFormAppRenderer.TableColumn("recipient_name", "Recipient")
+      )
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices",
+          Map(
+            "paging.page" -> "1",
+            "paging.pageSize" -> "1",
+            "paging.href" -> "/form/notice-board/notice/search-notices/continue/result-1?page={page}&pageSize={pageSize}",
+            "paging.hasNext" -> "true"
+          )
+        ),
+        200,
+        "application/json",
+        """{"data":[{"id":"notice_1","title":"Phase12","content":"Static form validation","recipient_name":"Bob"},{"id":"notice_2","title":"Hidden","content":"Second","recipient_name":"Alice"}]}""",
+        Map(StaticFormAppRenderer.tableColumnKey("result.body.data", "notice", "summary") -> columns)
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus:card-list source="result.body" entity="notice" view="summary"></textus:card-list></article>"""
+      ).body
+
+      html should include ("row row-cols-1 row-cols-md-2 g-3 mt-3")
+      html should include ("<h3 class=\"h5 card-title\">Phase12</h3>")
+      html should include ("<dt class=\"col-sm-4\">Recipient</dt><dd class=\"col-sm-8\">Bob</dd>")
+      html should include ("Page 1")
+      html should include ("""page=2&amp;pageSize=1""")
+      html should not include ("Hidden")
+      html should not include ("Static form validation")
+      html should not include ("<textus:card-list")
+    }
+
+    "render summary card and feedback widgets" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices",
+          Map(
+            "result.count" -> "42",
+            "result.message" -> "Notices loaded",
+            "error.message" -> "Search failed"
+          )
+        ),
+        200,
+        "application/json",
+        """{"data":[{"title":"Phase12"}]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:summary-card title="Matches" value="${result.count}" subtitle="result.message" variant="success"></textus:summary-card>
+          |  <textus-alert title="Status" message="result.message" variant="info"></textus-alert>
+          |  <textus:alert source="error.message" variant="error"></textus:alert>
+          |  <textus:empty-state source="result.body" message="No notices"></textus:empty-state>
+          |  <textus-empty-state source="result.missing" message="No missing records"></textus-empty-state>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("class=\"card h-100 textus-summary-card border-success\"")
+      html should include ("<strong class=\"display-6 text-success\">42</strong>")
+      html should include ("Notices loaded")
+      html should include ("class=\"alert alert-info textus-alert\"")
+      html should include ("class=\"alert alert-danger textus-alert\"")
+      html should include ("Search failed")
+      html should include ("No missing records")
+      html should not include ("No notices")
+      html should not include ("<textus:summary-card")
+      html should not include ("<textus-alert")
+      html should not include ("<textus:empty-state")
+    }
+
+    "render namespace and HTML-compatible widget notation through the same contract" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices",
+          Map(
+            "paging.page" -> "1",
+            "paging.pageSize" -> "20",
+            "paging.href" -> "/form/notice-board/notice/search-notices/result?page={page}&pageSize={pageSize}",
+            "result.count" -> "1",
+            "result.message" -> "ready"
+          )
+        ),
+        200,
+        "application/json",
+        """{"data":[{"title":"Phase12","recipient_name":"Bob"}]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus-record-card source="result.body" columns="title,recipient_name"></textus-record-card>
+          |  <textus:card-list source="result.body" columns="title,recipient_name"></textus:card-list>
+          |  <textus-summary-card title="Matches" value="result.count"></textus-summary-card>
+          |  <textus:alert message="result.message"></textus:alert>
+          |  <textus-pagination></textus-pagination>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("textus-record-card")
+      html should include ("row row-cols-1 row-cols-md-2")
+      html should include ("textus-summary-card")
+      html should include ("textus-alert")
+      html should include ("Result pages")
+      html should not include ("<textus-record-card")
+      html should not include ("<textus:card-list")
+      html should not include ("<textus-summary-card")
+      html should not include ("<textus:alert")
+      html should not include ("<textus-pagination")
+    }
+
     "render textus result table from result body object data" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(

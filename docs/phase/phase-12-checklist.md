@@ -783,7 +783,7 @@ Deferred scope:
 
 ## WEB-11: Textus Widget Set Expansion
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -796,20 +796,44 @@ layout, navigation, feedback, content, and form-helper widgets.
 
 ### Detailed Tasks
 
-- [ ] Add executable specifications for the general Textus widget rendering
+- [x] Add executable specifications for the general Textus widget rendering
       contract.
-- [ ] Implement `textus:record-card` / `textus-record-card`.
-- [ ] Implement `textus:card-list` / `textus-card-list`.
-- [ ] Reuse existing result-table paging metadata for `card-list`.
-- [ ] Extract `textus:pagination` if table/card paging rendering starts to
-      duplicate behavior.
-- [ ] Implement `textus:summary-card` for dashboard/admin summary use.
-- [ ] Add feedback widgets such as `textus:alert` and `textus:empty-state`
+- [x] Implement `textus:record-card` / `textus-record-card`.
+- [x] Implement `textus:card-list` / `textus-card-list`.
+- [x] Reuse existing result-table paging metadata for `card-list`.
+- [x] Extract `textus:pagination` so table/card/custom pages can share paging
+      metadata and rendering.
+- [x] Implement `textus:summary-card` for dashboard/admin summary use.
+- [x] Add feedback widgets such as `textus:alert` and `textus:empty-state`
       when card/table result pages need consistent messaging.
-- [ ] Keep `textus:xxx` as the preferred notation and `textus-xxx` as the
+- [x] Keep `textus:xxx` as the preferred notation and `textus-xxx` as the
       HTML-compatible notation.
-- [ ] Validate the card-list path with `textus-sample-app` notice search
+- [x] Validate the card-list path with `textus-sample-app` notice search
       results in addition to the current table view.
+
+### Closure
+
+WEB-11 is complete as the Phase 12 first-pass Textus widget expansion scope.
+
+Completed scope:
+
+- server-side widget expansion supports the preferred `textus:xxx` notation and
+  the HTML-compatible `textus-xxx` notation.
+- action/form-helper widgets cover action links, action forms, hidden context,
+  and page-context-preserving POST actions.
+- result widgets cover result view, result table, property list, error panel,
+  and standalone pagination.
+- card widgets cover record cards, card lists, and summary cards.
+- feedback widgets cover alerts and empty states.
+- `textus-sample-app` notice search validates card-list usage alongside the
+  existing table view.
+
+Deferred scope:
+
+- richer layout/navigation/content widgets such as section, grid, breadcrumb,
+  nav-list, status-badge, markdown, and action-card are future widget work.
+- broader visual theme and screenshot-regression polish remains outside the
+  Phase 12 first-pass widget scope.
 
 ### Candidate Widget Vocabulary
 
@@ -962,6 +986,181 @@ owns the portal route, while Component apps keep their component-scoped routes.
 
 ---
 
+## WEB-13: Web-Facing Shortid Support
+
+Status: PLANNED
+
+### Objective
+
+Introduce a Web-facing `shortid` mechanism for entity references.
+
+EntityId remains the canonical, globally meaningful identifier. Its practical
+structure is:
+
+- entity name
+- entity-local id / entropy
+- additional identity material when needed
+
+For general use, the entity name part is required. However, when the entity
+kind is already fixed by route, form, table, aggregate context, or descriptor,
+the entity-local entropy is enough to identify the target entity inside that
+entity collection.
+
+Web URLs and visible form fields should prefer the shorter entity-local id
+where that context is explicit, because full EntityId strings are too long for
+human-facing links and screens.
+
+### Design Direction
+
+- `id` is the canonical EntityId and must remain available for internal
+  persistence, references, APIs, diagnostics, and cross-entity contexts.
+- `shortid` is derived from the entity-local entropy portion of EntityId and is
+  stored/exposed as an entity attribute for Web-facing interaction.
+- `shortid` is only a complete reference when the entity kind is known from
+  context.
+- URL conventions should use `shortid` for entity-scoped routes such as
+  `/web/{component}/admin/entities/{entity}/{shortid}`.
+- Screens should avoid showing both `id` and `shortid` noisily. Admin/detail
+  pages may expose the canonical `id` in diagnostics or advanced sections,
+  while user-facing lists and links should prefer `shortid`.
+
+### Detailed Tasks
+
+- [ ] Define the canonical EntityId entropy extraction contract.
+- [ ] Add `shortid` generation at the entity creation chokepoint before the
+      entity is stored in resident memory or DataStore.
+- [ ] Define how `shortid` is represented in Schema / EntityRuntimeDescriptor
+      so Web forms, lists, details, and admin pages can discover it.
+- [ ] Define uniqueness and lookup behavior for `(entityName, shortid)`.
+- [ ] Add entity-scoped lookup APIs that accept `shortid` without requiring
+      full EntityId when the entity kind is explicit.
+- [ ] Update Web/admin route generation to prefer `shortid` for entity-scoped
+      visible URLs.
+- [ ] Define display policy for `id` vs `shortid` in list, detail, edit, and
+      diagnostic/admin views.
+- [ ] Add executable specifications covering generation, lookup, routing, and
+      display policy.
+- [ ] Validate with `textus-sample-app` notice URLs and admin links.
+
+### Inputs
+
+- `docs/design/web-layer.md`
+- `docs/spec/textus-widget.md`
+- `textus-sample-app`
+
+---
+
+## WEB-14: Application User Job Result UX
+
+Status: PLANNED
+
+### Objective
+
+Define and implement a natural user-facing UX for async Command job results.
+
+Command execution should remain asynchronous by default so CQRS-style flows do
+not collapse into synchronous Form processing. Static Form Web App pages still
+need a simple way to show the user what happened, how to wait when they care,
+and how to navigate to the resulting resource when enough tracking information
+is already known.
+
+### Design Direction
+
+- Form command execution returns a job id as the stable result handle.
+- When available, the initial response may also carry tracking references such
+  as entity id, shortid, aggregate id, operation name, or route-local return
+  targets.
+- The default UX should be asynchronous: show accepted/queued status and offer
+  an explicit wait/refresh/result action.
+- Synchronous command execution remains an explicit option for cases that need
+  it, but it is not the default Form behavior.
+- Result pages should work with Static Form conventions and Textus widgets, not
+  require custom JavaScript.
+- Later island enhancement may provide live polling or richer progress display
+  without changing the underlying job result contract.
+
+### Detailed Tasks
+
+- [ ] Define the application-user job result model exposed to Web/Form pages.
+- [ ] Define result properties produced from async command execution:
+      `jobId`, status, optional entity id/shortid, operation name, and result
+      links.
+- [ ] Add a default accepted/result template convention for command POST
+      responses.
+- [ ] Add widgets or action helpers for wait, refresh, result detail, and
+      resource navigation.
+- [ ] Define how job result lookup is authorized for anonymous, logged-in, and
+      admin users.
+- [ ] Define how failed jobs surface structured error information in Static
+      Form pages.
+- [ ] Evaluate whether the most natural UX is an accepted page, result ticket,
+      inline wait button, polling island, or a combination of those patterns.
+- [ ] Add executable specifications for async accepted result, wait action,
+      completed result, failed result, and missing/unauthorized job result.
+- [ ] Validate with `textus-sample-app` post/search flows where applicable.
+
+### Inputs
+
+- `docs/design/web-layer.md`
+- `docs/spec/textus-widget.md`
+- `docs/notes/cncf-web-static-form-app-contract.md`
+- `textus-sample-app`
+
+---
+
+## WEB-15: Textus Widget Asset Auto-Completion
+
+Status: PLANNED
+
+### Objective
+
+Define and implement automatic completion of CSS/JS assets required by Textus
+widgets.
+
+Static Form Web App pages should stay easy to write. If a page uses widgets
+that require framework assets such as local Bootstrap 5 CSS/JS, the renderer
+should be able to insert those dependencies when they are not already present.
+If the page or descriptor has already declared them, the renderer must not
+duplicate them.
+
+### Design Direction
+
+- Asset dependencies are declared by widget capability, not by ad hoc page
+  scanning alone.
+- Local packaged assets are the baseline. CDN references are not required and
+  must not be introduced by default.
+- Bootstrap 5 is the default built-in asset family for current admin/business
+  widgets.
+- The renderer should detect existing equivalent declarations in the page head
+  and descriptor-provided asset list.
+- Auto-completion must be deterministic and must not reorder or duplicate
+  explicit page assets.
+- Descriptor settings may disable auto-completion or provide an alternate asset
+  family later, but the simple Static Form path should work without descriptor
+  boilerplate.
+
+### Detailed Tasks
+
+- [ ] Define widget asset dependency metadata.
+- [ ] Add an asset completion pass for Static Form Web App HTML rendering.
+- [ ] Detect existing CSS/JS declarations and skip duplicates.
+- [ ] Insert local Bootstrap 5 CSS/JS when a rendered widget requires it and no
+      equivalent asset is already present.
+- [ ] Define descriptor hooks for enabling/disabling auto-completion and for
+      declaring page/app-level assets.
+- [ ] Add executable specifications for missing assets, existing assets,
+      descriptor-declared assets, and no-widget pages.
+- [ ] Validate with built-in admin pages and `textus-sample-app` static pages.
+
+### Inputs
+
+- `docs/design/web-layer.md`
+- `docs/spec/textus-widget.md`
+- `docs/notes/web-bootstrap-ui-polish-design.md`
+- `textus-sample-app`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.
@@ -986,7 +1185,7 @@ owns the portal route, while Component apps keep their component-scoped routes.
 
 Phase 12 is complete when:
 
-- WEB-01 through WEB-11 are marked DONE, or explicitly deferred to a later
+- WEB-01 through WEB-15 are marked DONE, or explicitly deferred to a later
   phase.
 - `phase-12.md` summary checkboxes are aligned.
 - No item remains ACTIVE or SUSPENDED.
