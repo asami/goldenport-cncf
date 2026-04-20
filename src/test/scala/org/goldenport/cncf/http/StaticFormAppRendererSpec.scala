@@ -4861,6 +4861,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
             "paging.page" -> "2",
             "paging.pageSize" -> "20",
             "search.recipientName" -> "bob",
+            "return.href" -> "/form/notice-board/notice/search-notices",
             "csrf" -> "token-1",
             "version" -> "7",
             "ui.tab" -> "summary",
@@ -4884,6 +4885,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("""<input type="hidden" name="paging.page" value="2">""")
       html should include ("""<input type="hidden" name="paging.pageSize" value="20">""")
       html should include ("""<input type="hidden" name="search.recipientName" value="bob">""")
+      html should include ("""<input type="hidden" name="return.href" value="/form/notice-board/notice/search-notices">""")
       html should include ("""<input type="hidden" name="csrf" value="token-1">""")
       html should include ("""<input type="hidden" name="version" value="7">""")
       html should include ("""<input type="hidden" name="ui.tab" value="summary">""")
@@ -5015,6 +5017,71 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("""<a class="btn btn-outline-primary" href="/form/notice-board/notice/get-notice/result?id=notice_1">Open detail</a>""")
       html should not include ("<textus:action-link")
       html should not include ("<textus-action-link")
+    }
+
+    "render action-group widgets from operation result actions" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice",
+          Map(
+            "paging.page" -> "1",
+            "result.action.await.href" -> "/form/notice-board/notice/post-notice/jobs/job-1/await",
+            "result.action.await.label" -> "Wait",
+            "result.action.await.method" -> "POST",
+            "result.action.detail.href" -> "/form/notice-board/notice/get-notice/result?id=notice_1",
+            "result.action.detail.label" -> "Open detail",
+            "result.action.detail.method" -> "GET"
+          )
+        ),
+        200,
+        "application/json",
+        """{}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:action-group actions="await,detail"></textus:action-group>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("textus-action-group")
+      html should include ("""<form method="post" action="/form/notice-board/notice/post-notice/jobs/job-1/await" class="d-inline">""")
+      html should include ("""<input type="hidden" name="paging.page" value="1">""")
+      html should include ("""<button type="submit" class="btn btn-primary">Wait</button>""")
+      html should include ("""<a class="btn btn-outline-primary" href="/form/notice-board/notice/get-notice/result?id=notice_1">Open detail</a>""")
+      html should not include ("<textus:action-group")
+    }
+
+    "render return action for detail pages from return href context" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "get-notice",
+          Map(
+            "return.href" -> "/form/notice-board/notice/search-notices"
+          )
+        ),
+        200,
+        "application/json",
+        """{"id":"notice_1","title":"Phase12"}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:action-group actions="return"></textus:action-group>
+          |  <form><textus:hidden-context></textus:hidden-context></form>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("""<a class="btn btn-outline-primary" href="/form/notice-board/notice/search-notices">Back</a>""")
+      html should include ("""<input type="hidden" name="return.href" value="/form/notice-board/notice/search-notices">""")
+      html should not include ("<textus:action-group")
+      html should not include ("<textus:hidden-context")
     }
 
     "render textus result table without total count" in {
@@ -5418,6 +5485,30 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("list-group-item list-group-item-action")
       html should not include ("<textus:nav-list")
       html should not include ("<textus-nav-list")
+    }
+
+    "parse widget attributes with single quotes and URL colons" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:nav-list items='Docs:https://example.org:8443/docs:btn btn-primary|Forms:/form/notice-board'></textus:nav-list>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("""class="btn btn-primary" href="https://example.org:8443/docs">Docs</a>""")
+      html should include ("""class="btn btn-outline-secondary" href="/form/notice-board">Forms</a>""")
+      html should not include ("<textus:nav-list")
     }
 
     "render action-card widgets from operation result actions" in {

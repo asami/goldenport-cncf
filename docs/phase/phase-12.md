@@ -212,6 +212,19 @@ This document is a progress dashboard, not a design journal.
 - BE (DONE): WEB-57 — Add navigation list widget baseline.
   `textus:nav-list` / `textus-nav-list` renders static navigation links in
   button and list-group styles.
+- BF (DONE): WEB-58 — Add result action-group baseline.
+  `textus:action-group` / `textus-action-group` renders operation result action
+  metadata as a reusable Bootstrap action row.
+- BG (DONE): WEB-59 — Preserve detail return context.
+  Static detail pages can receive `return.href` from list/detail links and
+  render a framework-provided return action.
+- BH (DONE): WEB-60 — Harden widget attribute parsing.
+  Widget attributes now support single-quoted values and navigation items with
+  URL colons.
+- BI (DONE): WEB-61 — Recheck Static Form result conventions.
+  The phase checklist records the current convention-first result template
+  contract across exact status, success/error aliases, hidden context, and
+  action widgets.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
@@ -363,6 +376,14 @@ Current note:
   Detail widgets are covered by CML/view columns and explicit column fallback.
 - [x] WEB-57: Add navigation list widget baseline.
   Static Form pages can use `textus:nav-list` for simple Bootstrap navigation.
+- [x] WEB-58: Add result action-group baseline.
+  Result actions can be rendered as a reusable Bootstrap action row.
+- [x] WEB-59: Preserve detail return context.
+  Detail pages can use `return.href` and `result.action.return`.
+- [x] WEB-60: Harden widget attribute parsing.
+  Widget attributes handle single quotes and URL-colon navigation values.
+- [x] WEB-61: Recheck Static Form result conventions.
+  Static Form result conventions remain the primary app mechanism.
 
 ## 6. Next Phase Candidates
 

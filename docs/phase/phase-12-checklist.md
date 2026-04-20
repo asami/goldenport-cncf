@@ -3074,6 +3074,160 @@ the framework emits richer action collections.
 
 ---
 
+## WEB-58 — Result Action Group Baseline
+
+Status: DONE
+
+### Goal
+
+Provide a general action-row widget for operation result pages so application
+pages do not need to hand-compose repeated action links and inline forms.
+
+### Scope
+
+- Implement `textus:action-group` and `textus-action-group`.
+- Resolve action metadata from `result.action.{name}`.
+- Render GET actions as links and non-GET actions as inline forms.
+- Preserve standard hidden context for form-rendered actions.
+
+### Detailed Tasks
+
+- [x] Add renderer support for namespace and HTML-compatible notation.
+- [x] Add executable spec coverage for GET and POST actions.
+- [x] Document baseline attributes in the widget spec.
+- [x] Use the widget from the notice-board result pages.
+
+### Closure
+
+WEB-58 separates operation/result actions from navigation links. `nav-list`
+continues to cover page navigation, while `action-group` covers framework-owned
+operation result actions.
+
+### Inputs
+
+- `docs/spec/textus-widget.md`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+- `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`
+- `textus-sample-app/web/notice-board/post-notice__200.html`
+
+---
+
+## WEB-59 — Detail Return Context
+
+Status: DONE
+
+### Goal
+
+Keep list/search-to-detail flows usable by carrying a return target into detail
+pages without introducing template control syntax.
+
+### Scope
+
+- Treat `return.href` as standard hidden/page context.
+- Convert `return.href` into `result.action.return` for result templates.
+- Let detail templates render return actions through `textus:action-group`.
+- Validate the notice-board search -> detail flow still works.
+
+### Detailed Tasks
+
+- [x] Add `return.href` to hidden context keys.
+- [x] Add result return action metadata from `return.href`.
+- [x] Add executable spec coverage for the return action.
+- [x] Add return context to notice-board search detail links.
+
+### Closure
+
+WEB-59 gives Static Form detail pages a minimal return-navigation mechanism.
+The mechanism stays property based and framework-owned, so static HTML does not
+need procedural routing logic.
+
+### Inputs
+
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+- `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`
+- `textus-sample-app/web/notice-board/search-notices__200.html`
+- `textus-sample-app/web/notice-board/get-notice__200.html`
+
+---
+
+## WEB-60 — Widget Attribute Parser Recheck
+
+Status: DONE
+
+### Goal
+
+Reduce fragility in static widget markup before more widgets depend on richer
+attribute values.
+
+### Scope
+
+- Accept both double-quoted and single-quoted widget attributes.
+- Keep URL values with `:` characters intact in navigation item parsing.
+- Preserve existing widget notation compatibility.
+
+### Detailed Tasks
+
+- [x] Replace the double-quote-only widget attribute parser.
+- [x] Rework `nav-list` item splitting so URL colons are not treated as
+      structural delimiters.
+- [x] Add executable spec coverage for single-quoted attributes and URL colons.
+- [x] Document the supported baseline.
+
+### Closure
+
+WEB-60 keeps the current lightweight parser but removes the immediate hazards
+seen in static HTML fragments. A full HTML parser remains outside this phase.
+
+### Inputs
+
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+- `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`
+- `docs/spec/textus-widget.md`
+
+---
+
+## WEB-61 — Static Form Result Convention Recheck
+
+Status: DONE
+
+### Goal
+
+Reconfirm that Static Form Web App remains convention-first after the recent
+widget additions.
+
+### Scope
+
+- Keep `xxx__200.html` and exact `xxx__{status}.html` templates as the primary
+  operation result mechanism.
+- Keep common `__400.html`, `__500.html`, and `__error.html` templates as the
+  fallback mechanism.
+- Keep descriptor result templates supplemental.
+- Ensure result pages can use hidden context, action-group, nav-list, and
+  detail widgets without procedural template logic.
+
+### Detailed Tasks
+
+- [x] Review existing executable coverage for exact status, success/error, and
+      common status templates.
+- [x] Record the current convention-first result template contract here.
+- [x] Validate the sample result flow with action-group, return context,
+      nav-list, result-table/card-list, and description-list widgets.
+
+### Closure
+
+WEB-61 closes the current Static Form result-template pass. The next work can
+continue from concrete missing capabilities rather than reopening the basic
+transition convention.
+
+### Inputs
+
+- `docs/phase/phase-12-checklist.md`
+- `docs/spec/textus-widget.md`
+- `textus-sample-app/scripts/check-static-form-app-flow.sh`
+- `textus-sample-app/scripts/check-static-form-result-assets.sh`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.
@@ -3098,7 +3252,7 @@ the framework emits richer action collections.
 
 Phase 12 is complete when:
 
-- WEB-01 through WEB-57 are marked DONE, or explicitly deferred to a later
+- WEB-01 through WEB-61 are marked DONE, or explicitly deferred to a later
   phase.
 - `phase-12.md` summary checkboxes are aligned.
 - No item remains ACTIVE or SUSPENDED.

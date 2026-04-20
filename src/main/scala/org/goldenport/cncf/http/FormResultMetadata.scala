@@ -9,7 +9,7 @@ import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Apr. 15, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class FormResultMetadata(

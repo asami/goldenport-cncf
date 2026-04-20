@@ -248,10 +248,14 @@ The following widgets are the baseline compatibility set:
 - `textus-action-link`
 - `textus:action-form`
 - `textus-action-form`
+- `textus:action-group`
+- `textus-action-group`
 - `textus:hidden-context`
 - `textus-hidden-context`
 - `textus:pagination`
 - `textus-pagination`
+- `textus:nav-list`
+- `textus-nav-list`
 
 New widgets must reuse the same property expansion, source lookup, action, and
 paging conventions where applicable.
@@ -259,8 +263,10 @@ paging conventions where applicable.
 ## Action Widgets
 
 `textus:action-link`, `textus-action-link`, `textus:action-form`, and
-`textus-action-form` are the baseline action widgets. Other widgets should
-compose with them rather than introduce a separate action model.
+`textus-action-form` are the single-action widgets. `textus:action-group` and
+`textus-action-group` render a set of operation/result actions with the same
+metadata model. Other widgets should compose with these rather than introduce a
+separate action model.
 
 Action rendering rules:
 
@@ -279,7 +285,19 @@ Example:
   <textus:action-link source="result.action.primary"></textus:action-link>
 </textus:record-card>
 <textus:action-form source="result.action.await"></textus:action-form>
+<textus:action-group actions="await,detail"></textus:action-group>
 ```
+
+`textus:action-group` baseline attributes:
+
+- `actions`: comma-separated action names. Each name resolves under
+  `result.action.{name}` by default.
+- `source-prefix`: property prefix for action metadata. Defaults to
+  `result.action`.
+- `class`: wrapper class. Defaults to a wrapping Bootstrap flex row.
+- `button-class`: optional class applied to every rendered action button.
+- `context`: defaults to `true`. When enabled, POST actions include standard
+  hidden page context.
 
 ## Job Widgets
 
@@ -402,6 +420,7 @@ The widget renders only framework-defined hidden context properties by default:
 - `paging.includeTotal`
 - `paging.href`
 - `continuation.id`
+- `return.href`
 - `textus.admin.principalId`
 - `textus.admin.subjectId`
 - `version`
@@ -629,8 +648,14 @@ Implemented baseline attributes:
 
 - `items`: pipe-separated item list. Each item uses
   `label:href` or `label:href:class`. Labels and hrefs may reference result
-  properties.
+  properties. URL values may contain additional `:` characters; the final
+  `:class` segment is treated as a CSS class only when it looks like a
+  Bootstrap/Textus class.
 - `style`: `buttons` by default. `list` renders Bootstrap list-group links.
+
+Widget attributes support both double-quoted and single-quoted values. This is
+important for static HTML fragments where a value itself contains a URL or
+quoted text.
 
 ### `textus:pagination` / `textus-pagination`
 

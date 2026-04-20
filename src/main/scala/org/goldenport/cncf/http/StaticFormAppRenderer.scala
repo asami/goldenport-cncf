@@ -101,7 +101,7 @@ object StaticFormAppRenderer {
         "paging.pageSize" -> page.values.getOrElse("paging.pageSize", "20"),
         "paging.chunkSize" -> page.values.getOrElse("paging.chunkSize", "1000"),
         "paging.href" -> page.values.getOrElse("paging.href", _default_paging_href)
-      ) ++ metadata.toTemplateValues ++ _detail_action_values(metadata) ++ _job_action_values(metadata)
+      ) ++ metadata.toTemplateValues ++ _detail_action_values(metadata) ++ _job_action_values(metadata) ++ _return_action_values
       val base = page.copy(values = page.values ++ formValues ++ resultValues)
       if (status >= 400)
         base
@@ -178,6 +178,16 @@ object StaticFormAppRenderer {
         case prefix if name.startsWith(prefix) => s"get-${name.drop(prefix.length)}"
       }
     }
+
+    private def _return_action_values: Map[String, String] =
+      page.values.get("return.href").filter(_.nonEmpty).map { href =>
+        Map(
+          "result.action.return.name" -> "return",
+          "result.action.return.label" -> "Back",
+          "result.action.return.href" -> href,
+          "result.action.return.method" -> "GET"
+        )
+      }.getOrElse(Map.empty)
   }
   final case class TableColumn(
     name: String,
@@ -678,6 +688,7 @@ object StaticFormAppRenderer {
       "paging.includeTotal",
       "paging.href",
       "continuation.id",
+      "return.href",
       "textus.admin.principalId",
       "textus.admin.subjectId",
       "version",
@@ -5056,6 +5067,7 @@ object StaticFormAppRenderer {
     val cardList = """<textus(?::card-list|-card-list)\b([^>]*)></textus(?::card-list|-card-list)>""".r
     val summaryCard = """<textus(?::summary-card|-summary-card)\b([^>]*)></textus(?::summary-card|-summary-card)>""".r
     val actionCard = """<textus(?::action-card|-action-card)\b([^>]*)></textus(?::action-card|-action-card)>""".r
+    val actionGroup = """<textus(?::action-group|-action-group)\b([^>]*)></textus(?::action-group|-action-group)>""".r
     val jobPanel = """<textus(?::job-panel|-job-panel)\b([^>]*)></textus(?::job-panel|-job-panel)>""".r
     val jobTicket = """<textus(?::job-ticket|-job-ticket)\b([^>]*)></textus(?::job-ticket|-job-ticket)>""".r
     val jobActions = """<textus(?::job-actions|-job-actions)\b([^>]*)></textus(?::job-actions|-job-actions)>""".r
@@ -5098,7 +5110,11 @@ object StaticFormAppRenderer {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_action_card(attrs, properties))
     })
-    val e2 = jobPanel.replaceAllIn(e1, m => {
+    val e1a = actionGroup.replaceAllIn(e1, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_action_group(attrs, properties))
+    })
+    val e2 = jobPanel.replaceAllIn(e1a, m => {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_job_panel(attrs, properties))
     })
@@ -5203,6 +5219,61 @@ object StaticFormAppRenderer {
             ""
         _action_form_html(effectiveMethod, href, css, label, context)
     }.getOrElse("")
+
+  private def _render_action_group(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String = {
+    val sourcePrefix = attrs.getOrElse("source-prefix", "result.action")
+    val context =
+      if (_widget_bool(attrs, "context", default = true))
+        _render_hidden_context(Map.empty, properties)
+      else
+        ""
+    val buttons = _action_group_names(attrs, properties).flatMap { name =>
+      val actionAttrs = Map(
+        "source" -> s"${sourcePrefix}.${name}",
+        "class" -> attrs.getOrElse("button-class", _action_group_button_class(name))
+      )
+      _resolve_action(actionAttrs, properties).map(_action_html(_, context))
+    }
+    if (buttons.isEmpty)
+      ""
+    else {
+      val css = attrs.getOrElse("class", "d-flex flex-wrap gap-2 mt-3 textus-action-group")
+      s"""<div class="${_escape(css)}">${buttons.mkString}</div>"""
+    }
+  }
+
+  private def _action_group_names(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): Vector[String] =
+    attrs.get("actions").map(_.split(',').toVector.map(_.trim).filter(_.nonEmpty)).filter(_.nonEmpty)
+      .getOrElse {
+        val count = properties.value("result.actions.count").toIntOption.getOrElse(0)
+        if (count > 0)
+          (0 until count).map(_.toString).toVector
+        else
+          Vector("primary")
+      }
+
+  private def _action_group_button_class(name: String): String =
+    name.trim.toLowerCase(java.util.Locale.ROOT) match {
+      case "primary" | "submit" | "save" | "await" | "refresh" | "result" => "btn btn-primary"
+      case _ => "btn btn-outline-primary"
+    }
+
+  private def _action_html(
+    action: ActionWidgetValue,
+    hiddenContext: String
+  ): String =
+    action match {
+      case ActionWidgetValue(href, label, css, method) if method.equalsIgnoreCase("GET") =>
+        s"""<a class="${_escape(css)}" href="${_escape(href)}">${_escape(label)}</a>"""
+      case ActionWidgetValue(href, label, css, method) =>
+        _action_form_html(method, href, css, label, hiddenContext)
+    }
 
   private final case class ActionWidgetValue(
     href: String,
@@ -5450,11 +5521,7 @@ object StaticFormAppRenderer {
         val body = description.filter(_.nonEmpty).map { x =>
           s"""<p class="card-text text-secondary">${_escape(x)}</p>"""
         }.getOrElse("")
-        val action =
-          if (method.equalsIgnoreCase("GET"))
-            s"""<a class="${_escape(css)}" href="${_escape(href)}">${_escape(label)}</a>"""
-          else
-            _action_form_html(method, href, css, label, _render_hidden_context(Map.empty, properties))
+        val action = _action_html(ActionWidgetValue(href, label, css, method), _render_hidden_context(Map.empty, properties))
         s"""<article class="card h-100 textus-action-card"><div class="card-body"><h3 class="h5 card-title">${_escape(title)}</h3>${body}<div class="mt-3">${action}</div></div></article>"""
     }.getOrElse("")
 
@@ -5513,12 +5580,9 @@ object StaticFormAppRenderer {
       .filter(_.nonEmpty)
       .getOrElse(Vector("await", "detail"))
     val buttons = names.flatMap { name =>
-      _resolve_action(Map("source" -> s"result.action.${name}", "class" -> _job_action_class(name)), properties).map {
-        case ActionWidgetValue(href, label, css, method) if method.equalsIgnoreCase("GET") =>
-          s"""<a class="${_escape(css)}" href="${_escape(href)}">${_escape(label)}</a>"""
-        case ActionWidgetValue(href, label, css, method) =>
-          _action_form_html(method, href, css, label, _render_hidden_context(Map.empty, properties))
-      }
+      val context = _render_hidden_context(Map.empty, properties)
+      _resolve_action(Map("source" -> s"result.action.${name}", "class" -> _job_action_class(name)), properties)
+        .map(_action_html(_, context))
     }
     if (buttons.isEmpty)
       ""
@@ -5677,15 +5741,28 @@ object StaticFormAppRenderer {
   private def _nav_item(
     text: String,
     properties: FormPageProperties
-  ): Option[(String, String, String)] =
-    text.split(":", 3).toList match {
-      case label :: href :: css :: Nil =>
-        Some((_resolve_attr_value(label.trim, properties), _resolve_attr_value(href.trim, properties), css.trim))
-      case label :: href :: Nil =>
-        Some((_resolve_attr_value(label.trim, properties), _resolve_attr_value(href.trim, properties), "btn btn-outline-secondary"))
-      case _ =>
-        None
+  ): Option[(String, String, String)] = {
+    val index = text.indexOf(':')
+    if (index < 0)
+      None
+    else {
+      val label = text.take(index).trim
+      val rest = text.drop(index + 1).trim
+      val last = rest.lastIndexOf(':')
+      val (href, css) =
+        if (last >= 0 && _looks_like_css_class(rest.drop(last + 1).trim))
+          rest.take(last).trim -> rest.drop(last + 1).trim
+        else
+          rest -> "btn btn-outline-secondary"
+      Some((_resolve_attr_value(label, properties), _resolve_attr_value(href, properties), css))
     }
+  }
+
+  private def _looks_like_css_class(value: String): Boolean =
+    value.startsWith("btn ") ||
+      value.startsWith("btn-") ||
+      value.startsWith("link-") ||
+      value.startsWith("textus-")
 
   private def _render_property_list(
     source: String,
@@ -5814,8 +5891,8 @@ object StaticFormAppRenderer {
     s"${source}|entity=${NamingConventions.toNormalizedSegment(entity)}|view=${NamingConventions.toNormalizedSegment(view)}"
 
   private def _widget_attrs(source: String): Map[String, String] =
-    "([A-Za-z0-9_.:-]+)=\"([^\"]*)\"".r.findAllMatchIn(source).map { m =>
-      m.group(1) -> m.group(2)
+    """([A-Za-z0-9_.:-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')""".r.findAllMatchIn(source).map { m =>
+      m.group(1) -> Option(m.group(2)).getOrElse(m.group(3))
     }.toMap
 
   private def _source_text(
