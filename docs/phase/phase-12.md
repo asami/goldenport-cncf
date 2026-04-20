@@ -190,6 +190,19 @@ This document is a progress dashboard, not a design journal.
   The notice-board sample result pages now use Bootstrap-oriented result
   sections, status badges, and job panels, with scripts checking the composed
   widgets.
+- AY (DONE): WEB-51 — Verify system job page handoff.
+  The sample public flow now follows the job-panel link to
+  `/web/system/jobs/{jobId}` and verifies both the system ticket and await
+  action.
+- AZ (DONE): WEB-52 — Recheck Static Form UI quality criteria.
+  The sample packaging and result checks now cover viewport readiness,
+  Bootstrap-local assets, result framing, and smartphone-friendly spacing hooks.
+- BA (DONE): WEB-53 — Add detail-oriented widget baseline.
+  `textus:description-list` renders detail records from result JSON using
+  resolved entity/view columns.
+- BB (DONE): WEB-54 — Recheck Web app packaging for runtime mapping.
+  The sample packaging check confirms canonical component Web app routes,
+  aliases, local assets, descriptor visibility, and polished app assets.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
@@ -324,6 +337,16 @@ Current note:
 - [x] WEB-50: Polish the sample Static Form Web App.
   Notice-board result pages use Bootstrap-oriented sections and composed
   widgets while staying static-template based.
+- [x] WEB-51: Verify system job page handoff.
+  The public flow checks `/web/system/jobs/{jobId}` and system await.
+- [x] WEB-52: Recheck Static Form UI quality criteria.
+  Sample checks cover viewport, local Bootstrap/widget assets, and responsive
+  result-page polish hooks.
+- [x] WEB-53: Add detail-oriented widget baseline.
+  `textus:description-list` is implemented and used by the notice detail page.
+- [x] WEB-54: Recheck Web app packaging for runtime mapping.
+  Packaging checks verify canonical routes, aliases, descriptor pages, and
+  polished app assets.
 
 ## 6. Next Phase Candidates
 

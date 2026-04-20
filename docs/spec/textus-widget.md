@@ -694,6 +694,16 @@ Required behavior:
 - uses resolved schema/view field order.
 - is suitable for Manual, admin detail pages, and card bodies.
 
+Implemented baseline attributes:
+
+- `source`: JSON object source. Defaults to `result.body`.
+- `entity`: entity name used to resolve schema/view columns.
+- `view`: view name. Defaults to the descriptor/default table view when
+  omitted.
+- `columns`: explicit comma-separated field list, optionally
+  `field:Label`.
+- `empty`: empty-state message when the source has no object data.
+
 ### `textus:markdown` / `textus-markdown`
 
 Trusted content renderer for Markdown-like documentation fragments.

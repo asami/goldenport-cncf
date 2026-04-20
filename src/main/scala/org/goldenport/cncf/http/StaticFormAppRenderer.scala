@@ -5067,6 +5067,7 @@ object StaticFormAppRenderer {
     val actionLink = """<textus(?::action-link|-action-link)\b([^>]*)></textus(?::action-link|-action-link)>""".r
     val actionForm = """<textus(?::action-form|-action-form)\b([^>]*)></textus(?::action-form|-action-form)>""".r
     val hiddenContext = """<textus(?::hidden-context|-hidden-context)\b([^>]*)></textus(?::hidden-context|-hidden-context)>""".r
+    val descriptionList = """<textus(?::description-list|-description-list)\b([^>]*)></textus(?::description-list|-description-list)>""".r
     val propertyList = """<textus-property-list\s+source="([^"]+)"\s*></textus-property-list>""".r
     val errorPanel = """<textus-error-panel\s+source="([^"]+)"\s*></textus-error-panel>""".r
     val a = resultView.replaceAllIn(template, m =>
@@ -5139,7 +5140,11 @@ object StaticFormAppRenderer {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_hidden_context(attrs, properties))
     })
-    val n = propertyList.replaceAllIn(l, m =>
+    val l1 = descriptionList.replaceAllIn(l, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_description_list(attrs, properties, tableColumns, defaultTableView))
+    })
+    val n = propertyList.replaceAllIn(l1, m =>
       java.util.regex.Matcher.quoteReplacement(_render_property_list(m.group(1), properties))
     )
     errorPanel.replaceAllIn(n, m =>
@@ -5632,6 +5637,28 @@ object StaticFormAppRenderer {
       case (key, value) if key == source || key.startsWith(prefix) => key -> value
     }
     s"""<dl class="row">${_property_rows(xs)}</dl>"""
+  }
+
+  private def _render_description_list(
+    attrs: Map[String, String],
+    properties: FormPageProperties,
+    tableColumns: Map[String, Vector[TableColumn]],
+    defaultTableView: String
+  ): String = {
+    val source = attrs.getOrElse("source", "result.body")
+    val columns = _table_columns(attrs.get("columns")).orElse(_table_columns(source, attrs, tableColumns, defaultTableView))
+    _source_json(source, properties).flatMap(_record_json).flatMap(_.asObject).map { obj =>
+      val fields = columns.getOrElse(obj.keys.toVector.map(name => TableColumn(name, name)))
+      val rows = fields.flatMap { column =>
+        obj(column.name).map { json =>
+          s"""<dt class="col-sm-4">${_escape(column.label)}</dt><dd class="col-sm-8">${_escape(_json_cell(json))}</dd>"""
+        }
+      }.mkString
+      if (rows.isEmpty)
+        _empty_state(attrs.getOrElse("empty", "No details"))
+      else
+        s"""<dl class="row textus-description-list">${rows}</dl>"""
+    }.getOrElse(_empty_state(attrs.getOrElse("empty", "No details")))
   }
 
   private def _render_error_panel(

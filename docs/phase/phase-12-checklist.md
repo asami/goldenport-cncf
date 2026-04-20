@@ -2803,6 +2803,165 @@ static HTML templates, Bootstrap assets, and Textus widgets.
 
 ---
 
+## WEB-51 — System Job Page Handoff Verification
+
+Status: DONE
+
+### Goal
+
+Verify that application pages can hand job result UX to the framework-provided
+system job page when they do not want to own the complete job interaction.
+
+### Scope
+
+- Follow the `textus:job-panel` system link to `/web/system/jobs/{jobId}`.
+- Verify the system page renders a job ticket and await action.
+- Verify system await POST returns the same framework result shape used by
+  operation-local await.
+- Keep job access enforcement in the system/job routes.
+
+### Detailed Tasks
+
+- [x] Extract the system job page link from the sample post result page.
+- [x] GET the system job page and confirm the ticket/action UI.
+- [x] POST to `/web/system/jobs/{jobId}/await`.
+- [x] Keep the ordinary operation-local await path in the same public flow.
+
+### Closure
+
+WEB-51 confirms the job UX split: application pages can embed job controls, but
+can also hand off to the system job page. Authorization remains framework-owned
+because both local and system await routes dispatch through job-control
+operations.
+
+### Inputs
+
+- `textus-sample-app/scripts/check-static-form-app-flow.sh`
+- `src/main/scala/org/goldenport/cncf/http/Http4sHttpServer.scala`
+- `docs/design/web-layer.md`
+
+---
+
+## WEB-52 — Static Form UI Quality Criteria Recheck
+
+Status: DONE
+
+### Goal
+
+Recheck the current Static Form sample against the Phase 12 Bootstrap polish
+criteria without introducing a separate visual testing stack.
+
+### Scope
+
+- Ensure pages remain Bootstrap 5 local-asset based.
+- Ensure public pages include viewport metadata for phone/tablet use.
+- Ensure result pages use stable result containers and spacing hooks.
+- Keep this as script-level structural validation for now.
+
+### Detailed Tasks
+
+- [x] Verify canonical app pages include the viewport meta tag.
+- [x] Verify local Bootstrap and Textus widget assets are used.
+- [x] Verify sample CSS contains result-page framing and responsive media
+      hooks.
+- [x] Keep screenshot/pixel-level validation deferred until a browser test
+      harness is introduced.
+
+### Closure
+
+WEB-52 keeps the UI quality bar explicit: the current phase validates
+responsive structure and local assets by scripts, while deeper visual regression
+is deferred.
+
+### Inputs
+
+- `textus-sample-app/scripts/check-web-packaging.sh`
+- `textus-sample-app/web/notice-board/assets/app.css`
+- `docs/notes/web-bootstrap-ui-polish-design.md`
+
+---
+
+## WEB-53 — Detail-Oriented Widget Baseline
+
+Status: DONE
+
+### Goal
+
+Add the first detail-oriented Textus widget so static detail pages can render
+schema/view ordered records without hand-writing property rows.
+
+### Scope
+
+- Implement `textus:description-list` / `textus-description-list`.
+- Use `source`, `entity`, and `view` attributes to resolve CML/schema-derived
+  column order.
+- Keep fallback behavior conservative when no object data is available.
+- Use the widget in the notice detail page.
+
+### Detailed Tasks
+
+- [x] Add renderer support for `textus:description-list`.
+- [x] Add executable spec coverage with CML/view-derived detail columns.
+- [x] Document implemented attributes in the widget spec.
+- [x] Use the widget in the sample `get-notice__200.html` page.
+- [x] Extend sample result checks to confirm widget expansion.
+
+### Closure
+
+WEB-53 gives Static Form detail pages a framework-owned projection point. This
+keeps display field order tied to schema/view metadata rather than ad hoc HTML
+or case-class reflection.
+
+### Inputs
+
+- `docs/spec/textus-widget.md`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+- `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`
+- `textus-sample-app/web/notice-board/get-notice__200.html`
+
+---
+
+## WEB-54 — Web App Packaging Runtime Mapping Recheck
+
+Status: DONE
+
+### Goal
+
+Recheck the CAR/SAR Web app packaging assumptions against the current
+notice-board runtime mapping.
+
+### Scope
+
+- Confirm packaged `/web/{webApp}` resources are served from the canonical
+  `/web/{component}/{webApp}` runtime route.
+- Confirm subsystem aliases can expose the same app at `/web/{webApp}` or
+  `/web`.
+- Confirm local assets resolve under both canonical and alias routes.
+- Confirm completed descriptor admin pages expose the effective route and asset
+  composition.
+
+### Detailed Tasks
+
+- [x] Recheck canonical `/web/notice-board/notice-board`.
+- [x] Recheck implicit `/web/notice-board` and `/web` aliases.
+- [x] Recheck canonical and alias asset routes.
+- [x] Recheck completed descriptor route/asset composition visibility.
+- [x] Recheck polished app CSS is served through the packaged asset routes.
+
+### Closure
+
+WEB-54 keeps the packaging contract grounded in the sample app: source files
+live under `web/notice-board`, while runtime routes expose the component-scoped
+canonical path and configured aliases.
+
+### Inputs
+
+- `textus-sample-app/scripts/check-web-packaging.sh`
+- `textus-sample-app/web/web-descriptor.yaml`
+- `docs/design/web-layer.md`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.
@@ -2827,7 +2986,7 @@ static HTML templates, Bootstrap assets, and Textus widgets.
 
 Phase 12 is complete when:
 
-- WEB-01 through WEB-50 are marked DONE, or explicitly deferred to a later
+- WEB-01 through WEB-54 are marked DONE, or explicitly deferred to a later
   phase.
 - `phase-12.md` summary checkboxes are aligned.
 - No item remains ACTIVE or SUSPENDED.

@@ -5194,6 +5194,37 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus:record-card")
     }
 
+    "render textus description list with CML detail columns" in {
+      val columns = Vector(
+        StaticFormAppRenderer.TableColumn("title", "Title"),
+        StaticFormAppRenderer.TableColumn("content", "Content"),
+        StaticFormAppRenderer.TableColumn("recipient_name", "Recipient")
+      )
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "get-notice"
+        ),
+        200,
+        "application/json",
+        """{"id":"notice_1","title":"Phase12","content":"Static form detail","recipient_name":"Bob","internal":"hidden"}""",
+        Map(StaticFormAppRenderer.tableColumnKey("result.body", "notice", "detail") -> columns)
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus:description-list source="result.body" entity="notice" view="detail"></textus:description-list></article>"""
+      ).body
+
+      html should include ("textus-description-list")
+      html should include ("<dt class=\"col-sm-4\">Title</dt><dd class=\"col-sm-8\">Phase12</dd>")
+      html should include ("<dt class=\"col-sm-4\">Content</dt><dd class=\"col-sm-8\">Static form detail</dd>")
+      html should include ("<dt class=\"col-sm-4\">Recipient</dt><dd class=\"col-sm-8\">Bob</dd>")
+      html should not include ("internal")
+      html should not include ("<textus:description-list")
+    }
+
     "render textus card list with shared paging metadata" in {
       val columns = Vector(
         StaticFormAppRenderer.TableColumn("title", "Title"),
