@@ -54,10 +54,11 @@ This document is a progress dashboard, not a design journal.
 - K (DONE): WEB-11 — Expand the Textus widget set.
   Static Form App has first-pass Textus widgets for action/form helpers,
   result/pagination rendering, cards, summaries, alerts, and empty states.
-- L (PLANNED): WEB-12 — Define Web app packaging and deployment.
-  Static Form Web App packaging should cover descriptor discovery, static
-  result templates, local assets, optional island scripts, and archive/project
-  deployment without requiring a SPA framework.
+- L (DONE): WEB-12 — Define Web app packaging and deployment.
+  Static Form Web App packaging is defined around canonical `/web` CAR/SAR
+  roots, descriptor discovery, static result templates, local assets, optional
+  island scripts, route aliases, archive discovery, and completed descriptor
+  inspection.
 - M (PLANNED): WEB-13 — Add shortid support for Web-facing entity references.
   EntityId remains the canonical identifier, but Web-facing routes and screens
   need a shorter entity-local identifier when the entity kind is already known.
@@ -110,11 +111,12 @@ Current note:
   First-pass widget expansion is complete for action/form helpers,
   result/pagination rendering, record/card-list/summary cards, alerts, and
   empty states. Richer layout/navigation/content widgets are future work.
-- [ ] WEB-12: Define Web app packaging and deployment.
-  Specify and implement how Static Form Web App resources are packaged and
-  deployed: Web Descriptor, static result templates, app-local assets, optional
-  island scripts, project discovery, and packaged component/subsystem archive
-  discovery.
+- [x] WEB-12: Define Web app packaging and deployment.
+  Static Form Web App resources are packaged under canonical CAR/SAR `/web`
+  roots. Descriptor discovery, static template lookup, app-local asset routing,
+  optional island directories, SAR aliases, implicit single-CAR aliases,
+  archive discovery, sample migration, and completed descriptor inspection are
+  covered by design notes and executable specifications.
 - [ ] WEB-13: Add shortid support for Web-facing entity references.
   Introduce a `shortid` value derived from the entity-local entropy portion of
   EntityId, define when it is safe to use it, and define how `id` and

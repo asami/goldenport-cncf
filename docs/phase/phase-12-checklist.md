@@ -857,7 +857,7 @@ Deferred scope:
 
 ## WEB-12: Web App Packaging And Deployment
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -900,7 +900,7 @@ owns the portal route, while Component apps keep their component-scoped routes.
 
 ### Detailed Tasks
 
-- [ ] Define the canonical `/web` Web app root layout for CAR and SAR.
+- [x] Define the canonical `/web` Web app root layout for CAR and SAR.
       Baseline shape:
       - `/web/web-descriptor.yaml`
       - `/web/{webAppName}/index.html`
@@ -975,6 +975,31 @@ owns the portal route, while Component apps keep their component-scoped routes.
 - [x] Validate deployment with `textus-sample-app`:
       post/search/get result templates, common error pages, public exposure,
       admin policy, and completed descriptor visibility.
+
+### Closure
+
+WEB-12 is complete as the Phase 12 first-pass Web app packaging and deployment
+scope.
+
+Completed scope:
+
+- canonical CAR/SAR `/web` layout is specified in `docs/design/web-layer.md`.
+- Web Descriptor app/route vocabulary supports omitted convention values and a
+  completed descriptor view.
+- Component Web apps are mounted under `/web/{component}/{webApp}`.
+- SAR routes can alias component Web apps to `/web/{webApp}` or `/web` without
+  changing ownership, authorization, templates, or assets.
+- filesystem and archive `/web` roots use the same descriptor/template/resource
+  lookup rules.
+- `textus-sample-app` uses the canonical `/web` layout for Static Form Web App
+  validation.
+
+Deferred scope:
+
+- richer SPA hosting remains outside the Static Form Web App baseline.
+- automatic CSS/JS dependency completion is tracked separately by WEB-15.
+- additional packaged island runtime conventions may be added as concrete
+  island use cases appear.
 
 ### Inputs
 
