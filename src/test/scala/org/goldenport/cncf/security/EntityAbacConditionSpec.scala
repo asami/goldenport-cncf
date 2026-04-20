@@ -7,7 +7,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 13, 2026
- * @version Apr. 13, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityAbacConditionSpec
@@ -120,6 +120,26 @@ final class EntityAbacConditionSpec
       val record = Record.dataAuto("postStatus" -> "Published")
 
       condition.matches(record, subject) shouldBe true
+    }
+
+    "match enum formatted values by label or value" in {
+      val bylabel = EntityAbacCondition.parse("postStatus=Published:read").get
+      val byvalue = EntityAbacCondition.parse("postStatus=published:read").get
+      val subject = SecuritySubject(
+        subjectId = "anonymous",
+        authenticationState = SecuritySubject.AuthenticationState.Anonymous,
+        accessTokenPresent = false,
+        primaryGroup = None,
+        groups = Set.empty,
+        roles = Set.empty,
+        privileges = Set.empty,
+        capabilities = Set.empty,
+        securityLevel = Set.empty
+      )
+      val record = Record.dataAuto("postStatus" -> "Enum(Published):published")
+
+      bylabel.matches(record, subject) shouldBe true
+      byvalue.matches(record, subject) shouldBe true
     }
 
     "parse multiple conditions separated by semicolon or newline" in {

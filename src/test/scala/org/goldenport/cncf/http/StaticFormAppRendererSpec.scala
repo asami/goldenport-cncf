@@ -5272,6 +5272,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           |  <textus:card title="Widget Card" subtitle="result.message"><p>${result.count} record</p></textus:card>
           |  <textus-summary-card title="Matches" value="result.count"></textus-summary-card>
           |  <textus:alert message="result.message"></textus:alert>
+          |  <textus:status-badge value="accepted"></textus:status-badge>
           |  <textus-pagination></textus-pagination>
           |</article>""".stripMargin
       ).body
@@ -5282,13 +5283,48 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Widget Card")
       html should include ("textus-summary-card")
       html should include ("textus-alert")
+      html should include ("textus-status-badge")
       html should include ("Result pages")
       html should not include ("<textus-record-card")
       html should not include ("<textus:card-list")
       html should not include ("<textus:card")
       html should not include ("<textus-summary-card")
       html should not include ("<textus:alert")
+      html should not include ("<textus:status-badge")
       html should not include ("<textus-pagination")
+    }
+
+    "render action-card widgets from operation result actions" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice",
+          Map(
+            "result.action.await.href" -> "/form/notice-board/notice/post-notice/jobs/job-1/await",
+            "result.action.await.label" -> "Wait for result",
+            "result.action.await.method" -> "POST",
+            "result.message" -> "Job accepted"
+          )
+        ),
+        202,
+        "application/json",
+        """{"jobId":"job-1"}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:action-card source="result.action.await" title="Command result" description="result.message"></textus:action-card>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("textus-action-card")
+      html should include ("Command result")
+      html should include ("Job accepted")
+      html should include ("method=\"post\"")
+      html should include ("/form/notice-board/notice/post-notice/jobs/job-1/await")
+      html should not include ("<textus:action-card")
     }
 
     "complete local widget assets for HTML document templates that use Textus widgets" in {

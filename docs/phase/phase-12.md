@@ -163,6 +163,18 @@ This document is a progress dashboard, not a design journal.
   The sample app packaging check covers canonical and implicit Web app routes,
   framework/app/form assets, descriptor admin inspection, and admin surface
   entrypoints.
+- AQ (DONE): WEB-43 — Recheck aggregate detail UX and instance operations.
+  The sample app now follows aggregate list rows into instance detail pages and
+  confirms instance operation links preserve the aggregate id context.
+- AR (DONE): WEB-44 — Recheck Static Form user transition flow.
+  The notice-board sample now validates post -> await -> search -> detail as
+  a public Static Form Web App flow using static result templates.
+- AS (DONE): WEB-45 — Expand widget composition coverage.
+  The renderer now supports action-card and status-badge widgets, and the
+  sample result page verifies nested card/action composition.
+- AT (DONE): WEB-46 — Validate the sample app as a minimal Static Form Web App.
+  The sample app now has an end-to-end browser-style check for the no-login
+  notice-board flow from the public Web app entry point.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
@@ -273,6 +285,18 @@ Current note:
   Packaging validation covers canonical `/web/{component}/{webApp}` routing,
   implicit aliases, asset routing, descriptor admin pages, and admin surface
   entrypoints.
+- [x] WEB-43: Recheck aggregate detail UX and instance operations.
+  Aggregate read rows are followed into instance detail pages, and instance
+  update operation links are checked for id handoff.
+- [x] WEB-44: Recheck Static Form user transition flow.
+  Public post, async await, search refresh, and detail navigation are validated
+  through static result pages and framework-provided properties.
+- [x] WEB-45: Expand widget composition coverage.
+  `textus:action-card` and `textus:status-badge` are implemented and verified
+  alongside card/action/widget composition.
+- [x] WEB-46: Validate the sample app as a minimal Static Form Web App.
+  `textus-sample-app` now verifies the no-login notice-board flow from the Web
+  app entry point through posting, waiting, searching, and opening a notice.
 
 ## 6. Next Phase Candidates
 

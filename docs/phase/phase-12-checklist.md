@@ -2479,6 +2479,167 @@ available.
 
 ---
 
+## WEB-43 — Aggregate Detail UX and Instance Operation Recheck
+
+Status: DONE
+
+### Goal
+
+Confirm aggregate Management Console pages work as a drill-down flow from
+aggregate list/read output into a specific aggregate instance and its available
+operations.
+
+### Scope
+
+- Create a `Notice` through the aggregate create operation.
+- Follow the aggregate read result link to the aggregate instance detail page.
+- Confirm the instance detail page renders the created data.
+- Confirm instance operation links preserve aggregate id context.
+- Update the aggregate through the operation-backed update form and reopen the
+  same instance detail page.
+
+### Detailed Tasks
+
+- [x] Extend the sample aggregate operation check to extract an instance detail
+      link from aggregate read output.
+- [x] Verify the aggregate instance detail page after create.
+- [x] Verify the instance update operation link and id handoff.
+- [x] Verify the same instance detail page after update.
+
+### Closure
+
+WEB-43 confirms the current aggregate UX contract: aggregate pages remain
+operation-backed, but users can still move naturally from read results to an
+instance detail page and then to instance-scoped operations.
+
+### Inputs
+
+- `textus-sample-app/scripts/check-admin-aggregate-operations.sh`
+- `docs/design/management-console.md`
+- `docs/notes/aggregate-method-implementation-strategy.md`
+
+---
+
+## WEB-44 — Static Form User Transition Flow Recheck
+
+Status: DONE
+
+### Goal
+
+Confirm the Static Form Web App convention can drive a real no-login user flow
+without descriptor-specific redirect programming.
+
+### Scope
+
+- Start from the public Web app entry point.
+- Open the generated post form.
+- Submit a notice and render `post-notice__200.html`.
+- Await the async job result through the generated action.
+- Search for the notice by recipient name and render `search-notices__200.html`.
+- Open the detail form/link and render `get-notice__200.html`.
+
+### Detailed Tasks
+
+- [x] Add a sample-app script for public Static Form App flow validation.
+- [x] Verify operation-specific static result templates are used.
+- [x] Verify async command wait is explicit through the generated job action.
+- [x] Verify search and detail pages receive result/form properties without
+      leaving unexpanded Textus widget tags.
+
+### Closure
+
+WEB-44 confirms the basic static convention remains viable for demo and
+internal tools: CML + static HTML result files + framework property injection
+can express the main notice-board flow.
+
+### Inputs
+
+- `textus-sample-app/scripts/check-static-form-app-flow.sh`
+- `textus-sample-app/web/notice-board/post-notice__200.html`
+- `textus-sample-app/web/notice-board/search-notices__200.html`
+- `textus-sample-app/web/notice-board/get-notice__200.html`
+- `docs/notes/cncf-web-static-form-app-contract.md`
+
+---
+
+## WEB-45 — Widget Composition Coverage Expansion
+
+Status: DONE
+
+### Goal
+
+Expand the executable widget baseline from result/table/card primitives to the
+small action/status widgets needed by Static Form application pages.
+
+### Scope
+
+- Implement `textus:action-card` / `textus-action-card`.
+- Implement `textus:status-badge` / `textus-status-badge`.
+- Keep both namespace and HTML-compatible notation supported.
+- Validate widget composition in renderer specs and the sample result page.
+
+### Detailed Tasks
+
+- [x] Add action-card rendering using the same action resolution model as
+      `textus:action-link`.
+- [x] Add status-badge rendering with conservative Bootstrap status mapping.
+- [x] Add renderer specs for action-card and status-badge.
+- [x] Use action-card and status-badge from the sample post result page.
+- [x] Confirm final sample responses contain no unexpanded `textus` tags.
+
+### Closure
+
+WEB-45 keeps widget growth focused on concrete needs discovered by the sample
+app: job/result actions and simple status display. Larger layout/navigation
+widgets remain future work until they remove real repetition.
+
+### Inputs
+
+- `docs/spec/textus-widget.md`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+- `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`
+- `textus-sample-app/web/notice-board/post-notice__200.html`
+
+---
+
+## WEB-46 — Minimal Static Form Web App Validation
+
+Status: DONE
+
+### Goal
+
+Validate `textus-sample-app` as a minimal no-login Static Form Web App, not only
+as a Management Console/runtime test driver.
+
+### Scope
+
+- Confirm the public Web entry point exposes user-facing post/search actions.
+- Confirm no login/session is required for the ordinary notice-board path.
+- Confirm the public flow is complete enough for a demo: post, wait, search,
+  and open detail.
+- Keep admin console checks separate from the public app flow.
+
+### Detailed Tasks
+
+- [x] Add a browser-style sample script that starts from `/web/notice-board`.
+- [x] Drive the public post/search/detail operations through `/form`.
+- [x] Confirm result templates and widgets render as user-facing pages.
+- [x] Keep admin-only validation in the admin scripts.
+
+### Closure
+
+WEB-46 confirms the sample app can now serve as the Phase 12 Static Form Web App
+driver. Remaining work should be guided by using the sample as an application,
+not only by admin console route coverage.
+
+### Inputs
+
+- `textus-sample-app/scripts/check-static-form-app-flow.sh`
+- `textus-sample-app/web/notice-board/index.html`
+- `docs/design/web-layer.md`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.
@@ -2503,7 +2664,7 @@ available.
 
 Phase 12 is complete when:
 
-- WEB-01 through WEB-42 are marked DONE, or explicitly deferred to a later
+- WEB-01 through WEB-46 are marked DONE, or explicitly deferred to a later
   phase.
 - `phase-12.md` summary checkboxes are aligned.
 - No item remains ACTIVE or SUSPENDED.

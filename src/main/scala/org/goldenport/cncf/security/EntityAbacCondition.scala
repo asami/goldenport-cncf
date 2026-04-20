@@ -9,7 +9,7 @@ import org.goldenport.record.Record
  * Natural ABAC condition for entity authorization.
  *
  * @since   Apr. 13, 2026
- * @version Apr. 13, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityAbacCondition(
@@ -79,7 +79,7 @@ object EntityAbacCondition {
     case object Eq extends Operator {
       val symbol = "="
       def matches(actual: String, expected: String): Boolean =
-        normalizeValue(actual) == normalizeValue(expected)
+        equivalentValue(actual, expected)
     }
     case object Lt extends Operator {
       val symbol = "<"
@@ -185,7 +185,26 @@ object EntityAbacCondition {
     Option(value).getOrElse("").trim.toLowerCase(java.util.Locale.ROOT)
 
   def normalizeValue(value: String): String =
-    normalize(value)
+    normalizedValueTokens(value).headOption.getOrElse("")
+
+  def equivalentValue(
+    actual: String,
+    expected: String
+  ): Boolean =
+    normalizedValueTokens(actual).intersect(normalizedValueTokens(expected)).nonEmpty
+
+  def normalizedValueTokens(value: String): Set[String] = {
+    val raw = rawValue(value)
+    val base = normalize(raw)
+    val enumPattern = """^Enum\(([^)]*)\):(.+)$""".r
+    val tokens = raw match {
+      case enumPattern(label, value) =>
+        Vector(label, value, raw)
+      case _ =>
+        Vector(raw)
+    }
+    tokens.map(normalize).filter(_.nonEmpty).toSet + base
+  }
 
   def rawValue(value: String): String =
     Option(value).getOrElse("").trim

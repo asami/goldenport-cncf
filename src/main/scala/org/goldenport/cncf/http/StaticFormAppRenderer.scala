@@ -5055,10 +5055,12 @@ object StaticFormAppRenderer {
     val recordCard = """<textus(?::record-card|-record-card)\b([^>]*)></textus(?::record-card|-record-card)>""".r
     val cardList = """<textus(?::card-list|-card-list)\b([^>]*)></textus(?::card-list|-card-list)>""".r
     val summaryCard = """<textus(?::summary-card|-summary-card)\b([^>]*)></textus(?::summary-card|-summary-card)>""".r
+    val actionCard = """<textus(?::action-card|-action-card)\b([^>]*)></textus(?::action-card|-action-card)>""".r
     val jobTicket = """<textus(?::job-ticket|-job-ticket)\b([^>]*)></textus(?::job-ticket|-job-ticket)>""".r
     val jobActions = """<textus(?::job-actions|-job-actions)\b([^>]*)></textus(?::job-actions|-job-actions)>""".r
     val alert = """<textus(?::alert|-alert)\b([^>]*)></textus(?::alert|-alert)>""".r
     val emptyState = """<textus(?::empty-state|-empty-state)\b([^>]*)></textus(?::empty-state|-empty-state)>""".r
+    val statusBadge = """<textus(?::status-badge|-status-badge)\b([^>]*)></textus(?::status-badge|-status-badge)>""".r
     val pagination = """<textus(?::pagination|-pagination)\b([^>]*)></textus(?::pagination|-pagination)>""".r
     val formLink = """<textus-form-link\s+href="([^"]+)"\s+label="([^"]+)"\s*></textus-form-link>""".r
     val actionLink = """<textus(?::action-link|-action-link)\b([^>]*)></textus(?::action-link|-action-link)>""".r
@@ -5089,7 +5091,11 @@ object StaticFormAppRenderer {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_summary_card(attrs, properties))
     })
-    val f0 = jobTicket.replaceAllIn(e, m => {
+    val e1 = actionCard.replaceAllIn(e, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_action_card(attrs, properties))
+    })
+    val f0 = jobTicket.replaceAllIn(e1, m => {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_job_ticket(attrs, properties))
     })
@@ -5105,7 +5111,11 @@ object StaticFormAppRenderer {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_empty_state(attrs, properties))
     })
-    val h = pagination.replaceAllIn(g, m => {
+    val g1 = statusBadge.replaceAllIn(g, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_status_badge(attrs, properties))
+    })
+    val h = pagination.replaceAllIn(g1, m => {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_pagination(attrs, properties))
     })
@@ -5386,6 +5396,26 @@ object StaticFormAppRenderer {
     s"""<article class="card h-100 textus-summary-card border-${_escape(variant)}"><div class="card-body"><p class="text-secondary mb-1">${_escape(title)}</p><strong class="display-6 text-${_escape(variant)}">${_escape(value)}</strong>${subtitleHtml}</div></article>"""
   }
 
+  private def _render_action_card(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String =
+    _resolve_action(attrs, properties).map {
+      case ActionWidgetValue(href, label, css, method) =>
+        val title = _attr_value(attrs, "title", properties).getOrElse(label)
+        val description = _attr_value(attrs, "description", properties)
+          .orElse(_attr_value(attrs, "subtitle", properties))
+        val body = description.filter(_.nonEmpty).map { x =>
+          s"""<p class="card-text text-secondary">${_escape(x)}</p>"""
+        }.getOrElse("")
+        val action =
+          if (method.equalsIgnoreCase("GET"))
+            s"""<a class="${_escape(css)}" href="${_escape(href)}">${_escape(label)}</a>"""
+          else
+            _action_form_html(method, href, css, label, _render_hidden_context(Map.empty, properties))
+        s"""<article class="card h-100 textus-action-card"><div class="card-body"><h3 class="h5 card-title">${_escape(title)}</h3>${body}<div class="mt-3">${action}</div></div></article>"""
+    }.getOrElse("")
+
   private def _render_job_ticket(
     attrs: Map[String, String],
     properties: FormPageProperties
@@ -5488,6 +5518,24 @@ object StaticFormAppRenderer {
     }
   }
 
+  private def _render_status_badge(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String = {
+    val value = attrs.get("value").map(_resolve_attr_value(_, properties))
+      .orElse(attrs.get("source").flatMap(source => _source_text(source, properties)))
+      .orElse(_property_non_empty(properties, "result.status"))
+      .orElse(_property_non_empty(properties, "result.outcome"))
+      .getOrElse("")
+    if (value.isEmpty)
+      ""
+    else {
+      val variant = attrs.get("variant").map(_bootstrap_variant).getOrElse(_status_variant(value))
+      val label = attrs.get("label").map(_resolve_attr_value(_, properties)).filter(_.nonEmpty).getOrElse(value)
+      s"""<span class="badge text-bg-${_escape(variant)} textus-status-badge">${_escape(label)}</span>"""
+    }
+  }
+
   private def _attr_value(
     attrs: Map[String, String],
     name: String,
@@ -5518,6 +5566,17 @@ object StaticFormAppRenderer {
       case "light" => "light"
       case "dark" => "dark"
       case _ => "info"
+    }
+
+  private def _status_variant(
+    value: String
+  ): String =
+    value.trim.toLowerCase(java.util.Locale.ROOT) match {
+      case "ok" | "success" | "succeeded" | "done" | "completed" | "published" | "active" => "success"
+      case "warn" | "warning" | "pending" | "queued" | "running" | "draft" => "warning"
+      case "error" | "failed" | "failure" | "denied" | "rejected" | "inactive" => "danger"
+      case "info" | "accepted" => "primary"
+      case _ => "secondary"
     }
 
   private def _render_pagination(
