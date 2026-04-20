@@ -65,6 +65,11 @@ object FormResultMetadata {
       ).flatten
   }
 
+  object Action {
+    def fromJson(json: Json): Option[Action] =
+      _json_action(json)
+  }
+
   def fromHttpResponse(response: HttpResponse): FormResultMetadata =
     fromBody(response.getString.getOrElse(""))
 

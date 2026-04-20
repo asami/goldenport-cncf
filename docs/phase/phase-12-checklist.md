@@ -3228,6 +3228,160 @@ transition convention.
 
 ---
 
+## WEB-62 — Action Metadata Normalization
+
+Status: DONE
+
+### Goal
+
+Clarify and implement how framework-generated actions and application-provided
+operation result actions merge into the action metadata consumed by widgets.
+
+### Scope
+
+- Keep indexed, named, and primary action property projections.
+- Treat `await`, `detail`, and `return` as framework-generated fallback
+  actions.
+- Let application-provided JSON actions override framework defaults when they
+  use the same action names/properties.
+
+### Detailed Tasks
+
+- [x] Reorder action property construction so framework actions are fallback
+      values.
+- [x] Add executable spec coverage for app-provided action override.
+- [x] Document the normalization and collision rule.
+
+### Closure
+
+WEB-62 keeps action metadata predictable as widgets and operation results grow:
+framework actions provide useful defaults, but application result metadata is
+authoritative when it supplies explicit actions.
+
+### Inputs
+
+- `src/main/scala/org/goldenport/cncf/http/FormResultMetadata.scala`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+- `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`
+- `docs/spec/textus-widget.md`
+
+---
+
+## WEB-63 — Action Group JSON Source Support
+
+Status: DONE
+
+### Goal
+
+Let `textus:action-group` render operation result action arrays directly,
+without requiring templates to know the projected property names.
+
+### Scope
+
+- Support `source="result.body.actions"` and similar JSON array sources.
+- Parse action objects using the same action metadata parser.
+- Preserve existing `actions="await,detail"` property-prefix behavior.
+
+### Detailed Tasks
+
+- [x] Expose action JSON parsing through `FormResultMetadata.Action`.
+- [x] Add action-group JSON source rendering.
+- [x] Add executable spec coverage for JSON source rendering.
+- [x] Document the `source` attribute.
+
+### Closure
+
+WEB-63 gives Static Form pages a more direct path from operation result JSON to
+action widgets while keeping the existing property projection contract.
+
+### Inputs
+
+- `src/main/scala/org/goldenport/cncf/http/FormResultMetadata.scala`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+- `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`
+- `docs/spec/textus-widget.md`
+
+---
+
+## WEB-64 — Detail Return Parameter Encoding
+
+Status: DONE
+
+### Goal
+
+Avoid embedding raw nested URLs into detail links when a list/search page wants
+to pass return context into a detail page.
+
+### Scope
+
+- Add `detail-param-{name}` attributes for result table and card-list detail
+  actions.
+- Expand record placeholders in parameter values.
+- URL encode parameter names and values before appending them to `detail-href`.
+- Use the encoded mechanism in the notice-board sample.
+
+### Detailed Tasks
+
+- [x] Add detail parameter appending in record detail link rendering.
+- [x] Add executable spec coverage for encoded return parameters.
+- [x] Replace raw sample `return.href` query construction.
+- [x] Update sample checks to expect encoded return context.
+
+### Closure
+
+WEB-64 keeps Static Form detail navigation URL-safe while preserving the simple
+static HTML contract.
+
+### Inputs
+
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+- `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`
+- `textus-sample-app/web/notice-board/search-notices__200.html`
+- `textus-sample-app/scripts/check-static-form-app-flow.sh`
+- `textus-sample-app/scripts/check-static-form-result-assets.sh`
+
+---
+
+## WEB-65 — Result Template Smoke Matrix
+
+Status: DONE
+
+### Goal
+
+Tie the convention-first Static Form result template contract to repeatable
+sample smoke checks.
+
+### Scope
+
+- Keep focused renderer specs as the exact convention matrix for
+  operation-specific, common, success/error, and descriptor fallback templates.
+- Keep sample scripts as runtime smoke checks for the public app result pages,
+  action widgets, detail navigation, return context, and packaged routes.
+
+### Detailed Tasks
+
+- [x] Reuse existing renderer specs for exact status/success/error/common
+      result template precedence.
+- [x] Extend sample flow checks to cover action-group and encoded return
+      context.
+- [x] Keep packaging checks in the smoke matrix for result template files and
+      route mappings.
+
+### Closure
+
+WEB-65 makes the current smoke matrix explicit: renderer specs cover
+convention precedence, while `textus-sample-app` scripts cover the packaged
+runtime behavior.
+
+### Inputs
+
+- `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`
+- `textus-sample-app/scripts/check-static-form-app-flow.sh`
+- `textus-sample-app/scripts/check-static-form-result-assets.sh`
+- `textus-sample-app/scripts/check-web-packaging.sh`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.
@@ -3252,7 +3406,7 @@ transition convention.
 
 Phase 12 is complete when:
 
-- WEB-01 through WEB-61 are marked DONE, or explicitly deferred to a later
+- WEB-01 through WEB-65 are marked DONE, or explicitly deferred to a later
   phase.
 - `phase-12.md` summary checkboxes are aligned.
 - No item remains ACTIVE or SUSPENDED.

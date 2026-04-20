@@ -101,7 +101,7 @@ object StaticFormAppRenderer {
         "paging.pageSize" -> page.values.getOrElse("paging.pageSize", "20"),
         "paging.chunkSize" -> page.values.getOrElse("paging.chunkSize", "1000"),
         "paging.href" -> page.values.getOrElse("paging.href", _default_paging_href)
-      ) ++ metadata.toTemplateValues ++ _detail_action_values(metadata) ++ _job_action_values(metadata) ++ _return_action_values
+      ) ++ _framework_action_values(metadata) ++ metadata.toTemplateValues
       val base = page.copy(values = page.values ++ formValues ++ resultValues)
       if (status >= 400)
         base
@@ -112,6 +112,9 @@ object StaticFormAppRenderer {
 
     private def _default_paging_href: String =
       s"/form/${componentName}/${serviceName}/${operationName}/result?page={page}&pageSize={pageSize}"
+
+    private def _framework_action_values(metadata: FormResultMetadata): Map[String, String] =
+      _detail_action_values(metadata) ++ _job_action_values(metadata) ++ _return_action_values
 
     private def _job_action_values(metadata: FormResultMetadata): Map[String, String] =
       metadata.jobId match {
@@ -5224,19 +5227,29 @@ object StaticFormAppRenderer {
     attrs: Map[String, String],
     properties: FormPageProperties
   ): String = {
+    val sourceActions = attrs.get("source").toVector.flatMap { source =>
+      _source_json(source, properties).flatMap(_.asArray).toVector.flatten.flatMap(FormResultMetadata.Action.fromJson)
+    }
     val sourcePrefix = attrs.getOrElse("source-prefix", "result.action")
     val context =
       if (_widget_bool(attrs, "context", default = true))
         _render_hidden_context(Map.empty, properties)
       else
         ""
-    val buttons = _action_group_names(attrs, properties).flatMap { name =>
-      val actionAttrs = Map(
-        "source" -> s"${sourcePrefix}.${name}",
-        "class" -> attrs.getOrElse("button-class", _action_group_button_class(name))
-      )
-      _resolve_action(actionAttrs, properties).map(_action_html(_, context))
-    }
+    val buttons =
+      if (sourceActions.nonEmpty)
+        sourceActions.flatMap { action =>
+          _action_value(action, attrs.get("button-class").getOrElse(_action_group_button_class(action.name.getOrElse(""))))
+            .map(_action_html(_, context))
+        }
+      else
+        _action_group_names(attrs, properties).flatMap { name =>
+          val actionAttrs = Map(
+            "source" -> s"${sourcePrefix}.${name}",
+            "class" -> attrs.getOrElse("button-class", _action_group_button_class(name))
+          )
+          _resolve_action(actionAttrs, properties).map(_action_html(_, context))
+        }
     if (buttons.isEmpty)
       ""
     else {
@@ -5273,6 +5286,16 @@ object StaticFormAppRenderer {
         s"""<a class="${_escape(css)}" href="${_escape(href)}">${_escape(label)}</a>"""
       case ActionWidgetValue(href, label, css, method) =>
         _action_form_html(method, href, css, label, hiddenContext)
+    }
+
+  private def _action_value(
+    action: FormResultMetadata.Action,
+    css: String
+  ): Option[ActionWidgetValue] =
+    action.href.map { href =>
+      val label = action.label.orElse(action.name).getOrElse("Open")
+      val method = action.method.getOrElse("GET")
+      ActionWidgetValue(href, label, css, method)
     }
 
   private final case class ActionWidgetValue(
@@ -5460,18 +5483,19 @@ object StaticFormAppRenderer {
     obj: Map[String, Json],
     attrs: Map[String, String]
   ): String =
-    attrs.get("detail-href").flatMap(_record_href(_, obj)).map { href =>
+    attrs.get("detail-href").flatMap(_record_href(_, obj, attrs)).map { href =>
       val label = attrs.getOrElse("detail-label", "Open detail")
       s"""<div class="mt-3"><a class="btn btn-sm btn-outline-primary" href="${_escape(href)}">${_escape(label)}</a></div>"""
     }.getOrElse("")
 
   private def _record_href(
     template: String,
-    obj: Map[String, Json]
+    obj: Map[String, Json],
+    attrs: Map[String, String]
   ): Option[String] = {
     val pattern = """\{([A-Za-z0-9_.-]+)\}""".r
     var ok = true
-    val href = pattern.replaceAllIn(template, m => {
+    val base = pattern.replaceAllIn(template, m => {
       obj.get(m.group(1)).map(_json_cell).filter(_.nonEmpty) match {
         case Some(value) => java.util.regex.Matcher.quoteReplacement(value)
         case None =>
@@ -5479,7 +5503,44 @@ object StaticFormAppRenderer {
           ""
       }
     })
-    Option.when(ok)(href)
+    Option.when(ok)(_append_detail_params(base, obj, attrs))
+  }
+
+  private def _append_detail_params(
+    href: String,
+    obj: Map[String, Json],
+    attrs: Map[String, String]
+  ): String = {
+    val params = attrs.toVector.collect {
+      case (key, value) if key.startsWith("detail-param-") =>
+        key.stripPrefix("detail-param-") -> _record_value_template(value, obj)
+    }.collect {
+      case (key, Some(value)) if key.nonEmpty && value.nonEmpty =>
+        s"${_escape_query(key)}=${_escape_query(value)}"
+    }
+    if (params.isEmpty)
+      href
+    else {
+      val sep = if (href.contains("?")) "&" else "?"
+      s"${href}${sep}${params.mkString("&")}"
+    }
+  }
+
+  private def _record_value_template(
+    template: String,
+    obj: Map[String, Json]
+  ): Option[String] = {
+    val pattern = """\{([A-Za-z0-9_.-]+)\}""".r
+    var ok = true
+    val value = pattern.replaceAllIn(template, m => {
+      obj.get(m.group(1)).map(_json_cell).filter(_.nonEmpty) match {
+        case Some(value) => java.util.regex.Matcher.quoteReplacement(value)
+        case None =>
+          ok = false
+          ""
+      }
+    })
+    Option.when(ok)(value)
   }
 
   private def _first_existing_field(
@@ -5953,7 +6014,7 @@ object StaticFormAppRenderer {
           val value = obj(h.name).map(_json_cell).getOrElse("")
           s"<td>${_escape(value)}</td>"
         }.mkString
-        val actionCell = attrs.get("detail-href").flatMap(_record_href(_, obj.toMap)).map { href =>
+        val actionCell = attrs.get("detail-href").flatMap(_record_href(_, obj.toMap, attrs)).map { href =>
           val label = attrs.getOrElse("detail-label", "Open detail")
           s"""<td><a class="btn btn-sm btn-outline-primary" href="${_escape(href)}">${_escape(label)}</a></td>"""
         }.getOrElse(attrs.get("detail-href").map(_ => "<td></td>").getOrElse(""))

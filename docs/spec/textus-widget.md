@@ -292,12 +292,24 @@ Example:
 
 - `actions`: comma-separated action names. Each name resolves under
   `result.action.{name}` by default.
+- `source`: optional JSON array source such as `result.body.actions`. When
+  present, actions are read directly from the operation result JSON.
 - `source-prefix`: property prefix for action metadata. Defaults to
   `result.action`.
 - `class`: wrapper class. Defaults to a wrapping Bootstrap flex row.
 - `button-class`: optional class applied to every rendered action button.
 - `context`: defaults to `true`. When enabled, POST actions include standard
   hidden page context.
+
+Action metadata normalization:
+
+- application-provided JSON `actions[]` is projected to indexed
+  `result.action.{n}`, named `result.action.{name}`, and
+  `result.action.primary` properties.
+- framework-generated actions such as `await`, `detail`, and `return` are
+  fallback values.
+- application-provided actions with the same property keys override
+  framework-generated defaults.
 
 ## Job Widgets
 
@@ -456,7 +468,9 @@ Requirements:
 `textus-result-table` may add per-row detail actions with `detail-href` and
 `detail-label`. `detail-href` is a URL template whose `{field}` placeholders are
 expanded from each row object. This keeps common search-result-to-detail flows
-inside the static widget contract.
+inside the static widget contract. Additional URL query parameters can be added
+with `detail-param-{name}` attributes. Parameter values are expanded from record
+placeholders and URL encoded before they are appended.
 
 ## Error Handling
 
@@ -525,6 +539,8 @@ Implemented baseline attributes:
 - `detail-href`: optional detail URL template. Record field placeholders such
   as `{id}` are expanded from the current record.
 - `detail-label`: optional detail action label. Defaults to `Open detail`.
+- `detail-param-{name}`: optional encoded query parameter appended to
+  `detail-href`.
 
 ### `textus:card-list` / `textus-card-list`
 
@@ -556,6 +572,7 @@ Implemented baseline attributes:
 - `title`, `subtitle`: forwarded to each record card.
 - `detail-href`, `detail-label`: forwarded to each record card so list results
   can provide detail navigation without hand-written table/card markup.
+- `detail-param-{name}`: forwarded to each record card.
 
 ### `textus:summary-card` / `textus-summary-card`
 

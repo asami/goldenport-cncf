@@ -225,6 +225,18 @@ This document is a progress dashboard, not a design journal.
   The phase checklist records the current convention-first result template
   contract across exact status, success/error aliases, hidden context, and
   action widgets.
+- BJ (DONE): WEB-62 — Normalize action metadata.
+  Application-provided action metadata now overrides framework-generated
+  fallback actions, while indexed/named/primary projections remain available.
+- BK (DONE): WEB-63 — Add action-group JSON source support.
+  `textus:action-group source="..."` can render a JSON action array directly
+  from the operation result.
+- BL (DONE): WEB-64 — Encode detail return parameters.
+  Detail widget links can append encoded `detail-param-*` query parameters such
+  as `return.href`.
+- BM (DONE): WEB-65 — Add result template smoke matrix.
+  The sample app validates result-template pages across the public Static Form
+  flow and packaging/runtime route checks.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
@@ -384,6 +396,14 @@ Current note:
   Widget attributes handle single quotes and URL-colon navigation values.
 - [x] WEB-61: Recheck Static Form result conventions.
   Static Form result conventions remain the primary app mechanism.
+- [x] WEB-62: Normalize action metadata.
+  Application-provided action metadata overrides framework fallback actions.
+- [x] WEB-63: Add action-group JSON source support.
+  Action groups can render directly from JSON action arrays.
+- [x] WEB-64: Encode detail return parameters.
+  Detail links append encoded `detail-param-*` query parameters.
+- [x] WEB-65: Add result template smoke matrix.
+  Result template smoke coverage is tied to the sample app scripts.
 
 ## 6. Next Phase Candidates
 

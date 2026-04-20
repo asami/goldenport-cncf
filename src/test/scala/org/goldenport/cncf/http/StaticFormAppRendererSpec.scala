@@ -2020,6 +2020,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         "result.action.detail.href" -> "/web/notice-board/admin/entities/notice/notice_1",
         "result.action.0.href" -> "/web/notice-board/admin/entities/notice/notice_1"
       )
+      val jsonAction = parse("""{"name":"approve","label":"Approve","href":"/form/approve","method":"POST"}""")
+        .toOption
+        .flatMap(FormResultMetadata.Action.fromJson)
+        .getOrElse(fail("action JSON should parse"))
+      jsonAction.toTemplateValues("result.action.approve") should contain allOf (
+        "result.action.approve.name" -> "approve",
+        "result.action.approve.label" -> "Approve",
+        "result.action.approve.href" -> "/form/approve",
+        "result.action.approve.method" -> "POST"
+      )
     }
 
     "render component view administration page" in {
@@ -5055,6 +5065,57 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus:action-group")
     }
 
+    "render action-group widgets directly from JSON action arrays" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice",
+          Map("paging.page" -> "1")
+        ),
+        200,
+        "application/json",
+        """{"actions":[{"name":"approve","label":"Approve","href":"/form/notice-board/notice/approve","method":"POST"},{"name":"detail","label":"Open detail","href":"/form/notice-board/notice/get-notice/result?id=notice_1","method":"GET"}]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:action-group source="result.body.actions"></textus:action-group>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("textus-action-group")
+      html should include ("""<form method="post" action="/form/notice-board/notice/approve" class="d-inline">""")
+      html should include ("""<button type="submit" class="btn btn-outline-primary">Approve</button>""")
+      html should include ("""<a class="btn btn-outline-primary" href="/form/notice-board/notice/get-notice/result?id=notice_1">Open detail</a>""")
+      html should not include ("<textus:action-group")
+    }
+
+    "let JSON action metadata override framework generated action defaults" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice"
+        ),
+        202,
+        "application/json",
+        """{"jobId":"job-1","actions":[{"name":"await","label":"Wait now","href":"/custom/jobs/job-1/await","method":"POST"}]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:action-group actions="await"></textus:action-group>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("action=\"/custom/jobs/job-1/await\"")
+      html should include ("""<button type="submit" class="btn btn-primary">Wait now</button>""")
+      html should not include ("action=\"/form/notice-board/notice/post-notice/jobs/job-1/await\"")
+    }
+
     "render return action for detail pages from return href context" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
@@ -5350,13 +5411,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val html = StaticFormAppRenderer.renderFormResult(
         properties,
         """<article>
-          |  <textus-result-table source="result.body" entity="notice" view="summary" detail-href="/form/notice-board/notice/get-notice/result?id={id}" detail-label="Read"></textus-result-table>
-          |  <textus:card-list source="result.body" entity="notice" view="summary" detail-href="/form/notice-board/notice/get-notice/result?id={id}" detail-label="Open notice"></textus:card-list>
+          |  <textus-result-table source="result.body" entity="notice" view="summary" detail-href="/form/notice-board/notice/get-notice/result?id={id}" detail-param-return.href="/form/notice-board/notice/search-notices?recipientName=Bob Smith" detail-label="Read"></textus-result-table>
+          |  <textus:card-list source="result.body" entity="notice" view="summary" detail-href="/form/notice-board/notice/get-notice/result?id={id}" detail-param-return.href="/form/notice-board/notice/search-notices?recipientName=Bob Smith" detail-label="Open notice"></textus:card-list>
           |</article>""".stripMargin
       ).body
 
       html should include ("<th>Actions</th>")
-      html should include ("href=\"/form/notice-board/notice/get-notice/result?id=notice_1\"")
+      html should include ("href=\"/form/notice-board/notice/get-notice/result?id=notice_1&amp;return.href=%2Fform%2Fnotice-board%2Fnotice%2Fsearch-notices%3FrecipientName%3DBob%20Smith\"")
       html should include ("""Read</a>""")
       html should include ("""Open notice</a>""")
       html should not include ("Static form validation")
