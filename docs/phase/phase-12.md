@@ -75,6 +75,10 @@ This document is a progress dashboard, not a design journal.
   and `/web/assets/textus-widgets.js` after the local Bootstrap baseline.
   Built-in layouts include them, and full HTML document templates receive them
   automatically when they use Textus widgets.
+- Q (DONE): WEB-17 — Validate Static Form result asset completion end to end.
+  `textus-sample-app` has an executable check that posts real Static Form
+  requests and verifies the result pages include Bootstrap and Textus widget
+  framework assets with all Textus widget tags expanded.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational

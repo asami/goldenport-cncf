@@ -1363,6 +1363,54 @@ assets without descriptor boilerplate.
 
 ---
 
+## WEB-17: Static Form Result Asset E2E
+
+Status: DONE
+
+### Objective
+
+Validate that Textus widget asset completion works in real Static Form Web App
+responses, not only in renderer-level specifications.
+
+WEB-16 verifies the renderer and framework asset routes. WEB-17 adds a
+sample-application executable check that sends actual form POST requests and
+asserts that result pages receive the framework assets and do not leak
+unexpanded `textus:` / `textus-` widget tags.
+
+### Design Direction
+
+- Use `textus-sample-app` as the practical validation driver.
+- Exercise real form routes rather than only static file routes.
+- Cover both command-style and query-style result pages.
+- Check framework asset completion, widget expansion, and representative
+  result-page content in the same flow.
+
+### Detailed Tasks
+
+- [x] Add a sample-app script that starts the local server.
+- [x] POST to `post-notice` and verify the result page includes:
+      - `/web/assets/bootstrap.min.css`
+      - `/web/assets/textus-widgets.css`
+      - `/web/assets/bootstrap.bundle.min.js`
+      - `/web/assets/textus-widgets.js`
+- [x] POST to `search-notices` and verify the same framework assets.
+- [x] Verify the result pages include expected business headings.
+- [x] Verify no raw `<textus...` widget tags remain in the responses.
+- [x] Run the script against the published local CNCF runtime.
+
+### Closure
+
+WEB-17 is complete as the end-to-end confirmation that Static Form result pages
+in `textus-sample-app` receive the WEB-16 framework assets and render Textus
+widgets before returning HTML.
+
+### Inputs
+
+- `textus-sample-app/scripts/check-static-form-result-assets.sh`
+- `docs/spec/textus-widget.md`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.
