@@ -59,7 +59,7 @@ This document is a progress dashboard, not a design journal.
   roots, descriptor discovery, static result templates, local assets, optional
   island scripts, route aliases, archive discovery, and completed descriptor
   inspection.
-- M (PLANNED): WEB-13 — Add shortid support for Web-facing entity references.
+- M (DONE): WEB-13 — Add shortid support for Web-facing entity references.
   EntityId remains the canonical identifier, but Web-facing routes and screens
   need a shorter entity-local identifier when the entity kind is already known.
 - N (DONE): WEB-14 — Define application-user job result UX.
@@ -118,11 +118,20 @@ Current note:
   optional island directories, SAR aliases, implicit single-CAR aliases,
   archive discovery, sample migration, and completed descriptor inspection are
   covered by design notes and executable specifications.
-- [ ] WEB-13: Add shortid support for Web-facing entity references.
+- [x] WEB-13: Add shortid support for Web-facing entity references.
   Introduce a `shortid` value derived from the entity-local entropy portion of
   EntityId, define when it is safe to use it, and define how `id` and
   `shortid` are exposed in Web URLs, forms, lists, detail pages, and admin
-  screens.
+  screens. The EntityId entropy extraction contract has been confirmed:
+  `EntityId.parts.entropy` is the canonical `shortid` source. `shortid` is a
+  `SimpleEntity` identity attribute, not a `NameAttributes` field. Canonical
+  `id` remains the primary identifier for external integration and generic
+  framework logic because it carries major/minor, entity name, timestamp, and
+  entropy. Timestamp is also reserved for possible distributed ordering
+  algorithms, so `shortid` must not replace canonical id in generic processing.
+  Admin entity list/detail/edit links now prefer shortid for entity-scoped Web
+  URLs, while read/update operations normalize the route token back to
+  canonical EntityId before entity access or persistence.
 - [x] WEB-14: Define application-user job result UX.
   Design and implement the user-facing result reference flow for async Command
   execution: job id handoff, optional wait/action buttons, result pages, and

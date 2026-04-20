@@ -15,6 +15,7 @@ import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
 import org.goldenport.value.BaseContent
 import org.goldenport.schema.{Multiplicity, ValueDomain, XBoolean, XDateTime, XInt, XString}
+import org.simplemodeling.model.datatype.EntityId
 import io.circe.Json
 import io.circe.parser.parse
 
@@ -1966,6 +1967,7 @@ object StaticFormAppRenderer {
       val entityPath = NamingConventions.toNormalizedSegment(entityName)
       val entityLabel = _title_label(entityPath)
       val basePath = s"/web/${componentPath}/admin/entities/${entityPath}"
+      val routeId = _entity_route_id(id)
       val querySuffix = _hidden_form_context_query_suffix(values)
       val body = _admin_entity_record_table(subsystem, component, componentPath, entityPath, id, webDescriptor)
       val nav = _admin_nav_card(Vector(
@@ -1981,7 +1983,7 @@ object StaticFormAppRenderer {
              |  <div class="card-body">
              |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
              |      <h2 class="card-title mb-0">${_escape(entityLabel)} detail</h2>
-             |      <a class="btn btn-primary" href="${_escape(basePath + "/" + _escape_path_segment(id) + "/edit" + querySuffix)}">Edit</a>
+             |      <a class="btn btn-primary" href="${_escape(basePath + "/" + _escape_path_segment(routeId) + "/edit" + querySuffix)}">Edit</a>
              |    </div>
              |    ${body}
              |  </div>
@@ -2003,7 +2005,8 @@ object StaticFormAppRenderer {
       val entityPath = NamingConventions.toNormalizedSegment(entityName)
       val entityLabel = _title_label(entityPath)
       val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
-      val actionPath = s"/form/${componentPath}/admin/entities/${entityPath}/${id}/update"
+      val routeId = _entity_route_id(id)
+      val actionPath = s"/form/${componentPath}/admin/entities/${entityPath}/${routeId}/update"
       val webSchema = WebSchemaResolver.resolveEntity(
         component,
         componentPath,
@@ -2025,7 +2028,7 @@ object StaticFormAppRenderer {
         includeExtensionFields = false
       )
       val nav = _admin_nav_card(Vector(
-        "Detail" -> s"${webBasePath}/${id}",
+        "Detail" -> s"${webBasePath}/${routeId}",
         s"Back to ${entityLabel} records" -> webBasePath
       ))
       Page(_simple_page(
@@ -2042,7 +2045,7 @@ object StaticFormAppRenderer {
              |      ${hiddenContext}
              |      <div class="d-flex flex-wrap gap-2">
              |        <button type="submit" class="btn btn-primary">Update</button>
-             |        <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}/${_escape(id)}">Cancel</a>
+             |        <a class="btn btn-outline-secondary" href="${_escape(webBasePath)}/${_escape(routeId)}">Cancel</a>
              |      </div>
              |    </form>
              |  </div>
@@ -2644,7 +2647,7 @@ object StaticFormAppRenderer {
           _admin_empty_table_cell(3, emptyMessage)
         } else {
           items.map { item =>
-            val href = s"${basePath}/${_escape_path_segment(item.id)}${_hidden_form_context_query_suffix(linkContext)}"
+            val href = s"${basePath}/${_escape_path_segment(_admin_read_list_route_id(item))}${_hidden_form_context_query_suffix(linkContext)}"
             val actions = _admin_read_list_actions(href, includeEdit)
             s"""<tr><td><code>${_escape(item.id)}</code></td><td>${_escape(item.label)}</td><td>${actions}</td></tr>"""
           }.mkString("\n")
@@ -2660,8 +2663,8 @@ object StaticFormAppRenderer {
           _admin_empty_table_cell(schemaFields.size + 1, emptyMessage)
         } else {
           items.map { item =>
-            val href = s"${basePath}/${_escape_path_segment(item.id)}${_hidden_form_context_query_suffix(linkContext)}"
             val values = _admin_read_list_item_fields(item)
+            val href = s"${basePath}/${_escape_path_segment(_admin_read_list_route_id(item, values))}${_hidden_form_context_query_suffix(linkContext)}"
             val columns = schemaFields.map { field =>
               val value = {
                 if (field == "id") values.getOrElse(field, item.id)
@@ -2689,6 +2692,20 @@ object StaticFormAppRenderer {
     linkContext: Map[String, String] = Map.empty
   ): String =
     _admin_read_result_list_table_labeled(items, schemaFields, Map.empty, basePath, emptyMessage, includeEdit, linkContext)
+
+  private def _admin_read_list_route_id(
+    item: _AdminReadListItem,
+    values: Map[String, String] = Map.empty
+  ): String =
+    values.get("shortid")
+      .orElse(_admin_read_list_item_fields(item).get("shortid"))
+      .filter(_.nonEmpty)
+      .getOrElse(item.id)
+
+  private def _entity_route_id(
+    id: String
+  ): String =
+    EntityId.parse(id).toOption.map(_.parts.entropy).getOrElse(id)
 
   private def _web_field_labels(
     fields: Vector[WebSchemaResolver.ResolvedWebField]

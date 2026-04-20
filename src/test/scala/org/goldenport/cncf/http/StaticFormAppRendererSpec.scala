@@ -413,7 +413,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val componentName = "notice_board"
       val componentPath = "notice-board"
       val entityPath = "notice"
-      val recordId = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id.value
+      val recordEntityId = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id
+      val recordId = recordEntityId.value
+      val recordShortid = recordEntityId.parts.entropy
 
       val list = StaticFormAppRenderer.renderComponentAdminEntityType(subsystem, componentName, entityPath).map(_.body).getOrElse(fail("component entity type admin is missing"))
       val firstPage = StaticFormAppRenderer.renderComponentAdminEntityType(
@@ -436,6 +438,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         WebDescriptor(admin = Map("entity.notice" -> WebDescriptor.AdminSurface(WebDescriptor.TotalCountPolicy.Optional)))
       ).map(_.body).getOrElse(fail("component entity total page admin is missing"))
       val detail = StaticFormAppRenderer.renderComponentAdminEntityDetail(subsystem, componentName, entityPath, recordId).map(_.body).getOrElse(fail("component entity detail admin is missing"))
+      val detailByShortid = StaticFormAppRenderer.renderComponentAdminEntityDetail(subsystem, componentName, entityPath, recordShortid).map(_.body).getOrElse(fail("component entity detail admin by shortid is missing"))
       val edit = StaticFormAppRenderer.renderComponentAdminEntityEdit(subsystem, componentName, entityPath, recordId).map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
       list should include ("notice_1")
@@ -443,8 +446,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       list should include ("class=\"btn-group btn-group-sm\"")
       list should include ("board update")
       list should include ("alice")
-      list should include (s"/web/${componentPath}/admin/entities/${entityPath}/${recordId}")
-      list should include (s"/web/${componentPath}/admin/entities/${entityPath}/${recordId}/edit")
+      list should include (s"/web/${componentPath}/admin/entities/${entityPath}/${recordShortid}")
+      list should include (s"/web/${componentPath}/admin/entities/${entityPath}/${recordShortid}/edit")
       list should not include ("No records are currently available")
       firstPage should include ("Page 1")
       firstPage should include ("page=2&amp;pageSize=1")
@@ -456,9 +459,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       totalPage should include ("includeTotal=true")
       detail should include ("board update")
       detail should include ("alice")
+      detailByShortid should include ("board update")
+      detailByShortid should include ("alice")
       edit should include ("name=\"title\"")
       edit should include ("value=\"board update\"")
-      edit should include (s"/form/${componentPath}/admin/entities/${entityPath}/${recordId}/update")
+      edit should include (s"/form/${componentPath}/admin/entities/${entityPath}/${recordShortid}/update")
     }
 
     "preserve list paging and search context through entity detail and edit links" in {
@@ -466,7 +471,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val componentName = "notice_board"
       val componentPath = "notice-board"
       val entityPath = "notice"
-      val recordId = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id.value
+      val recordEntityId = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id
+      val recordId = recordEntityId.value
+      val recordShortid = recordEntityId.parts.entropy
       val context = Map(
         "search.author" -> "alice",
         "paging.page" -> "2",
@@ -503,7 +510,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       list should include ("search.author=alice")
       list should include ("/edit?crud.origin.href=")
       detail should include (s"/web/${componentPath}/admin/entities/${entityPath}?crud.origin.href=")
-      detail should include (s"/web/${componentPath}/admin/entities/${entityPath}/${recordId}/edit?crud.origin.href=")
+      detail should include (s"/web/${componentPath}/admin/entities/${entityPath}/${recordShortid}/edit?crud.origin.href=")
       edit should include ("type=\"hidden\" name=\"crud.origin.href\"")
       edit should include ("type=\"hidden\" name=\"paging.page\" value=\"2\"")
       edit should include ("type=\"hidden\" name=\"paging.pageSize\" value=\"1\"")
@@ -516,14 +523,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
       val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
       val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
-      val recordId = collection.storage.storeRealm.values.head.id.value
+      val recordEntityId = collection.storage.storeRealm.values.head.id
+      val recordId = recordEntityId.value
+      val recordShortid = recordEntityId.parts.entropy
       val req = _post_form_request(
-        s"/form/notice-board/admin/entities/notice/${recordId}/update",
+        s"/form/notice-board/admin/entities/notice/${recordShortid}/update",
         "title=board+updated&author=bob"
       )
 
       val html = server
-        ._submit_component_admin_entity_update(req, "notice-board", "notice", recordId)
+        ._submit_component_admin_entity_update(req, "notice-board", "notice", recordShortid)
         .flatMap(_.as[String])
         .unsafeRunSync()
 
@@ -738,7 +747,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val componentName = "notice_board"
       val componentPath = "notice-board"
       val entityPath = "notice"
-      val recordId = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id.value
+      val recordEntityId = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity](entityPath).storage.storeRealm.values.head.id
+      val recordId = recordEntityId.value
+      val recordShortid = recordEntityId.parts.entropy
 
       val newHtml = StaticFormAppRenderer
         .renderComponentAdminEntityNew(subsystem, componentName, entityPath)
@@ -754,7 +765,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       newHtml should include ("name=\"body\"")
       newHtml should not include ("name=\"title\"")
       newHtml should not include ("name=\"content\"")
-      editHtml should include (s"/form/${componentPath}/admin/entities/${entityPath}/${recordId}/update")
+      editHtml should include (s"/form/${componentPath}/admin/entities/${entityPath}/${recordShortid}/update")
       editHtml should include ("name=\"subject\"")
       editHtml should include ("name=\"body\"")
       editHtml should not include ("name=\"title\"")
@@ -3263,12 +3274,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       response.status.code shouldBe 200
       json.hcursor.downField("source").as[String].toOption shouldBe Some("Schema")
-      names shouldBe Vector("id", "name", "status")
-      fields(2).hcursor.downField("label").as[String].toOption shouldBe Some("Order status")
-      fields(2).hcursor.downField("type").as[String].toOption shouldBe Some("select")
-      fields(2).hcursor.downField("values").as[Vector[String]].toOption shouldBe Some(Vector("draft", "submitted", "approved"))
-      fields(2).hcursor.downField("required").as[Boolean].toOption shouldBe Some(true)
-      fields(2).hcursor.downField("help").as[String].toOption shouldBe Some("CML generated status hint.")
+      names shouldBe Vector("id", "shortid", "name", "status")
+      fields(1).hcursor.downField("system").as[Boolean].toOption shouldBe Some(true)
+      fields(1).hcursor.downField("readonly").as[Boolean].toOption shouldBe Some(true)
+      fields(1).hcursor.downField("required").as[Boolean].toOption shouldBe Some(false)
+      fields(3).hcursor.downField("label").as[String].toOption shouldBe Some("Order status")
+      fields(3).hcursor.downField("type").as[String].toOption shouldBe Some("select")
+      fields(3).hcursor.downField("values").as[Vector[String]].toOption shouldBe Some(Vector("draft", "submitted", "approved"))
+      fields(3).hcursor.downField("required").as[Boolean].toOption shouldBe Some(true)
+      fields(3).hcursor.downField("help").as[String].toOption shouldBe Some("CML generated status hint.")
     }
 
     "serve admin entity form definition API from merged Schema and WebDescriptor controls" in {

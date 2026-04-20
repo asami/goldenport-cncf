@@ -48,7 +48,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
- * @version Apr. 19, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -2036,7 +2036,10 @@ object AdminComponent {
     }
     val withId =
       data.get("id").map(_.toString).filter(_.nonEmpty) match {
-        case Some(_) => data
+        case Some(idOrShortid) =>
+          collection.resolveEntityId(idOrShortid)
+            .map(id => data + ("id" -> id.value))
+            .getOrElse(data)
         case None =>
           val cid = collection.descriptor.collectionId
           data + ("id" -> EntityId(cid.major, cid.minor, cid).value)
@@ -2063,8 +2066,10 @@ object AdminComponent {
     id: String,
     fields: Vector[String] = Vector.empty
   ): Option[Record] =
-    _entity_values(collection)
-      .find(x => collection.descriptor.persistent.id(x).value == id)
+    collection.resolveEntityId(id).flatMap { canonicalId =>
+      _entity_values(collection)
+        .find(x => collection.descriptor.persistent.id(x) == canonicalId)
+    }
       .map(x => _entity_display_record(x, collection.descriptor.persistent.toRecord(x), fields))
 
   private def _entity_view_fields(
@@ -2163,10 +2168,12 @@ object AdminComponent {
     fields: Vector[String] = Vector.empty
   ): _Page[_AdminReadItem] = {
     val items = result.data.map { x =>
-      val id = collection.descriptor.persistent.id(x).value
-      val record = _entity_display_record(x, collection.descriptor.persistent.toRecord(x), fields)
+      val entityId = collection.descriptor.persistent.id(x)
+      val id = entityId.value
+      val sourceRecord = collection.descriptor.persistent.toRecord(x)
+      val record = _entity_display_record(x, sourceRecord, fields)
       val label = _record_label(record).getOrElse(id)
-      _AdminReadItem(id, label, _record_text(record))
+      _AdminReadItem(id, label, _record_text(record), sourceRecord.getString("shortid").orElse(Some(entityId.parts.entropy)))
     }
     _Page(
       items.take(paging.pageSize),
@@ -2188,9 +2195,11 @@ object AdminComponent {
       _search_result_page(collection, result, paging, decision, fields)
     else
       _page_values(_entity_values(collection).map { x =>
-        val id = collection.descriptor.persistent.id(x).value
-        val record = _entity_display_record(x, collection.descriptor.persistent.toRecord(x), fields)
-        _AdminReadItem(id, _record_label(record).getOrElse(id), _record_text(record))
+        val entityId = collection.descriptor.persistent.id(x)
+        val id = entityId.value
+        val sourceRecord = collection.descriptor.persistent.toRecord(x)
+        val record = _entity_display_record(x, sourceRecord, fields)
+        _AdminReadItem(id, _record_label(record).getOrElse(id), _record_text(record), sourceRecord.getString("shortid").orElse(Some(entityId.parts.entropy)))
       }, paging, decision)
 
   private def _prefetched_page_values[A](
@@ -2323,13 +2332,16 @@ object AdminComponent {
   private final case class _AdminReadItem(
     id: String,
     label: String,
-    value: String
+    value: String,
+    shortid: Option[String] = None
   ) {
     def toRecord: Record =
       Record.dataAuto(
-        "id" -> id,
-        "label" -> label,
-        "value" -> value
+        (Vector(
+          "id" -> id,
+          "label" -> label,
+          "value" -> value
+        ) ++ shortid.map("shortid" -> _).toVector)*
       )
   }
 

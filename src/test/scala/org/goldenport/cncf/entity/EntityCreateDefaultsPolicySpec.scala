@@ -9,11 +9,40 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Apr. 13, 2026
- * @version Apr. 13, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
   "EntityCreateDefaultsPolicy" should {
+    "store shortid from EntityId entropy as a SimpleEntity identity attribute" in {
+      given ExecutionContext = ExecutionContext.test()
+      given EntityPersistentCreate[TestCreate] = _persistent_create
+      val target = EntityCollectionId("test", "a", "target_entity")
+      val entityId = EntityId("test", "target", target)
+
+      val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
+        Record.dataAuto("name" -> "target"),
+        entityId,
+        EntityCreateOptions.default
+      )
+
+      targetRecord.getString("shortid") shouldBe Some(entityId.parts.entropy)
+    }
+
+    "preserve explicitly supplied shortid create value" in {
+      given ExecutionContext = ExecutionContext.test()
+      given EntityPersistentCreate[TestCreate] = _persistent_create
+      val target = EntityCollectionId("test", "a", "target_entity")
+
+      val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
+        Record.dataAuto("name" -> "target", "shortid" -> "manual-shortid"),
+        EntityId("test", "target", target),
+        EntityCreateOptions.default
+      )
+
+      targetRecord.getString("shortid") shouldBe Some("manual-shortid")
+    }
+
     "override create defaults by entity collection" in {
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create

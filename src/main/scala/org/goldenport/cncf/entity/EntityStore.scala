@@ -21,7 +21,7 @@ import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
  *  version Jan. 10, 2026
  *  version Feb. 26, 2026
  *  version Mar. 30, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -609,6 +609,7 @@ class StandardEntityStore(
 
     if (includesCreationDefaults) {
       add_if_missing("id", existing_value("id").orElse(Some(id.print)))
+      add_if_missing("shortid", existing_value("shortid").orElse(Some(id.parts.entropy)))
       add_if_missing("name", existing_value("name").orElse(Some(principalid)))
       add_if_missing("createdAt", existing_value("createdAt").orElse(Some(now)))
       add_if_missing("createdBy", existing_value("createdBy").orElse(Some(principal)))

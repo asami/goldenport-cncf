@@ -1039,10 +1039,17 @@ human-facing links and screens.
 
 - `id` is the canonical EntityId and must remain available for internal
   persistence, references, APIs, diagnostics, and cross-entity contexts.
+- External integration and generic framework logic should continue to pass the
+  canonical EntityId. It carries major/minor, entity name, timestamp, and
+  entropy, which are needed for scalable routing, partitioning, and possible
+  distributed ordering semantics. In particular, timestamp is reserved as a
+  future ordering signal for distributed algorithms and must not be discarded
+  by generic processing.
 - `shortid` is derived from the entity-local entropy portion of EntityId and is
-  stored/exposed as an entity attribute for Web-facing interaction.
+  stored/exposed as a `SimpleEntity` identity attribute for Web-facing
+  interaction and DB lookup.
 - `shortid` is only a complete reference when the entity kind is known from
-  context.
+  context, such as a fixed entity admin route or a component-local Web screen.
 - URL conventions should use `shortid` for entity-scoped routes such as
   `/web/{component}/admin/entities/{entity}/{shortid}`.
 - Screens should avoid showing both `id` and `shortid` noisily. Admin/detail
@@ -1051,21 +1058,73 @@ human-facing links and screens.
 
 ### Detailed Tasks
 
-- [ ] Define the canonical EntityId entropy extraction contract.
-- [ ] Add `shortid` generation at the entity creation chokepoint before the
+- [x] Define the canonical EntityId entropy extraction contract.
+      `EntityId` is defined in `simplemodeling-model` as a specialization of
+      `UniversalId`. The canonical Web-facing shortid source is
+      `EntityId.parts.entropy`. This keeps `id` as the full canonical
+      identifier while allowing entity-scoped URLs and forms to use the
+      entropy portion when the route already fixes the entity collection.
+- [x] Add `shortid` generation at the entity creation chokepoint before the
       entity is stored in resident memory or DataStore.
-- [ ] Define how `shortid` is represented in Schema / EntityRuntimeDescriptor
+      `shortid` is no longer a `NameAttributes` field. It belongs to
+      `SimpleEntity` and is complemented from `EntityId.parts.entropy` by CNCF
+      create/save defaults so DataStore-backed lookup can use a persisted
+      column.
+- [x] Define how `shortid` is represented in Schema / EntityRuntimeDescriptor
       so Web forms, lists, details, and admin pages can discover it.
-- [ ] Define uniqueness and lookup behavior for `(entityName, shortid)`.
-- [ ] Add entity-scoped lookup APIs that accept `shortid` without requiring
+      `ComponentFactory` enriches effective entity runtime Schema with a
+      `shortid` column immediately after canonical `id` when missing. The
+      column is marked as a system, readonly, non-required Web field.
+- [x] Define uniqueness and lookup behavior for `(entityName, shortid)`.
+      `shortid` is unique only within an entity collection. Framework code
+      must resolve `(entityName, shortid)` to canonical `EntityId` before
+      loading or updating an entity.
+- [x] Add entity-scoped lookup APIs that accept `shortid` without requiring
       full EntityId when the entity kind is explicit.
-- [ ] Update Web/admin route generation to prefer `shortid` for entity-scoped
+      `EntityCollection.resolveEntityId` and `EntitySpace.resolveEntityId`
+      accept either canonical EntityId or entity-scoped shortid. The current
+      implementation resolves canonical id first, then falls back to the
+      persisted `shortid` field or `EntityId.parts.entropy`.
+- [x] Update Web/admin route generation to prefer `shortid` for entity-scoped
       visible URLs.
-- [ ] Define display policy for `id` vs `shortid` in list, detail, edit, and
+      Admin entity list/detail/edit links now use shortid when available while
+      update POST resolves back to canonical id before persistence.
+- [x] Define display policy for `id` vs `shortid` in list, detail, edit, and
       diagnostic/admin views.
-- [ ] Add executable specifications covering generation, lookup, routing, and
+      The route-facing identifier is shortid. Canonical `id` remains available
+      in schema/display data for admin diagnostics and advanced inspection, but
+      is not the preferred route token for entity-scoped Web links.
+- [x] Add executable specifications covering generation, lookup, routing, and
       display policy.
-- [ ] Validate with `textus-sample-app` notice URLs and admin links.
+- [x] Validate with `textus-sample-app` notice URLs and admin links.
+      After publishing the framework locally, the sample app compiles and its
+      admin notice list emits shortid detail/edit links. Detail access by
+      shortid returns the expected notice record.
+
+### Current Findings
+
+- Canonical EntityId format is inherited from `UniversalId`:
+  `major-minor-entity-{entityName}-{timestamp}-{entropy}`.
+- `EntityId.parts.entropy` is already available after parsing or generation,
+  so no string-splitting should be introduced in CNCF.
+- Creation chokepoints to update next are `EntityStore.create`, generated
+  entity construction paths, and admin `EntityCollection.putRecordSynced`
+  create/update flows.
+- `NameAttributes.shortid` was removed from the model surface. `shortid` now
+  belongs to `SimpleEntity`, `SimpleEntityCreate`, `SimpleEntityUpdate`, and
+  `SimpleEntityQuery`.
+- `EntityRuntimeDescriptor.schema` now exposes `shortid` for Web/admin
+  discovery without replacing canonical `id`.
+- `shortid` must not become the default external identifier. It intentionally
+  omits major/minor, entity name, and timestamp.
+- Admin entity read/update now accept either canonical id or shortid. Update
+  requests normalize the id back to canonical EntityId before
+  `EntityCollection.putRecordSynced`.
+- Lookup/display chokepoints are the admin operation records returned by
+  `AdminComponent` and the route/link rendering in `StaticFormAppRenderer`.
+- `EntityRuntimeDescriptor.schema` remains the right metadata carrier for Web
+  forms/lists/details. If `shortid` needs additional semantics, extend Schema
+  metadata rather than adding ad hoc reflection fields.
 
 ### Inputs
 

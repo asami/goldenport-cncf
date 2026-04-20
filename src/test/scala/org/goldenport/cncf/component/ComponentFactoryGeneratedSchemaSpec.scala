@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 16, 2026
- * @version Apr. 16, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryGeneratedSchemaSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -36,7 +36,14 @@ final class ComponentFactoryGeneratedSchemaSpec extends AnyWordSpec with Matcher
 
       Then("the runtime descriptor exposes the companion schema")
       val schema = component.entityRuntimeDescriptor("order").flatMap(_.schema).getOrElse(fail("schema is missing"))
-      schema.columns.map(_.name.value) shouldBe Vector("id", "name", "status")
+      schema.columns.map(_.name.value) shouldBe Vector("id", "shortid", "name", "status")
+
+      And("the schema exposes shortid as a system Web identity attribute without replacing canonical id")
+      val shortid = schema.columns.find(_.name.value == "shortid").getOrElse(fail("shortid column is missing"))
+      shortid.domain.datatype.name shouldBe "string"
+      shortid.web.system shouldBe true
+      shortid.web.readonly shouldBe true
+      shortid.web.required shouldBe Some(false)
 
       And("the schema preserves generated Web hints for Web form composition")
       val status = schema.columns.find(_.name.value == "status").getOrElse(fail("status column is missing"))

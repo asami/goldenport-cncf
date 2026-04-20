@@ -1,6 +1,7 @@
 package org.goldenport.cncf.entity.runtime
 
 import org.goldenport.Consequence
+import org.goldenport.datatype.Identifier
 import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.EntityId
@@ -11,7 +12,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 /*
  * @since   Mar. 14, 2026
  *  version Mar. 30, 2026
- * @version Apr. 19, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -78,6 +79,36 @@ final class EntityCollection[E](
     storage.storeRealm.remove(id)
     storage.memoryRealm.foreach(_.remove(id))
   }
+
+  def resolveEntityId(idOrShortid: String): Option[EntityId] =
+    _canonical_entity_id(idOrShortid).orElse(_entity_id_by_shortid(idOrShortid))
+
+  def resolveByReference(idOrShortid: String): Consequence[E] =
+    resolveEntityId(idOrShortid) match {
+      case Some(id) => resolve(id)
+      case None => Consequence.successOrEntityNotFound(Option.empty[E])(Identifier(idOrShortid))
+    }
+
+  private def _canonical_entity_id(
+    idOrShortid: String
+  ): Option[EntityId] =
+    EntityId.parse(idOrShortid).toOption.filter { id =>
+      id.collection.major == descriptor.collectionId.major &&
+        id.collection.name == descriptor.collectionId.name
+    }
+
+  private def _entity_id_by_shortid(
+    shortid: String
+  ): Option[EntityId] =
+    _all_values.find { entity =>
+      val id = descriptor.persistent.id(entity)
+      val record = descriptor.persistent.toRecord(entity)
+      record.getString("shortid").contains(shortid) || id.parts.entropy == shortid
+    }.map(descriptor.persistent.id)
+
+  private def _all_values: Vector[E] =
+    storage.memoryRealm.map(_.values).getOrElse(Vector.empty) ++
+      storage.storeRealm.values
 
   // Current phase search API:
   // route is available through EntitySpace/EntityCollection.
