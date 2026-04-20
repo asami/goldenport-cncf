@@ -37,7 +37,7 @@ import org.goldenport.configuration.ConfigurationValue
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 30, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -558,7 +558,7 @@ trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Cor
     collectionname: String,
     q: Query[?]
   ): Consequence[SearchResult[A]] =
-    browser.browser[A](collectionname).query(q).map(_to_search_result(q, _))
+    browser.browser[A](collectionname).query_with_context(q)(using execution_context).map(_to_search_result(q, _))
 
   protected final def view_search_or_throw[A](
     collectionname: String,
@@ -578,7 +578,7 @@ trait ActionCallBrowserPart extends ActionCallFeaturePart { self: ActionCall.Cor
     viewname: String,
     q: Query[?]
   ): Consequence[SearchResult[A]] =
-    browser.browser[A](collectionname, viewname).query(q).map(_to_search_result(q, _))
+    browser.browser[A](collectionname, viewname).query_with_context(q)(using execution_context).map(_to_search_result(q, _))
 
   protected final def view_search_or_throw[A](
     collectionname: String,
@@ -734,8 +734,12 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   private def _is_entity_not_found(
     conclusion: org.goldenport.Conclusion
   ): Boolean = {
-    val s = conclusion.show.toLowerCase
-    s.contains("not found") || s.contains("notfound")
+    val symptom = conclusion.observation.taxonomy.symptom
+    val message = conclusion.show.toLowerCase
+    symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.NotFound ||
+      message.contains("not found") ||
+      message.contains("not-found") ||
+      message.contains("notfound")
   }
 
   protected final def entity_create[T](

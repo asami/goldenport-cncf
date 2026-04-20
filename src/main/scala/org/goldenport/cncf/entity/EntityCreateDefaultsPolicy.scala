@@ -13,7 +13,7 @@ import org.goldenport.datatype.{Identifier, ObjectId}
  * This is CNCF runtime policy, not a simplemodeling-model concern.
  *
  * @since   Apr. 13, 2026
- * @version Apr. 13, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityCreateDefaultsPolicy {
@@ -187,7 +187,8 @@ object EntityCreateDefaultsPolicy {
         value.foreach(v => defaults += (key(canonical) -> v))
 
       add_if_missing("id", Some(id.print))
-      add_or_replace("name", Some(principalid))
+      add_if_missing("shortid", Some(id.parts.entropy))
+      add_or_replace_generated_default("name", Some(principalid), _is_generated_name_default)
       add_or_replace("createdAt", Some(now))
       add_or_replace("createdBy", Some(principal))
       add_or_replace("updatedAt", Some(now))
@@ -259,6 +260,9 @@ object EntityCreateDefaultsPolicy {
 
     private def _is_system_or_unknown(p: Any): Boolean =
       _is_system(p) || Option(p).exists(_.toString.equalsIgnoreCase("unknown"))
+
+    private def _is_generated_name_default(p: Any): Boolean =
+      _is_system_or_unknown(p) || Option(p).exists(_.toString.equalsIgnoreCase("anonymous"))
 
     private def _is_system(p: Any): Boolean =
       Option(p).exists(_.toString.equalsIgnoreCase("system"))

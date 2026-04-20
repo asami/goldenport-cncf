@@ -26,7 +26,8 @@ import org.goldenport.cncf.entity.view.{Browser, ContextualBrowserCount, Context
 import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.statemachine.{CollectionStateMachinePlanner, CollectionStateMachinePlannerProvider, CollectionTransitionRule, CollectionTransitionRuleProvider, TransitionTrigger, TransitionRule}
 import org.goldenport.cncf.naming.NamingConventions
-import org.goldenport.schema.Schema
+import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, XString}
+import org.simplemodeling.model.value.BaseContent
 import scala.util.Try
 
 /*
@@ -34,7 +35,7 @@ import scala.util.Try
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Mar. 31, 2026
- * @version Apr. 16, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -112,14 +113,53 @@ final class ComponentFactory(
     component: Component,
     descriptor: EntityRuntimeDescriptor
   ): EntityRuntimeDescriptor =
-    descriptor.schema match {
-      case Some(_) => descriptor
-      case None =>
-        _generated_entity_module(component, descriptor.entityName)
-          .flatMap(_extract_schema)
-          .map(descriptor.withSchema)
-          .getOrElse(descriptor)
+    _effective_entity_schema(component, descriptor) match {
+      case Some(schema) => descriptor.withSchema(_with_shortid_schema(schema))
+      case None => descriptor
     }
+
+  private def _effective_entity_schema(
+    component: Component,
+    descriptor: EntityRuntimeDescriptor
+  ): Option[Schema] =
+    descriptor.schema.orElse {
+      _generated_entity_module(component, descriptor.entityName)
+        .flatMap(_extract_schema)
+    }
+
+  private def _with_shortid_schema(
+    schema: Schema
+  ): Schema = {
+    val names = schema.columns.map(_.name.value)
+    if (names.exists(NamingConventions.equivalentByNormalized(_, "shortid")))
+      schema
+    else {
+      val column = _shortid_column
+      val columns =
+        names.indexWhere(NamingConventions.equivalentByNormalized(_, "id")) match {
+          case -1 => schema.columns :+ column
+          case n =>
+            val (before, after) = schema.columns.splitAt(n + 1)
+            before ++ (column +: after)
+        }
+      schema.copy(columns = columns)
+    }
+  }
+
+  private def _shortid_column: Column =
+    Column(
+      baseContent = BaseContent.Builder("shortid").label("Short ID").build(),
+      domain = ValueDomain(
+        datatype = XString,
+        multiplicity = Multiplicity.ZeroOne
+      ),
+      web = WebColumn(
+        required = Some(false),
+        system = true,
+        readonly = true,
+        help = Some("Entity-local identifier for Web UI when the entity kind is fixed. Use canonical id for external integration.")
+      )
+    )
 
   private def _bootstrap_event_reception(
     component: Component
@@ -559,8 +599,10 @@ final class ComponentFactory(
     entityname: String
   ): ViewBuilder[Any] =
     new ContextualViewBuilder[Any] {
-      def build_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[Any] =
+      def build_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[Any] = {
+        given ExecutionContext = _with_internal_materialization_read(ctx)
         _load_view_source_entity(component, entityspace, entityname, id).flatMap(_entity_to_view(component, entityname, _))
+      }
     }
 
   private def _default_view_browser(
@@ -570,16 +612,20 @@ final class ComponentFactory(
     collection: ViewCollection[Any]
   ): Browser[Any] = {
     val queryfn = new ContextualBrowserQuery[Any] {
-      def query_with_context(q: Query[_])(using ctx: ExecutionContext): Consequence[Vector[Any]] =
+      def query_with_context(q: Query[_])(using ctx: ExecutionContext): Consequence[Vector[Any]] = {
+        given ExecutionContext = _with_internal_materialization_read(ctx)
         _search_view_source_entities(component, entityspace, entityname, _sanitize_query(q)).flatMap {
           _.foldLeft(Consequence.success(Vector.empty[Any])) { (z, entity) =>
             z.flatMap(xs => _entity_to_view(component, entityname, entity).map(xs :+ _))
           }
         }
+      }
     }
     val countfn = new ContextualBrowserCount {
-      def count_with_context(q: Query[_])(using ctx: ExecutionContext): Consequence[Int] =
+      def count_with_context(q: Query[_])(using ctx: ExecutionContext): Consequence[Int] = {
+        given ExecutionContext = _with_internal_materialization_read(ctx)
         _count_view_source_entities(component, entityspace, entityname, _sanitize_count_query(q))
+      }
     }
     Browser.from(
       collection,
@@ -598,20 +644,26 @@ final class ComponentFactory(
     collection: ViewCollection[Any]
   ): Browser[Any] = {
     val loadfn = new ContextualBrowserFind[Any] {
-      def find_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[Any] =
+      def find_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[Any] = {
+        given ExecutionContext = _with_internal_materialization_read(ctx)
         _load_view_source_entity(component, entityspace, entityname, id).flatMap(_entity_to_view(component, entityname, Some(viewname), _))
+      }
     }
     val queryfn = new ContextualBrowserQuery[Any] {
-      def query_with_context(q: Query[_])(using ctx: ExecutionContext): Consequence[Vector[Any]] =
+      def query_with_context(q: Query[_])(using ctx: ExecutionContext): Consequence[Vector[Any]] = {
+        given ExecutionContext = _with_internal_materialization_read(ctx)
         _search_view_source_entities(component, entityspace, entityname, _sanitize_query(q)).flatMap {
           _.foldLeft(Consequence.success(Vector.empty[Any])) { (z, entity) =>
             z.flatMap(xs => _entity_to_view(component, entityname, Some(viewname), entity).map(xs :+ _))
           }
         }
+      }
     }
     val countfn = new ContextualBrowserCount {
-      def count_with_context(q: Query[_])(using ctx: ExecutionContext): Consequence[Int] =
+      def count_with_context(q: Query[_])(using ctx: ExecutionContext): Consequence[Int] = {
+        given ExecutionContext = _with_internal_materialization_read(ctx)
         _count_view_source_entities(component, entityspace, entityname, _sanitize_count_query(q))
+      }
     }
     Browser.from(
       loadfn,
@@ -632,6 +684,7 @@ final class ComponentFactory(
   ): Browser[Any] = {
     val queryfn = new ContextualBrowserQuery[Any] {
       def query_with_context(q: Query[_])(using ctx: ExecutionContext): Consequence[Vector[Any]] = {
+        given ExecutionContext = _with_internal_materialization_read(ctx)
         val source = _sanitize_query_record(_query_record(q))
         val filtered = _filter_view_query_record(source, querydef)
         val searchrecord = _searchable_query_record(if (filtered.asMap.nonEmpty) filtered else source)
@@ -647,6 +700,7 @@ final class ComponentFactory(
     }
     val countfn = new ContextualBrowserCount {
       def count_with_context(q: Query[_])(using ctx: ExecutionContext): Consequence[Int] = {
+        given ExecutionContext = _with_internal_materialization_read(ctx)
         val source = _sanitize_query_record(_query_record(q))
         val filtered = _filter_view_query_record(source, querydef)
         val searchrecord = _searchable_query_record(if (filtered.asMap.nonEmpty) filtered else source)
@@ -661,6 +715,15 @@ final class ComponentFactory(
       Some(ctx => _entity_total_count_capability(component, entityname)(using ctx))
     )
   }
+
+  private def _with_internal_materialization_read(
+    ctx: ExecutionContext
+  ): ExecutionContext =
+    // View/Aggregate materialization reads source entities internally before
+    // the resulting surface applies its own operation-level contract. The
+    // existing flag is named after aggregates; keep using it until a dedicated
+    // internal materialization scope is introduced.
+    ExecutionContext.withAggregateInternalRead(ctx, true)
 
   private def _entity_total_count_capability(
     component: Component,
