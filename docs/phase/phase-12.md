@@ -100,6 +100,9 @@ This document is a progress dashboard, not a design journal.
   Completed Web descriptor inspection now reports global, app, form, and
   resolved input/result asset composition so package authors can debug
   descriptor-driven asset behavior from the management console.
+- X (DONE): WEB-24 — Render descriptor asset composition tables.
+  Management Console descriptor pages now show configured asset scopes and
+  resolved Static Form page assets as Bootstrap tables before the raw JSON.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational

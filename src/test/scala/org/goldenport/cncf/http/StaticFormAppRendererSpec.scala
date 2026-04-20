@@ -51,7 +51,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -262,6 +262,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val html = StaticFormAppRenderer.renderSystemAdminDescriptor(descriptor).body
 
       html should include ("System Web Descriptor")
+      html should include ("Asset Composition")
+      html should include ("Configured Scopes")
+      html should include ("Resolved Form Pages")
+      html should include ("component form index")
+      html should include ("operation input")
+      html should include ("operation result")
       html should include ("Completed Descriptor")
       html should include ("Configured Descriptor")
       html should include ("/web/system/admin")
@@ -335,6 +341,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/system/admin/descriptor")
       html should include ("Completed Descriptor")
       html should include ("Configured Descriptor")
+      html should include ("Asset Composition")
+      html should include ("Configured Scopes")
+      html should include ("Resolved Form Pages")
       html should include ("&quot;root&quot; : &quot;/web/notice-board&quot;")
       html should include (s"&quot;route&quot; : &quot;/web/${componentPath}/notice-board&quot;")
       html should include ("&quot;kind&quot; : &quot;static-form&quot;")

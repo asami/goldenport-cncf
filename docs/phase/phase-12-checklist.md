@@ -1704,6 +1704,46 @@ are used by Static Form index, input, and result pages.
 
 ---
 
+## WEB-24 — Render Descriptor Asset Composition Tables
+
+Status: DONE
+
+### Goal
+
+Make descriptor asset composition readable from the management console without
+requiring operators to inspect JSON by hand.
+
+### Scope
+
+- System descriptor admin page shows configured descriptor asset scopes as a
+  Bootstrap table.
+- Component descriptor admin page shows the same scope table and filters
+  resolved form rows to the selected component.
+- Resolved form page rows show component form index, operation input, and
+  operation result asset lists.
+- Raw completed/configured descriptor JSON remains available for exact
+  inspection.
+
+### Detailed Tasks
+
+- [x] Add Asset Composition section to descriptor admin pages.
+- [x] Render configured global/app/form asset scopes in a table.
+- [x] Render completed form page asset rows in a table.
+- [x] Add executable specification checks for the table headings and row
+      labels.
+
+### Closure
+
+WEB-24 is complete for the first readable admin surface. The descriptor page
+now provides both operator-friendly tables and raw JSON for exact debugging.
+
+### Inputs
+
+- `docs/phase/phase-12.md`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.

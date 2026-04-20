@@ -21,7 +21,7 @@ import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -1746,6 +1746,7 @@ object StaticFormAppRenderer {
            |  <h2>Navigation</h2>
            |  <p><a href="/web/system/admin">System admin</a> · <a href="/web/system/dashboard">System dashboard</a></p>
            |</article>
+           |${_web_descriptor_asset_composition_table(webDescriptor)}
            |<article>
            |  <h2>Completed Descriptor</h2>
            |  <p>The completed view applies framework defaults so the descriptor can be inspected as the runtime sees it.</p>
@@ -1780,6 +1781,7 @@ object StaticFormAppRenderer {
              |  <h2>Navigation</h2>
              |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/web/system/admin/descriptor">System descriptor</a></p>
              |</article>
+             |${_web_descriptor_asset_composition_table(webDescriptor, Some(componentPath))}
              |<article>
              |  <h2>Completed Descriptor</h2>
              |  <p>The completed view applies framework defaults and resolves component route placeholders for this component.</p>
@@ -4317,6 +4319,100 @@ object StaticFormAppRenderer {
             None
         }
     }
+
+  private def _web_descriptor_asset_composition_table(
+    descriptor: WebDescriptor,
+    componentSegment: Option[String] = None
+  ): String = {
+    val forms = _web_descriptor_form_asset_entries(descriptor, componentSegment)
+    val scopeRows =
+      Vector(_web_descriptor_asset_scope_row("global", "web.assets", descriptor.assets)) ++
+        descriptor.apps.map(app =>
+          _web_descriptor_asset_scope_row("app", app.normalizedName, app.assets)
+        ) ++
+        forms.map {
+          case (selector, _, _, _, form) =>
+            _web_descriptor_asset_scope_row("form", selector, form.assets)
+        }
+    val resolvedRows = forms.flatMap {
+      case (selector, component, service, operation, _) =>
+        Vector(
+          _web_descriptor_resolved_asset_row(
+            selector,
+            "component form index",
+            descriptor.formIndexAssets(component)
+          ),
+          _web_descriptor_resolved_asset_row(
+            selector,
+            "operation input",
+            descriptor.resultAssets(component, service, operation)
+          ),
+          _web_descriptor_resolved_asset_row(
+            selector,
+            "operation result",
+            descriptor.resultAssets(component, service, operation)
+          )
+        )
+    }
+    val scopeBody =
+      if (scopeRows.isEmpty)
+        """<tr><td colspan="5" class="text-secondary">No descriptor asset scopes are configured.</td></tr>"""
+      else
+        scopeRows.mkString("\n")
+    val resolvedBody =
+      if (resolvedRows.isEmpty)
+        """<tr><td colspan="5" class="text-secondary">No form asset compositions are resolved for this scope.</td></tr>"""
+      else
+        resolvedRows.mkString("\n")
+    s"""<article>
+       |  <h2>Asset Composition</h2>
+       |  <p>Configured descriptor asset scopes and completed Static Form page asset lists.</p>
+       |  <h3>Configured Scopes</h3>
+       |  <div class="table-responsive"><table class="table table-sm align-middle">
+       |    <thead><tr><th>Scope</th><th>Selector</th><th>Auto complete</th><th>CSS</th><th>JS</th></tr></thead>
+       |    <tbody>${scopeBody}</tbody>
+       |  </table></div>
+       |  <h3>Resolved Form Pages</h3>
+       |  <div class="table-responsive"><table class="table table-sm align-middle">
+       |    <thead><tr><th>Form</th><th>Page</th><th>Auto complete</th><th>CSS</th><th>JS</th></tr></thead>
+       |    <tbody>${resolvedBody}</tbody>
+       |  </table></div>
+       |</article>""".stripMargin
+  }
+
+  private def _web_descriptor_asset_scope_row(
+    scope: String,
+    selector: String,
+    assets: WebDescriptor.Assets
+  ): String =
+    s"""<tr>
+       |  <td>${_escape(scope)}</td>
+       |  <td><code>${_escape(selector)}</code></td>
+       |  <td>${assets.autoComplete}</td>
+       |  <td>${_web_descriptor_asset_url_list(assets.css)}</td>
+       |  <td>${_web_descriptor_asset_url_list(assets.js)}</td>
+       |</tr>""".stripMargin
+
+  private def _web_descriptor_resolved_asset_row(
+    selector: String,
+    page: String,
+    assets: WebDescriptor.Assets
+  ): String =
+    s"""<tr>
+       |  <td><code>${_escape(selector)}</code></td>
+       |  <td>${_escape(page)}</td>
+       |  <td>${assets.autoComplete}</td>
+       |  <td>${_web_descriptor_asset_url_list(assets.css)}</td>
+       |  <td>${_web_descriptor_asset_url_list(assets.js)}</td>
+       |</tr>""".stripMargin
+
+  private def _web_descriptor_asset_url_list(
+    urls: Vector[String]
+  ): String =
+    if (urls.isEmpty)
+      """<span class="text-secondary">none</span>"""
+    else
+      urls.map(url => s"""<div><code>${_escape(url)}</code></div>""").mkString
 
   private def _web_descriptor_app_json(
     app: WebDescriptor.App
