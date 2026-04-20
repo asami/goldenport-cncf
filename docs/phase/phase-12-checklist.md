@@ -2178,6 +2178,137 @@ the rest of the Form/Admin surface.
 
 ---
 
+## WEB-36 — Management Console Read Surface E2E Recheck
+
+Status: DONE
+
+### Goal
+
+Confirm that data created through the Management Console entity form is visible
+from all read-oriented admin surfaces that should share the same runtime
+metadata and entity access path.
+
+### Scope
+
+- Create one `Notice` through the admin entity create form.
+- Confirm the created `Notice` appears in the entity list.
+- Follow the generated entity detail link and confirm title/content render.
+- Confirm the aggregate read page shows the created `Notice`.
+- Confirm the view read page shows the created `Notice`.
+
+### Detailed Tasks
+
+- [x] Add a sample-app check dedicated to read-surface propagation.
+- [x] Use a real `/form/notice-board/admin/entities/notice/create` POST rather
+      than directly mutating test data.
+- [x] Resolve the created entity detail URL from the rendered list page instead
+      of hard-coding generated identifiers.
+- [x] Verify entity detail, aggregate read, and view read pages with the same
+      created title/content.
+
+### Closure
+
+WEB-36 confirms that the current Management Console read surfaces are wired to
+the same runtime entity data path in the published sample runtime. It catches
+regressions where a create path updates only one in-memory surface but aggregate
+or view read pages drift out of sync.
+
+### Inputs
+
+- `textus-sample-app/scripts/check-admin-read-flows.sh`
+- `docs/design/management-console.md`
+- `docs/design/web-form-api-schema.md`
+
+---
+
+## WEB-37 — Aggregate Operation Create/Update E2E Recheck
+
+Status: DONE
+
+### Goal
+
+Confirm that aggregate create/update actions exposed by the Management Console
+execute as operation-backed Form flows, produce async job result pages, and
+update the aggregate read output.
+
+### Scope
+
+- Recheck aggregate detail links to operation forms.
+- Render aggregate create and update operation forms.
+- Submit create/update through `/form/notice-board/aggregate/...`.
+- Await the async job result through the generated job result action.
+- Confirm aggregate read reflects both created and updated values.
+
+### Detailed Tasks
+
+- [x] Add sample-app checks for aggregate create/update operation form routes.
+- [x] Submit `createNotice` through the aggregate operation form and await the
+      generated job result.
+- [x] Confirm the aggregate read page contains the created record.
+- [x] Submit `updateNotice` through the aggregate operation form with the admin
+      form context needed by the operation policy.
+- [x] Preserve form/admin context when the job await route dispatches
+      `job_control.job.await_job_result`.
+- [x] Confirm the aggregate read page contains the updated title/content.
+
+### Closure
+
+WEB-37 confirms the current aggregate Management Console write path without
+adding direct aggregate mutation routes. A bug found during the sample E2E was
+fixed in the HTTP Form job-await path: POSTed form context is now propagated to
+the internal job-control operation so ownership/capability checks see the same
+admin subject context as the submitted form flow.
+
+### Inputs
+
+- `textus-sample-app/scripts/check-admin-aggregate-operations.sh`
+- `textus-sample-app/scripts/check-web-packaging.sh`
+- `src/main/scala/org/goldenport/cncf/http/Http4sHttpServer.scala`
+- `docs/notes/aggregate-method-implementation-strategy.md`
+
+---
+
+## WEB-38 — Data CRUD Fixture Boundary
+
+Status: DONE
+
+### Goal
+
+Keep the Data admin surface honest while avoiding a misleading full CRUD E2E
+test in a sample app that does not yet model a meaningful data collection.
+
+### Scope
+
+- Keep route-level validation for `/web/notice-board/admin/data`.
+- Keep the current placeholder assertion visible in sample checks.
+- Record that CNCF renderer specs already cover DataStore-backed data CRUD with
+  a fixture.
+- Defer sample-level Data CRUD E2E until a data-oriented sample or fixture is
+  introduced.
+
+### Detailed Tasks
+
+- [x] Keep the sample-app Data admin entrypoint check in the packaging/admin
+      surface validation.
+- [x] Keep the placeholder text assertion so unsupported Data CRUD is explicit.
+- [x] Record the fixture boundary in Phase 12 instead of treating the current
+      notice-board sample as a data CRUD application.
+
+### Closure
+
+WEB-38 closes the immediate Phase 12 bookkeeping for Data CRUD validation. The
+runtime surface remains visible, but a meaningful end-to-end create/update
+round trip is reserved for a future sample that actually owns a data collection
+model.
+
+### Inputs
+
+- `textus-sample-app/scripts/check-web-packaging.sh`
+- `textus-sample-app/scripts/check-admin-surfaces.sh`
+- `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.
@@ -2202,7 +2333,7 @@ the rest of the Form/Admin surface.
 
 Phase 12 is complete when:
 
-- WEB-01 through WEB-35 are marked DONE, or explicitly deferred to a later
+- WEB-01 through WEB-38 are marked DONE, or explicitly deferred to a later
   phase.
 - `phase-12.md` summary checkboxes are aligned.
 - No item remains ACTIVE or SUSPENDED.

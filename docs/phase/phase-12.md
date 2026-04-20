@@ -137,6 +137,18 @@ This document is a progress dashboard, not a design journal.
 - AI (DONE): WEB-35 — Recheck Management Console view surface.
   The sample app confirms view metadata, read baseline, and JSON Form API
   definition for the `notice` view.
+- AJ (DONE): WEB-36 — Recheck Management Console read surfaces with created data.
+  The sample app now creates a `Notice` through the admin entity form, then
+  verifies that the same data is visible from entity list/detail, aggregate
+  read, and view read pages.
+- AK (DONE): WEB-37 — Recheck aggregate operation create/update round trip.
+  The sample app now exercises aggregate operation forms end to end: submit
+  create/update commands, wait for the async job result, and confirm aggregate
+  read pages reflect the changes.
+- AL (DONE): WEB-38 — Record Data CRUD fixture boundary.
+  The current notice-board CAR sample has no meaningful data collection
+  fixture, so full Data CRUD E2E remains deferred until a data-oriented sample
+  or fixture is added. Current checks keep the data admin entrypoint visible.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
@@ -223,6 +235,17 @@ Current note:
 - [x] WEB-35: Recheck Management Console view surface.
   View list/detail, read baseline, and JSON Form API metadata are checked
   against the sample app runtime.
+- [x] WEB-36: Recheck Management Console read surfaces with created data.
+  `textus-sample-app` creates a `Notice` through the admin entity form and
+  verifies that entity list/detail, aggregate read, and view read all expose
+  the created title/content through the published runtime.
+- [x] WEB-37: Recheck aggregate operation create/update round trip.
+  Aggregate create/update operation forms are executed through `/form`, async
+  job result pages are awaited, and aggregate read output is checked after
+  create and update.
+- [x] WEB-38: Record Data CRUD fixture boundary.
+  Data admin route validation remains in place, while full Data CRUD E2E is
+  explicitly held for a future data collection fixture/sample.
 
 ## 6. Next Phase Candidates
 

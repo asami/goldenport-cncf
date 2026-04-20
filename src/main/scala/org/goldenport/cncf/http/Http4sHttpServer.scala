@@ -36,7 +36,7 @@ import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -1506,24 +1506,30 @@ final class Http4sHttpServer(
         "result.job.id" -> jobId,
         "result.job.href" -> s"/form/${app}/${service}/${operation}/jobs/${jobId}/await"
       )
-      val res = _dispatch_operation(
-        "job_control",
-        "job",
-        "await_job_result",
-        HttpRequest.fromPath(
-          method = HttpRequest.POST,
-          path = "/job_control/job/await_job_result",
-          query = Record.empty,
-          header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value)),
-          form = Record.data("id" -> jobId)
+      for {
+        form <- _to_plain_form_record(req)
+        dispatchForm = Record.create(
+          (_operation_dispatch_form(form).asMap + ("id" -> jobId)).toVector
         )
-      )
-      val page = StaticFormAppRenderer.renderFormResult(
-        _form_result_properties(app, service, operation, res, values),
-        _form_result_static_template(app, service, operation, res.code)
-          .orElse(_form_descriptor(app, service, operation).flatMap(_.resultTemplate))
-      )
-      _html(page).map { html =>
+        res = _dispatch_operation(
+          "job_control",
+          "job",
+          "await_job_result",
+          HttpRequest.fromPath(
+            method = HttpRequest.POST,
+            path = "/job_control/job/await_job_result",
+            query = Record.empty,
+            header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value)),
+            form = dispatchForm
+          )
+        )
+        page = StaticFormAppRenderer.renderFormResult(
+          _form_result_properties(app, service, operation, res, values),
+          _form_result_static_template(app, service, operation, res.code)
+            .orElse(_form_descriptor(app, service, operation).flatMap(_.resultTemplate))
+        )
+        html <- _html(page)
+      } yield {
         RuntimeDashboardMetrics.recordHtmlRequest(
           req.method.name,
           req.uri.path.renderString,
