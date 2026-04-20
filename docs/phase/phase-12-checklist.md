@@ -2011,6 +2011,55 @@ settles.
 
 ---
 
+## WEB-32 — Management Console CRUD Route Recheck
+
+Status: DONE
+
+### Goal
+
+Re-anchor the current Web development thread on the remaining Form/Admin path:
+Management Console CRUD must continue to work as an actual browser route flow
+from `textus-sample-app`, not only as renderer-level specifications.
+
+### Scope
+
+- Recheck component admin entry points for entity, data, aggregate, and view
+  surfaces.
+- Recheck entity type list, entity record list, and entity new form routes.
+- Execute one real admin entity create POST through `/form`.
+- Confirm the created entity appears in the admin entity list.
+- Follow the list detail link and confirm the created values render on the
+  entity detail page.
+
+### Detailed Tasks
+
+- [x] Add sample-app route checks for `/web/notice-board/admin/entities`,
+      `/data`, `/aggregates`, and `/views`.
+- [x] Add sample-app route checks for the `Notice` entity list and new form.
+- [x] Add a sample-app admin CRUD check that posts a new `Notice` through the
+      admin entity create form endpoint.
+- [x] Verify list-to-detail navigation for the created `Notice` without using
+      a hard-coded generated id.
+- [x] Keep the check focused on current entity CRUD. Data CRUD and
+      aggregate-command E2E remain separate follow-up validation items because
+      the notice-board sample does not yet provide a meaningful data collection
+      fixture for those flows.
+
+### Closure
+
+WEB-32 closes the immediate route-level recheck. CNCF-side executable specs
+already cover renderer and dispatch behavior; the new sample check confirms the
+published runtime can serve the same flow from a real CAR-style application.
+
+### Inputs
+
+- `textus-sample-app/scripts/check-web-packaging.sh`
+- `textus-sample-app/scripts/check-admin-crud.sh`
+- `docs/design/management-console.md`
+- `docs/notes/cncf-web-static-form-app-contract.md`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.
@@ -2035,7 +2084,7 @@ settles.
 
 Phase 12 is complete when:
 
-- WEB-01 through WEB-15 are marked DONE, or explicitly deferred to a later
+- WEB-01 through WEB-32 are marked DONE, or explicitly deferred to a later
   phase.
 - `phase-12.md` summary checkboxes are aligned.
 - No item remains ACTIVE or SUSPENDED.

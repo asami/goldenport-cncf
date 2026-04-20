@@ -124,6 +124,9 @@ This document is a progress dashboard, not a design journal.
 - AE (DONE): WEB-31 — Polish descriptor admin sections.
   Descriptor admin pages now expose Bootstrap navigation pills, section anchors,
   and table-to-JSON links so the tables remain the primary inspection surface.
+- AF (DONE): WEB-32 — Recheck Management Console CRUD routes with the sample app.
+  The sample app now validates the built-in admin entry points and an entity
+  create/list/detail round trip against the published runtime.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
@@ -196,6 +199,10 @@ Current note:
   Full HTML document templates that use Textus widgets receive local Bootstrap
   5 CSS/JS when missing. Existing page declarations and descriptor-declared
   assets are not duplicated, and pages without widgets are left unchanged.
+- [x] WEB-32: Recheck Management Console CRUD routes with the sample app.
+  `textus-sample-app` verifies entity/admin entry pages and an actual admin
+  entity create/list/detail flow. This keeps the current work order anchored on
+  remaining Form/Admin behavior before deeper Static Form App expansion.
 
 ## 6. Next Phase Candidates
 
