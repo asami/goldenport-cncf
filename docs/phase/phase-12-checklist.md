@@ -1077,7 +1077,7 @@ human-facing links and screens.
 
 ## WEB-14: Application User Job Result UX
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -1101,28 +1101,66 @@ is already known.
   it, but it is not the default Form behavior.
 - Result pages should work with Static Form conventions and Textus widgets, not
   require custom JavaScript.
+- Applications may either embed job UX using Textus job widgets or link to a
+  system-provided job page such as `/web/system/jobs/{jobId}` when they do not
+  want to compose the job UX into the application page.
+- Operation-local await routes and system job pages must both enforce the same
+  owner-only job visibility policy. Admin/content-manager style capabilities
+  may inspect broader job surfaces, but ordinary users see only jobs submitted
+  by the same subject/session.
 - Later island enhancement may provide live polling or richer progress display
   without changing the underlying job result contract.
 
 ### Detailed Tasks
 
-- [ ] Define the application-user job result model exposed to Web/Form pages.
-- [ ] Define result properties produced from async command execution:
+- [x] Define the application-user job result model exposed to Web/Form pages.
+- [x] Define result properties produced from async command execution:
       `jobId`, status, optional entity id/shortid, operation name, and result
       links.
-- [ ] Add a default accepted/result template convention for command POST
+- [x] Add a default accepted/result template convention for command POST
       responses.
-- [ ] Add widgets or action helpers for wait, refresh, result detail, and
+- [x] Add widgets or action helpers for wait, refresh, result detail, and
       resource navigation.
-- [ ] Define how job result lookup is authorized for anonymous, logged-in, and
+- [x] Define how job result lookup is authorized for anonymous, logged-in, and
       admin users.
-- [ ] Define how failed jobs surface structured error information in Static
+- [x] Define how failed jobs surface structured error information in Static
       Form pages.
-- [ ] Evaluate whether the most natural UX is an accepted page, result ticket,
+- [x] Evaluate whether the most natural UX is an accepted page, result ticket,
       inline wait button, polling island, or a combination of those patterns.
-- [ ] Add executable specifications for async accepted result, wait action,
+- [x] Add executable specifications for async accepted result, wait action,
       completed result, failed result, and missing/unauthorized job result.
-- [ ] Validate with `textus-sample-app` post/search flows where applicable.
+- [x] Validate with `textus-sample-app` post/search flows where applicable.
+
+### Current Closure
+
+WEB-14 has a first-pass implementation for application-user job result UX.
+
+Completed scope:
+
+- async Command results expose `result.job.id`, `result.job.status`,
+  `result.job.href`, and `result.action.await.*`.
+- `textus:job-ticket` / `textus-job-ticket` render an embeddable job status
+  card for Static Form Web App pages.
+- `textus:job-actions` / `textus-job-actions` render await/detail actions for
+  application pages that want their own layout.
+- `/web/system/jobs/{jobId}` and `/web/system/jobs/{jobId}/await` provide a
+  system-hosted job result page for applications that want to link out instead
+  of composing job UI.
+- Job query/result/await surfaces enforce owner visibility through the job
+  submitter principal/session, while admin/content-manager capabilities keep
+  broader operational visibility.
+- `textus-sample-app` notice posting uses the job ticket widget on the static
+  result page.
+
+Deferred scope:
+
+- anonymous-user isolation depends on session context becoming available at
+  ingress. Until the session layer is completed, anonymous jobs can be scoped
+  only to the anonymous subject or to an explicit session/principal supplied by
+  the caller.
+- richer polling/island UX and progress timeline widgets remain future
+  enhancements.
+- shortid/entity navigation improvements are tracked by WEB-13.
 
 ### Inputs
 

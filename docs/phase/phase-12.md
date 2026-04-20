@@ -62,7 +62,7 @@ This document is a progress dashboard, not a design journal.
 - M (PLANNED): WEB-13 — Add shortid support for Web-facing entity references.
   EntityId remains the canonical identifier, but Web-facing routes and screens
   need a shorter entity-local identifier when the entity kind is already known.
-- N (PLANNED): WEB-14 — Define application-user job result UX.
+- N (DONE): WEB-14 — Define application-user job result UX.
   Async command execution should expose a natural way for users to follow,
   wait for, and inspect job results without forcing all Form flows to become
   synchronous.
@@ -123,10 +123,12 @@ Current note:
   EntityId, define when it is safe to use it, and define how `id` and
   `shortid` are exposed in Web URLs, forms, lists, detail pages, and admin
   screens.
-- [ ] WEB-14: Define application-user job result UX.
+- [x] WEB-14: Define application-user job result UX.
   Design and implement the user-facing result reference flow for async Command
   execution: job id handoff, optional wait/action buttons, result pages, and
-  trace references such as entity id or shortid when available.
+  trace references such as entity id or shortid when available. Current work
+  adds embeddable job widgets, a system job page, and owner-only job result
+  visibility.
 - [x] WEB-15: Auto-complete required widget assets.
   Full HTML document templates that use Textus widgets receive local Bootstrap
   5 CSS/JS when missing. Existing page declarations and descriptor-declared

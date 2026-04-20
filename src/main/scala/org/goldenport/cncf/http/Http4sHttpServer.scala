@@ -100,6 +100,10 @@ final class Http4sHttpServer(
         _system_manual()
       case GET -> Root / "web" / "system" / "manual" / "openapi.json" =>
         _system_manual_openapi()
+      case req @ GET -> Root / "web" / "system" / "jobs" / jobId =>
+        _system_job(req, jobId)
+      case req @ POST -> Root / "web" / "system" / "jobs" / jobId / "await" =>
+        _system_job_await(req, jobId)
       case req @ GET -> Root / "web" / "system" / "admin" =>
         if (_is_web_authorized("system", "admin", "index", Some(req))) _system_admin() else _forbidden()
       case req @ GET -> Root / "web" / "system" / "admin" / "descriptor" =>
@@ -320,6 +324,47 @@ final class Http4sHttpServer(
         .withEntity(OpenApiProjector.forSubsystem(engine.runtimeSubsystem))
         .withContentType(`Content-Type`(MediaType.application.json, Some(Charset.`UTF-8`)))
     )
+
+  private def _system_job(
+    req: org.http4s.Request[IO],
+    jobId: String
+  ): IO[HResponse[IO]] = {
+    val res = _dispatch_operation(
+      "job_control",
+      "job",
+      "get_job_status",
+      HttpRequest.fromPath(
+        method = HttpRequest.POST,
+        path = "/job_control/job/get_job_status",
+        query = Record.empty,
+        header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value)),
+        form = Record.data("id" -> jobId)
+      )
+    )
+    if (res.code >= 200 && res.code < 400)
+      _html(StaticFormAppRenderer.renderSystemJobTicket(jobId))
+    else
+      _html_status(StaticFormAppRenderer.renderSystemJobResult(jobId, res), HStatus.fromInt(res.code).getOrElse(HStatus.Forbidden))
+  }
+
+  private def _system_job_await(
+    req: org.http4s.Request[IO],
+    jobId: String
+  ): IO[HResponse[IO]] = {
+    val res = _dispatch_operation(
+      "job_control",
+      "job",
+      "await_job_result",
+      HttpRequest.fromPath(
+        method = HttpRequest.POST,
+        path = "/job_control/job/await_job_result",
+        query = Record.empty,
+        header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value)),
+        form = Record.data("id" -> jobId)
+      )
+    )
+    _html_status(StaticFormAppRenderer.renderSystemJobResult(jobId, res), HStatus.fromInt(res.code).getOrElse(HStatus.Ok))
+  }
 
   private def _component_manual(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentManual(engine.runtimeSubsystem, app) match {

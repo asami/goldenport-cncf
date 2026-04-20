@@ -1865,6 +1865,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       FormResultMetadata.fromBody("""{"jobId":"cncf-job-job-1"}""").toTemplateValues shouldBe Map(
         "result.job.id" -> "cncf-job-job-1"
       )
+      FormResultMetadata.fromBody("""{"jobId":"cncf-job-job-2","jobStatus":"running"}""").toTemplateValues shouldBe Map(
+        "result.job.id" -> "cncf-job-job-2",
+        "result.job.status" -> "running"
+      )
       FormResultMetadata.fromBody(
         """{"actions":[{"name":"detail","label":"Open detail","href":"/web/notice-board/admin/entities/notice/notice_1","method":"GET"}]}"""
       ).toTemplateValues should contain allOf (
@@ -4700,6 +4704,46 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("""<button type="submit" class="btn btn-outline-primary">Check result</button>""")
       html should not include ("<textus:action-link")
       html should not include ("<textus-action-link")
+    }
+
+    "render job ticket and job actions for application job result UX" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice"
+        ),
+        200,
+        "application/json",
+        """{"jobId":"cncf-job-job-1","jobStatus":"running","message":"Queued"}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:job-ticket></textus:job-ticket>
+          |  <textus-job-actions actions="await"></textus-job-actions>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("textus-job-ticket")
+      html should include ("cncf-job-job-1")
+      html should include ("running")
+      html should include ("Queued")
+      html should include ("textus-job-actions")
+      _count_occurrences(html, "/form/notice-board/notice/post-notice/jobs/cncf-job-job-1/await") shouldBe 2
+      html should not include ("<textus:job-ticket")
+      html should not include ("<textus-job-actions")
+    }
+
+    "render system job ticket page with fixed system await link" in {
+      val html = StaticFormAppRenderer.renderSystemJobTicket("cncf-job-job-1").body
+
+      html should include ("textus-job-ticket")
+      html should include ("cncf-job-job-1")
+      html should include ("/web/system/jobs/cncf-job-job-1/await")
+      html should include ("Check result")
+      html should not include ("<textus:job-ticket")
     }
 
     "render detail action link from command result id" in {

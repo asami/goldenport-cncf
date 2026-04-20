@@ -113,9 +113,11 @@ object StaticFormAppRenderer {
     private def _job_action_values(metadata: FormResultMetadata): Map[String, String] =
       metadata.jobId match {
         case Some(jobid) =>
-          val href = s"/form/${componentName}/${serviceName}/${operationName}/jobs/${jobid}/await"
+          val href = page.values.getOrElse("result.job.href", s"/form/${componentName}/${serviceName}/${operationName}/jobs/${jobid}/await")
           val common = Map(
             "result.job.href" -> href,
+            "result.job.status" -> metadata.jobStatus.getOrElse("accepted"),
+            "result.job.message" -> metadata.message.getOrElse("Command accepted."),
             "result.action.await.name" -> "await",
             "result.action.await.label" -> "Check result",
             "result.action.await.href" -> href,
@@ -1535,6 +1537,7 @@ object StaticFormAppRenderer {
       s"""<article>
          |  <h2>$${operation.label} Result</h2>
          |  <p>Content-Type $${result.contentType}</p>
+         |  <textus:job-ticket></textus:job-ticket>
          |  <textus-error-panel source="error"></textus-error-panel>
          |  <textus-result-view source="result.body"></textus-result-view>
          |  <textus-result-table source="result.body" page="paging.page" page-size="paging.pageSize" total="paging.total" href="paging.href"></textus-result-table>
@@ -1603,6 +1606,75 @@ object StaticFormAppRenderer {
         body = rendered
       ))
   }
+
+  def renderSystemJobTicket(
+    jobId: String
+  ): Page =
+    renderFormResult(
+      FormResultProperties(
+        FormPageProperties(
+          "system",
+          "job",
+          "result",
+          _system_job_values(jobId, "accepted", s"/web/system/jobs/${jobId}/await")
+        ),
+        200,
+        "application/json",
+        s"""{"jobId":"${_json(jobId)}","jobStatus":"accepted","message":"Job result is available from this system page."}"""
+      ),
+      _system_job_template("Job result")
+    )
+
+  def renderSystemJobResult(
+    jobId: String,
+    response: org.goldenport.http.HttpResponse
+  ): Page = {
+    val ok = response.code >= 200 && response.code < 400
+    renderFormResult(
+      FormResultProperties(
+        FormPageProperties(
+          "system",
+          "job",
+          "result",
+          _system_job_values(jobId, if (ok) "completed" else "failed", s"/web/system/jobs/${jobId}/await")
+        ),
+        response.code,
+        response.mime.value,
+        response.getString.getOrElse("")
+      ),
+      _system_job_template("Job result")
+    )
+  }
+
+  private def _system_job_values(
+    jobId: String,
+    status: String,
+    awaitHref: String
+  ): Map[String, String] =
+    Map(
+      "result.job.id" -> jobId,
+      "result.job.status" -> status,
+      "result.job.href" -> awaitHref,
+      "result.action.await.name" -> "await",
+      "result.action.await.label" -> "Check result",
+      "result.action.await.href" -> awaitHref,
+      "result.action.await.method" -> "POST",
+      "result.action.primary.name" -> "await",
+      "result.action.primary.label" -> "Check result",
+      "result.action.primary.href" -> awaitHref,
+      "result.action.primary.method" -> "POST"
+    )
+
+  private def _system_job_template(
+    title: String
+  ): String =
+    s"""<article>
+       |  <h2>${_escape(title)}</h2>
+       |  <textus:job-ticket></textus:job-ticket>
+       |  <textus-error-panel source="error"></textus-error-panel>
+       |  <textus-result-view source="result.body"></textus-result-view>
+       |  <textus-property-list source="result"></textus-property-list>
+       |</article>""".stripMargin
 
   def renderSubsystemDashboard(subsystem: Subsystem): Page =
     Page(_dashboard_shell(
@@ -4467,6 +4539,8 @@ object StaticFormAppRenderer {
     val recordCard = """<textus(?::record-card|-record-card)\b([^>]*)></textus(?::record-card|-record-card)>""".r
     val cardList = """<textus(?::card-list|-card-list)\b([^>]*)></textus(?::card-list|-card-list)>""".r
     val summaryCard = """<textus(?::summary-card|-summary-card)\b([^>]*)></textus(?::summary-card|-summary-card)>""".r
+    val jobTicket = """<textus(?::job-ticket|-job-ticket)\b([^>]*)></textus(?::job-ticket|-job-ticket)>""".r
+    val jobActions = """<textus(?::job-actions|-job-actions)\b([^>]*)></textus(?::job-actions|-job-actions)>""".r
     val alert = """<textus(?::alert|-alert)\b([^>]*)></textus(?::alert|-alert)>""".r
     val emptyState = """<textus(?::empty-state|-empty-state)\b([^>]*)></textus(?::empty-state|-empty-state)>""".r
     val pagination = """<textus(?::pagination|-pagination)\b([^>]*)></textus(?::pagination|-pagination)>""".r
@@ -4495,7 +4569,15 @@ object StaticFormAppRenderer {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_summary_card(attrs, properties))
     })
-    val f = alert.replaceAllIn(e, m => {
+    val f0 = jobTicket.replaceAllIn(e, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_job_ticket(attrs, properties))
+    })
+    val f1 = jobActions.replaceAllIn(f0, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_job_actions(attrs, properties))
+    })
+    val f = alert.replaceAllIn(f1, m => {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_alert(attrs, properties))
     })
@@ -4762,6 +4844,71 @@ object StaticFormAppRenderer {
     }.getOrElse("")
     s"""<article class="card h-100 textus-summary-card border-${_escape(variant)}"><div class="card-body"><p class="text-secondary mb-1">${_escape(title)}</p><strong class="display-6 text-${_escape(variant)}">${_escape(value)}</strong>${subtitleHtml}</div></article>"""
   }
+
+  private def _render_job_ticket(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String = {
+    val source = attrs.getOrElse("source", "result.job")
+    val jobId = properties.value(s"${source}.id")
+    if (jobId.isEmpty)
+      ""
+    else {
+      val title = _attr_value(attrs, "title", properties).getOrElse("Job accepted")
+      val status = _property_non_empty(properties, s"${source}.status").getOrElse("accepted")
+      val message = _property_non_empty(properties, s"${source}.message")
+        .orElse(_property_non_empty(properties, "result.message"))
+        .getOrElse("The command is running asynchronously.")
+      val variant = _job_status_variant(status)
+      val actions =
+        if (_widget_bool(attrs, "actions", default = true))
+          _render_job_actions(attrs, properties)
+        else
+          ""
+      s"""<article class="card textus-job-ticket border-${_escape(variant)} mb-3"><div class="card-body"><div class="d-flex flex-wrap align-items-start justify-content-between gap-2"><div><h3 class="h5 card-title mb-1">${_escape(title)}</h3><p class="text-secondary mb-2">${_escape(message)}</p></div><span class="badge text-bg-${_escape(variant)}">${_escape(status)}</span></div><dl class="row mb-3"><dt class="col-sm-3">Job ID</dt><dd class="col-sm-9"><code>${_escape(jobId)}</code></dd></dl>${actions}</div></article>"""
+    }
+  }
+
+  private def _render_job_actions(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String = {
+    val names = attrs.get("actions")
+      .map(_.split(',').toVector.map(_.trim).filter(_.nonEmpty))
+      .filter(_.nonEmpty)
+      .getOrElse(Vector("await", "detail"))
+    val buttons = names.flatMap { name =>
+      _resolve_action(Map("source" -> s"result.action.${name}", "class" -> _job_action_class(name)), properties).map {
+        case ActionWidgetValue(href, label, css, method) if method.equalsIgnoreCase("GET") =>
+          s"""<a class="${_escape(css)}" href="${_escape(href)}">${_escape(label)}</a>"""
+        case ActionWidgetValue(href, label, css, method) =>
+          _action_form_html(method, href, css, label, _render_hidden_context(Map.empty, properties))
+      }
+    }
+    if (buttons.isEmpty)
+      ""
+    else
+      s"""<div class="d-flex flex-wrap gap-2 textus-job-actions">${buttons.mkString}</div>"""
+  }
+
+  private def _job_status_variant(
+    status: String
+  ): String =
+    status.trim.toLowerCase(java.util.Locale.ROOT) match {
+      case "completed" | "complete" | "succeeded" | "success" | "done" => "success"
+      case "failed" | "failure" | "error" => "danger"
+      case "running" | "queued" | "accepted" | "pending" => "primary"
+      case "cancelled" | "canceled" | "suspended" => "warning"
+      case _ => "secondary"
+    }
+
+  private def _job_action_class(
+    name: String
+  ): String =
+    name.trim.toLowerCase(java.util.Locale.ROOT) match {
+      case "await" | "refresh" | "result" => "btn btn-primary"
+      case _ => "btn btn-outline-primary"
+    }
 
   private def _render_alert(
     attrs: Map[String, String],

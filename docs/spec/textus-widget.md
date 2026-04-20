@@ -215,6 +215,77 @@ Example:
 <textus:action-form source="result.action.await"></textus:action-form>
 ```
 
+## Job Widgets
+
+Job widgets provide an application-embeddable UX for asynchronous Command
+results. They use the same action metadata model as action widgets.
+
+Default job result properties:
+
+- `result.job.id`: submitted job id.
+- `result.job.status`: user-facing job status such as `accepted`, `running`,
+  `completed`, or `failed`.
+- `result.job.href`: canonical result/await URL.
+- `result.action.await.*`: action metadata for waiting on the job result.
+- `result.action.detail.*`: optional action metadata for opening a resulting
+  resource when available.
+
+### `textus:job-ticket` / `textus-job-ticket`
+
+Renders a Bootstrap card summarizing a job id, status, message, and available
+job actions.
+
+Example:
+
+```html
+<textus:job-ticket></textus:job-ticket>
+```
+
+Required behavior:
+
+- renders nothing when `result.job.id` is absent.
+- renders job id and status from `result.job.*`.
+- renders wait/detail actions by composing with the same action metadata used
+  by `textus:action-link`.
+- supports `actions="false"` to suppress embedded actions.
+
+### `textus:job-actions` / `textus-job-actions`
+
+Renders job-related action buttons without the surrounding card.
+
+Example:
+
+```html
+<textus:job-actions actions="await,detail"></textus:job-actions>
+```
+
+Required behavior:
+
+- defaults to `await,detail`.
+- renders only actions whose metadata has an `href`.
+- uses POST form rendering for wait/refresh actions when the action method is
+  not `GET`.
+- includes hidden context in form-rendered actions.
+
+### System Job Page
+
+Applications that do not want to compose a job UX into their own page may link
+to the system job page:
+
+```text
+/web/system/jobs/{jobId}
+```
+
+The system page provides the same job ticket and wait behavior. Waiting is
+performed by POSTing to:
+
+```text
+/web/system/jobs/{jobId}/await
+```
+
+The system page must enforce the same job ownership policy as operation-local
+await routes. It must not expose arbitrary jobs to unrelated users.
+
 ## Hidden Context Widget
 
 `textus:hidden-context` and `textus-hidden-context` render hidden form inputs

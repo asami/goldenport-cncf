@@ -9,12 +9,13 @@ import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Apr. 15, 2026
- * @version Apr. 19, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class FormResultMetadata(
   id: Option[String] = None,
   jobId: Option[String] = None,
+  jobStatus: Option[String] = None,
   outcome: Option[String] = None,
   message: Option[String] = None,
   totalCount: Option[Long] = None,
@@ -24,6 +25,7 @@ final case class FormResultMetadata(
     val scalar =
       id.map("result.id" -> _).toMap ++
         jobId.map("result.job.id" -> _).toMap ++
+        jobStatus.map("result.job.status" -> _).toMap ++
         outcome.map("result.outcome" -> _).toMap ++
         message.map("result.message" -> _).toMap ++
         totalCount.map(x => "result.totalCount" -> x.toString).toMap ++
@@ -80,6 +82,7 @@ object FormResultMetadata {
       FormResultMetadata(
         id = _first_string(cursor, Vector("id", "result.id", "item.id")),
         jobId = _first_string(cursor, Vector("jobId", "job-id", "job.id", "result.jobId", "result.job-id", "result.job.id")),
+        jobStatus = _first_string(cursor, Vector("jobStatus", "job-status", "job.status", "result.jobStatus", "result.job-status", "result.job.status")),
         outcome = _first_string(cursor, Vector("outcome", "result.outcome")),
         message = _first_string(cursor, Vector("message", "result.message", "error.message")),
         totalCount = _first_long(cursor, Vector("totalCount", "total_count", "total-count", "result.totalCount", "result.total_count", "result.total-count")),

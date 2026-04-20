@@ -17,7 +17,7 @@ import org.goldenport.cncf.event.{EventId, EventLane, EventRecord, EventStore}
 /*
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
- * @version Apr. 19, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -298,6 +298,7 @@ final case class JobQueryReadModel(
   status: JobStatus,
   persistence: JobPersistencePolicy,
   origin: JobDataOrigin,
+  submitter: JobSubmitter,
   createdAt: Instant,
   updatedAt: Instant,
   tasks: JobTaskPage,
@@ -308,8 +309,23 @@ final case class JobQueryReadModel(
   result: Option[OperationResponse]
 )
 
+final case class JobSubmitter(
+  principalId: String,
+  subjectKind: String,
+  sessionId: Option[String] = None
+)
+
+object JobSubmitter {
+  def from(ctx: ExecutionContext): JobSubmitter =
+    JobSubmitter(
+      ctx.security.principal.id.value,
+      ctx.security.subjectKind.toString,
+      ctx.security.session.flatMap(_.sessionId)
+    )
+}
+
 trait JobQueryPolicy {
-  def authorizeRead(using ExecutionContext): Consequence[Unit]
+  def authorizeRead(model: JobQueryReadModel)(using ExecutionContext): Consequence[Unit]
 }
 
 object JobQueryPolicy {
@@ -318,14 +334,28 @@ object JobQueryPolicy {
   private final class DefaultJobQueryPolicy extends JobQueryPolicy {
     private val _read_caps = Set("job_view", "job_admin", "content_manager", "content_admin")
 
-    def authorizeRead(using ctx: ExecutionContext): Consequence[Unit] =
+    def authorizeRead(model: JobQueryReadModel)(using ctx: ExecutionContext): Consequence[Unit] =
       if (ctx.security.hasAnyCapability(_read_caps))
+        Consequence.unit
+      else if (_same_submitter(model.submitter, ctx))
         Consequence.unit
       else
         Consequence.operationIllegal(
           "job.query",
-          s"required capability: ${_read_caps.toVector.sorted.mkString("|")}"
+          s"job is not owned by the current subject; required capability: ${_read_caps.toVector.sorted.mkString("|")}"
         )
+
+    private def _same_submitter(
+      submitter: JobSubmitter,
+      ctx: ExecutionContext
+    ): Boolean =
+      submitter.sessionId match {
+        case Some(sessionId) =>
+          ctx.security.session.flatMap(_.sessionId).contains(sessionId)
+        case None =>
+          submitter.principalId == ctx.security.principal.id.value &&
+            submitter.subjectKind == ctx.security.subjectKind.toString
+      }
   }
 }
 
@@ -355,7 +385,10 @@ trait JobEngine {
     jobId: JobId,
     policy: JobQueryPolicy = JobQueryPolicy.default
   )(using ExecutionContext): Consequence[Option[JobQueryReadModel]] =
-    policy.authorizeRead.flatMap(_ => Consequence.success(query(jobId)))
+    query(jobId) match {
+      case Some(model) => policy.authorizeRead(model).map(_ => Some(model))
+      case None => Consequence.success(None)
+    }
 }
 
 final class InMemoryJobEngine(
@@ -449,6 +482,7 @@ final class InMemoryJobEngine(
         status = record.status,
         persistence = record.persistence,
         origin = _origin(record),
+        submitter = JobSubmitter.from(record.submittedContext),
         createdAt = record.createdAt,
         updatedAt = record.updatedAt,
         tasks = tasks,

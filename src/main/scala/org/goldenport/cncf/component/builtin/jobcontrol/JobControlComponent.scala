@@ -19,8 +19,7 @@ import org.goldenport.value.BaseContent
 /*
  * @since   Mar. 28, 2026
  *  version Mar. 29, 2026
- *  version Apr. 11, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
@@ -28,10 +27,10 @@ final class JobControlComponent() extends Component {
 
 object JobControlComponent {
   trait JobService {
-    def getJobStatus(jobId: JobId): Consequence[JobQueryReadModel]
-    def loadJobHistory(jobId: JobId): Consequence[JobTimelinePage]
-    def getJobResult(jobId: JobId): Consequence[JobResult]
-    def awaitJobResult(jobId: JobId): Consequence[OperationResponse]
+    def getJobStatus(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobQueryReadModel]
+    def loadJobHistory(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobTimelinePage]
+    def getJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobResult]
+    def awaitJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[OperationResponse]
   }
 
   trait JobAdminService {
@@ -114,28 +113,37 @@ object JobControlComponent {
   }
 
   private final class DefaultJobService(component: Component) extends JobService {
-    def getJobStatus(jobId: JobId): Consequence[JobQueryReadModel] =
-      {
-      component.jobEngine.query(jobId) match {
+    def getJobStatus(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobQueryReadModel] =
+      component.jobEngine.queryVisible(jobId).flatMap {
         case Some(model) => Consequence.success(model)
         case None => Consequence.operationNotFound(s"job:${jobId.value}")
       }
+
+    def loadJobHistory(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobTimelinePage] =
+      component.jobEngine.queryVisible(jobId).flatMap {
+        case Some(_) =>
+          component.jobEngine.queryTimeline(jobId) match {
+            case Some(page) => Consequence.success(page)
+            case None => Consequence.operationNotFound(s"job history:${jobId.value}")
+          }
+        case None => Consequence.operationNotFound(s"job:${jobId.value}")
       }
 
-    def loadJobHistory(jobId: JobId): Consequence[JobTimelinePage] =
-      component.jobEngine.queryTimeline(jobId) match {
-        case Some(page) => Consequence.success(page)
-        case None => Consequence.operationNotFound(s"job history:${jobId.value}")
+    def getJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobResult] =
+      component.jobEngine.queryVisible(jobId).flatMap {
+        case Some(_) =>
+          component.logic.getJobResult(jobId) match {
+            case Some(result) => Consequence.success(result)
+            case None => Consequence.operationNotFound(s"job result:${jobId.value}")
+          }
+        case None => Consequence.operationNotFound(s"job:${jobId.value}")
       }
 
-    def getJobResult(jobId: JobId): Consequence[JobResult] =
-      component.logic.getJobResult(jobId) match {
-        case Some(result) => Consequence.success(result)
-        case None => Consequence.operationNotFound(s"job result:${jobId.value}")
+    def awaitJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[OperationResponse] =
+      component.jobEngine.queryVisible(jobId).flatMap {
+        case Some(_) => component.logic.awaitJobResult(jobId)
+        case None => Consequence.operationNotFound(s"job:${jobId.value}")
       }
-
-    def awaitJobResult(jobId: JobId): Consequence[OperationResponse] =
-      component.logic.awaitJobResult(jobId)
   }
 
   private final class DefaultJobAdminService(component: Component) extends JobAdminService {
@@ -327,7 +335,7 @@ object JobControlComponent {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
-          component.port.get[JobService].map(_.getJobStatus(jobId)) match {
+          component.port.get[JobService].map(_.getJobStatus(jobId)(using core.executionContext)) match {
             case Some(result) => result.map(model => OperationResponse.RecordResponse(_job_record(model)))
             case None => Consequence.serviceUnavailable("job service is not available")
           }
@@ -343,7 +351,7 @@ object JobControlComponent {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
-          component.port.get[JobService].map(_.loadJobHistory(jobId)) match {
+          component.port.get[JobService].map(_.loadJobHistory(jobId)(using core.executionContext)) match {
             case Some(result) => result.map(page => OperationResponse.RecordResponse(_timeline_record(jobId, page)))
             case None => Consequence.serviceUnavailable("job service is not available")
           }
@@ -357,7 +365,7 @@ object JobControlComponent {
     jobId: JobId
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _job_result_response(core, jobId, _.getJobResult(jobId))
+      _job_result_response(core, jobId, _.getJobResult(jobId)(using core.executionContext))
   }
 
   private final case class AwaitJobResultCall(
@@ -367,7 +375,7 @@ object JobControlComponent {
     def execute(): Consequence[OperationResponse] =
       core.component match {
         case Some(component) =>
-          component.port.get[JobService].map(_.awaitJobResult(jobId)) match {
+          component.port.get[JobService].map(_.awaitJobResult(jobId)(using core.executionContext)) match {
             case Some(result) => result
             case None => Consequence.serviceUnavailable("job service is not available")
           }
@@ -480,6 +488,9 @@ object JobControlComponent {
       "status" -> model.status.toString,
       "persistence" -> model.persistence.toString,
       "origin" -> model.origin.toString,
+      "submitter-principal-id" -> model.submitter.principalId,
+      "submitter-subject-kind" -> model.submitter.subjectKind,
+      "submitter-session-id" -> model.submitter.sessionId.getOrElse(""),
       "created-at" -> model.createdAt.toString,
       "updated-at" -> model.updatedAt.toString,
       "result-success" -> model.resultSummary.success,

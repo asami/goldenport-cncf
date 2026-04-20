@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 21, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobQueryReadModelSpec
@@ -113,6 +113,7 @@ final class JobQueryReadModelSpec
       read.debug.parameters.get("p1") shouldBe Some("v1")
       read.debug.executionNotes should contain("note-1")
       read.traceTree.roots.nonEmpty shouldBe true
+      read.submitter.principalId shouldBe "test-user-principal"
     }
 
     "enforce policy visibility on query surfaces" in {
@@ -122,13 +123,23 @@ final class JobQueryReadModelSpec
       val jobid = engine.submit(List(task), ExecutionContext.test())
       val _ = _await_result(engine, jobid)
 
-      When("queryVisible is called as user")
-      val denied = {
+      When("queryVisible is called as the submitting user")
+      val ownerAllowed = {
         given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.User)
         engine.queryVisible(jobid)
       }
 
-      Then("user is denied")
+      Then("the owner can read query surface")
+      ownerAllowed shouldBe a[Consequence.Success[_]]
+      ownerAllowed.toOption.flatten.map(_.jobId) shouldBe Some(jobid)
+
+      When("queryVisible is called as anonymous")
+      val denied = {
+        given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.Anonymous)
+        engine.queryVisible(jobid)
+      }
+
+      Then("a different subject is denied")
       denied shouldBe a[Consequence.Failure[_]]
 
       When("queryVisible is called as content manager")
