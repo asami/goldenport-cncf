@@ -5263,6 +5263,40 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus:card-list")
     }
 
+    "render table and card detail actions from record fields" in {
+      val columns = Vector(
+        StaticFormAppRenderer.TableColumn("title", "Title"),
+        StaticFormAppRenderer.TableColumn("recipient_name", "Recipient")
+      )
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"id":"notice_1","title":"Phase12","content":"Static form validation","recipient_name":"Bob"}]}""",
+        Map(StaticFormAppRenderer.tableColumnKey("result.body.data", "notice", "summary") -> columns)
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus-result-table source="result.body" entity="notice" view="summary" detail-href="/form/notice-board/notice/get-notice/result?id={id}" detail-label="Read"></textus-result-table>
+          |  <textus:card-list source="result.body" entity="notice" view="summary" detail-href="/form/notice-board/notice/get-notice/result?id={id}" detail-label="Open notice"></textus:card-list>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("<th>Actions</th>")
+      html should include ("href=\"/form/notice-board/notice/get-notice/result?id=notice_1\"")
+      html should include ("""Read</a>""")
+      html should include ("""Open notice</a>""")
+      html should not include ("Static form validation")
+      html should not include ("<textus-result-table")
+      html should not include ("<textus:card-list")
+    }
+
     "render summary card and feedback widgets" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
@@ -5351,6 +5385,39 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus:alert")
       html should not include ("<textus:status-badge")
       html should not include ("<textus-pagination")
+    }
+
+    "render nav-list widgets in button and list-group styles" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices",
+          Map(
+            "nav.search.href" -> "/form/notice-board/notice/search-notices",
+            "nav.post.href" -> "/form/notice-board/notice/post-notice"
+          )
+        ),
+        200,
+        "application/json",
+        """{"data":[]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:nav-list items="Search:nav.search.href:btn btn-primary|Post:nav.post.href"></textus:nav-list>
+          |  <textus-nav-list style="list" items="Search again:nav.search.href|Post notice:nav.post.href"></textus-nav-list>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("textus-nav-list")
+      html should include ("""class="btn btn-primary" href="/form/notice-board/notice/search-notices">Search</a>""")
+      html should include ("""class="btn btn-outline-secondary" href="/form/notice-board/notice/post-notice">Post</a>""")
+      html should include ("list-group")
+      html should include ("list-group-item list-group-item-action")
+      html should not include ("<textus:nav-list")
+      html should not include ("<textus-nav-list")
     }
 
     "render action-card widgets from operation result actions" in {
@@ -5746,6 +5813,31 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("notice_1")
       html should not include ("rights")
       html should not include ("<textus-result-table")
+    }
+
+    "render textus description list with explicit columns" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "get-notice"
+        ),
+        200,
+        "application/json",
+        """{"id":"notice_1","title":"Phase12","content":"Static form detail","recipient_name":"Bob"}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus:description-list source="result.body" columns="title:Title,recipient_name:Recipient"></textus:description-list></article>"""
+      ).body
+
+      html should include ("textus-description-list")
+      html should include ("<dt class=\"col-sm-4\">Title</dt><dd class=\"col-sm-8\">Phase12</dd>")
+      html should include ("<dt class=\"col-sm-4\">Recipient</dt><dd class=\"col-sm-8\">Bob</dd>")
+      html should not include ("Static form detail")
+      html should not include ("notice_1")
+      html should not include ("<textus:description-list")
     }
 
     "render textus result table from result body with CML summary columns" in {

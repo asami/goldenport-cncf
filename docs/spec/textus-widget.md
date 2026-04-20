@@ -434,6 +434,11 @@ Requirements:
   descriptor policy allow it.
 - rendered paging controls remain valid plain HTML links/forms.
 
+`textus-result-table` may add per-row detail actions with `detail-href` and
+`detail-label`. `detail-href` is a URL template whose `{field}` placeholders are
+expanded from each row object. This keeps common search-result-to-detail flows
+inside the static widget contract.
+
 ## Error Handling
 
 Widgets fail closed.
@@ -498,6 +503,9 @@ Implemented baseline attributes:
   `name`, `label`, then `id` when present.
 - `subtitle`: field name used as card subtitle. Defaults to common secondary
   fields such as `recipient_name`, `sender_name`, `status`, and `updated_at`.
+- `detail-href`: optional detail URL template. Record field placeholders such
+  as `{id}` are expanded from the current record.
+- `detail-label`: optional detail action label. Defaults to `Open detail`.
 
 ### `textus:card-list` / `textus-card-list`
 
@@ -527,6 +535,8 @@ Implemented baseline attributes:
 - `page`, `page-size`, `total`, `href`, `has-next`: same metadata attributes
   as `textus:pagination`.
 - `title`, `subtitle`: forwarded to each record card.
+- `detail-href`, `detail-label`: forwarded to each record card so list results
+  can provide detail navigation without hand-written table/card markup.
 
 ### `textus:summary-card` / `textus-summary-card`
 
@@ -614,6 +624,13 @@ Required behavior:
 - renders Bootstrap `.list-group` or `.nav` depending on style.
 - supports `source` for result-provided links.
 - supports explicit static child items when needed.
+
+Implemented baseline attributes:
+
+- `items`: pipe-separated item list. Each item uses
+  `label:href` or `label:href:class`. Labels and hrefs may reference result
+  properties.
+- `style`: `buttons` by default. `list` renders Bootstrap list-group links.
 
 ### `textus:pagination` / `textus-pagination`
 

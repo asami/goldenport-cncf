@@ -5063,6 +5063,7 @@ object StaticFormAppRenderer {
     val emptyState = """<textus(?::empty-state|-empty-state)\b([^>]*)></textus(?::empty-state|-empty-state)>""".r
     val statusBadge = """<textus(?::status-badge|-status-badge)\b([^>]*)></textus(?::status-badge|-status-badge)>""".r
     val pagination = """<textus(?::pagination|-pagination)\b([^>]*)></textus(?::pagination|-pagination)>""".r
+    val navList = """<textus(?::nav-list|-nav-list)\b([^>]*)></textus(?::nav-list|-nav-list)>""".r
     val formLink = """<textus-form-link\s+href="([^"]+)"\s+label="([^"]+)"\s*></textus-form-link>""".r
     val actionLink = """<textus(?::action-link|-action-link)\b([^>]*)></textus(?::action-link|-action-link)>""".r
     val actionForm = """<textus(?::action-form|-action-form)\b([^>]*)></textus(?::action-form|-action-form)>""".r
@@ -5125,7 +5126,11 @@ object StaticFormAppRenderer {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_pagination(attrs, properties))
     })
-    val i = formLink.replaceAllIn(h, m =>
+    val h1 = navList.replaceAllIn(h, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_nav_list(attrs, properties))
+    })
+    val i = formLink.replaceAllIn(h1, m =>
       java.util.regex.Matcher.quoteReplacement(_render_form_link(m.group(1), m.group(2), properties))
     )
     val j = actionLink.replaceAllIn(i, m => {
@@ -5292,7 +5297,7 @@ object StaticFormAppRenderer {
     val pageSize = _int_property(properties, pageSizePath, 20)
     val total = _optional_int_property(properties, totalPath)
     val href = properties.value(hrefPath)
-    val table = _json_table(source, properties, page, pageSize, columns).getOrElse("")
+    val table = _json_table(source, properties, page, pageSize, columns, attrs).getOrElse("")
     s"""${table}<div class="mt-3">${_render_pagination(attrs, properties)}</div>"""
   }
 
@@ -5376,7 +5381,34 @@ object StaticFormAppRenderer {
       s"""<dt class="col-sm-4">${_escape(column.label)}</dt><dd class="col-sm-8">${_escape(value)}</dd>"""
     }.mkString
     val subtitleHtml = subtitle.map(x => s"""<p class="card-subtitle text-secondary mb-2">${_escape(x)}</p>""").getOrElse("")
-    s"""<article class="card h-100 textus-record-card"><div class="card-body"><h3 class="h5 card-title">${_escape(title)}</h3>${subtitleHtml}<dl class="row mb-0">${rows}</dl></div></article>"""
+    val actionHtml = _record_action_html(obj, attrs)
+    s"""<article class="card h-100 textus-record-card"><div class="card-body"><h3 class="h5 card-title">${_escape(title)}</h3>${subtitleHtml}<dl class="row mb-0">${rows}</dl>${actionHtml}</div></article>"""
+  }
+
+  private def _record_action_html(
+    obj: Map[String, Json],
+    attrs: Map[String, String]
+  ): String =
+    attrs.get("detail-href").flatMap(_record_href(_, obj)).map { href =>
+      val label = attrs.getOrElse("detail-label", "Open detail")
+      s"""<div class="mt-3"><a class="btn btn-sm btn-outline-primary" href="${_escape(href)}">${_escape(label)}</a></div>"""
+    }.getOrElse("")
+
+  private def _record_href(
+    template: String,
+    obj: Map[String, Json]
+  ): Option[String] = {
+    val pattern = """\{([A-Za-z0-9_.-]+)\}""".r
+    var ok = true
+    val href = pattern.replaceAllIn(template, m => {
+      obj.get(m.group(1)).map(_json_cell).filter(_.nonEmpty) match {
+        case Some(value) => java.util.regex.Matcher.quoteReplacement(value)
+        case None =>
+          ok = false
+          ""
+      }
+    })
+    Option.when(ok)(href)
   }
 
   private def _first_existing_field(
@@ -5628,6 +5660,33 @@ object StaticFormAppRenderer {
     _paging_nav(page, pageSize, total, href, hasNext)
   }
 
+  private def _render_nav_list(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String = {
+    val style = attrs.getOrElse("style", "buttons").trim.toLowerCase(java.util.Locale.ROOT)
+    val items = attrs.get("items").toVector.flatMap(_.split("\\|").toVector).flatMap(_nav_item(_, properties))
+    if (items.isEmpty)
+      ""
+    else if (style == "list")
+      s"""<nav class="textus-nav-list"><div class="list-group">${items.map { case (label, href, css) => s"""<a class="list-group-item list-group-item-action ${_escape(css)}" href="${_escape(href)}">${_escape(label)}</a>""" }.mkString}</div></nav>"""
+    else
+      s"""<nav class="d-flex flex-wrap gap-2 mt-3 textus-nav-list">${items.map { case (label, href, css) => s"""<a class="${_escape(css)}" href="${_escape(href)}">${_escape(label)}</a>""" }.mkString}</nav>"""
+  }
+
+  private def _nav_item(
+    text: String,
+    properties: FormPageProperties
+  ): Option[(String, String, String)] =
+    text.split(":", 3).toList match {
+      case label :: href :: css :: Nil =>
+        Some((_resolve_attr_value(label.trim, properties), _resolve_attr_value(href.trim, properties), css.trim))
+      case label :: href :: Nil =>
+        Some((_resolve_attr_value(label.trim, properties), _resolve_attr_value(href.trim, properties), "btn btn-outline-secondary"))
+      case _ =>
+        None
+    }
+
   private def _render_property_list(
     source: String,
     properties: FormPageProperties
@@ -5678,11 +5737,12 @@ object StaticFormAppRenderer {
     properties: FormPageProperties,
     page: Int,
     pageSize: Int,
-    columns: Option[Vector[TableColumn]]
+    columns: Option[Vector[TableColumn]],
+    attrs: Map[String, String]
   ): Option[String] =
     _source_json(source, properties).flatMap { json =>
       val rows = _table_rows(json)
-      rows.flatMap(xs => _records_table(_page_rows(xs, page, pageSize), columns))
+      rows.flatMap(xs => _records_table(_page_rows(xs, page, pageSize), columns, attrs))
     }
 
   private def _table_rows(
@@ -5801,20 +5861,26 @@ object StaticFormAppRenderer {
 
   private def _records_table(
     rows: Vector[Json],
-    columns: Option[Vector[TableColumn]]
+    columns: Option[Vector[TableColumn]],
+    attrs: Map[String, String]
   ): Option[String] = {
     val objects = rows.flatMap(_.asObject)
     if (objects.isEmpty) {
       None
     } else {
       val headers = columns.getOrElse(objects.flatMap(_.keys).distinct.map(name => TableColumn(name, name)))
-      val head = headers.map(h => s"<th>${_escape(h.label)}</th>").mkString
+      val actionHeader = attrs.get("detail-href").map(_ => "<th>Actions</th>").getOrElse("")
+      val head = headers.map(h => s"<th>${_escape(h.label)}</th>").mkString + actionHeader
       val body = objects.map { obj =>
         val cells = headers.map { h =>
           val value = obj(h.name).map(_json_cell).getOrElse("")
           s"<td>${_escape(value)}</td>"
         }.mkString
-        s"<tr>${cells}</tr>"
+        val actionCell = attrs.get("detail-href").flatMap(_record_href(_, obj.toMap)).map { href =>
+          val label = attrs.getOrElse("detail-label", "Open detail")
+          s"""<td><a class="btn btn-sm btn-outline-primary" href="${_escape(href)}">${_escape(label)}</a></td>"""
+        }.getOrElse(attrs.get("detail-href").map(_ => "<td></td>").getOrElse(""))
+        s"<tr>${cells}${actionCell}</tr>"
       }.mkString("\n")
       Some(s"""<div class="table-responsive mt-3"><table class="table table-sm table-striped"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>""")
     }

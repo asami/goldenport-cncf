@@ -203,6 +203,15 @@ This document is a progress dashboard, not a design journal.
 - BB (DONE): WEB-54 — Recheck Web app packaging for runtime mapping.
   The sample packaging check confirms canonical component Web app routes,
   aliases, local assets, descriptor visibility, and polished app assets.
+- BC (DONE): WEB-55 — Add result detail navigation.
+  Search result widgets can now render detail links from row fields, and the
+  sample flow opens details from the search result page.
+- BD (DONE): WEB-56 — Recheck description-list column selection.
+  `textus:description-list` is verified with both CML/view columns and explicit
+  column declarations.
+- BE (DONE): WEB-57 — Add navigation list widget baseline.
+  `textus:nav-list` / `textus-nav-list` renders static navigation links in
+  button and list-group styles.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
@@ -347,6 +356,13 @@ Current note:
 - [x] WEB-54: Recheck Web app packaging for runtime mapping.
   Packaging checks verify canonical routes, aliases, descriptor pages, and
   polished app assets.
+- [x] WEB-55: Add result detail navigation.
+  Result table/card-list widgets can render detail links by expanding record
+  fields into `detail-href`.
+- [x] WEB-56: Recheck description-list column selection.
+  Detail widgets are covered by CML/view columns and explicit column fallback.
+- [x] WEB-57: Add navigation list widget baseline.
+  Static Form pages can use `textus:nav-list` for simple Bootstrap navigation.
 
 ## 6. Next Phase Candidates
 

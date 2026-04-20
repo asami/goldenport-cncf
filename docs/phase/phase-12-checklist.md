@@ -2962,6 +2962,118 @@ canonical path and configured aliases.
 
 ---
 
+## WEB-55 — Result Detail Navigation
+
+Status: DONE
+
+### Goal
+
+Let Static Form search/result pages move naturally from a list result into a
+detail page without hand-writing table or card action markup.
+
+### Scope
+
+- Add detail action support to `textus-result-table`.
+- Reuse the same detail action support from `textus:card-list`.
+- Expand record field placeholders from the current result row.
+- Validate the notice-board search result -> detail flow.
+
+### Detailed Tasks
+
+- [x] Add `detail-href` and `detail-label` attributes to list/detail result
+      widgets.
+- [x] Add executable renderer coverage for table and card detail actions.
+- [x] Use the detail action in the sample notice search result page.
+- [x] Extend the sample flow check to open details from search results.
+
+### Closure
+
+WEB-55 makes search-result-to-detail navigation part of the framework-owned
+widget contract. Static pages can keep using CML/view field selection while
+getting a consistent Bootstrap action affordance.
+
+### Inputs
+
+- `docs/spec/textus-widget.md`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+- `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`
+- `textus-sample-app/web/notice-board/search-notices__200.html`
+- `textus-sample-app/scripts/check-static-form-app-flow.sh`
+
+---
+
+## WEB-56 — Description List Column Selection Recheck
+
+Status: DONE
+
+### Goal
+
+Confirm detail widgets obey schema/view-derived field order and also support
+explicit column declarations when a static page needs a local projection.
+
+### Scope
+
+- Keep CML/view column selection as the primary route.
+- Verify explicit `columns` fallback for `textus:description-list`.
+- Ensure omitted fields remain omitted from detail output.
+
+### Detailed Tasks
+
+- [x] Keep existing CML/view-driven description-list spec coverage.
+- [x] Add explicit `columns` description-list spec coverage.
+- [x] Document the implemented attribute contract.
+
+### Closure
+
+WEB-56 keeps detail rendering tied to the same projection model as result
+tables and cards, while retaining a narrow explicit-column escape hatch for
+static templates.
+
+### Inputs
+
+- `docs/spec/textus-widget.md`
+- `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`
+
+---
+
+## WEB-57 — Navigation List Widget Baseline
+
+Status: DONE
+
+### Goal
+
+Provide a small framework-owned navigation widget for static result pages so
+common page-to-page links use consistent Bootstrap markup.
+
+### Scope
+
+- Implement `textus:nav-list` and `textus-nav-list`.
+- Support explicit static item lists.
+- Support button-style and list-group-style rendering.
+- Use the widget in notice-board result pages.
+
+### Detailed Tasks
+
+- [x] Add renderer support for namespace and HTML-compatible notation.
+- [x] Add executable spec coverage for button and list styles.
+- [x] Document baseline attributes.
+- [x] Use the widget in sample result pages.
+
+### Closure
+
+WEB-57 covers the immediate static-page navigation need without introducing a
+larger menu model. Result-provided navigation sources can be added later when
+the framework emits richer action collections.
+
+### Inputs
+
+- `docs/spec/textus-widget.md`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+- `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`
+- `textus-sample-app/web/notice-board/*.html`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.
@@ -2986,7 +3098,7 @@ canonical path and configured aliases.
 
 Phase 12 is complete when:
 
-- WEB-01 through WEB-54 are marked DONE, or explicitly deferred to a later
+- WEB-01 through WEB-57 are marked DONE, or explicitly deferred to a later
   phase.
 - `phase-12.md` summary checkboxes are aligned.
 - No item remains ACTIVE or SUSPENDED.
