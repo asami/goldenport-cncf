@@ -127,6 +127,16 @@ This document is a progress dashboard, not a design journal.
 - AF (DONE): WEB-32 — Recheck Management Console CRUD routes with the sample app.
   The sample app now validates the built-in admin entry points and an entity
   create/list/detail round trip against the published runtime.
+- AG (DONE): WEB-33 — Recheck Management Console data surface.
+  The sample app confirms the data admin entry route and records that full data
+  CRUD E2E needs a data collection fixture rather than the current notice-only
+  CAR sample.
+- AH (DONE): WEB-34 — Recheck Management Console aggregate surface.
+  The sample app confirms aggregate metadata, read baseline, and operation-backed
+  create/update/read links for the `notice` aggregate.
+- AI (DONE): WEB-35 — Recheck Management Console view surface.
+  The sample app confirms view metadata, read baseline, and JSON Form API
+  definition for the `notice` view.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
@@ -203,6 +213,16 @@ Current note:
   `textus-sample-app` verifies entity/admin entry pages and an actual admin
   entity create/list/detail flow. This keeps the current work order anchored on
   remaining Form/Admin behavior before deeper Static Form App expansion.
+- [x] WEB-33: Recheck Management Console data surface.
+  Data admin entrypoint behavior is covered in `textus-sample-app`. Full data
+  CRUD E2E remains dependent on adding a meaningful data collection fixture to
+  the sample app.
+- [x] WEB-34: Recheck Management Console aggregate surface.
+  Aggregate list/detail, read baseline, and operation-backed create/update/read
+  action links are checked against the sample app runtime.
+- [x] WEB-35: Recheck Management Console view surface.
+  View list/detail, read baseline, and JSON Form API metadata are checked
+  against the sample app runtime.
 
 ## 6. Next Phase Candidates
 

@@ -2060,6 +2060,124 @@ published runtime can serve the same flow from a real CAR-style application.
 
 ---
 
+## WEB-33 — Management Console Data Surface Recheck
+
+Status: DONE
+
+### Goal
+
+Confirm the sample application still exposes the component-scoped Data admin
+surface after the Form/Admin route work, and explicitly record the current
+sample limitation for full Data CRUD E2E.
+
+### Scope
+
+- Recheck `/web/notice-board/admin/data`.
+- Confirm the current baseline placeholder is visible.
+- Keep full DataStore CRUD E2E separate until the sample app has a meaningful
+  data collection fixture.
+
+### Detailed Tasks
+
+- [x] Add a sample-app check for the Data admin entrypoint.
+- [x] Assert the current placeholder text so the limitation is visible rather
+      than silently passing as an empty page.
+- [x] Record that CNCF-side executable specs already cover DataStore-backed
+      data list/detail/new/create/edit/update with an `audit` fixture, while
+      the notice-board sample does not yet model an application data collection.
+
+### Closure
+
+WEB-33 closes the route-level recheck for the current CAR sample. A future
+sample that includes a real data collection should add the full create/update
+round trip, analogous to the WEB-32 entity CRUD check.
+
+### Inputs
+
+- `textus-sample-app/scripts/check-admin-surfaces.sh`
+- `textus-sample-app/scripts/check-web-packaging.sh`
+- `src/test/scala/org/goldenport/cncf/http/StaticFormAppRendererSpec.scala`
+
+---
+
+## WEB-34 — Management Console Aggregate Surface Recheck
+
+Status: DONE
+
+### Goal
+
+Confirm the sample application exposes aggregate metadata, read baseline, and
+operation-backed aggregate actions through the built-in Management Console.
+
+### Scope
+
+- Recheck `/web/notice-board/admin/aggregates`.
+- Recheck `/web/notice-board/admin/aggregates/notice`.
+- Confirm create/read/update operations are rendered as Operation form links,
+  not as direct aggregate mutation.
+- Confirm aggregate JSON Form API metadata stays read-oriented.
+
+### Detailed Tasks
+
+- [x] Add a sample-app check for aggregate list metadata.
+- [x] Add a sample-app check for the `notice` aggregate detail page.
+- [x] Assert `createNotice`, `updateNotice`, and read operation links route to
+      `/form/notice-board/aggregate/...`.
+- [x] Assert the generic aggregate Form API definition remains
+      `admin-aggregate` and exposes list/detail navigation metadata.
+
+### Closure
+
+WEB-34 confirms the current aggregate Management Console contract from the
+sample runtime: aggregate create/update remain operation-backed and the
+aggregate page is the administrative navigation surface.
+
+### Inputs
+
+- `textus-sample-app/scripts/check-admin-surfaces.sh`
+- `docs/design/management-console.md`
+- `docs/notes/aggregate-method-implementation-strategy.md`
+
+---
+
+## WEB-35 — Management Console View Surface Recheck
+
+Status: DONE
+
+### Goal
+
+Confirm the sample application exposes view metadata and the read-only view
+baseline through the built-in Management Console.
+
+### Scope
+
+- Recheck `/web/notice-board/admin/views`.
+- Recheck `/web/notice-board/admin/views/notice`.
+- Confirm summary/detail view metadata and the read result table are rendered.
+- Confirm view JSON Form API metadata stays read-oriented.
+
+### Detailed Tasks
+
+- [x] Add a sample-app check for view list metadata.
+- [x] Add a sample-app check for the `notice` view detail/read page.
+- [x] Assert the view read table uses the expected CML-derived columns.
+- [x] Assert the generic view Form API definition remains `admin-view` and
+      exposes list/detail navigation metadata.
+
+### Closure
+
+WEB-35 confirms the current view Management Console contract from the sample
+runtime: views remain read-only and use the same schema/view metadata path as
+the rest of the Form/Admin surface.
+
+### Inputs
+
+- `textus-sample-app/scripts/check-admin-surfaces.sh`
+- `docs/design/management-console.md`
+- `docs/design/web-form-api-schema.md`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.
@@ -2084,7 +2202,7 @@ published runtime can serve the same flow from a real CAR-style application.
 
 Phase 12 is complete when:
 
-- WEB-01 through WEB-32 are marked DONE, or explicitly deferred to a later
+- WEB-01 through WEB-35 are marked DONE, or explicitly deferred to a later
   phase.
 - `phase-12.md` summary checkboxes are aligned.
 - No item remains ACTIVE or SUSPENDED.
