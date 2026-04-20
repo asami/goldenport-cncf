@@ -1516,6 +1516,58 @@ without requiring template authors to repeat shared links on every result page.
 
 ---
 
+## WEB-20: Scoped Descriptor Assets
+
+Status: DONE
+
+### Objective
+
+Allow Static Form Web App assets to be scoped below the global descriptor.
+
+WEB-19 made `web.assets` an actual result-page composition input. WEB-20 adds
+the next practical scope levels so multi-app packages can avoid applying every
+CSS/JS file to every result page.
+
+### Design Direction
+
+- Asset scopes are merged in deterministic order:
+  1. global `web.assets`
+  2. app `web.apps[].assets`
+  3. form/operation `web.form.<selector>.assets`
+- Descriptor assets are inserted after framework assets.
+- Duplicate asset URLs are suppressed across scopes.
+- `autoComplete=false` in any merged scope disables framework asset
+  auto-completion for that result page.
+- WEB-20 implements global, app, and form scopes. Template/page-specific assets
+  remain future composition work.
+
+### Detailed Tasks
+
+- [x] Add `assets` to `WebDescriptor.App`.
+- [x] Add `assets` to `WebDescriptor.Form`.
+- [x] Add descriptor asset merge helpers for result rendering.
+- [x] Use merged result assets in `Http4sHttpServer` Static Form result
+      rendering.
+- [x] Add executable specifications for parsing and merge order.
+- [x] Move `textus-sample-app` notice-board assets to app scope.
+- [x] Validate app-scoped assets with Static Form result-page E2E checks.
+
+### Closure
+
+WEB-20 is complete for the global/app/form descriptor scopes needed by current
+Static Form Web App result pages. The sample app now declares its app-local
+assets under the `notice-board` Web app entry rather than the global asset
+scope.
+
+### Inputs
+
+- `docs/spec/textus-widget.md`
+- `docs/design/web-layer.md`
+- `docs/phase/phase-12.md`
+- `textus-sample-app/web/web-descriptor.yaml`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.

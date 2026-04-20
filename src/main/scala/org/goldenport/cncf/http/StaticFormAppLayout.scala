@@ -119,7 +119,6 @@ object StaticFormAppLayout {
     html: String,
     declaredCss: Vector[String]
   ): Boolean = {
-    val _ = declaredCss
     html.contains("/web/assets/bootstrap.min.css") ||
       html.toLowerCase(java.util.Locale.ROOT).contains("bootstrap.min.css")
   }
@@ -128,7 +127,6 @@ object StaticFormAppLayout {
     html: String,
     declaredJs: Vector[String]
   ): Boolean = {
-    val _ = declaredJs
     html.contains("/web/assets/bootstrap.bundle.min.js") ||
       html.toLowerCase(java.util.Locale.ROOT).contains("bootstrap.bundle.min.js")
   }
@@ -137,7 +135,6 @@ object StaticFormAppLayout {
     html: String,
     declaredCss: Vector[String]
   ): Boolean = {
-    val _ = declaredCss
     _has_asset(html, "textus-widgets.css")
   }
 
@@ -145,7 +142,6 @@ object StaticFormAppLayout {
     html: String,
     declaredJs: Vector[String]
   ): Boolean = {
-    val _ = declaredJs
     _has_asset(html, "textus-widgets.js")
   }
 

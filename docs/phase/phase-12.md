@@ -86,6 +86,9 @@ This document is a progress dashboard, not a design journal.
   Descriptor-declared CSS/JS are now inserted into full HTML and fragment
   result pages with duplicate suppression. Framework assets remain first,
   followed by app/page composition assets.
+- T (DONE): WEB-20 — Add scoped descriptor assets.
+  Static Form result asset composition now merges global, app, and form
+  descriptor assets so multi-app Web packages can avoid global over-application.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational

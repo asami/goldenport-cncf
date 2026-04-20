@@ -43,6 +43,11 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |      successRedirect: /web/${component}/admin/aggregates/${service}/${result.id}
           |      failureRedirect: /form/${component}/${service}/${operation}
           |      stayOnError: true
+          |      assets:
+          |        css:
+          |          - /web/notice-board/notice-board/assets/search.css
+          |        js:
+          |          - /web/notice-board/notice-board/assets/search.js
           |      resultTemplate: |
           |        <article>
           |          <h2>${operation.label}</h2>
@@ -87,6 +92,11 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |    - name: console
           |      path: /web/console
           |      kind: console
+          |      assets:
+          |        css:
+          |          - /web/console/assets/console.css
+          |        js:
+          |          - /web/console/assets/console.js
           |
           |  routes:
           |    - path: /web/notice-board
@@ -129,6 +139,8 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.form("notice-board.notice.search-notices").successRedirect shouldBe Some("/web/${component}/admin/aggregates/${service}/${result.id}")
       descriptor.form("notice-board.notice.search-notices").failureRedirect shouldBe Some("/form/${component}/${service}/${operation}")
       descriptor.form("notice-board.notice.search-notices").stayOnError shouldBe true
+      descriptor.form("notice-board.notice.search-notices").assets.css shouldBe Vector("/web/notice-board/notice-board/assets/search.css")
+      descriptor.form("notice-board.notice.search-notices").assets.js shouldBe Vector("/web/notice-board/notice-board/assets/search.js")
       descriptor.form("notice-board.notice.search-notices").resultTemplate.getOrElse(fail("result template is missing")) should include ("<textus-property-list source=\"result\"></textus-property-list>")
       descriptor.form("notice-board.notice.search-notices").controls("body").controlType shouldBe Some("textarea")
       descriptor.form("notice-board.notice.search-notices").controls("body").required shouldBe Some(true)
@@ -153,6 +165,8 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.adminFields("notice_board", "data", "audit").map(_.name) shouldBe Vector("id", "action", "actor")
       descriptor.apps.map(_.name) shouldBe Vector("manual", "console")
       descriptor.apps.map(_.path) shouldBe Vector("/web/manual", "/web/console")
+      descriptor.apps(1).assets.css shouldBe Vector("/web/console/assets/console.css")
+      descriptor.apps(1).assets.js shouldBe Vector("/web/console/assets/console.js")
       descriptor.routes.map(_.path) shouldBe Vector("/web/notice-board", "/web")
       descriptor.routes.map(_.kind) shouldBe Vector(WebDescriptor.RouteKind.Alias, WebDescriptor.RouteKind.Default)
       descriptor.routes.head.target.component shouldBe "notice-board"
@@ -164,6 +178,16 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.assets.autoComplete shouldBe false
       descriptor.assets.css shouldBe Vector("/web/assets/bootstrap.min.css", "/web/notice-board/assets/app.css")
       descriptor.assets.js shouldBe Vector("/web/assets/bootstrap.bundle.min.js", "/web/notice-board/assets/app.js")
+      descriptor.resultAssets("notice-board", "notice", "search-notices").css shouldBe Vector(
+        "/web/assets/bootstrap.min.css",
+        "/web/notice-board/assets/app.css",
+        "/web/notice-board/notice-board/assets/search.css"
+      )
+      descriptor.resultAssets("console", "notice", "search-notices").css shouldBe Vector(
+        "/web/assets/bootstrap.min.css",
+        "/web/notice-board/assets/app.css",
+        "/web/console/assets/console.css"
+      )
     }
 
     "complete obvious Static Form Web app defaults from a minimal app entry" in {

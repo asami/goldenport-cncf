@@ -318,6 +318,29 @@ Static Form result rendering uses `web.assets` as composition input:
   composition assets, with duplicate suppression.
 - framework assets are inserted first, followed by descriptor-declared assets.
 
+Descriptor assets can also be scoped to a Web app and to a form/operation:
+
+```yaml
+web:
+  apps:
+    - name: notice-board
+      assets:
+        css:
+          - /web/notice-board/notice-board/assets/app.css
+        js:
+          - /web/notice-board/notice-board/assets/app.js
+  form:
+    notice-board.notice.search-notices:
+      assets:
+        css:
+          - /web/notice-board/notice-board/assets/search.css
+```
+
+Result rendering merges asset scopes in the order `web.assets`,
+`web.apps[].assets`, then `web.form.<selector>.assets`. This keeps global
+assets available while allowing multi-app CAR/SAR packages to avoid applying
+app-specific CSS/JS to unrelated pages.
+
 App-local assets are served from the canonical component Web app route:
 
 ```text

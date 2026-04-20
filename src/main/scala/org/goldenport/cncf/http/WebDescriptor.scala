@@ -56,6 +56,27 @@ final case class WebDescriptor(
     else
       apps.exists(_.matches(name, path))
 
+  def appAssets(name: String): WebDescriptor.Assets =
+    apps.find(_.matches(name, Vector.empty)).map(_.assets).getOrElse(WebDescriptor.Assets())
+
+  def formAssets(
+    componentName: String,
+    serviceName: String,
+    operationName: String
+  ): WebDescriptor.Assets =
+    form.get(WebDescriptor.formSelector(componentName, serviceName, operationName))
+      .map(_.assets)
+      .getOrElse(WebDescriptor.Assets())
+
+  def resultAssets(
+    componentName: String,
+    serviceName: String,
+    operationName: String
+  ): WebDescriptor.Assets =
+    assets
+      .merge(appAssets(componentName))
+      .merge(formAssets(componentName, serviceName, operationName))
+
   def webRouteFor(path: Vector[String]): Option[WebDescriptor.ResolvedRoute] =
     routes.view
       .flatMap(route => route.resolve(path).map(route.normalizedPath.length -> _))
@@ -201,6 +222,7 @@ object WebDescriptor {
     failureRedirect: Option[String] = None,
     stayOnError: Boolean = false,
     resultTemplate: Option[String] = None,
+    assets: Assets = Assets(),
     controls: Map[String, FormControl] = Map.empty
   )
 
@@ -258,7 +280,8 @@ object WebDescriptor {
     path: String = "",
     kind: String = "static-form",
     root: Option[String] = None,
-    route: Option[String] = None
+    route: Option[String] = None,
+    assets: Assets = Assets()
   ) {
     def normalizedName: String =
       _normalize_app_segment(name)
@@ -375,9 +398,23 @@ object WebDescriptor {
     autoComplete: Boolean = true,
     css: Vector[String] = Vector.empty,
     js: Vector[String] = Vector.empty
-  )
+  ) {
+    def merge(rhs: Assets): Assets =
+      Assets(
+        autoComplete && rhs.autoComplete,
+        (css ++ rhs.css).distinct,
+        (js ++ rhs.js).distinct
+      )
+  }
 
   val empty: WebDescriptor = WebDescriptor()
+
+  def formSelector(
+    componentName: String,
+    serviceName: String,
+    operationName: String
+  ): String =
+    _normalize_selector(Vector(componentName, serviceName, operationName).mkString("."))
 
   def load(path: Path): Consequence[WebDescriptor] =
     if (!Files.exists(path))
@@ -499,6 +536,7 @@ object WebDescriptor {
               failureRedirect = _string(r, "failureRedirect").orElse(_string(r, "failure-redirect")),
               stayOnError = _boolean(r, "stayOnError").orElse(_boolean(r, "stay-on-error")).getOrElse(false),
               resultTemplate = _string(r, "resultTemplate").orElse(_string(r, "result-template")),
+              assets = _assets(r),
               controls = _form_controls(r)
             )
           }
@@ -543,7 +581,8 @@ object WebDescriptor {
         path = record.getString("path").map(_.trim).filter(_.nonEmpty).orElse(root).getOrElse(""),
         kind = record.getString("kind").map(_.trim).filter(_.nonEmpty).getOrElse("static-form"),
         root = root,
-        route = record.getString("route").map(_.trim).filter(_.nonEmpty)
+        route = record.getString("route").map(_.trim).filter(_.nonEmpty),
+        assets = _assets(record)
       )
     }
 

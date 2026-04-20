@@ -101,11 +101,37 @@ before `</body>`, unless the final page already contains the same asset.
 Framework assets are placed first, followed by descriptor-declared application
 assets.
 
+Descriptor assets may be declared at multiple scopes:
+
+```yaml
+web:
+  assets:
+    css:
+      - /web/assets/site.css
+  apps:
+    - name: notice-board
+      assets:
+        css:
+          - /web/notice-board/notice-board/assets/app.css
+        js:
+          - /web/notice-board/notice-board/assets/app.js
+  form:
+    notice-board.notice.search-notices:
+      assets:
+        css:
+          - /web/notice-board/notice-board/assets/search.css
+```
+
+Static Form result rendering merges scopes in this order: global, app, then
+form/operation. Duplicate asset URLs are inserted once.
+
 If `web.assets.autoComplete` is `false`, Static Form result rendering must not
 insert framework widget assets automatically. Widget expansion still runs; the
 application is then responsible for supplying any CSS/JS needed by the final
 page. Explicit descriptor CSS/JS are still inserted because they are declared
-composition assets, not inferred framework dependencies.
+composition assets, not inferred framework dependencies. `autoComplete=false`
+in any merged scope disables framework asset auto-completion for the result
+page.
 
 Fragment templates are normally wrapped by the built-in Bootstrap page layout,
 so they already receive the local Bootstrap and Textus widget baseline through
