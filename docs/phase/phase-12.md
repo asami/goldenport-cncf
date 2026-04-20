@@ -66,9 +66,10 @@ This document is a progress dashboard, not a design journal.
   Async command execution should expose a natural way for users to follow,
   wait for, and inspect job results without forcing all Form flows to become
   synchronous.
-- O (PLANNED): WEB-15 — Auto-complete required widget assets.
-  Textus widget rendering should be able to supply required CSS/JS dependencies
-  such as local Bootstrap 5 assets when a page has not already declared them.
+- O (DONE): WEB-15 — Auto-complete required widget assets.
+  Textus widget rendering supplies local Bootstrap 5 CSS/JS for full HTML
+  document templates that use widgets, while skipping duplicates and honoring
+  descriptor-declared assets.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational
@@ -126,10 +127,10 @@ Current note:
   Design and implement the user-facing result reference flow for async Command
   execution: job id handoff, optional wait/action buttons, result pages, and
   trace references such as entity id or shortid when available.
-- [ ] WEB-15: Auto-complete required widget assets.
-  Define and implement asset dependency completion for Textus widgets. Required
-  CSS/JS such as local Bootstrap 5 should be inserted when absent, and skipped
-  when already declared by the page or descriptor.
+- [x] WEB-15: Auto-complete required widget assets.
+  Full HTML document templates that use Textus widgets receive local Bootstrap
+  5 CSS/JS when missing. Existing page declarations and descriptor-declared
+  assets are not duplicated, and pages without widgets are left unchanged.
 
 ## 6. Next Phase Candidates
 

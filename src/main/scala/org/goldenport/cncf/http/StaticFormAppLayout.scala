@@ -2,10 +2,16 @@ package org.goldenport.cncf.http
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 12, 2026
+ * @version Apr. 20, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppLayout {
+  final case class AssetCompletionOptions(
+    requiresBootstrap: Boolean = false,
+    declaredCss: Vector[String] = Vector.empty,
+    declaredJs: Vector[String] = Vector.empty
+  )
+
   final case class Options(
     title: String,
     subtitle: String,
@@ -47,6 +53,34 @@ object StaticFormAppLayout {
        |</html>
        |""".stripMargin
 
+  def completeWidgetAssets(
+    html: String,
+    options: AssetCompletionOptions
+  ): String =
+    if (!options.requiresBootstrap)
+      html
+    else {
+      val withCss =
+        if (_has_bootstrap_css(html, options.declaredCss))
+          html
+        else
+          _insert_before(
+            html,
+            "</head>",
+            """  <link href="/web/assets/bootstrap.min.css" rel="stylesheet">
+              |""".stripMargin
+          )
+      if (_has_bootstrap_js(withCss, options.declaredJs))
+        withCss
+      else
+        _insert_before(
+          withCss,
+          "</body>",
+          """  <script src="/web/assets/bootstrap.bundle.min.js"></script>
+            |""".stripMargin
+        )
+    }
+
   def escape(value: String): String =
     value
       .replace("&", "&amp;")
@@ -54,4 +88,33 @@ object StaticFormAppLayout {
       .replace(">", "&gt;")
       .replace("\"", "&quot;")
       .replace("'", "&#39;")
+
+  private def _has_bootstrap_css(
+    html: String,
+    declaredCss: Vector[String]
+  ): Boolean =
+    html.contains("/web/assets/bootstrap.min.css") ||
+      html.toLowerCase(java.util.Locale.ROOT).contains("bootstrap.min.css") ||
+      declaredCss.exists(_.toLowerCase(java.util.Locale.ROOT).contains("bootstrap"))
+
+  private def _has_bootstrap_js(
+    html: String,
+    declaredJs: Vector[String]
+  ): Boolean =
+    html.contains("/web/assets/bootstrap.bundle.min.js") ||
+      html.toLowerCase(java.util.Locale.ROOT).contains("bootstrap.bundle.min.js") ||
+      declaredJs.exists(_.toLowerCase(java.util.Locale.ROOT).contains("bootstrap"))
+
+  private def _insert_before(
+    html: String,
+    marker: String,
+    insertion: String
+  ): String = {
+    val lower = html.toLowerCase(java.util.Locale.ROOT)
+    val index = lower.indexOf(marker.toLowerCase(java.util.Locale.ROOT))
+    if (index >= 0)
+      html.substring(0, index) + insertion + html.substring(index)
+    else
+      html + "\n" + insertion
+  }
 }

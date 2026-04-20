@@ -1560,7 +1560,7 @@ object StaticFormAppRenderer {
       properties.defaultTableView
     )
     if (_is_html_document(template))
-      Page(rendered)
+      Page(_complete_widget_assets(template, rendered))
     else
       Page(_simple_page(
         title = s"${_escape(properties.operationLabel)} Result",
@@ -4433,6 +4433,20 @@ object StaticFormAppRenderer {
     val text = template.dropWhile(_.isWhitespace).toLowerCase(java.util.Locale.ROOT)
     text.startsWith("<!doctype html") || text.startsWith("<html")
   }
+
+  private def _complete_widget_assets(
+    template: String,
+    rendered: String
+  ): String =
+    StaticFormAppLayout.completeWidgetAssets(
+      rendered,
+      StaticFormAppLayout.AssetCompletionOptions(
+        requiresBootstrap = _has_textus_widgets(template)
+      )
+    )
+
+  private def _has_textus_widgets(template: String): Boolean =
+    """<textus(?::|-)[A-Za-z0-9-]+\b""".r.findFirstIn(template).nonEmpty
 
   private def _render_property_expansions(
     template: String,

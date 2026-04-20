@@ -1013,7 +1013,7 @@ Deferred scope:
 
 ## WEB-13: Web-Facing Shortid Support
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -1166,16 +1166,38 @@ duplicate them.
 
 ### Detailed Tasks
 
-- [ ] Define widget asset dependency metadata.
-- [ ] Add an asset completion pass for Static Form Web App HTML rendering.
-- [ ] Detect existing CSS/JS declarations and skip duplicates.
-- [ ] Insert local Bootstrap 5 CSS/JS when a rendered widget requires it and no
+- [x] Define widget asset dependency metadata.
+- [x] Add an asset completion pass for Static Form Web App HTML rendering.
+- [x] Detect existing CSS/JS declarations and skip duplicates.
+- [x] Insert local Bootstrap 5 CSS/JS when a rendered widget requires it and no
       equivalent asset is already present.
-- [ ] Define descriptor hooks for enabling/disabling auto-completion and for
+- [x] Define descriptor hooks for enabling/disabling auto-completion and for
       declaring page/app-level assets.
-- [ ] Add executable specifications for missing assets, existing assets,
+- [x] Add executable specifications for missing assets, existing assets,
       descriptor-declared assets, and no-widget pages.
-- [ ] Validate with built-in admin pages and `textus-sample-app` static pages.
+- [x] Validate with built-in admin pages and `textus-sample-app` static pages.
+
+### Closure
+
+WEB-15 is complete as the first-pass Textus widget asset auto-completion
+mechanism.
+
+Completed scope:
+
+- full HTML document result templates with Textus widgets receive local
+  Bootstrap 5 CSS/JS when the assets are missing.
+- fragment templates continue to use the existing built-in Bootstrap layout.
+- existing page-level Bootstrap declarations are not duplicated.
+- descriptor-level asset declarations are represented by `web.assets` and are
+  treated as already supplied by the surrounding app/page composition.
+- pages without Textus widgets are left unchanged.
+
+Deferred scope:
+
+- wiring descriptor-declared custom CSS/JS into every Static Form App route is
+  future packaging/composition work.
+- richer widget-specific dependency sets beyond the Bootstrap baseline are
+  deferred until those widgets require them.
 
 ### Inputs
 

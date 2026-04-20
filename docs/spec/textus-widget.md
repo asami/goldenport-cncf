@@ -53,6 +53,49 @@ assets:
 Applications may add local CSS, but widget output must not depend on CDN access
 or a parallel CSS system.
 
+## Asset Auto-Completion
+
+Static Form App renderers complete widget assets for full HTML document
+templates.
+
+When a full HTML document template contains any supported `textus:` or
+`textus-` widget and the page does not already declare Bootstrap 5 assets, the
+renderer inserts:
+
+```html
+<link href="/web/assets/bootstrap.min.css" rel="stylesheet">
+<script src="/web/assets/bootstrap.bundle.min.js"></script>
+```
+
+The CSS link is inserted before `</head>`. The JavaScript bundle is inserted
+before `</body>`.
+
+The renderer must not add duplicates. A page that already declares Bootstrap
+CSS or JS keeps its declaration. A Web Descriptor may also declare page/app
+assets:
+
+```yaml
+web:
+  assets:
+    autoComplete: true
+    css:
+      - /web/assets/bootstrap.min.css
+      - /web/notice-board/assets/app.css
+    js:
+      - /web/assets/bootstrap.bundle.min.js
+      - /web/notice-board/assets/app.js
+```
+
+Descriptor-declared assets are treated as already supplied by the surrounding
+page/app composition. If they include Bootstrap, widget asset completion must
+not insert another Bootstrap asset.
+
+Fragment templates are normally wrapped by the built-in Bootstrap page layout,
+so they already receive the local Bootstrap baseline through that layout.
+
+If a full HTML document contains no Textus widget, asset completion must leave
+the document unchanged.
+
 ## Data Binding
 
 Widgets use the same property and result binding model as existing Static Form

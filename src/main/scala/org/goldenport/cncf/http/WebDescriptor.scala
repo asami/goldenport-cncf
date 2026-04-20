@@ -23,6 +23,7 @@ final case class WebDescriptor(
   form: Map[String, WebDescriptor.Form] = Map.empty,
   apps: Vector[WebDescriptor.App] = Vector.empty,
   routes: Vector[WebDescriptor.Route] = Vector.empty,
+  assets: WebDescriptor.Assets = WebDescriptor.Assets(),
   admin: Map[String, WebDescriptor.AdminSurface] = Map.empty
 ) {
   def hasControls: Boolean =
@@ -31,6 +32,7 @@ final case class WebDescriptor(
       form.nonEmpty ||
       apps.nonEmpty ||
       routes.nonEmpty ||
+      assets != WebDescriptor.Assets() ||
       admin.nonEmpty ||
       defaultView != WebTableColumnResolver.defaultViewName ||
       auth != WebDescriptor.Auth()
@@ -369,6 +371,12 @@ object WebDescriptor {
     remainingPath: Vector[String]
   )
 
+  final case class Assets(
+    autoComplete: Boolean = true,
+    css: Vector[String] = Vector.empty,
+    js: Vector[String] = Vector.empty
+  )
+
   val empty: WebDescriptor = WebDescriptor()
 
   def load(path: Path): Consequence[WebDescriptor] =
@@ -402,6 +410,7 @@ object WebDescriptor {
       form = _form(web),
       apps = _apps(web),
       routes = _routes(web),
+      assets = _assets(web),
       admin = _admin(web)
     )
   }
@@ -544,6 +553,20 @@ object WebDescriptor {
       case Some(xs: java.util.List[?]) => xs.asScala.toVector.flatMap(_any_to_record).flatMap(_route)
       case _ => Vector.empty
     }
+
+  private def _assets(record: Record): Assets =
+    _record_value(record, "assets")
+      .orElse(_record_value(record, "asset"))
+      .flatMap(_any_to_record)
+      .map { r =>
+        Assets(
+          autoComplete = _boolean(r, "autoComplete")
+            .orElse(_boolean(r, "auto-complete"))
+            .getOrElse(true),
+          css = _string_vector(r, "css") ++ _string_vector(r, "styles"),
+          js = _string_vector(r, "js") ++ _string_vector(r, "scripts")
+        )
+      }.getOrElse(Assets())
 
   private def _route(record: Record): Option[Route] =
     for {

@@ -5026,6 +5026,114 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus-pagination")
     }
 
+    "complete local Bootstrap assets for HTML document templates that use Textus widgets" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"title":"Phase12","recipient_name":"Bob"}]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<!doctype html>
+          |<html lang="en">
+          |<head>
+          |  <meta charset="utf-8">
+          |  <title>Search result</title>
+          |</head>
+          |<body>
+          |  <textus:card-list source="result.body" columns="title,recipient_name"></textus:card-list>
+          |</body>
+          |</html>""".stripMargin
+      ).body
+
+      html should include ("/web/assets/bootstrap.min.css")
+      html should include ("/web/assets/bootstrap.bundle.min.js")
+      html should include ("row row-cols-1 row-cols-md-2")
+      html should not include ("<textus:card-list")
+      html.indexOf("/web/assets/bootstrap.min.css") should be < html.indexOf("</head>")
+      html.indexOf("/web/assets/bootstrap.bundle.min.js") should be < html.indexOf("</body>")
+    }
+
+    "not duplicate existing local Bootstrap assets in HTML document templates" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "search-notices"
+        ),
+        200,
+        "application/json",
+        """{"data":[{"title":"Phase12","recipient_name":"Bob"}]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<!doctype html>
+          |<html lang="en">
+          |<head>
+          |  <link href="/web/assets/bootstrap.min.css" rel="stylesheet">
+          |</head>
+          |<body>
+          |  <textus-result-table source="result.body"></textus-result-table>
+          |  <script src="/web/assets/bootstrap.bundle.min.js"></script>
+          |</body>
+          |</html>""".stripMargin
+      ).body
+
+      _count_occurrences(html, "/web/assets/bootstrap.min.css") shouldBe 1
+      _count_occurrences(html, "/web/assets/bootstrap.bundle.min.js") shouldBe 1
+      html should not include ("<textus-result-table")
+    }
+
+    "leave HTML document templates without Textus widgets unchanged by asset completion" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "plain"
+        ),
+        200,
+        "text/plain",
+        "ok"
+      )
+      val template =
+        """<!doctype html>
+          |<html lang="en">
+          |<head><title>Plain</title></head>
+          |<body><p>No widgets</p></body>
+          |</html>""".stripMargin
+
+      val html = StaticFormAppRenderer.renderFormResult(properties, template).body
+
+      html shouldBe template
+      html should not include ("/web/assets/bootstrap.min.css")
+      html should not include ("/web/assets/bootstrap.bundle.min.js")
+    }
+
+    "honor descriptor-declared widget assets during completion" in {
+      val html = StaticFormAppLayout.completeWidgetAssets(
+        """<!doctype html>
+          |<html lang="en">
+          |<head><title>Declared assets</title></head>
+          |<body><main class="card">Body</main></body>
+          |</html>""".stripMargin,
+        StaticFormAppLayout.AssetCompletionOptions(
+          requiresBootstrap = true,
+          declaredCss = Vector("/web/assets/bootstrap.min.css"),
+          declaredJs = Vector("/web/assets/bootstrap.bundle.min.js")
+        )
+      )
+
+      html should not include ("/web/assets/bootstrap.min.css")
+      html should not include ("/web/assets/bootstrap.bundle.min.js")
+    }
+
     "render textus result table from result body object data" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
@@ -5305,6 +5413,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       pages.mkString("\n") should include ("shadow-sm")
     }
   }
+
+  private def _count_occurrences(
+    text: String,
+    needle: String
+  ): Int =
+    if (needle.isEmpty)
+      0
+    else
+      text.sliding(needle.length).count(_ == needle)
 
   private def _dashboard_state_json(
     subsystem: org.goldenport.cncf.subsystem.Subsystem,

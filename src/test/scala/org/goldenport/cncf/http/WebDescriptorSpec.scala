@@ -99,6 +99,15 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |      target:
           |        component: notice-board
           |        app: notice-board
+          |
+          |  assets:
+          |    autoComplete: false
+          |    css:
+          |      - /web/assets/bootstrap.min.css
+          |      - /web/notice-board/assets/app.css
+          |    js:
+          |      - /web/assets/bootstrap.bundle.min.js
+          |      - /web/notice-board/assets/app.js
           |""".stripMargin,
         StandardCharsets.UTF_8
       )
@@ -152,6 +161,9 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.webRouteFor(Vector("web", "notice-board", "about")).map(_.remainingPath) shouldBe Some(Vector("about"))
       descriptor.webRouteFor(Vector("web", "notice-board", "about")).map(_.kind) shouldBe Some(WebDescriptor.RouteKind.Alias)
       descriptor.webRouteFor(Vector("web", "other")).map(_.kind) shouldBe Some(WebDescriptor.RouteKind.Default)
+      descriptor.assets.autoComplete shouldBe false
+      descriptor.assets.css shouldBe Vector("/web/assets/bootstrap.min.css", "/web/notice-board/assets/app.css")
+      descriptor.assets.js shouldBe Vector("/web/assets/bootstrap.bundle.min.js", "/web/notice-board/assets/app.js")
     }
 
     "complete obvious Static Form Web app defaults from a minimal app entry" in {
