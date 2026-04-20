@@ -1744,6 +1744,46 @@ now provides both operator-friendly tables and raw JSON for exact debugging.
 
 ---
 
+## WEB-25 — Render Descriptor Control Tables
+
+Status: DONE
+
+### Goal
+
+Make the descriptor admin page useful as a management-console inspection
+surface, not only a raw JSON viewer.
+
+### Scope
+
+- Descriptor admin pages show completed Web app entries as a table.
+- Descriptor admin pages show Web routes as a table.
+- Descriptor admin pages show form exposure and authorization as a table.
+- Descriptor admin pages show admin surfaces and field control summaries as a
+  table.
+- Component descriptor pages filter selector and route rows to the selected
+  component scope where the descriptor carries component-qualified data.
+
+### Detailed Tasks
+
+- [x] Add Descriptor Controls section before Asset Composition.
+- [x] Render Apps and Routes tables from completed descriptor values.
+- [x] Render Form Access And Authorization table.
+- [x] Render Admin Surfaces table.
+- [x] Add executable specification checks for the new descriptor tables.
+
+### Closure
+
+WEB-25 is complete for the first descriptor-wide readable admin view. Raw JSON
+remains available for exact inspection, but the normal admin path now exposes
+the major descriptor contracts as Bootstrap tables.
+
+### Inputs
+
+- `docs/phase/phase-12.md`
+- `src/main/scala/org/goldenport/cncf/http/StaticFormAppRenderer.scala`
+
+---
+
 ## Deferred / Next Phase Candidates
 
 - SPA hosting as a separate mode beyond Static Form Web App plus islands.

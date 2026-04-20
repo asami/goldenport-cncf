@@ -197,7 +197,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           js = Vector("/web/assets/site.js")
         ),
         expose = Map("notice-board.notice.search-notices" -> WebDescriptor.Exposure.Public),
-        authorization = Map("notice-board.notice.search-notices" -> WebDescriptor.Authorization(roles = Vector("reader"))),
+        authorization = Map("notice-board.notice.search-notices" -> WebDescriptor.Authorization(
+          roles = Vector("reader"),
+          scopes = Vector("notice:read"),
+          capabilities = Vector("notice.search"),
+          operationModes = Vector(org.goldenport.cncf.config.OperationMode.Develop),
+          anonymousOperationModes = Vector(org.goldenport.cncf.config.OperationMode.Test),
+          allowAnonymous = true
+        )),
         form = Map("notice-board.notice.search-notices" -> WebDescriptor.Form(
           enabled = Some(true),
           assets = WebDescriptor.Assets(
@@ -239,7 +246,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           js = Vector("/web/assets/site.js")
         ),
         expose = Map("notice-board.notice.search-notices" -> WebDescriptor.Exposure.Public),
-        authorization = Map("notice-board.notice.search-notices" -> WebDescriptor.Authorization(roles = Vector("reader"))),
+        authorization = Map("notice-board.notice.search-notices" -> WebDescriptor.Authorization(
+          roles = Vector("reader"),
+          scopes = Vector("notice:read"),
+          capabilities = Vector("notice.search"),
+          operationModes = Vector(org.goldenport.cncf.config.OperationMode.Develop),
+          anonymousOperationModes = Vector(org.goldenport.cncf.config.OperationMode.Test),
+          allowAnonymous = true
+        )),
         form = Map("notice-board.notice.search-notices" -> WebDescriptor.Form(
           enabled = Some(true),
           assets = WebDescriptor.Assets(
@@ -262,6 +276,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val html = StaticFormAppRenderer.renderSystemAdminDescriptor(descriptor).body
 
       html should include ("System Web Descriptor")
+      html should include ("Descriptor Controls")
+      html should include ("Apps")
+      html should include ("Routes")
+      html should include ("Form Access And Authorization")
+      html should include ("Admin Surfaces")
+      html should include ("notice:read")
+      html should include ("notice.search")
+      html should include ("develop")
+      html should include ("test")
       html should include ("Asset Composition")
       html should include ("Configured Scopes")
       html should include ("Resolved Form Pages")
@@ -341,6 +364,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/system/admin/descriptor")
       html should include ("Completed Descriptor")
       html should include ("Configured Descriptor")
+      html should include ("Descriptor Controls")
+      html should include ("Apps")
+      html should include ("Routes")
+      html should include ("Form Access And Authorization")
+      html should include ("Admin Surfaces")
       html should include ("Asset Composition")
       html should include ("Configured Scopes")
       html should include ("Resolved Form Pages")

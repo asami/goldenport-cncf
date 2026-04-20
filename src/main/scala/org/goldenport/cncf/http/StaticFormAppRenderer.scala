@@ -1746,6 +1746,7 @@ object StaticFormAppRenderer {
            |  <h2>Navigation</h2>
            |  <p><a href="/web/system/admin">System admin</a> · <a href="/web/system/dashboard">System dashboard</a></p>
            |</article>
+           |${_web_descriptor_control_tables(webDescriptor)}
            |${_web_descriptor_asset_composition_table(webDescriptor)}
            |<article>
            |  <h2>Completed Descriptor</h2>
@@ -1781,6 +1782,7 @@ object StaticFormAppRenderer {
              |  <h2>Navigation</h2>
              |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/web/system/admin/descriptor">System descriptor</a></p>
              |</article>
+             |${_web_descriptor_control_tables(webDescriptor, Some(componentPath))}
              |${_web_descriptor_asset_composition_table(webDescriptor, Some(componentPath))}
              |<article>
              |  <h2>Completed Descriptor</h2>
@@ -4319,6 +4321,155 @@ object StaticFormAppRenderer {
             None
         }
     }
+
+  private def _web_descriptor_control_tables(
+    descriptor: WebDescriptor,
+    componentSegment: Option[String] = None
+  ): String = {
+    s"""<article>
+       |  <h2>Descriptor Controls</h2>
+       |  <p>Completed apps, routes, form access, authorization, and admin surfaces.</p>
+       |  ${_web_descriptor_apps_table(descriptor, componentSegment)}
+       |  ${_web_descriptor_routes_table(descriptor, componentSegment)}
+       |  ${_web_descriptor_form_controls_table(descriptor, componentSegment)}
+       |  ${_web_descriptor_admin_surfaces_table(descriptor)}
+       |</article>""".stripMargin
+  }
+
+  private def _web_descriptor_apps_table(
+    descriptor: WebDescriptor,
+    componentSegment: Option[String]
+  ): String = {
+    val rows = descriptor.apps.map { app =>
+      val completed = app.completedFor(componentSegment)
+      s"""<tr>
+         |  <td><code>${_escape(completed.name)}</code></td>
+         |  <td><code>${_escape(completed.effectivePath)}</code></td>
+         |  <td><code>${_escape(completed.effectiveRoot)}</code></td>
+         |  <td><code>${_escape(completed.effectiveRoute)}</code></td>
+         |  <td>${_escape(completed.effectiveKind)}</td>
+         |</tr>""".stripMargin
+    }
+    val body =
+      if (rows.isEmpty)
+        """<tr><td colspan="5" class="text-secondary">No Web app descriptor entries are configured.</td></tr>"""
+      else
+        rows.mkString("\n")
+    s"""<h3>Apps</h3>
+       |<div class="table-responsive"><table class="table table-sm align-middle">
+       |  <thead><tr><th>Name</th><th>Path</th><th>Root</th><th>Route</th><th>Kind</th></tr></thead>
+       |  <tbody>${body}</tbody>
+       |</table></div>""".stripMargin
+  }
+
+  private def _web_descriptor_routes_table(
+    descriptor: WebDescriptor,
+    componentSegment: Option[String]
+  ): String = {
+    val filtered = descriptor.routes.filter(route =>
+      componentSegment.forall(component => NamingConventions.equivalentByNormalized(route.target.component, component))
+    )
+    val rows = filtered.map { route =>
+      s"""<tr>
+         |  <td><code>${_escape(route.path)}</code></td>
+         |  <td>${_escape(route.kind.name)}</td>
+         |  <td><code>${_escape(route.target.component)}</code></td>
+         |  <td><code>${_escape(route.target.app)}</code></td>
+         |</tr>""".stripMargin
+    }
+    val body =
+      if (rows.isEmpty)
+        """<tr><td colspan="4" class="text-secondary">No Web route descriptor entries are configured for this scope.</td></tr>"""
+      else
+        rows.mkString("\n")
+    s"""<h3>Routes</h3>
+       |<div class="table-responsive"><table class="table table-sm align-middle">
+       |  <thead><tr><th>Path</th><th>Kind</th><th>Target component</th><th>Target app</th></tr></thead>
+       |  <tbody>${body}</tbody>
+       |</table></div>""".stripMargin
+  }
+
+  private def _web_descriptor_form_controls_table(
+    descriptor: WebDescriptor,
+    componentSegment: Option[String]
+  ): String = {
+    val selectors = (descriptor.expose.keySet ++ descriptor.form.keySet ++ descriptor.authorization.keySet)
+      .toVector
+      .filter(selector => _selector_matches_component(selector, componentSegment))
+      .sortBy(identity)
+    val rows = selectors.map { selector =>
+      val exposure = descriptor.exposureOf(selector).name
+      val form = descriptor.form.get(selector)
+      val authorization = descriptor.authorization.get(selector)
+      s"""<tr>
+         |  <td><code>${_escape(selector)}</code></td>
+         |  <td>${_escape(exposure)}</td>
+         |  <td>${form.flatMap(_.enabled).map(_.toString).getOrElse("default")}</td>
+         |  <td>${_escape(_web_descriptor_csv(authorization.map(_.roles).getOrElse(Vector.empty)))}</td>
+         |  <td>${_escape(_web_descriptor_csv(authorization.map(_.scopes).getOrElse(Vector.empty)))}</td>
+         |  <td>${_escape(_web_descriptor_csv(authorization.map(_.capabilities).getOrElse(Vector.empty)))}</td>
+         |  <td>${authorization.exists(_.allowAnonymous)}</td>
+         |  <td>${_escape(_web_descriptor_csv(authorization.map(_.operationModes.map(_.name)).getOrElse(Vector.empty)))}</td>
+         |  <td>${_escape(_web_descriptor_csv(authorization.map(_.anonymousOperationModes.map(_.name)).getOrElse(Vector.empty)))}</td>
+         |</tr>""".stripMargin
+    }
+    val body =
+      if (rows.isEmpty)
+        """<tr><td colspan="9" class="text-secondary">No form, exposure, or authorization entries are configured for this scope.</td></tr>"""
+      else
+        rows.mkString("\n")
+    s"""<h3>Form Access And Authorization</h3>
+       |<div class="table-responsive"><table class="table table-sm align-middle">
+       |  <thead><tr><th>Selector</th><th>Exposure</th><th>Form</th><th>Roles</th><th>Scopes</th><th>Capabilities</th><th>Anonymous</th><th>Operation modes</th><th>Anonymous modes</th></tr></thead>
+       |  <tbody>${body}</tbody>
+       |</table></div>""".stripMargin
+  }
+
+  private def _web_descriptor_admin_surfaces_table(
+    descriptor: WebDescriptor
+  ): String = {
+    val rows = descriptor.admin.toVector.sortBy(_._1).map {
+      case (selector, admin) =>
+        val fields = admin.fields.map { field =>
+          val control = field.control.controlType.getOrElse("default")
+          val required = field.control.required.map(value => s", required=${value}").getOrElse("")
+          s"${field.name}:${control}${required}"
+        }
+        s"""<tr>
+           |  <td><code>${_escape(selector)}</code></td>
+           |  <td>${_escape(admin.totalCount.name)}</td>
+           |  <td>${_escape(_web_descriptor_csv(fields))}</td>
+           |</tr>""".stripMargin
+    }
+    val body =
+      if (rows.isEmpty)
+        """<tr><td colspan="3" class="text-secondary">No Management Console surfaces are configured.</td></tr>"""
+      else
+        rows.mkString("\n")
+    s"""<h3>Admin Surfaces</h3>
+       |<div class="table-responsive"><table class="table table-sm align-middle">
+       |  <thead><tr><th>Surface</th><th>Total count</th><th>Fields</th></tr></thead>
+       |  <tbody>${body}</tbody>
+       |</table></div>""".stripMargin
+  }
+
+  private def _selector_matches_component(
+    selector: String,
+    componentSegment: Option[String]
+  ): Boolean =
+    componentSegment.forall { component =>
+      selector.split("\\.", 2).headOption.exists(head =>
+        NamingConventions.equivalentByNormalized(head, component)
+      )
+    }
+
+  private def _web_descriptor_csv(
+    values: Vector[String]
+  ): String =
+    if (values.isEmpty)
+      "none"
+    else
+      values.mkString(", ")
 
   private def _web_descriptor_asset_composition_table(
     descriptor: WebDescriptor,

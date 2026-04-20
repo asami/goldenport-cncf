@@ -103,6 +103,9 @@ This document is a progress dashboard, not a design journal.
 - X (DONE): WEB-24 — Render descriptor asset composition tables.
   Management Console descriptor pages now show configured asset scopes and
   resolved Static Form page assets as Bootstrap tables before the raw JSON.
+- Y (DONE): WEB-25 — Render descriptor control tables.
+  Management Console descriptor pages now show apps, routes, form access,
+  authorization, and admin surfaces as readable tables before the raw JSON.
 
 Current note:
 - Web-related journal notes already exist for architecture, operational

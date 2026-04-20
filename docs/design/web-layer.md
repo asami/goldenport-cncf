@@ -277,6 +277,10 @@ component form indexes, operation input pages, and operation result pages.
 The same information is rendered as Asset Composition tables before the raw
 JSON so operators can inspect configured scopes and completed page assets
 without reading the descriptor structure directly.
+Descriptor pages also render Apps, Routes, Form Access And Authorization, and
+Admin Surfaces tables before the raw JSON. These tables are the primary admin
+inspection surface; the raw descriptor JSON remains available for exact
+debugging and copy/paste.
 
 Static result template lookup is route-local under the Web app root. For a
 Component app `abc:/web/notice-board`, operation result templates are placed

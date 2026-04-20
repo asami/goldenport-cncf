@@ -135,6 +135,9 @@ indexes, operation input pages, and operation result pages. This descriptor
 surface is the debugging contract for descriptor-driven asset insertion. The
 management console must also render that information as tables so the common
 inspection path does not require reading JSON.
+The descriptor admin page also renders descriptor controls such as apps,
+routes, form access, authorization, and admin surfaces as tables before the raw
+JSON.
 
 If `web.assets.autoComplete` is `false`, Static Form result rendering must not
 insert framework widget assets automatically. Widget expansion still runs; the
