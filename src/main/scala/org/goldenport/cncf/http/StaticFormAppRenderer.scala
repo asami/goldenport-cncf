@@ -51,12 +51,24 @@ object StaticFormAppRenderer {
     def withTotalCountPolicy(policy: WebDescriptor.TotalCountPolicy): PageRequest =
       copy(totalCountPolicy = policy)
   }
-  final case class FormPageProperties(
-    componentName: String,
-    serviceName: String,
-    operationName: String,
-    values: Map[String, String] = Map.empty
-  ) {
+final case class FormPageProperties(
+  componentName: String,
+  serviceName: String,
+  operationName: String,
+  values: Map[String, String] = Map.empty,
+  componentPathOverride: Option[String] = None,
+  servicePathOverride: Option[String] = None,
+  operationPathOverride: Option[String] = None
+) {
+    def componentPath: String =
+      componentPathOverride.getOrElse(NamingConventions.toNormalizedSegment(componentName))
+
+    def servicePath: String =
+      servicePathOverride.getOrElse(NamingConventions.toNormalizedSegment(serviceName))
+
+    def operationPath: String =
+      operationPathOverride.getOrElse(NamingConventions.toNormalizedSegment(operationName))
+
     def operationLabel: String =
       s"${componentName}.${serviceName}.${operationName}"
 
@@ -111,7 +123,7 @@ object StaticFormAppRenderer {
         base
 
     private def _default_paging_href: String =
-      s"/form/${componentName}/${serviceName}/${operationName}/result?page={page}&pageSize={pageSize}"
+      s"/form/${page.componentPath}/${page.servicePath}/${page.operationPath}/result?page={page}&pageSize={pageSize}"
 
     private def _framework_action_values(metadata: FormResultMetadata): Map[String, String] =
       _detail_action_values(metadata) ++ _job_action_values(metadata) ++ _return_action_values
@@ -119,7 +131,7 @@ object StaticFormAppRenderer {
     private def _job_action_values(metadata: FormResultMetadata): Map[String, String] =
       metadata.jobId match {
         case Some(jobid) =>
-          val href = page.values.getOrElse("result.job.href", s"/form/${componentName}/${serviceName}/${operationName}/jobs/${jobid}/await")
+          val href = page.values.getOrElse("result.job.href", s"/form/${page.componentPath}/${page.servicePath}/${page.operationPath}/jobs/${jobid}/await")
           val common = Map(
             "result.job.href" -> href,
             "result.job.status" -> metadata.jobStatus.getOrElse("accepted"),
@@ -150,7 +162,8 @@ object StaticFormAppRenderer {
     private def _detail_action_values(metadata: FormResultMetadata): Map[String, String] =
       metadata.id.flatMap(id => _detail_operation_name.map(_ -> id)) match {
         case Some((detailOperation, id)) =>
-          val href = s"/form/${componentName}/${serviceName}/${detailOperation}/result?id=${_escape_query(id)}"
+          val detailOperationPath = NamingConventions.toNormalizedSegment(detailOperation)
+          val href = s"/form/${page.componentPath}/${page.servicePath}/${detailOperationPath}/result?id=${_escape_query(id)}"
           val common = Map(
             "result.action.detail.name" -> "detail",
             "result.action.detail.label" -> "Open detail",
@@ -245,7 +258,7 @@ object StaticFormAppRenderer {
       case Vector() if app == "console" =>
         Some(renderSystemConsole(subsystem))
       case Vector("dashboard") =>
-        _find_component(subsystem, app).map(renderComponentDashboard)
+        _find_component(subsystem, app).map(renderComponentDashboard(_, NamingConventions.toNormalizedSegment(app)))
       case _ =>
         None
     }
@@ -257,7 +270,7 @@ object StaticFormAppRenderer {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val services = component.protocol.services.services.map { service =>
         val operations = service.operations.operations.toVector.filter { operation =>
           webDescriptor.isFormEnabled(_operation_selector(component.name, service.name, operation.name))
@@ -351,7 +364,7 @@ object StaticFormAppRenderer {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val entityPath = NamingConventions.toNormalizedSegment(entityName)
       val webSchema = WebSchemaResolver.resolveEntity(
         component,
@@ -389,7 +402,7 @@ object StaticFormAppRenderer {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val entityPath = NamingConventions.toNormalizedSegment(entityName)
       val webSchema = WebSchemaResolver.resolveEntity(
         component,
@@ -425,7 +438,7 @@ object StaticFormAppRenderer {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val dataPath = NamingConventions.toNormalizedSegment(dataName)
       val webSchema = WebSchemaResolver.resolveData(
         componentPath,
@@ -461,7 +474,7 @@ object StaticFormAppRenderer {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val dataPath = NamingConventions.toNormalizedSegment(dataName)
       val webSchema = WebSchemaResolver.resolveData(
         componentPath,
@@ -494,7 +507,7 @@ object StaticFormAppRenderer {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val viewPath = NamingConventions.toNormalizedSegment(viewName)
       val definition = _view_definition(component, viewName)
       val entityName = definition.map(_.entityName).getOrElse(_strip_surface_suffix(viewPath, "view").getOrElse(viewPath))
@@ -529,7 +542,7 @@ object StaticFormAppRenderer {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val aggregatePath = NamingConventions.toNormalizedSegment(aggregateName)
       val definition = _aggregate_definition(component, aggregateName)
       val entityName = definition.map(_.entityName).getOrElse(_strip_surface_suffix(aggregatePath, "aggregate").getOrElse(aggregatePath))
@@ -588,7 +601,7 @@ object StaticFormAppRenderer {
     view: Option[String] = None
   ): Option[FormValidationResult] =
     _find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val entityPath = NamingConventions.toNormalizedSegment(entityName)
       val webSchema = WebSchemaResolver.resolveEntity(
         component,
@@ -616,7 +629,7 @@ object StaticFormAppRenderer {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[FormValidationResult] =
     _find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val dataPath = NamingConventions.toNormalizedSegment(dataName)
       val webSchema = WebSchemaResolver.resolveData(
         componentPath,
@@ -969,7 +982,7 @@ object StaticFormAppRenderer {
       operation <- service.operations.operations.find(x => NamingConventions.equivalentByNormalized(x.name, operationName))
       if webDescriptor.isFormEnabled(_operation_selector(component.name, service.name, operation.name))
     } yield {
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val servicePath = NamingConventions.toNormalizedSegment(service.name)
       val operationPath = NamingConventions.toNormalizedSegment(operation.name)
       val formDescriptor = webDescriptor.form.get(_operation_selector(component.name, service.name, operation.name))
@@ -1712,10 +1725,13 @@ object StaticFormAppRenderer {
     ))
 
   def renderComponentDashboard(component: Component): Page =
+    renderComponentDashboard(component, NamingConventions.toNormalizedSegment(component.name))
+
+  def renderComponentDashboard(component: Component, componentPath: String): Page =
     Page(_dashboard_shell(
       title = s"${_escape(component.name)} Dashboard",
       subtitle = "Component health",
-      statePath = s"/web/${NamingConventions.toNormalizedSegment(component.name)}/dashboard/state"
+      statePath = s"/web/${componentPath}/dashboard/state"
     ))
 
   def renderDashboardState(
@@ -1782,7 +1798,7 @@ object StaticFormAppRenderer {
     componentName: String,
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
-    _find_component(subsystem, componentName).map(renderComponentAdmin(_, webDescriptor))
+    _find_component(subsystem, componentName).map(renderComponentAdmin(_, NamingConventions.toNormalizedSegment(componentName), webDescriptor))
 
   def renderComponentAdminDescriptor(
     subsystem: Subsystem,
@@ -1790,7 +1806,7 @@ object StaticFormAppRenderer {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
       Page(_simple_page(
         title = s"${_escape(component.name)} Web Descriptor",
         subtitle = "Component Management Console descriptor view",
@@ -1842,7 +1858,7 @@ object StaticFormAppRenderer {
       subtitle = "Component reference",
       component = component,
       selector = Some(component.name),
-      currentPath = s"/web/${NamingConventions.toNormalizedSegment(component.name)}/manual",
+      currentPath = s"/web/${NamingConventions.toNormalizedSegment(componentName)}/manual",
       childNames = component.protocol.services.services.map(_.name).toVector
     ))
 
@@ -1859,7 +1875,7 @@ object StaticFormAppRenderer {
       subtitle = "Service reference",
       component = component,
       selector = Some(s"${component.name}.${service.name}"),
-      currentPath = s"/web/${NamingConventions.toNormalizedSegment(component.name)}/manual/${NamingConventions.toNormalizedSegment(service.name)}",
+      currentPath = s"/web/${NamingConventions.toNormalizedSegment(componentName)}/manual/${NamingConventions.toNormalizedSegment(service.name)}",
       childNames = service.operations.operations.map(_.name).toVector
     ))
 
@@ -1878,7 +1894,7 @@ object StaticFormAppRenderer {
       subtitle = "Operation reference",
       component = component,
       selector = Some(s"${component.name}.${service.name}.${operation.name}"),
-      currentPath = s"/web/${NamingConventions.toNormalizedSegment(component.name)}/manual/${NamingConventions.toNormalizedSegment(service.name)}/${NamingConventions.toNormalizedSegment(operation.name)}",
+      currentPath = s"/web/${NamingConventions.toNormalizedSegment(componentName)}/manual/${NamingConventions.toNormalizedSegment(service.name)}/${NamingConventions.toNormalizedSegment(operation.name)}",
       childNames = Vector.empty
     ))
 
@@ -1887,7 +1903,7 @@ object StaticFormAppRenderer {
     componentName: String
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val rows = component.componentDescriptors.flatMap(_.entityRuntimeDescriptors).map { descriptor =>
         val entityPath = NamingConventions.toNormalizedSegment(descriptor.entityName)
         s"""<tr>
@@ -1930,7 +1946,7 @@ object StaticFormAppRenderer {
     pageContext: Map[String, String] = Map.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val entityPath = NamingConventions.toNormalizedSegment(entityName)
       val entityLabel = _title_label(entityPath)
       val basePath = s"/web/${componentPath}/admin/entities/${entityPath}"
@@ -2000,7 +2016,7 @@ object StaticFormAppRenderer {
     values: Map[String, String] = Map.empty
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val entityPath = NamingConventions.toNormalizedSegment(entityName)
       val entityLabel = _title_label(entityPath)
       val basePath = s"/web/${componentPath}/admin/entities/${entityPath}"
@@ -2038,7 +2054,7 @@ object StaticFormAppRenderer {
     validation: Option[FormValidationResult] = None
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val entityPath = NamingConventions.toNormalizedSegment(entityName)
       val entityLabel = _title_label(entityPath)
       val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
@@ -2099,7 +2115,7 @@ object StaticFormAppRenderer {
     validation: Option[FormValidationResult] = None
   ): Option[Page] =
     _find_component(subsystem, componentName).map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val entityPath = NamingConventions.toNormalizedSegment(entityName)
       val entityLabel = _title_label(entityPath)
       val webBasePath = s"/web/${componentPath}/admin/entities/${entityPath}"
@@ -3718,20 +3734,26 @@ object StaticFormAppRenderer {
   def renderComponentAdmin(
     component: Component,
     webDescriptor: WebDescriptor
+  ): Page =
+    renderComponentAdmin(component, NamingConventions.toNormalizedSegment(component.name), webDescriptor)
+
+  def renderComponentAdmin(
+    component: Component,
+    componentPath: String,
+    webDescriptor: WebDescriptor
   ): Page = {
-    val name = NamingConventions.toNormalizedSegment(component.name)
     Page(_admin_page(
       title = s"${_escape(component.name)} Admin Configuration",
       subtitle = "Current component runtime configuration",
       components = Vector(component),
       subsystemName = component.subsystem.map(_.name).getOrElse(component.name),
       subsystemVersion = component.subsystem.flatMap(_.version),
-      dashboardPath = s"/web/${name}/dashboard",
+      dashboardPath = s"/web/${componentPath}/dashboard",
       performancePath = "/web/system/performance",
       webDescriptor = webDescriptor,
       runtimeConfiguration = None,
       operationalDetails = None,
-      componentFormsPath = Some(s"/form/${name}")
+      componentFormsPath = Some(s"/form/${componentPath}")
     ))
   }
 
@@ -3758,7 +3780,9 @@ object StaticFormAppRenderer {
     subsystem: Subsystem,
     name: String
   ): Option[Component] =
-    subsystem.components.find(x => NamingConventions.equivalentByNormalized(x.name, name))
+    subsystem.components.find(x =>
+      NamingConventions.equivalentByNormalized(x.name, name)
+    )
 
   private def _operation_selector(
     componentName: String,
@@ -3994,9 +4018,11 @@ object StaticFormAppRenderer {
         s"""<section><h3>${_escape(service.name)}</h3><ul>${operations}</ul></section>"""
       }.mkString("\n")
       val version = component.artifactMetadata.map(_.version).getOrElse("unversioned")
+      val componentlets = _componentlet_table(component)
       s"""<article>
          |  <h2>${_escape(component.name)}</h2>
          |  <p>Version ${_escape(version)}</p>
+         |  ${componentlets}
          |  ${services}
          |</article>""".stripMargin
     }.mkString("\n")
@@ -4151,6 +4177,44 @@ object StaticFormAppRenderer {
       |    </section>
       |  </div>
       |</div>""".stripMargin
+
+  private def _componentlet_table(
+    component: Component
+  ): String = {
+    val rows = component.componentDescriptors
+      .flatMap(_.componentlets)
+      .sortBy(_.name)
+      .map { componentlet =>
+        s"""<tr>
+           |  <td><code>${_escape(componentlet.name)}</code></td>
+           |  <td>${_escape(componentlet.kind.getOrElse("componentlet"))}</td>
+           |  <td>${_escape(componentlet.archiveScope.getOrElse(""))}</td>
+           |  <td>${_escape(componentlet.implementationClass.getOrElse(""))}</td>
+           |  <td>${_escape(componentlet.factoryObject.getOrElse(""))}</td>
+           |</tr>""".stripMargin
+      }
+      .mkString("\n")
+    if (rows.isEmpty)
+      ""
+    else
+      s"""<section>
+         |  <h3>Componentlets</h3>
+         |  <div class="table-responsive"><table class="table table-sm table-hover align-middle">
+         |    <thead><tr><th>Name</th><th>Kind</th><th>Archive scope</th><th>Implementation</th><th>Factory</th></tr></thead>
+         |    <tbody>${rows}</tbody>
+         |  </table></div>
+         |</section>""".stripMargin
+  }
+
+  private def _manual_componentlet_section(
+    component: Component
+  ): String = {
+    val body = _componentlet_table(component)
+    if (body.isEmpty)
+      ""
+    else
+      _manual_card("Componentlets", body, Some("componentlets"))
+  }
 
   private def _component_admin_actions(
     formsPath: Option[String]
@@ -4894,6 +4958,11 @@ object StaticFormAppRenderer {
     val describe = DescribeProjection.project(component, selector)
     val schema = SchemaProjection.project(component, selector)
     val childLinks = _manual_child_links(currentPath, childNames)
+    val componentletCard =
+      if (selector.exists(NamingConventions.equivalentByNormalized(component.name, _)))
+        _manual_componentlet_section(component)
+      else
+        ""
     val body =
       s"""${_manual_card("Reference navigation",
          s"""<p>This manual is read-only. Use it to inspect help, describe, schema, OpenAPI, and MCP entry points.</p>
@@ -4906,6 +4975,7 @@ object StaticFormAppRenderer {
             |  <a class="btn btn-outline-secondary" href="/web/console">Console</a>
             |</div>""".stripMargin)}
          |${_manual_card("Children", childLinks)}
+         |${componentletCard}
          |${_manual_card("Help", _manual_record(help), Some("help"))}
          |${_manual_card("Describe", _manual_record(describe), Some("describe"))}
          |${_manual_card("Schema", _manual_record(schema), Some("schema"))}""".stripMargin

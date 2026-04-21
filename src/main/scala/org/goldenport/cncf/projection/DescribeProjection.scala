@@ -22,6 +22,19 @@ object DescribeProjection {
       case Target.ComponentTarget(component) =>
         val services = component.protocol.services.services.sortBy(_.name)
         val artifact = artifact_record(component)
+        val componentlets = component.componentDescriptors
+          .flatMap(_.componentlets)
+          .sortBy(_.name)
+          .map { x =>
+            Record.data(
+              "name" -> x.name,
+              "kind" -> x.kind.getOrElse(""),
+              "isPrimary" -> x.isPrimary.getOrElse(false),
+              "archiveScope" -> x.archiveScope.getOrElse(""),
+              "implementationClass" -> x.implementationClass.getOrElse(""),
+              "factoryObject" -> x.factoryObject.getOrElse("")
+            )
+          }
         val aggregates = aggregateMetas(component).map { x =>
           Record.data(
             "name" -> x.name,
@@ -54,6 +67,7 @@ object DescribeProjection {
           "origin" -> user_origin_label(component.origin.label),
           "artifact" -> artifact,
           "summary" -> s"Component ${component.name}",
+          "componentlets" -> componentlets,
           "services" -> services.map(service_record),
           "aggregates" -> aggregates,
           "views" -> views,

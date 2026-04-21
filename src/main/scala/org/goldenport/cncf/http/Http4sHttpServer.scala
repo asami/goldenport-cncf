@@ -1636,7 +1636,9 @@ final class Http4sHttpServer(
   private def _component(
     app: String
   ): Option[org.goldenport.cncf.component.Component] =
-    engine.runtimeSubsystem.components.find(c => NamingConventions.equivalentByNormalized(c.name, app))
+    engine.runtimeSubsystem.components.find(c =>
+      NamingConventions.equivalentByNormalized(c.name, app)
+    )
 
   private def _form_transition_response(
     app: String,

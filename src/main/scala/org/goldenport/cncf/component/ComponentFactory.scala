@@ -28,6 +28,7 @@ import org.goldenport.cncf.statemachine.{CollectionStateMachinePlanner, Collecti
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, XString}
 import org.simplemodeling.model.value.BaseContent
+import scala.collection.mutable
 import scala.util.Try
 
 /*
@@ -43,6 +44,8 @@ final class ComponentFactory(
   private val _collaborators: CollaboratorFactory = CollaboratorFactory.empty,
   private val _runtime_entity_descriptors: Vector[EntityRuntimeDescriptor] = Vector.empty
 ) {
+  private val _shared_event_buses = mutable.AnyRefMap.empty[Subsystem, EventBus]
+
   def discover(): Vector[Component] = {
     val cs = _component_repository_space.discover()
     cs.map(bootstrap)
@@ -173,12 +176,25 @@ final class ComponentFactory(
         ()
     }
     if (component.eventReceptionDefinitions.nonEmpty || component.eventSubscriptionDefinitions.nonEmpty) {
-      val engine = EventEngine.noop(DataStore.noop(), eventstore = store)
-      val bus = EventBus.default(engine)
+      val bus = _shared_event_bus(component, store)
       val reception = createEventReceptionWithOperationDispatcher(component, bus)
       component.withEventReception(reception)
     }
   }
+
+  private def _shared_event_bus(
+    component: Component,
+    store: EventStore
+  ): EventBus =
+    component.subsystem match {
+      case Some(subsystem) =>
+        _shared_event_buses.getOrElseUpdate(
+          subsystem,
+          EventBus.default(EventEngine.noop(DataStore.noop(), eventstore = store))
+        )
+      case None =>
+        EventBus.default(EventEngine.noop(DataStore.noop(), eventstore = store))
+    }
 
   def createEventReceptionWithOperationDispatcher(
     component: Component,

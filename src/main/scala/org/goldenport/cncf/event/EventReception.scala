@@ -267,6 +267,21 @@ object EventReception {
     def registerSubscription(subscription: CmlSubscriptionDefinition): Unit = synchronized {
       _validate_subscription(subscription)
       _subscriptions += subscription
+      eventBus.register(
+        EventSubscription(
+          name = subscription.name,
+          eventName = Some(subscription.eventName),
+          handler = new EventDispatchHandler {
+            def dispatch(event: DomainEvent): Consequence[Unit] =
+              event match {
+                case reception: ReceptionDomainEvent =>
+                  _dispatch_registered_subscription(subscription, reception)
+                case _ =>
+                  Consequence.unit
+              }
+          }
+        )
+      )
     }
 
     def registerStateMachineListener(listener: StateMachineEventListener): Unit = synchronized {
@@ -362,26 +377,24 @@ object EventReception {
             publish.flatMap { r =>
               _dispatch_to_listeners(event, matched, ctx).flatMap { basecount =>
                 _dispatch_to_entity_subscriptions(event, ctx).flatMap { entitycount =>
-                  _dispatch_to_subscriptions(event, ctx).flatMap { subscriptioncount =>
-                    val count = basecount + entitycount + subscriptioncount
-                    if (count > 0) {
-                      Consequence.success(
-                        ReceptionResult(
-                          outcome = ReceptionOutcome.Routed,
-                          dispatchedCount = count,
-                          persisted = r.persisted,
-                          reason = None
-                        )
+                  val count = basecount + entitycount + r.dispatchedCount
+                  if (count > 0) {
+                    Consequence.success(
+                      ReceptionResult(
+                        outcome = ReceptionOutcome.Routed,
+                        dispatchedCount = count,
+                        persisted = r.persisted,
+                        reason = None
                       )
-                    } else {
-                      _on_nomatch(input, ctx).map { _ =>
-                        ReceptionResult(
-                          outcome = ReceptionOutcome.Dropped,
-                          dispatchedCount = 0,
-                          persisted = r.persisted,
-                          reason = Some("non-target")
-                        )
-                      }
+                    )
+                  } else {
+                    _on_nomatch(input, ctx).map { _ =>
+                      ReceptionResult(
+                        outcome = ReceptionOutcome.Dropped,
+                        dispatchedCount = 0,
+                        persisted = r.persisted,
+                        reason = Some("non-target")
+                      )
                     }
                   }
                 }
@@ -762,6 +775,15 @@ object EventReception {
         }
       }
     }
+
+    private def _dispatch_registered_subscription(
+      subscription: CmlSubscriptionDefinition,
+      event: ReceptionDomainEvent
+    ): Consequence[Unit] =
+      ingressSecurityResolver.resolve(event.attributes).flatMap { security =>
+        given ExecutionContext = security.executionContext
+        _dispatch_subscription(subscription, event).map(_ => ())
+      }
 
     private def _dispatch_subscription(
       s: CmlSubscriptionDefinition,

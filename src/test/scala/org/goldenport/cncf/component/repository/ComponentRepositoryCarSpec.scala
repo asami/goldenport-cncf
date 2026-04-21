@@ -31,6 +31,39 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
   }
 
   "ComponentDirRepository" should {
+    "resolve descriptor by componentlet name from a car directory" in {
+      _with_temp_dir { componentdir =>
+        _create_fake_component_jar(componentdir.resolve("component").resolve("main.jar"))
+        val descriptorPath = componentdir.resolve("component-descriptor.json")
+        Files.writeString(
+          descriptorPath,
+          """{
+            |  "component": {
+            |    "name": "sample-component",
+            |    "kind": "component",
+            |    "isPrimary": true
+            |  },
+            |  "componentlets": [
+            |    {
+            |      "name": "public-notice",
+            |      "kind": "componentlet",
+            |      "isPrimary": false
+            |    },
+            |    {
+            |      "name": "notice-admin",
+            |      "kind": "componentlet",
+            |      "isPrimary": false
+            |    }
+            |  ]
+            |}""".stripMargin
+        )
+
+        val descriptor = ComponentRepository.resolveComponentDescriptorFromComponentDir(componentdir, "public-notice")
+
+        descriptor.map(_.componentName) shouldBe Some(Some("sample-component"))
+        descriptor.toVector.flatMap(_.componentlets.map(_.name)) shouldBe Vector("public-notice", "notice-admin")
+      }
+    }
 
     "discover the component wrapped in a car" in {
       val subsystem = new Subsystem(

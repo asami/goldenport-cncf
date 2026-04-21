@@ -31,7 +31,7 @@ import org.goldenport.record.Record
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, WebValidationHints, XBoolean, XDateTime, XInt, XString}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall, QueryAction}
-import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentFactory}
+import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentFactory, ComponentletDescriptor}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace, QueryDirective, SearchResult, SearchableDataStore, TotalCountCapability}
@@ -341,6 +341,32 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     "render component admin configuration detail page" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val component = subsystem.components.headOption.getOrElse(fail("component is missing"))
+      val componentlets = Vector(
+        ComponentletDescriptor(
+          name = "notice-admin",
+          kind = Some("componentlet"),
+          archiveScope = Some("car-bundled"),
+          implementationClass = Some("domain.impl.NoticeAdminComponent"),
+          factoryObject = Some("domain.impl.NoticeAdminComponent")
+        ),
+        ComponentletDescriptor(
+          name = "public-notice",
+          kind = Some("componentlet"),
+          archiveScope = Some("car-bundled"),
+          implementationClass = Some("domain.impl.PublicNoticeComponent"),
+          factoryObject = Some("domain.impl.PublicNoticeComponent")
+        )
+      )
+      component.withComponentDescriptors(
+        if (component.componentDescriptors.nonEmpty)
+          component.componentDescriptors.map(_.copy(componentlets = componentlets))
+        else
+          Vector(ComponentDescriptor(
+            name = Some(component.name),
+            componentName = Some(component.name),
+            componentlets = componentlets
+          ))
+      )
 
       val html = StaticFormAppRenderer.renderComponentAdmin(subsystem, component.name).map(_.body).getOrElse(fail("component admin is missing"))
 
@@ -363,6 +389,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin/data")
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin/aggregates")
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin/views")
+      html should include ("Componentlets")
+      html should include ("notice-admin")
+      html should include ("public-notice")
+      html should include ("car-bundled")
       html should not include ("Operational Details")
       html should not include ("/form/admin/assembly/warnings")
       html should not include ("/form/admin/execution/history")
@@ -422,6 +452,27 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
     "render read-only system and component manual pages" in {
       val subsystem = _aggregate_http_fixture_subsystem()
+      subsystem.components.find(_.name == "notice_board").foreach { component =>
+        val componentlets = Vector(
+          ComponentletDescriptor(
+            name = "notice-admin",
+            kind = Some("componentlet"),
+            archiveScope = Some("car-bundled"),
+            implementationClass = Some("domain.impl.NoticeAdminComponent"),
+            factoryObject = Some("domain.impl.NoticeAdminComponent")
+          )
+        )
+        component.withComponentDescriptors(
+          if (component.componentDescriptors.nonEmpty)
+            component.componentDescriptors.map(_.copy(componentlets = componentlets))
+          else
+            Vector(ComponentDescriptor(
+              name = Some(component.name),
+              componentName = Some(component.name),
+              componentlets = componentlets
+            ))
+        )
+      }
 
       val systemHtml = StaticFormAppRenderer.renderSystemManual(subsystem).body
       val componentHtml = StaticFormAppRenderer.renderComponentManual(subsystem, "notice-board").map(_.body).getOrElse(fail("component manual is missing"))
@@ -437,6 +488,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       componentHtml should include ("Help")
       componentHtml should include ("Describe")
       componentHtml should include ("Schema")
+      componentHtml should include ("Componentlets")
+      componentHtml should include ("notice-admin")
+      componentHtml should include ("car-bundled")
       componentHtml should include ("/web/notice-board/manual/notice-aggregate")
       componentHtml should include ("class=\"row mb-0\"")
       serviceHtml should include ("Service reference")
@@ -448,8 +502,31 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       operationHtml should not include ("method=\"post\"")
     }
 
+    "preserve real componentlet path in rendered manual admin and form links" in {
+      val subsystem = _aggregate_http_fixture_subsystem_with_componentlets()
+
+      val manualHtml = StaticFormAppRenderer.renderComponentManual(subsystem, "notice-admin").map(_.body).getOrElse(fail("component manual is missing"))
+      val adminHtml = StaticFormAppRenderer.renderComponentAdmin(subsystem, "notice-admin").map(_.body).getOrElse(fail("component admin is missing"))
+      val formHtml = StaticFormAppRenderer.renderFormIndex(subsystem, "notice-admin").map(_.body).getOrElse(fail("form index is missing"))
+
+      manualHtml should include ("/web/notice-admin/manual/notice-aggregate")
+      adminHtml should include ("/web/notice-admin/dashboard")
+      adminHtml should include ("/form/notice-admin")
+      formHtml should include ("/web/notice-admin/dashboard")
+      formHtml should include ("/web/notice-admin/admin")
+      formHtml should include ("/form/notice-admin/notice-aggregate/approve-notice-aggregate")
+    }
+
+    "not resolve componentlet metadata alone as runtime component in rendered pages" in {
+      val subsystem = _aggregate_http_fixture_subsystem_with_componentlet_metadata_only()
+
+      StaticFormAppRenderer.renderComponentManual(subsystem, "notice-admin") shouldBe None
+      StaticFormAppRenderer.renderComponentAdmin(subsystem, "notice-admin") shouldBe None
+      StaticFormAppRenderer.renderFormIndex(subsystem, "notice-admin") shouldBe None
+    }
+
     "serve manual routes and OpenAPI JSON through Web HTML paths" in {
-      val subsystem = _aggregate_http_fixture_subsystem()
+      val subsystem = _aggregate_http_fixture_subsystem_with_componentlets()
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
       val manualResponse = server
@@ -458,6 +535,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         .run(_get_request("/web/notice-board/manual/notice-aggregate/approve-notice-aggregate"))
         .unsafeRunSync()
       val manualHtml = manualResponse.as[String].unsafeRunSync()
+      val aliasManualResponse = server
+        .routes(null)
+        .orNotFound
+        .run(_get_request("/web/notice-admin/manual/notice-aggregate/approve-notice-aggregate"))
+        .unsafeRunSync()
+      val aliasManualHtml = aliasManualResponse.as[String].unsafeRunSync()
       val openApiResponse = server
         .routes(null)
         .orNotFound
@@ -469,6 +552,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       manualHtml should include ("Operation reference")
       manualHtml should include ("approve-notice-aggregate")
       manualHtml should include ("/mcp")
+      aliasManualResponse.status.code shouldBe 200
+      aliasManualHtml should include ("Operation reference")
+      aliasManualHtml should include ("approve-notice-aggregate")
       openApiResponse.status.code shouldBe 200
       openApiJson should include (""""openapi"""")
       openApiJson should include ("/notice-board/notice-aggregate/approve-notice-aggregate")
@@ -2578,6 +2664,37 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("created:notice_1")
       html should include ("result.id")
       html should include ("notice_1")
+    }
+
+    "preserve componentlet alias when awaiting asynchronous command job result through the form job route" in {
+      val subsystem = _aggregate_http_fixture_subsystem_with_componentlets()
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(new StaticWebOperationDispatcher(
+        HttpResponse.Text(
+          HttpStatus.Ok,
+          ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+          Bag.text("created:notice_1", StandardCharsets.UTF_8)
+        )
+      ))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+
+      val html = server
+        ._await_operation_form_job(
+          _post_form_request("/form/notice-admin/notice/post-notice/jobs/cncf-job-job-1/await", ""),
+          "notice-admin",
+          "notice",
+          "post-notice",
+          "cncf-job-job-1"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      dispatcher.paths.lastOption shouldBe Some("/job_control/job/await_job_result")
+      dispatcher.forms.lastOption.flatMap(_.getString("id")) shouldBe Some("cncf-job-job-1")
+      html should include ("created:notice_1")
+      html should include ("notice_1")
+      html should include ("/form/notice-admin/notice/post-notice")
+      html should not include ("/form/notice-board/notice/post-notice")
     }
 
     "render awaited job result through descriptor result template when static template is absent" in {
@@ -4935,6 +5052,27 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus-action-link")
     }
 
+    "preserve componentlet alias in framework generated await action links" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-admin",
+          "notice",
+          "post-notice"
+        ),
+        200,
+        "application/json",
+        """{"jobId":"cncf-job-job-1","jobStatus":"accepted"}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus:job-actions actions="await"></textus:job-actions></article>"""
+      ).body
+
+      html should include ("/form/notice-admin/notice/post-notice/jobs/cncf-job-job-1/await")
+      html should not include ("/form/notice-board/notice/post-notice/jobs/cncf-job-job-1/await")
+    }
+
     "render job ticket and job actions for application job result UX" in {
       val properties = StaticFormAppRenderer.FormResultProperties(
         StaticFormAppRenderer.FormPageProperties(
@@ -5027,6 +5165,27 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("""<a class="btn btn-outline-primary" href="/form/notice-board/notice/get-notice/result?id=notice_1">Open detail</a>""")
       html should not include ("<textus:action-link")
       html should not include ("<textus-action-link")
+    }
+
+    "preserve componentlet alias in framework generated detail action links" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-admin",
+          "notice",
+          "post-notice"
+        ),
+        200,
+        "application/json",
+        """{"id":"notice_1"}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus:action-link source="result.action.detail" class="btn btn-outline-primary"></textus:action-link></article>"""
+      ).body
+
+      html should include ("""href="/form/notice-admin/notice/get-notice/result?id=notice_1"""")
+      html should not include ("""href="/form/notice-board/notice/get-notice/result?id=notice_1"""")
     }
 
     "render action-group widgets from operation result actions" in {
@@ -5290,6 +5449,32 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Page 1")
       html should include ("""<li class="page-item disabled"><a class="page-link" href="/form/notice-board/notice/search-notices/result?page=2&amp;pageSize=20">Next</a></li>""")
       html should not include ("<textus:pagination")
+    }
+
+    "preserve componentlet alias in default paging href" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-admin",
+          "notice",
+          "search-notices",
+          Map(
+            "paging.page" -> "1",
+            "paging.pageSize" -> "20",
+            "paging.hasNext" -> "false"
+          )
+        ),
+        200,
+        "application/json",
+        """{"data":[]}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><textus:pagination></textus:pagination></article>"""
+      ).body
+
+      html should include ("/form/notice-admin/notice/search-notices/result?page=2&amp;pageSize=20")
+      html should not include ("/form/notice-board/notice/search-notices/result?page=2&amp;pageSize=20")
     }
 
     "render textus record card with CML summary columns" in {
@@ -6630,6 +6815,41 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     ).add(Vector(component))
   }
 
+  private def _aggregate_http_fixture_subsystem_with_componentlet_metadata_only(
+    configuration: Configuration = Configuration.empty
+  ): Subsystem = {
+    val subsystem = _aggregate_http_fixture_subsystem(configuration)
+    subsystem.components.find(_.name == "notice_board").foreach { component =>
+      val componentlets = Vector(
+        ComponentletDescriptor(
+          name = "notice-admin",
+          kind = Some("componentlet"),
+          archiveScope = Some("car-bundled")
+        )
+      )
+      component.withComponentDescriptors(
+        if (component.componentDescriptors.nonEmpty)
+          component.componentDescriptors.map(_.copy(componentlets = componentlets))
+        else
+          Vector(ComponentDescriptor(
+            name = Some(component.name),
+            componentName = Some(component.name),
+            componentlets = componentlets
+          ))
+      )
+    }
+    subsystem
+  }
+
+  private def _aggregate_http_fixture_subsystem_with_componentlets(
+    configuration: Configuration = Configuration.empty
+  ): Subsystem = {
+    val subsystem = _aggregate_http_fixture_subsystem_with_componentlet_metadata_only(configuration)
+    val component = new org.goldenport.cncf.component.Component() {}
+    _initialize_component_with_id("notice-admin", "notice_admin", component, _aggregate_http_protocol())
+    subsystem.add(Vector(component))
+  }
+
   private def _web_template_fixture_root(
     filename: String,
     content: String
@@ -6687,7 +6907,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     component: org.goldenport.cncf.component.Component,
     protocol: Protocol = Protocol.empty
   ): org.goldenport.cncf.component.Component = {
-    val componentId = org.goldenport.cncf.component.ComponentId(name)
+    _initialize_component_with_id(name, name, component, protocol)
+  }
+
+  private def _initialize_component_with_id(
+    name: String,
+    componentIdName: String,
+    component: org.goldenport.cncf.component.Component,
+    protocol: Protocol = Protocol.empty
+  ): org.goldenport.cncf.component.Component = {
+    val componentId = org.goldenport.cncf.component.ComponentId(componentIdName)
     val instanceId = org.goldenport.cncf.component.ComponentInstanceId.default(componentId)
     val factory = new org.goldenport.cncf.component.Component.Factory {
       override protected def create_Components(params: org.goldenport.cncf.component.ComponentCreate): Vector[org.goldenport.cncf.component.Component] =

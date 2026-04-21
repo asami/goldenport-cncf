@@ -298,7 +298,7 @@ object ComponentRepository extends GlobalObservable {
     val names = Vector(
       descriptor.componentName,
       descriptor.name
-    ).flatten
+    ).flatten ++ descriptor.componentlets.map(_.name)
     names.contains(requested)
   }
 

@@ -18,11 +18,23 @@ import org.simplemodeling.model.datatype.EntityCollectionId
  * @version Apr. 16, 2026
  * @author  ASAMI, Tomoharu
  */
+final case class ComponentletDescriptor(
+  name: String,
+  kind: Option[String] = None,
+  isPrimary: Option[Boolean] = None,
+  archiveScope: Option[String] = None,
+  implementationClass: Option[String] = None,
+  factoryObject: Option[String] = None,
+  extensions: Map[String, String] = Map.empty,
+  config: Map[String, String] = Map.empty
+)
+
 final case class ComponentDescriptor(
   name: Option[String] = None,
   version: Option[String] = None,
   componentName: Option[String] = None,
   subsystemName: Option[String] = None,
+  componentlets: Vector[ComponentletDescriptor] = Vector.empty,
   entityRuntimeDescriptors: Vector[EntityRuntimeDescriptor] = Vector.empty,
   extensionBindings: Record = Record.empty,
   extensions: Map[String, String] = Map.empty,
@@ -56,24 +68,51 @@ object ComponentDescriptor {
         applicationDomain = applicationDomain
       )
 
+  given RecordDecoder[ComponentletDescriptor] with
+    def fromRecord(rec: Record): Consequence[ComponentletDescriptor] =
+      _string(rec, "name")
+        .map { name =>
+          Consequence.success(
+            ComponentletDescriptor(
+              name = name,
+              kind = _string(rec, "kind"),
+              isPrimary = _boolean(rec, "isPrimary", "is_primary"),
+              archiveScope = _string(rec, "archiveScope", "archive_scope"),
+              implementationClass = _string(rec, "implementationClass", "implementation_class"),
+              factoryObject = _string(rec, "factoryObject", "factory_object"),
+              extensions = _string_map_value(rec, List("extension", "extensions")),
+              config = _string_map_value(rec, List("config"))
+            )
+          )
+        }
+        .getOrElse(Consequence.argumentMissing("componentlets.name"))
+
   given RecordDecoder[ComponentDescriptor] with
     def fromRecord(rec: Record): Consequence[ComponentDescriptor] = {
-      val componentName = _string(rec, "component", "componentName").orElse(_string(rec, "name"))
-      val entitiesC = _entity_descriptors(rec)
-      val extensionBindings = _record_value(rec, List("extension_bindings", "extensionBindings", "extension_binding")).getOrElse(Record.empty)
-      entitiesC.map(xs =>
+      val componentrec = _component_record(rec)
+      val componentName = _string(componentrec, "component", "componentName").orElse(_string(componentrec, "name"))
+      val entitiesC = _entity_descriptors(componentrec)
+      val componentletsC = _componentlet_descriptors(rec)
+      val extensionBindings = _record_value(componentrec, List("extension_bindings", "extensionBindings", "extension_binding")).getOrElse(Record.empty)
+      for {
+        xs <- entitiesC
+        componentlets <- componentletsC
+      } yield
         ComponentDescriptor(
-          name = _string(rec, "name").orElse(componentName),
-          version = _string(rec, "version"),
+          name = _string(componentrec, "name").orElse(componentName),
+          version = _string(componentrec, "version").orElse(_string(rec, "version")),
           componentName = componentName,
-          subsystemName = _string(rec, "subsystem", "subsystemName"),
+          subsystemName = _string(componentrec, "subsystem", "subsystemName").orElse(_string(rec, "subsystem", "subsystemName")),
+          componentlets = componentlets,
           entityRuntimeDescriptors = xs,
           extensionBindings = extensionBindings,
-          extensions = _string_map_value(rec, List("extension", "extensions")),
-          config = _string_map_value(rec, List("config"))
+          extensions = _component_extensions(componentrec),
+          config = _string_map_value(componentrec, List("config"))
         )
-      )
     }
+
+  private def _component_record(rec: Record): Record =
+    _record_value(rec, List("component")).getOrElse(rec)
 
   private def _entity_descriptors(rec: Record): Consequence[Vector[EntityRuntimeDescriptor]] =
     rec.getAny("entities") match {
@@ -92,8 +131,49 @@ object ComponentDescriptor {
           Consequence.success(Vector.empty)
     }
 
+  private def _componentlet_descriptors(rec: Record): Consequence[Vector[ComponentletDescriptor]] =
+    rec.getAny("componentlets") match {
+      case Some(xs: Seq[?]) =>
+        xs.foldLeft(Consequence.success(Vector.empty[ComponentletDescriptor])) { (z, x) =>
+          for {
+            acc <- z
+            descriptor <- _componentlet_descriptor(x)
+          } yield acc :+ descriptor
+        }
+      case Some(xs: Array[?]) =>
+        _componentlet_descriptors(Record.data("componentlets" -> xs.toVector))
+      case Some(_: String) =>
+        Consequence.success(Vector.empty)
+      case Some(_) =>
+        Consequence.argumentInvalid("invalid componentlets entry")
+      case None =>
+        Consequence.success(Vector.empty)
+    }
+
+  private def _componentlet_descriptor(value: Any): Consequence[ComponentletDescriptor] =
+    value match {
+      case s: String if s.trim.nonEmpty =>
+        Consequence.success(ComponentletDescriptor(name = s.trim))
+      case r: Record =>
+        summon[RecordDecoder[ComponentletDescriptor]].fromRecord(r)
+      case m: Map[?, ?] =>
+        summon[RecordDecoder[ComponentletDescriptor]].fromRecord(Record.create(m.iterator.map { case (k, v) => k.toString -> v }.toMap))
+      case _ =>
+        Consequence.argumentInvalid("invalid componentlet entry")
+    }
+
   private def _string(rec: Record, keys: String*): Option[String] =
     keys.iterator.map(rec.getString).collectFirst { case Some(s) if s.trim.nonEmpty => s.trim }
+
+  private def _boolean(rec: Record, keys: String*): Option[Boolean] =
+    keys.iterator.map(rec.getBoolean).collectFirst {
+      case Some(b) => b
+    }.orElse {
+      keys.iterator.map(rec.getString).collectFirst {
+        case Some(s) if s.trim.equalsIgnoreCase("true") => true
+        case Some(s) if s.trim.equalsIgnoreCase("false") => false
+      }
+    }
 
   private def _record_value(rec: Record, keys: List[String]): Option[Record] =
     keys.iterator.map(rec.getAny).collectFirst {
@@ -101,8 +181,51 @@ object ComponentDescriptor {
       case Some(m: Map[?, ?]) => Record.create(m.iterator.map { case (k, v) => k.toString -> v }.toMap)
     }
 
+  private def _component_extensions(rec: Record): Map[String, String] = {
+    val reserved = Set(
+      "name",
+      "version",
+      "component",
+      "componentName",
+      "subsystem",
+      "subsystemName",
+      "entities",
+      "componentlets",
+      "entity",
+      "entityName",
+      "extension",
+      "extensions",
+      "extension_bindings",
+      "extensionBinding",
+      "extensionBindings",
+      "extension_binding",
+      "config"
+    )
+    _string_map_value(rec, List("extension", "extensions")) ++
+      rec.asMap.collect {
+        case (k, v) if !reserved.contains(k) =>
+          _scalar_string(v).map(k -> _)
+      }.flatten.toMap
+  }
+
   private def _string_map_value(rec: Record, keys: List[String]): Map[String, String] =
     _record_value(rec, keys).map(_.asMap.collect { case (k, v: String) => k -> v }).getOrElse(Map.empty)
+
+  private def _scalar_string(value: Any): Option[String] =
+    value match {
+      case null => None
+      case s: String => Option.when(s.trim.nonEmpty)(s.trim)
+      case b: Boolean => Some(b.toString)
+      case n: Byte => Some(n.toString)
+      case n: Short => Some(n.toString)
+      case n: Int => Some(n.toString)
+      case n: Long => Some(n.toString)
+      case n: Float => Some(n.toString)
+      case n: Double => Some(n.toString)
+      case n: BigInt => Some(n.toString)
+      case n: BigDecimal => Some(n.toString)
+      case _ => None
+    }
 
   private def _any_to_record(value: Any): Option[Record] =
     value match {

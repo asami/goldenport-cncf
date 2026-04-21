@@ -1,5 +1,7 @@
 package org.goldenport.cncf.component
 
+import org.goldenport.cncf.naming.NamingConventions
+
 /*
  * @since   Jan.  8, 2026
  * @version Jan. 15, 2026
@@ -27,7 +29,8 @@ final class ComponentSpace(
   def find(locator: ComponentLocator): Option[Component] =
     locator match {
       case ComponentLocator.ComponentIdLocator(id) => _get_default_by_component_id(id)
-      case ComponentLocator.NameLocator(name) => _by_name.get(name)
+      case ComponentLocator.NameLocator(name) =>
+        _by_name.get(name).orElse(_components.find(x => NamingConventions.equivalentByNormalized(x.name, name)))
     }
 
   def add(ps: Seq[Component]): ComponentSpace = {

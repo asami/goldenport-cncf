@@ -7,10 +7,12 @@ import org.goldenport.protocol.operation.OperationRequest
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
 import org.goldenport.cncf.component._
+import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy}
 import org.goldenport.cncf.entity.aggregate.AggregateDefinition
 import org.goldenport.cncf.entity.view.{ViewDefinition, ViewQueryDefinition}
 import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField}
 import org.goldenport.cncf.testutil.TestComponentFactory
+import org.simplemodeling.model.datatype.EntityCollectionId
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -58,6 +60,9 @@ final class AggregateViewProjectionAlignmentSpec
       _records(describe("views")).head.getBoolean("rebuildable") shouldBe Some(true)
       describe.get("origin").map(_.toString) shouldBe Some("active car projection-alignment@0.1.0")
       _record(describe("artifact")).getString("name") shouldBe Some("projection-alignment")
+      _records(describe("componentlets")).map(_.getString("name").getOrElse("")) shouldBe Vector("notice-admin", "public-notice")
+      _records(describe("componentlets")).head.getString("kind") shouldBe Some("componentlet")
+      _records(describe("componentlets")).head.getBoolean("isPrimary") shouldBe Some(false)
       _records(describe("operationDefinitions")).map(_.getString("name").getOrElse("")) shouldBe Vector("getPerson", "savePerson")
       _records(describe("operationDefinitions")).head.getString("kind") shouldBe Some("QUERY")
       _records(describe("operationDefinitions")).head.getString("inputType") shouldBe Some("GetPerson")
@@ -187,6 +192,42 @@ final class AggregateViewProjectionAlignmentSpec
         version = "0.1.0",
         component = Some(component.name),
         subsystem = None
+      )
+    )
+    component.withComponentDescriptors(
+      Vector(
+        ComponentDescriptor(
+          name = Some(component.name),
+          componentName = Some(component.name),
+          componentlets = Vector(
+            ComponentletDescriptor(
+              name = "public-notice",
+              kind = Some("componentlet"),
+              isPrimary = Some(false),
+              archiveScope = Some("car-bundled"),
+              implementationClass = Some("domain.impl.PublicNoticeComponent"),
+              factoryObject = Some("domain.impl.PublicNoticeComponent")
+            ),
+            ComponentletDescriptor(
+              name = "notice-admin",
+              kind = Some("componentlet"),
+              isPrimary = Some(false),
+              archiveScope = Some("car-bundled"),
+              implementationClass = Some("domain.impl.NoticeAdminComponent"),
+              factoryObject = Some("domain.impl.NoticeAdminComponent")
+            )
+          ),
+          entityRuntimeDescriptors = Vector(
+            EntityRuntimeDescriptor(
+              entityName = "Person",
+              collectionId = EntityCollectionId("sys", "sys", "Person"),
+              memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+              partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+              maxPartitions = 64,
+              maxEntitiesPerPartition = 10000
+            )
+          )
+        )
       )
     )
     subsystem.add(Vector(component))

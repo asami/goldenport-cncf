@@ -47,5 +47,62 @@ final class ComponentDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.operationKind shouldBe EntityOperationKind.Resource
       descriptor.applicationDomain shouldBe EntityApplicationDomain.Business
     }
+
+    "decode descriptor-first component root with componentlets" in {
+      val rec = Record.data(
+        "component" -> Record.data(
+          "name" -> "sample-component",
+          "kind" -> "component",
+          "isPrimary" -> "true",
+          "archiveScope" -> "car-root",
+          "boundedContext" -> "default"
+        ),
+        "componentlets" -> Vector(
+          Record.data(
+            "name" -> "notice-admin",
+            "kind" -> "componentlet",
+            "isPrimary" -> "false",
+            "archiveScope" -> "car-bundled",
+            "implementationClass" -> "domain.impl.NoticeAdminComponent",
+            "factoryObject" -> "domain.impl.NoticeAdminComponent"
+          ),
+          Record.data(
+            "name" -> "public-notice",
+            "kind" -> "componentlet",
+            "isPrimary" -> "false",
+            "archiveScope" -> "car-bundled",
+            "implementationClass" -> "domain.impl.PublicNoticeComponent",
+            "factoryObject" -> "domain.impl.PublicNoticeComponent"
+          )
+        )
+      )
+
+      val descriptor = summon[RecordDecoder[ComponentDescriptor]].fromRecord(rec).toOption.get
+
+      descriptor.componentName shouldBe Some("sample-component")
+      descriptor.name shouldBe Some("sample-component")
+      descriptor.extensions.get("kind") shouldBe Some("component")
+      descriptor.extensions.get("archiveScope") shouldBe Some("car-root")
+      descriptor.componentlets.map(_.name) shouldBe Vector("notice-admin", "public-notice")
+      descriptor.componentlets.map(_.kind) shouldBe Vector(Some("componentlet"), Some("componentlet"))
+      descriptor.componentlets.flatMap(_.implementationClass) shouldBe Vector(
+        "domain.impl.NoticeAdminComponent",
+        "domain.impl.PublicNoticeComponent"
+      )
+    }
+
+    "decode componentlet names from simple string list" in {
+      val rec = Record.data(
+        "component" -> Record.data(
+          "name" -> "sample-component"
+        ),
+        "componentlets" -> Vector("notice-admin", "public-notice")
+      )
+
+      val descriptor = summon[RecordDecoder[ComponentDescriptor]].fromRecord(rec).toOption.get
+
+      descriptor.componentlets.map(_.name) shouldBe Vector("notice-admin", "public-notice")
+      descriptor.componentlets.forall(_.kind.isEmpty) shouldBe true
+    }
   }
 }

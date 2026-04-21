@@ -136,6 +136,69 @@ final class ComponentFactoryEventReceptionBootstrapSpec
       calls.toVector shouldBe Vector("person.sync")
     }
 
+    "dispatch subscription across receptions sharing the same event bus" in {
+      Given("publisher and subscriber receptions on one shared event bus")
+      val publisher = new Component() {
+        override def eventReceptionDefinitions: Vector[CmlEventDefinition] =
+          Vector(
+            CmlEventDefinition(
+              name = "person.created",
+              category = CmlEventCategory.NonActionEvent,
+              kind = Some("created")
+            )
+          )
+      }
+      val subscriber = new Component() {
+        override def eventSubscriptionDefinitions: Vector[CmlSubscriptionDefinition] =
+          Vector(
+            CmlSubscriptionDefinition(
+              name = "person-sync",
+              eventName = "person.created",
+              route = DispatchRoute.Unicast,
+              target = Some("targetId"),
+              actionName = "person.sync",
+              declaredTargetUpperBound = 1
+            )
+          )
+      }
+
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val calls = scala.collection.mutable.ArrayBuffer.empty[String]
+      val dispatcher = new ActionCallDispatcher {
+        def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
+          val _ = event
+          calls += actionName
+          Consequence.unit
+        }
+      }
+
+      val factory = new ComponentFactory()
+      val publisherReception = factory.createEventReceptionWithOperationDispatcher(publisher, bus)
+      val _ = factory.createEventReception(subscriber, bus, dispatcher)
+
+      When("publisher receives an event")
+      val result = publisherReception.receive(
+        ReceptionInput(
+          name = "person.created",
+          kind = "created",
+          attributes = Map("targetId" -> "p1")
+        )
+      )
+
+      Then("subscriber subscription is dispatched through the shared bus")
+      result shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = false
+        )
+      )
+      calls.toVector shouldBe Vector("person.sync")
+    }
+
     "provide operation-based action dispatcher with parse/validate stage" in {
       Given("default component and operation-based dispatcher")
       val component = new Component() {}

@@ -1,8 +1,12 @@
 package org.goldenport.cncf.subsystem.resolver
 
+import cats.data.NonEmptyVector
 import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.matchers.should.Matchers
 
+import org.goldenport.protocol.Protocol
+import org.goldenport.protocol.spec as spec
+import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentletDescriptor}
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionStage
@@ -162,6 +166,31 @@ class OperationResolverSpec extends AnyWordSpec with Matchers {
         case other => fail(s"unexpected result: $other")
       }
     }
+
+    "resolve real componentlet as component selector when built from runtime components" in {
+      val resolver = OperationResolver.build(Seq(_component_with_componentlet_metadata(), _componentlet_runtime_component()))
+
+      resolver.resolve("public-notice.notice.search-notices") match {
+        case ResolutionResult.Resolved(fqn, component, service, operation) =>
+          fqn shouldBe "public-notice.notice.search-notices"
+          component shouldBe "public-notice"
+          service shouldBe "notice"
+          operation shouldBe "search-notices"
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+    }
+
+    "not resolve componentlet metadata alone as runtime component selector" in {
+      val resolver = OperationResolver.build(Seq(_component_with_componentlet_metadata()))
+
+      resolver.resolve("public-notice.notice.search-notices") match {
+        case ResolutionResult.NotFound(_, _) =>
+          succeed
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+    }
   }
 
   "Single Operation Optimization (CLI / Script, FQN-only)" should {
@@ -205,4 +234,92 @@ class OperationResolverSpec extends AnyWordSpec with Matchers {
       }
     }
   }
+
+  private def _component_with_componentlet_metadata(): Component = {
+    val component = new Component() {}
+    component.withComponentDescriptors(
+      Vector(
+        ComponentDescriptor(
+          name = Some("notice-board"),
+          componentName = Some("notice-board"),
+          componentlets = Vector(
+            ComponentletDescriptor(name = "public-notice")
+          )
+        )
+      )
+    )
+    val protocol = Protocol(
+      services = spec.ServiceDefinitionGroup(
+        Vector(
+          spec.ServiceDefinition(
+            name = "notice",
+            operations = spec.OperationDefinitionGroup(
+              operations = NonEmptyVector.of(_NoopOperation("search-notices"))
+            )
+          )
+        )
+      )
+    )
+    val core = org.goldenport.cncf.component.Component.Core.create(
+      name = "notice-board",
+      componentid = org.goldenport.cncf.component.ComponentId("notice_board"),
+      instanceid = org.goldenport.cncf.component.ComponentInstanceId.default(
+        org.goldenport.cncf.component.ComponentId("notice_board")
+      ),
+      protocol = protocol
+    )
+    component.initialize(
+      org.goldenport.cncf.component.ComponentInit(
+        subsystem = org.goldenport.cncf.testutil.TestComponentFactory.emptySubsystem("notice-board"),
+        core = core,
+        origin = org.goldenport.cncf.component.ComponentOrigin.Main,
+        componentDescriptors = component.componentDescriptors
+      )
+    )
+  }
+
+  private def _componentlet_runtime_component(): Component = {
+    val component = new Component() {}
+    val protocol = Protocol(
+      services = spec.ServiceDefinitionGroup(
+        Vector(
+          spec.ServiceDefinition(
+            name = "notice",
+            operations = spec.OperationDefinitionGroup(
+              operations = NonEmptyVector.of(_NoopOperation("search-notices"))
+            )
+          )
+        )
+      )
+    )
+    val core = org.goldenport.cncf.component.Component.Core.create(
+      name = "public-notice",
+      componentid = org.goldenport.cncf.component.ComponentId("public_notice"),
+      instanceid = org.goldenport.cncf.component.ComponentInstanceId.default(
+        org.goldenport.cncf.component.ComponentId("public_notice")
+      ),
+      protocol = protocol
+    )
+    component.initialize(
+      org.goldenport.cncf.component.ComponentInit(
+        subsystem = org.goldenport.cncf.testutil.TestComponentFactory.emptySubsystem("public-notice"),
+        core = core,
+        origin = org.goldenport.cncf.component.ComponentOrigin.Main,
+        componentDescriptors = Vector.empty
+      )
+    )
+  }
+}
+
+private final case class _NoopOperation(
+  opname: String
+) extends spec.OperationDefinition {
+  override val specification: spec.OperationDefinition.Specification =
+    spec.OperationDefinition.Specification(
+      name = opname,
+      request = spec.RequestDefinition(),
+      response = spec.ResponseDefinition.void
+    )
+  override def createOperationRequest(req: org.goldenport.protocol.Request): org.goldenport.Consequence[org.goldenport.protocol.operation.OperationRequest] =
+    org.goldenport.Consequence.notImplemented("not used")
 }
