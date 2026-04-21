@@ -65,10 +65,9 @@ object AdminComponent {
       OperationAuthorizationRule.developAnonymousAdmin(runtimeConfig)
   }
 
-  object Factory extends Component.Factory {
-    protected def create_Components(params: ComponentCreate): Vector[Component] = {
-      Vector(AdminComponent())
-    }
+  object Factory extends Component.SinglePrimaryBundleFactory {
+    protected def create_Component(params: ComponentCreate): Component =
+      AdminComponent()
 
     protected def create_Core(
       params: ComponentCreate,

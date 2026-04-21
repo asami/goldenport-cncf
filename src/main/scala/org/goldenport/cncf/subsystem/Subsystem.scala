@@ -111,6 +111,12 @@ final class Subsystem(
     this
   }
 
+  def add(bundle: Component.Bundle): Subsystem =
+    add(bundle.participants)
+
+  def add(component: Component): Subsystem =
+    add(Vector(component))
+
   def registerEventReception(componentName: String, reception: EventReception): Subsystem = {
     _event_receptions.update(componentName, reception)
     this

@@ -137,9 +137,9 @@ final class ComponentFactoryDefaultAggregateCollectionSpec extends AnyWordSpec w
   ): Component = {
     val componentId = ComponentId(name)
     val instanceId = ComponentInstanceId.default(componentId)
-    val factory = new Component.Factory {
-      override protected def create_Components(params: ComponentCreate): Vector[Component] =
-        Vector.empty
+    val factory = new Component.SinglePrimaryBundleFactory {
+      override protected def create_Component(params: ComponentCreate): Component =
+        component
 
       override protected def create_Core(
         params: ComponentCreate,

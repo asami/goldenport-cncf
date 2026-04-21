@@ -50,7 +50,7 @@ object DefaultSubsystemFactory {
       JobControlComponent.Factory,
       MetricsComponent.Factory,
       _spec
-    ).flatMap(_.create(params))
+    ).flatMap(_.create(params).participants)
   }
 
   def default(

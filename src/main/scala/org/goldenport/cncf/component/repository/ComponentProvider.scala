@@ -80,7 +80,7 @@ object ComponentProvider {
 
   private def _find_impl_factories(
     componentClass: Class[_ <: Component]
-  ): Vector[Component.Factory] = {
+  ): Vector[Component.BundleFactory] = {
     val loader = componentClass.getClassLoader
     val packageName = Option(componentClass.getPackage).map(_.getName).filter(_.nonEmpty).getOrElse("")
     val implPackage =
@@ -101,17 +101,17 @@ object ComponentProvider {
   private def _load_factory(
     className: String,
     loader: ClassLoader
-  ): Option[Component.Factory] =
+  ): Option[Component.BundleFactory] =
     _load_optional_class(className, loader).flatMap(_resolve_factory_instance)
 
   private def _instantiate_from_factory(
-    factory: Component.Factory,
+    factory: Component.BundleFactory,
     componentClass: Class[_ <: Component],
     params: ComponentCreate,
     log: BootstrapLog
   ): Consequence[Component] = {
-    val components = factory.create(params)
-    components.headOption match {
+    val bundle = factory.create(params)
+    bundle.participants.headOption match {
       case Some(comp) =>
         // Factory.create already initializes the component with the factory-built core.
         Consequence.success(comp)
@@ -138,8 +138,8 @@ object ComponentProvider {
 
   private def _resolve_factory_instance(
     cls: Class[_]
-  ): Option[Component.Factory] = {
-    if (!classOf[Component.Factory].isAssignableFrom(cls)) {
+  ): Option[Component.BundleFactory] = {
+    if (!classOf[Component.BundleFactory].isAssignableFrom(cls)) {
       None
     } else if (cls.getName.endsWith("$")) {
       _module_instance(cls)
@@ -150,11 +150,11 @@ object ComponentProvider {
 
   private def _module_instance(
     cls: Class[_]
-  ): Option[Component.Factory] = {
+  ): Option[Component.BundleFactory] = {
     try {
       val field = cls.getField("MODULE$")
       val instance = field.get(null)
-      Some(instance.asInstanceOf[Component.Factory])
+      Some(instance.asInstanceOf[Component.BundleFactory])
     } catch {
       case NonFatal(_) => None
     }
@@ -162,11 +162,11 @@ object ComponentProvider {
 
   private def _instantiate_factory_class(
     cls: Class[_]
-  ): Option[Component.Factory] = {
+  ): Option[Component.BundleFactory] = {
     try {
       val ctor = cls.getDeclaredConstructor()
       ctor.setAccessible(true)
-      Some(ctor.newInstance().asInstanceOf[Component.Factory])
+      Some(ctor.newInstance().asInstanceOf[Component.BundleFactory])
     } catch {
       case NonFatal(_) => None
     }
@@ -250,8 +250,8 @@ object ComponentProvider {
   ): Consequence[Component] = {
     _companion_factories(componentClass) match {
       case factory +: _ =>
-        val components = factory.create(params)
-        components.headOption match {
+        val bundle = factory.create(params)
+        bundle.participants.headOption match {
           case Some(comp) =>
             log.info(s"instantiated via companion factory for ${componentClass.getName}")
             Consequence.Success(comp)
@@ -267,7 +267,7 @@ object ComponentProvider {
 
   private def _companion_factories(
     componentClass: Class[_ <: Component]
-  ): Vector[Component.Factory] = {
+  ): Vector[Component.BundleFactory] = {
     val loader = componentClass.getClassLoader
     val directCandidates = Vector(
       componentClass.getName + "$Factory",
@@ -277,7 +277,7 @@ object ComponentProvider {
       _load_optional_class(componentClass.getName + "$", loader) match {
         case Some(companionClass) =>
           _module_instance(companionClass) match {
-            case Some(factory: Component.Factory) => Vector(factory)
+            case Some(factory: Component.BundleFactory) => Vector(factory)
             case _ =>
               companionClass.getDeclaredClasses.view
                 .map(_resolve_factory_class)
@@ -295,11 +295,11 @@ object ComponentProvider {
 
   private def _resolve_factory_class(
     cls: Class[_]
-  ): Option[Component.Factory] = {
-    if (!classOf[Component.Factory].isAssignableFrom(cls)) {
+  ): Option[Component.BundleFactory] = {
+    if (!classOf[Component.BundleFactory].isAssignableFrom(cls)) {
       None
     } else if (cls.getName.endsWith("$")) {
-      _module_instance(cls).collect { case factory: Component.Factory => factory }
+      _module_instance(cls).collect { case factory: Component.BundleFactory => factory }
     } else if (Modifier.isAbstract(cls.getModifiers)) {
       None
     } else {

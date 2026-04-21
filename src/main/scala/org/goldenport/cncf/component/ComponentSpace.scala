@@ -39,6 +39,9 @@ final class ComponentSpace(
     this
   }
 
+  def add(bundle: Component.Bundle): ComponentSpace =
+    add(bundle.participants)
+
   def add(p: Component, pp: Component, ps: Component*): ComponentSpace = {
     add(p +: pp +: ps)
     this

@@ -26,9 +26,9 @@ object DebugComponent {
   val name: String = "debug"
   val componentId: ComponentId = ComponentId(name)
 
-  object Factory extends Component.Factory {
-    protected def create_Components(params: ComponentCreate): Vector[Component] =
-      Vector(DebugComponent())
+  object Factory extends Component.SinglePrimaryBundleFactory {
+    protected def create_Component(params: ComponentCreate): Component =
+      DebugComponent()
 
     protected def create_Core(
       params: ComponentCreate,

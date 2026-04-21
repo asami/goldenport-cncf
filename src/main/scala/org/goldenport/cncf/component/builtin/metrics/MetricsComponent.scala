@@ -31,9 +31,9 @@ object MetricsComponent {
   val name: String = "metrics"
   val componentId: ComponentId = ComponentId(name)
 
-  object Factory extends Component.Factory {
-    protected def create_Components(params: ComponentCreate): Vector[Component] =
-      Vector(MetricsComponent())
+  object Factory extends Component.SinglePrimaryBundleFactory {
+    protected def create_Component(params: ComponentCreate): Component =
+      MetricsComponent()
 
     protected def create_Core(
       params: ComponentCreate,

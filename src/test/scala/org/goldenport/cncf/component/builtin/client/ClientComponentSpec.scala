@@ -96,9 +96,9 @@ class ClientComponentSpec
       TestComponentFactory.emptySubsystem("client-component-spec"),
       ComponentOrigin.Builtin
     )
-    val component = ClientComponent.Factory.create(params).collectFirst {
+    val component = ClientComponent.Factory.create(params).primary match {
       case c: ClientComponent => c
-    }.getOrElse {
+      case _ =>
       fail("client component factory did not produce ClientComponent")
     }
     val _ = component.withApplicationConfig(

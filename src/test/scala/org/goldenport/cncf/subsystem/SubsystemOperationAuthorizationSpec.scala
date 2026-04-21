@@ -140,7 +140,7 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
       ),
       name = s"subsystem-operation-authorization-${operationMode.name}"
     )
-    val admin = AdminComponent.Factory.create(ComponentCreate(subsystem, ComponentOrigin.Builtin))
+    val admin = AdminComponent.Factory.create(ComponentCreate(subsystem, ComponentOrigin.Builtin)).primary
     subsystem.add(admin)
   }
 

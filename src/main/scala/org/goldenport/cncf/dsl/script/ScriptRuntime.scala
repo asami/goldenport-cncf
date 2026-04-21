@@ -42,7 +42,7 @@ object ScriptRuntime {
 
   private def _build_components(script: Script)(p: Subsystem): Vector[Component] = {
     val create = ComponentCreate(p, ComponentOrigin.Main)
-    ScriptExecutionComponent.Factory(script).create(create)
+    ScriptExecutionComponent.Factory(script).create(create).participants
   }
 
   // def run(
@@ -107,9 +107,9 @@ object ScriptExecutionComponent {
     )
   }
 
-  case class Factory(script: Script) extends Component.Factory {
-    protected def create_Components(params: ComponentCreate): Vector[Component] =
-      Vector(ScriptExecutionComponent())
+  case class Factory(script: Script) extends Component.SinglePrimaryBundleFactory {
+    protected def create_Component(params: ComponentCreate): Component =
+      ScriptExecutionComponent()
 
     protected def create_Core(
       params: ComponentCreate,

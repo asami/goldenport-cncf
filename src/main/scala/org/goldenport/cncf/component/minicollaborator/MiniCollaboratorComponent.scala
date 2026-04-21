@@ -35,9 +35,9 @@ object MiniCollaboratorComponent {
   val name = "mini_collaborator"
   val componentId = ComponentId(name)
 
-  class Factory extends Component.Factory {
-    protected def create_Components(params: ComponentCreate): Vector[Component] =
-      Vector(MiniCollaboratorComponent())
+  class Factory extends Component.SinglePrimaryBundleFactory {
+    protected def create_Component(params: ComponentCreate): Component =
+      MiniCollaboratorComponent()
 
     protected def create_Core(
       params: ComponentCreate,

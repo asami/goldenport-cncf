@@ -26,7 +26,7 @@ private[projection] object GeneratedHelpProjectionFixture {
       subsystem = subsystem,
       origin = ComponentOrigin.Repository("cozy-generated")
     )
-    val component = factory.create(params).head
+    val component = factory.create(params).primary
     subsystem.add(Vector(component))
     subsystem.components.find(_.name == component.name).getOrElse(component)
   }
@@ -34,9 +34,9 @@ private[projection] object GeneratedHelpProjectionFixture {
   private val name = "domain"
   private val componentId = ComponentId(name)
 
-  private lazy val factory = new Component.Factory {
-    override protected def create_Components(params: ComponentCreate): Vector[Component] =
-      Vector(new Component() {
+  private lazy val factory = new Component.SinglePrimaryBundleFactory {
+    override protected def create_Component(params: ComponentCreate): Component =
+      new Component() {
         override def operationDefinitions: Vector[CmlOperationDefinition] =
           Vector(
             CmlOperationDefinition(
@@ -92,13 +92,7 @@ private[projection] object GeneratedHelpProjectionFixture {
               )
             )
           )
-      }.initialize(
-        ComponentInit(
-          subsystem = params.subsystem,
-          core = core,
-          origin = params.origin
-        )
-      ))
+      }
 
     override protected def create_Core(
       params: ComponentCreate,

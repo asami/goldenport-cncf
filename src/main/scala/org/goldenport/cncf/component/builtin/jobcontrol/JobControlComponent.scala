@@ -43,9 +43,9 @@ object JobControlComponent {
   val name: String = "job_control"
   val componentId: ComponentId = ComponentId(name)
 
-  object Factory extends Component.Factory {
-    protected def create_Components(params: ComponentCreate): Vector[Component] =
-      Vector(JobControlComponent())
+  object Factory extends Component.SinglePrimaryBundleFactory {
+    protected def create_Component(params: ComponentCreate): Component =
+      JobControlComponent()
 
     protected def create_Core(
       params: ComponentCreate,

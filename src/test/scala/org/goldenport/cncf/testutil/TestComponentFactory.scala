@@ -56,12 +56,12 @@ object TestComponentFactory {
   ): Component = {
     val componentId = ComponentId(name)
     val instanceId = ComponentInstanceId.default(componentId)
-    val factory = new Component.Factory {
+    val factory: Component.SinglePrimaryBundleFactory = new Component.SinglePrimaryBundleFactory {
       override def serviceFactory: Component.ServiceFactory =
         serviceFactoryOpt.getOrElse(Component.ServiceFactory.empty)
 
-      override protected def create_Components(params: ComponentCreate): Vector[Component] =
-        Vector.empty
+      override protected def create_Component(params: ComponentCreate): Component =
+        new Component() {}
 
       override protected def create_Core(
         params: ComponentCreate,
@@ -83,8 +83,6 @@ object TestComponentFactory {
       protocol,
       factory
     )
-    val c = Component.Instance(core)
-    val params = ComponentInit(subsystem, core, ComponentOrigin.Builtin)
-    c.initialize(params)
+    factory.create(ComponentCreate(subsystem, ComponentOrigin.Builtin)).primary
   }
 }

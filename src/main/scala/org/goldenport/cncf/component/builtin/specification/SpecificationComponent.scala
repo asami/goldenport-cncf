@@ -36,10 +36,9 @@ object SpecificationComponent {
   val name: String = "spec"
   val componentId = ComponentId(name) // TODO static
 
-  class Factory extends Component.Factory {
-    protected def create_Components(params: ComponentCreate): Vector[Component] = {
-      Vector(SpecificationComponent())
-    }
+  class Factory extends Component.SinglePrimaryBundleFactory {
+    protected def create_Component(params: ComponentCreate): Component =
+      SpecificationComponent()
 
     protected def create_Core(
       params: ComponentCreate,

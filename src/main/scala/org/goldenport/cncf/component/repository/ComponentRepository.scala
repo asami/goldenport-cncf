@@ -320,11 +320,11 @@ object ComponentRepository extends GlobalObservable {
       ServiceLoader.load(classOf[Component], loader).iterator.asScala.toVector
     val factories =
       ServiceLoader
-        .load(classOf[Component.Factory], loader)
+        .load(classOf[Component.BundleFactory], loader)
         .iterator
         .asScala
         .toVector
-    val fromFactories = factories.flatMap(_.create(withOrigin))
+    val fromFactories = factories.flatMap(_.create(withOrigin).participants)
     val direct = components.map(_initialize_component(withOrigin))
     direct ++ fromFactories
   }
@@ -762,7 +762,7 @@ object ComponentRepository extends GlobalObservable {
     classNames: Seq[String],
     artifactname: String,
     repositoryType: String
-  ): Option[Class[_ <: Component.Factory]] = {
+  ): Option[Class[_ <: Component.BundleFactory]] = {
     val factories = classNames.view.flatMap { className =>
       _load_class(
         className = className,
@@ -771,12 +771,12 @@ object ComponentRepository extends GlobalObservable {
         repositoryType = repositoryType
       ).flatMap { cls =>
         if (
-          classOf[Component.Factory].isAssignableFrom(cls) &&
+          classOf[Component.BundleFactory].isAssignableFrom(cls) &&
           !cls.isInterface &&
           !Modifier.isAbstract(cls.getModifiers) &&
           !cls.getName.endsWith("$")
         ) {
-          Some(cls.asInstanceOf[Class[_ <: Component.Factory]])
+          Some(cls.asInstanceOf[Class[_ <: Component.BundleFactory]])
         } else {
           None
         }
@@ -786,7 +786,7 @@ object ComponentRepository extends GlobalObservable {
   }
 
   private def _factory_priority(
-    factoryClass: Class[_ <: Component.Factory]
+    factoryClass: Class[_ <: Component.BundleFactory]
   ): (Int, String) = {
     val name = factoryClass.getName
     val nestedPenalty = if (name.contains("$") || factoryClass.getEnclosingClass != null) 1 else 0
@@ -794,13 +794,13 @@ object ComponentRepository extends GlobalObservable {
   }
 
   private def _create_components_from_factory(
-    factoryClass: Class[_ <: Component.Factory],
+    factoryClass: Class[_ <: Component.BundleFactory],
     params: ComponentCreate,
     log: BootstrapLog
   ): Seq[Component] = {
     try {
-      val factory = factoryClass.getDeclaredConstructor().newInstance().asInstanceOf[Component.Factory]
-      factory.create(params)
+      val factory = factoryClass.getDeclaredConstructor().newInstance().asInstanceOf[Component.BundleFactory]
+      factory.create(params).participants
     } catch {
       case NonFatal(e) =>
         log.warn(s"component factory initialization failed for ${factoryClass.getName}: ${e.getMessage}")

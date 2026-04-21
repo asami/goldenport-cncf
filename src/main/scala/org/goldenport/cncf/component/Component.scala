@@ -54,6 +54,7 @@ import org.goldenport.schema.{DataType, XString}
 abstract class Component() extends Component.Core.Holder {
   private var _core: Option[Component.Core] = None
   private var _origin: Option[ComponentOrigin] = None
+  private var _participant_role: Component.ParticipantRole = Component.ParticipantRole.Primary
   private var _application_config: Component.ApplicationConfig = Component.ApplicationConfig()
   private var _collaborator_classpath: Option[Vector[Path]] = None
 //  private var _system_context: SystemContext = SystemContext.empty
@@ -88,6 +89,15 @@ abstract class Component() extends Component.Core.Holder {
   def origin: ComponentOrigin =
     _origin.getOrElse(ComponentOrigin.Unknown)
 
+  def participantRole: Component.ParticipantRole =
+    _participant_role
+
+  def isPrimaryParticipant: Boolean =
+    _participant_role == Component.ParticipantRole.Primary
+
+  def isComponentletParticipant: Boolean =
+    _participant_role == Component.ParticipantRole.Componentlet
+
   def componentDescriptors: Vector[ComponentDescriptor] =
     _component_descriptors
 
@@ -119,6 +129,7 @@ abstract class Component() extends Component.Core.Holder {
   def initialize(params: ComponentInit): Component = {
     _core = Some(params.core)
     _origin = Some(params.origin)
+    _participant_role = params.participantRole
     _subsystem = Some(params.subsystem)
     _component_descriptors = params.componentDescriptors
     _inherit_http_driver_(params)
@@ -628,6 +639,20 @@ object Component {
     }
   }
 
+  sealed trait ParticipantRole
+  object ParticipantRole {
+    case object Primary extends ParticipantRole
+    case object Componentlet extends ParticipantRole
+  }
+
+  final case class Bundle(
+    primary: Component,
+    componentlets: Vector[Component] = Vector.empty
+  ) {
+    def participants: Vector[Component] =
+      primary +: componentlets
+  }
+
   abstract class Factory {
     def serviceFactory: ServiceFactory = ServiceFactory.empty
 
@@ -709,21 +734,36 @@ object Component {
       core: ActionCall.Core
     ): Vector[org.goldenport.cncf.security.EntityAccessRelation] = Vector.empty
 
-    final def create(params: ComponentCreate): Vector[Component] = {
-      val xs = create_Components(params)
-      xs.map { comp =>
-        val core = create_Core(params, comp)
-        val sharedCore = core.copy(jobEngine = params.subsystem.jobEngine)
-        comp.initialize(ComponentInit(params.subsystem, sharedCore, params.origin))
-      }
-    }
+    final def createPrimary(params: ComponentCreate): Component =
+      _create_participant(params, ParticipantRole.Primary)
 
-    protected def create_Components(params: ComponentCreate): Vector[Component]
+    final def createComponentlet(params: ComponentCreate): Component =
+      _create_participant(params, ParticipantRole.Componentlet)
 
     protected def create_Core(
       params: ComponentCreate,
       comp: Component
     ): Component.Core
+
+    protected def create_Component(params: ComponentCreate): Component
+
+    private def _create_participant(
+      params: ComponentCreate,
+      role: ParticipantRole
+    ): Component = {
+      val comp = create_Component(params)
+      val core = create_Core(params, comp)
+      val sharedCore = core.copy(jobEngine = params.subsystem.jobEngine)
+      comp.initialize(
+        ComponentInit(
+          subsystem = params.subsystem,
+          core = sharedCore,
+          origin = params.origin,
+          componentDescriptors = params.componentDescriptors,
+          participantRole = role
+        )
+      )
+    }
 
     // private def _resolve_core(
     //   params: ComponentInitParams,
@@ -761,6 +801,27 @@ object Component {
         this
       )
     }
+  }
+
+  trait PrimaryComponentFactory extends Factory
+
+  trait ComponentletFactory extends Factory
+
+  trait BundleFactory {
+    def primaryFactory: PrimaryComponentFactory
+
+    def componentletFactories: Vector[ComponentletFactory] = Vector.empty
+
+    final def create(params: ComponentCreate): Bundle =
+      Bundle(
+        primary = primaryFactory.createPrimary(params),
+        componentlets = componentletFactories.map(_.createComponentlet(params))
+      )
+  }
+
+  abstract class SinglePrimaryBundleFactory extends Factory with BundleFactory with PrimaryComponentFactory {
+    final override def primaryFactory: PrimaryComponentFactory = this
+    final override def componentletFactories: Vector[ComponentletFactory] = Vector.empty
   }
 
   abstract class ServiceFactory extends ServiceDefinition.Factory[Service] {
@@ -1820,7 +1881,8 @@ final case class ComponentInit( // TODO use config
   subsystem: Subsystem,
   core: Component.Core,
   origin: ComponentOrigin,
-  componentDescriptors: Vector[ComponentDescriptor] = Vector.empty
+  componentDescriptors: Vector[ComponentDescriptor] = Vector.empty,
+  participantRole: Component.ParticipantRole = Component.ParticipantRole.Primary
 )
 
 sealed trait ComponentOrigin {

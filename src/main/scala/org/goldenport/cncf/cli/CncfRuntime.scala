@@ -1048,7 +1048,7 @@ object CncfRuntime extends GlobalObservable {
             Nil
           case Right(factory) =>
             try {
-              factory.create(params)
+              factory.create(params).participants
             } catch {
               case NonFatal(e) =>
                 observe_warn(s"component factory failed class=${name} message=${e.getMessage}")
@@ -1060,16 +1060,16 @@ object CncfRuntime extends GlobalObservable {
 
   private def _load_component_factory(
     className: String
-  ): Either[String, Component.Factory] =
+  ): Either[String, Component.BundleFactory] =
     try {
       val loader = Thread.currentThread.getContextClassLoader
       val clazz = Class.forName(className, true, loader)
-      if (!classOf[Component.Factory].isAssignableFrom(clazz)) {
-        Left(s"component factory class is not a Component.Factory: ${className}")
+      if (!classOf[Component.BundleFactory].isAssignableFrom(clazz)) {
+        Left(s"component factory class is not a Component.BundleFactory: ${className}")
       } else {
         val ctor = clazz.getDeclaredConstructor()
         ctor.setAccessible(true)
-        Right(ctor.newInstance().asInstanceOf[Component.Factory])
+        Right(ctor.newInstance().asInstanceOf[Component.BundleFactory])
       }
     } catch {
       case NonFatal(e) =>
@@ -1179,12 +1179,12 @@ object CncfRuntime extends GlobalObservable {
         .filter(_.getClass.getClassLoader eq loader)
     val factories =
       ServiceLoader
-        .load(classOf[Component.Factory], loader)
+        .load(classOf[Component.BundleFactory], loader)
         .iterator
         .asScala
         .toVector
         .filter(_.getClass.getClassLoader eq loader)
-    val fromFactories = factories.flatMap(_.create(params))
+    val fromFactories = factories.flatMap(_.create(params).participants)
     val direct = components.map(_initialize_component_(params))
     direct ++ fromFactories
   }
@@ -1263,7 +1263,7 @@ object CncfRuntime extends GlobalObservable {
   ): Option[Component] =
     try {
       val clazz = Class.forName(className, false, loader)
-      if (classOf[Component.Factory].isAssignableFrom(clazz)) {
+      if (classOf[Component.BundleFactory].isAssignableFrom(clazz)) {
         None
       } else if (classOf[Component].isAssignableFrom(clazz)) {
         observe_trace(s"[discover:classes] instantiating class component $className")

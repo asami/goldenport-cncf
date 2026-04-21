@@ -6918,9 +6918,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
   ): org.goldenport.cncf.component.Component = {
     val componentId = org.goldenport.cncf.component.ComponentId(componentIdName)
     val instanceId = org.goldenport.cncf.component.ComponentInstanceId.default(componentId)
-    val factory = new org.goldenport.cncf.component.Component.Factory {
-      override protected def create_Components(params: org.goldenport.cncf.component.ComponentCreate): Vector[org.goldenport.cncf.component.Component] =
-        Vector.empty
+    val factory = new org.goldenport.cncf.component.Component.SinglePrimaryBundleFactory {
+      override protected def create_Component(params: org.goldenport.cncf.component.ComponentCreate): org.goldenport.cncf.component.Component =
+        component
 
       override protected def create_Core(
         params: org.goldenport.cncf.component.ComponentCreate,

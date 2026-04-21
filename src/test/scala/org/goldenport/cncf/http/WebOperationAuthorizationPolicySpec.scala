@@ -42,7 +42,7 @@ final class WebOperationAuthorizationPolicySpec extends AnyWordSpec with Matcher
 
   private def _subsystem_with_admin(): Subsystem = {
     val subsystem = TestComponentFactory.emptySubsystem("web-operation-authorization-policy")
-    val admin = AdminComponent.Factory.create(ComponentCreate(subsystem, ComponentOrigin.Builtin))
+    val admin = AdminComponent.Factory.create(ComponentCreate(subsystem, ComponentOrigin.Builtin)).primary
     subsystem.add(admin)
   }
 }

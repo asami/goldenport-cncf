@@ -36,10 +36,9 @@ object ClientComponent {
   val name: String = "client"
   val componentId = ComponentId(name) // TODO static
 
-  object Factory extends Component.Factory {
-    protected def create_Components(params: ComponentCreate): Vector[Component] = {
-      Vector(_client())
-    }
+  object Factory extends Component.SinglePrimaryBundleFactory {
+    protected def create_Component(params: ComponentCreate): Component =
+      _client()
 
     private def _client(): Component = {
       ClientComponent()

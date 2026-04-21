@@ -205,9 +205,9 @@ class ClientAdminSystemPingSpec
   private def _client_component(): ClientComponent = {
     val subsystem = TestComponentFactory.emptySubsystem("cncf-client-test")
     val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
-    val component = ClientComponent.Factory.create(params).collectFirst {
+    val component = ClientComponent.Factory.create(params).primary match {
       case c: ClientComponent => c
-    }.getOrElse {
+      case _ =>
       fail("client component factory did not produce ClientComponent")
     }
     component

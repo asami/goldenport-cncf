@@ -38,9 +38,9 @@ object EventComponent {
   val name: String = "event"
   val componentId: ComponentId = ComponentId(name)
 
-  object Factory extends Component.Factory {
-    protected def create_Components(params: ComponentCreate): Vector[Component] =
-      Vector(EventComponent())
+  object Factory extends Component.SinglePrimaryBundleFactory {
+    protected def create_Component(params: ComponentCreate): Component =
+      EventComponent()
 
     protected def create_Core(
       params: ComponentCreate,

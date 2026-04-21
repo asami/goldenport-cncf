@@ -209,7 +209,7 @@ class ClientRequestNormalizationSpec
   private def _subsystem_with_admin() = {
     val subsystem = TestComponentFactory.emptySubsystem("client-request-normalization")
     val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
-    val admin = AdminComponent.Factory.create(params)
+    val admin = AdminComponent.Factory.create(params).primary
     subsystem.add(admin)
   }
 
