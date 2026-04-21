@@ -222,7 +222,32 @@ is expected but not defined here.
 
 
 ----------------------------------------------------------------------
-12. Relationship to Consumers (e.g. SIE)
+12. Product Boundary
+----------------------------------------------------------------------
+
+Job management is part of the CNCF built-in execution layer and follows
+the Pareto 80/20 principle.
+
+Its built-in scope is intentionally limited to the high-frequency 80%
+of operational needs:
+
+    - submission
+    - lifecycle/result visibility
+    - await/query/history
+    - retry/cancel/suspend/resume
+    - sequential batch submission support
+
+Job management must not grow into a workflow/orchestration platform.
+
+JCL is treated as a submission language, not a workflow language.
+Workflow progression belongs to the workflow layer, not to Job management.
+
+For the execution-platform boundary, see:
+
+    - `docs/design/execution-platform-boundary.md`
+
+----------------------------------------------------------------------
+13. Relationship to Consumers (e.g. SIE)
 ----------------------------------------------------------------------
 
 Consumers such as Semantic Integration Engine:
@@ -241,7 +266,7 @@ Job management is shared infrastructure.
 
 
 ----------------------------------------------------------------------
-13. Final Note
+14. Final Note
 ----------------------------------------------------------------------
 
 Job management exists to make execution failures

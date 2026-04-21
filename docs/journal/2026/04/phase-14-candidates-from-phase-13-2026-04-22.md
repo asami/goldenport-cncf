@@ -28,6 +28,21 @@ baseline work:
 
 Phase 14 should build on these contracts rather than revisiting them.
 
+## Boundary Fixed Before Phase 14 Implementation
+
+Before implementing JCL or Workflow slices, CNCF fixes the execution-platform
+boundary as a design rule:
+
+- built-in Job Management and built-in Workflow follow the Pareto 80/20 principle
+- JCL is submission-only
+- Workflow is a separate event-triggered orchestration layer
+- the high-frequency 80% belongs to built-in execution
+- the specialized 20% is an external-engine handoff concern
+
+Reference:
+
+- `docs/design/execution-platform-boundary.md`
+
 ## Phase 14 Candidate Work
 
 ### 1. Dead-Letter and Poison-Event Handling

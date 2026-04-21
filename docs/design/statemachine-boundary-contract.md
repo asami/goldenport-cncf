@@ -70,9 +70,30 @@ Allowed extensions:
 - additional resolver strategies (scope/FQ/global)
 - execution planner enrichment (entry/exit/transition phases)
 - introspection projection adapters
+- workflow-facing adapters that consume state machine context without moving workflow ownership into the state machine layer
+
+## Relationship to WorkflowEngine
+
+State machine and workflow are separate layers.
+
+State machine owns domain transition semantics.
+WorkflowEngine may consume event plus entity status plus state machine context
+in order to decide the next action, but workflow progression is not owned by
+the state machine layer itself.
+
+This means:
+
+- state machine stays the semantic source/planner
+- workflow remains an orchestration layer outside the state machine boundary
+- JobEngine remains the execution substrate
+
+For the execution-platform boundary, including the Pareto 80/20
+product-boundary rule, see:
+
+- `docs/design/execution-platform-boundary.md`
 
 ## Non-Goals
 
-- workflow engine orchestration
+- full workflow engine orchestration inside the state machine layer
 - persistence redesign
 - core primitive duplication inside CNCF
