@@ -1,8 +1,11 @@
 package org.goldenport.cncf.event
 
 import java.time.Instant
+import java.nio.charset.StandardCharsets
+import java.net.URLEncoder
 import scala.collection.mutable.ArrayBuffer
 import org.goldenport.Consequence
+import org.goldenport.Conclusion
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.EntityId
@@ -313,6 +316,10 @@ object EventReception {
     val EventKind = "cncf.event.kind"
     val EventOccurredAt = "cncf.event.occurredAt"
     val EventPersistent = "cncf.event.persistent"
+    val EventHistory = "cncf.event.history"
+    val EventHistoryCount = "cncf.event.historyCount"
+    val EventHistoryFormat = "cncf.event.historyFormat"
+    val EventHistoryOverflow = "cncf.event.historyOverflow"
     val ContinuationMode = "cncf.event.continuationMode"
     val IngressBoundary = "cncf.event.ingressBoundary"
     val OriginBoundary = "cncf.event.originBoundary"
@@ -327,6 +334,7 @@ object EventReception {
 
     val SourceSubsystem = "cncf.source.subsystem"
     val SourceComponent = "cncf.source.component"
+    val SourceAction = "cncf.source.action"
     val TargetSubsystem = "cncf.target.subsystem"
     val TargetComponent = "cncf.target.component"
 
@@ -405,6 +413,7 @@ object EventReception {
     private val _entitysubscriptions = ArrayBuffer.empty[EntityEventSubscription]
     private val _replay_seen_ids = scala.collection.mutable.HashSet.empty[String]
     private val _replay_last_sequence = scala.collection.mutable.HashMap.empty[String, Long]
+    private val _event_history_max_size = 4096
 
     def register(definition: CmlEventDefinition): Unit = synchronized {
       _definitions += definition
@@ -523,35 +532,109 @@ object EventReception {
               occurredAt = occurredat
             )
             val option = EventPublishOption(persistent = input.persistent)
-            val publish = ctx.map { x =>
-              given ExecutionContext = x
-              eventBus.publishAuthorized(event, option, policy)
-            }.getOrElse {
-              eventBus.publish(event, option)
-            }
-            publish.flatMap { r =>
-              _dispatch_to_listeners(event, matched, ctx).flatMap { basecount =>
-                _dispatch_to_entity_subscriptions(event, ctx).flatMap { entitycount =>
-                  val count = basecount + entitycount + r.dispatchedCount
-                  if (count > 0) {
-                    Consequence.success(
-                      ReceptionResult(
-                        outcome = ReceptionOutcome.Routed,
-                        dispatchedCount = count,
-                        persisted = r.persisted,
-                        reason = None
+            if (_should_use_sync_inline_path(event, matched, ctx))
+              _receive_sync_inline(input, event, matched, policy, ctx.get)
+            else {
+              val publish = ctx.map { x =>
+                given ExecutionContext = x
+                eventBus.publishAuthorized(event, option, policy)
+              }.getOrElse {
+                eventBus.publish(event, option)
+              }
+              publish.flatMap { r =>
+                _dispatch_to_listeners(event, matched, ctx).flatMap { basecount =>
+                  _dispatch_to_entity_subscriptions(event, ctx).flatMap { entitycount =>
+                    val count = basecount + entitycount + r.dispatchedCount
+                    if (count > 0) {
+                      Consequence.success(
+                        ReceptionResult(
+                          outcome = ReceptionOutcome.Routed,
+                          dispatchedCount = count,
+                          persisted = r.persisted,
+                          reason = None
+                        )
                       )
-                    )
-                  } else {
-                    _on_nomatch(input, ctx).map { _ =>
-                      ReceptionResult(
-                        outcome = ReceptionOutcome.Dropped,
-                        dispatchedCount = 0,
-                        persisted = r.persisted,
-                        reason = Some("non-target")
-                      )
+                    } else {
+                      _on_nomatch(input, ctx).map { _ =>
+                        ReceptionResult(
+                          outcome = ReceptionOutcome.Dropped,
+                          dispatchedCount = 0,
+                          persisted = r.persisted,
+                          reason = Some("non-target")
+                        )
+                      }
                     }
                   }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    private def _should_use_sync_inline_path(
+      event: ReceptionDomainEvent,
+      matched: Vector[CmlEventDefinition],
+      ctx: Option[ExecutionContext]
+    ): Boolean =
+      ctx.nonEmpty && {
+        val bysubscription = _subscriptions_snapshot()
+          .filter(_.matches(event))
+          .exists { subscription =>
+            _resolve_execution_policy(subscription, event).toOption.exists(_.policy.timing == EventExecutionTiming.Sync)
+          }
+        val byactionbinding =
+          matched.exists(d => d.category == CmlEventCategory.ActionEvent && d.actionName.nonEmpty) &&
+            _resolve_origin_boundary(event).toOption.contains(EventOriginBoundary.SameSubsystem)
+        bysubscription || byactionbinding
+      }
+
+    private def _receive_sync_inline(
+      input: ReceptionInput,
+      event: ReceptionDomainEvent,
+      matched: Vector[CmlEventDefinition],
+      policy: EventPolicyEngine,
+      ctx: ExecutionContext
+    ): Consequence[ReceptionResult] = {
+      given ExecutionContext = ctx
+      policy.authorizePublish.flatMap { _ =>
+        policy.authorizeDispatch.flatMap { _ =>
+          _append_source_history(event).flatMap { event0 =>
+            _dispatch_to_subscriptions_inline(event0, Some(ctx)).flatMap { case (event1, subscriptioncount) =>
+              _dispatch_to_listeners(event1, matched, Some(ctx)).flatMap { listenercount =>
+                _dispatch_to_entity_subscriptions(event1, Some(ctx)).flatMap { entitycount =>
+                  val count = subscriptioncount + listenercount + entitycount
+                  val staged =
+                    if (input.persistent) {
+                      ctx.runtime.unitOfWork.stageEvent(event1)
+                      true
+                    } else {
+                      false
+                    }
+                  val outcome =
+                    if (count > 0)
+                      Consequence.success(
+                        ReceptionResult(
+                          outcome = ReceptionOutcome.Routed,
+                          dispatchedCount = count,
+                          persisted = staged,
+                          reason = None
+                        )
+                      )
+                    else
+                      _on_nomatch(input, Some(ctx)).map { _ =>
+                        ReceptionResult(
+                          outcome = ReceptionOutcome.Dropped,
+                          dispatchedCount = 0,
+                          persisted = staged,
+                          reason = Some("non-target")
+                        )
+                      }
+                  if (staged && !_has_action_scope(ctx.cncfCore.scope))
+                    ctx.runtime.unitOfWork.commit().flatMap(_ => outcome)
+                  else
+                    outcome
                 }
               }
             }
@@ -728,6 +811,7 @@ object EventReception {
         .orElse(currentSubsystemName)
       val sourceComponent = _find_scope_name(ctx.cncfCore.scope, org.goldenport.cncf.context.ScopeKind.Component)
         .orElse(currentComponentName)
+      val sourceAction = _find_scope_name(ctx.cncfCore.scope, org.goldenport.cncf.context.ScopeKind.Action)
       val causationid = job.causationId
         .orElse(job.actionId.map(_.print))
         .orElse(ob.correlationId.map(_.print))
@@ -735,6 +819,7 @@ object EventReception {
       val pairs = Vector(
         sourceSubsystem.map(x => StandardAttribute.SourceSubsystem -> x),
         sourceComponent.map(x => StandardAttribute.SourceComponent -> x),
+        sourceAction.map(x => StandardAttribute.SourceAction -> x),
         Some(StandardAttribute.TraceId -> ob.traceId.print),
         ob.spanId.map(x => StandardAttribute.SpanId -> x.print),
         ob.correlationId.map(x => StandardAttribute.CorrelationId -> x.print),
@@ -764,6 +849,12 @@ object EventReception {
         Some(scope.core.name)
       else
         scope.core.parent.flatMap(_find_scope_name(_, kind))
+
+    private def _has_action_scope(
+      scope: org.goldenport.cncf.context.ScopeContext
+    ): Boolean =
+      scope.core.kind == org.goldenport.cncf.context.ScopeKind.Action ||
+        scope.core.parent.exists(_has_action_scope)
 
     private final case class _NoMatchEventTask(
       input: ReceptionInput
@@ -974,6 +1065,31 @@ object EventReception {
       }
     }
 
+    private def _dispatch_to_subscriptions_inline(
+      event: ReceptionDomainEvent,
+      ctxopt: Option[ExecutionContext]
+    ): Consequence[(ReceptionDomainEvent, Int)] = {
+      val xs = _subscriptions_snapshot().filter(_.matches(event))
+      if (xs.isEmpty)
+        Consequence.success((event, 0))
+      else {
+        val resolvectx: Consequence[ExecutionContext] = ctxopt match {
+          case Some(ctx) => Consequence.success(ctx)
+          case None => ingressSecurityResolver.resolve(event.attributes).map(_.executionContext)
+        }
+        resolvectx.flatMap { ctx =>
+          given ExecutionContext = ctx
+          xs.foldLeft(Consequence.success((event, 0))) { (z, s) =>
+            z.flatMap { case (currentevent, count) =>
+              _dispatch_subscription_inline(s, currentevent).map { case (updated, delta) =>
+                (updated, count + delta)
+              }
+            }
+          }
+        }
+      }
+    }
+
     private def _dispatch_registered_subscription(
       subscription: CmlSubscriptionDefinition,
       event: ReceptionDomainEvent
@@ -981,6 +1097,36 @@ object EventReception {
       ingressSecurityResolver.resolve(event.attributes).flatMap { security =>
         given ExecutionContext = security.executionContext
         _dispatch_subscription(subscription, event).map(_ => ())
+      }
+
+    private def _dispatch_subscription_inline(
+      s: CmlSubscriptionDefinition,
+      event: ReceptionDomainEvent
+    )(using ExecutionContext): Consequence[(ReceptionDomainEvent, Int)] =
+      if (!_selector_matches(s.selector, event))
+        Consequence.success((event, 0))
+      else {
+        val targets = _resolve_subscription_targets(s, event)
+        val bounded = targets.take(s.declaredTargetUpperBound)
+        bounded.foldLeft(Consequence.success((event, 0))) { (z, targetid) =>
+          z.flatMap { case (currentevent, count) =>
+            _resolve_execution_policy(s, currentevent).flatMap { resolved =>
+              _decorate_event_for_dispatch(currentevent, s, targetid, resolved).flatMap { dispatching =>
+                _dispatch_event_action(s.actionName, dispatching, resolved).flatMap { _ =>
+                  _append_dispatch_history(dispatching, "succeeded", None).map { finished =>
+                    (finished, count + 1)
+                  }
+                }.recoverWith { conclusion =>
+                  _append_dispatch_history(
+                    dispatching,
+                    "failed",
+                    Some(conclusion.show)
+                  ).flatMap(_ => Consequence.Failure(conclusion))
+                }
+              }
+            }
+          }
+        }
       }
 
     private def _dispatch_subscription(
@@ -995,29 +1141,9 @@ object EventReception {
         bounded.foldLeft(Consequence.success(0)) { (z, targetid) =>
           z.flatMap { count =>
             _resolve_execution_policy(s, event).flatMap { resolved =>
-              val attrs0 = event.attributes + ("targetId" -> targetid) + ("target" -> targetid)
-              val attrs1 = s.entityName match {
-                case Some(name) =>
-                  attrs0 ++ Map(
-                    "entity" -> name,
-                    "entityName" -> name,
-                    "entity_name" -> name
-                  )
-                case None =>
-                  attrs0
+              _decorate_event_for_dispatch(event, s, targetid, resolved).flatMap { evt =>
+                _dispatch_event_action(s.actionName, evt, resolved).map(_ => count + 1)
               }
-              val attrs2 =
-                attrs1 +
-                  (StandardAttribute.ContinuationMode -> _continuation_mode_name(resolved.compatibilityMode)) +
-                  (StandardAttribute.OriginBoundary -> _origin_boundary_name(resolved.boundary)) +
-                  (StandardAttribute.ReceptionRuleName -> resolved.ruleName) +
-                  (StandardAttribute.ReceptionPolicy -> resolved.policy.modeName) +
-                  (StandardAttribute.PolicySource -> resolved.policySource) +
-                  (StandardAttribute.TargetSubsystem -> currentSubsystemName.getOrElse("")) +
-                  (StandardAttribute.TargetComponent -> currentComponentName.getOrElse("")) +
-                  (StandardAttribute.SagaRelation -> _saga_relation_name(resolved.policy.sagaRelation))
-              val evt = event.copy(attributes = attrs2)
-              _dispatch_event_action(s.actionName, evt, resolved).map(_ => count + 1)
             }
           }
         }
@@ -1223,6 +1349,125 @@ object EventReception {
               _failure("async event reception requires job engine")
           }
       }
+
+    private def _decorate_event_for_dispatch(
+      event: ReceptionDomainEvent,
+      subscription: CmlSubscriptionDefinition,
+      targetid: String,
+      resolved: _ResolvedExecutionPolicy
+    ): Consequence[ReceptionDomainEvent] = {
+      val attrs0 = event.attributes + ("targetId" -> targetid) + ("target" -> targetid)
+      val attrs1 = subscription.entityName match {
+        case Some(name) =>
+          attrs0 ++ Map(
+            "entity" -> name,
+            "entityName" -> name,
+            "entity_name" -> name
+          )
+        case None =>
+          attrs0
+      }
+      val attrs2 = attrs1 ++ Vector(
+        Some(StandardAttribute.ContinuationMode -> _continuation_mode_name(resolved.compatibilityMode)),
+        Some(StandardAttribute.OriginBoundary -> _origin_boundary_name(resolved.boundary)),
+        Some(StandardAttribute.ReceptionRuleName -> resolved.ruleName),
+        Some(StandardAttribute.ReceptionPolicy -> resolved.policy.modeName),
+        Some(StandardAttribute.PolicySource -> resolved.policySource),
+        Some(StandardAttribute.SagaRelation -> _saga_relation_name(resolved.policy.sagaRelation)),
+        currentSubsystemName.filter(_.nonEmpty).map(x => StandardAttribute.TargetSubsystem -> x),
+        currentComponentName.filter(_.nonEmpty).map(x => StandardAttribute.TargetComponent -> x)
+      ).flatten.toMap
+      _append_reception_history(event.copy(attributes = attrs2))
+    }
+
+    private def _append_source_history(
+      event: ReceptionDomainEvent
+    ): Consequence[ReceptionDomainEvent] =
+      _append_history(
+        event,
+        "source",
+        Vector(
+          "source.subsystem" -> event.attributes.getOrElse(StandardAttribute.SourceSubsystem, ""),
+          "source.component" -> event.attributes.getOrElse(StandardAttribute.SourceComponent, ""),
+          "source.action" -> event.attributes.getOrElse(StandardAttribute.SourceAction, ""),
+          "job.id" -> event.attributes.getOrElse(StandardAttribute.JobId, ""),
+          "correlation.id" -> event.attributes.getOrElse(StandardAttribute.CorrelationId, ""),
+          "causation.id" -> event.attributes.getOrElse(StandardAttribute.CausationId, "")
+        )
+      )
+
+    private def _append_reception_history(
+      event: ReceptionDomainEvent
+    ): Consequence[ReceptionDomainEvent] =
+      _append_history(
+        event,
+        "reception",
+        Vector(
+          "origin.boundary" -> event.attributes.getOrElse(StandardAttribute.OriginBoundary, ""),
+          "subscription.target" -> event.attributes.getOrElse("targetId", ""),
+          "rule" -> event.attributes.getOrElse(StandardAttribute.ReceptionRuleName, ""),
+          "policy" -> event.attributes.getOrElse(StandardAttribute.ReceptionPolicy, ""),
+          "policy.source" -> event.attributes.getOrElse(StandardAttribute.PolicySource, ""),
+          "target.subsystem" -> event.attributes.getOrElse(StandardAttribute.TargetSubsystem, ""),
+          "target.component" -> event.attributes.getOrElse(StandardAttribute.TargetComponent, "")
+        )
+      )
+
+    private def _append_dispatch_history(
+      event: ReceptionDomainEvent,
+      result: String,
+      failure: Option[String]
+    ): Consequence[ReceptionDomainEvent] =
+      _append_history(
+        event,
+        "dispatch",
+        Vector(
+          "mode" -> "sync-inline",
+          "result" -> result,
+          "failure" -> failure.getOrElse("")
+        )
+      )
+
+    private def _append_history(
+      event: ReceptionDomainEvent,
+      stage: String,
+      fields: Vector[(String, String)]
+    ): Consequence[ReceptionDomainEvent] = {
+      val entry = _serialize_history_entry(stage, fields)
+      val current = event.attributes.get(StandardAttribute.EventHistory).filter(_.nonEmpty)
+      val merged = current.fold(entry)(x => s"$x||$entry")
+      if (merged.length > _event_history_max_size)
+        _failure(s"event history exceeds cap: ${merged.length}/${_event_history_max_size}")
+      else {
+        val count = current.fold(1)(x => x.split("\\|\\|", -1).length + 1)
+        Consequence.success(
+          event.copy(
+            attributes = event.attributes ++ Map(
+              StandardAttribute.EventHistory -> merged,
+              StandardAttribute.EventHistoryCount -> count.toString,
+              StandardAttribute.EventHistoryFormat -> "delta-trail",
+              StandardAttribute.EventHistoryOverflow -> "fail-fast"
+            )
+          )
+        )
+      }
+    }
+
+    private def _serialize_history_entry(
+      stage: String,
+      fields: Vector[(String, String)]
+    ): String = {
+      val body = fields.collect {
+        case (k, v) if k.nonEmpty && v.nonEmpty =>
+          s"${_encode_history(k)}=${_encode_history(v)}"
+      }.mkString(",")
+      s"${_encode_history(stage)}{$body}"
+    }
+
+    private def _encode_history(
+      p: String
+    ): String =
+      URLEncoder.encode(Option(p).getOrElse(""), StandardCharsets.UTF_8)
 
     private def _job_submission_context(
       ctx: ExecutionContext,

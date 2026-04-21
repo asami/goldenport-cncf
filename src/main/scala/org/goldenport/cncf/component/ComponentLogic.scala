@@ -1,6 +1,7 @@
 package org.goldenport.cncf.component
 
 import org.goldenport.Consequence
+import org.goldenport.Conclusion
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.Response
@@ -132,7 +133,23 @@ case class ComponentLogic(
           case _ =>
             val jobid = submitJob(List(task), scopedCtx)
             Consequence.success(OperationResponse.Scalar(jobid.value))
-        }
+      }
+    }
+  }
+
+  def executeEventContinuationAction(
+    action: Action,
+    ctx: ExecutionContext
+  ): Consequence[OperationResponse] = {
+    val call = createActionCall(action, ctx)
+    given ExecutionContext = ctx
+    call.authorize().flatMap { _ =>
+      try {
+        call.execute()
+      } catch {
+        case e: Throwable =>
+          Consequence.Failure(Conclusion.from(e))
+      }
     }
   }
 

@@ -11,7 +11,7 @@ import org.goldenport.cncf.naming.NamingConventions
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 28, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationRequestActionDispatcher(
@@ -37,13 +37,13 @@ final class OperationRequestActionDispatcher(
     p: ParsedEventAction
   ): Consequence[Unit] = {
     val ec = logic.executionContext()
-    logic.executeAction(p.action, ec).map(_ => ())
+    logic.executeEventContinuationAction(p.action, ec).map(_ => ())
   }
 
   def dispatchParsedActionAuthorized(
     p: ParsedEventAction
   )(using ctx: ExecutionContext): Consequence[Unit] = {
-    logic.executeAction(p.action, ctx).map(_ => ())
+    logic.executeEventContinuationAction(p.action, ctx).map(_ => ())
   }
 
   private def _to_request(

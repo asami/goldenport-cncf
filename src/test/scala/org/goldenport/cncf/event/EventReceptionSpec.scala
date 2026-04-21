@@ -1,12 +1,14 @@
 package org.goldenport.cncf.event
 
 import scala.collection.mutable.ArrayBuffer
+import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel}
 import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.job.{ActionId, JobContext, JobControlPolicy, JobControlRequest, JobControlResponse, JobEngine, JobPersistencePolicy, JobQueryReadModel, JobResult, JobStatus, JobSubmitOption, JobTask, JobTaskPage, JobTimelinePage, JobId, TaskId}
 import org.goldenport.cncf.security.IngressSecurityResolver
-import org.goldenport.cncf.unitofwork.CommitRecorder
+import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkOp}
 import org.goldenport.provisional.observation.Taxonomy
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -1039,7 +1041,7 @@ final class EventReceptionSpec
           policy = EventReceptionExecutionPolicy.AsyncNewJobNewSaga
         )
       )
-      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+      given ExecutionContext = _shared_event_context(recorder, store)
 
       When("receiving selector-specific external event")
       val result = reception.receiveAuthorized(
@@ -1068,6 +1070,184 @@ final class EventReceptionSpec
       attrs.head.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("explicit-rule")
       attrs.head.get(EventReception.StandardAttribute.SagaRelation) shouldBe Some("new-saga")
       attrs.head.get(EventReception.StandardAttribute.ContinuationMode) shouldBe Some("new-job")
+    }
+
+    "persist same-subsystem sync event after inline dispatch with framework-owned history" in {
+      Given("persistent same-subsystem sync reception with inline dispatch recorder")
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val dispatchentries = ArrayBuffer.empty[Vector[String]]
+      val attrs = ArrayBuffer.empty[Map[String, String]]
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _SecureRecordingDispatcherWithRecorder(dispatchentries, attrs, recorder),
+        currentSubsystemName = Some("public-notice"),
+        currentComponentName = Some("notice-admin")
+      )
+      reception.register(
+        CmlEventDefinition(
+          name = "notice.published",
+          category = CmlEventCategory.NonActionEvent,
+          kind = Some("published")
+        )
+      )
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "notice-admin-sync",
+          eventName = "notice.published",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "notice.admin.sync"
+        )
+      )
+      given ExecutionContext = _shared_event_context(recorder, store)
+
+      When("persistent event is received through same-subsystem sync path")
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "notice.published",
+          kind = "published",
+          attributes = Map(
+            "targetId" -> "notice-1",
+            EventReception.StandardAttribute.SourceSubsystem -> "public-notice",
+            EventReception.StandardAttribute.SourceComponent -> "public-notice"
+          ),
+          persistent = true
+        )
+      )
+
+      Then("dispatch happens before commit and final stored event contains framework metadata and history")
+      result shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = true
+        )
+      )
+      dispatchentries.headOption.getOrElse(Vector.empty) should not contain "UnitOfWork.commit"
+      val stored = store.query(EventStore.Query(name = Some("notice.published"))).toOption.getOrElse(Vector.empty)
+      stored.size shouldBe 1
+      val record = stored.head
+      record.attributes.get(EventReception.StandardAttribute.OriginBoundary) shouldBe Some("same-subsystem")
+      record.attributes.get(EventReception.StandardAttribute.ReceptionRuleName) shouldBe Some("default:same-subsystem")
+      record.attributes.get(EventReception.StandardAttribute.ReceptionPolicy) shouldBe Some(EventReceptionExecutionPolicy.SameSubsystemDefault.modeName)
+      record.attributes.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("subsystem-default")
+      record.attributes.get(EventReception.StandardAttribute.TargetComponent) shouldBe Some("notice-admin")
+      record.attributes.get(EventReception.StandardAttribute.EventHistoryFormat) shouldBe Some("delta-trail")
+      record.attributes.get(EventReception.StandardAttribute.EventHistoryOverflow) shouldBe Some("fail-fast")
+      record.attributes.get(EventReception.StandardAttribute.EventHistoryCount) shouldBe Some("3")
+      record.attributes.get(EventReception.StandardAttribute.EventHistory).exists(_.contains("source{")) shouldBe true
+      record.attributes.get(EventReception.StandardAttribute.EventHistory).exists(_.contains("reception{")) shouldBe true
+      record.attributes.get(EventReception.StandardAttribute.EventHistory).exists(_.contains("dispatch{")) shouldBe true
+      recorder.entries shouldBe Vector(
+        "UnitOfWork.prepare",
+        "EventEngine.prepare",
+        "UnitOfWork.commit",
+        "EventEngine.commit",
+        "DataStore.commit"
+      )
+    }
+
+    "rollback same-subsystem sync reception when inline dispatch fails" in {
+      Given("persistent same-subsystem sync reception with failing inline dispatch")
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _FailingSecureDispatcher,
+        currentSubsystemName = Some("public-notice"),
+        currentComponentName = Some("notice-admin")
+      )
+      reception.register(
+        CmlEventDefinition(
+          name = "notice.failed",
+          category = CmlEventCategory.NonActionEvent,
+          kind = Some("published")
+        )
+      )
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "notice-admin-sync",
+          eventName = "notice.failed",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "notice.admin.sync"
+        )
+      )
+      given ExecutionContext = _shared_event_context(recorder, store)
+
+      When("dispatch fails")
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "notice.failed",
+          kind = "published",
+          attributes = Map(
+            "targetId" -> "notice-2",
+            EventReception.StandardAttribute.SourceSubsystem -> "public-notice"
+          ),
+          persistent = true
+        )
+      )
+
+      Then("the failure is returned and no event is committed")
+      result shouldBe a[Consequence.Failure[_]]
+      store.query(EventStore.Query(name = Some("notice.failed"))).toOption.getOrElse(Vector.empty) shouldBe Vector.empty
+      recorder.entries should not contain "UnitOfWork.commit"
+      recorder.entries should not contain "EventEngine.commit"
+    }
+
+    "fail fast when event history exceeds configured cap" in {
+      Given("same-subsystem sync reception with oversized target metadata")
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _SecureRecordingDispatcher(ArrayBuffer.empty, ArrayBuffer.empty),
+        currentSubsystemName = Some("public-notice"),
+        currentComponentName = Some("notice-admin")
+      )
+      reception.register(
+        CmlEventDefinition(
+          name = "notice.oversized",
+          category = CmlEventCategory.NonActionEvent,
+          kind = Some("published")
+        )
+      )
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "notice-admin-sync",
+          eventName = "notice.oversized",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "notice.admin.sync"
+        )
+      )
+      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+      val oversized = "x" * 5000
+
+      When("history append would exceed the cap")
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "notice.oversized",
+          kind = "published",
+          attributes = Map(
+            "targetId" -> oversized,
+            EventReception.StandardAttribute.SourceSubsystem -> "public-notice"
+          ),
+          persistent = true
+        )
+      )
+
+      Then("the reception fails before commit and nothing is persisted")
+      result shouldBe a[Consequence.Failure[_]]
+      store.query(EventStore.Query(name = Some("notice.oversized"))).toOption.getOrElse(Vector.empty) shouldBe Vector.empty
+      recorder.entries should not contain "UnitOfWork.commit"
     }
 
     "fail policy selection when subscription event has no source boundary information" in {
@@ -1260,6 +1440,54 @@ final class EventReceptionSpec
     }
   }
 
+  private final class _SecureRecordingDispatcherWithRecorder(
+    entriesAtDispatch: ArrayBuffer[Vector[String]],
+    attrs: ArrayBuffer[Map[String, String]],
+    recorder: _InMemoryCommitRecorder
+  ) extends SecureActionCallDispatcher {
+    def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
+      val _ = actionName
+      entriesAtDispatch += recorder.entries
+      event match {
+        case e: ReceptionDomainEvent => attrs += e.attributes
+        case _ => ()
+      }
+      Consequence.unit
+    }
+
+    def dispatchActionAuthorized(
+      actionName: String,
+      event: DomainEvent
+    )(using ctx: ExecutionContext): Consequence[Unit] = {
+      val _ = actionName
+      val _ = ctx
+      entriesAtDispatch += recorder.entries
+      event match {
+        case e: ReceptionDomainEvent => attrs += e.attributes
+        case _ => ()
+      }
+      Consequence.unit
+    }
+  }
+
+  private final class _FailingSecureDispatcher extends SecureActionCallDispatcher {
+    def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
+      val _ = actionName
+      val _ = event
+      Consequence.operationInvalid("event.dispatch", "forced failure")
+    }
+
+    def dispatchActionAuthorized(
+      actionName: String,
+      event: DomainEvent
+    )(using ctx: ExecutionContext): Consequence[Unit] = {
+      val _ = actionName
+      val _ = event
+      val _ = ctx
+      Consequence.operationInvalid("event.dispatch", "forced failure")
+    }
+  }
+
   private final class _RecordingJobEngine extends JobEngine {
     @volatile private var _options: Vector[JobSubmitOption] = Vector.empty
 
@@ -1287,5 +1515,49 @@ final class EventReceptionSpec
     def query(jobId: JobId): Option[JobQueryReadModel] = None
     def queryTasks(jobId: JobId, offset: Int, limit: Int): Option[JobTaskPage] = None
     def queryTimeline(jobId: JobId, offset: Int, limit: Int): Option[JobTimelinePage] = None
+  }
+
+  private def _shared_event_context(
+    recorder: CommitRecorder,
+    store: EventStore
+  ): ExecutionContext = {
+    val base = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+    val driver = FakeHttpDriver.okText("nop")
+    val consequenceinterpreter = new (UnitOfWorkOp ~> Consequence) {
+      def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
+        throw new UnsupportedOperationException("unitOfWorkInterpreter is not used in EventReceptionSpec")
+    }
+    final class RuntimeHolder {
+      private var _uow: Option[UnitOfWork] = None
+      val eventengine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val runtime = new org.goldenport.cncf.context.RuntimeContext(
+        core = org.goldenport.cncf.context.RuntimeContext.core(
+          name = "event-reception-spec-runtime",
+          parent = None,
+          observabilityContext = base.observability,
+          httpDriverOption = Some(driver)
+        ),
+        unitOfWorkSupplier = () => _uow.getOrElse {
+          throw new IllegalStateException("UnitOfWork has not been bound")
+        },
+        unitOfWorkInterpreterFn = consequenceinterpreter,
+        commitAction = uow => {
+          val _ = uow.commit()
+          ()
+        },
+        abortAction = uow => {
+          val _ = uow.rollback()
+          ()
+        },
+        disposeAction = _ => (),
+        token = "event-reception-spec-runtime"
+      )
+      lazy val context: ExecutionContext = ExecutionContext.withRuntimeContext(base, runtime)
+      def bind(): ExecutionContext = {
+        _uow = Some(new UnitOfWork(context, eventengine, recorder))
+        context
+      }
+    }
+    new RuntimeHolder().bind()
   }
 }
