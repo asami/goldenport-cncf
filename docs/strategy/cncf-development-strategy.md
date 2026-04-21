@@ -334,11 +334,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: Phase 13 (`docs/phase/phase-13.md`)
-- Latest active phase dashboard: `docs/phase/phase-13.md`
-- Latest active phase checklist: `docs/phase/phase-13-checklist.md`
-- Latest closed phase dashboard: `docs/phase/phase-12.md`
-- Latest closed phase checklist: `docs/phase/phase-12-checklist.md`
+- Current phase selection: none (Phase 13 is closed; next phase selection is pending)
+- Latest active phase dashboard: none
+- Latest active phase checklist: none
+- Latest closed phase dashboard: `docs/phase/phase-13.md`
+- Latest closed phase checklist: `docs/phase/phase-13-checklist.md`
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
 ## 6. Explicit Non-Goals
@@ -358,7 +358,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 10: closed (`docs/phase/phase-10.md`)
 - Phase 11: closed (`docs/phase/phase-11.md`)
 - Phase 12: closed (`docs/phase/phase-12.md`)
-- Phase 13: open (`docs/phase/phase-13.md`)
+- Phase 13: closed (`docs/phase/phase-13.md`)
 
 ## 8. Development Item Status
 
@@ -385,7 +385,7 @@ completed, it moves to the completed development item history below.
   - `docs/notes/phase-12-web-closure.md`
 
 ### 8.2 Event Mechanism Extension
-Active Phase 13 work area.
+Closed in Phase 13. This remains a reference area for Phase 14+ extensions and regressions.
 
 - Phase 13 baseline:
   - subsystem-level shared event wiring
@@ -410,6 +410,8 @@ Active Phase 13 work area.
   - `docs/phase/phase-13-checklist.md`
   - `docs/journal/2026/04/event-mechanism-extension-work-items.md`
   - `docs/notes/event-reception-policy-selection.md`
+  - `docs/journal/2026/04/phase-13-closure-result-2026-04-22.md`
+  - `docs/journal/2026/04/textus-sample-app-event-phase-13-closure-handoff-2026-04-22.md`
 
 ### 8.3 Security
 - Authentication

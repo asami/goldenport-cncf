@@ -219,3 +219,5 @@ Phase 13 is complete when:
 - [x] EVX-01 through EVX-07 are marked DONE.
 - [x] `phase-13.md` summary checkboxes are aligned.
 - [x] No item remains ACTIVE or SUSPENDED.
+- [x] CNCF closure evidence is recorded in `docs/journal/2026/04/phase-13-closure-result-2026-04-22.md`.
+- [x] Driver-app live closure evidence is recorded in `docs/journal/2026/04/textus-sample-app-event-phase-13-closure-handoff-2026-04-22.md`.

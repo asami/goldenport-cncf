@@ -22,6 +22,7 @@ import org.goldenport.cncf.component.builtin.client.{GetQuery, PostCommand}
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.assembly.AssemblyReport
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentInit, ComponentOrigin}
+import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig, RuntimeDefaults, RuntimeFileConfigLoader}
 import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
@@ -1158,7 +1159,7 @@ object CncfRuntime extends GlobalObservable {
       Nil
     } else {
       val loader = _class_loader_(classDirs)
-      val service = _discover_service_loader_(loader, params)
+      val service = _discover_service_loader_(loader, params, classDirs)
       if (service.nonEmpty) service
       else _discover_by_scan_(loader, params, classDirs, packagePrefixes)
     }
@@ -1172,21 +1173,32 @@ object CncfRuntime extends GlobalObservable {
 
   private def _discover_service_loader_(
     loader: URLClassLoader,
-    params: ComponentCreate
+    params: ComponentCreate,
+    classDirs: Seq[Path]
   ): Vector[Component] = {
+    def isFromClassDirs(x: AnyRef): Boolean =
+      Option(x.getClass.getProtectionDomain)
+        .flatMap(pd => Option(pd.getCodeSource))
+        .flatMap(cs => Option(cs.getLocation))
+        .flatMap(url => scala.util.Try(Paths.get(url.toURI)).toOption)
+        .exists(path => classDirs.exists(dir => path.normalize.startsWith(dir.normalize)))
+
     val components =
       ServiceLoader.load(classOf[Component], loader).iterator.asScala.toVector
-        .filter(_.getClass.getClassLoader eq loader)
+        .filter(x => isFromClassDirs(x))
     val factories =
       ServiceLoader
         .load(classOf[Component.BundleFactory], loader)
         .iterator
         .asScala
         .toVector
-        .filter(_.getClass.getClassLoader eq loader)
+        .filter(x => isFromClassDirs(x))
     val fromFactories = factories.flatMap(_.create(params).participants)
     val direct = components.map(_initialize_component_(params))
-    direct ++ fromFactories
+    if (fromFactories.nonEmpty)
+      fromFactories ++ direct.filterNot(d => fromFactories.exists(f => NamingConventions.equivalentByNormalized(f.name, d.name)))
+    else
+      direct
   }
 
   private def _discover_by_scan_(

@@ -60,6 +60,10 @@ Current note:
   - stable policy precedence and policy source visibility
   - bundle/participant construction with formal runtime componentlet identity
   - builtin event/job/admin diagnostics coverage
+- Sample-driver closure is also reached:
+  - `textus-sample-app-event` now verifies `--discover=classes` bundle discovery,
+    live cross-component continuation, and builtin operator-facing diagnostics
+    without app-side compensation.
 
 ## 5. Development Items
 
@@ -83,6 +87,7 @@ Current note:
 - `docs/journal/2026/04/event-mechanism-extension-work-items.md`
 - `docs/journal/2026/03/event-mechanism-design.md`
 - `docs/journal/2026/04/phase-13-closure-result-2026-04-22.md`
+- `docs/journal/2026/04/textus-sample-app-event-phase-13-closure-handoff-2026-04-22.md`
 - `docs/notes/event-reception-latest-processing-spec.md`
 - `docs/notes/event-reception-policy-selection.md`
 - `docs/phase/phase-13-checklist.md`

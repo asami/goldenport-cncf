@@ -17,6 +17,7 @@ import org.goldenport.cncf.bootstrap.BootstrapLog
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.observability.global.{GlobalObservable, ObservabilityScopeDefaults, PersistentBootstrapLog}
 import org.goldenport.cncf.component.*
+import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.backend.collaborator.{CollaboratorClassLoader, CollaboratorFactory}
 import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
 
@@ -326,7 +327,10 @@ object ComponentRepository extends GlobalObservable {
         .toVector
     val fromFactories = factories.flatMap(_.create(withOrigin).participants)
     val direct = components.map(_initialize_component(withOrigin))
-    direct ++ fromFactories
+    if (fromFactories.nonEmpty)
+      fromFactories ++ direct.filterNot(d => fromFactories.exists(f => NamingConventions.equivalentByNormalized(f.name, d.name)))
+    else
+      direct
   }
 
   private def _discover_from_artifacts(
