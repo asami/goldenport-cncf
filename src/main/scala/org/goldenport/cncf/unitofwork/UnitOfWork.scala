@@ -30,7 +30,7 @@ import org.goldenport.cncf.http.HttpDriver
  *  version Jan. 18, 2026
  *  version Feb. 27, 2026
  *  version Mar. 24, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
@@ -43,6 +43,7 @@ class UnitOfWork(
 //  private var _shell_command_executor: Option[ShellCommandExecutor] = None
   private val _dirty_entities: mutable.Map[EntityId, Entity] = mutable.Map.empty
   private var _pending_events: Vector[DomainEvent] = Vector.empty
+  private var _post_commit_callbacks: Vector[() => Unit] = Vector.empty
 
   def transactionContext = context.transactionContext
 
@@ -132,12 +133,16 @@ class UnitOfWork(
           eventengine.abort(tx) // TODO
           tx.abort()
           _pending_events = Vector.empty
+          _post_commit_callbacks = Vector.empty
           Consequence.stateConflict(reason)
         case None =>
           recorder.record("UnitOfWork.commit")
           tx.commit()
           eventengine.commit(tx) // TODO
           _pending_events = Vector.empty
+          val callbacks = _post_commit_callbacks
+          _post_commit_callbacks = Vector.empty
+          callbacks.foreach(_())
           Consequence.success(())
       }
     } catch {
@@ -152,6 +157,7 @@ class UnitOfWork(
       eventengine.abort(tx) // TODO
       tx.abort()
       _pending_events = Vector.empty
+      _post_commit_callbacks = Vector.empty
       Consequence.success(())
     } catch {
       case e: Throwable =>
@@ -171,6 +177,9 @@ class UnitOfWork(
     _pending_events = _pending_events ++ events.toVector
 
   def pendingEvents: Vector[DomainEvent] = _pending_events
+
+  def stagePostCommit(callback: => Unit): Unit =
+    _post_commit_callbacks = _post_commit_callbacks :+ (() => callback)
 
   def executionContext: ExecutionContext = context
 }

@@ -473,6 +473,7 @@ final class ComponentFactoryEventReceptionBootstrapSpec
       Then("subsystem exposes the shared event reception facility")
       bootstrapped.eventReception.nonEmpty shouldBe true
       subsystem.eventReceptions.get("boot_component") shouldBe bootstrapped.eventReception
+      bootstrapped.eventStore shouldBe Some(subsystem.eventStore)
       subsystem.eventBus should not be null
     }
 

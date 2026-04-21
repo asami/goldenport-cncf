@@ -535,33 +535,35 @@ object EventReception {
             if (_should_use_sync_inline_path(event, matched, ctx))
               _receive_sync_inline(input, event, matched, policy, ctx.get)
             else {
-              val publish = ctx.map { x =>
-                given ExecutionContext = x
-                eventBus.publishAuthorized(event, option, policy)
-              }.getOrElse {
-                eventBus.publish(event, option)
-              }
-              publish.flatMap { r =>
-                _dispatch_to_listeners(event, matched, ctx).flatMap { basecount =>
-                  _dispatch_to_entity_subscriptions(event, ctx).flatMap { entitycount =>
-                    val count = basecount + entitycount + r.dispatchedCount
-                    if (count > 0) {
-                      Consequence.success(
-                        ReceptionResult(
-                          outcome = ReceptionOutcome.Routed,
-                          dispatchedCount = count,
-                          persisted = r.persisted,
-                          reason = None
+              _prepare_event_for_publish(event, ctx).flatMap { publishevent =>
+                val publish = ctx.map { x =>
+                  given ExecutionContext = x
+                  eventBus.publishAuthorized(publishevent, option, policy)
+                }.getOrElse {
+                  eventBus.publish(publishevent, option)
+                }
+                publish.flatMap { r =>
+                  _dispatch_to_listeners(publishevent, matched, ctx).flatMap { basecount =>
+                    _dispatch_to_entity_subscriptions(publishevent, ctx).flatMap { entitycount =>
+                      val count = basecount + entitycount + r.dispatchedCount
+                      if (count > 0) {
+                        Consequence.success(
+                          ReceptionResult(
+                            outcome = ReceptionOutcome.Routed,
+                            dispatchedCount = count,
+                            persisted = r.persisted,
+                            reason = None
+                          )
                         )
-                      )
-                    } else {
-                      _on_nomatch(input, ctx).map { _ =>
-                        ReceptionResult(
-                          outcome = ReceptionOutcome.Dropped,
-                          dispatchedCount = 0,
-                          persisted = r.persisted,
-                          reason = Some("non-target")
-                        )
+                      } else {
+                        _on_nomatch(input, ctx).map { _ =>
+                          ReceptionResult(
+                            outcome = ReceptionOutcome.Dropped,
+                            dispatchedCount = 0,
+                            persisted = r.persisted,
+                            reason = Some("non-target")
+                          )
+                        }
                       }
                     }
                   }
@@ -570,6 +572,72 @@ object EventReception {
             }
           }
         }
+      }
+    }
+
+    private def _prepare_event_for_publish(
+      event: ReceptionDomainEvent,
+      ctxopt: Option[ExecutionContext]
+    ): Consequence[ReceptionDomainEvent] =
+      _append_source_history(event).flatMap {
+        case sourceevent if ctxopt.isEmpty =>
+          Consequence.success(sourceevent)
+        case sourceevent =>
+          _decorate_event_for_persistence(sourceevent, ctxopt.get)
+      }
+
+    private def _decorate_event_for_persistence(
+      event: ReceptionDomainEvent,
+      ctx: ExecutionContext
+    ): Consequence[ReceptionDomainEvent] =
+      _resolve_first_persistent_dispatch(event, ctx).flatMap {
+        case Some(prepared) => Consequence.success(prepared)
+        case None => Consequence.success(event)
+      }
+
+    private def _resolve_first_persistent_dispatch(
+      event: ReceptionDomainEvent,
+      ctx: ExecutionContext
+    ): Consequence[Option[ReceptionDomainEvent]] = {
+      given ExecutionContext = ctx
+      _sync_inline_receptions(ctx).foldLeft(Consequence.success(Option.empty[ReceptionDomainEvent])) { (z, reception) =>
+        z.flatMap {
+          case s @ Some(_) =>
+            Consequence.success(s)
+          case None =>
+              reception._resolve_first_persistent_dispatch_local(event)
+        }
+      }
+    }
+
+    private def _resolve_first_persistent_dispatch_local(
+      event: ReceptionDomainEvent
+    )(using ExecutionContext): Consequence[Option[ReceptionDomainEvent]] =
+      _subscriptions_snapshot()
+        .filter(_.matches(event))
+        .foldLeft(Consequence.success(Option.empty[ReceptionDomainEvent])) { (z, subscription) =>
+          z.flatMap {
+            case s @ Some(_) =>
+              Consequence.success(s)
+            case None if !_selector_matches(subscription.selector, event) =>
+              Consequence.success(None)
+            case None =>
+              _resolve_first_persistent_dispatch_target(subscription, event)
+          }
+        }
+
+    private def _resolve_first_persistent_dispatch_target(
+      subscription: CmlSubscriptionDefinition,
+      event: ReceptionDomainEvent
+    )(using ExecutionContext): Consequence[Option[ReceptionDomainEvent]] = {
+      val targets = _resolve_subscription_targets(subscription, event).take(subscription.declaredTargetUpperBound)
+      targets.headOption match {
+        case Some(targetid) =>
+          _resolve_execution_policy(subscription, event).flatMap { resolved =>
+            _decorate_event_for_dispatch(event, subscription, targetid, resolved).map(Some(_))
+          }
+        case None =>
+          Consequence.success(None)
       }
     }
 
@@ -633,7 +701,10 @@ object EventReception {
                           reason = Some("non-target")
                         )
                       }
-                  outcome
+                  if (staged && !_has_action_scope(ctx.cncfCore.scope))
+                    ctx.runtime.unitOfWork.commit().flatMap(_ => outcome)
+                  else
+                    outcome
                 }
               }
             }
@@ -1132,9 +1203,19 @@ object EventReception {
       subscription: CmlSubscriptionDefinition,
       event: ReceptionDomainEvent
     ): Consequence[Unit] =
-      ingressSecurityResolver.resolve(event.attributes).flatMap { security =>
+      _resolve_dispatch_execution_context(event.attributes).flatMap { security =>
         given ExecutionContext = security.executionContext
         _dispatch_subscription(subscription, event).map(_ => ())
+      }
+
+    private def _resolve_dispatch_execution_context(
+      attributes: Map[String, String]
+    ): Consequence[org.goldenport.cncf.security.ResolvedIngressSecurity] =
+      dispatcher match {
+        case scoped: ScopedActionCallDispatcher =>
+          ingressSecurityResolver.resolve(scoped.dispatchBaseExecutionContext(), attributes)
+        case _ =>
+          ingressSecurityResolver.resolve(attributes)
       }
 
     private def _dispatch_subscription_inline(
@@ -1381,7 +1462,14 @@ object EventReception {
                   s"event reception policy source: ${resolved.policySource}"
                 )
               )
-              val _ = engine.submit(List(_DispatchActionTask(actionname, event)), submitctx, option)
+              val submit = () => engine.submit(List(_DispatchActionTask(actionname, event)), submitctx, option)
+              if (_has_action_scope(ctx.cncfCore.scope))
+                ctx.runtime.unitOfWork.stagePostCommit {
+                  val _ = submit()
+                }
+              else {
+                val _ = submit()
+              }
               Consequence.unit
             case None =>
               _failure("async event reception requires job engine")
@@ -1533,12 +1621,16 @@ object EventReception {
     ) extends JobTask {
       val actionId: ActionId = ActionId.generate()
       def run(ctx: ExecutionContext): TaskOutcome = {
-        given ExecutionContext = ctx
-        val dispatched = dispatcher match {
-          case d: SecureActionCallDispatcher =>
-            d.dispatchActionAuthorized(actionName, event)
-          case _ =>
-            dispatcher.dispatchAction(actionName, event)
+        val dispatched = _resolve_dispatch_execution_context(event.attributes).flatMap { security =>
+          val base = security.executionContext
+          val withobservability = ExecutionContext.withObservabilityContext(base, ctx.observability)
+          given ExecutionContext = ExecutionContext.withJobContext(withobservability, ctx.jobContext)
+          dispatcher match {
+            case d: SecureActionCallDispatcher =>
+              d.dispatchActionAuthorized(actionName, event)
+            case _ =>
+              dispatcher.dispatchAction(actionName, event)
+          }
         }
         dispatched match {
           case Consequence.Success(_) =>

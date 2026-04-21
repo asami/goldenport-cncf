@@ -957,7 +957,8 @@ final class EventReceptionSpec
             "targetId" -> "n1",
             EventReception.StandardAttribute.SourceSubsystem -> "inventory",
             EventReception.StandardAttribute.SourceComponent -> "publisher"
-          )
+          ),
+          persistent = true
         )
       )
       EventAwaitSupport.awaitVisible(jobids.flatten.nonEmpty) shouldBe true
@@ -967,9 +968,16 @@ final class EventReceptionSpec
         ReceptionResult(
           outcome = ReceptionOutcome.Routed,
           dispatchedCount = 1,
-          persisted = false
+          persisted = true
         )
       )
+      val stored = store.query(EventStore.Query(name = Some("notice.published"))).toOption.getOrElse(Vector.empty)
+      stored should have size 1
+      val persistedattrs = stored.head.attributes
+      persistedattrs.get(EventReception.StandardAttribute.ReceptionRuleName) shouldBe Some("compatibility:new-job")
+      persistedattrs.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("compatibility-mapping")
+      persistedattrs.get(EventReception.StandardAttribute.TargetComponent) shouldBe Some("public-notice")
+      persistedattrs.get(EventReception.StandardAttribute.EventHistory).nonEmpty shouldBe true
       val childJobId = JobId.parse(jobids.flatten.head).toOption.get
       val child = jobengine.query(childJobId).get
       calls.toVector shouldBe Vector("notice.sync")

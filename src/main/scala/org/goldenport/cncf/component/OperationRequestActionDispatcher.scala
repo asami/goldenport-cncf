@@ -5,7 +5,7 @@ import org.goldenport.Consequence
 import org.goldenport.protocol.{Argument, Property, Request}
 import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.event.{DomainEvent, ParsedEventAction, ReceptionDomainEvent, SecureActionFactoryDispatcher}
+import org.goldenport.cncf.event.{DomainEvent, ParsedEventAction, ReceptionDomainEvent, ScopedActionCallDispatcher, SecureActionFactoryDispatcher}
 import org.goldenport.cncf.naming.NamingConventions
 
 /*
@@ -16,7 +16,10 @@ import org.goldenport.cncf.naming.NamingConventions
  */
 final class OperationRequestActionDispatcher(
   logic: ComponentLogic
-) extends SecureActionFactoryDispatcher {
+) extends SecureActionFactoryDispatcher with ScopedActionCallDispatcher {
+  def dispatchBaseExecutionContext(): ExecutionContext =
+    logic.executionContext()
+
   def parseValidateAction(
     actionName: String,
     event: DomainEvent

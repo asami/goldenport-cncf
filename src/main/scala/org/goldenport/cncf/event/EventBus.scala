@@ -18,7 +18,7 @@ import org.goldenport.provisional.observation.Taxonomy
  *
  * @since   Mar. 20, 2026
  *  version Mar. 20, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EventDispatchHandler {
@@ -27,6 +27,10 @@ trait EventDispatchHandler {
 
 trait ActionCallDispatcher {
   def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit]
+}
+
+trait ScopedActionCallDispatcher extends ActionCallDispatcher {
+  def dispatchBaseExecutionContext(): ExecutionContext
 }
 
 final case class ParsedEventAction(
