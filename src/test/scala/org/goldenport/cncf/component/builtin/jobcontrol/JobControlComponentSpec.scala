@@ -56,6 +56,8 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers {
           model.lineage.targetComponent shouldBe Some("public-notice")
           model.lineage.receptionRule shouldBe Some("person-created-sync")
           model.lineage.policySource shouldBe Some("compatibility-mapping")
+          model.lineage.failurePolicy shouldBe Some("retry")
+          model.lineage.failureDisposition.print shouldBe "not-applicable"
         case Consequence.Failure(conclusion) =>
           fail(conclusion.show)
       }

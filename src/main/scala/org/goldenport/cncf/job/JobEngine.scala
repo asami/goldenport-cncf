@@ -224,6 +224,18 @@ enum JobDataOrigin {
   case Runtime
 }
 
+enum AsyncFailureDisposition {
+  case NotApplicable
+  case Retryable
+  case Terminal
+
+  def print: String = this match {
+    case AsyncFailureDisposition.NotApplicable => "not-applicable"
+    case AsyncFailureDisposition.Retryable => "retryable"
+    case AsyncFailureDisposition.Terminal => "terminal"
+  }
+}
+
 enum JobTaskStatus {
   case Running
   case Succeeded
@@ -280,7 +292,8 @@ final case class JobEventLineage(
   policySource: Option[String],
   jobRelation: Option[String],
   sagaRelation: Option[String],
-  failurePolicy: Option[String]
+  failurePolicy: Option[String],
+  failureDisposition: AsyncFailureDisposition
 ) {
   def eventTriggered: Boolean =
     eventName.nonEmpty || receptionRule.nonEmpty || receptionPolicy.nonEmpty
@@ -1024,6 +1037,22 @@ final class InMemoryJobEngine(
     def _param(key: String): Option[String] =
       parameters.get(key).map(_.trim).filter(_.nonEmpty)
 
+    def _failure_disposition(
+      jobrelation: Option[String],
+      failurepolicy: Option[String]
+    ): AsyncFailureDisposition =
+      (jobrelation.map(_.toLowerCase(java.util.Locale.ROOT)), failurepolicy.map(_.toLowerCase(java.util.Locale.ROOT))) match {
+        case (Some("newjob"), Some("retry")) if record.status == JobStatus.Failed =>
+          AsyncFailureDisposition.Retryable
+        case (Some("newjob"), Some("fail")) if record.status == JobStatus.Failed =>
+          AsyncFailureDisposition.Terminal
+        case _ =>
+          AsyncFailureDisposition.NotApplicable
+      }
+
+    val jobrelation = _param("reception.jobRelation")
+    val failurepolicy = _param("failure.policy")
+
     JobEventLineage(
       eventName = _param("event.name"),
       eventKind = _param("event.kind"),
@@ -1043,9 +1072,10 @@ final class InMemoryJobEngine(
       receptionRule = _param("reception.rule"),
       receptionPolicy = _param("reception.policy"),
       policySource = _param("reception.policySource"),
-      jobRelation = _param("reception.jobRelation"),
+      jobRelation = jobrelation,
       sagaRelation = _param("saga.relation"),
-      failurePolicy = _param("failure.policy")
+      failurePolicy = failurepolicy,
+      failureDisposition = _failure_disposition(jobrelation, failurepolicy)
     )
   }
 

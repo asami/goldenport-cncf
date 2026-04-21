@@ -977,6 +977,10 @@ final class EventReceptionSpec
       persistedattrs.get(EventReception.StandardAttribute.ReceptionRuleName) shouldBe Some("compatibility:new-job")
       persistedattrs.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("compatibility-mapping")
       persistedattrs.get(EventReception.StandardAttribute.TargetComponent) shouldBe Some("public-notice")
+      persistedattrs.get(EventReception.StandardAttribute.FailurePolicy) shouldBe Some("retry")
+      persistedattrs.get(EventReception.StandardAttribute.FailureDispositionBase) shouldBe Some("retryable")
+      persistedattrs.get(EventReception.StandardAttribute.DispatchKind) shouldBe Some("async-new-job")
+      persistedattrs.get(EventReception.StandardAttribute.DispatchStatus) shouldBe Some("queued")
       persistedattrs.get(EventReception.StandardAttribute.EventHistory).nonEmpty shouldBe true
       val childJobId = JobId.parse(jobids.flatten.head).toOption.get
       val child = jobengine.query(childJobId).get
@@ -992,6 +996,233 @@ final class EventReceptionSpec
       child.lineage.policySource shouldBe Some("compatibility-mapping")
       child.lineage.receptionRule shouldBe Some("compatibility:new-job")
       child.lineage.receptionPolicy shouldBe Some(EventReceptionExecutionPolicy.AsyncNewJobSameSaga.modeName)
+      child.lineage.failureDisposition shouldBe org.goldenport.cncf.job.AsyncFailureDisposition.NotApplicable
+    }
+
+    "prefer explicit rule over compatibility mapping for same-subsystem runtime dispatch" in {
+      Given("same-subsystem subscription with legacy NewJob continuation and explicit sync rule")
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val jobengine = new _RecordingJobEngine
+      val calls = ArrayBuffer.empty[String]
+      val jobids = ArrayBuffer.empty[Option[String]]
+      val parentids = ArrayBuffer.empty[Option[String]]
+      val attrs = ArrayBuffer.empty[Map[String, String]]
+      val dispatcher = new _SecureRecordingDispatcher3(calls, jobids, parentids, attrs)
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = dispatcher,
+        currentSubsystemName = Some("inventory"),
+        currentComponentName = Some("notice-admin"),
+        jobEngine = Some(jobengine)
+      )
+      reception.register(
+        CmlEventDefinition(
+          name = "notice.reviewed",
+          category = CmlEventCategory.NonActionEvent,
+          kind = Some("reviewed")
+        )
+      )
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "notice-sync",
+          eventName = "notice.reviewed",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "notice.sync",
+          continuationMode = Some(EventContinuationMode.NewJob)
+        )
+      )
+      reception.registerRule(
+        EventReceptionRule(
+          name = "notice-reviewed-sync",
+          condition = EventReceptionCondition(
+            originBoundary = Some(EventOriginBoundary.SameSubsystem),
+            eventName = Some("notice.reviewed"),
+            eventKind = Some("reviewed")
+          ),
+          policy = EventReceptionExecutionPolicy.SameSubsystemDefault
+        )
+      )
+      val parent = JobId.generate()
+      val base = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+      given ExecutionContext = ExecutionContext.withJobContext(
+        base,
+        JobContext(
+          jobId = Some(parent),
+          taskId = Some(TaskId.generate()),
+          actionId = Some(ActionId.generate())
+        )
+      )
+
+      When("the event is received")
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "notice.reviewed",
+          kind = "reviewed",
+          attributes = Map(
+            "targetId" -> "n2",
+            EventReception.StandardAttribute.SourceSubsystem -> "inventory",
+            EventReception.StandardAttribute.SourceComponent -> "public-notice"
+          )
+        )
+      )
+
+      Then("the explicit rule wins over legacy compatibility mapping")
+      result shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = false
+        )
+      )
+      calls.toVector shouldBe Vector("notice.sync")
+      jobids.flatten should contain(parent.print)
+      attrs.head.get(EventReception.StandardAttribute.ReceptionRuleName) shouldBe Some("notice-reviewed-sync")
+      attrs.head.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("explicit-rule")
+      attrs.head.get(EventReception.StandardAttribute.ReceptionPolicy) shouldBe Some(EventReceptionExecutionPolicy.SameSubsystemDefault.modeName)
+      attrs.head.get(EventReception.StandardAttribute.ContinuationMode) shouldBe Some("same-job")
+      jobengine.submissionCount shouldBe 0
+    }
+
+    "project retryable async failure disposition from failed child job" in {
+      Given("an async continuation that fails under retry policy")
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val jobengine = org.goldenport.cncf.job.InMemoryJobEngine.create()
+      val jobids = ArrayBuffer.empty[Option[String]]
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _FailingSecureDispatcherWithCapture(jobids, ArrayBuffer.empty),
+        currentSubsystemName = Some("inventory"),
+        currentComponentName = Some("public-notice"),
+        jobEngine = Some(jobengine)
+      )
+      reception.register(
+        CmlEventDefinition(
+          name = "notice.retryable",
+          category = CmlEventCategory.NonActionEvent,
+          kind = Some("published")
+        )
+      )
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "notice-sync",
+          eventName = "notice.retryable",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "notice.sync",
+          continuationMode = Some(EventContinuationMode.NewJob)
+        )
+      )
+      given ExecutionContext = _shared_event_context(recorder, store)
+
+      When("the child job fails")
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "notice.retryable",
+          kind = "published",
+          attributes = Map(
+            "targetId" -> "n3",
+            EventReception.StandardAttribute.SourceSubsystem -> "inventory"
+          )
+        )
+      )
+      EventAwaitSupport.awaitVisible(jobids.flatten.nonEmpty) shouldBe true
+      val child = jobengine.query(JobId.parse(jobids.flatten.head).toOption.get).get
+
+      Then("the resulting lineage is retryable")
+      result shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = false
+        )
+      )
+      child.status shouldBe JobStatus.Failed
+      child.lineage.failurePolicy shouldBe Some("retry")
+      child.lineage.failureDisposition shouldBe org.goldenport.cncf.job.AsyncFailureDisposition.Retryable
+    }
+
+    "project terminal async failure disposition from failed child job" in {
+      Given("an async continuation that fails under fail policy")
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val jobengine = org.goldenport.cncf.job.InMemoryJobEngine.create()
+      val jobids = ArrayBuffer.empty[Option[String]]
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _FailingSecureDispatcherWithCapture(jobids, ArrayBuffer.empty),
+        currentSubsystemName = Some("inventory"),
+        currentComponentName = Some("public-notice"),
+        jobEngine = Some(jobengine)
+      )
+      reception.register(
+        CmlEventDefinition(
+          name = "notice.terminal",
+          category = CmlEventCategory.NonActionEvent,
+          kind = Some("published")
+        )
+      )
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "notice-sync",
+          eventName = "notice.terminal",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "notice.sync"
+        )
+      )
+      reception.registerRule(
+        EventReceptionRule(
+          name = "notice-terminal-fail",
+          condition = EventReceptionCondition(
+            originBoundary = Some(EventOriginBoundary.ExternalSubsystem),
+            eventName = Some("notice.terminal"),
+            eventKind = Some("published")
+          ),
+          policy = EventReceptionExecutionPolicy(
+            timing = EventExecutionTiming.Async,
+            jobRelation = EventJobRelation.NewJob,
+            sagaRelation = EventSagaRelation.SameSaga,
+            transactionRelation = EventTransactionRelation.NewTransaction,
+            failurePolicy = EventFailurePolicy.Fail
+          )
+        )
+      )
+      given ExecutionContext = _shared_event_context(recorder, store)
+
+      When("the child job fails")
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "notice.terminal",
+          kind = "published",
+          attributes = Map(
+            "targetId" -> "n4",
+            EventReception.StandardAttribute.SourceSubsystem -> "remote-system"
+          )
+        )
+      )
+      EventAwaitSupport.awaitVisible(jobids.flatten.nonEmpty) shouldBe true
+      val child = jobengine.query(JobId.parse(jobids.flatten.head).toOption.get).get
+
+      Then("the resulting lineage is terminal")
+      result shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = false
+        )
+      )
+      child.status shouldBe JobStatus.Failed
+      child.lineage.failurePolicy shouldBe Some("fail")
+      child.lineage.failureDisposition shouldBe org.goldenport.cncf.job.AsyncFailureDisposition.Terminal
     }
 
     "select more specific external rule and mark new-saga async dispatch" in {
@@ -1496,11 +1727,41 @@ final class EventReceptionSpec
     }
   }
 
+  private final class _FailingSecureDispatcherWithCapture(
+    jobids: ArrayBuffer[Option[String]],
+    attrs: ArrayBuffer[Map[String, String]]
+  ) extends SecureActionCallDispatcher {
+    def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
+      val _ = actionName
+      event match {
+        case e: ReceptionDomainEvent => attrs += e.attributes
+        case _ => ()
+      }
+      Consequence.operationInvalid("event.dispatch", "forced failure")
+    }
+
+    def dispatchActionAuthorized(
+      actionName: String,
+      event: DomainEvent
+    )(using ctx: ExecutionContext): Consequence[Unit] = {
+      val _ = actionName
+      jobids += ctx.jobContext.jobId.map(_.print)
+      event match {
+        case e: ReceptionDomainEvent => attrs += e.attributes
+        case _ => ()
+      }
+      Consequence.operationInvalid("event.dispatch", "forced failure")
+    }
+  }
+
   private final class _RecordingJobEngine extends JobEngine {
     @volatile private var _options: Vector[JobSubmitOption] = Vector.empty
 
     def lastOption: Option[JobSubmitOption] =
       _options.lastOption
+
+    def submissionCount: Int =
+      _options.size
 
     def submit(tasks: List[JobTask], ctx: ExecutionContext): JobId =
       submit(tasks, ctx, JobSubmitOption())

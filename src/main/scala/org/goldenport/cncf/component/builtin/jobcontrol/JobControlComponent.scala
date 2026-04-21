@@ -512,6 +512,7 @@ object JobControlComponent {
       "job-relation" -> model.lineage.jobRelation.getOrElse(""),
       "saga-relation" -> model.lineage.sagaRelation.getOrElse(""),
       "failure-policy" -> model.lineage.failurePolicy.getOrElse(""),
+      "failure-disposition" -> model.lineage.failureDisposition.print,
       "tasks" -> model.tasks.tasks.map { task =>
         Record.data(
           "task-id" -> task.taskId.value,

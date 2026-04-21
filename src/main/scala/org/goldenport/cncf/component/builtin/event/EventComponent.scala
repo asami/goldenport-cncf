@@ -394,7 +394,12 @@ object EventComponent {
       "reception-rule" -> record.attributes.getOrElse("cncf.event.receptionRule", ""),
       "reception-policy" -> record.attributes.getOrElse("cncf.event.receptionPolicy", ""),
       "policy-source" -> record.attributes.getOrElse("cncf.event.policySource", ""),
+      "failure-policy" -> record.attributes.getOrElse("cncf.event.failurePolicy", ""),
+      "failure-disposition-base" -> record.attributes.getOrElse("cncf.event.failureDispositionBase", ""),
+      "dispatch-kind" -> record.attributes.getOrElse("cncf.event.dispatchKind", ""),
+      "dispatch-status" -> record.attributes.getOrElse("cncf.event.dispatchStatus", ""),
       "saga-relation" -> record.attributes.getOrElse("cncf.event.sagaRelation", ""),
+      "event-history" -> record.attributes.getOrElse("cncf.event.history", ""),
       "payload" -> record.payload.toVector.sortBy(_._1).map { case (k, v) =>
         s"$k=$v"
       },

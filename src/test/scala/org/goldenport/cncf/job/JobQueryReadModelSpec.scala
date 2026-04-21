@@ -1,6 +1,6 @@
 package org.goldenport.cncf.job
 
-import org.goldenport.Consequence
+import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, CommandAction}
@@ -161,6 +161,55 @@ final class JobQueryReadModelSpec
       read.lineage.policySource shouldBe Some("explicit-rule")
       read.lineage.sagaRelation shouldBe Some("same-saga")
       read.lineage.failurePolicy shouldBe Some("retry")
+      read.lineage.failureDisposition shouldBe AsyncFailureDisposition.NotApplicable
+    }
+
+    "project retryable async failure disposition for failed child jobs" in {
+      Given("an event-triggered async child job with retry policy")
+      val engine = InMemoryJobEngine.create()
+      val task = _failed_task("dispatchRetry")
+      val option = JobSubmitOption(
+        persistence = JobPersistencePolicy.Ephemeral,
+        requestSummary = Some("event.continuation:person.created"),
+        parameters = Map(
+          "event.name" -> "person.created",
+          "reception.jobRelation" -> "newjob",
+          "failure.policy" -> "retry"
+        )
+      )
+
+      When("the job fails")
+      val jobid = engine.submit(List(task), ExecutionContext.test(), option)
+      val _ = _await_result(engine, jobid)
+      val read = engine.query(jobid).get
+
+      Then("the read model classifies it as retryable")
+      read.status shouldBe JobStatus.Failed
+      read.lineage.failureDisposition shouldBe AsyncFailureDisposition.Retryable
+    }
+
+    "project terminal async failure disposition for failed child jobs" in {
+      Given("an event-triggered async child job with fail policy")
+      val engine = InMemoryJobEngine.create()
+      val task = _failed_task("dispatchFail")
+      val option = JobSubmitOption(
+        persistence = JobPersistencePolicy.Ephemeral,
+        requestSummary = Some("event.continuation:person.created"),
+        parameters = Map(
+          "event.name" -> "person.created",
+          "reception.jobRelation" -> "newjob",
+          "failure.policy" -> "fail"
+        )
+      )
+
+      When("the job fails")
+      val jobid = engine.submit(List(task), ExecutionContext.test(), option)
+      val _ = _await_result(engine, jobid)
+      val read = engine.query(jobid).get
+
+      Then("the read model classifies it as terminal")
+      read.status shouldBe JobStatus.Failed
+      read.lineage.failureDisposition shouldBe AsyncFailureDisposition.Terminal
     }
 
     "enforce policy visibility on query surfaces" in {
@@ -215,6 +264,20 @@ final class JobQueryReadModelSpec
             Consequence.success(OperationResponse.Scalar(value))
         }
       }
+    }
+
+  private def _failed_task(actionname: String): JobTask =
+    new JobTask {
+      val actionId: ActionId = ActionId.generate()
+      def run(ctx: ExecutionContext): TaskOutcome = {
+        val _ = ctx
+        TaskFailed(_operation_invalid(actionname))
+      }
+    }
+
+  private def _operation_invalid(name: String): Conclusion =
+    Consequence.operationInvalid(name, "forced failure") match {
+      case Consequence.Failure(conclusion) => conclusion
     }
 
   private def _await_result(engine: JobEngine, jobid: JobId): Option[JobResult] = {

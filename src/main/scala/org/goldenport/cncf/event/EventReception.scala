@@ -146,6 +146,18 @@ enum EventFailurePolicy {
   case Retry
 }
 
+enum EventReceptionPolicySource {
+  case ExplicitRule
+  case CompatibilityMapping
+  case SubsystemDefault
+
+  def print: String = this match {
+    case EventReceptionPolicySource.ExplicitRule => "explicit-rule"
+    case EventReceptionPolicySource.CompatibilityMapping => "compatibility-mapping"
+    case EventReceptionPolicySource.SubsystemDefault => "subsystem-default"
+  }
+}
+
 final case class EventReceptionExecutionPolicy(
   timing: EventExecutionTiming,
   jobRelation: EventJobRelation,
@@ -326,6 +338,10 @@ object EventReception {
     val ReceptionRuleName = "cncf.event.receptionRule"
     val ReceptionPolicy = "cncf.event.receptionPolicy"
     val PolicySource = "cncf.event.policySource"
+    val FailurePolicy = "cncf.event.failurePolicy"
+    val FailureDispositionBase = "cncf.event.failureDispositionBase"
+    val DispatchKind = "cncf.event.dispatchKind"
+    val DispatchStatus = "cncf.event.dispatchStatus"
     val SagaRelation = "cncf.event.sagaRelation"
     val Replay = "cncf.event.replay"
     val ReplayEventId = "cncf.event.replayEventId"
@@ -1273,7 +1289,7 @@ object EventReception {
       policy: EventReceptionExecutionPolicy,
       boundary: EventOriginBoundary,
       compatibilityMode: EventContinuationMode,
-      policySource: String
+      policySource: EventReceptionPolicySource
     )
 
     private def _resolve_continuation_mode(
@@ -1297,7 +1313,7 @@ object EventReception {
               policy = rule.policy,
               boundary = boundary,
               compatibilityMode = _compatibility_mode(rule.policy, boundary),
-              policySource = "explicit-rule"
+              policySource = EventReceptionPolicySource.ExplicitRule
             )
           case None =>
             val compatibility = _resolve_continuation_mode(subscription, event)
@@ -1305,9 +1321,9 @@ object EventReception {
             val policy = _compatibility_policy(compatibility, boundary)
             val source =
               if (explicitcompat)
-                "compatibility-mapping"
+                EventReceptionPolicySource.CompatibilityMapping
               else
-                "subsystem-default"
+                EventReceptionPolicySource.SubsystemDefault
             val rulename =
               if (explicitcompat)
                 s"compatibility:${_continuation_mode_name(compatibility)}"
@@ -1450,7 +1466,7 @@ object EventReception {
                   "origin.boundary" -> _origin_boundary_name(resolved.boundary),
                   "reception.rule" -> resolved.ruleName,
                   "reception.policy" -> resolved.policy.modeName,
-                  "reception.policySource" -> resolved.policySource,
+                  "reception.policySource" -> resolved.policySource.print,
                   "reception.jobRelation" -> resolved.policy.jobRelation.toString.toLowerCase(java.util.Locale.ROOT),
                   "saga.relation" -> _saga_relation_name(resolved.policy.sagaRelation),
                   "failure.policy" -> resolved.policy.failurePolicy.toString.toLowerCase(java.util.Locale.ROOT)
@@ -1459,7 +1475,7 @@ object EventReception {
                   "event continuation via async reception",
                   s"event reception rule: ${resolved.ruleName}",
                   s"event reception policy: ${resolved.policy.modeName}",
-                  s"event reception policy source: ${resolved.policySource}"
+                  s"event reception policy source: ${resolved.policySource.print}"
                 )
               )
               val submit = () => engine.submit(List(_DispatchActionTask(actionname, event)), submitctx, option)
@@ -1498,7 +1514,11 @@ object EventReception {
         Some(StandardAttribute.OriginBoundary -> _origin_boundary_name(resolved.boundary)),
         Some(StandardAttribute.ReceptionRuleName -> resolved.ruleName),
         Some(StandardAttribute.ReceptionPolicy -> resolved.policy.modeName),
-        Some(StandardAttribute.PolicySource -> resolved.policySource),
+        Some(StandardAttribute.PolicySource -> resolved.policySource.print),
+        Some(StandardAttribute.FailurePolicy -> _failure_policy_name(resolved.policy.failurePolicy)),
+        Some(StandardAttribute.FailureDispositionBase -> _failure_disposition_base_name(resolved.policy)),
+        Some(StandardAttribute.DispatchKind -> _dispatch_kind_name(resolved.policy)),
+        Some(StandardAttribute.DispatchStatus -> _initial_dispatch_status_name(resolved.policy)),
         Some(StandardAttribute.SagaRelation -> _saga_relation_name(resolved.policy.sagaRelation)),
         currentSubsystemName.filter(_.nonEmpty).map(x => StandardAttribute.TargetSubsystem -> x),
         currentComponentName.filter(_.nonEmpty).map(x => StandardAttribute.TargetComponent -> x)
@@ -1545,7 +1565,13 @@ object EventReception {
       failure: Option[String]
     ): Consequence[ReceptionDomainEvent] =
       _append_history(
-        event,
+        event.copy(
+          attributes = event.attributes ++ Map(
+            StandardAttribute.DispatchKind -> "sync-inline",
+            StandardAttribute.DispatchStatus -> result,
+            StandardAttribute.FailureDispositionBase -> "not-applicable"
+          )
+        ),
         "dispatch",
         Vector(
           "mode" -> "sync-inline",
@@ -1553,6 +1579,39 @@ object EventReception {
           "failure" -> failure.getOrElse("")
         )
       )
+
+    private def _dispatch_kind_name(
+      policy: EventReceptionExecutionPolicy
+    ): String =
+      policy.timing match {
+        case EventExecutionTiming.Sync => "sync-inline"
+        case EventExecutionTiming.Async => "async-new-job"
+      }
+
+    private def _initial_dispatch_status_name(
+      policy: EventReceptionExecutionPolicy
+    ): String =
+      policy.timing match {
+        case EventExecutionTiming.Sync => "pending-inline"
+        case EventExecutionTiming.Async => "queued"
+      }
+
+    private def _failure_policy_name(
+      policy: EventFailurePolicy
+    ): String =
+      policy.toString.toLowerCase(java.util.Locale.ROOT)
+
+    private def _failure_disposition_base_name(
+      policy: EventReceptionExecutionPolicy
+    ): String =
+      policy.timing match {
+        case EventExecutionTiming.Sync => "not-applicable"
+        case EventExecutionTiming.Async =>
+          policy.failurePolicy match {
+            case EventFailurePolicy.Fail => "terminal"
+            case EventFailurePolicy.Retry => "retryable"
+          }
+      }
 
     private def _append_history(
       event: ReceptionDomainEvent,

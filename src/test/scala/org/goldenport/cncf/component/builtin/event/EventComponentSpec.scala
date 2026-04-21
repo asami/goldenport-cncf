@@ -81,7 +81,12 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
           "cncf.event.receptionRule" -> "person-created-sync",
           "cncf.event.receptionPolicy" -> "async:new-job:same-saga:new-transaction",
           "cncf.event.policySource" -> "explicit-rule",
-          "cncf.event.sagaRelation" -> "same-saga"
+          "cncf.event.failurePolicy" -> "retry",
+          "cncf.event.failureDispositionBase" -> "retryable",
+          "cncf.event.dispatchKind" -> "async-new-job",
+          "cncf.event.dispatchStatus" -> "queued",
+          "cncf.event.sagaRelation" -> "same-saga",
+          "cncf.event.history" -> "source{source.component=publisher}"
         ),
         createdAt = Instant.now(),
         persistent = true,
@@ -106,6 +111,10 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
           value should include ("public-notice")
           value should include ("person-created-sync")
           value should include ("explicit-rule")
+          value should include ("retry")
+          value should include ("retryable")
+          value should include ("async-new-job")
+          value should include ("queued")
         case Consequence.Failure(conclusion) =>
           fail(conclusion.show)
       }
