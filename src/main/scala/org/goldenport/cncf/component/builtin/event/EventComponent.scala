@@ -17,7 +17,7 @@ import org.goldenport.value.BaseContent
 /*
  * @since   Mar. 28, 2026
  *  version Apr. 11, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventComponent() extends Component {
@@ -386,6 +386,15 @@ object EventComponent {
       "lane" -> record.lane.value,
       "persistent" -> record.persistent,
       "sequence" -> record.sequence,
+      "source-subsystem" -> record.attributes.getOrElse("cncf.source.subsystem", ""),
+      "source-component" -> record.attributes.getOrElse("cncf.source.component", ""),
+      "target-subsystem" -> record.attributes.getOrElse("cncf.target.subsystem", ""),
+      "target-component" -> record.attributes.getOrElse("cncf.target.component", ""),
+      "origin-boundary" -> record.attributes.getOrElse("cncf.event.originBoundary", ""),
+      "reception-rule" -> record.attributes.getOrElse("cncf.event.receptionRule", ""),
+      "reception-policy" -> record.attributes.getOrElse("cncf.event.receptionPolicy", ""),
+      "policy-source" -> record.attributes.getOrElse("cncf.event.policySource", ""),
+      "saga-relation" -> record.attributes.getOrElse("cncf.event.sagaRelation", ""),
       "payload" -> record.payload.toVector.sortBy(_._1).map { case (k, v) =>
         s"$k=$v"
       },

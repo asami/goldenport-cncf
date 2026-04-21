@@ -666,6 +666,7 @@ final class EventReceptionSpec
       attrs.head.get(EventReception.StandardAttribute.OriginBoundary) shouldBe Some("external-subsystem")
       attrs.head.get(EventReception.StandardAttribute.ReceptionRuleName) shouldBe Some("external-order-approved")
       attrs.head.get(EventReception.StandardAttribute.ReceptionPolicy) shouldBe Some(EventReceptionExecutionPolicy.AsyncNewJobSameSaga.modeName)
+      attrs.head.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("explicit-rule")
       attrs.head.get(EventReception.StandardAttribute.SagaRelation) shouldBe Some("same-saga")
     }
 
@@ -892,9 +893,95 @@ final class EventReceptionSpec
       attrs.head.get(EventReception.StandardAttribute.OriginBoundary) shouldBe Some("same-subsystem")
       attrs.head.get(EventReception.StandardAttribute.ReceptionRuleName) shouldBe Some("default:same-subsystem")
       attrs.head.get(EventReception.StandardAttribute.ReceptionPolicy) shouldBe Some(EventReceptionExecutionPolicy.SameSubsystemDefault.modeName)
+      attrs.head.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("subsystem-default")
       attrs.head.get(EventReception.StandardAttribute.CorrelationId).nonEmpty shouldBe true
       attrs.head.get(EventReception.StandardAttribute.CausationId).nonEmpty shouldBe true
       attrs.head.get(EventReception.StandardAttribute.ParentJobId) shouldBe Some(parent.print)
+    }
+
+    "materialize compatibility-mapped async continuation as spawned job lineage" in {
+      Given("same-subsystem subscription with legacy NewJob continuation")
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val jobengine = org.goldenport.cncf.job.InMemoryJobEngine.create()
+      val calls = ArrayBuffer.empty[String]
+      val jobids = ArrayBuffer.empty[Option[String]]
+      val parentids = ArrayBuffer.empty[Option[String]]
+      val attrs = ArrayBuffer.empty[Map[String, String]]
+      val dispatcher = new _SecureRecordingDispatcher3(calls, jobids, parentids, attrs)
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = dispatcher,
+        currentSubsystemName = Some("inventory"),
+        currentComponentName = Some("public-notice"),
+        jobEngine = Some(jobengine)
+      )
+      reception.register(
+        CmlEventDefinition(
+          name = "notice.published",
+          category = CmlEventCategory.NonActionEvent,
+          kind = Some("published")
+        )
+      )
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "notice-sync",
+          eventName = "notice.published",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "notice.sync",
+          continuationMode = Some(EventContinuationMode.NewJob)
+        )
+      )
+      val base = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+      val parentjob = JobId.generate()
+      given ExecutionContext = ExecutionContext.withJobContext(
+        base,
+        JobContext(
+          jobId = Some(parentjob),
+          taskId = Some(TaskId.generate()),
+          actionId = Some(ActionId.generate())
+        )
+      )
+
+      When("event is received")
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "notice.published",
+          kind = "published",
+          attributes = Map(
+            "targetId" -> "n1",
+            EventReception.StandardAttribute.SourceSubsystem -> "inventory",
+            EventReception.StandardAttribute.SourceComponent -> "publisher"
+          )
+        )
+      )
+      EventAwaitSupport.awaitVisible(jobids.flatten.nonEmpty) shouldBe true
+
+      Then("async child job preserves explicit compatibility diagnostics")
+      result shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = false
+        )
+      )
+      val childJobId = JobId.parse(jobids.flatten.head).toOption.get
+      val child = jobengine.query(childJobId).get
+      calls.toVector shouldBe Vector("notice.sync")
+      parentids.flatten should contain(parentjob.print)
+      attrs.head.get(EventReception.StandardAttribute.ReceptionRuleName) shouldBe Some("compatibility:new-job")
+      attrs.head.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("compatibility-mapping")
+      attrs.head.get(EventReception.StandardAttribute.TargetComponent) shouldBe Some("public-notice")
+      child.lineage.eventTriggered shouldBe true
+      child.lineage.parentJobId shouldBe Some(parentjob.print)
+      child.lineage.sourceComponent shouldBe Some("publisher")
+      child.lineage.targetComponent shouldBe Some("public-notice")
+      child.lineage.policySource shouldBe Some("compatibility-mapping")
+      child.lineage.receptionRule shouldBe Some("compatibility:new-job")
+      child.lineage.receptionPolicy shouldBe Some(EventReceptionExecutionPolicy.AsyncNewJobSameSaga.modeName)
     }
 
     "select more specific external rule and mark new-saga async dispatch" in {
@@ -978,6 +1065,7 @@ final class EventReceptionSpec
       )
       attrs.head.get(EventReception.StandardAttribute.ReceptionRuleName) shouldBe Some("external-priority-csv")
       attrs.head.get(EventReception.StandardAttribute.ReceptionPolicy) shouldBe Some(EventReceptionExecutionPolicy.AsyncNewJobNewSaga.modeName)
+      attrs.head.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("explicit-rule")
       attrs.head.get(EventReception.StandardAttribute.SagaRelation) shouldBe Some("new-saga")
       attrs.head.get(EventReception.StandardAttribute.ContinuationMode) shouldBe Some("new-job")
     }

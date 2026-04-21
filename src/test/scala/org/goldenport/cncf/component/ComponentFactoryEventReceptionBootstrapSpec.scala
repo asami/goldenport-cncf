@@ -337,6 +337,111 @@ final class ComponentFactoryEventReceptionBootstrapSpec
       calls.toVector shouldBe Vector("person.sync")
     }
 
+    "preserve runtime componentlet identity in cross-component event dispatch" in {
+      Given("publisher and real runtime componentlet sharing one subsystem bus")
+      val subsystem = TestComponentFactory.emptySubsystem("sample")
+      val publisher = _initialized_component("publisher", new Component() {
+        override def eventReceptionDefinitions: Vector[CmlEventDefinition] =
+          Vector(
+            CmlEventDefinition(
+              name = "notice.published",
+              category = CmlEventCategory.NonActionEvent,
+              kind = Some("published")
+            )
+          )
+
+        withComponentDescriptors(
+          Vector(
+            ComponentDescriptor(
+              name = Some("notice-board"),
+              componentName = Some("notice-board"),
+              componentlets = Vector(
+                ComponentletDescriptor(name = "public-notice", kind = Some("componentlet"))
+              )
+            )
+          )
+        )
+      }, subsystem)
+      val subscriber = _initialized_component("public-notice", new Component() {
+        override def eventSubscriptionDefinitions: Vector[CmlSubscriptionDefinition] =
+          Vector(
+            CmlSubscriptionDefinition(
+              name = "notice-sync",
+              eventName = "notice.published",
+              route = DispatchRoute.Unicast,
+              target = Some("targetId"),
+              actionName = "notice.sync"
+            )
+          )
+      }, subsystem, componentIdLabel = "public_notice")
+
+      val calls = scala.collection.mutable.ArrayBuffer.empty[String]
+      val attrs = scala.collection.mutable.ArrayBuffer.empty[Map[String, String]]
+      val dispatcher = new ActionCallDispatcher {
+        def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
+          calls += actionName
+          event match {
+            case e: ReceptionDomainEvent => attrs += e.attributes
+            case _ => ()
+          }
+          Consequence.unit
+        }
+      }
+
+      val factory = new ComponentFactory()
+      val publisherReception = factory.createEventReceptionWithOperationDispatcher(publisher, subsystem.eventBus)
+      val _ = factory.createEventReception(subscriber, subsystem.eventBus, dispatcher)
+      given org.goldenport.cncf.context.ExecutionContext =
+        org.goldenport.cncf.context.ExecutionContext.test(
+          org.goldenport.cncf.context.SecurityContext.Privilege.ApplicationContentManager
+        )
+
+      When("publisher emits an event routed to the runtime componentlet")
+      val result = publisherReception.receiveAuthorized(
+        ReceptionInput(
+          name = "notice.published",
+          kind = "published",
+          attributes = Map("targetId" -> "n1")
+        )
+      )
+
+      Then("dispatched event preserves the componentlet runtime name")
+      result shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = false
+        )
+      )
+      calls.toVector shouldBe Vector("notice.sync")
+      attrs.head.get(EventReception.StandardAttribute.SourceComponent) shouldBe Some("publisher")
+      attrs.head.get(EventReception.StandardAttribute.TargetComponent) shouldBe Some("public-notice")
+    }
+
+    "not register metadata-only componentlet as an event reception participant" in {
+      Given("primary component descriptor with metadata-only componentlet entry")
+      val subsystem = TestComponentFactory.emptySubsystem("sample")
+      val component = _initialized_component("notice-board", new Component() {}.withComponentDescriptors(
+        Vector(
+          ComponentDescriptor(
+            name = Some("notice-board"),
+            componentName = Some("notice-board"),
+            componentlets = Vector(
+              ComponentletDescriptor(name = "public-notice", kind = Some("componentlet"))
+            )
+          )
+        )
+      ), subsystem, componentIdLabel = "notice_board")
+
+      When("factory bootstraps the primary component only")
+      val bootstrapped = new ComponentFactory().bootstrap(component)
+
+      Then("no runtime reception is materialized for metadata-only componentlets")
+      bootstrapped.eventReception shouldBe empty
+      subsystem.eventReceptions.contains("notice-board") shouldBe false
+      subsystem.eventReceptions.contains("public-notice") shouldBe false
+    }
+
     "register bootstrapped reception into subsystem-owned facilities" in {
       Given("initialized component with event metadata and subsystem ownership")
       val subsystem = TestComponentFactory.emptySubsystem("sample")
@@ -436,9 +541,11 @@ final class ComponentFactoryEventReceptionBootstrapSpec
   private def _initialized_component(
     name: String,
     component: Component,
-    subsystem: Subsystem
+    subsystem: Subsystem,
+    componentIdLabel: String = ""
   ): Component = {
-    val componentId = ComponentId(name)
+    val idlabel = if (componentIdLabel.nonEmpty) componentIdLabel else name
+    val componentId = ComponentId(idlabel)
     val instanceId = ComponentInstanceId.default(componentId)
     val core = Component.Core.create(name, componentId, instanceId, Protocol.empty)
     component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))

@@ -19,7 +19,7 @@ import org.goldenport.value.BaseContent
 /*
  * @since   Mar. 28, 2026
  *  version Mar. 29, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
@@ -496,6 +496,22 @@ object JobControlComponent {
       "result-success" -> model.resultSummary.success,
       "result-message" -> model.resultSummary.message.getOrElse(""),
       "result" -> model.result.map(_.print).getOrElse(""),
+      "event-triggered" -> model.lineage.eventTriggered,
+      "event-name" -> model.lineage.eventName.getOrElse(""),
+      "event-kind" -> model.lineage.eventKind.getOrElse(""),
+      "parent-job-id" -> model.lineage.parentJobId.getOrElse(""),
+      "correlation-id" -> model.lineage.correlationId.getOrElse(""),
+      "causation-id" -> model.lineage.causationId.getOrElse(""),
+      "source-subsystem" -> model.lineage.sourceSubsystem.getOrElse(""),
+      "source-component" -> model.lineage.sourceComponent.getOrElse(""),
+      "target-subsystem" -> model.lineage.targetSubsystem.getOrElse(""),
+      "target-component" -> model.lineage.targetComponent.getOrElse(""),
+      "reception-rule" -> model.lineage.receptionRule.getOrElse(""),
+      "reception-policy" -> model.lineage.receptionPolicy.getOrElse(""),
+      "policy-source" -> model.lineage.policySource.getOrElse(""),
+      "job-relation" -> model.lineage.jobRelation.getOrElse(""),
+      "saga-relation" -> model.lineage.sagaRelation.getOrElse(""),
+      "failure-policy" -> model.lineage.failurePolicy.getOrElse(""),
       "tasks" -> model.tasks.tasks.map { task =>
         Record.data(
           "task-id" -> task.taskId.value,
@@ -505,7 +521,11 @@ object JobControlComponent {
         )
       },
       "timeline" -> model.timeline.events.map(_timeline_event_record),
-      "debug-request-summary" -> model.debug.requestSummary.getOrElse("")
+      "debug-request-summary" -> model.debug.requestSummary.getOrElse(""),
+      "debug-execution-notes" -> model.debug.executionNotes,
+      "debug-parameters" -> model.debug.parameters.toVector.sortBy(_._1).map { case (k, v) =>
+        s"$k=$v"
+      }
     )
 
   private def _timeline_record(

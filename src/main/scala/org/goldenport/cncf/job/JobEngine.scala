@@ -17,7 +17,7 @@ import org.goldenport.cncf.event.{EventId, EventLane, EventRecord, EventStore}
 /*
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -265,6 +265,27 @@ final case class JobDebugInfo(
   executionNotes: Vector[String]
 )
 
+final case class JobEventLineage(
+  eventName: Option[String],
+  eventKind: Option[String],
+  parentJobId: Option[String],
+  correlationId: Option[String],
+  causationId: Option[String],
+  sourceSubsystem: Option[String],
+  sourceComponent: Option[String],
+  targetSubsystem: Option[String],
+  targetComponent: Option[String],
+  receptionRule: Option[String],
+  receptionPolicy: Option[String],
+  policySource: Option[String],
+  jobRelation: Option[String],
+  sagaRelation: Option[String],
+  failurePolicy: Option[String]
+) {
+  def eventTriggered: Boolean =
+    eventName.nonEmpty || receptionRule.nonEmpty || receptionPolicy.nonEmpty
+}
+
 final case class JobTimelinePage(
   offset: Int,
   limit: Int,
@@ -305,6 +326,7 @@ final case class JobQueryReadModel(
   timeline: JobTimelinePage,
   traceTree: JobTraceTree,
   debug: JobDebugInfo,
+  lineage: JobEventLineage,
   resultSummary: JobResultSummary,
   result: Option[OperationResponse]
 )
@@ -489,6 +511,7 @@ final class InMemoryJobEngine(
         timeline = timeline,
         traceTree = _trace_tree(record),
         debug = record.debug,
+        lineage = _event_lineage(record),
         resultSummary = _result_summary(record),
         result = record.result.collect { case JobResult.Success(res) => res }
       )
@@ -993,6 +1016,36 @@ final class InMemoryJobEngine(
     JobTraceTree(
       jobId = record.id,
       roots = build(None)
+    )
+  }
+
+  private def _event_lineage(record: JobRecord): JobEventLineage = {
+    val parameters = record.debug.parameters
+    def _param(key: String): Option[String] =
+      parameters.get(key).map(_.trim).filter(_.nonEmpty)
+
+    JobEventLineage(
+      eventName = _param("event.name"),
+      eventKind = _param("event.kind"),
+      parentJobId =
+        _param("cncf.context.jobId")
+          .orElse(record.submittedContext.jobContext.jobId.map(_.print)),
+      correlationId =
+        _param("cncf.context.correlationId")
+          .orElse(record.submittedContext.observability.correlationId.map(_.print)),
+      causationId =
+        _param("cncf.context.causationId")
+          .orElse(record.submittedContext.jobContext.causationId),
+      sourceSubsystem = _param("cncf.source.subsystem"),
+      sourceComponent = _param("cncf.source.component"),
+      targetSubsystem = _param("cncf.target.subsystem"),
+      targetComponent = _param("cncf.target.component"),
+      receptionRule = _param("reception.rule"),
+      receptionPolicy = _param("reception.policy"),
+      policySource = _param("reception.policySource"),
+      jobRelation = _param("reception.jobRelation"),
+      sagaRelation = _param("saga.relation"),
+      failurePolicy = _param("failure.policy")
     )
   }
 

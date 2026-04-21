@@ -1,8 +1,10 @@
 package org.goldenport.cncf.component.builtin.event
 
+import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.event.{EventId, EventLane, EventRecord}
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobId, JobRunMode, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.protocol.{Argument, Request, Response}
@@ -12,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 28, 2026
- * @version Mar. 28, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventComponentSpec extends AnyWordSpec with Matchers {
@@ -57,6 +59,53 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
           val value = res.toString
           value should include ("job.submitted")
           value should include (jobId.value)
+        case Consequence.Failure(conclusion) =>
+          fail(conclusion.show)
+      }
+    }
+
+    "expose selected policy and source/target metadata on event inspection surfaces" in {
+      val subsystem = DefaultSubsystemFactory.default(mode = Some("command"))
+      val eventStore = subsystem.eventStore
+      val record = EventRecord(
+        id = EventId.generate(),
+        name = "person.created",
+        kind = "created",
+        payload = Map("id" -> "p1"),
+        attributes = Map(
+          "cncf.source.subsystem" -> "crm",
+          "cncf.source.component" -> "publisher",
+          "cncf.target.subsystem" -> subsystem.name,
+          "cncf.target.component" -> "public-notice",
+          "cncf.event.originBoundary" -> "external-subsystem",
+          "cncf.event.receptionRule" -> "person-created-sync",
+          "cncf.event.receptionPolicy" -> "async:new-job:same-saga:new-transaction",
+          "cncf.event.policySource" -> "explicit-rule",
+          "cncf.event.sagaRelation" -> "same-saga"
+        ),
+        createdAt = Instant.now(),
+        persistent = true,
+        status = EventRecord.Status.Stored,
+        lane = EventLane.Transactional
+      )
+      eventStore.append(Seq(record)) shouldBe a[Consequence.Success[_]]
+
+      val loadReq = Request(
+        component = Some("event"),
+        service = Some("event"),
+        operation = "load_event",
+        arguments = List(Argument("id", record.id.value)),
+        switches = Nil,
+        properties = Nil
+      )
+
+      subsystem.execute(loadReq) match {
+        case Consequence.Success(res) =>
+          val value = res.toString
+          value should include ("crm")
+          value should include ("public-notice")
+          value should include ("person-created-sync")
+          value should include ("explicit-rule")
         case Consequence.Failure(conclusion) =>
           fail(conclusion.show)
       }

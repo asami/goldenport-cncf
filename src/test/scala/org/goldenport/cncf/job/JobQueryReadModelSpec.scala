@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobQueryReadModelSpec
@@ -114,6 +114,53 @@ final class JobQueryReadModelSpec
       read.debug.executionNotes should contain("note-1")
       read.traceTree.roots.nonEmpty shouldBe true
       read.submitter.principalId shouldBe "test-user-principal"
+    }
+
+    "expose event-triggered lineage explicitly in the read model" in {
+      Given("an async job submitted from event reception metadata")
+      val engine = InMemoryJobEngine.create()
+      val parentJobId = JobId.generate().print
+      val task = ActionTask(ActionId.generate(), _success_action("dispatch", "done"), ActionEngine.create(), None)
+      val option = JobSubmitOption(
+        persistence = JobPersistencePolicy.Ephemeral,
+        requestSummary = Some("event.continuation:person.created"),
+        parameters = Map(
+          "event.name" -> "person.created",
+          "event.kind" -> "created",
+          "cncf.context.jobId" -> parentJobId,
+          "cncf.context.correlationId" -> "corr-1",
+          "cncf.context.causationId" -> "cause-1",
+          "cncf.source.subsystem" -> "crm",
+          "cncf.source.component" -> "publisher",
+          "cncf.target.subsystem" -> "sample",
+          "cncf.target.component" -> "public-notice",
+          "reception.rule" -> "person-created-sync",
+          "reception.policy" -> "async:new-job:same-saga:new-transaction",
+          "reception.policySource" -> "explicit-rule",
+          "reception.jobRelation" -> "newjob",
+          "saga.relation" -> "same-saga",
+          "failure.policy" -> "retry"
+        ),
+        executionNotes = Vector("event reception policy source: explicit-rule")
+      )
+
+      When("querying the completed job")
+      val jobid = engine.submit(List(task), ExecutionContext.test(), option)
+      val _ = _await_result(engine, jobid)
+      val read = engine.query(jobid).get
+
+      Then("lineage fields are materialized as structured metadata")
+      read.lineage.eventTriggered shouldBe true
+      read.lineage.eventName shouldBe Some("person.created")
+      read.lineage.parentJobId shouldBe Some(parentJobId)
+      read.lineage.sourceSubsystem shouldBe Some("crm")
+      read.lineage.sourceComponent shouldBe Some("publisher")
+      read.lineage.targetComponent shouldBe Some("public-notice")
+      read.lineage.receptionRule shouldBe Some("person-created-sync")
+      read.lineage.receptionPolicy shouldBe Some("async:new-job:same-saga:new-transaction")
+      read.lineage.policySource shouldBe Some("explicit-rule")
+      read.lineage.sagaRelation shouldBe Some("same-saga")
+      read.lineage.failurePolicy shouldBe Some("retry")
     }
 
     "enforce policy visibility on query surfaces" in {

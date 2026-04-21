@@ -318,6 +318,7 @@ object EventReception {
     val OriginBoundary = "cncf.event.originBoundary"
     val ReceptionRuleName = "cncf.event.receptionRule"
     val ReceptionPolicy = "cncf.event.receptionPolicy"
+    val PolicySource = "cncf.event.policySource"
     val SagaRelation = "cncf.event.sagaRelation"
     val Replay = "cncf.event.replay"
     val ReplayEventId = "cncf.event.replayEventId"
@@ -326,6 +327,8 @@ object EventReception {
 
     val SourceSubsystem = "cncf.source.subsystem"
     val SourceComponent = "cncf.source.component"
+    val TargetSubsystem = "cncf.target.subsystem"
+    val TargetComponent = "cncf.target.component"
 
     val TraceId = "cncf.context.traceId"
     val SpanId = "cncf.context.spanId"
@@ -707,8 +710,14 @@ object EventReception {
     private def _has_explicit_boundary_listener(
       matched: Vector[CmlEventDefinition]
     ): Boolean = synchronized {
-      _subscriptions.nonEmpty || _listeners.nonEmpty || _directlisteners.nonEmpty || matched.exists(_.actionName.nonEmpty)
+        _subscriptions.nonEmpty || _listeners.nonEmpty || _directlisteners.nonEmpty || matched.exists(_.actionName.nonEmpty)
     }
+
+    private def _has_explicit_compatibility_mode(
+      subscription: CmlSubscriptionDefinition,
+      event: ReceptionDomainEvent
+    ): Boolean =
+      subscription.continuationMode.nonEmpty || _continuation_mode_from_attributes(event.attributes).nonEmpty
 
     private def _standard_context_attributes(
       ctx: ExecutionContext
@@ -1003,6 +1012,9 @@ object EventReception {
                   (StandardAttribute.OriginBoundary -> _origin_boundary_name(resolved.boundary)) +
                   (StandardAttribute.ReceptionRuleName -> resolved.ruleName) +
                   (StandardAttribute.ReceptionPolicy -> resolved.policy.modeName) +
+                  (StandardAttribute.PolicySource -> resolved.policySource) +
+                  (StandardAttribute.TargetSubsystem -> currentSubsystemName.getOrElse("")) +
+                  (StandardAttribute.TargetComponent -> currentComponentName.getOrElse("")) +
                   (StandardAttribute.SagaRelation -> _saga_relation_name(resolved.policy.sagaRelation))
               val evt = event.copy(attributes = attrs2)
               _dispatch_event_action(s.actionName, evt, resolved).map(_ => count + 1)
@@ -1015,7 +1027,8 @@ object EventReception {
       ruleName: String,
       policy: EventReceptionExecutionPolicy,
       boundary: EventOriginBoundary,
-      compatibilityMode: EventContinuationMode
+      compatibilityMode: EventContinuationMode,
+      policySource: String
     )
 
     private def _resolve_continuation_mode(
@@ -1038,16 +1051,29 @@ object EventReception {
               ruleName = rule.name,
               policy = rule.policy,
               boundary = boundary,
-              compatibilityMode = _compatibility_mode(rule.policy, boundary)
+              compatibilityMode = _compatibility_mode(rule.policy, boundary),
+              policySource = "explicit-rule"
             )
           case None =>
             val compatibility = _resolve_continuation_mode(subscription, event)
+            val explicitcompat = _has_explicit_compatibility_mode(subscription, event)
             val policy = _compatibility_policy(compatibility, boundary)
+            val source =
+              if (explicitcompat)
+                "compatibility-mapping"
+              else
+                "subsystem-default"
+            val rulename =
+              if (explicitcompat)
+                s"compatibility:${_continuation_mode_name(compatibility)}"
+              else
+                s"default:${_origin_boundary_name(boundary)}"
             _ResolvedExecutionPolicy(
-              ruleName = s"default:${_origin_boundary_name(boundary)}",
+              ruleName = rulename,
               policy = policy,
               boundary = boundary,
-              compatibilityMode = compatibility
+              compatibilityMode = compatibility,
+              policySource = source
             )
         }
       }
@@ -1179,13 +1205,16 @@ object EventReception {
                   "origin.boundary" -> _origin_boundary_name(resolved.boundary),
                   "reception.rule" -> resolved.ruleName,
                   "reception.policy" -> resolved.policy.modeName,
+                  "reception.policySource" -> resolved.policySource,
+                  "reception.jobRelation" -> resolved.policy.jobRelation.toString.toLowerCase(java.util.Locale.ROOT),
                   "saga.relation" -> _saga_relation_name(resolved.policy.sagaRelation),
                   "failure.policy" -> resolved.policy.failurePolicy.toString.toLowerCase(java.util.Locale.ROOT)
                 ),
                 executionNotes = Vector(
                   "event continuation via async reception",
                   s"event reception rule: ${resolved.ruleName}",
-                  s"event reception policy: ${resolved.policy.modeName}"
+                  s"event reception policy: ${resolved.policy.modeName}",
+                  s"event reception policy source: ${resolved.policySource}"
                 )
               )
               val _ = engine.submit(List(_DispatchActionTask(actionname, event)), submitctx, option)
