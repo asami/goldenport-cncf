@@ -186,6 +186,38 @@ As execution-policy shapes, the following modes are currently meaningful.
 
 This is the recommended default for same-subsystem reception.
 
+#### Client Interface vs Runtime Execution
+
+Phase 13 same-subsystem default must be read as:
+
+- client-facing async job interface
+- runtime async job scheduling
+- synchronous inline continuation inside the job body
+
+This is different from an async-looking interface that still executes
+synchronously to completion in the foreground.
+
+| Mode | Client Interface | Runtime Scheduling | Runtime Body | Intended Use |
+| --- | --- | --- | --- | --- |
+| `SyncJobAsyncInterface` | async job-style | synchronous | synchronous | testing / controlled verification |
+| `Async Job + Sync Inline Continuation` | async job-style | asynchronous | synchronous inline continuation | canonical same-subsystem sync reception target |
+
+The first mode remains useful as a framework/testing mode. The second is the
+intended production semantics target for same-subsystem sync event reception.
+
+For this target semantics, the framework direction is:
+
+- one job
+- one `ExecutionContext`
+- one `RuntimeContext`
+- one `UnitOfWork`
+- one transaction
+- no child job for same-subsystem sync continuation
+- framework-owned event history is appended to the runtime event and persisted
+  to the event store
+- history uses compact delta records rather than full snapshots
+- history overflow is deterministic failure rather than truncation
+
 ### 7.2 Sync with Async Fallback
 
 - same baseline as same-subsystem default

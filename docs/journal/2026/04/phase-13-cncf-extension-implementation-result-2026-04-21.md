@@ -209,3 +209,25 @@ The next natural slice is:
 
 The key point is that the framework baseline is now strong enough to support
 the real sample without relying on hidden event/job behavior.
+
+## 8. Open Semantic Refinement
+
+The first extension slice completed:
+
+- inspection visibility
+- lineage visibility
+- componentlet participation protection
+
+Same-subsystem sync semantics still need an explicit semantic refinement around:
+
+- async interface vs runtime execution distinction
+- one job / one `ExecutionContext` / one `RuntimeContext`
+- single `UnitOfWork` / single transaction
+- synchronous inline continuation without child job
+- framework-owned event history appended to the runtime event and persisted to
+  the event store
+- compact delta history rather than full snapshots
+- deterministic failure on history-cap overflow rather than truncation
+
+This refinement should be documented and implemented as a framework concern in
+CNCF, not left to sample-side correction logic.

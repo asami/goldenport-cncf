@@ -23,6 +23,15 @@ This document is a progress dashboard, not a design journal.
 - Add focused executable specifications and observability coverage for the
   event-driven collaboration path.
 
+Current semantic direction for same-subsystem sync reception:
+
+- async client interface
+- async job scheduling
+- sync inline continuation within one job / `UnitOfWork` / transaction
+
+`SyncJobAsyncInterface` remains available as a testing/verification mode, but
+it is not the semantic target for Phase 13 same-subsystem sync reception.
+
 ## 3. Non-Goals
 
 - No inter-subsystem transport over an external service bus.

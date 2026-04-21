@@ -35,6 +35,66 @@ Current reception flow:
    - Entity event subscription path
 5. Result is returned as `ReceptionResult(outcome, dispatchedCount, persisted, reason)`.
 
+## 2.1 Same-Subsystem Sync Reception Semantics
+
+Phase 13 same-subsystem sync reception now needs an explicit distinction
+between two different modes.
+
+### Canonical target semantics
+
+The canonical target for same-subsystem sync reception is:
+
+- client-facing async job interface
+- runtime async job scheduling
+- synchronous inline continuation inside the started job body
+
+Meaning:
+
+- the client receives a job-style async interface
+- the job is executed asynchronously from the client perspective
+- once the job body starts, source action, event emit, subscription resolution,
+  and target follow-up action continue synchronously inline
+- no child job is created for same-subsystem sync continuation
+- one job
+- one `ExecutionContext`
+- one `RuntimeContext`
+- one `UnitOfWork`
+- one transaction
+
+This is the intended production semantics target for same-subsystem sync
+reception.
+
+### Testing-oriented mode
+
+There is also a separate testing/verification-oriented mode:
+
+- client-facing async job interface
+- synchronous execution
+
+This corresponds to the closest existing runtime concept:
+
+- `SyncJobAsyncInterface`
+
+This mode preserves an async-style interface while the framework waits for
+completion synchronously. It is useful for tests and controlled verification,
+but it is not the semantic target for production same-subsystem sync event
+reception.
+
+### Event history behavior
+
+For the same-subsystem sync refinement, framework-owned event history is
+expected to behave as follows:
+
+- framework appends history to the runtime event as execution progresses
+- the same history is persisted to the event store
+- history is append-only
+- history format is compact `Delta Trail`
+- history overflow is deterministic `Fail Fast`
+
+This note does not yet claim that the full production refinement is already
+implemented. It records the target semantics to avoid ambiguity during the next
+slice.
+
 ## 3. Event Categories
 
 `CmlEventDefinition.category`:
