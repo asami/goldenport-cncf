@@ -347,7 +347,7 @@ abstract class Component() extends Component.Core.Holder {
 
   private def _component_context(parent: ScopeContext): Component.Context =
     Component.Context(
-      name = "component",
+      name = parent.name,
       parent = parent,
       this,
       componentOrigin = ComponentOrigin.Unknown

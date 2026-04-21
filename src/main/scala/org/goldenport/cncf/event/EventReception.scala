@@ -579,11 +579,13 @@ object EventReception {
       ctx: Option[ExecutionContext]
     ): Boolean =
       ctx.nonEmpty && {
-        val bysubscription = _subscriptions_snapshot()
-          .filter(_.matches(event))
-          .exists { subscription =>
-            _resolve_execution_policy(subscription, event).toOption.exists(_.policy.timing == EventExecutionTiming.Sync)
-          }
+        val bysubscription = ctx.exists { ec =>
+          _sync_inline_receptions(ec)
+            .flatMap(_._subscriptions_snapshot().filter(_.matches(event)))
+            .exists { subscription =>
+              _resolve_execution_policy(subscription, event).toOption.exists(_.policy.timing == EventExecutionTiming.Sync)
+            }
+        }
         val byactionbinding =
           matched.exists(d => d.category == CmlEventCategory.ActionEvent && d.actionName.nonEmpty) &&
             _resolve_origin_boundary(event).toOption.contains(EventOriginBoundary.SameSubsystem)
@@ -601,7 +603,7 @@ object EventReception {
       policy.authorizePublish.flatMap { _ =>
         policy.authorizeDispatch.flatMap { _ =>
           _append_source_history(event).flatMap { event0 =>
-            _dispatch_to_subscriptions_inline(event0, Some(ctx)).flatMap { case (event1, subscriptioncount) =>
+            _dispatch_to_subscriptions_inline_all(event0, Some(ctx)).flatMap { case (event1, subscriptioncount) =>
               _dispatch_to_listeners(event1, matched, Some(ctx)).flatMap { listenercount =>
                 _dispatch_to_entity_subscriptions(event1, Some(ctx)).flatMap { entitycount =>
                   val count = subscriptioncount + listenercount + entitycount
@@ -631,10 +633,7 @@ object EventReception {
                           reason = Some("non-target")
                         )
                       }
-                  if (staged && !_has_action_scope(ctx.cncfCore.scope))
-                    ctx.runtime.unitOfWork.commit().flatMap(_ => outcome)
-                  else
-                    outcome
+                  outcome
                 }
               }
             }
@@ -849,6 +848,28 @@ object EventReception {
         Some(scope.core.name)
       else
         scope.core.parent.flatMap(_find_scope_name(_, kind))
+
+    private def _sync_inline_receptions(
+      ctx: ExecutionContext
+    ): Vector[DefaultEventReception] =
+      _subsystem_from_scope(ctx.cncfCore.scope)
+        .map(_.eventReceptions.values.collect { case m: DefaultEventReception => m }.toVector)
+        .filter(_.nonEmpty)
+        .getOrElse(Vector(this))
+
+    @annotation.tailrec
+    private def _subsystem_from_scope(
+      scope: org.goldenport.cncf.context.ScopeContext
+    ): Option[org.goldenport.cncf.subsystem.Subsystem] =
+      scope match {
+        case cc: org.goldenport.cncf.component.Component.Context =>
+          cc.component.subsystem
+        case other =>
+          other.core.parent match {
+            case Some(parent) => _subsystem_from_scope(parent)
+            case None => None
+          }
+      }
 
     private def _has_action_scope(
       scope: org.goldenport.cncf.context.ScopeContext
@@ -1089,6 +1110,23 @@ object EventReception {
         }
       }
     }
+
+    private def _dispatch_to_subscriptions_inline_all(
+      event: ReceptionDomainEvent,
+      ctxopt: Option[ExecutionContext]
+    ): Consequence[(ReceptionDomainEvent, Int)] =
+      ctxopt match {
+        case Some(ctx) =>
+          _sync_inline_receptions(ctx).foldLeft(Consequence.success((event, 0))) { (z, reception) =>
+            z.flatMap { case (currentevent, count) =>
+              reception._dispatch_to_subscriptions_inline(currentevent, Some(ctx)).map { case (updated, delta) =>
+                (updated, count + delta)
+              }
+            }
+          }
+        case None =>
+          _dispatch_to_subscriptions_inline(event, None)
+      }
 
     private def _dispatch_registered_subscription(
       subscription: CmlSubscriptionDefinition,

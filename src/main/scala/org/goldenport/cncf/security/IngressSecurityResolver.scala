@@ -20,7 +20,7 @@ import org.goldenport.protocol.Request
  *
  * @since   Mar. 20, 2026
  *  version Apr. 13, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -330,9 +330,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
           unitOfWorkSupplier = () => new UnitOfWork(context),
           unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
             def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
-              new UnitOfWorkInterpreter(new UnitOfWork(context)).run(
-                ConsequenceT.liftF(Free.liftF(fa))
-              )
+              new UnitOfWorkInterpreter(new UnitOfWork(context)).interpret(fa)
           },
           commitAction = _ => (),
           abortAction = _ => (),
@@ -371,9 +369,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
           unitOfWorkSupplier = () => new UnitOfWork(context),
           unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
             def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
-              new UnitOfWorkInterpreter(new UnitOfWork(context)).run(
-                ConsequenceT.liftF(Free.liftF(fa))
-              )
+              new UnitOfWorkInterpreter(new UnitOfWork(context)).interpret(fa)
           },
           commitAction = _ => (),
           abortAction = _ => (),

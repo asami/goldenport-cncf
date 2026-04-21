@@ -26,7 +26,7 @@ import org.goldenport.cncf.security.OperationAccessPolicy
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 29, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -68,6 +68,9 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
   def execute[A](op: UnitOfWorkOp[A]): A =
     run(ConsequenceT.liftF(Free.liftF(op))).TAKE
+
+  def interpret[A](op: UnitOfWorkOp[A]): Consequence[A] =
+    _execute(op)
 
   private def _execute[A](op: UnitOfWorkOp[A]): Consequence[A] = op match {
     case UnitOfWorkOp.HttpGet(path) =>

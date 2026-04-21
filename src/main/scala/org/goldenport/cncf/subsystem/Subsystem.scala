@@ -105,6 +105,7 @@ final class Subsystem(
 
   def add(comps: Seq[Component]): Subsystem = {
     val injected = comps.map(x => _inject_context(x.name, x))
+    injected.foreach(_bind_runtime_services)
     _component_space = _component_space.add(injected)
     _rebuildResolver()
     this
@@ -140,6 +141,17 @@ final class Subsystem(
       componentOrigin = comp.origin
     )
     comp.withScopeContext(sc)
+  }
+
+  private def _bind_runtime_services(component: Component): Unit = {
+    val _ = component.withEventStore(_event_store)
+    component.jobEngine match {
+      case m: InMemoryJobEngine =>
+        m.withEventStore(_event_store)
+      case _ =>
+        ()
+    }
+    component.eventReception.foreach(registerEventReception(component.name, _))
   }
 
   // private val _components: Map[String, Component] =

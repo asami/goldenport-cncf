@@ -11,7 +11,8 @@ import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExe
 import cats.~>
 import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, EntityStoreContext, ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeKind}
 import org.goldenport.cncf.backend.collaborator.Collaborator
-import org.goldenport.cncf.event.ReceptionInput
+import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.event.{EventEngine, EventStore, ReceptionInput}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobControlPolicy, JobControlRequest, JobControlResponse, JobEngine, JobId, JobPersistencePolicy, JobResult, JobRunMode, JobStatus, JobSubmitOption, JobTask}
 import org.goldenport.cncf.unitofwork.UnitOfWork
@@ -297,7 +298,11 @@ case class ComponentLogic(
     lazy val context: ExecutionContext = ExecutionContext.create(runtime)
     // Bind UnitOfWork to the ActionCall execution context.
     lazy val uow: UnitOfWork = new UnitOfWork(
-      context = context
+      context = context,
+      eventengine = EventEngine.noop(
+        DataStore.noop(),
+        eventstore = component.eventStore.getOrElse(EventStore.inMemory)
+      )
     )
     lazy val runtime: RuntimeContext = _component_runtime_context(() => uow, driver)
     context
@@ -339,9 +344,7 @@ case class ComponentLogic(
     )
     val consequenceInterpreter = new (UnitOfWorkOp ~> Consequence) {
       def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
-        new UnitOfWorkInterpreter(uowsupplier()).run(
-          org.goldenport.ConsequenceT.liftF(cats.free.Free.liftF(fa))
-        )
+        new UnitOfWorkInterpreter(uowsupplier()).interpret(fa)
     }
     new RuntimeContext(
       core = core,
