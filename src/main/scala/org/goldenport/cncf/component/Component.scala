@@ -32,7 +32,7 @@ import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
 import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace, ViewDefinition}
 import org.goldenport.cncf.operation.{CmlOperationAccess, CmlOperationDefinition}
 import org.goldenport.cncf.statemachine.{CmlStateMachineDefinition, StateMachinePlannerProvider}
-import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition, EventReception, EventStore}
+import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition, EventReception, EventReceptionRule, EventStore}
 import org.goldenport.cncf.security.AuthenticationProvider
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
 import cats.data.NonEmptyVector
@@ -48,7 +48,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
  *  version Mar. 30, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -243,6 +243,7 @@ abstract class Component() extends Component.Core.Holder {
   def eventReceptionDefinitions: Vector[CmlEventDefinition] = Vector.empty
   def eventRoutingDefinitions: Vector[CmlRoutingDefinition] = Vector.empty
   def eventSubscriptionDefinitions: Vector[CmlSubscriptionDefinition] = Vector.empty
+  def eventReceptionRuleDefinitions: Vector[EventReceptionRule] = Vector.empty
   def aggregateDefinitions: Vector[AggregateDefinition] = Vector.empty
   def viewDefinitions: Vector[ViewDefinition] = Vector.empty
   def operationDefinitions: Vector[CmlOperationDefinition] = Vector.empty

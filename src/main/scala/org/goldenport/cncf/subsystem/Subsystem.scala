@@ -1,5 +1,6 @@
 package org.goldenport.cncf.subsystem
 
+import scala.collection.mutable
 import org.goldenport.Consequence
 import org.goldenport.http.{HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.protocol.handler.egress.Egress
@@ -20,7 +21,8 @@ import org.goldenport.cncf.component.builtin.debug.DebugComponent
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
-import org.goldenport.cncf.event.{EventStore}
+import org.goldenport.cncf.datastore.DataStore
+import org.goldenport.cncf.event.{EventBus, EventEngine, EventReception, EventStore}
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.protocol.{Property, Request, Response}
 
@@ -37,7 +39,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -55,6 +57,9 @@ final class Subsystem(
   private val _http_driver: Option[HttpDriver] = httpdriver
   private val _job_engine: JobEngine = InMemoryJobEngine.create()
   private val _event_store: EventStore = EventStore.inMemory
+  private lazy val _event_bus: EventBus =
+    EventBus.default(EventEngine.noop(DataStore.noop(), eventstore = _event_store))
+  private val _event_receptions = mutable.LinkedHashMap.empty[String, EventReception]
   private val _entity_access_metrics: EntityAccessMetricsRegistry = EntityAccessMetricsRegistry.shared
   private var _descriptor: Option[GenericSubsystemDescriptor] = None
   private var _resolved_security_wiring: ResolvedSecurityWiring = ResolvedSecurityWiring.empty
@@ -79,6 +84,8 @@ final class Subsystem(
   def httpDriver: Option[HttpDriver] = _http_driver
   def jobEngine: JobEngine = _job_engine
   def eventStore: EventStore = _event_store
+  def eventBus: EventBus = _event_bus
+  def eventReceptions: Map[String, EventReception] = _event_receptions.toMap
   def entityAccessMetrics: EntityAccessMetricsRegistry = _entity_access_metrics
   def serverEmulatorBaseUrl: String = globalRuntimeContext.serverEmulatorBaseUrl
   def descriptor: Option[GenericSubsystemDescriptor] = _descriptor
@@ -100,6 +107,11 @@ final class Subsystem(
     val injected = comps.map(x => _inject_context(x.name, x))
     _component_space = _component_space.add(injected)
     _rebuildResolver()
+    this
+  }
+
+  def registerEventReception(componentName: String, reception: EventReception): Subsystem = {
+    _event_receptions.update(componentName, reception)
     this
   }
 

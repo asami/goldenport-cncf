@@ -19,7 +19,7 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityQuery, EntityStore}
 import org.goldenport.cncf.entity.aggregate.{AggregateAssembler, AggregateBuilder, AggregateCollection, AggregateSpace, AggregateDefinition, ContextualAggregateBuilder, ContextualAggregateCount, ContextualAggregateQuery}
-import org.goldenport.cncf.event.{ActionCallDispatcher, EventBus, EventEngine, EventReception, EventStore, EntitySubscriptionLimit}
+import org.goldenport.cncf.event.{ActionCallDispatcher, EventBus, EventReception, EventStore, EntitySubscriptionLimit}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimeDescriptor, EntityRuntimePlan, EntitySpace, EntityStorage, PartitionedMemoryRealm, PartitionStrategy, WorkingSetDefinition, WorkingSetInitializer}
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.entity.view.{Browser, ContextualBrowserCount, ContextualBrowserFind, ContextualBrowserQuery, ContextualViewBuilder, ViewDefinition, ViewBuilder, ViewCollection, ViewSpace}
@@ -28,7 +28,6 @@ import org.goldenport.cncf.statemachine.{CollectionStateMachinePlanner, Collecti
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, XString}
 import org.simplemodeling.model.value.BaseContent
-import scala.collection.mutable
 import scala.util.Try
 
 /*
@@ -36,7 +35,7 @@ import scala.util.Try
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Mar. 31, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -44,8 +43,6 @@ final class ComponentFactory(
   private val _collaborators: CollaboratorFactory = CollaboratorFactory.empty,
   private val _runtime_entity_descriptors: Vector[EntityRuntimeDescriptor] = Vector.empty
 ) {
-  private val _shared_event_buses = mutable.AnyRefMap.empty[Subsystem, EventBus]
-
   def discover(): Vector[Component] = {
     val cs = _component_repository_space.discover()
     cs.map(bootstrap)
@@ -175,10 +172,15 @@ final class ComponentFactory(
       case _ =>
         ()
     }
-    if (component.eventReceptionDefinitions.nonEmpty || component.eventSubscriptionDefinitions.nonEmpty) {
+    if (
+      component.eventReceptionDefinitions.nonEmpty ||
+      component.eventSubscriptionDefinitions.nonEmpty ||
+      component.eventReceptionRuleDefinitions.nonEmpty
+    ) {
       val bus = _shared_event_bus(component, store)
       val reception = createEventReceptionWithOperationDispatcher(component, bus)
       component.withEventReception(reception)
+      component.subsystem.foreach(_.registerEventReception(component.name, reception))
     }
   }
 
@@ -187,13 +189,8 @@ final class ComponentFactory(
     store: EventStore
   ): EventBus =
     component.subsystem match {
-      case Some(subsystem) =>
-        _shared_event_buses.getOrElseUpdate(
-          subsystem,
-          EventBus.default(EventEngine.noop(DataStore.noop(), eventstore = store))
-        )
-      case None =>
-        EventBus.default(EventEngine.noop(DataStore.noop(), eventstore = store))
+      case Some(subsystem) => subsystem.eventBus
+      case None => EventBus.default(org.goldenport.cncf.event.EventEngine.noop(DataStore.noop(), eventstore = store))
     }
 
   def createEventReceptionWithOperationDispatcher(
@@ -224,12 +221,15 @@ final class ComponentFactory(
       entitySpace = Some(component.entitySpace),
       entitySubscriptionLimit = entitySubscriptionLimit,
       workingSetEntities = component.workingSetEntityNames,
+      currentSubsystemName = component.subsystem.map(_.name),
+      currentComponentName = Try(component.name).toOption,
       // EventReception can be created from lightweight test components
       // before Component.core initialization.
       jobEngine = Try(component.jobEngine).toOption
     )
     component.eventReceptionDefinitions.foreach(reception.register)
     component.eventSubscriptionDefinitions.foreach(reception.registerSubscription)
+    component.eventReceptionRuleDefinitions.foreach(reception.registerRule)
     reception
   }
 

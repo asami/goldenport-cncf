@@ -24,7 +24,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
  *  version Mar. 31, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -398,7 +398,8 @@ object ComponentLogic {
                 attributes = definition.selectors,
                 persistent = false
               )
-              reception.receive(input).map { result =>
+              given ExecutionContext = _executionContext
+              reception.receiveAuthorized(input).map { result =>
                 OperationResponse.create(
                   Record.data(
                     "outcome" -> result.outcome.toString,

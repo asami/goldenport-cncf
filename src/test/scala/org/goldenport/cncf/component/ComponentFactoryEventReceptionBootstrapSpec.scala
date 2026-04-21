@@ -8,7 +8,10 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent}
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.event.*
+import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.unitofwork.CommitRecorder
+import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -17,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 10, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryEventReceptionBootstrapSpec
@@ -78,7 +81,8 @@ final class ComponentFactoryEventReceptionBootstrapSpec
 
     "register component event/subscription metadata automatically" in {
       Given("component exposing generated event metadata")
-      val component = new Component() {
+      val subsystem = TestComponentFactory.emptySubsystem("sample")
+      val component = _initialized_component("person_component", new Component() {
         override def eventReceptionDefinitions: Vector[CmlEventDefinition] =
           Vector(
             CmlEventDefinition(
@@ -99,7 +103,7 @@ final class ComponentFactoryEventReceptionBootstrapSpec
               declaredTargetUpperBound = 1
             )
           )
-      }
+      }, subsystem)
 
       val recorder = new _InMemoryCommitRecorder
       val store = EventStore.inMemory
@@ -121,7 +125,10 @@ final class ComponentFactoryEventReceptionBootstrapSpec
         ReceptionInput(
           name = "person.created",
           kind = "created",
-          attributes = Map("targetId" -> "p1")
+          attributes = Map(
+            "targetId" -> "p1",
+            EventReception.StandardAttribute.SourceSubsystem -> "sample"
+          )
         )
       )
 
@@ -136,9 +143,11 @@ final class ComponentFactoryEventReceptionBootstrapSpec
       calls.toVector shouldBe Vector("person.sync")
     }
 
-    "dispatch subscription across receptions sharing the same event bus" in {
-      Given("publisher and subscriber receptions on one shared event bus")
-      val publisher = new Component() {
+    "register component reception rules automatically" in {
+      Given("component exposing generated reception rule metadata")
+      val captured = scala.collection.mutable.ArrayBuffer.empty[Map[String, String]]
+      val subsystem = TestComponentFactory.emptySubsystem("sample")
+      val component = _initialized_component("person_rule_component", new Component() {
         override def eventReceptionDefinitions: Vector[CmlEventDefinition] =
           Vector(
             CmlEventDefinition(
@@ -147,8 +156,7 @@ final class ComponentFactoryEventReceptionBootstrapSpec
               kind = Some("created")
             )
           )
-      }
-      val subscriber = new Component() {
+
         override def eventSubscriptionDefinitions: Vector[CmlSubscriptionDefinition] =
           Vector(
             CmlSubscriptionDefinition(
@@ -160,7 +168,134 @@ final class ComponentFactoryEventReceptionBootstrapSpec
               declaredTargetUpperBound = 1
             )
           )
+
+        override def eventReceptionRuleDefinitions: Vector[EventReceptionRule] =
+          Vector(
+            EventReceptionRule(
+              name = "person-created-sync",
+              condition = EventReceptionCondition(
+                eventName = Some("person.created"),
+                eventKind = Some("created")
+              ),
+              policy = EventReceptionExecutionPolicy.SameSubsystemDefault
+            )
+          )
+      }, subsystem)
+
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val dispatcher = new ActionCallDispatcher {
+        def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
+          val _ = actionName
+          event match {
+            case e: ReceptionDomainEvent => captured += e.attributes
+            case _ => ()
+          }
+          Consequence.unit
+        }
       }
+
+      When("factory creates reception from component metadata")
+      val factory = new ComponentFactory()
+      val reception = factory.createEventReception(component, bus, dispatcher)
+      val result = reception.receive(
+        ReceptionInput(
+          name = "person.created",
+          kind = "created",
+          attributes = Map(
+            "targetId" -> "p1",
+            EventReception.StandardAttribute.SourceSubsystem -> "remote-subsystem"
+          )
+        )
+      )
+
+      Then("registered rules are applied without ad hoc wiring")
+      result shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = false
+        )
+      )
+      captured.head.get(EventReception.StandardAttribute.ReceptionRuleName) shouldBe Some("person-created-sync")
+      captured.head.get(EventReception.StandardAttribute.ReceptionPolicy) shouldBe Some(EventReceptionExecutionPolicy.SameSubsystemDefault.modeName)
+    }
+
+    "reject ambiguous component reception rules at factory registration time" in {
+      Given("component exposing duplicate reception rules")
+      val subsystem = TestComponentFactory.emptySubsystem("sample")
+      val component = _initialized_component("duplicate_rule_component", new Component() {
+        override def eventReceptionRuleDefinitions: Vector[EventReceptionRule] =
+          Vector(
+            EventReceptionRule(
+              name = "dup-1",
+              condition = EventReceptionCondition(
+                originBoundary = Some(EventOriginBoundary.ExternalSubsystem),
+                eventName = Some("dup.event"),
+                eventKind = Some("created")
+              ),
+              policy = EventReceptionExecutionPolicy.AsyncNewJobSameSaga
+            ),
+            EventReceptionRule(
+              name = "dup-2",
+              condition = EventReceptionCondition(
+                originBoundary = Some(EventOriginBoundary.ExternalSubsystem),
+                eventName = Some("dup.event"),
+                eventKind = Some("created")
+              ),
+              policy = EventReceptionExecutionPolicy.AsyncNewJobNewSaga
+            )
+          )
+      }, subsystem)
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val factory = new ComponentFactory()
+
+      When("factory registers generated rules")
+      val ex = intercept[IllegalStateException] {
+        factory.createEventReception(component, bus, new ActionCallDispatcher {
+          def dispatchAction(actionName: String, event: DomainEvent): Consequence[Unit] = {
+            val _ = actionName
+            val _ = event
+            Consequence.unit
+          }
+        })
+      }
+
+      Then("ambiguous equal-priority rules fail deterministically")
+      ex.getMessage should include("ambiguous event reception rule")
+    }
+
+    "dispatch subscription across receptions sharing the same event bus" in {
+      Given("publisher and subscriber receptions on one shared event bus")
+      val subsystem = TestComponentFactory.emptySubsystem("sample")
+      val publisher = _initialized_component("publisher", new Component() {
+        override def eventReceptionDefinitions: Vector[CmlEventDefinition] =
+          Vector(
+            CmlEventDefinition(
+              name = "person.created",
+              category = CmlEventCategory.NonActionEvent,
+              kind = Some("created")
+            )
+          )
+      }, subsystem)
+      val subscriber = _initialized_component("subscriber", new Component() {
+        override def eventSubscriptionDefinitions: Vector[CmlSubscriptionDefinition] =
+          Vector(
+            CmlSubscriptionDefinition(
+              name = "person-sync",
+              eventName = "person.created",
+              route = DispatchRoute.Unicast,
+              target = Some("targetId"),
+              actionName = "person.sync",
+              declaredTargetUpperBound = 1
+            )
+          )
+      }, subsystem)
 
       val recorder = new _InMemoryCommitRecorder
       val store = EventStore.inMemory
@@ -184,7 +319,10 @@ final class ComponentFactoryEventReceptionBootstrapSpec
         ReceptionInput(
           name = "person.created",
           kind = "created",
-          attributes = Map("targetId" -> "p1")
+          attributes = Map(
+            "targetId" -> "p1",
+            EventReception.StandardAttribute.SourceSubsystem -> "sample"
+          )
         )
       )
 
@@ -197,6 +335,40 @@ final class ComponentFactoryEventReceptionBootstrapSpec
         )
       )
       calls.toVector shouldBe Vector("person.sync")
+    }
+
+    "register bootstrapped reception into subsystem-owned facilities" in {
+      Given("initialized component with event metadata and subsystem ownership")
+      val subsystem = TestComponentFactory.emptySubsystem("sample")
+      val component = _initialized_component("boot_component", new Component() {
+        override def eventReceptionDefinitions: Vector[CmlEventDefinition] =
+          Vector(
+            CmlEventDefinition(
+              name = "boot.event",
+              category = CmlEventCategory.NonActionEvent,
+              kind = Some("created")
+            )
+          )
+
+        override def eventSubscriptionDefinitions: Vector[CmlSubscriptionDefinition] =
+          Vector(
+            CmlSubscriptionDefinition(
+              name = "boot-sync",
+              eventName = "boot.event",
+              route = DispatchRoute.Unicast,
+              target = Some("targetId"),
+              actionName = "boot.sync"
+            )
+          )
+      }, subsystem)
+
+      When("factory bootstraps the component")
+      val bootstrapped = new ComponentFactory().bootstrap(component)
+
+      Then("subsystem exposes the shared event reception facility")
+      bootstrapped.eventReception.nonEmpty shouldBe true
+      subsystem.eventReceptions.get("boot_component") shouldBe bootstrapped.eventReception
+      subsystem.eventBus should not be null
     }
 
     "provide operation-based action dispatcher with parse/validate stage" in {
@@ -260,6 +432,17 @@ final class ComponentFactoryEventReceptionBootstrapSpec
       def fromRecord(r: Record): Consequence[_BootEntity] =
         Consequence.notImplemented("not used in this spec")
     }
+
+  private def _initialized_component(
+    name: String,
+    component: Component,
+    subsystem: Subsystem
+  ): Component = {
+    val componentId = ComponentId(name)
+    val instanceId = ComponentInstanceId.default(componentId)
+    val core = Component.Core.create(name, componentId, instanceId, Protocol.empty)
+    component.initialize(ComponentInit(subsystem, core, ComponentOrigin.Builtin))
+  }
 }
 
 private final case class _BootEntity(

@@ -2,7 +2,7 @@ package org.goldenport.cncf.event
 
 import scala.collection.mutable.ArrayBuffer
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.{ExecutionContext, SecurityContext, SecurityLevel}
+import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.job.{ActionId, JobContext, JobControlPolicy, JobControlRequest, JobControlResponse, JobEngine, JobPersistencePolicy, JobQueryReadModel, JobResult, JobStatus, JobSubmitOption, JobTask, JobTaskPage, JobTimelinePage, JobId, TaskId}
 import org.goldenport.cncf.security.IngressSecurityResolver
@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 21, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 21, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventReceptionSpec
@@ -32,7 +32,12 @@ final class EventReceptionSpec
       val bus = EventBus.default(engine)
       val calls = ArrayBuffer.empty[String]
       val dispatcher = new _RecordingDispatcher(calls)
-      val reception = EventReception.default(bus, dispatcher)
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = dispatcher,
+        currentSubsystemName = Some("sample"),
+        currentComponentName = Some("publisher")
+      )
 
       reception.register(
         CmlEventDefinition(
@@ -74,7 +79,11 @@ final class EventReceptionSpec
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
       val calls = ArrayBuffer.empty[String]
-      val reception = EventReception.default(bus, new _RecordingDispatcher(calls))
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _RecordingDispatcher(calls),
+        currentSubsystemName = Some("sample")
+      )
 
       reception.register(
         CmlEventDefinition(
@@ -170,7 +179,11 @@ final class EventReceptionSpec
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
       val calls = ArrayBuffer.empty[String]
-      val reception = EventReception.default(bus, new _RecordingDispatcher(calls))
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _RecordingDispatcher(calls),
+        currentSubsystemName = Some("sample")
+      )
       reception.register(
         CmlEventDefinition(
           name = "audit.ingested",
@@ -242,7 +255,11 @@ final class EventReceptionSpec
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
       val calls = ArrayBuffer.empty[String]
-      val reception = EventReception.default(bus, new _RecordingDispatcher(calls))
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _RecordingDispatcher(calls),
+        currentSubsystemName = Some("sample")
+      )
       val listened = ArrayBuffer.empty[String]
       reception.registerStateMachineListener(
         new StateMachineEventListener {
@@ -292,7 +309,11 @@ final class EventReceptionSpec
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
       val calls = ArrayBuffer.empty[String]
-      val reception = EventReception.default(bus, new _RecordingDispatcher(calls))
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _RecordingDispatcher(calls),
+        currentSubsystemName = Some("sample")
+      )
       val listened = ArrayBuffer.empty[String]
       reception.registerDirectListener(
         new DirectEventListener {
@@ -342,7 +363,11 @@ final class EventReceptionSpec
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
       val calls = ArrayBuffer.empty[String]
-      val reception = EventReception.default(bus, new _RecordingDispatcher(calls))
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _RecordingDispatcher(calls),
+        currentSubsystemName = Some("sample")
+      )
       reception.register(
         CmlEventDefinition(
           name = "person.created",
@@ -366,7 +391,10 @@ final class EventReceptionSpec
         ReceptionInput(
           name = "person.created",
           kind = "created",
-          attributes = Map("targetId" -> "p1")
+          attributes = Map(
+            "targetId" -> "p1",
+            EventReception.StandardAttribute.SourceSubsystem -> "sample"
+          )
         )
       )
 
@@ -424,7 +452,11 @@ final class EventReceptionSpec
           Consequence.unit
         }
       }
-      val reception = EventReception.default(bus, dispatcher)
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = dispatcher,
+        currentSubsystemName = Some("sample")
+      )
       reception.register(
         CmlEventDefinition(
           name = "person.updated",
@@ -449,7 +481,10 @@ final class EventReceptionSpec
         ReceptionInput(
           name = "person.updated",
           kind = "updated",
-          attributes = Map("targetId" -> "p1")
+          attributes = Map(
+            "targetId" -> "p1",
+            EventReception.StandardAttribute.SourceSubsystem -> "sample"
+          )
         )
       )
 
@@ -499,12 +534,19 @@ final class EventReceptionSpec
         )
       )
       val base = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+      val subsystemScope = ScopeContext(
+        kind = ScopeKind.Subsystem,
+        name = "sample",
+        parent = None,
+        observabilityContext = base.observability
+      )
+      val componentScope = subsystemScope.createChildScope(ScopeKind.Component, "publisher")
       val jobctx = JobContext(
         jobId = Some(JobId.generate()),
         taskId = Some(TaskId.generate()),
         actionId = Some(ActionId.generate())
       )
-      given ExecutionContext = ExecutionContext.withJobContext(base, jobctx)
+      given ExecutionContext = ExecutionContext.withJobContext(base.withScope(componentScope), jobctx)
 
       When("receiving authorized event")
       val result = reception.receiveAuthorized(
@@ -536,10 +578,12 @@ final class EventReceptionSpec
       attrs.get(EventReception.StandardAttribute.PrincipalId) shouldBe Some(base.security.principal.id.value)
       attrs.get(EventReception.StandardAttribute.EventName) shouldBe Some("context.bound.event")
       attrs.get(EventReception.StandardAttribute.EventKind) shouldBe Some("accepted")
+      attrs.get(EventReception.StandardAttribute.SourceSubsystem) shouldBe Some("sample")
+      attrs.get(EventReception.StandardAttribute.SourceComponent) shouldBe Some("publisher")
     }
 
-    "route subscription in new-job continuation mode with parent job linkage" in {
-      Given("subscription with explicit new-job continuation")
+    "route external-subsystem reception with async new-job same-saga policy" in {
+      Given("subscription with rule-selected async new-job same-saga policy")
       val recorder = new _InMemoryCommitRecorder
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
@@ -554,6 +598,7 @@ final class EventReceptionSpec
         eventBus = bus,
         dispatcher = dispatcher,
         ingressSecurityResolver = IngressSecurityResolver.default,
+        currentSubsystemName = Some("sales"),
         jobEngine = Some(jobengine)
       )
       reception.register(
@@ -569,8 +614,18 @@ final class EventReceptionSpec
           eventName = "order.approved",
           route = DispatchRoute.Unicast,
           target = Some("targetId"),
-          actionName = "order.fulfill",
-          continuationMode = Some(EventContinuationMode.NewJob)
+          actionName = "order.fulfill"
+        )
+      )
+      reception.registerRule(
+        EventReceptionRule(
+          name = "external-order-approved",
+          condition = EventReceptionCondition(
+            originBoundary = Some(EventOriginBoundary.ExternalSubsystem),
+            eventName = Some("order.approved"),
+            eventKind = Some("approved")
+          ),
+          policy = EventReceptionExecutionPolicy.AsyncNewJobSameSaga
         )
       )
       val base = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
@@ -590,12 +645,15 @@ final class EventReceptionSpec
         ReceptionInput(
           name = "order.approved",
           kind = "approved",
-          attributes = Map("targetId" -> "o1")
+          attributes = Map(
+            "targetId" -> "o1",
+            EventReception.StandardAttribute.SourceSubsystem -> "billing"
+          )
         )
       )
-      _await(() => calls.nonEmpty)
+      EventAwaitSupport.awaitVisible(calls.nonEmpty) shouldBe true
 
-      Then("dispatch is executed through a new Job task with parent linkage")
+      Then("dispatch is executed through a new job task with selected policy metadata")
       result shouldBe Consequence.success(
         ReceptionResult(
           outcome = ReceptionOutcome.Routed,
@@ -605,6 +663,10 @@ final class EventReceptionSpec
       )
       calls.toVector shouldBe Vector("order.fulfill")
       levels.nonEmpty shouldBe true
+      attrs.head.get(EventReception.StandardAttribute.OriginBoundary) shouldBe Some("external-subsystem")
+      attrs.head.get(EventReception.StandardAttribute.ReceptionRuleName) shouldBe Some("external-order-approved")
+      attrs.head.get(EventReception.StandardAttribute.ReceptionPolicy) shouldBe Some(EventReceptionExecutionPolicy.AsyncNewJobSameSaga.modeName)
+      attrs.head.get(EventReception.StandardAttribute.SagaRelation) shouldBe Some("same-saga")
     }
 
     "drop duplicated replay event deterministically" in {
@@ -614,7 +676,11 @@ final class EventReceptionSpec
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
       val calls = ArrayBuffer.empty[String]
-      val reception = EventReception.default(bus, new _RecordingDispatcher(calls))
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _RecordingDispatcher(calls),
+        currentSubsystemName = Some("sample")
+      )
       reception.register(
         CmlEventDefinition(
           name = "inventory.replayed",
@@ -639,6 +705,7 @@ final class EventReceptionSpec
           kind = "replayed",
           attributes = Map(
             "targetId" -> "i1",
+            EventReception.StandardAttribute.SourceSubsystem -> "sample",
             EventReception.StandardAttribute.Replay -> "true",
             EventReception.StandardAttribute.ReplayEventId -> "evt-1",
             EventReception.StandardAttribute.ReplaySequence -> "1"
@@ -651,6 +718,7 @@ final class EventReceptionSpec
           kind = "replayed",
           attributes = Map(
             "targetId" -> "i1",
+            EventReception.StandardAttribute.SourceSubsystem -> "sample",
             EventReception.StandardAttribute.Replay -> "true",
             EventReception.StandardAttribute.ReplayEventId -> "evt-1",
             EventReception.StandardAttribute.ReplaySequence -> "2"
@@ -684,7 +752,11 @@ final class EventReceptionSpec
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
       val calls = ArrayBuffer.empty[String]
-      val reception = EventReception.default(bus, new _RecordingDispatcher(calls))
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _RecordingDispatcher(calls),
+        currentSubsystemName = Some("sample")
+      )
       reception.register(
         CmlEventDefinition(
           name = "billing.replayed",
@@ -709,6 +781,7 @@ final class EventReceptionSpec
           kind = "replayed",
           attributes = Map(
             "targetId" -> "b1",
+            EventReception.StandardAttribute.SourceSubsystem -> "sample",
             EventReception.StandardAttribute.Replay -> "true",
             EventReception.StandardAttribute.ReplayEventId -> "evt-10",
             EventReception.StandardAttribute.ReplayStream -> "stream-a",
@@ -722,6 +795,7 @@ final class EventReceptionSpec
           kind = "replayed",
           attributes = Map(
             "targetId" -> "b1",
+            EventReception.StandardAttribute.SourceSubsystem -> "sample",
             EventReception.StandardAttribute.Replay -> "true",
             EventReception.StandardAttribute.ReplayEventId -> "evt-9",
             EventReception.StandardAttribute.ReplayStream -> "stream-a",
@@ -749,8 +823,8 @@ final class EventReceptionSpec
       calls.toVector shouldBe Vector("billing.sync")
     }
 
-    "route subscription in same-job continuation mode without creating a new job" in {
-      Given("subscription with explicit same-job continuation and parent job context")
+    "route same-subsystem reception with default sync policy without creating a new job" in {
+      Given("subscription without explicit rule or continuation and parent job context")
       val recorder = new _InMemoryCommitRecorder
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
@@ -760,7 +834,11 @@ final class EventReceptionSpec
       val parentids = ArrayBuffer.empty[Option[String]]
       val attrs = ArrayBuffer.empty[Map[String, String]]
       val dispatcher = new _SecureRecordingDispatcher3(calls, jobids, parentids, attrs)
-      val reception = EventReception.default(bus, dispatcher)
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = dispatcher,
+        currentSubsystemName = Some("accounting")
+      )
       reception.register(
         CmlEventDefinition(
           name = "account.updated",
@@ -774,8 +852,7 @@ final class EventReceptionSpec
           eventName = "account.updated",
           route = DispatchRoute.Unicast,
           target = Some("targetId"),
-          actionName = "account.sync",
-          continuationMode = Some(EventContinuationMode.SameJob)
+          actionName = "account.sync"
         )
       )
       val parent = JobId.generate()
@@ -793,11 +870,14 @@ final class EventReceptionSpec
         ReceptionInput(
           name = "account.updated",
           kind = "updated",
-          attributes = Map("targetId" -> "a1")
+          attributes = Map(
+            "targetId" -> "a1",
+            EventReception.StandardAttribute.SourceSubsystem -> "accounting"
+          )
         )
       )
 
-      Then("dispatch continues on same job context and metadata is propagated")
+      Then("dispatch continues on same job context and default same-subsystem metadata is propagated")
       result shouldBe Consequence.success(
         ReceptionResult(
           outcome = ReceptionOutcome.Routed,
@@ -809,9 +889,138 @@ final class EventReceptionSpec
       jobids.flatten should contain(basejob.jobId.get.print)
       parentids.flatten should contain(parent.print)
       attrs.head.get(EventReception.StandardAttribute.ContinuationMode) shouldBe Some("same-job")
+      attrs.head.get(EventReception.StandardAttribute.OriginBoundary) shouldBe Some("same-subsystem")
+      attrs.head.get(EventReception.StandardAttribute.ReceptionRuleName) shouldBe Some("default:same-subsystem")
+      attrs.head.get(EventReception.StandardAttribute.ReceptionPolicy) shouldBe Some(EventReceptionExecutionPolicy.SameSubsystemDefault.modeName)
       attrs.head.get(EventReception.StandardAttribute.CorrelationId).nonEmpty shouldBe true
       attrs.head.get(EventReception.StandardAttribute.CausationId).nonEmpty shouldBe true
       attrs.head.get(EventReception.StandardAttribute.ParentJobId) shouldBe Some(parent.print)
+    }
+
+    "select more specific external rule and mark new-saga async dispatch" in {
+      Given("external rules with different specificity")
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val jobengine = org.goldenport.cncf.job.InMemoryJobEngine.create()
+      val calls = ArrayBuffer.empty[String]
+      val parentjobs = ArrayBuffer.empty[Option[String]]
+      val attrs = ArrayBuffer.empty[Map[String, String]]
+      val dispatcher = new _SecureRecordingDispatcher2(calls, ArrayBuffer.empty, parentjobs, attrs)
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = dispatcher,
+        currentSubsystemName = Some("inventory"),
+        jobEngine = Some(jobengine)
+      )
+      reception.register(
+        CmlEventDefinition(
+          name = "stock.adjusted",
+          category = CmlEventCategory.NonActionEvent,
+          kind = Some("adjusted")
+        )
+      )
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "stock-sync",
+          eventName = "stock.adjusted",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "stock.sync"
+        )
+      )
+      reception.registerRule(
+        EventReceptionRule(
+          name = "external-default",
+          condition = EventReceptionCondition(
+            originBoundary = Some(EventOriginBoundary.ExternalSubsystem),
+            eventName = Some("stock.adjusted")
+          ),
+          policy = EventReceptionExecutionPolicy.AsyncNewJobSameSaga
+        )
+      )
+      reception.registerRule(
+        EventReceptionRule(
+          name = "external-priority-csv",
+          condition = EventReceptionCondition(
+            originBoundary = Some(EventOriginBoundary.ExternalSubsystem),
+            eventName = Some("stock.adjusted"),
+            eventKind = Some("adjusted"),
+            selectors = Map("source" -> "csv")
+          ),
+          policy = EventReceptionExecutionPolicy.AsyncNewJobNewSaga
+        )
+      )
+      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+
+      When("receiving selector-specific external event")
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "stock.adjusted",
+          kind = "adjusted",
+          attributes = Map(
+            "targetId" -> "s1",
+            "source" -> "csv",
+            EventReception.StandardAttribute.SourceSubsystem -> "backoffice"
+          )
+        )
+      )
+      EventAwaitSupport.awaitVisible(calls.nonEmpty) shouldBe true
+
+      Then("the more specific rule wins and new-saga metadata is recorded")
+      result shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = false
+        )
+      )
+      attrs.head.get(EventReception.StandardAttribute.ReceptionRuleName) shouldBe Some("external-priority-csv")
+      attrs.head.get(EventReception.StandardAttribute.ReceptionPolicy) shouldBe Some(EventReceptionExecutionPolicy.AsyncNewJobNewSaga.modeName)
+      attrs.head.get(EventReception.StandardAttribute.SagaRelation) shouldBe Some("new-saga")
+      attrs.head.get(EventReception.StandardAttribute.ContinuationMode) shouldBe Some("new-job")
+    }
+
+    "fail policy selection when subscription event has no source boundary information" in {
+      Given("subscription-based event reception without source subsystem or external ingress marker")
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _RecordingDispatcher(ArrayBuffer.empty),
+        currentSubsystemName = Some("sample")
+      )
+      reception.register(
+        CmlEventDefinition(
+          name = "person.synced",
+          category = CmlEventCategory.NonActionEvent,
+          kind = Some("synced")
+        )
+      )
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "person-sync",
+          eventName = "person.synced",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "person.sync"
+        )
+      )
+
+      When("receiving event without boundary metadata")
+      val result = reception.receive(
+        ReceptionInput(
+          name = "person.synced",
+          kind = "synced",
+          attributes = Map("targetId" -> "p1")
+        )
+      )
+
+      Then("selection fails deterministically instead of guessing a boundary")
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "materialize no-match event as ephemeral job when jobEngine is provided" in {
@@ -922,11 +1131,7 @@ final class EventReceptionSpec
     ready: () => Boolean,
     timeoutMillis: Long = 3000L
   ): Unit = {
-    val deadline = System.currentTimeMillis() + timeoutMillis
-    while (!ready() && System.currentTimeMillis() < deadline) {
-      Thread.sleep(10L)
-    }
-    if (!ready()) {
+    if (!EventAwaitSupport.awaitVisible(ready(), timeoutMillis)) {
       fail("timeout waiting async event dispatch")
     }
   }
