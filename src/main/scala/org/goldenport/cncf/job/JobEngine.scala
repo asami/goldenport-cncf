@@ -17,7 +17,7 @@ import org.goldenport.cncf.event.{EventId, EventLane, EventRecord, EventStore}
 /*
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
- * @version Apr. 21, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -177,6 +177,9 @@ final case class TaskFailed(
 
 trait JobTask {
   def actionId: ActionId
+  def componentName: Option[String] = None
+  def serviceName: Option[String] = None
+  def operationName: Option[String] = None
   def run(ctx: ExecutionContext): TaskOutcome
 }
 
@@ -186,6 +189,15 @@ final case class ActionTask(
   actionEngine: ActionEngine,
   component: Option[Component]
 ) extends JobTask {
+  override def componentName: Option[String] =
+    component.map(_.name)
+
+  override def serviceName: Option[String] =
+    None
+
+  override def operationName: Option[String] =
+    Some(action.name)
+
   def run(ctx: ExecutionContext): TaskOutcome = {
     val call = component.map(ComponentLogic(_).createActionCall(action, ctx)).getOrElse {
       val correlationid = ctx.observability.correlationId
@@ -259,7 +271,10 @@ final case class JobTaskReadModel(
   status: JobTaskStatus,
   startedAt: Instant,
   finishedAt: Option[Instant],
-  result: JobTaskResultSummary
+  result: JobTaskResultSummary,
+  component: Option[String] = None,
+  service: Option[String] = None,
+  operation: Option[String] = None
 )
 
 final case class JobTimelineEvent(
@@ -291,6 +306,8 @@ final case class JobEventLineage(
   receptionPolicy: Option[String],
   policySource: Option[String],
   jobRelation: Option[String],
+  taskRelation: Option[String],
+  transactionRelation: Option[String],
   sagaRelation: Option[String],
   failurePolicy: Option[String],
   failureDisposition: AsyncFailureDisposition
@@ -415,6 +432,11 @@ trait JobEngine {
   def queryTasks(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTaskPage]
   def queryTimeline(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTimelinePage]
   def metrics: Option[JobMetrics] = None
+  def annotateJob(jobId: JobId, parameters: Map[String, String], executionNotes: Vector[String] = Vector.empty): Unit = ()
+  def runTaskInJobSync(jobId: JobId, task: JobTask, ctx: ExecutionContext): Consequence[TaskOutcome] =
+    Consequence.operationInvalid("job.same-job.sync-task")
+  def enqueueTaskInJob(jobId: JobId, task: JobTask, ctx: ExecutionContext): Consequence[TaskId] =
+    Consequence.operationInvalid("job.same-job.async-task")
 
   def queryVisible(
     jobId: JobId,
@@ -546,6 +568,49 @@ final class InMemoryJobEngine(
     Some(JobMetrics(running = running, queued = queued, completed = completed, failed = failed))
   }
 
+  override def annotateJob(
+    jobId: JobId,
+    parameters: Map[String, String],
+    executionNotes: Vector[String] = Vector.empty
+  ): Unit =
+    _mutate_record(jobId) { record =>
+      record.copy(
+        debug = record.debug.copy(
+          parameters = record.debug.parameters ++ parameters,
+          executionNotes = record.debug.executionNotes ++ executionNotes
+        ),
+        updatedAt = Instant.now()
+      )
+    }
+
+  override def runTaskInJobSync(
+    jobId: JobId,
+    task: JobTask,
+    ctx: ExecutionContext
+  ): Consequence[TaskOutcome] =
+    _get_record(jobId) match {
+      case Some(_) =>
+        val outcome = _run_same_job_task_(jobId, task, ctx)
+        outcome.result.map(_ => outcome)
+      case None =>
+        Consequence.operationNotFound(s"job:${jobId.value}")
+    }
+
+  override def enqueueTaskInJob(
+    jobId: JobId,
+    task: JobTask,
+    ctx: ExecutionContext
+  ): Consequence[TaskId] =
+    _get_record(jobId) match {
+      case Some(_) =>
+        val taskid = TaskId.generate()
+        _append_timeline_(jobId, "job.same-job-async.enqueued", Some(taskid), ctx.jobContext.currentTask, Some(task.operationName.getOrElse(task.actionId.print)))
+        Future(_run_same_job_task_(jobId, task, ctx, Some(taskid)))
+        Consequence.success(taskid)
+      case None =>
+        Consequence.operationNotFound(s"job:${jobId.value}")
+    }
+
   private def _run_job_async_(
     jobid: JobId,
     tasks: List[JobTask],
@@ -609,7 +674,7 @@ final class InMemoryJobEngine(
                 ) ++ ctx.observability.correlationId.map(x => "correlationId" -> x.print)
               )
               val executioncontext = ExecutionContext.withJobContext(ctx, jobcontext)
-              _append_task_running_(jobid, taskid, previous, startedat)
+              _append_task_running_(jobid, taskid, previous, startedat, task)
               task.run(executioncontext) match {
                 case TaskSucceeded(res) =>
                   successResponse = Some(res)
@@ -636,39 +701,62 @@ final class InMemoryJobEngine(
             }
           }
         }
-        _get_record(jobid).map(_.status) match {
+        val deferred = _get_record(jobid).map(_.status) match {
           case Some(JobStatus.Cancelled) =>
-            _update_record_(jobid, JobStatus.Cancelled, Some(JobResult.Failure(Conclusion.simple("job cancelled"))))
+            Some(JobResult.Failure(Conclusion.simple("job cancelled")))
           case _ =>
-            failure match {
-              case Some(c) =>
-                _append_timeline_(jobid, "job.failed", None, None, c.observation.getEffectiveMessage)
-                _update_record_(jobid, JobStatus.Failed, Some(JobResult.Failure(c)))
-                _append_event_(
-                  name = "job.failed",
-                  payload = Map(
-                    "job-id" -> jobid.value,
-                    "status" -> JobStatus.Failed.toString,
-                    "message" -> c.show
-                  )
-                )
-              case None =>
-                _append_timeline_(jobid, "job.succeeded", None, None, None)
-                _update_record_(
-                  jobid,
-                  JobStatus.Succeeded,
-                  successResponse.map(JobResult.Success.apply)
-                )
-                _append_event_(
-                  name = "job.succeeded",
-                  payload = Map(
-                    "job-id" -> jobid.value,
-                    "status" -> JobStatus.Succeeded.toString
-                  )
-                )
-            }
+            failure.map(JobResult.Failure.apply).orElse(successResponse.map(JobResult.Success.apply))
         }
+        _mark_base_completion_(jobid, deferred)
     }
+  }
+
+  private def _run_same_job_task_(
+    jobid: JobId,
+    task: JobTask,
+    ctx: ExecutionContext,
+    forcedTaskId: Option[TaskId] = None
+  ): TaskOutcome = {
+    val taskid = forcedTaskId.getOrElse(TaskId.generate())
+    val parent = ctx.jobContext.currentTask
+    val startedat = Instant.now()
+    val jobcontext = JobContext(
+      jobId = Some(jobid),
+      taskId = Some(taskid),
+      actionId = Some(task.actionId),
+      parentJobId = ctx.jobContext.jobId,
+      currentTask = Some(taskid),
+      taskStack = ctx.jobContext.taskStack :+ taskid,
+      causationId = ctx.observability.correlationId.map(_.print),
+      traceMetadata = Map("traceId" -> ctx.observability.traceId.print) ++
+        ctx.observability.correlationId.map(x => "correlationId" -> x.print)
+    )
+    val executioncontext = ExecutionContext.withJobContext(ctx, jobcontext)
+    _append_task_running_(jobid, taskid, parent, startedat, task)
+    val outcome = task.run(executioncontext)
+    outcome match {
+      case TaskSucceeded(res) =>
+        _append_task_finished_(
+          jobid,
+          taskid,
+          parent,
+          JobTaskStatus.Succeeded,
+          JobTaskResultSummary(success = true, message = Some("ok")),
+          Instant.now()
+        )
+      case TaskFailed(c) =>
+        _append_task_finished_(
+          jobid,
+          taskid,
+          parent,
+          JobTaskStatus.Failed,
+          JobTaskResultSummary(success = false, message = c.observation.getEffectiveMessage),
+          Instant.now()
+        )
+        _update_deferred_result_(jobid, Some(JobResult.Failure(c)))
+    }
+    _settle_if_ready_(jobid)
+    outcome
   }
 
   private def _control(
@@ -881,7 +969,8 @@ final class InMemoryJobEngine(
     jobid: JobId,
     taskid: TaskId,
     parent: Option[TaskId],
-    startedat: Instant
+    startedat: Instant,
+    taskdef: JobTask
   ): Unit =
     _mutate_record(jobid) { record =>
       val task = JobTaskReadModel(
@@ -890,7 +979,10 @@ final class InMemoryJobEngine(
         status = JobTaskStatus.Running,
         startedAt = startedat,
         finishedAt = None,
-        result = JobTaskResultSummary(success = true, message = None)
+        result = JobTaskResultSummary(success = true, message = None),
+        component = taskdef.componentName,
+        service = taskdef.serviceName,
+        operation = taskdef.operationName
       )
       val timeline = _next_timeline(
         record.timeline,
@@ -900,6 +992,8 @@ final class InMemoryJobEngine(
         None
       )
       record.copy(
+        status = JobStatus.Running,
+        activeTaskCount = record.activeTaskCount + 1,
         taskReadModels = record.taskReadModels :+ task,
         timeline = timeline,
         updatedAt = Instant.now()
@@ -937,10 +1031,68 @@ final class InMemoryJobEngine(
         summary.message
       )
       record.copy(
+        activeTaskCount = math.max(0, record.activeTaskCount - 1),
         taskReadModels = tasks,
         timeline = timeline,
         updatedAt = Instant.now()
       )
+    }
+
+  private def _mark_base_completion_(
+    jobid: JobId,
+    result: Option[JobResult]
+  ): Unit = {
+    _mutate_record(jobid) { record =>
+      record.copy(
+        baseTasksCompleted = true,
+        deferredResult = result.orElse(record.deferredResult),
+        updatedAt = Instant.now()
+      )
+    }
+    _settle_if_ready_(jobid)
+  }
+
+  private def _update_deferred_result_(
+    jobid: JobId,
+    result: Option[JobResult]
+  ): Unit =
+    _mutate_record(jobid) { record =>
+      record.copy(
+        deferredResult = result.orElse(record.deferredResult),
+        updatedAt = Instant.now()
+      )
+    }
+
+  private def _settle_if_ready_(jobid: JobId): Unit =
+    _get_record(jobid).foreach { record =>
+      if (record.baseTasksCompleted && record.activeTaskCount == 0) {
+        record.deferredResult match {
+          case Some(JobResult.Failure(c)) if record.status != JobStatus.Cancelled =>
+            _append_timeline_(jobid, "job.failed", None, None, c.observation.getEffectiveMessage)
+            _update_record_(jobid, JobStatus.Failed, Some(JobResult.Failure(c)))
+            _append_event_(
+              name = "job.failed",
+              payload = Map(
+                "job-id" -> jobid.value,
+                "status" -> JobStatus.Failed.toString,
+                "message" -> c.show
+              )
+            )
+          case Some(success @ JobResult.Success(_)) =>
+            _append_timeline_(jobid, "job.succeeded", None, None, None)
+            _update_record_(jobid, JobStatus.Succeeded, Some(success))
+            _append_event_(
+              name = "job.succeeded",
+              payload = Map(
+                "job-id" -> jobid.value,
+                "status" -> JobStatus.Succeeded.toString
+              )
+            )
+          case None =>
+            ()
+        }
+        _mutate_record(jobid)(_.copy(baseTasksCompleted = false, deferredResult = None, updatedAt = Instant.now()))
+      }
     }
 
   private def _append_timeline_(
@@ -1073,6 +1225,8 @@ final class InMemoryJobEngine(
       receptionPolicy = _param("reception.policy"),
       policySource = _param("reception.policySource"),
       jobRelation = jobrelation,
+      taskRelation = _param("reception.taskRelation"),
+      transactionRelation = _param("reception.transactionRelation"),
       sagaRelation = _param("saga.relation"),
       failurePolicy = failurepolicy,
       failureDisposition = _failure_disposition(jobrelation, failurepolicy)
@@ -1209,5 +1363,8 @@ final case class JobRecord(
   updatedAt: Instant,
   taskReadModels: Vector[JobTaskReadModel],
   timeline: Vector[JobTimelineEvent],
-  debug: JobDebugInfo
+  debug: JobDebugInfo,
+  deferredResult: Option[JobResult] = None,
+  activeTaskCount: Int = 0,
+  baseTasksCompleted: Boolean = false
 )

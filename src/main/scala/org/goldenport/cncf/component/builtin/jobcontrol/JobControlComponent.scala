@@ -19,7 +19,7 @@ import org.goldenport.value.BaseContent
 /*
  * @since   Mar. 28, 2026
  *  version Mar. 29, 2026
- * @version Apr. 21, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
@@ -510,15 +510,24 @@ object JobControlComponent {
       "reception-policy" -> model.lineage.receptionPolicy.getOrElse(""),
       "policy-source" -> model.lineage.policySource.getOrElse(""),
       "job-relation" -> model.lineage.jobRelation.getOrElse(""),
+      "task-relation" -> model.lineage.taskRelation.getOrElse(""),
+      "transaction-relation" -> model.lineage.transactionRelation.getOrElse(""),
       "saga-relation" -> model.lineage.sagaRelation.getOrElse(""),
       "failure-policy" -> model.lineage.failurePolicy.getOrElse(""),
       "failure-disposition" -> model.lineage.failureDisposition.print,
+      "task-count" -> model.tasks.totalCount,
       "tasks" -> model.tasks.tasks.map { task =>
         Record.data(
           "task-id" -> task.taskId.value,
+          "parent-task-id" -> task.parentTaskId.map(_.value).getOrElse(""),
           "status" -> task.status.toString,
           "success" -> task.result.success,
-          "message" -> task.result.message.getOrElse("")
+          "message" -> task.result.message.getOrElse(""),
+          "component" -> task.component.getOrElse(""),
+          "service" -> task.service.getOrElse(""),
+          "operation" -> task.operation.getOrElse(""),
+          "started-at" -> task.startedAt.toString,
+          "finished-at" -> task.finishedAt.map(_.toString).getOrElse("")
         )
       },
       "timeline" -> model.timeline.events.map(_timeline_event_record),

@@ -17,7 +17,7 @@ import org.goldenport.value.BaseContent
 /*
  * @since   Mar. 28, 2026
  *  version Apr. 11, 2026
- * @version Apr. 21, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventComponent() extends Component {
@@ -394,6 +394,8 @@ object EventComponent {
       "reception-rule" -> record.attributes.getOrElse("cncf.event.receptionRule", ""),
       "reception-policy" -> record.attributes.getOrElse("cncf.event.receptionPolicy", ""),
       "policy-source" -> record.attributes.getOrElse("cncf.event.policySource", ""),
+      "task-relation" -> record.attributes.getOrElse("cncf.event.taskRelation", ""),
+      "transaction-relation" -> record.attributes.getOrElse("cncf.event.transactionRelation", ""),
       "failure-policy" -> record.attributes.getOrElse("cncf.event.failurePolicy", ""),
       "failure-disposition-base" -> record.attributes.getOrElse("cncf.event.failureDispositionBase", ""),
       "dispatch-kind" -> record.attributes.getOrElse("cncf.event.dispatchKind", ""),

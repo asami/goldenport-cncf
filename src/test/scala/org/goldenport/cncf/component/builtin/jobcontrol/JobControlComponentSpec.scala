@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 21, 2026
- * @version Apr. 21, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponentSpec extends AnyWordSpec with Matchers {
@@ -41,6 +41,8 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers {
             "reception.policy" -> "async:new-job:same-saga:new-transaction",
             "reception.policySource" -> "compatibility-mapping",
             "reception.jobRelation" -> "newjob",
+            "reception.taskRelation" -> "separate-task",
+            "reception.transactionRelation" -> "new-transaction",
             "saga.relation" -> "same-saga",
             "failure.policy" -> "retry"
           ),
@@ -56,6 +58,8 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers {
           model.lineage.targetComponent shouldBe Some("public-notice")
           model.lineage.receptionRule shouldBe Some("person-created-sync")
           model.lineage.policySource shouldBe Some("compatibility-mapping")
+          model.lineage.taskRelation shouldBe Some("separate-task")
+          model.lineage.transactionRelation shouldBe Some("new-transaction")
           model.lineage.failurePolicy shouldBe Some("retry")
           model.lineage.failureDisposition.print shouldBe "not-applicable"
         case Consequence.Failure(conclusion) =>

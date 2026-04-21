@@ -48,7 +48,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -1257,6 +1257,8 @@ object AdminComponent {
         "reception-rule",
         "reception-policy",
         "policy-source",
+        "task-relation",
+        "transaction-relation",
         "failure-policy",
         "failure-disposition-base",
         "dispatch-kind",
@@ -1271,6 +1273,8 @@ object AdminComponent {
         "reception-policy",
         "policy-source",
         "job-relation",
+        "task-relation",
+        "transaction-relation",
         "saga-relation",
         "failure-policy",
         "failure-disposition",

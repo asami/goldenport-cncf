@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 21, 2026
- * @version Apr. 21, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventReceptionSpec
@@ -1046,8 +1046,8 @@ final class EventReceptionSpec
           policy = EventReceptionExecutionPolicy.SameSubsystemDefault
         )
       )
-      val parent = JobId.generate()
       val base = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+      val parent = jobengine.submit(Nil, base)
       given ExecutionContext = ExecutionContext.withJobContext(
         base,
         JobContext(
@@ -1084,7 +1084,7 @@ final class EventReceptionSpec
       attrs.head.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("explicit-rule")
       attrs.head.get(EventReception.StandardAttribute.ReceptionPolicy) shouldBe Some(EventReceptionExecutionPolicy.SameSubsystemDefault.modeName)
       attrs.head.get(EventReception.StandardAttribute.ContinuationMode) shouldBe Some("same-job")
-      jobengine.submissionCount shouldBe 0
+      jobengine.submissionCount shouldBe 1
     }
 
     "project retryable async failure disposition from failed child job" in {
@@ -1146,6 +1146,200 @@ final class EventReceptionSpec
       child.status shouldBe JobStatus.Failed
       child.lineage.failurePolicy shouldBe Some("retry")
       child.lineage.failureDisposition shouldBe org.goldenport.cncf.job.AsyncFailureDisposition.Retryable
+    }
+
+    "expose same-job separate-task sync metadata without creating a child job" in {
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val jobengine = new _RecordingJobEngine
+      val calls = ArrayBuffer.empty[String]
+      val attrs = ArrayBuffer.empty[Map[String, String]]
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _SecureRecordingDispatcher3(calls, ArrayBuffer.empty, ArrayBuffer.empty, attrs),
+        currentSubsystemName = Some("inventory"),
+        currentComponentName = Some("notice-admin"),
+        jobEngine = Some(jobengine)
+      )
+      reception.register(CmlEventDefinition("notice.sync.samejob", CmlEventCategory.NonActionEvent, Some("published")))
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "notice-sync",
+          eventName = "notice.sync.samejob",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "notice.sync"
+        )
+      )
+      val base = _shared_event_context(recorder, store)
+      val rootJobId = jobengine.submit(Nil, base)
+      given ExecutionContext = ExecutionContext.withJobContext(
+        base,
+        JobContext(
+          jobId = Some(rootJobId),
+          taskId = Some(TaskId.generate()),
+          actionId = Some(ActionId.generate()),
+          currentTask = Some(TaskId.generate())
+        )
+      )
+
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "notice.sync.samejob",
+          kind = "published",
+          attributes = Map(
+            "targetId" -> "n-sync",
+            EventReception.StandardAttribute.SourceSubsystem -> "inventory",
+            EventReception.StandardAttribute.SourceComponent -> "public-notice"
+          )
+        )
+      )
+
+      result shouldBe Consequence.success(ReceptionResult(ReceptionOutcome.Routed, 1, persisted = false))
+      jobengine.submissionCount shouldBe 1
+      jobengine.syncRuns.map(_._1) should contain(rootJobId)
+      val record = jobengine.query(rootJobId).getOrElse(fail("root job missing"))
+      record.lineage.targetComponent shouldBe Some("notice-admin")
+      record.lineage.jobRelation shouldBe Some("samejob")
+      record.lineage.taskRelation shouldBe Some("separate-task")
+      record.lineage.transactionRelation shouldBe Some("same-transaction")
+      record.tasks.totalCount should be >= 1
+    }
+
+    "run same-job async new-transaction continuation without creating a child job" in {
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val jobengine = new _RecordingJobEngine
+      val calls = ArrayBuffer.empty[String]
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _RecordingDispatcher(calls),
+        currentSubsystemName = Some("inventory"),
+        currentComponentName = Some("notice-admin"),
+        jobEngine = Some(jobengine)
+      )
+      reception.register(CmlEventDefinition("notice.async.samejob", CmlEventCategory.NonActionEvent, Some("published")))
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "notice-sync",
+          eventName = "notice.async.samejob",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "notice.sync"
+        )
+      )
+      reception.registerRule(
+        EventReceptionRule(
+          name = "notice-async-samejob",
+          condition = EventReceptionCondition(
+            originBoundary = Some(EventOriginBoundary.SameSubsystem),
+            eventName = Some("notice.async.samejob"),
+            eventKind = Some("published")
+          ),
+          policy = EventReceptionExecutionPolicy.AsyncSameJobSameSagaNewTransaction
+        )
+      )
+      val base = _shared_event_context(recorder, store)
+      val rootJobId = jobengine.submit(Nil, base)
+      given ExecutionContext = ExecutionContext.withJobContext(
+        base,
+        JobContext(
+          jobId = Some(rootJobId),
+          taskId = Some(TaskId.generate()),
+          actionId = Some(ActionId.generate()),
+          currentTask = Some(TaskId.generate())
+        )
+      )
+
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "notice.async.samejob",
+          kind = "published",
+          attributes = Map(
+            "targetId" -> "n-async",
+            EventReception.StandardAttribute.SourceSubsystem -> "inventory",
+            EventReception.StandardAttribute.SourceComponent -> "public-notice"
+          )
+        )
+      )
+
+      result shouldBe Consequence.success(ReceptionResult(ReceptionOutcome.Routed, 1, persisted = false))
+      EventAwaitSupport.awaitVisible(jobengine.asyncEnqueues.nonEmpty) shouldBe true
+      jobengine.submissionCount shouldBe 1
+      val record = jobengine.query(rootJobId).getOrElse(fail("root job missing"))
+      record.lineage.receptionRule shouldBe Some("notice-async-samejob")
+      record.lineage.taskRelation shouldBe Some("separate-task")
+      record.lineage.transactionRelation shouldBe Some("new-transaction")
+    }
+
+    "reject async same-job same-transaction at policy selection time" in {
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val jobengine = new _RecordingJobEngine
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = new _RecordingDispatcher(ArrayBuffer.empty),
+        currentSubsystemName = Some("inventory"),
+        currentComponentName = Some("notice-admin"),
+        jobEngine = Some(jobengine)
+      )
+      reception.register(CmlEventDefinition("notice.unsupported", CmlEventCategory.NonActionEvent, Some("published")))
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "notice-sync",
+          eventName = "notice.unsupported",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "notice.sync"
+        )
+      )
+      reception.registerRule(
+        EventReceptionRule(
+          name = "notice-unsupported",
+          condition = EventReceptionCondition(
+            originBoundary = Some(EventOriginBoundary.SameSubsystem),
+            eventName = Some("notice.unsupported"),
+            eventKind = Some("published")
+          ),
+          policy = EventReceptionExecutionPolicy(
+            timing = EventExecutionTiming.Async,
+            jobRelation = EventJobRelation.SameJob,
+            sagaRelation = EventSagaRelation.SameSaga,
+            transactionRelation = EventTransactionRelation.SameTransaction,
+            failurePolicy = EventFailurePolicy.Retry
+          )
+        )
+      )
+      val base = _shared_event_context(recorder, store)
+      val rootJobId = jobengine.submit(Nil, base)
+      given ExecutionContext = ExecutionContext.withJobContext(
+        base,
+        JobContext(jobId = Some(rootJobId), taskId = Some(TaskId.generate()), actionId = Some(ActionId.generate()))
+      )
+
+      val result = reception.receiveAuthorized(
+        ReceptionInput(
+          name = "notice.unsupported",
+          kind = "published",
+          attributes = Map(
+            "targetId" -> "n-unsupported",
+            EventReception.StandardAttribute.SourceSubsystem -> "inventory"
+          )
+        )
+      )
+
+      result shouldBe a[Consequence.Failure[_]]
+      result match {
+        case Consequence.Failure(c) => c.show should include ("unsupported event reception policy")
+        case _ => fail("expected failure")
+      }
+      jobengine.asyncEnqueues shouldBe empty
     }
 
     "project terminal async failure disposition from failed child job" in {
@@ -1756,6 +1950,10 @@ final class EventReceptionSpec
 
   private final class _RecordingJobEngine extends JobEngine {
     @volatile private var _options: Vector[JobSubmitOption] = Vector.empty
+    @volatile private var _annotations: Vector[(JobId, Map[String, String])] = Vector.empty
+    @volatile private var _syncRuns: Vector[(JobId, String)] = Vector.empty
+    @volatile private var _asyncEnqueues: Vector[(JobId, String)] = Vector.empty
+    private val _delegate = new org.goldenport.cncf.job.InMemoryJobEngine()(scala.concurrent.ExecutionContext.global)
 
     def lastOption: Option[JobSubmitOption] =
       _options.lastOption
@@ -1763,27 +1961,50 @@ final class EventReceptionSpec
     def submissionCount: Int =
       _options.size
 
+    def annotations: Vector[(JobId, Map[String, String])] =
+      _annotations
+
+    def syncRuns: Vector[(JobId, String)] =
+      _syncRuns
+
+    def asyncEnqueues: Vector[(JobId, String)] =
+      _asyncEnqueues
+
     def submit(tasks: List[JobTask], ctx: ExecutionContext): JobId =
       submit(tasks, ctx, JobSubmitOption())
 
     def submit(tasks: List[JobTask], ctx: ExecutionContext, option: JobSubmitOption): JobId = {
-      val _ = tasks
-      val _ = ctx
       _options = _options :+ option
-      JobId.generate()
+      _delegate.submit(tasks, ctx, option)
     }
 
-    def getStatus(jobId: JobId): Option[JobStatus] = None
-    def getResult(jobId: JobId): Option[JobResult] = None
+    override def annotateJob(jobId: JobId, parameters: Map[String, String], executionNotes: Vector[String]): Unit = {
+      _annotations = _annotations :+ ((jobId, parameters))
+      _delegate.annotateJob(jobId, parameters, executionNotes)
+    }
+
+    override def runTaskInJobSync(jobId: JobId, task: JobTask, ctx: ExecutionContext): Consequence[org.goldenport.cncf.job.TaskOutcome] = {
+      _syncRuns = _syncRuns :+ ((jobId, task.operationName.getOrElse(task.actionId.print)))
+      _delegate.runTaskInJobSync(jobId, task, ctx)
+    }
+
+    override def enqueueTaskInJob(jobId: JobId, task: JobTask, ctx: ExecutionContext): Consequence[TaskId] = {
+      _asyncEnqueues = _asyncEnqueues :+ ((jobId, task.operationName.getOrElse(task.actionId.print)))
+      _delegate.enqueueTaskInJob(jobId, task, ctx)
+    }
+
+    def getStatus(jobId: JobId): Option[JobStatus] = _delegate.getStatus(jobId)
+    def getResult(jobId: JobId): Option[JobResult] = _delegate.getResult(jobId)
     def control(
       jobId: JobId,
       request: JobControlRequest,
       policy: JobControlPolicy
     )(using ExecutionContext): Consequence[JobControlResponse] =
-      Consequence.notImplemented("not used in this spec")
-    def query(jobId: JobId): Option[JobQueryReadModel] = None
-    def queryTasks(jobId: JobId, offset: Int, limit: Int): Option[JobTaskPage] = None
-    def queryTimeline(jobId: JobId, offset: Int, limit: Int): Option[JobTimelinePage] = None
+      _delegate.control(jobId, request, policy)
+    def query(jobId: JobId): Option[JobQueryReadModel] = _delegate.query(jobId)
+    def queryTasks(jobId: JobId, offset: Int, limit: Int): Option[JobTaskPage] = _delegate.queryTasks(jobId, offset, limit)
+    def queryTimeline(jobId: JobId, offset: Int, limit: Int): Option[JobTimelinePage] = _delegate.queryTimeline(jobId, offset, limit)
+    override def metrics = _delegate.metrics
   }
 
   private def _shared_event_context(

@@ -21,7 +21,7 @@ import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 21, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -4063,8 +4063,18 @@ final case class FormPageProperties(
     configuration.map { _ =>
       """<article>
         |  <h2>Job Control</h2>
-        |  <p>Job control entry points are reserved for system admin operations. The WEB-05 baseline is read-only and does not expose browser-side cancel, retry, or force-complete actions.</p>
+        |  <p>Job control entry points are reserved for system admin operations. Use builtin job and event surfaces as the authoritative source for cross-component continuation observability.</p>
+        |  <div class="card mb-3"><div class="card-body">
+        |    <h3 class="h5">Operator Checklist</h3>
+        |    <ul class="mb-0">
+        |      <li>Use <code>job_control.job.get_job_status</code> for source/target component, reception policy, task relation, transaction relation, and task summary.</li>
+        |      <li>Use <code>job_control.job.load_job_history</code> for per-task execution timeline.</li>
+        |      <li>Use <code>event.event.load_event</code> for dispatch contract, policy source, and unsupported-policy rejection evidence.</li>
+        |      <li>Use <code>job_control.job_admin.load_job_events</code> for job-to-event cross-links.</li>
+        |    </ul>
+        |  </div></div>
         |  <ul>
+        |    <li><a href="/form/admin/execution/diagnostics">Execution diagnostics</a></li>
         |    <li><a href="/form/admin/execution/history">Execution history</a></li>
         |    <li><a href="/form/admin/execution/calltree">Latest calltree</a></li>
         |  </ul>

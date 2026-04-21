@@ -23,7 +23,7 @@ import org.goldenport.provisional.observation.Taxonomy
  *
  * @since   Mar. 21, 2026
  *  version Mar. 24, 2026
- * @version Apr. 21, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 enum CmlEventCategory {
@@ -213,6 +213,15 @@ object EventReceptionExecutionPolicy {
       transactionRelation = EventTransactionRelation.NewTransaction,
       failurePolicy = EventFailurePolicy.Retry
     )
+
+  val AsyncSameJobSameSagaNewTransaction: EventReceptionExecutionPolicy =
+    EventReceptionExecutionPolicy(
+      timing = EventExecutionTiming.Async,
+      jobRelation = EventJobRelation.SameJob,
+      sagaRelation = EventSagaRelation.SameSaga,
+      transactionRelation = EventTransactionRelation.NewTransaction,
+      failurePolicy = EventFailurePolicy.Retry
+    )
 }
 
 final case class EventReceptionRule(
@@ -342,6 +351,8 @@ object EventReception {
     val FailureDispositionBase = "cncf.event.failureDispositionBase"
     val DispatchKind = "cncf.event.dispatchKind"
     val DispatchStatus = "cncf.event.dispatchStatus"
+    val TaskRelation = "cncf.event.taskRelation"
+    val TransactionRelation = "cncf.event.transactionRelation"
     val SagaRelation = "cncf.event.sagaRelation"
     val Replay = "cncf.event.replay"
     val ReplayEventId = "cncf.event.replayEventId"
@@ -1305,16 +1316,17 @@ object EventReception {
       event: ReceptionDomainEvent
     ): Consequence[_ResolvedExecutionPolicy] = {
       val category = definitions.find(_.name == event.name).map(_.category)
-      _resolve_origin_boundary(event).map { boundary =>
+      _resolve_origin_boundary(event).flatMap { boundary =>
         _select_rule(event, boundary, category) match {
           case Some((rule, _)) =>
-            _ResolvedExecutionPolicy(
+            val resolved = _ResolvedExecutionPolicy(
               ruleName = rule.name,
               policy = rule.policy,
               boundary = boundary,
               compatibilityMode = _compatibility_mode(rule.policy, boundary),
               policySource = EventReceptionPolicySource.ExplicitRule
             )
+            _validate_supported_policy(resolved).map(_ => resolved)
           case None =>
             val compatibility = _resolve_continuation_mode(subscription, event)
             val explicitcompat = _has_explicit_compatibility_mode(subscription, event)
@@ -1329,16 +1341,27 @@ object EventReception {
                 s"compatibility:${_continuation_mode_name(compatibility)}"
               else
                 s"default:${_origin_boundary_name(boundary)}"
-            _ResolvedExecutionPolicy(
+            val resolved = _ResolvedExecutionPolicy(
               ruleName = rulename,
               policy = policy,
               boundary = boundary,
               compatibilityMode = compatibility,
               policySource = source
             )
+            _validate_supported_policy(resolved).map(_ => resolved)
         }
       }
     }
+
+    private def _validate_supported_policy(
+      resolved: _ResolvedExecutionPolicy
+    ): Consequence[Unit] =
+      (resolved.policy.timing, resolved.policy.jobRelation, resolved.policy.transactionRelation) match {
+        case (EventExecutionTiming.Async, EventJobRelation.SameJob, EventTransactionRelation.SameTransaction) =>
+          _failure(s"unsupported event reception policy: ${resolved.policy.modeName}")
+        case _ =>
+          Consequence.unit
+      }
 
     private def _resolve_origin_boundary(
       event: ReceptionDomainEvent
@@ -1440,57 +1463,96 @@ object EventReception {
       event: ReceptionDomainEvent,
       resolved: _ResolvedExecutionPolicy
     )(using ctx: ExecutionContext): Consequence[Unit] =
-      resolved.policy.timing match {
-        case EventExecutionTiming.Sync =>
-          dispatcher match {
-            case d: SecureActionCallDispatcher =>
-              d.dispatchActionAuthorized(actionname, event)
-            case _ =>
-              dispatcher.dispatchAction(actionname, event)
-          }
-        case EventExecutionTiming.Async =>
-          jobEngine match {
-            case Some(engine) =>
-              val submitctx = _job_submission_context(ctx, event, resolved)
-              val option = JobSubmitOption(
-                persistence =
-                  if (_read_boolean(event.attributes, Vector(StandardAttribute.EventPersistent)))
-                    JobPersistencePolicy.Persistent
-                  else
-                    JobPersistencePolicy.Ephemeral,
-                requestSummary = Some(s"event.continuation:${event.name}"),
-                parameters = event.attributes ++ Map(
-                  "event.name" -> event.name,
-                  "event.kind" -> event.kind,
-                  "continuation.mode" -> _continuation_mode_name(resolved.compatibilityMode),
-                  "origin.boundary" -> _origin_boundary_name(resolved.boundary),
-                  "reception.rule" -> resolved.ruleName,
-                  "reception.policy" -> resolved.policy.modeName,
-                  "reception.policySource" -> resolved.policySource.print,
-                  "reception.jobRelation" -> resolved.policy.jobRelation.toString.toLowerCase(java.util.Locale.ROOT),
-                  "saga.relation" -> _saga_relation_name(resolved.policy.sagaRelation),
-                  "failure.policy" -> resolved.policy.failurePolicy.toString.toLowerCase(java.util.Locale.ROOT)
-                ),
-                executionNotes = Vector(
-                  "event continuation via async reception",
-                  s"event reception rule: ${resolved.ruleName}",
-                  s"event reception policy: ${resolved.policy.modeName}",
-                  s"event reception policy source: ${resolved.policySource.print}"
+      jobEngine match {
+        case Some(engine) if resolved.policy.jobRelation == EventJobRelation.SameJob =>
+          ctx.jobContext.jobId match {
+            case Some(jobid) =>
+              val parameters = _job_parameters(event, resolved)
+              engine.annotateJob(
+                jobid,
+                parameters,
+                Vector(
+                  s"event continuation policy: ${resolved.policy.modeName}",
+                  s"event continuation target: ${event.attributes.getOrElse(StandardAttribute.TargetComponent, "")}"
                 )
               )
-              val submit = () => engine.submit(List(_DispatchActionTask(actionname, event)), submitctx, option)
-              if (_has_action_scope(ctx.cncfCore.scope))
-                ctx.runtime.unitOfWork.stagePostCommit {
-                  val _ = submit()
-                }
-              else {
-                val _ = submit()
+              resolved.policy.timing match {
+                case EventExecutionTiming.Sync =>
+                  engine.runTaskInJobSync(jobid, _DispatchActionTask(actionname, event), ctx).map(_ => ())
+                case EventExecutionTiming.Async =>
+                  val enqueue = () => engine.enqueueTaskInJob(jobid, _DispatchActionTask(actionname, event), ctx).map(_ => ())
+                  if (_has_action_scope(ctx.cncfCore.scope))
+                    ctx.runtime.unitOfWork.stagePostCommit {
+                      val _ = enqueue()
+                    }
+                  else
+                    val _ = enqueue()
+                  Consequence.unit
               }
-              Consequence.unit
             case None =>
-              _failure("async event reception requires job engine")
+              _failure(s"same-job event reception requires job context: ${resolved.policy.modeName}")
+          }
+        case _ =>
+          resolved.policy.timing match {
+            case EventExecutionTiming.Sync =>
+              dispatcher match {
+                case d: SecureActionCallDispatcher =>
+                  d.dispatchActionAuthorized(actionname, event)
+                case _ =>
+                  dispatcher.dispatchAction(actionname, event)
+              }
+            case EventExecutionTiming.Async =>
+              jobEngine match {
+                case Some(engine) =>
+                  val submitctx = _job_submission_context(ctx, event, resolved)
+                  val option = JobSubmitOption(
+                    persistence =
+                      if (_read_boolean(event.attributes, Vector(StandardAttribute.EventPersistent)))
+                        JobPersistencePolicy.Persistent
+                      else
+                        JobPersistencePolicy.Ephemeral,
+                    requestSummary = Some(s"event.continuation:${event.name}"),
+                    parameters = _job_parameters(event, resolved),
+                    executionNotes = Vector(
+                      "event continuation via async reception",
+                      s"event reception rule: ${resolved.ruleName}",
+                      s"event reception policy: ${resolved.policy.modeName}",
+                      s"event reception policy source: ${resolved.policySource.print}"
+                    )
+                  )
+                  val submit = () => engine.submit(List(_DispatchActionTask(actionname, event)), submitctx, option)
+                  if (_has_action_scope(ctx.cncfCore.scope))
+                    ctx.runtime.unitOfWork.stagePostCommit {
+                      val _ = submit()
+                    }
+                  else {
+                    val _ = submit()
+                  }
+                  Consequence.unit
+                case None =>
+                  _failure("async event reception requires job engine")
+              }
           }
       }
+
+    private def _job_parameters(
+      event: ReceptionDomainEvent,
+      resolved: _ResolvedExecutionPolicy
+    ): Map[String, String] =
+      event.attributes ++ Map(
+        "event.name" -> event.name,
+        "event.kind" -> event.kind,
+        "continuation.mode" -> _continuation_mode_name(resolved.compatibilityMode),
+        "origin.boundary" -> _origin_boundary_name(resolved.boundary),
+        "reception.rule" -> resolved.ruleName,
+        "reception.policy" -> resolved.policy.modeName,
+        "reception.policySource" -> resolved.policySource.print,
+        "reception.jobRelation" -> resolved.policy.jobRelation.toString.toLowerCase(java.util.Locale.ROOT),
+        "reception.taskRelation" -> _task_relation_name(resolved.policy),
+        "reception.transactionRelation" -> _transaction_relation_name(resolved.policy),
+        "saga.relation" -> _saga_relation_name(resolved.policy.sagaRelation),
+        "failure.policy" -> resolved.policy.failurePolicy.toString.toLowerCase(java.util.Locale.ROOT)
+      )
 
     private def _decorate_event_for_dispatch(
       event: ReceptionDomainEvent,
@@ -1519,6 +1581,8 @@ object EventReception {
         Some(StandardAttribute.FailureDispositionBase -> _failure_disposition_base_name(resolved.policy)),
         Some(StandardAttribute.DispatchKind -> _dispatch_kind_name(resolved.policy)),
         Some(StandardAttribute.DispatchStatus -> _initial_dispatch_status_name(resolved.policy)),
+        Some(StandardAttribute.TaskRelation -> _task_relation_name(resolved.policy)),
+        Some(StandardAttribute.TransactionRelation -> _transaction_relation_name(resolved.policy)),
         Some(StandardAttribute.SagaRelation -> _saga_relation_name(resolved.policy.sagaRelation)),
         currentSubsystemName.filter(_.nonEmpty).map(x => StandardAttribute.TargetSubsystem -> x),
         currentComponentName.filter(_.nonEmpty).map(x => StandardAttribute.TargetComponent -> x)
@@ -1567,14 +1631,14 @@ object EventReception {
       _append_history(
         event.copy(
           attributes = event.attributes ++ Map(
-            StandardAttribute.DispatchKind -> "sync-inline",
+            StandardAttribute.DispatchKind -> event.attributes.getOrElse(StandardAttribute.DispatchKind, "sync-inline"),
             StandardAttribute.DispatchStatus -> result,
-            StandardAttribute.FailureDispositionBase -> "not-applicable"
+            StandardAttribute.FailureDispositionBase -> event.attributes.getOrElse(StandardAttribute.FailureDispositionBase, "not-applicable")
           )
         ),
         "dispatch",
         Vector(
-          "mode" -> "sync-inline",
+          "mode" -> event.attributes.getOrElse(StandardAttribute.DispatchKind, "sync-inline"),
           "result" -> result,
           "failure" -> failure.getOrElse("")
         )
@@ -1583,9 +1647,11 @@ object EventReception {
     private def _dispatch_kind_name(
       policy: EventReceptionExecutionPolicy
     ): String =
-      policy.timing match {
-        case EventExecutionTiming.Sync => "sync-inline"
-        case EventExecutionTiming.Async => "async-new-job"
+      (policy.timing, policy.jobRelation) match {
+        case (EventExecutionTiming.Sync, EventJobRelation.SameJob) => "sync-inline"
+        case (EventExecutionTiming.Async, EventJobRelation.SameJob) => "async-same-job"
+        case (EventExecutionTiming.Async, EventJobRelation.NewJob) => "async-new-job"
+        case (EventExecutionTiming.Sync, EventJobRelation.NewJob) => "sync-new-job"
       }
 
     private def _initial_dispatch_status_name(
@@ -1611,6 +1677,22 @@ object EventReception {
             case EventFailurePolicy.Fail => "terminal"
             case EventFailurePolicy.Retry => "retryable"
           }
+      }
+
+    private def _task_relation_name(
+      policy: EventReceptionExecutionPolicy
+    ): String =
+      policy.timing match {
+        case EventExecutionTiming.Sync => "separate-task"
+        case EventExecutionTiming.Async => "separate-task"
+      }
+
+    private def _transaction_relation_name(
+      policy: EventReceptionExecutionPolicy
+    ): String =
+      policy.transactionRelation match {
+        case EventTransactionRelation.SameTransaction => "same-transaction"
+        case EventTransactionRelation.NewTransaction => "new-transaction"
       }
 
     private def _append_history(
@@ -1679,6 +1761,16 @@ object EventReception {
       event: ReceptionDomainEvent
     ) extends JobTask {
       val actionId: ActionId = ActionId.generate()
+      override val componentName: Option[String] =
+        event.attributes.get(StandardAttribute.TargetComponent).filter(_.nonEmpty)
+      override val serviceName: Option[String] =
+        Some(actionName).map(_.split('.').toVector).collect {
+          case Vector(service, _operation) => service
+        }
+      override val operationName: Option[String] =
+        Some(actionName).map(_.split('.').toVector).collect {
+          case Vector(_service, operation) => operation
+        }.orElse(Some(actionName))
       def run(ctx: ExecutionContext): TaskOutcome = {
         val dispatched = _resolve_dispatch_execution_context(event.attributes).flatMap { security =>
           val base = security.executionContext

@@ -51,7 +51,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 21, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -145,9 +145,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Configuration mutation must use a separate admin action surface")
       html should include ("audit logging")
       html should include ("Job Control")
-      html should include ("read-only")
-      html should include ("cancel, retry, or force-complete")
-      html should include ("explicit admin authorization")
+      html should include ("authoritative source for cross-component continuation observability")
+      html should include ("Operator Checklist")
+      html should include ("job_control.job.get_job_status")
+      html should include ("event.event.load_event")
+      html should include ("/form/admin/execution/diagnostics")
       html should include ("Operational Details")
       html should include ("Assembly")
       html should include ("/form/admin/assembly/warnings")
