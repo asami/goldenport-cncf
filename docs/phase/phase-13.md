@@ -1,6 +1,6 @@
 # Phase 13 — Event Mechanism Extension
 
-status = open
+status = closed
 
 ## 1. Purpose of This Document
 
@@ -42,29 +42,34 @@ it is not the semantic target for Phase 13 same-subsystem sync reception.
 
 ## 4. Current Work Stack
 
-- A (ACTIVE): EVX-01 — Define subsystem-level shared event wiring baseline.
-- B (SUSPENDED): EVX-02 — Make component subscription bootstrap a standard startup path.
-- C (SUSPENDED): EVX-03 — Stabilize event-to-action dispatch contract.
-- D (SUSPENDED): EVX-04 — Formalize continuation/job integration semantics.
-- E (SUSPENDED): EVX-05 — Add internal event-aware await support.
-- F (SUSPENDED): EVX-06 — Add observability/inspection coverage for event-driven collaboration.
-- G (SUSPENDED): EVX-07 — Protect the extension path with executable specifications.
+- A (DONE): EVX-01 — Define subsystem-level shared event wiring baseline.
+- B (DONE): EVX-02 — Make component subscription bootstrap a standard startup path.
+- C (DONE): EVX-03 — Stabilize event-to-action dispatch contract.
+- D (DONE): EVX-04 — Formalize continuation/job integration semantics.
+- E (DONE): EVX-05 — Add internal event-aware await support.
+- F (DONE): EVX-06 — Add observability/inspection coverage for event-driven collaboration.
+- G (DONE): EVX-07 — Protect the extension path with executable specifications.
 
 Current note:
-- The framework already has `EventBus`, `EventReception`, continuation modes,
-  and builtin event/job-control inspection components.
-- This phase extends those foundations into the canonical subsystem-level
-  event collaboration model rather than inventing a new event mechanism.
+- Phase 13 runtime closure is reached.
+- The framework now has:
+  - subsystem-owned shared event wiring
+  - standard subscription bootstrap
+  - sync-inline and async/new-job continuation semantics
+  - typed async failure disposition
+  - stable policy precedence and policy source visibility
+  - bundle/participant construction with formal runtime componentlet identity
+  - builtin event/job/admin diagnostics coverage
 
 ## 5. Development Items
 
-- [ ] EVX-01: Define and implement subsystem-level shared event wiring.
-- [ ] EVX-02: Define and implement component subscription bootstrap.
-- [ ] EVX-03: Refine event-to-action dispatch contract.
-- [ ] EVX-04: Formalize event continuation and job integration semantics.
-- [ ] EVX-05: Add internal await support based on event completion.
-- [ ] EVX-06: Add observability and inspection coverage for event-driven collaboration.
-- [ ] EVX-07: Add executable specifications for the event extension path.
+- [x] EVX-01: Define and implement subsystem-level shared event wiring.
+- [x] EVX-02: Define and implement component subscription bootstrap.
+- [x] EVX-03: Refine event-to-action dispatch contract.
+- [x] EVX-04: Formalize event continuation and job integration semantics.
+- [x] EVX-05: Add internal await support based on event completion.
+- [x] EVX-06: Add observability and inspection coverage for event-driven collaboration.
+- [x] EVX-07: Add executable specifications for the event extension path.
 
 ## 6. Next Phase Candidates
 
@@ -77,6 +82,7 @@ Current note:
 - `docs/strategy/cncf-development-strategy.md`
 - `docs/journal/2026/04/event-mechanism-extension-work-items.md`
 - `docs/journal/2026/03/event-mechanism-design.md`
+- `docs/journal/2026/04/phase-13-closure-result-2026-04-22.md`
 - `docs/notes/event-reception-latest-processing-spec.md`
 - `docs/notes/event-reception-policy-selection.md`
 - `docs/phase/phase-13-checklist.md`

@@ -48,7 +48,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
  *  version Mar. 30, 2026
- * @version Apr. 21, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -649,8 +649,19 @@ object Component {
     primary: Component,
     componentlets: Vector[Component] = Vector.empty
   ) {
+    require(primary != null, "primary component is required")
+    require(componentlets.forall(_ != null), "componentlets must not contain null")
+
     def participants: Vector[Component] =
       primary +: componentlets
+
+    def validate(): Bundle = {
+      val names = participants.map(_.name)
+      val duplicated = names.groupBy(identity).collectFirst { case (name, xs) if xs.size > 1 => name }
+      require(!componentlets.exists(_ eq primary), "primary component must not appear in componentlets")
+      require(duplicated.isEmpty, s"duplicate participant name in bundle: ${duplicated.getOrElse("")}")
+      this
+    }
   }
 
   abstract class Factory {
@@ -816,7 +827,7 @@ object Component {
       Bundle(
         primary = primaryFactory.createPrimary(params),
         componentlets = componentletFactories.map(_.createComponentlet(params))
-      )
+      ).validate()
   }
 
   abstract class SinglePrimaryBundleFactory extends Factory with BundleFactory with PrimaryComponentFactory {

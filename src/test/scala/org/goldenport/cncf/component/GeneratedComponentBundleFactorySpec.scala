@@ -79,6 +79,20 @@ final class GeneratedComponentBundleFactorySpec
       )
       _GeneratedBundleFactory.calls.toVector shouldBe Vector("notice-admin")
     }
+
+    "reject malformed bundle outputs deterministically" in {
+      Given("bundle factory with duplicate participant names")
+      val subsystem = TestComponentFactory.emptySubsystem("generated-bundle")
+      val params = ComponentCreate(subsystem, ComponentOrigin.Repository("cozy-generated"))
+
+      When("bundle is created")
+      val ex = intercept[IllegalArgumentException] {
+        _InvalidBundleFactory.create(params)
+      }
+
+      Then("construction fails before bootstrap")
+      ex.getMessage should include ("duplicate participant name")
+    }
   }
 
   private object _GeneratedBundleFactory extends Component.BundleFactory {
@@ -218,5 +232,47 @@ final class GeneratedComponentBundleFactorySpec
 
     override def componentletFactories: Vector[Component.ComponentletFactory] =
       Vector(NoticeAdminFactory)
+  }
+
+  private object _InvalidBundleFactory extends Component.BundleFactory {
+    object PrimaryFactory extends Component.PrimaryComponentFactory {
+      protected def create_Component(params: ComponentCreate): Component =
+        new Component() {}
+
+      protected def create_Core(
+        params: ComponentCreate,
+        comp: Component
+      ): Component.Core =
+        Component.Core.create(
+          "duplicate",
+          ComponentId("duplicate"),
+          ComponentInstanceId.default(ComponentId("duplicate")),
+          Protocol.empty,
+          this
+        )
+    }
+
+    object DuplicateComponentletFactory extends Component.ComponentletFactory {
+      protected def create_Component(params: ComponentCreate): Component =
+        new Component() {}
+
+      protected def create_Core(
+        params: ComponentCreate,
+        comp: Component
+      ): Component.Core =
+        Component.Core.create(
+          "duplicate",
+          ComponentId("duplicate_componentlet"),
+          ComponentInstanceId.default(ComponentId("duplicate_componentlet")),
+          Protocol.empty,
+          this
+        )
+    }
+
+    def primaryFactory: Component.PrimaryComponentFactory =
+      PrimaryFactory
+
+    override def componentletFactories: Vector[Component.ComponentletFactory] =
+      Vector(DuplicateComponentletFactory)
   }
 }

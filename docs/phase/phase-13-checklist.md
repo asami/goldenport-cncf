@@ -44,7 +44,7 @@ the actual event collaboration contract.
 
 ## EVX-01: Subsystem-Level Shared Event Wiring
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -54,10 +54,10 @@ runtime context.
 
 ### Detailed Tasks
 
-- [ ] Make subsystem-level `EventBus` ownership explicit.
-- [ ] Make subsystem-level `EventReception` ownership explicit.
-- [ ] Ensure component bootstrap can register subscriptions into subsystem scope.
-- [ ] Define lifecycle and visibility of subsystem event facilities.
+- [x] Make subsystem-level `EventBus` ownership explicit.
+- [x] Make subsystem-level `EventReception` ownership explicit.
+- [x] Ensure component bootstrap can register subscriptions into subsystem scope.
+- [x] Define lifecycle and visibility of subsystem event facilities.
 
 ### Expected Outcome
 
@@ -75,7 +75,7 @@ runtime context.
 
 ## EVX-02: Component Subscription Bootstrap
 
-Status: SUSPENDED
+Status: DONE
 
 ### Objective
 
@@ -84,10 +84,10 @@ ad hoc manual path.
 
 ### Detailed Tasks
 
-- [ ] Define how component descriptors / generated definitions contribute subscriptions.
-- [ ] Define handwritten registration path for custom factories.
-- [ ] Ensure duplicate registration and ordering behavior are deterministic.
-- [ ] Clarify authorization boundary for subscription registration.
+- [x] Define how component descriptors / generated definitions contribute subscriptions.
+- [x] Define handwritten registration path for custom factories.
+- [x] Ensure duplicate registration and ordering behavior are deterministic.
+- [x] Clarify authorization boundary for subscription registration.
 
 ### Expected Outcome
 
@@ -98,7 +98,7 @@ ad hoc manual path.
 
 ## EVX-03: Event-to-Action Dispatch Contract
 
-Status: SUSPENDED
+Status: DONE
 
 ### Objective
 
@@ -106,10 +106,10 @@ Refine the contract by which a received event triggers an action call.
 
 ### Detailed Tasks
 
-- [ ] Confirm canonical target resolution rules.
-- [ ] Confirm event payload to action input mapping rules.
-- [ ] Document selector behavior and failure handling.
-- [ ] Clarify same-component versus cross-component dispatch semantics.
+- [x] Confirm canonical target resolution rules.
+- [x] Confirm event payload to action input mapping rules.
+- [x] Document selector behavior and failure handling.
+- [x] Clarify same-component versus cross-component dispatch semantics.
 
 ### Expected Outcome
 
@@ -119,7 +119,7 @@ Refine the contract by which a received event triggers an action call.
 
 ## EVX-04: Event Continuation and Job Integration
 
-Status: SUSPENDED
+Status: DONE
 
 ### Objective
 
@@ -127,10 +127,10 @@ Promote existing continuation behavior into a clearer execution model.
 
 ### Detailed Tasks
 
-- [ ] Formalize `SameJob` versus `NewJob`.
-- [ ] Define job metadata inherited from event context.
-- [ ] Define correlation / causation / parent-job propagation.
-- [ ] Define failure, retry, and dead-letter expectations for event-triggered jobs.
+- [x] Formalize `SameJob` versus `NewJob`.
+- [x] Define job metadata inherited from event context.
+- [x] Define correlation / causation / parent-job propagation.
+- [x] Define failure, retry, and dead-letter expectations for event-triggered jobs within the Phase 13 boundary.
 
 ### Expected Outcome
 
@@ -141,7 +141,7 @@ Promote existing continuation behavior into a clearer execution model.
 
 ## EVX-05: Internal Await Based on Event Completion
 
-Status: SUSPENDED
+Status: DONE
 
 ### Objective
 
@@ -149,10 +149,10 @@ Replace ad hoc demo/test waiting with event-aware waiting support.
 
 ### Detailed Tasks
 
-- [ ] Keep the current polling helper internal only.
-- [ ] Add event-aware internal await utilities where practical.
-- [ ] Define minimal contract for waiting on event visibility or event-derived completion.
-- [ ] Apply it first to tests, executable specs, and demos.
+- [x] Keep the current polling helper internal only.
+- [x] Add event-aware internal await utilities where practical.
+- [x] Define minimal contract for waiting on event visibility or event-derived completion.
+- [x] Apply it first to tests, executable specs, and demos.
 
 ### Expected Outcome
 
@@ -162,7 +162,7 @@ Replace ad hoc demo/test waiting with event-aware waiting support.
 
 ## EVX-06: Observability and Inspection
 
-Status: SUSPENDED
+Status: DONE
 
 ### Objective
 
@@ -170,10 +170,10 @@ Expose enough visibility to debug event-driven collaboration.
 
 ### Detailed Tasks
 
-- [ ] Ensure emitted events can be inspected per job / per correlation.
-- [ ] Confirm builtin event component coverage for event-driven paths.
-- [ ] Add traces for subscription matching and dispatch outcome.
-- [ ] Define minimum operator-facing diagnostics for event dispatch failure.
+- [x] Ensure emitted events can be inspected per job / per correlation.
+- [x] Confirm builtin event component coverage for event-driven paths.
+- [x] Add traces for subscription matching and dispatch outcome.
+- [x] Define minimum operator-facing diagnostics for event dispatch failure.
 
 ### Expected Outcome
 
@@ -183,7 +183,7 @@ Expose enough visibility to debug event-driven collaboration.
 
 ## EVX-07: Executable Specifications
 
-Status: SUSPENDED
+Status: DONE
 
 ### Objective
 
@@ -191,11 +191,11 @@ Protect the event extension path with focused regression coverage.
 
 ### Detailed Tasks
 
-- [ ] Add subsystem-level component-to-component event collaboration test.
-- [ ] Add same-job continuation test.
-- [ ] Add new-job continuation test.
-- [ ] Add action-call wait/visibility test without fixed sleep.
-- [ ] Add authorization and failure-path tests for event dispatch.
+- [x] Add subsystem-level component-to-component event collaboration test.
+- [x] Add same-job continuation test.
+- [x] Add new-job continuation test.
+- [x] Add action-call wait/visibility test without fixed sleep.
+- [x] Add authorization and failure-path tests for event dispatch.
 
 ### Expected Outcome
 
@@ -216,6 +216,6 @@ Protect the event extension path with focused regression coverage.
 
 Phase 13 is complete when:
 
-- [ ] EVX-01 through EVX-07 are marked DONE.
-- [ ] `phase-13.md` summary checkboxes are aligned.
-- [ ] No item remains ACTIVE or SUSPENDED.
+- [x] EVX-01 through EVX-07 are marked DONE.
+- [x] `phase-13.md` summary checkboxes are aligned.
+- [x] No item remains ACTIVE or SUSPENDED.
