@@ -2,10 +2,11 @@ package org.goldenport.cncf.component.builtin.jobcontrol
 
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
-import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, ProcedureActionCall, QueryAction}
+import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, CommandAction, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
-import org.goldenport.cncf.job.{JobControlCommand, JobControlRequest, JobId, JobResult}
+import org.goldenport.cncf.job.{ActionId, ActionTask, JobBatchDefinition, JobBatchSubmissionResult, JobControlCommand, JobControlRequest, JobDefinition, JobFailureHook, JobId, JobPersistencePolicy, JobResult, JobSubmitOption}
 import org.goldenport.cncf.job.{JobQueryReadModel, JobTimelinePage}
+import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.event.EventStore
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
@@ -31,6 +32,9 @@ object JobControlComponent {
     def loadJobHistory(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobTimelinePage]
     def getJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobResult]
     def awaitJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[OperationResponse]
+    def describeJobDefinition(body: String): Consequence[JobBatchDefinition]
+    def submitJobDefinition(body: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult]
+    def submitJobBatch(body: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult]
   }
 
   trait JobAdminService {
@@ -57,6 +61,10 @@ object JobControlComponent {
       val loadJobHistory = new LoadJobHistoryOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobTimelinePage"))))
       val getJobResult = new GetJobResultOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobResult"))))
       val awaitJobResult = new AwaitJobResultOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("OperationResponse"))))
+      val bodyrequest = _body_request
+      val describeJobDefinition = new DescribeJobDefinitionOperationDefinition(bodyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val submitJobDefinition = new SubmitJobDefinitionOperationDefinition(bodyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
+      val submitJobBatch = new SubmitJobBatchOperationDefinition(bodyrequest, spec.ResponseDefinition(result = List(DataType.Named("Record"))))
       val cancelJob = new ControlJobOperationDefinition(
         name = "cancel_job",
         command = JobControlCommand.Cancel,
@@ -79,7 +87,7 @@ object JobControlComponent {
       val jobService = spec.ServiceDefinition(
         name = "job",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(getJobStatus, loadJobHistory, getJobResult, awaitJobResult)
+          operations = NonEmptyVector.of(getJobStatus, loadJobHistory, getJobResult, awaitJobResult, describeJobDefinition, submitJobDefinition, submitJobBatch)
         )
       )
       val jobAdminService = spec.ServiceDefinition(
@@ -109,6 +117,11 @@ object JobControlComponent {
     private def _job_id_request: spec.RequestDefinition =
       spec.RequestDefinition(
         parameters = List(spec.ParameterDefinition(content = BaseContent.simple("id"), kind = spec.ParameterDefinition.Kind.Argument))
+      )
+
+    private def _body_request: spec.RequestDefinition =
+      spec.RequestDefinition(
+        parameters = List(spec.ParameterDefinition(content = BaseContent.simple("body"), kind = spec.ParameterDefinition.Kind.Argument))
       )
   }
 
@@ -143,6 +156,130 @@ object JobControlComponent {
       component.jobEngine.queryVisible(jobId).flatMap {
         case Some(_) => component.logic.awaitJobResult(jobId)
         case None => Consequence.operationNotFound(s"job:${jobId.value}")
+      }
+
+    def describeJobDefinition(body: String): Consequence[JobBatchDefinition] =
+      JobBatchDefinition.parseYaml(body)
+
+    def submitJobDefinition(body: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult] =
+      JobBatchDefinition.parseYaml(body).flatMap { batch =>
+        if (batch.jobs.size != 1)
+          Consequence.argumentInvalid("submit_job_definition requires exactly one job in jobs[]")
+        else
+          _submit_batch(batch)
+      }
+
+    def submitJobBatch(body: String)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult] =
+      JobBatchDefinition.parseYaml(body).flatMap(_submit_batch)
+
+    private def _submit_batch(
+      batch: JobBatchDefinition
+    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult] =
+      _submit_jobs(batch.jobs, Vector.empty)
+
+    private def _submit_jobs(
+      jobs: Vector[JobDefinition],
+      submitted: Vector[JobId]
+    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult] =
+      jobs.headOption match {
+        case None =>
+          Consequence.success(JobBatchSubmissionResult(submitted, success = true))
+        case Some(job) =>
+          _submit_one(job).flatMap { case (jobid, response) =>
+            val updated = submitted :+ jobid
+            response match {
+              case Consequence.Success(_) =>
+                _submit_jobs(jobs.drop(1), updated)
+              case Consequence.Failure(conclusion) =>
+                _run_failure_hook(job.onFailure).map { hook =>
+                  JobBatchSubmissionResult(
+                    submittedJobIds = updated,
+                    success = false,
+                    stoppedAtIndex = Some(updated.size - 1),
+                    stoppedAtName = Some(job.name),
+                    failureMessage = Some(conclusion.show),
+                    failureHookJobId = hook._1,
+                    failureHookMessage = hook._2
+                  )
+                }
+            }
+          }
+      }
+
+    private def _run_failure_hook(
+      hook: Option[JobFailureHook]
+    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[(Option[JobId], Option[String])] =
+      hook match {
+        case None => Consequence.success((None, None))
+        case Some(h) =>
+          _submit_action(
+            selector = h.action,
+            parameters = h.parameters,
+            requestSummary = Some(s"jcl.failure-hook:${h.action}"),
+            persistence = JobPersistencePolicy.Persistent
+          ).map { case (jobid, response) =>
+            response match {
+              case Consequence.Success(_) => (Some(jobid), None)
+              case Consequence.Failure(conclusion) => (Some(jobid), Some(conclusion.show))
+            }
+          }
+      }
+
+    private def _submit_one(
+      job: JobDefinition
+    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[(JobId, Consequence[OperationResponse])] =
+      _submit_action(
+        selector = job.target.action,
+        parameters = job.parameters,
+        requestSummary = job.submit.requestSummary.orElse(Some(job.name)),
+        persistence = job.submit.persistence
+      )
+
+    private def _submit_action(
+      selector: String,
+      parameters: Map[String, String],
+      requestSummary: Option[String],
+      persistence: JobPersistencePolicy
+    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[(JobId, Consequence[OperationResponse])] =
+      _resolve_target_action(selector, parameters).map { case (target, action) =>
+        val task = ActionTask(ActionId.generate(), action, target.actionEngine, Some(target))
+        val option = JobSubmitOption(
+          persistence = persistence,
+          requestSummary = requestSummary,
+          parameters = parameters ++ Map("jcl.target.action" -> selector),
+          executionNotes = Vector("jcl submission")
+        )
+        val jobid = component.jobEngine.submit(List(task), summon[org.goldenport.cncf.context.ExecutionContext], option)
+        (jobid, component.logic.awaitJobResult(jobid))
+      }
+
+    private def _resolve_target_action(
+      selector: String,
+      parameters: Map[String, String]
+    ): Consequence[(Component, Action)] =
+      component.subsystem.map(_.operationResolver.resolve(selector)).getOrElse(OperationResolver.ResolutionResult.Invalid("subsystem is not available")) match {
+        case OperationResolver.ResolutionResult.Resolved(_, componentName, serviceName, operationName) =>
+          component.subsystem.flatMap(_.findComponent(componentName)) match {
+            case Some(target) =>
+              val request = Request.of(
+                component = componentName,
+                service = serviceName,
+                operation = operationName,
+                arguments = parameters.toVector.sortBy(_._1).map { case (k, v) => org.goldenport.protocol.Argument(k, v) }.toList
+              )
+              target.logic.makeOperationRequest(request).flatMap {
+                case action: Action => Consequence.success((target, action))
+                case _: OperationRequest => Consequence.argumentInvalid(s"JCL target is not action: $selector")
+              }
+            case None =>
+              Consequence.operationNotFound(s"JCL target component: $componentName")
+          }
+        case OperationResolver.ResolutionResult.NotFound(_, s) =>
+          Consequence.operationNotFound(s"JCL target action: $s")
+        case OperationResolver.ResolutionResult.Ambiguous(s, candidates) =>
+          Consequence.argumentInvalid(s"ambiguous JCL target action: $s => ${candidates.mkString(",")}")
+        case OperationResolver.ResolutionResult.Invalid(message) =>
+          Consequence.argumentInvalid(message)
       }
   }
 
@@ -238,6 +375,51 @@ object JobControlComponent {
       }
   }
 
+  private final class DescribeJobDefinitionOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "describe_job_definition",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _body(req).map(DescribeJobDefinitionAction(req, _))
+  }
+
+  private final class SubmitJobDefinitionOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "submit_job_definition",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _body(req).map(SubmitJobDefinitionAction(req, _))
+  }
+
+  private final class SubmitJobBatchOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "submit_job_batch",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _body(req).map(SubmitJobBatchAction(req, _))
+  }
+
   private final class ControlJobOperationDefinition(
     name: String,
     command: JobControlCommand,
@@ -304,6 +486,30 @@ object JobControlComponent {
   ) extends SyncJobAction {
     def createCall(core: ActionCall.Core): ActionCall =
       AwaitJobResultCall(core, jobId)
+  }
+
+  private final case class DescribeJobDefinitionAction(
+    request: Request,
+    body: String
+  ) extends SyncJobAction {
+    def createCall(core: ActionCall.Core): ActionCall =
+      DescribeJobDefinitionCall(core, body)
+  }
+
+  private final case class SubmitJobDefinitionAction(
+    request: Request,
+    body: String
+  ) extends SyncJobAction {
+    def createCall(core: ActionCall.Core): ActionCall =
+      SubmitJobDefinitionCall(core, body)
+  }
+
+  private final case class SubmitJobBatchAction(
+    request: Request,
+    body: String
+  ) extends SyncJobAction {
+    def createCall(core: ActionCall.Core): ActionCall =
+      SubmitJobBatchCall(core, body)
   }
 
   private final case class ControlJobAction(
@@ -383,6 +589,52 @@ object JobControlComponent {
           Consequence.serviceUnavailable("component is not initialized")
       }
   }
+
+  private final case class DescribeJobDefinitionCall(
+    core: ActionCall.Core,
+    body: String
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      core.component match {
+        case Some(component) =>
+          component.port.get[JobService].map(_.describeJobDefinition(body)) match {
+            case Some(result) => result.map(model => OperationResponse.RecordResponse(model.toRecord))
+            case None => Consequence.serviceUnavailable("job service is not available")
+          }
+        case None =>
+          Consequence.serviceUnavailable("component is not initialized")
+      }
+  }
+
+  private final case class SubmitJobDefinitionCall(
+    core: ActionCall.Core,
+    body: String
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _jcl_submission_response(core, _.submitJobDefinition(body)(using core.executionContext))
+  }
+
+  private final case class SubmitJobBatchCall(
+    core: ActionCall.Core,
+    body: String
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _jcl_submission_response(core, _.submitJobBatch(body)(using core.executionContext))
+  }
+
+  private def _jcl_submission_response(
+    core: ActionCall.Core,
+    f: JobService => Consequence[JobBatchSubmissionResult]
+  ): Consequence[OperationResponse] =
+    core.component match {
+      case Some(component) =>
+        component.port.get[JobService].map(f) match {
+          case Some(result) => result.map(x => OperationResponse.RecordResponse(x.toRecord))
+          case None => Consequence.serviceUnavailable("job service is not available")
+        }
+      case None =>
+        Consequence.serviceUnavailable("component is not initialized")
+    }
 
   private def _job_result_response(
     core: ActionCall.Core,
@@ -473,6 +725,14 @@ object JobControlComponent {
           case Some(prop) => JobId.parse(prop.value.toString)
           case None => Consequence.argumentMissing("id")
         }
+    }
+
+  private def _body(req: Request): Consequence[String] =
+    req.arguments.find(_.name == "body").map(_.value.toString).filter(_.trim.nonEmpty)
+      .orElse(req.properties.find(_.name == "body").map(_.value.toString).filter(_.trim.nonEmpty))
+      .orElse(req.properties.find(_.name == "http.body").map(_.value.toString).filter(_.trim.nonEmpty)) match {
+      case Some(body) => Consequence.success(body)
+      case None => Consequence.argumentMissing("body")
     }
 
   private def _job_matches(

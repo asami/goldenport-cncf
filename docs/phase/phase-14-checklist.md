@@ -31,7 +31,7 @@ Phase 14 implementation proceeds in this order:
 
 1. WF-01 fixes the lightweight workflow baseline first.
 2. WF-02 makes workflow definitions and workflow instances inspectable.
-3. JCL-01 adds sequential submission-only `JCL` after workflow entrypoints are stable.
+3. JCL-01 adds sequential submission-only `JCL` with action targets only.
 4. JCL-02 connects `JCL` to workflow entrypoints without mixing the two languages.
 5. OPS-01 adds retry/dead-letter hardening after the new execution baseline exists.
 6. OPS-02 handles saga identity and ABAC follow-up only if still inside the phase boundary.
@@ -108,7 +108,7 @@ projection/inspection surfaces.
 
 ## JCL-01: Submission-Only JCL Baseline
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -117,12 +117,12 @@ submission.
 
 ### Detailed Tasks
 
-- [ ] Define YAML `JCL` shape.
-- [ ] Keep `JCL` sequential-only.
-- [ ] Support target action or workflow entrypoint.
-- [ ] Support parameters and submit policy.
-- [ ] Support job-level failure hook via named action.
-- [ ] Reject workflow semantics inside `JCL`.
+- [x] Define YAML `JCL` shape with top-level `jobs[]`.
+- [x] Keep `JCL` sequential-only.
+- [x] Support action target only in JCL-01.
+- [x] Support parameters and submit policy.
+- [x] Support job-level failure hook via named action.
+- [x] Reject workflow semantics inside `JCL`.
 
 ### Expected Outcome
 
@@ -133,7 +133,7 @@ submission.
 
 ## JCL-02: JCL to Workflow Entrypoints
 
-Status: SUSPENDED
+Status: ACTIVE
 
 ### Objective
 
