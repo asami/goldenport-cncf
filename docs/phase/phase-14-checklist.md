@@ -43,7 +43,7 @@ avoids building `JCL` against an unstable workflow target.
 
 ## WF-01: Lightweight WorkflowEngine Baseline
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -59,12 +59,12 @@ The baseline must be:
 
 ### Detailed Tasks
 
-- [ ] Define workflow definition/registration model.
-- [ ] Define workflow instance/status model.
-- [ ] Define event-to-workflow matching using `event + entity status`.
-- [ ] Define next-action decision contract.
-- [ ] Define delegation path into existing runtime/job execution.
-- [ ] Define linkage from workflow instances to resulting job ids.
+- [x] Define workflow definition/registration model.
+- [x] Define workflow instance/status model.
+- [x] Define event-to-workflow matching using `event + entity status`.
+- [x] Define next-action decision contract.
+- [x] Define delegation path into existing runtime/job execution.
+- [x] Define linkage from workflow instances to resulting job ids.
 
 ### Expected Outcome
 
@@ -84,7 +84,7 @@ The baseline must be:
 
 ## WF-02: Workflow Inspection and Projection
 
-Status: SUSPENDED
+Status: DONE
 
 ### Objective
 
@@ -93,11 +93,11 @@ projection/inspection surfaces.
 
 ### Detailed Tasks
 
-- [ ] Add workflow definition projection.
-- [ ] Add workflow instance status projection.
-- [ ] Add workflow instance history projection.
-- [ ] Add admin discovery links to authoritative workflow/job surfaces.
-- [ ] Preserve Phase 13 runtime participant identity rules in workflow visibility.
+- [x] Add workflow definition projection.
+- [x] Add workflow instance status projection.
+- [x] Add workflow instance history projection.
+- [x] Add admin discovery links to authoritative workflow/job surfaces.
+- [x] Preserve Phase 13 runtime participant identity rules in workflow visibility.
 
 ### Expected Outcome
 
@@ -108,7 +108,7 @@ projection/inspection surfaces.
 
 ## JCL-01: Submission-Only JCL Baseline
 
-Status: SUSPENDED
+Status: ACTIVE
 
 ### Objective
 
@@ -212,7 +212,7 @@ boundary after WF/JCL and OPS-01.
 
 Phase 14 kickoff is complete when:
 
-- [ ] `phase-14.md` exists and is the active phase document.
-- [ ] `phase-14-checklist.md` exists and contains the work stack above.
-- [ ] Phase 14 purpose/non-goals reflect the Pareto 80/20 boundary.
-- [ ] Phase 13 documents remain unchanged except by reference.
+- [x] `phase-14.md` exists and is the active phase document.
+- [x] `phase-14-checklist.md` exists and contains the work stack above.
+- [x] Phase 14 purpose/non-goals reflect the Pareto 80/20 boundary.
+- [x] Phase 13 documents remain unchanged except by reference.

@@ -31,6 +31,11 @@ final class AdminExecutionDiagnosticsSpec
           record.getString("summary").exists(_.contains("queued dispatch contract")) shouldBe true
           val routes = record.getAny("routes").collect { case xs: Seq[?] => xs }.getOrElse(fail("routes missing"))
           routes.map(_.asInstanceOf[org.goldenport.record.Record].getString("selector").getOrElse("")) should contain allOf(
+            "workflow.workflow.list_workflow_definitions",
+            "workflow.workflow.describe_workflow_definition",
+            "workflow.workflow.list_workflow_instances",
+            "workflow.workflow.get_workflow_instance",
+            "workflow.workflow.load_workflow_history",
             "event.event.search_event",
             "event.event.load_event",
             "event.event_admin.load_job_events",
@@ -70,6 +75,8 @@ final class AdminExecutionDiagnosticsSpec
             "target-subsystem",
             "target-component"
           )
+          record.getRecord("workflow-surface").flatMap(_.getString("selector")) shouldBe Some("workflow.workflow.list_workflow_instances")
+          record.getRecord("job-surface").flatMap(_.getString("selector")) shouldBe Some("job_control.job.get_job_status")
         case other =>
           fail(s"expected diagnostics record but got $other")
       }

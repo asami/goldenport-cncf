@@ -27,6 +27,7 @@ import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.statemachine.{CollectionStateMachinePlanner, CollectionStateMachinePlannerProvider, CollectionTransitionRule, CollectionTransitionRuleProvider, TransitionTrigger, TransitionRule}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, XString}
+import org.goldenport.cncf.workflow.WorkflowDefinition
 import org.simplemodeling.model.value.BaseContent
 import scala.util.Try
 
@@ -35,7 +36,7 @@ import scala.util.Try
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Mar. 31, 2026
- * @version Apr. 21, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -175,13 +176,16 @@ final class ComponentFactory(
     if (
       component.eventReceptionDefinitions.nonEmpty ||
       component.eventSubscriptionDefinitions.nonEmpty ||
-      component.eventReceptionRuleDefinitions.nonEmpty
+      component.eventReceptionRuleDefinitions.nonEmpty ||
+      component.workflowDefinitions.nonEmpty
     ) {
       val bus = _shared_event_bus(component, store)
       val reception = createEventReceptionWithOperationDispatcher(component, bus)
       component.withEventReception(reception)
       component.subsystem.foreach(_.registerEventReception(component.name, reception))
     }
+    if (component.workflowDefinitions.nonEmpty)
+      _bootstrap_workflow(component)
   }
 
   private def _shared_event_bus(
@@ -228,15 +232,52 @@ final class ComponentFactory(
       jobEngine = Try(component.jobEngine).toOption
     )
     component.eventReceptionDefinitions.foreach(reception.register)
+    _register_workflow_event_definitions(component.workflowDefinitions, reception)
     component.eventSubscriptionDefinitions.foreach(reception.registerSubscription)
     component.eventReceptionRuleDefinitions.foreach(reception.registerRule)
     reception
+  }
+
+  private def _register_workflow_event_definitions(
+    definitions: Vector[WorkflowDefinition],
+    reception: EventReception
+  ): Unit = {
+    val existing = scala.collection.mutable.HashSet.empty[String] ++ reception.definitions.map(_.name)
+    definitions.iterator.flatMap(_.registrations).foreach { registration =>
+      if (!existing.contains(registration.eventName)) {
+        reception.register(
+          org.goldenport.cncf.event.CmlEventDefinition(
+            name = registration.eventName,
+            category = org.goldenport.cncf.event.CmlEventCategory.NonActionEvent
+          )
+        )
+        existing += registration.eventName
+      }
+    }
   }
 
   def createOperationActionDispatcher(
     component: Component
   ): ActionCallDispatcher =
     new OperationRequestActionDispatcher(ComponentLogic(component))
+
+  private def _bootstrap_workflow(
+    component: Component
+  ): Unit =
+    component.subsystem.foreach { subsystem =>
+      subsystem.workflowEngine.register(component, component.workflowDefinitions)
+      component.eventReception.foreach(_.registerWorkflowListener(
+        new org.goldenport.cncf.event.WorkflowEventListener {
+          def onEvent(
+            event: org.goldenport.cncf.event.ReceptionDomainEvent,
+            definitions: Vector[org.goldenport.cncf.event.CmlEventDefinition]
+          )(using ctx: ExecutionContext): Consequence[Unit] = {
+            val _ = definitions
+            subsystem.workflowEngine.handle(component.name, event).map(_ => ())
+          }
+        }
+      ))
+    }
 
   private def _bootstrap_state_machine_planners(
     component: Component,

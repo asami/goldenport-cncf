@@ -23,6 +23,7 @@ import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.{EventBus, EventEngine, EventReception, EventStore}
+import org.goldenport.cncf.workflow.WorkflowEngine
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.protocol.{Property, Request, Response}
 
@@ -39,7 +40,8 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
- * @version Apr. 21, 2026
+ *  version Apr. 22, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -59,6 +61,7 @@ final class Subsystem(
   private val _event_store: EventStore = EventStore.inMemory
   private lazy val _event_bus: EventBus =
     EventBus.default(EventEngine.noop(DataStore.noop(), eventstore = _event_store))
+  private lazy val _workflow_engine: WorkflowEngine = WorkflowEngine.inMemory(this)
   private val _event_receptions = mutable.LinkedHashMap.empty[String, EventReception]
   private val _entity_access_metrics: EntityAccessMetricsRegistry = EntityAccessMetricsRegistry.shared
   private var _descriptor: Option[GenericSubsystemDescriptor] = None
@@ -85,6 +88,7 @@ final class Subsystem(
   def jobEngine: JobEngine = _job_engine
   def eventStore: EventStore = _event_store
   def eventBus: EventBus = _event_bus
+  def workflowEngine: WorkflowEngine = _workflow_engine
   def eventReceptions: Map[String, EventReception] = _event_receptions.toMap
   def entityAccessMetrics: EntityAccessMetricsRegistry = _entity_access_metrics
   def serverEmulatorBaseUrl: String = globalRuntimeContext.serverEmulatorBaseUrl
@@ -191,6 +195,9 @@ final class Subsystem(
   //   )
 
   def components: Vector[Component] = _component_space.components
+
+  def findComponent(name: String): Option[Component] =
+    _component_space.find(NameLocator(name))
 
   def resolver: OperationResolver = _resolver
 

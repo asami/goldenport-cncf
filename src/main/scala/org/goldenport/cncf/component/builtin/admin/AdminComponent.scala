@@ -1202,8 +1202,38 @@ object AdminComponent {
   private def _execution_diagnostics_record_(): Record =
     Record.data(
       "kind" -> "phase-13-execution-diagnostics",
-      "summary" -> "Use event surfaces for queued dispatch contract and persisted event metadata; use job surfaces for final child-job lineage and async failure disposition.",
+      "summary" -> "Use workflow surfaces for workflow definitions and instances; use event surfaces for queued dispatch contract and persisted event metadata; use job surfaces for final child-job lineage and async failure disposition.",
       "routes" -> Vector(
+        Record.data(
+          "selector" -> "workflow.workflow.list_workflow_definitions",
+          "surface" -> "workflow",
+          "role" -> "authoritative-detail",
+          "summary" -> "List workflow definitions and registrations."
+        ),
+        Record.data(
+          "selector" -> "workflow.workflow.describe_workflow_definition",
+          "surface" -> "workflow",
+          "role" -> "authoritative-detail",
+          "summary" -> "Inspect one workflow definition with status rules."
+        ),
+        Record.data(
+          "selector" -> "workflow.workflow.list_workflow_instances",
+          "surface" -> "workflow",
+          "role" -> "authoritative-detail",
+          "summary" -> "List workflow instances and related job ids."
+        ),
+        Record.data(
+          "selector" -> "workflow.workflow.get_workflow_instance",
+          "surface" -> "workflow",
+          "role" -> "authoritative-detail",
+          "summary" -> "Inspect one workflow instance and job cross-links."
+        ),
+        Record.data(
+          "selector" -> "workflow.workflow.load_workflow_history",
+          "surface" -> "workflow",
+          "role" -> "authoritative-detail",
+          "summary" -> "Inspect workflow history entries and selected actions."
+        ),
         Record.data(
           "selector" -> "event.event.search_event",
           "surface" -> "event",
@@ -1282,6 +1312,10 @@ object AdminComponent {
         "source-component",
         "target-subsystem",
         "target-component"
+      ),
+      "workflow-surface" -> Record.data(
+        "selector" -> "workflow.workflow.list_workflow_instances",
+        "summary" -> "Authoritative detail for workflow definitions, instances, progress, and related job ids."
       ),
       "event-surface" -> Record.data(
         "selector" -> "event.event.load_event",

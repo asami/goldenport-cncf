@@ -35,6 +35,7 @@ import org.goldenport.cncf.statemachine.{CmlStateMachineDefinition, StateMachine
 import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition, EventReception, EventReceptionRule, EventStore}
 import org.goldenport.cncf.security.AuthenticationProvider
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
+import org.goldenport.cncf.workflow.WorkflowDefinition
 import cats.data.NonEmptyVector
 import java.io.InputStream
 import java.nio.charset.StandardCharsets
@@ -255,6 +256,7 @@ abstract class Component() extends Component.Core.Holder {
   def eventRoutingDefinitions: Vector[CmlRoutingDefinition] = Vector.empty
   def eventSubscriptionDefinitions: Vector[CmlSubscriptionDefinition] = Vector.empty
   def eventReceptionRuleDefinitions: Vector[EventReceptionRule] = Vector.empty
+  def workflowDefinitions: Vector[WorkflowDefinition] = Vector.empty
   def aggregateDefinitions: Vector[AggregateDefinition] = Vector.empty
   def viewDefinitions: Vector[ViewDefinition] = Vector.empty
   def operationDefinitions: Vector[CmlOperationDefinition] = Vector.empty

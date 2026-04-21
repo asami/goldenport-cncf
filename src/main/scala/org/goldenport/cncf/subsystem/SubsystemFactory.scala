@@ -10,6 +10,7 @@ import org.goldenport.cncf.component.builtin.event.EventComponent
 import org.goldenport.cncf.component.builtin.jobcontrol.JobControlComponent
 import org.goldenport.cncf.component.builtin.metrics.MetricsComponent
 import org.goldenport.cncf.component.builtin.specification.SpecificationComponent
+import org.goldenport.cncf.component.builtin.workflow.WorkflowComponent
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.http.{FakeHttpDriver, UrlConnectionHttpDriver}
@@ -27,7 +28,7 @@ import org.goldenport.protocol.spec as spec
  *  version Jan. 30, 2026
  *  version Feb. 15, 2026
  *  version Mar. 29, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {
@@ -48,6 +49,7 @@ object DefaultSubsystemFactory {
       DebugComponent.Factory,
       EventComponent.Factory,
       JobControlComponent.Factory,
+      WorkflowComponent.Factory,
       MetricsComponent.Factory,
       _spec
     ).flatMap(_.create(params).participants)

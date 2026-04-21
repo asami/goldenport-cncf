@@ -310,12 +310,20 @@ trait DirectEventListener {
   )(using ExecutionContext): Consequence[Unit]
 }
 
+trait WorkflowEventListener {
+  def onEvent(
+    event: ReceptionDomainEvent,
+    definitions: Vector[CmlEventDefinition]
+  )(using ExecutionContext): Consequence[Unit]
+}
+
 trait EventReception {
   def register(definition: CmlEventDefinition): Unit
   def registerSubscription(subscription: CmlSubscriptionDefinition): Unit
   def registerRule(rule: EventReceptionRule): Unit
   def registerStateMachineListener(listener: StateMachineEventListener): Unit
   def registerDirectListener(listener: DirectEventListener): Unit
+  def registerWorkflowListener(listener: WorkflowEventListener): Unit
   def registerEntitySubscription(subscription: EntityEventSubscription): Unit
   def definitions: Vector[CmlEventDefinition]
   def subscriptions: Vector[CmlSubscriptionDefinition]
@@ -437,6 +445,7 @@ object EventReception {
     private val _rules = ArrayBuffer.empty[(EventReceptionRule, Int)]
     private val _listeners = ArrayBuffer.empty[StateMachineEventListener]
     private val _directlisteners = ArrayBuffer.empty[DirectEventListener]
+    private val _workflowlisteners = ArrayBuffer.empty[WorkflowEventListener]
     private val _entitysubscriptions = ArrayBuffer.empty[EntityEventSubscription]
     private val _replay_seen_ids = scala.collection.mutable.HashSet.empty[String]
     private val _replay_last_sequence = scala.collection.mutable.HashMap.empty[String, Long]
@@ -477,6 +486,10 @@ object EventReception {
 
     def registerDirectListener(listener: DirectEventListener): Unit = synchronized {
       _directlisteners += listener
+    }
+
+    def registerWorkflowListener(listener: WorkflowEventListener): Unit = synchronized {
+      _workflowlisteners += listener
     }
 
     def registerEntitySubscription(subscription: EntityEventSubscription): Unit = synchronized {
@@ -1009,6 +1022,7 @@ object EventReception {
       val hasactionbinding = actiondefs.exists(_.actionName.nonEmpty)
       val listeners = _listeners_snapshot(hasactionbinding)
       val directlisteners = _direct_listeners_snapshot()
+      val workflowlisteners = _workflow_listeners_snapshot()
       val resolvectx: Consequence[ExecutionContext] = ctxopt match {
         case Some(ctx) => Consequence.success(ctx)
         case None => ingressSecurityResolver.resolve(event.attributes).map(_.executionContext)
@@ -1024,6 +1038,12 @@ object EventReception {
           directlisteners.foldLeft(Consequence.success(count0)) { (z, listener) =>
             z.flatMap { count =>
               listener.onEvent(event, matched).map(_ => count + 1)
+            }
+          }.flatMap { count1 =>
+            workflowlisteners.foldLeft(Consequence.success(count1)) { (z, listener) =>
+              z.flatMap { count =>
+                listener.onEvent(event, matched).map(_ => count + 1)
+              }
             }
           }
         }
@@ -1044,6 +1064,10 @@ object EventReception {
 
     private def _direct_listeners_snapshot(): Vector[DirectEventListener] = synchronized {
       _directlisteners.toVector
+    }
+
+    private def _workflow_listeners_snapshot(): Vector[WorkflowEventListener] = synchronized {
+      _workflowlisteners.toVector
     }
 
     private def _subscriptions_snapshot(): Vector[CmlSubscriptionDefinition] = synchronized {
@@ -1232,7 +1256,15 @@ object EventReception {
     ): Consequence[Unit] =
       _resolve_dispatch_execution_context(event.attributes).flatMap { security =>
         given ExecutionContext = security.executionContext
-        _dispatch_subscription(subscription, event).map(_ => ())
+        _resolve_execution_policy(subscription, event).flatMap { resolved =>
+          if (resolved.policy.timing == EventExecutionTiming.Sync &&
+            resolved.policy.jobRelation == EventJobRelation.SameJob &&
+            security.executionContext.jobContext.jobId.isEmpty
+          )
+            _dispatch_subscription_inline(subscription, event).map(_ => ())
+          else
+            _dispatch_subscription(subscription, event).map(_ => ())
+        }
       }
 
     private def _resolve_dispatch_execution_context(
@@ -1488,6 +1520,13 @@ object EventReception {
                   else
                     val _ = enqueue()
                   Consequence.unit
+              }
+            case None if resolved.policy.timing == EventExecutionTiming.Sync =>
+              dispatcher match {
+                case d: SecureActionCallDispatcher =>
+                  d.dispatchActionAuthorized(actionname, event)
+                case _ =>
+                  dispatcher.dispatchAction(actionname, event)
               }
             case None =>
               _failure(s"same-job event reception requires job context: ${resolved.policy.modeName}")
