@@ -138,6 +138,10 @@ object AdminComponent {
         request,
         spec.ResponseDefinition(result = List(DataType.Named("Record")))
       )
+      val opExecutionDiagnostics = new ExecutionDiagnosticsOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(DataType.Named("Record")))
+      )
       val opEntityCreate = new EntityCreateOperationDefinition(
         request,
         spec.ResponseDefinition(result = List(XString)),
@@ -245,6 +249,7 @@ object AdminComponent {
         name = "execution",
         operations = spec.OperationDefinitionGroup(
           operations = NonEmptyVector.of(
+            opExecutionDiagnostics,
             opExecutionHistory,
             opExecutionCalltree
           )
@@ -594,6 +599,26 @@ object AdminComponent {
       req: Request
     ): Consequence[OperationRequest] =
       Consequence.success(ExecutionHistoryAction(req))
+  }
+
+  private final class ExecutionDiagnosticsOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition with AdminOperationAuthorization {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        content = BaseContent.Builder("diagnostics")
+          .summary("Show the canonical event/job diagnostics entry points for operators.")
+          .description("Return authoritative selectors, runtime field contracts, and short guidance for Phase 13 event/job inspection without duplicating the underlying event and job surfaces.")
+          .build(),
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(
+      req: Request
+    ): Consequence[OperationRequest] =
+      Consequence.success(ExecutionDiagnosticsAction(req))
   }
 
   private final class EntityCreateOperationDefinition(
@@ -1024,6 +1049,13 @@ object AdminComponent {
       ExecutionHistoryActionCall(core, request)
   }
 
+  private final case class ExecutionDiagnosticsAction(
+    request: Request
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      ExecutionDiagnosticsActionCall(core)
+  }
+
   private final case class DeploymentSecurityMarkdownActionCall(
     core: ActionCall.Core,
     subsystem: Subsystem
@@ -1158,8 +1190,105 @@ object AdminComponent {
     }
   }
 
+  private final case class ExecutionDiagnosticsActionCall(
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      Consequence.success(OperationResponse.RecordResponse(_execution_diagnostics_record_()))
+  }
+
   private def _request_property_(request: Request, name: String): Option[String] =
     request.properties.find(_.name == name).map(_.value.toString).filter(_.nonEmpty)
+
+  private def _execution_diagnostics_record_(): Record =
+    Record.data(
+      "kind" -> "phase-13-execution-diagnostics",
+      "summary" -> "Use event surfaces for queued dispatch contract and persisted event metadata; use job surfaces for final child-job lineage and async failure disposition.",
+      "routes" -> Vector(
+        Record.data(
+          "selector" -> "event.event.search_event",
+          "surface" -> "event",
+          "role" -> "authoritative-detail",
+          "summary" -> "Search persisted event records with dispatch metadata."
+        ),
+        Record.data(
+          "selector" -> "event.event.load_event",
+          "surface" -> "event",
+          "role" -> "authoritative-detail",
+          "summary" -> "Inspect one persisted event record including policy source, dispatch status, and event history."
+        ),
+        Record.data(
+          "selector" -> "event.event_admin.load_job_events",
+          "surface" -> "event_admin",
+          "role" -> "cross-link",
+          "summary" -> "Inspect event records associated with one job."
+        ),
+        Record.data(
+          "selector" -> "job_control.job.get_job_status",
+          "surface" -> "job",
+          "role" -> "authoritative-detail",
+          "summary" -> "Inspect structured lineage and final async failure disposition for one job."
+        ),
+        Record.data(
+          "selector" -> "job_control.job.load_job_history",
+          "surface" -> "job",
+          "role" -> "authoritative-detail",
+          "summary" -> "Inspect the retained timeline for one job."
+        ),
+        Record.data(
+          "selector" -> "job_control.job.get_job_result",
+          "surface" -> "job",
+          "role" -> "authoritative-detail",
+          "summary" -> "Inspect final job result payload or failure."
+        ),
+        Record.data(
+          "selector" -> "job_control.job.await_job_result",
+          "surface" -> "job",
+          "role" -> "operator-await",
+          "summary" -> "Await final job result through the authoritative job surface."
+        ),
+        Record.data(
+          "selector" -> "job_control.job_admin.load_job_events",
+          "surface" -> "job_admin",
+          "role" -> "cross-link",
+          "summary" -> "Inspect event records associated with one job from the job-control side."
+        )
+      ),
+      "event-fields" -> Vector(
+        "reception-rule",
+        "reception-policy",
+        "policy-source",
+        "failure-policy",
+        "failure-disposition-base",
+        "dispatch-kind",
+        "dispatch-status",
+        "source-subsystem",
+        "source-component",
+        "target-subsystem",
+        "target-component"
+      ),
+      "job-fields" -> Vector(
+        "reception-rule",
+        "reception-policy",
+        "policy-source",
+        "job-relation",
+        "saga-relation",
+        "failure-policy",
+        "failure-disposition",
+        "source-subsystem",
+        "source-component",
+        "target-subsystem",
+        "target-component"
+      ),
+      "event-surface" -> Record.data(
+        "selector" -> "event.event.load_event",
+        "summary" -> "Authoritative detail for queued dispatch contract and persisted event metadata."
+      ),
+      "job-surface" -> Record.data(
+        "selector" -> "job_control.job.get_job_status",
+        "summary" -> "Authoritative detail for final child-job lineage and async failure disposition."
+      )
+    )
 
   private def _assembly_component_record_(comp: Component): Record =
     org.goldenport.record.Record.data(
