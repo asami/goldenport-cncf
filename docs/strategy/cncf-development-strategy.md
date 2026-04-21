@@ -297,6 +297,29 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - No broad UI generation beyond the convention-first Static Form baseline.
 - Artifact (work): `docs/phase/phase-12.md`.
 
+### Phase 13: Event Mechanism Extension
+- Goal: establish subsystem-internal event collaboration as a standard CNCF
+  runtime capability on top of the existing event/job foundation.
+- Scope:
+- Make subsystem-level shared event wiring explicit.
+- Make component subscription bootstrap part of normal startup.
+- Stabilize event-to-action dispatch semantics.
+- Introduce boundary-aware reception policy selection for:
+  - same-subsystem reception
+  - external-subsystem reception
+  - event name / kind / selectors based policy matching
+- Support the Phase 13 baseline execution policies:
+  - same-subsystem default sync reception
+  - async new-job same-saga reception
+  - async new-job new-saga reception
+- Add internal await support, observability coverage, and executable
+  specifications for the collaboration path.
+- Non-goals:
+- No external service-bus transport finalization in this phase.
+- No ABAC-aware reception policy selection finalization in this phase.
+- No async same-job same-transaction guarantee in this phase.
+- Artifact (work): `docs/phase/phase-13.md`.
+
 ## 4. Relationship Between Phases
 - Later phases depend on earlier phases.
 - Phase 1.5 constrains Phase 2 and Phase 3.
@@ -311,7 +334,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: pending after Phase 12 closure
+- Current phase selection: Phase 13 (`docs/phase/phase-13.md`)
+- Latest active phase dashboard: `docs/phase/phase-13.md`
+- Latest active phase checklist: `docs/phase/phase-13-checklist.md`
 - Latest closed phase dashboard: `docs/phase/phase-12.md`
 - Latest closed phase checklist: `docs/phase/phase-12-checklist.md`
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
@@ -333,6 +358,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 10: closed (`docs/phase/phase-10.md`)
 - Phase 11: closed (`docs/phase/phase-11.md`)
 - Phase 12: closed (`docs/phase/phase-12.md`)
+- Phase 13: open (`docs/phase/phase-13.md`)
 
 ## 8. Development Item Status
 
@@ -359,11 +385,31 @@ completed, it moves to the completed development item history below.
   - `docs/notes/phase-12-web-closure.md`
 
 ### 8.2 Event Mechanism Extension
-- Subsystem-level shared event wiring
-- Component subscription bootstrap
-- Event-to-action dispatch and continuation/job semantics
-- Internal await support
-- Executable specifications and observability coverage
+Active Phase 13 work area.
+
+- Phase 13 baseline:
+  - subsystem-level shared event wiring
+  - component subscription bootstrap
+  - event-to-action dispatch and continuation/job semantics
+  - boundary-aware reception policy selection by subsystem origin, event name,
+    event kind, and selectors
+  - same-subsystem default sync reception
+  - async new-job same-saga reception
+  - async new-job new-saga reception
+  - internal await support
+  - executable specifications and observability coverage
+- Future extensions beyond the Phase 13 baseline:
+  - async same-job same-transaction reception
+  - sync-with-async-fallback reception policy
+  - ABAC-aware reception policy selection
+  - richer event classification beyond name/kind/selectors
+  - source component/componentlet specific policy overrides
+  - finalized saga-id propagation contract
+- Source references:
+  - `docs/phase/phase-13.md`
+  - `docs/phase/phase-13-checklist.md`
+  - `docs/journal/2026/04/event-mechanism-extension-work-items.md`
+  - `docs/notes/event-reception-policy-selection.md`
 
 ### 8.3 Security
 - Authentication

@@ -1,7 +1,15 @@
 # Event Reception Latest Processing Spec (for Cozy Handoff)
 
 Status: draft note (non-normative)  
-Updated: 2026-03-20
+Updated: 2026-04-21
+
+Supersession note:
+- This note remains the runtime-oriented summary of the current implementation.
+- Event reception policy selection and continuation-mode redesign are now
+  summarized in:
+  - `docs/notes/event-reception-policy-selection.md`
+- Read this note together with the newer policy-selection note when working on
+  Phase 13 event/job semantics.
 
 ## 1. Purpose
 
@@ -164,3 +172,8 @@ For Cozy-side generation, provide enough metadata to produce:
 - richer policy mapping per event type/listener class
 - telemetry separation for state-machine dispatch vs direct listener dispatch
 
+## 13. Related Follow-Up Notes
+
+- `docs/notes/event-reception-policy-selection.md`
+- `docs/design/event-driven-job-management.md`
+- `docs/phase/phase-13.md`
