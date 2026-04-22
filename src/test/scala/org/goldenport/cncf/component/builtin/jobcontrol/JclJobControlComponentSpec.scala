@@ -258,6 +258,9 @@ final class JclJobControlComponentSpec
       record.getBoolean("success") shouldBe Some(true)
       val submittedIds = _strings(record, "submitted-job-ids")
       submittedIds.size shouldBe 1
+      _await_condition {
+        fixture.trace.contains("workflow.advanceOrder")
+      } shouldBe true
       fixture.trace should contain ("workflow.advanceOrder")
 
       val instance = fixture.subsystem.workflowEngine.instances.headOption.getOrElse(fail("workflow instance missing"))
@@ -348,6 +351,13 @@ final class JclJobControlComponentSpec
       record.getString("failure-hook-job-id").exists(_.nonEmpty) shouldBe true
 
       And("the failure hook runs and later jobs are not executed")
+      _await_condition {
+        fixture.trace.toVector == Vector(
+          "ok:orderId=direct-1",
+          "workflow.advanceOrder",
+          "hook:reason=workflow-no-progress"
+        )
+      } shouldBe true
       fixture.trace.toVector shouldBe Vector(
         "ok:orderId=direct-1",
         "workflow.advanceOrder",
@@ -530,6 +540,19 @@ final class JclJobControlComponentSpec
 
   private def _strings(record: Record, key: String): Vector[String] =
     record.getAny(key).collect { case xs: Seq[?] => xs.map(_.toString).toVector }.getOrElse(Vector.empty)
+
+  private def _await_condition(
+    p: => Boolean,
+    timeoutMillis: Long = 2000L
+  ): Boolean = {
+    val deadline = System.currentTimeMillis() + timeoutMillis
+    var matched = p
+    while (!matched && System.currentTimeMillis() < deadline) {
+      Thread.sleep(10L)
+      matched = p
+    }
+    matched
+  }
 
   private def _entity_id(
     entropy: String

@@ -1,6 +1,7 @@
 package org.goldenport.cncf.job
 
 import java.time.Duration
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.cncf.context.ExecutionContext
@@ -108,6 +109,50 @@ final class JobRetryOperationalSpec
       engine.shutdown()
     }
 
+    "enqueue delayed retries into the shared scheduler instead of executing them directly" in {
+      Given("a single-worker scheduler occupied by another async job")
+      val engine = new InMemoryJobEngine(
+        retrySchedule = InMemoryJobEngine.RetrySchedule(
+          delayedRetryDelays = Vector(Duration.ofMillis(200L), Duration.ofMillis(300L), Duration.ofMillis(400L))
+        ),
+        schedulerConfig = InMemoryJobEngine.SchedulerConfig(workerCount = 1)
+      )(scala.concurrent.ExecutionContext.global)
+      val attempts = new AtomicInteger(0)
+      val task = _CountingTask(
+        conclusion = _failure(Disposition.UserAction.RetryLater, "retry-later-queued"),
+        attempts = attempts,
+        succeedAt = 2
+      )
+      val blockerEntered = new CountDownLatch(1)
+      val blockerRelease = new CountDownLatch(1)
+
+      When("a RetryLater job becomes due while the worker is still busy")
+      val jobId = engine.submit(List(task), ExecutionContext.test())
+      _await_condition {
+        engine.query(jobId).exists(_.retry.nextRetryDueAt.nonEmpty)
+      } shouldBe true
+      val blockerId = engine.submit(List(_BlockingTask(blockerEntered, blockerRelease, "blocker")), ExecutionContext.test())
+      blockerEntered.await(1, TimeUnit.SECONDS) shouldBe true
+
+      Then("the retry is enqueued and waits for worker availability")
+      _await_condition {
+        engine.query(jobId).exists { model =>
+          model.retry.nextRetryDueAt.isEmpty &&
+          model.retry.kind == JobRetryKind.Delayed
+        }
+      } shouldBe true
+      attempts.get() shouldBe 1
+
+      blockerRelease.countDown()
+      _await_query(engine, blockerId)
+      val model = _await_query(engine, jobId)
+
+      And("execution resumes through the shared scheduler path")
+      model.status shouldBe JobStatus.Succeeded
+      attempts.get() shouldBe 2
+      engine.shutdown()
+    }
+
     "fail immediately as poison when retry is not requested" in {
       Given("a job that fails without retry-worthiness")
       val engine = InMemoryJobEngine.create()
@@ -151,6 +196,20 @@ final class JobRetryOperationalSpec
         TaskSucceeded(OperationResponse.Scalar(s"ok-$current"))
       else
         TaskFailed(conclusion)
+    }
+  }
+
+  private final case class _BlockingTask(
+    entered: CountDownLatch,
+    release: CountDownLatch,
+    value: String,
+    actionId: ActionId = ActionId.generate()
+  ) extends JobTask {
+    def run(ctx: ExecutionContext): TaskOutcome = {
+      val _ = ctx
+      entered.countDown()
+      release.await(2, TimeUnit.SECONDS)
+      TaskSucceeded(OperationResponse.Scalar(value))
     }
   }
 

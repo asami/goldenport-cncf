@@ -1,8 +1,9 @@
 package org.goldenport.cncf.job
 
 import java.time.Instant
-import java.util.concurrent.{ConcurrentHashMap, Executors, ScheduledExecutorService, TimeUnit}
-import scala.concurrent.{ExecutionContext as ScalaExecutionContext, Future}
+import java.util.concurrent.{ConcurrentHashMap, Executors, LinkedBlockingQueue, ScheduledExecutorService, TimeUnit, ExecutorService}
+import java.util.concurrent.atomic.AtomicLong
+import scala.concurrent.ExecutionContext as ScalaExecutionContext
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.consequence.Failures
 import org.goldenport.id.UniversalId
@@ -478,7 +479,8 @@ trait JobEngine {
 
 final class InMemoryJobEngine(
   val runtimeState: InMemoryJobEngine.State = InMemoryJobEngine.State(),
-  val retrySchedule: InMemoryJobEngine.RetrySchedule = InMemoryJobEngine.RetrySchedule.default
+  val retrySchedule: InMemoryJobEngine.RetrySchedule = InMemoryJobEngine.RetrySchedule.default,
+  val schedulerConfig: InMemoryJobEngine.SchedulerConfig = InMemoryJobEngine.SchedulerConfig.default
 )(
   implicit val executionContext: ScalaExecutionContext
 ) extends JobEngine {
@@ -488,6 +490,13 @@ final class InMemoryJobEngine(
   private var _event_store: Option[EventStore] = None
   private val _scheduler: ScheduledExecutorService =
     Executors.newSingleThreadScheduledExecutor()
+  private val _work_queue = new LinkedBlockingQueue[SchedulerWorkItem]()
+  private val _work_sequence = new AtomicLong(0L)
+  private val _worker_pool: ExecutorService =
+    Executors.newFixedThreadPool(math.max(1, schedulerConfig.workerCount))
+  @volatile private var _shutdown_requested = false
+
+  _start_scheduler_workers_()
 
   _rehydrate_delayed_retries_()
 
@@ -497,7 +506,11 @@ final class InMemoryJobEngine(
   }
 
   def shutdown(): Unit =
-    _scheduler.shutdownNow()
+    {
+      _shutdown_requested = true
+      _worker_pool.shutdownNow()
+      _scheduler.shutdownNow()
+    }
 
   def submit(tasks: List[JobTask], ctx: ExecutionContext): JobId =
     submit(tasks, ctx, _default_submit_option(tasks))
@@ -547,7 +560,8 @@ final class InMemoryJobEngine(
     )
     option.runMode match {
       case JobRunMode.Async =>
-        _run_job_async_(jobid, tasks, ctx)
+        _append_timeline_(jobid, "job.async.queued", None, None, None)
+        _enqueue_work_(SchedulerWorkItem.JobRun(_next_sequence_(), jobid))
       case JobRunMode.Sync =>
         _run_job_sync_(jobid, tasks, ctx)
     }
@@ -644,21 +658,12 @@ final class InMemoryJobEngine(
     _get_record(jobId) match {
       case Some(_) =>
         val taskid = TaskId.generate()
-        _append_timeline_(jobId, "job.same-job-async.enqueued", Some(taskid), ctx.jobContext.currentTask, Some(task.operationName.getOrElse(task.actionId.print)))
-        Future(_run_same_job_task_(jobId, task, ctx, Some(taskid)))
+        _append_timeline_(jobId, "job.same-job-async.queued", Some(taskid), ctx.jobContext.currentTask, Some(task.operationName.getOrElse(task.actionId.print)))
+        _enqueue_work_(SchedulerWorkItem.SameJobTask(_next_sequence_(), jobId, task, ctx, taskid))
         Consequence.success(taskid)
       case None =>
         Consequence.operationNotFound(s"job:${jobId.value}")
     }
-
-  private def _run_job_async_(
-    jobid: JobId,
-    tasks: List[JobTask],
-    ctx: ExecutionContext
-  ): Unit = {
-    Future(_run_job_body_(jobid, tasks, ctx))
-    ()
-  }
 
   private def _run_job_sync_(
     jobid: JobId,
@@ -666,6 +671,99 @@ final class InMemoryJobEngine(
     ctx: ExecutionContext
   ): Unit =
     _run_job_body_(jobid, tasks, ctx)
+
+  private def _start_scheduler_workers_(): Unit =
+    (0 until math.max(1, schedulerConfig.workerCount)).foreach { _ =>
+      _worker_pool.submit(
+        new Runnable {
+          override def run(): Unit =
+            _scheduler_worker_loop_()
+        }
+      )
+    }
+
+  private def _scheduler_worker_loop_(): Unit =
+    while (!_shutdown_requested && !Thread.currentThread().isInterrupted) {
+      try {
+        val work = _work_queue.take()
+        _run_scheduler_work_(work)
+      } catch {
+        case _: InterruptedException =>
+          Thread.currentThread().interrupt()
+        case e: Throwable =>
+          val _ = e
+      }
+    }
+
+  private def _run_scheduler_work_(work: SchedulerWorkItem): Unit =
+    work match {
+      case SchedulerWorkItem.JobRun(_, jobid) =>
+        _run_job_record_(jobid, Some("job-run"))
+      case SchedulerWorkItem.RetryRun(_, jobid) =>
+        _run_job_record_(jobid, Some("retry-run"))
+      case SchedulerWorkItem.SameJobTask(_, jobid, task, ctx, forcedTaskId) =>
+        _run_queued_same_job_task_(jobid, task, ctx, forcedTaskId, Some("same-job-task"))
+    }
+
+  private def _run_job_record_(jobid: JobId): Unit =
+    _run_job_record_(jobid, None)
+
+  private def _run_job_record_(
+    jobid: JobId,
+    note: Option[String]
+  ): Unit =
+    _get_record(jobid).foreach { record =>
+      if (_can_run_next_task(jobid)) {
+        try {
+          _append_timeline_(jobid, "job.scheduler.started", None, None, note)
+          _run_job_body_(jobid, record.tasks, record.submittedContext)
+        } catch {
+          case e: Throwable =>
+            _handle_worker_failure_(jobid, e)
+        }
+      }
+    }
+
+  private def _run_queued_same_job_task_(
+    jobid: JobId,
+    task: JobTask,
+    ctx: ExecutionContext,
+    forcedTaskId: TaskId,
+    note: Option[String]
+  ): Unit =
+    if (_can_run_next_task(jobid)) {
+      try {
+        _append_timeline_(jobid, "job.scheduler.started", Some(forcedTaskId), ctx.jobContext.currentTask, note)
+        val _ = _run_same_job_task_(jobid, task, ctx, Some(forcedTaskId))
+      } catch {
+        case e: Throwable =>
+          _handle_worker_failure_(jobid, e)
+      }
+    }
+
+  private def _handle_worker_failure_(
+    jobid: JobId,
+    e: Throwable
+  ): Unit = {
+    val message = Option(e.getMessage).filter(_.nonEmpty).getOrElse(e.getClass.getName)
+    val conclusion = Conclusion.simple(s"job scheduler failure: $message")
+    _append_timeline_(jobid, "job.failed", None, None, Some(message))
+    _update_record_(jobid, JobStatus.Failed, Some(JobResult.Failure(conclusion)))
+    _append_event_(
+      name = "job.failed",
+      payload = Map(
+        "job-id" -> jobid.value,
+        "status" -> JobStatus.Failed.toString,
+        "message" -> conclusion.show
+      )
+    )
+  }
+
+  private def _enqueue_work_(work: SchedulerWorkItem): Unit =
+    _work_queue.put(work)
+
+  private def _next_sequence_(): Long =
+    _work_sequence.incrementAndGet()
 
   private def _run_job_body_(
     jobid: JobId,
@@ -850,7 +948,8 @@ final class InMemoryJobEngine(
         "status" -> JobStatus.Submitted.toString
       )
     )
-    _run_job_async_(jobid, record.tasks, record.submittedContext)
+    _append_timeline_(jobid, "job.async.queued", None, None, Some("retry"))
+    _enqueue_work_(SchedulerWorkItem.RetryRun(_next_sequence_(), jobid))
   }
 
   private def _append_timeline_for_control_(
@@ -1417,7 +1516,8 @@ final class InMemoryJobEngine(
           lastFailureUserAction = _user_action_name_(conclusion),
           lastFailureMessage = conclusion.observation.getEffectiveMessage
         ))
-        _run_job_async_(jobid, record.tasks, record.submittedContext)
+        _append_timeline_(jobid, "job.async.queued", None, None, Some("retry-now"))
+        _enqueue_work_(SchedulerWorkItem.RetryRun(_next_sequence_(), jobid))
       case RetryPolicy.Delayed(nextAttempt, dueAt, maxAttempts) =>
         _append_timeline_(jobid, "job.retry.delayed.scheduled", None, None, Some(s"$nextAttempt/$maxAttempts @ ${dueAt.toString}"))
         _update_record_for_retry_(jobid, record, JobRetryKind.Delayed, nextAttempt, Some(dueAt), conclusion)
@@ -1615,6 +1715,7 @@ final class InMemoryJobEngine(
         record.retry.nextRetryDueAt.exists(!_.isAfter(Instant.now()))
       ) {
         _append_timeline_(jobid, "job.retry.delayed.submitted", None, None, Some(s"${record.retry.attemptCount}/${record.retry.maxAttempts}"))
+        _append_timeline_(jobid, "job.retry.delayed.enqueued", None, None, Some(s"${record.retry.attemptCount}/${record.retry.maxAttempts}"))
         _append_event_(
           name = "job.retry.delayed.submitted",
           payload = Map(
@@ -1629,7 +1730,7 @@ final class InMemoryJobEngine(
             updatedAt = Instant.now()
           )
         )
-        _run_job_async_(jobid, record.tasks, record.submittedContext)
+        _enqueue_work_(SchedulerWorkItem.RetryRun(_next_sequence_(), jobid))
       }
     }
 
@@ -1648,6 +1749,14 @@ final class InMemoryJobEngine(
 }
 
 object InMemoryJobEngine {
+  final case class SchedulerConfig(
+    workerCount: Int = 1
+  )
+
+  object SchedulerConfig {
+    val default: SchedulerConfig = SchedulerConfig()
+  }
+
   final case class RetrySchedule(
     delayedRetryDelays: Vector[java.time.Duration],
     maxRetries: Int = 3
@@ -1677,8 +1786,35 @@ object InMemoryJobEngine {
     final case class Exhausted(kind: JobRetryKind, attempts: Int, maxAttempts: Int) extends RetryPolicy
   }
 
-  def create(): InMemoryJobEngine =
-    new InMemoryJobEngine()(scala.concurrent.ExecutionContext.global)
+  private sealed trait SchedulerWorkItem {
+    def sequence: Long
+    def jobId: JobId
+  }
+
+  private object SchedulerWorkItem {
+    final case class JobRun(
+      sequence: Long,
+      jobId: JobId
+    ) extends SchedulerWorkItem
+
+    final case class RetryRun(
+      sequence: Long,
+      jobId: JobId
+    ) extends SchedulerWorkItem
+
+    final case class SameJobTask(
+      sequence: Long,
+      jobId: JobId,
+      task: JobTask,
+      ctx: ExecutionContext,
+      forcedTaskId: TaskId
+    ) extends SchedulerWorkItem
+  }
+
+  def create(
+    schedulerConfig: SchedulerConfig = SchedulerConfig.default
+  ): InMemoryJobEngine =
+    new InMemoryJobEngine(schedulerConfig = schedulerConfig)(scala.concurrent.ExecutionContext.global)
 }
 
 final case class JobRecord(

@@ -44,7 +44,7 @@ usage from expanding implicitly.
 
 ## JS-01: Shared Job Scheduler for Async Execution
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -66,12 +66,12 @@ JS-01 must ensure:
 
 ### Detailed Tasks
 
-- [ ] Route async submit through the shared scheduler queue.
-- [ ] Route same-job async task execution through the shared scheduler queue.
-- [ ] Rework delayed retry so due retries enqueue into the shared scheduler.
-- [ ] Add bounded/configurable worker concurrency.
-- [ ] Keep public status stable and expose queueing through timeline/metrics.
-- [ ] Ensure scheduler-owned metrics and traceability remain authoritative for
+- [x] Route async submit through the shared scheduler queue.
+- [x] Route same-job async task execution through the shared scheduler queue.
+- [x] Rework delayed retry so due retries enqueue into the shared scheduler.
+- [x] Add bounded/configurable worker concurrency.
+- [x] Keep public status stable and expose queueing through timeline/metrics.
+- [x] Ensure scheduler-owned metrics and traceability remain authoritative for
   async execution.
 
 ### Expected Outcome
@@ -92,7 +92,7 @@ JS-01 must ensure:
 
 ## PR-01: Queue Priority and Workflow Priority Normalization
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 
