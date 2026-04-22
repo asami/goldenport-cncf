@@ -43,7 +43,7 @@ directly to provider internals.
 
 ## AU-01: CNCF Auth/Session Contract Completion
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -62,19 +62,20 @@ AU-01 must ensure:
 
 ### Detailed Tasks
 
-- [ ] Fix the canonical request/response/auth-result contract around the
+- [x] Fix the canonical request/response/auth-result contract around the
       existing `AuthenticationProvider` path.
-- [ ] Fix provider selection behavior from subsystem wiring.
-- [ ] Clarify authenticated vs anonymous subject semantics.
-- [ ] Ensure `ExecutionContext.security` is the single runtime carrier for the
+- [x] Fix provider selection behavior from subsystem wiring.
+- [x] Clarify authenticated vs anonymous subject semantics.
+- [x] Ensure `ExecutionContext.security` is the single runtime carrier for the
       resolved auth/session state.
-- [ ] Add executable coverage for subsystem auth wiring and auth contract
+- [x] Add executable coverage for subsystem auth wiring and auth contract
       failure/success behavior.
 
 ### Expected Outcome
 
 - CNCF has one completed auth/session contract centered on the already-existing
   authentication footholds.
+- `AuthenticationProvider` now has explicit `Some/None/Failure` semantics, and runtime fallback no longer hides provider failures.
 
 ### Guardrails
 
@@ -85,7 +86,7 @@ AU-01 must ensure:
 
 ## AU-02: Web Session Runtime Path
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 

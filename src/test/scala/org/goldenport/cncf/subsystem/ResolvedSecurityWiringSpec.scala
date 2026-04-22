@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  9, 2026
- * @version Apr.  9, 2026
+ * @version Apr. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
@@ -54,6 +54,25 @@ final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
       wiring.authentication.providers.head.priority shouldBe 100
       wiring.authentication.providers.head.isDefault shouldBe true
       wiring.authentication.providers.head.provider.map(_.name) shouldBe Some("user-account")
+    }
+
+    "order providers by priority descending then normalized component and provider names" in {
+      val providers = Vector(
+        ResolvedAuthenticationProviderBinding(name = "z-provider", componentName = "b-component", priority = 10),
+        ResolvedAuthenticationProviderBinding(name = "a-provider", componentName = "b-component", priority = 10),
+        ResolvedAuthenticationProviderBinding(name = "c-provider", componentName = "a-component", priority = 20),
+        ResolvedAuthenticationProviderBinding(name = "b-provider", componentName = "a-component", priority = 10)
+      )
+
+      val ordered = ResolvedAuthenticationWiring(providers = providers).enabledProviders
+        .sortBy(x => (-x.priority, x.componentName.toLowerCase.replace("_", "").replace("-", ""), x.name.toLowerCase.replace("_", "").replace("-", "")))
+
+      ordered.map(x => (x.priority, x.componentName, x.name)) shouldBe Vector(
+        (20, "a-component", "c-provider"),
+        (10, "a-component", "b-provider"),
+        (10, "b-component", "a-provider"),
+        (10, "b-component", "z-provider")
+      )
     }
 
     "drop convention providers when convention is disabled" in {

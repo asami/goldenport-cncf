@@ -1,12 +1,12 @@
 package org.goldenport.cncf.security
 
-import org.goldenport.cncf.context.{Capability, Principal, PrincipalId, SecurityContext, SecurityLevel}
+import org.goldenport.cncf.context.{Capability, Principal, PrincipalId, SecurityContext, SecurityLevel, SessionContext}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 13, 2026
+ * @version Apr. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SecuritySubjectSpec
@@ -126,6 +126,24 @@ final class SecuritySubjectSpec
 
       subject.isAuthenticated shouldBe true
       subject.accessTokenPresent shouldBe true
+    }
+
+    "derive authenticated subject from session metadata even without access token" in {
+      val principal = new Principal {
+        def id: PrincipalId = PrincipalId("u2")
+        def attributes: Map[String, String] = Map.empty
+      }
+      val subject = SecuritySubject.from(
+        SecurityContext(
+          principal = principal,
+          capabilities = Set.empty,
+          level = SecurityLevel("user"),
+          session = Some(SessionContext(sessionId = Some("sess-1")))
+        )
+      )
+
+      subject.isAuthenticated shouldBe true
+      subject.accessTokenPresent shouldBe false
     }
 
     "derive anonymous subject from anonymous marker" in {

@@ -4,7 +4,7 @@ import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 13, 2026
+ * @version Apr. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SecuritySubject(
@@ -97,8 +97,10 @@ object SecuritySubject {
     val attributes = security.principal.attributes
     val accessTokenPresent =
       _has_token(attributes)
+    val sessionPresent =
+      _has_session(security)
     val authenticationState =
-      _authentication_state(security, accessTokenPresent)
+      _authentication_state(security, accessTokenPresent, sessionPresent)
     val primaryGroup =
       _first_token(attributes, "group", "group_id")
     val groupSet =
@@ -210,15 +212,26 @@ object SecuritySubject {
     Vector("access_token", "token", "bearer_token", "jwt", "authorization")
       .exists(k => attributes.get(k).exists(_.trim.nonEmpty))
 
+  private def _has_session(security: SecurityContext): Boolean =
+    security.session.exists { session =>
+      session.sessionId.exists(_.trim.nonEmpty) ||
+      session.tokenId.exists(_.trim.nonEmpty) ||
+      session.authenticatedAt.nonEmpty ||
+      session.expiresAt.nonEmpty ||
+      session.refreshSessionId.exists(_.trim.nonEmpty) ||
+      session.attributes.exists { case (_, value) => value.trim.nonEmpty }
+    }
+
   private def _authentication_state(
     security: SecurityContext,
-    accessTokenPresent: Boolean
+    accessTokenPresent: Boolean,
+    sessionPresent: Boolean
   ): AuthenticationState = {
     val attributes = security.principal.attributes
     val explicitAuthenticated = _boolean(attributes.get("authenticated"))
     val explicitAnonymous = _boolean(attributes.get("anonymous"))
     val subjectId = normalize(security.principal.id.value)
-    if (explicitAuthenticated.contains(true) || accessTokenPresent)
+    if (explicitAuthenticated.contains(true) || accessTokenPresent || sessionPresent)
       AuthenticationState.Authenticated
     else if (
       explicitAnonymous.contains(true) ||

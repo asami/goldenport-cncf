@@ -20,7 +20,7 @@ import org.goldenport.protocol.Request
  *
  * @since   Mar. 20, 2026
  *  version Apr. 13, 2026
- * @version Apr. 21, 2026
+ * @version Apr. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -118,12 +118,15 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       if (resolvedProviders.nonEmpty)
         _resolve_authenticated_security(resolvedProviders, base, request)
       else
-        Consequence.securityAuthenticationRequired[SecurityContext]("No authentication provider accepted the request.")
-    security0.orElse {
-      if (_fallback_privilege_enabled(base))
-        _resolve_privilege(attributes).map(_security_context(_, attributes))
-      else
-        Consequence.securityPermissionDenied[SecurityContext]("Privilege fallback is disabled by resolved security wiring.")
+        Consequence.success(None)
+    security0.flatMap {
+      case Some(security) =>
+        Consequence.success(security)
+      case None =>
+        if (_fallback_privilege_enabled(base))
+          _resolve_privilege(attributes).map(_security_context(_, attributes))
+        else
+          Consequence.securityPermissionDenied[SecurityContext]("Privilege fallback is disabled by resolved security wiring.")
     }.flatMap { security =>
       val privilege = _resolve_privilege_from_security(security)
       val ctx0 = ExecutionContext.withSecurityContext(base, security)
@@ -258,17 +261,19 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     providers: Vector[AuthenticationProvider],
     base: ExecutionContext,
     request: AuthenticationRequest
-  ): Consequence[SecurityContext] = {
-    val initial: Consequence[SecurityContext] =
-      Consequence.securityAuthenticationRequired[SecurityContext]("No authentication provider accepted the request.")
-    providers.foldLeft(initial) { (z, provider) =>
-      z.orElse {
-        provider.authenticate(request)(using base).flatMap {
-          case Some(result) => Consequence.success(result.toSecurityContext)
-          case None => Consequence.securityAuthenticationRequired[SecurityContext](s"Authentication provider did not match: ${provider.name}")
-        }
+  ): Consequence[Option[SecurityContext]] = {
+    def go(rest: Vector[AuthenticationProvider]): Consequence[Option[SecurityContext]] =
+      rest.headOption match {
+        case Some(provider) =>
+          provider.authenticate(request)(using base).flatMap {
+            case Some(result) => Consequence.success(Some(result.toSecurityContext))
+            case None => go(rest.tail)
+          }
+        case None =>
+          Consequence.success(None)
       }
-    }
+
+    go(providers)
   }
 
   private def _resolved_authentication_providers(base: ExecutionContext): Vector[AuthenticationProvider] =

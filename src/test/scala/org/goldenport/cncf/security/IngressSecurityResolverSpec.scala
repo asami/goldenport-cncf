@@ -2,7 +2,7 @@ package org.goldenport.cncf.security
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
-import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeContext, ScopeKind, SecurityLevel, TraceId}
+import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, PrincipalId, ScopeContext, ScopeKind, SecurityLevel, TraceId}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAuthenticationBinding, GenericSubsystemAuthenticationProviderBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemSecurityBinding, Subsystem}
 import org.goldenport.cncf.event.EventReception
 import org.goldenport.cncf.job.{ActionId, JobId, TaskId}
@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- * @version Apr. 13, 2026
+ * @version Apr. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
@@ -123,6 +123,72 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
       result shouldBe a[Consequence.Failure[_]]
     }
 
+    "try the next provider when the first provider does not match" in {
+      val subsystem = _subsystem(
+        fallbackEnabled = true,
+        providers = Vector(
+          _provider("first-provider", _ => Consequence.success(None)),
+          _provider(
+            "second-provider",
+            _ => Consequence.success(Some(AuthenticationResult(PrincipalId("user-2"), attributes = Map.empty)))
+          )
+        )
+      )
+      val base = subsystem.components.head.logic.executionContext()
+
+      val result = IngressSecurityResolver.resolve(base, Map("access_token" -> "matched-token"))
+
+      result shouldBe a[Consequence.Success[_]]
+      val resolved = result.toOption.get
+      resolved.executionContext.security.principal.id.value shouldBe "user-2"
+      SecuritySubject.from(resolved.executionContext.security).isAuthenticated shouldBe true
+    }
+
+    "propagate provider failure instead of falling back to privilege resolution" in {
+      val subsystem = _subsystem(
+        fallbackEnabled = true,
+        providers = Vector(
+          _provider("failing-provider", _ => Consequence.argumentInvalid("invalid credentials"))
+        )
+      )
+      val base = subsystem.components.head.logic.executionContext()
+
+      val result = IngressSecurityResolver.resolve(
+        base,
+        Map(
+          "access_token" -> "bad-token",
+          "privilege" -> "application_content_manager"
+        )
+      )
+
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
+    "preserve authenticated session metadata in execution context security" in {
+      val session = org.goldenport.cncf.context.SessionContext(
+        sessionId = Some("sess-1"),
+        tokenId = Some("token-1")
+      )
+      val subsystem = _subsystem(
+        fallbackEnabled = true,
+        providers = Vector(
+          _provider(
+            "session-provider",
+            _ => Consequence.success(Some(AuthenticationResult(PrincipalId("user-3"), attributes = Map.empty, session = Some(session))))
+          )
+        )
+      )
+      val base = subsystem.components.head.logic.executionContext()
+
+      val result = IngressSecurityResolver.resolve(base, Map("access_token" -> "session-token"))
+
+      result shouldBe a[Consequence.Success[_]]
+      val resolved = result.toOption.get
+      resolved.executionContext.security.session.map(_.sessionId) shouldBe Some(Some("sess-1"))
+      resolved.executionContext.security.session.map(_.tokenId) shouldBe Some(Some("token-1"))
+      SecuritySubject.from(resolved.executionContext.security).isAuthenticated shouldBe true
+    }
+
     "fallback to privilege resolution when providers do not resolve and fallback remains enabled" in {
       val subsystem = _subsystem(fallbackEnabled = true)
       val base = subsystem.components.head.logic.executionContext()
@@ -141,7 +207,10 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
     }
   }
 
-  private def _subsystem(fallbackEnabled: Boolean): Subsystem = {
+  private def _subsystem(
+    fallbackEnabled: Boolean,
+    providers: Vector[AuthenticationProvider] = Vector(_provider("dummy-provider", _ => Consequence.success(None)))
+  ): Subsystem = {
     val subsystem = Subsystem(
       name = "security-test",
       scopeContext = Some(
@@ -157,14 +226,26 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
         org.goldenport.configuration.ConfigurationTrace.empty
       )
     )
-    val component = Component.create(
-      "Dummy",
-      ComponentId("dummy"),
-      ComponentInstanceId.default(ComponentId("dummy")),
-      Protocol.empty
+    val ownerSubsystem = subsystem
+    val component = new Component() {
+      override val core: Component.Core =
+        Component.Core.create(
+          "Dummy",
+          ComponentId("dummy"),
+          ComponentInstanceId.default(ComponentId("dummy")),
+          Protocol.empty
+        )
+      override def subsystem: Option[Subsystem] = Some(ownerSubsystem)
+      override def authenticationProviders: Vector[AuthenticationProvider] = providers
+    }.withArtifactMetadata(
+      Component.ArtifactMetadata(
+        sourceType = "spec",
+        name = "Dummy",
+        version = "0.0.0",
+        component = Some("dummy")
+      )
     )
-    subsystem.add(Vector(component))
-    subsystem.withDescriptor(
+    val configured = subsystem.withDescriptor(
       GenericSubsystemDescriptor(
         path = java.nio.file.Path.of("<memory>"),
         subsystemName = "security-test",
@@ -175,18 +256,34 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
               GenericSubsystemAuthenticationBinding(
                 convention = Some("enabled"),
                 fallbackPrivilege = Some(if (fallbackEnabled) "enabled" else "disabled"),
-                providers = Vector(
+                providers = providers.map { provider =>
                   GenericSubsystemAuthenticationProviderBinding(
-                    name = "dummy-provider",
+                    name = provider.name,
                     component = "dummy",
                     enabled = Some(true)
                   )
-                )
+                }
               )
             )
           )
         )
       )
     )
+    configured.add(Vector(component))
+    require(
+      configured.resolvedSecurityWiring.authentication.enabledProviders.flatMap(_.provider).map(_.name) == providers.map(_.name),
+      s"resolved providers mismatch: ${configured.resolvedSecurityWiring.authentication.enabledProviders.flatMap(_.provider).map(_.name)} vs ${providers.map(_.name)}"
+    )
+    configured
   }
+
+  private def _provider(
+    providerName: String,
+    f: AuthenticationRequest => Consequence[Option[AuthenticationResult]]
+  ): AuthenticationProvider =
+    new AuthenticationProvider {
+      override val name: String = providerName
+      def authenticate(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]] =
+        f(request)
+    }
 }

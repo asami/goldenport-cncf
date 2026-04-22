@@ -9,9 +9,12 @@ import org.goldenport.cncf.context.{Capability, ExecutionContext, Principal, Pri
  * - Authentication providers belong to deployed components.
  * - CNCF ingress resolves request attributes through providers and normalizes the
  *   result into the common SecurityContext carried by ExecutionContext.
+ * - Success(Some(result)) means the provider accepted the request and authenticated it.
+ * - Success(None) means the provider did not match the request.
+ * - Failure means the provider matched but authentication failed operationally.
  *
  * @since   Apr.  9, 2026
- * @version Apr.  9, 2026
+ * @version Apr. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AuthenticationRequest(
@@ -76,7 +79,7 @@ final case class AuthenticationResult(
 
 object AuthenticationResult {
   def defaultAttributes(principalId: PrincipalId, attributes: Map[String, String]): Map[String, String] =
-    attributes ++ Map(
+    Option(attributes).getOrElse(Map.empty[String, String]) ++ Map(
       "principal_id" -> principalId.value,
       "authenticated" -> "true"
     )
@@ -84,5 +87,10 @@ object AuthenticationResult {
 
 trait AuthenticationProvider {
   def name: String
+
+  // Contract:
+  // - Success(Some(result)): accepted and authenticated.
+  // - Success(None): request did not match this provider.
+  // - Failure: matched request but authentication failed deterministically.
   def authenticate(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]]
 }
