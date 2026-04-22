@@ -133,7 +133,7 @@ submission.
 
 ## JCL-02: JCL to Workflow Entrypoints
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -142,10 +142,10 @@ submission and orchestration.
 
 ### Detailed Tasks
 
-- [ ] Allow `JCL` target to reference a workflow entrypoint.
-- [ ] Ensure `JCL` starts work while workflow controls progression.
-- [ ] Keep `JCL` and workflow as separate models/languages.
-- [ ] Preserve existing runtime/job visibility on submitted work.
+- [x] Allow `JCL` target to reference a workflow entrypoint.
+- [x] Ensure `JCL` starts work while workflow controls progression.
+- [x] Keep `JCL` and workflow as separate models/languages.
+- [x] Preserve existing runtime/job visibility on submitted work.
 
 ### Expected Outcome
 
@@ -155,7 +155,7 @@ submission and orchestration.
 
 ## OPS-01: Retry and Dead-Letter Hardening
 
-Status: SUSPENDED
+Status: ACTIVE
 
 ### Objective
 

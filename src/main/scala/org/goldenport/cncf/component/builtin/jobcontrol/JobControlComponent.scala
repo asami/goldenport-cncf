@@ -6,8 +6,10 @@ import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, CommandActi
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobBatchDefinition, JobBatchSubmissionResult, JobControlCommand, JobControlRequest, JobDefinition, JobFailureHook, JobId, JobPersistencePolicy, JobResult, JobSubmitOption}
 import org.goldenport.cncf.job.{JobQueryReadModel, JobTimelinePage}
+import org.goldenport.cncf.event.ReceptionDomainEvent
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.event.EventStore
+import org.goldenport.cncf.workflow.WorkflowEntrypoint
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -126,6 +128,11 @@ object JobControlComponent {
   }
 
   private final class DefaultJobService(component: Component) extends JobService {
+    private final case class _Submission(
+      jobIds: Vector[JobId],
+      response: Consequence[OperationResponse]
+    )
+
     def getJobStatus(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobQueryReadModel] =
       component.jobEngine.queryVisible(jobId).flatMap {
         case Some(model) => Consequence.success(model)
@@ -179,23 +186,24 @@ object JobControlComponent {
 
     private def _submit_jobs(
       jobs: Vector[JobDefinition],
-      submitted: Vector[JobId]
+      submitted: Vector[JobId],
+      index: Int = 0
     )(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobBatchSubmissionResult] =
       jobs.headOption match {
         case None =>
           Consequence.success(JobBatchSubmissionResult(submitted, success = true))
         case Some(job) =>
-          _submit_one(job).flatMap { case (jobid, response) =>
-            val updated = submitted :+ jobid
-            response match {
+          _submit_one(job).flatMap { submission =>
+            val updated = submitted ++ submission.jobIds
+            submission.response match {
               case Consequence.Success(_) =>
-                _submit_jobs(jobs.drop(1), updated)
+                _submit_jobs(jobs.drop(1), updated, index + 1)
               case Consequence.Failure(conclusion) =>
                 _run_failure_hook(job.onFailure).map { hook =>
                   JobBatchSubmissionResult(
                     submittedJobIds = updated,
                     success = false,
-                    stoppedAtIndex = Some(updated.size - 1),
+                    stoppedAtIndex = Some(index),
                     stoppedAtName = Some(job.name),
                     failureMessage = Some(conclusion.show),
                     failureHookJobId = hook._1,
@@ -227,13 +235,26 @@ object JobControlComponent {
 
     private def _submit_one(
       job: JobDefinition
-    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[(JobId, Consequence[OperationResponse])] =
-      _submit_action(
-        selector = job.target.action,
-        parameters = job.parameters,
-        requestSummary = job.submit.requestSummary.orElse(Some(job.name)),
-        persistence = job.submit.persistence
-      )
+    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[_Submission] =
+      job.target match {
+        case x if x.action.nonEmpty =>
+          _submit_action(
+            selector = x.action.get,
+            parameters = job.parameters,
+            requestSummary = job.submit.requestSummary.orElse(Some(job.name)),
+            persistence = job.submit.persistence
+          ).map { case (jobid, response) =>
+            _Submission(Vector(jobid), response)
+          }
+        case x if x.workflow.nonEmpty =>
+          _submit_workflow(
+            entry = x.workflow.get,
+            parameters = job.parameters,
+            requestSummary = job.submit.requestSummary.orElse(Some(job.name))
+          )
+        case _ =>
+          Consequence.argumentInvalid("JCL target must contain action or workflow")
+      }
 
     private def _submit_action(
       selector: String,
@@ -252,6 +273,81 @@ object JobControlComponent {
         val jobid = component.jobEngine.submit(List(task), summon[org.goldenport.cncf.context.ExecutionContext], option)
         (jobid, component.logic.awaitJobResult(jobid))
       }
+
+    private def _submit_workflow(
+      entry: org.goldenport.cncf.job.JobWorkflowTarget,
+      parameters: Map[String, String],
+      requestSummary: Option[String]
+    )(using org.goldenport.cncf.context.ExecutionContext): Consequence[_Submission] =
+      _resolve_workflow_entrypoint(entry).flatMap { endpoint =>
+        val event = _workflow_start_event(endpoint, parameters)
+        component.subsystem match {
+          case Some(subsystem) =>
+            subsystem.workflowEngine.handle(endpoint.component.name, event).flatMap { decision =>
+              if (decision.progressed)
+                decision.relatedJobId match {
+                  case Some(jobid) =>
+                    Consequence.success(
+                      _Submission(
+                        Vector(jobid),
+                        Consequence.success(OperationResponse.Scalar(requestSummary.getOrElse("workflow-started")))
+                      )
+                    )
+                  case None =>
+                    Consequence.stateConflict(s"workflow progressed without managed job: ${entry.definition}/${entry.registration}")
+                }
+              else
+                Consequence.success(
+                  _Submission(
+                    Vector.empty,
+                    Consequence.argumentInvalid(
+                      s"workflow did not progress: ${decision.reason.getOrElse("unknown")}"
+                    )
+                  )
+                )
+            }
+          case None =>
+            Consequence.serviceUnavailable("subsystem is not available")
+        }
+      }
+
+    private def _resolve_workflow_entrypoint(
+      entry: org.goldenport.cncf.job.JobWorkflowTarget
+    ): Consequence[WorkflowEntrypoint] =
+      component.subsystem match {
+        case Some(subsystem) =>
+          subsystem.workflowEngine.findEntrypoint(entry.definition, entry.registration) match {
+            case Some(endpoint) => Consequence.success(endpoint)
+            case None =>
+              subsystem.workflowEngine.findDefinition(entry.definition) match {
+                case None =>
+                  Consequence.argumentInvalid(s"unknown JCL workflow definition: ${entry.definition}")
+                case Some(_) =>
+                  Consequence.argumentInvalid(s"unknown JCL workflow registration: ${entry.definition}/${entry.registration}")
+              }
+          }
+        case None =>
+          Consequence.serviceUnavailable("subsystem is not available")
+      }
+
+    private def _workflow_start_event(
+      endpoint: WorkflowEntrypoint,
+      parameters: Map[String, String]
+    ): ReceptionDomainEvent = {
+      val payload: Map[String, Any] = parameters.toVector.map(x => x._1 -> x._2).toMap
+      val attributes = parameters ++ Map(
+        "entity" -> endpoint.registration.entityCollection,
+        "jcl.workflow.definition" -> endpoint.definition.name,
+        "jcl.workflow.registration" -> endpoint.registration.name,
+        "jcl.synthetic-start" -> "true"
+      )
+      ReceptionDomainEvent(
+        name = endpoint.registration.eventName,
+        kind = "domain-event",
+        payload = payload,
+        attributes = attributes
+      )
+    }
 
     private def _resolve_target_action(
       selector: String,

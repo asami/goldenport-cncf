@@ -45,8 +45,8 @@ Current semantic direction:
 - A (DONE): WF-01 — Introduce lightweight `WorkflowEngine` baseline.
 - B (DONE): WF-02 — Add workflow inspection/projection surfaces.
 - C (DONE): JCL-01 — Define and add `JCL` job/batch submission baseline.
-- D (ACTIVE): JCL-02 — Connect `JCL` to workflow entrypoints.
-- E (SUSPENDED): OPS-01 — Add retry/dead-letter operational hardening after workflow/JCL baseline.
+- D (DONE): JCL-02 — Connect `JCL` to workflow entrypoints.
+- E (ACTIVE): OPS-01 — Add retry/dead-letter operational hardening after workflow/JCL baseline.
 - F (SUSPENDED): OPS-02 — Add saga identity / ABAC follow-up only if still in scope after A-E.
 
 Current note:
@@ -62,13 +62,18 @@ Current note:
   - top-level `jobs[]`
   - sequential fail-fast execution
   - optional job-level failure hook
+- `JCL-02` workflow entrypoint integration is implemented and validated:
+  - workflow target uses `definition + registration`
+  - JCL starts workflow through a synthetic start event
+  - workflow progression remains authoritative in `WorkflowEngine`
+  - resulting jobs remain authoritative in `job_control`
 
 ## 5. Development Items
 
 - [x] WF-01: Introduce lightweight `WorkflowEngine` baseline.
 - [x] WF-02: Add workflow inspection/projection surfaces.
 - [x] JCL-01: Define and add `JCL` job/batch submission baseline.
-- [ ] JCL-02: Connect `JCL` to workflow entrypoints.
+- [x] JCL-02: Connect `JCL` to workflow entrypoints.
 - [ ] OPS-01: Add retry/dead-letter operational hardening after workflow/JCL baseline.
 - [ ] OPS-02: Add saga identity / ABAC follow-up only if still in scope after A-E.
 

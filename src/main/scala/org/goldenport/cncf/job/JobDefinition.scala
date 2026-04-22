@@ -10,12 +10,25 @@ import org.yaml.snakeyaml.Yaml
  * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
-final case class JobTarget(
-  action: String
+final case class JobWorkflowTarget(
+  definition: String,
+  registration: String
 ) {
   def toRecord: Record =
     Record.data(
-      "action" -> action
+      "definition" -> definition,
+      "registration" -> registration
+    )
+}
+
+final case class JobTarget(
+  action: Option[String] = None,
+  workflow: Option[JobWorkflowTarget] = None
+) {
+  def toRecord: Record =
+    Record.data(
+      "action" -> action.getOrElse(""),
+      "workflow" -> workflow.map(_.toRecord).getOrElse(Record.empty)
     )
 }
 
@@ -139,15 +152,28 @@ object JobBatchDefinition {
       case None => Consequence.argumentMissing(path)
       case Some(value) =>
         _object_map(value, path).flatMap { m =>
-          if (m.contains("workflow"))
-            Consequence.argumentInvalid(s"$path.workflow is not supported in JCL-01")
-          else if (Set("branch", "loop", "parallel", "wait", "steps", "event").exists(m.contains))
+          if (Set("branch", "loop", "parallel", "wait", "steps", "event").exists(m.contains))
             Consequence.argumentInvalid(s"$path contains unsupported workflow semantics")
-          else if (m.keySet != Set("action"))
-            Consequence.argumentInvalid(s"$path must contain only action")
+          else if (m.keySet == Set("action"))
+            _required_string(m, "action", path).map(x => JobTarget(action = Some(x)))
+          else if (m.keySet == Set("workflow"))
+            _workflow_target(m("workflow"), s"$path.workflow").map(x => JobTarget(workflow = Some(x)))
+          else if (m.keySet == Set("action", "workflow"))
+            Consequence.argumentInvalid(s"$path.action and $path.workflow are mutually exclusive")
           else
-            _required_string(m, "action", path).map(JobTarget.apply)
+            Consequence.argumentInvalid(s"$path must contain exactly one of action or workflow")
         }
+    }
+
+  private def _workflow_target(p: Any, path: String): Consequence[JobWorkflowTarget] =
+    _object_map(p, path).flatMap { m =>
+      val allowed = Set("definition", "registration")
+      _reject_unknown_keys(m.keySet, allowed, path).flatMap { _ =>
+        for {
+          definition <- _required_string(m, "definition", path)
+          registration <- _required_string(m, "registration", path)
+        } yield JobWorkflowTarget(definition, registration)
+      }
     }
 
   private def _submit(p: Option[Any], path: String): Consequence[JobSubmitSpec] =

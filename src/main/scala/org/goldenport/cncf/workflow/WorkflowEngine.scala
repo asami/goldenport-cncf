@@ -121,12 +121,20 @@ final case class WorkflowDecision(
   instanceId: Option[WorkflowInstanceId]
 )
 
+final case class WorkflowEntrypoint(
+  component: Component,
+  definition: WorkflowDefinition,
+  registration: WorkflowRegistration
+)
+
 trait WorkflowEngine {
   def register(component: Component, definitions: Vector[WorkflowDefinition]): Unit
   def handle(componentName: String, event: ReceptionDomainEvent)(using ExecutionContext): Consequence[WorkflowDecision]
   def definitions: Vector[WorkflowDefinition]
   def registrations: Vector[WorkflowRegistration]
   def findDefinition(nameOrId: String): Option[WorkflowDefinition]
+  def findRegistration(definitionNameOrId: String, registrationName: String): Option[WorkflowRegistration]
+  def findEntrypoint(definitionNameOrId: String, registrationName: String): Option[WorkflowEntrypoint]
   def findInstance(id: WorkflowInstanceId): Option[WorkflowInstance]
   def history(id: WorkflowInstanceId): Vector[WorkflowHistoryEntry]
   def instances: Vector[WorkflowInstance]
@@ -206,6 +214,24 @@ object WorkflowEngine {
     def findDefinition(nameOrId: String): Option[WorkflowDefinition] = synchronized {
       val key = Option(nameOrId).getOrElse("").trim
       definitions.find(x => x.id.value == key || x.name == key)
+    }
+
+    def findRegistration(
+      definitionNameOrId: String,
+      registrationName: String
+    ): Option[WorkflowRegistration] =
+      findDefinition(definitionNameOrId).flatMap(_.registrations.find(_.name == registrationName))
+
+    def findEntrypoint(
+      definitionNameOrId: String,
+      registrationName: String
+    ): Option[WorkflowEntrypoint] = synchronized {
+      val definitionopt = findDefinition(definitionNameOrId)
+      definitionopt.flatMap { definition =>
+        _entries.find { entry =>
+          entry.definition.id == definition.id && entry.registration.name == registrationName
+        }.map(entry => WorkflowEntrypoint(entry.component, entry.definition, entry.registration))
+      }
     }
 
     def findInstance(id: WorkflowInstanceId): Option[WorkflowInstance] = synchronized {
