@@ -649,7 +649,8 @@ final class EventReceptionSpec
           kind = "approved",
           attributes = Map(
             "targetId" -> "o1",
-            EventReception.StandardAttribute.SourceSubsystem -> "billing"
+            EventReception.StandardAttribute.SourceSubsystem -> "billing",
+            EventReception.StandardAttribute.SagaId -> "saga-order-approved"
           )
         )
       )
@@ -670,6 +671,7 @@ final class EventReceptionSpec
       attrs.head.get(EventReception.StandardAttribute.ReceptionPolicy) shouldBe Some(EventReceptionExecutionPolicy.AsyncNewJobSameSaga.modeName)
       attrs.head.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("explicit-rule")
       attrs.head.get(EventReception.StandardAttribute.SagaRelation) shouldBe Some("same-saga")
+      attrs.head.get(EventReception.StandardAttribute.SagaId) shouldBe Some("saga-order-approved")
     }
 
     "drop duplicated replay event deterministically" in {
@@ -897,6 +899,7 @@ final class EventReceptionSpec
       attrs.head.get(EventReception.StandardAttribute.ReceptionPolicy) shouldBe Some(EventReceptionExecutionPolicy.SameSubsystemDefault.modeName)
       attrs.head.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("subsystem-default")
       attrs.head.get(EventReception.StandardAttribute.CorrelationId).nonEmpty shouldBe true
+      attrs.head.get(EventReception.StandardAttribute.SagaId) shouldBe attrs.head.get(EventReception.StandardAttribute.CorrelationId)
       attrs.head.get(EventReception.StandardAttribute.CausationId).nonEmpty shouldBe true
       attrs.head.get(EventReception.StandardAttribute.ParentJobId) shouldBe Some(parent.print)
     }
@@ -989,8 +992,10 @@ final class EventReceptionSpec
       attrs.head.get(EventReception.StandardAttribute.ReceptionRuleName) shouldBe Some("compatibility:new-job")
       attrs.head.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("compatibility-mapping")
       attrs.head.get(EventReception.StandardAttribute.TargetComponent) shouldBe Some("public-notice")
+      attrs.head.get(EventReception.StandardAttribute.SagaId).nonEmpty shouldBe true
       child.lineage.eventTriggered shouldBe true
       child.lineage.parentJobId shouldBe Some(parentjob.print)
+      child.lineage.sagaId shouldBe attrs.head.get(EventReception.StandardAttribute.SagaId)
       child.lineage.sourceComponent shouldBe Some("publisher")
       child.lineage.targetComponent shouldBe Some("public-notice")
       child.lineage.policySource shouldBe Some("compatibility-mapping")
@@ -1502,7 +1507,141 @@ final class EventReceptionSpec
       attrs.head.get(EventReception.StandardAttribute.ReceptionPolicy) shouldBe Some(EventReceptionExecutionPolicy.AsyncNewJobNewSaga.modeName)
       attrs.head.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("explicit-rule")
       attrs.head.get(EventReception.StandardAttribute.SagaRelation) shouldBe Some("new-saga")
+      attrs.head.get(EventReception.StandardAttribute.SagaId).nonEmpty shouldBe true
+      attrs.head.get(EventReception.StandardAttribute.SagaId) should not be attrs.head.get(EventReception.StandardAttribute.CorrelationId)
       attrs.head.get(EventReception.StandardAttribute.ContinuationMode) shouldBe Some("new-job")
+    }
+
+    "prefer ABAC-matched explicit rule over compatibility mapping and fall through on ABAC miss" in {
+      Given("same-subsystem subscription with explicit ABAC-gated rule and legacy NewJob continuation")
+      val recorder = new _InMemoryCommitRecorder
+      val store = EventStore.inMemory
+      val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
+      val bus = EventBus.default(engine)
+      val jobengine = new _RecordingJobEngine
+      val calls = ArrayBuffer.empty[String]
+      val jobids = ArrayBuffer.empty[Option[String]]
+      val parentids = ArrayBuffer.empty[Option[String]]
+      val attrs = ArrayBuffer.empty[Map[String, String]]
+      val dispatcher = new _SecureRecordingDispatcher3(calls, jobids, parentids, attrs)
+      val reception = EventReception.default(
+        eventBus = bus,
+        dispatcher = dispatcher,
+        currentSubsystemName = Some("inventory"),
+        currentComponentName = Some("notice-admin"),
+        jobEngine = Some(jobengine)
+      )
+      reception.register(
+        CmlEventDefinition(
+          name = "notice.authorized",
+          category = CmlEventCategory.NonActionEvent,
+          kind = Some("reviewed")
+        )
+      )
+      reception.registerSubscription(
+        CmlSubscriptionDefinition(
+          name = "notice-sync",
+          eventName = "notice.authorized",
+          route = DispatchRoute.Unicast,
+          target = Some("targetId"),
+          actionName = "notice.sync",
+          continuationMode = Some(EventContinuationMode.NewJob)
+        )
+      )
+      reception.registerRule(
+        EventReceptionRule(
+          name = "notice-authorized-explicit",
+          condition = EventReceptionCondition(
+            originBoundary = Some(EventOriginBoundary.SameSubsystem),
+            eventName = Some("notice.authorized"),
+            eventKind = Some("reviewed"),
+            abacConditions = Vector(
+              EventReceptionAbacCondition(
+                EventReceptionAbacOperand.EventAttribute("dispatchRole"),
+                EventReceptionAbacOperand.Literal("content_manager")
+              )
+            )
+          ),
+          policy = EventReceptionExecutionPolicy.SameSubsystemDefault
+        )
+      )
+
+      val matched = {
+        val managerBase = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+        val managerParent = jobengine.submit(Nil, managerBase)
+        given ExecutionContext = ExecutionContext.withJobContext(
+          managerBase,
+          JobContext(
+            jobId = Some(managerParent),
+            taskId = Some(TaskId.generate()),
+            actionId = Some(ActionId.generate())
+          )
+        )
+        When("the ABAC condition matches")
+        reception.receiveAuthorized(
+          ReceptionInput(
+            name = "notice.authorized",
+            kind = "reviewed",
+            attributes = Map(
+              "targetId" -> "na-1",
+              "dispatchRole" -> "content_manager",
+              EventReception.StandardAttribute.SourceSubsystem -> "inventory",
+              EventReception.StandardAttribute.SourceComponent -> "public-notice"
+            )
+          )
+        )
+      }
+
+      Then("the explicit rule wins")
+      matched shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = false
+        )
+      )
+      attrs.head.get(EventReception.StandardAttribute.ReceptionRuleName) shouldBe Some("notice-authorized-explicit")
+      attrs.head.get(EventReception.StandardAttribute.PolicySource) shouldBe Some("explicit-rule")
+      jobengine.submissionCount shouldBe 1
+
+      When("the ABAC condition misses for a user context")
+      val missed = {
+        val userCtx = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+        val userParent = jobengine.submit(Nil, userCtx)
+        given ExecutionContext = ExecutionContext.withJobContext(
+          userCtx,
+          JobContext(
+            jobId = Some(userParent),
+            taskId = Some(TaskId.generate()),
+            actionId = Some(ActionId.generate())
+          )
+        )
+        val beforeSubmissions = jobengine.submissionCount
+        val beforeAnnotations = jobengine.annotations.size
+        val result = reception.receiveAuthorized(
+          ReceptionInput(
+            name = "notice.authorized",
+            kind = "reviewed",
+            attributes = Map(
+              "targetId" -> "na-2",
+              "dispatchRole" -> "reviewer",
+              EventReception.StandardAttribute.SourceSubsystem -> "inventory",
+              EventReception.StandardAttribute.SourceComponent -> "public-notice"
+            )
+          )
+        )
+        (beforeSubmissions, beforeAnnotations, result)
+      }
+
+      Then("the explicit rule becomes non-match and compatibility mapping is used")
+      missed._3 shouldBe Consequence.success(
+        ReceptionResult(
+          outcome = ReceptionOutcome.Routed,
+          dispatchedCount = 1,
+          persisted = false
+        )
+      )
+      EventAwaitSupport.awaitVisible(jobengine.submissionCount >= missed._1) shouldBe true
     }
 
     "persist same-subsystem sync event after inline dispatch with framework-owned history" in {

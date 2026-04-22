@@ -47,7 +47,7 @@ Current semantic direction:
 - C (DONE): JCL-01 — Define and add `JCL` job/batch submission baseline.
 - D (DONE): JCL-02 — Connect `JCL` to workflow entrypoints.
 - E (DONE): OPS-01 — Add retry/dead-letter operational hardening after workflow/JCL baseline.
-- F (ACTIVE): OPS-02 — Add saga identity / ABAC follow-up only if still in scope after A-E.
+- F (DONE): OPS-02 — Add saga identity / ABAC follow-up only if still in scope after A-E.
 
 Current note:
 - Phase 13 is closed and remains frozen.
@@ -73,6 +73,11 @@ Current note:
   - `RetryLater` uses delayed automatic retry with built-in `1 / 5 / 15 minutes`
   - delayed retry state is stored in existing job authority and rehydrated by the scheduler
   - dead-letter / poison visibility remains authoritative in `job_control` and `event`
+- `OPS-02` saga identity and ABAC follow-up is implemented and validated:
+  - saga identity is standardized as explicit `cncf.event.sagaId` / `saga.id` / `saga-id`
+  - `job_control` and `event` project `saga-id` separately from `saga-relation`
+  - ABAC conditions are supported only inside explicit reception rules
+  - ABAC miss is treated as explicit-rule non-match and does not create a new precedence tier
 
 ## 5. Development Items
 
@@ -81,7 +86,7 @@ Current note:
 - [x] JCL-01: Define and add `JCL` job/batch submission baseline.
 - [x] JCL-02: Connect `JCL` to workflow entrypoints.
 - [x] OPS-01: Add retry/dead-letter operational hardening after workflow/JCL baseline.
-- [ ] OPS-02: Add saga identity / ABAC follow-up only if still in scope after A-E.
+- [x] OPS-02: Add saga identity / ABAC follow-up only if still in scope after A-E.
 
 ## 6. Next Phase Candidates
 

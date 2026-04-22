@@ -198,6 +198,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
         traceId = traceid,
         spanId = span,
         correlationId = correlation.orElse(ctx.observability.correlationId),
+        sagaId = attributes.get("cncf.event.sagaId").filter(_.nonEmpty).orElse(ctx.observability.sagaId),
         callTreeContext = ctx.observability.callTreeContext
       )
       ExecutionContext.withObservabilityContext(ctx, ob)

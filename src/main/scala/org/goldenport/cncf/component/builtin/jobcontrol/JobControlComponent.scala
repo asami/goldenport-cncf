@@ -857,6 +857,7 @@ object JobControlComponent {
       "event-kind" -> model.lineage.eventKind.getOrElse(""),
       "parent-job-id" -> model.lineage.parentJobId.getOrElse(""),
       "correlation-id" -> model.lineage.correlationId.getOrElse(""),
+      "saga-id" -> model.lineage.sagaId.getOrElse(""),
       "causation-id" -> model.lineage.causationId.getOrElse(""),
       "source-subsystem" -> model.lineage.sourceSubsystem.getOrElse(""),
       "source-component" -> model.lineage.sourceComponent.getOrElse(""),

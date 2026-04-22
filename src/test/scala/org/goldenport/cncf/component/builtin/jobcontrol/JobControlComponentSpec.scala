@@ -34,6 +34,7 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers {
             "event.kind" -> "created",
             "cncf.context.jobId" -> "cncf.job.parent.20260421.000000.000000000000",
             "cncf.context.correlationId" -> "corr-1",
+            "saga.id" -> "saga-1",
             "cncf.context.causationId" -> "cause-1",
             "cncf.source.subsystem" -> "crm",
             "cncf.source.component" -> "publisher",
@@ -56,6 +57,7 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers {
       service.getJobStatus(jobId) match {
         case Consequence.Success(model) =>
           model.lineage.eventName shouldBe Some("person.created")
+          model.lineage.sagaId shouldBe Some("saga-1")
           model.lineage.sourceSubsystem shouldBe Some("crm")
           model.lineage.targetComponent shouldBe Some("public-notice")
           model.lineage.receptionRule shouldBe Some("person-created-sync")

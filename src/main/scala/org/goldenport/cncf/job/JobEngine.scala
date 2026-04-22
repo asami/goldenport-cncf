@@ -298,6 +298,7 @@ final case class JobEventLineage(
   eventKind: Option[String],
   parentJobId: Option[String],
   correlationId: Option[String],
+  sagaId: Option[String],
   causationId: Option[String],
   sourceSubsystem: Option[String],
   sourceComponent: Option[String],
@@ -1257,6 +1258,10 @@ final class InMemoryJobEngine(
       correlationId =
         _param("cncf.context.correlationId")
           .orElse(record.submittedContext.observability.correlationId.map(_.print)),
+      sagaId =
+        _param("saga.id")
+          .orElse(_param("cncf.event.sagaId"))
+          .orElse(record.submittedContext.observability.sagaId),
       causationId =
         _param("cncf.context.causationId")
           .orElse(record.submittedContext.jobContext.causationId),

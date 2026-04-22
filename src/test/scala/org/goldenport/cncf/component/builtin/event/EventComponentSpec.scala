@@ -83,6 +83,7 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
           "cncf.event.receptionRule" -> "person-created-sync",
           "cncf.event.receptionPolicy" -> "async:new-job:same-saga:new-transaction",
           "cncf.event.policySource" -> "explicit-rule",
+          "cncf.event.sagaId" -> "saga-1",
           "cncf.event.failurePolicy" -> "retry",
           "cncf.event.failureDispositionBase" -> "retryable",
           "cncf.event.dispatchKind" -> "async-new-job",
@@ -113,6 +114,7 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
           value should include ("public-notice")
           value should include ("person-created-sync")
           value should include ("explicit-rule")
+          value should include ("saga-1")
           value should include ("retry")
           value should include ("retryable")
           value should include ("async-new-job")

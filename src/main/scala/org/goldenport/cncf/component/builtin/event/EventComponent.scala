@@ -394,6 +394,7 @@ object EventComponent {
       "reception-rule" -> record.attributes.getOrElse("cncf.event.receptionRule", ""),
       "reception-policy" -> record.attributes.getOrElse("cncf.event.receptionPolicy", ""),
       "policy-source" -> record.attributes.getOrElse("cncf.event.policySource", ""),
+      "saga-id" -> record.attributes.getOrElse("cncf.event.sagaId", ""),
       "task-relation" -> record.attributes.getOrElse("cncf.event.taskRelation", ""),
       "transaction-relation" -> record.attributes.getOrElse("cncf.event.transactionRelation", ""),
       "failure-policy" -> record.attributes.getOrElse("cncf.event.failurePolicy", ""),

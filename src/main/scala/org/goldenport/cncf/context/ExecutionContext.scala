@@ -350,7 +350,8 @@ object ExecutionContext {
     ObservabilityContext(
       traceId = TraceId("test", "runtime"),
       spanId = None,
-      correlationId = Some(CorrelationId("test", "runtime"))
+      correlationId = Some(CorrelationId("test", "runtime")),
+      sagaId = None
     )
 
   private def _testRuntimeContext(

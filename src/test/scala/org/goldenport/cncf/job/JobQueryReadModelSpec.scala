@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Apr. 21, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobQueryReadModelSpec
@@ -129,6 +129,7 @@ final class JobQueryReadModelSpec
           "event.kind" -> "created",
           "cncf.context.jobId" -> parentJobId,
           "cncf.context.correlationId" -> "corr-1",
+          "saga.id" -> "saga-1",
           "cncf.context.causationId" -> "cause-1",
           "cncf.source.subsystem" -> "crm",
           "cncf.source.component" -> "publisher",
@@ -153,6 +154,7 @@ final class JobQueryReadModelSpec
       read.lineage.eventTriggered shouldBe true
       read.lineage.eventName shouldBe Some("person.created")
       read.lineage.parentJobId shouldBe Some(parentJobId)
+      read.lineage.sagaId shouldBe Some("saga-1")
       read.lineage.sourceSubsystem shouldBe Some("crm")
       read.lineage.sourceComponent shouldBe Some("publisher")
       read.lineage.targetComponent shouldBe Some("public-notice")

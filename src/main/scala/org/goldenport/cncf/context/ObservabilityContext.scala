@@ -48,6 +48,7 @@ final case class ObservabilityContext(
   traceId: TraceId,
   spanId: Option[SpanId],
   correlationId: Option[CorrelationId],
+  sagaId: Option[String] = None,
   callTreeContext: CallTreeContext = CallTreeContext.Disabled
 ) {
   def createChild(
@@ -73,6 +74,7 @@ final case class ObservabilityContext(
       traceId = nextTraceId,
       spanId = nextSpanId,
       correlationId = nextCorrelationId,
+      sagaId = sagaId,
       callTreeContext = callTreeContext
     )
   }

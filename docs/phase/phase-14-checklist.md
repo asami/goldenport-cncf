@@ -183,7 +183,7 @@ Add operational hardening only after the workflow/JCL baseline exists.
 
 ## OPS-02: Saga Identity and ABAC Follow-Up
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -192,14 +192,18 @@ boundary after WF/JCL and OPS-01.
 
 ### Detailed Tasks
 
-- [ ] Define final saga identity standardization if still in scope.
-- [ ] Define ABAC execution follow-up for event-rule matching if still in scope.
-- [ ] Confirm both remain inside the Pareto 80/20 built-in boundary.
+- [x] Define final saga identity standardization if still in scope.
+- [x] Define ABAC execution follow-up for event-rule matching if still in scope.
+- [x] Confirm both remain inside the Pareto 80/20 built-in boundary.
 
 ### Expected Outcome
 
 - Only the semantic follow-up work that still belongs inside the built-in 80%
   layer is carried by this phase.
+- Saga identity is now propagated as explicit runtime metadata and projected
+  through existing authoritative surfaces.
+- Explicit reception rules can now apply equality-based ABAC conditions without
+  changing the existing precedence contract.
 
 ---
 
