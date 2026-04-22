@@ -109,7 +109,15 @@ final class Http4sHttpServer(
       case GET -> Root / "web" / "system" / "manual" / "openapi.json" =>
         _system_manual_openapi()
       case req @ GET -> Root / "web" / app / "login" =>
-        _login_page(req, app)
+        _web_route_alias(Vector("web", app, "login")).flatMap {
+          case Some(response) => IO.pure(response)
+          case None => _login_page(req, app)
+        }
+      case req @ GET -> Root / "web" / app / "signup" =>
+        _web_route_alias(Vector("web", app, "signup")).flatMap {
+          case Some(response) => IO.pure(response)
+          case None => _component_web_app_or_static_form_app(app, "signup")
+        }
       case req @ POST -> Root / "web" / app / "login" =>
         _login_submit(req, app)
       case req @ POST -> Root / "web" / app / "logout" =>
@@ -1940,7 +1948,9 @@ final class Http4sHttpServer(
     app: String,
     error: Option[String] = None
   ): IO[HResponse[IO]] = {
-    val _ = req
+    val returnTo = _login_return_to_(req.uri.query.params).getOrElse(s"/web/${_escape_path_segment_(app)}")
+    val hiddenReturnTo =
+      s"""<input type="hidden" name="returnTo" value="${_escape_html_(returnTo)}">"""
     _html(
       StaticFormAppRenderer.Page(
         s"""<!doctype html>
@@ -1960,6 +1970,7 @@ final class Http4sHttpServer(
            |            <h1 class="h4 mb-3">${_escape_html_(app)} Login</h1>
            |            ${error.map(e => s"""<div class="alert alert-danger" role="alert">${_escape_html_(e)}</div>""").getOrElse("")}
            |            <form method="post" action="/web/${_escape_path_segment_(app)}/login">
+           |              $hiddenReturnTo
            |              <div class="mb-3">
            |                <label class="form-label" for="username">Username</label>
            |                <input class="form-control" id="username" name="username" autocomplete="username" required>
@@ -1991,15 +2002,19 @@ final class Http4sHttpServer(
           form <- _to_plain_form_record(req)
           response <- {
             given ExecutionContext = ExecutionContext.create()
-            service.login(AuthenticationRequest(_request_attributes(req, form.asMap.map((k, v) => k -> v.toString)))) match {
+            val formAttributes = form.asMap.map((k, v) => k -> v.toString)
+            service.login(AuthenticationRequest(_request_attributes(req, formAttributes))) match {
               case org.goldenport.Consequence.Success(summary) =>
                 val sessionid = summary.sessionId.getOrElse(throw new IllegalStateException("auth.login must return session id"))
                 IO.pure(
-                  _see_other(s"/web/${app}")
+                  _see_other(_login_return_to_(req.uri.query.params ++ formAttributes).getOrElse(s"/web/${app}"))
                     .addCookie(_session_cookie_(sessionid))
                 )
               case org.goldenport.Consequence.Failure(c) =>
-                _login_page(req, app, Some(c.displayMessage))
+                if (_has_exact_web_route_alias_(Vector("web", app, "login")))
+                  IO.pure(_see_other(_login_error_redirect_(app, c.displayMessage, _login_return_to_(req.uri.query.params ++ formAttributes))))
+                else
+                  _login_page(req, app, Some(c.displayMessage))
             }
           }
         } yield response
@@ -2059,6 +2074,37 @@ final class Http4sHttpServer(
     _request_header_record(req).asMap.view.mapValues(_.toString).toMap ++
       req.uri.query.params.toMap ++
       extra
+
+  private def _has_exact_web_route_alias_(
+    path: Vector[String]
+  ): Boolean =
+    engine.webDescriptor.webRouteFor(path).isDefined
+
+  private def _login_error_redirect_(
+    app: String,
+    error: String,
+    returnTo: Option[String]
+  ): String = {
+    val base = Uri.unsafeFromString(s"/web/${_escape_path_segment_(app)}/login")
+      .withQueryParam("error", error)
+    returnTo.fold(base)(x => base.withQueryParam("returnTo", x)).renderString
+  }
+
+  private def _login_return_to_(
+    params: Map[String, String]
+  ): Option[String] =
+    params.get("returnTo")
+      .map(_.trim)
+      .filter(_non_empty_local_web_path_)
+
+  private def _non_empty_local_web_path_(
+    path: String
+  ): Boolean =
+    path.nonEmpty &&
+      path.startsWith("/") &&
+      !path.startsWith("//")
+    && !path.contains("\r")
+    && !path.contains("\n")
 
   private def _request_header_record(
     req: org.http4s.Request[IO]

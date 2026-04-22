@@ -3,11 +3,15 @@ package org.goldenport.cncf.http
 import cats.effect.IO
 import cats.effect.unsafe.implicits.global
 import io.circe.parser.parse
+import java.nio.charset.StandardCharsets
+import java.nio.file.{Files, Path}
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.context.{ExecutionContext, PrincipalId, SessionContext}
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationRequest, AuthenticationResult}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.protocol.{Property, Protocol, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.http4s.{Header, Method, Request as HRequest, Uri}
@@ -127,9 +131,52 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
           fail(s"unexpected response: $other")
       }
     }
+
+    "delegate exact login alias routes to provider-owned UI when configured" in {
+      val provider = new _SessionProvider(Map("alice" -> "secret"), Map.empty)
+      val webroot = _web_root(
+        """routes:
+          |  - path: /web/cwitter/login
+          |    target:
+          |      component: session_provider
+          |      app: signin
+          |""".stripMargin,
+        Vector(
+          "signin/index.html" -> "<!doctype html><html><body><h1>Provider Sign In</h1></body></html>"
+        )
+      )
+      val subsystem = _subsystem(provider, Some(webroot.resolve("web.yaml")))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(
+        _get_request("/web/cwitter/login")
+      ).unsafeRunSync()
+
+      response.status.code shouldBe 200
+      response.as[String].unsafeRunSync() should include ("Provider Sign In")
+    }
+
+    "honor returnTo on successful built-in login" in {
+      val provider = new _SessionProvider(Map("alice" -> "secret"), Map.empty)
+      val subsystem = _subsystem(provider)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val login = server.routes(null).orNotFound.run(
+        _post_form_request(
+          "/web/cwitter/login?returnTo=/web/cwitter",
+          "username=alice&password=secret"
+        )
+      ).unsafeRunSync()
+
+      login.status.code shouldBe 303
+      _header(login, "Location") shouldBe Some("/web/cwitter")
+    }
   }
 
-  private def _subsystem(provider: _SessionProvider) = {
+  private def _subsystem(
+    provider: _SessionProvider,
+    webDescriptor: Option[Path] = None
+  ) = {
     given ExecutionContext = ExecutionContext.create()
     val component = new Component() {
       override val core: Component.Core =
@@ -148,7 +195,17 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
         component = Some("session_provider")
       )
     )
-    DefaultSubsystemFactory.default(Vector(component), None)
+    val configuration = ResolvedConfiguration(
+      Configuration(
+        webDescriptor.toVector.map(path =>
+          RuntimeConfig.WebDescriptorKey -> org.goldenport.configuration.ConfigurationValue.StringValue(path.toString)
+        ).toMap
+      ),
+      ConfigurationTrace.empty
+    )
+    val subsystem = DefaultSubsystemFactory.default(None, configuration)
+    subsystem.add(Vector(component))
+    subsystem
   }
 
   private def _post_form_request(path: String, body: String): HRequest[IO] =
@@ -227,5 +284,19 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
         principalId = PrincipalId(principalid),
         session = Some(SessionContext(sessionId = Some(sessionid)))
       )
+  }
+
+  private def _web_root(
+    descriptor: String,
+    files: Vector[(String, String)]
+  ): Path = {
+    val root = Files.createTempDirectory("cncf-auth-web-")
+    Files.writeString(root.resolve("web.yaml"), descriptor, StandardCharsets.UTF_8)
+    files.foreach { case (relative, content) =>
+      val path = root.resolve(relative)
+      Option(path.getParent).foreach(parent => Files.createDirectories(parent))
+      Files.writeString(path, content, StandardCharsets.UTF_8)
+    }
+    root
   }
 }
