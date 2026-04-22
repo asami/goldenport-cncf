@@ -28,6 +28,10 @@ final case class AuthenticationRequest(
 
   def refreshToken: Option[String] =
     AuthenticationRequest.findFirst(attributes, AuthenticationRequest.RefreshTokenKeys)
+
+  def sessionId: Option[String] =
+    AuthenticationRequest.findFirst(attributes, AuthenticationRequest.SessionIdKeys)
+      .orElse(AuthenticationRequest.findCookieSession(attributes))
 }
 
 object AuthenticationRequest {
@@ -43,6 +47,19 @@ object AuthenticationRequest {
     "refreshToken"
   )
 
+  val SessionIdKeys: Vector[String] = Vector(
+    "x-textus-session",
+    "x-cncf-session",
+    "session_id",
+    "sessionId",
+    "textus.session",
+    "cncf.session"
+  )
+
+  private val CookieHeaderKeys: Vector[String] = Vector(
+    "cookie"
+  )
+
   def findFirst(attributes: Map[String, String], keys: Vector[String]): Option[String] = {
     val normalized = attributes.map { case (k, v) => normalizeToken(k) -> v }
     keys.iterator.flatMap(key => normalized.get(normalizeToken(key))).collectFirst {
@@ -54,6 +71,29 @@ object AuthenticationRequest {
 
   def normalizeToken(p: String): String =
     p.trim.toLowerCase.replace("_", "").replace("-", "")
+
+  def findCookieSession(attributes: Map[String, String]): Option[String] =
+    findFirst(attributes, CookieHeaderKeys).flatMap(_session_cookie_id)
+
+  private def _session_cookie_id(value: String): Option[String] =
+    Option(value)
+      .toVector
+      .flatMap(_.split(";"))
+      .iterator
+      .map(_.trim)
+      .collectFirst {
+        case token if _is_session_cookie(token) =>
+          token.dropWhile(_ != '=').drop(1).trim
+      }
+      .filter(_.nonEmpty)
+
+  private def _is_session_cookie(token: String): Boolean = {
+    val key = token.takeWhile(_ != '=').trim.toLowerCase(java.util.Locale.ROOT)
+    key == "textus-session" ||
+      key == "cncf-session" ||
+      key.startsWith("textus-session-") ||
+      key.startsWith("cncf-session-")
+  }
 }
 
 final case class AuthenticationResult(
@@ -93,4 +133,13 @@ trait AuthenticationProvider {
   // - Success(None): request did not match this provider.
   // - Failure: matched request but authentication failed deterministically.
   def authenticate(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]]
+
+  def login(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]] =
+    Consequence.success(None)
+
+  def logout(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[SessionContext]] =
+    Consequence.success(None)
+
+  def currentSession(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]] =
+    authenticate(request)
 }

@@ -262,25 +262,12 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     base: ExecutionContext,
     request: AuthenticationRequest
   ): Consequence[Option[SecurityContext]] = {
-    def go(rest: Vector[AuthenticationProvider]): Consequence[Option[SecurityContext]] =
-      rest.headOption match {
-        case Some(provider) =>
-          provider.authenticate(request)(using base).flatMap {
-            case Some(result) => Consequence.success(Some(result.toSecurityContext))
-            case None => go(rest.tail)
-          }
-        case None =>
-          Consequence.success(None)
-      }
-
-    go(providers)
+    val _ = providers
+    AuthenticationProviderRuntime.authenticate(base, request).map(_.map(_.toSecurityContext))
   }
 
   private def _resolved_authentication_providers(base: ExecutionContext): Vector[AuthenticationProvider] =
-    _subsystem_from_scope(base.cncfCore.scope)
-      .toVector
-      .flatMap(_.resolvedSecurityWiring.authentication.enabledProviders)
-      .flatMap(_.provider)
+    AuthenticationProviderRuntime.providers(base)
 
   private def _fallback_privilege_enabled(base: ExecutionContext): Boolean =
     _subsystem_from_scope(base.cncfCore.scope)
@@ -288,7 +275,9 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       .getOrElse(true)
 
   @annotation.tailrec
-  private def _subsystem_from_scope(scope: ScopeContext): Option[org.goldenport.cncf.subsystem.Subsystem] =
+  private def _subsystem_from_scope(
+    scope: ScopeContext
+  ): Option[org.goldenport.cncf.subsystem.Subsystem] =
     scope match {
       case cc: Component.Context =>
         cc.component.subsystem

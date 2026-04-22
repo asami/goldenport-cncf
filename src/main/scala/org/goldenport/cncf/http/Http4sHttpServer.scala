@@ -7,12 +7,14 @@ import cats.syntax.all.*
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import java.util.UUID
+import scala.concurrent.duration.*
 import scala.collection.concurrent.TrieMap
 import fs2.Pipe
 import fs2.Stream
 import com.comcast.ip4s.Host
 import com.comcast.ip4s.Port
-import org.http4s.{HttpRoutes, MediaType, Request as HRequest, Response as HResponse, Status as HStatus, Uri}
+import io.circe.Json
+import org.http4s.{HttpRoutes, MediaType, Request as HRequest, Response as HResponse, ResponseCookie, SameSite, Status as HStatus, Uri}
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.headers.{`Content-Type`, Location}
 import org.http4s.Charset
@@ -23,12 +25,14 @@ import org.http4s.server.websocket.WebSocketBuilder2
 import org.http4s.websocket.WebSocketFrame
 import org.goldenport.record.Record
 import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse, HttpStatus}
+import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.observability.{DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
 import org.goldenport.cncf.openapi.OpenApiProjector
+import org.goldenport.cncf.security.AuthenticationRequest
 import org.goldenport.bag.Bag
 import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
 
@@ -36,7 +40,7 @@ import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
- * @version Apr. 21, 2026
+ * @version Apr. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -104,6 +108,14 @@ final class Http4sHttpServer(
         _system_manual()
       case GET -> Root / "web" / "system" / "manual" / "openapi.json" =>
         _system_manual_openapi()
+      case req @ GET -> Root / "web" / app / "login" =>
+        _login_page(req, app)
+      case req @ POST -> Root / "web" / app / "login" =>
+        _login_submit(req, app)
+      case req @ POST -> Root / "web" / app / "logout" =>
+        _logout_submit(req, app)
+      case req @ GET -> Root / "web" / app / "session" =>
+        _current_session(req, app)
       case req @ GET -> Root / "web" / "system" / "jobs" / jobId =>
         _system_job(req, jobId)
       case req @ POST -> Root / "web" / "system" / "jobs" / jobId / "await" =>
@@ -355,7 +367,7 @@ final class Http4sHttpServer(
         method = HttpRequest.POST,
         path = "/job_control/job/get_job_status",
         query = Record.empty,
-        header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value)),
+        header = _request_header_record(req),
         form = Record.data("id" -> jobId)
       )
     )
@@ -377,7 +389,7 @@ final class Http4sHttpServer(
         method = HttpRequest.POST,
         path = "/job_control/job/await_job_result",
         query = Record.empty,
-        header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value)),
+        header = _request_header_record(req),
         form = Record.data("id" -> jobId)
       )
     )
@@ -944,7 +956,7 @@ final class Http4sHttpServer(
           method = HttpRequest.POST,
           path = s"/${app}/${service}/${operation}",
           query = Record.create(req.uri.query.params.toVector),
-          header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value)),
+          header = _request_header_record(req),
           form = _operation_dispatch_form(form)
         )
       )
@@ -983,7 +995,7 @@ final class Http4sHttpServer(
             method = HttpRequest.POST,
             path = s"/${app}/${service}/${operation}",
             query = Record.create(req.uri.query.params.toVector),
-            header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value)),
+            header = _request_header_record(req),
             form = _operation_dispatch_form(form)
           )
         )
@@ -1470,7 +1482,7 @@ final class Http4sHttpServer(
         method = HttpRequest.GET,
         path = s"/${app}/${service}/${operation}",
         query = query,
-        header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value))
+        header = _request_header_record(req)
       )
     )
     val page = StaticFormAppRenderer.renderFormResult(
@@ -1519,7 +1531,7 @@ final class Http4sHttpServer(
             method = HttpRequest.POST,
             path = "/job_control/job/await_job_result",
             query = Record.empty,
-            header = Record.create(req.headers.headers.map(h => h.name.toString -> h.value)),
+            header = _request_header_record(req),
             form = dispatchForm
           )
         )
@@ -1923,6 +1935,195 @@ final class Http4sHttpServer(
   private def _see_other(path: String): HResponse[IO] =
     HResponse[IO](HStatus.SeeOther).putHeaders(Location(Uri.unsafeFromString(path)))
 
+  private[http] def _login_page(
+    req: org.http4s.Request[IO],
+    app: String,
+    error: Option[String] = None
+  ): IO[HResponse[IO]] = {
+    val _ = req
+    _html(
+      StaticFormAppRenderer.Page(
+        s"""<!doctype html>
+           |<html lang="en">
+           |<head>
+           |  <meta charset="utf-8">
+           |  <meta name="viewport" content="width=device-width, initial-scale=1">
+           |  <title>${_escape_html_(app)} Login</title>
+           |  <link href="/web/assets/bootstrap.min.css" rel="stylesheet">
+           |</head>
+           |<body class="bg-light">
+           |  <main class="container py-5">
+           |    <div class="row justify-content-center">
+           |      <div class="col-12 col-md-6 col-lg-4">
+           |        <div class="card shadow-sm">
+           |          <div class="card-body">
+           |            <h1 class="h4 mb-3">${_escape_html_(app)} Login</h1>
+           |            ${error.map(e => s"""<div class="alert alert-danger" role="alert">${_escape_html_(e)}</div>""").getOrElse("")}
+           |            <form method="post" action="/web/${_escape_path_segment_(app)}/login">
+           |              <div class="mb-3">
+           |                <label class="form-label" for="username">Username</label>
+           |                <input class="form-control" id="username" name="username" autocomplete="username" required>
+           |              </div>
+           |              <div class="mb-3">
+           |                <label class="form-label" for="password">Password</label>
+           |                <input class="form-control" id="password" name="password" type="password" autocomplete="current-password" required>
+           |              </div>
+           |              <button class="btn btn-primary w-100" type="submit">Login</button>
+           |            </form>
+           |          </div>
+           |        </div>
+           |      </div>
+           |    </div>
+           |  </main>
+           |</body>
+           |</html>""".stripMargin
+      )
+    )
+  }
+
+  private[http] def _login_submit(
+    req: org.http4s.Request[IO],
+    app: String
+  ): IO[HResponse[IO]] =
+    _auth_service match {
+      case Some(service) =>
+        for {
+          form <- _to_plain_form_record(req)
+          response <- {
+            given ExecutionContext = ExecutionContext.create()
+            service.login(AuthenticationRequest(_request_attributes(req, form.asMap.map((k, v) => k -> v.toString)))) match {
+              case org.goldenport.Consequence.Success(summary) =>
+                val sessionid = summary.sessionId.getOrElse(throw new IllegalStateException("auth.login must return session id"))
+                IO.pure(
+                  _see_other(s"/web/${app}")
+                    .addCookie(_session_cookie_(sessionid))
+                )
+              case org.goldenport.Consequence.Failure(c) =>
+                _login_page(req, app, Some(c.displayMessage))
+            }
+          }
+        } yield response
+      case None =>
+        _web_error_response(Some(app), HStatus.ServiceUnavailable, "Authentication service is unavailable.", s"/web/${app}/login")
+    }
+
+  private[http] def _logout_submit(
+    req: org.http4s.Request[IO],
+    app: String
+  ): IO[HResponse[IO]] =
+    _auth_service match {
+      case Some(service) =>
+        given ExecutionContext = ExecutionContext.create()
+        service.logout(AuthenticationRequest(_request_attributes(req))) match {
+          case org.goldenport.Consequence.Success(_) =>
+            IO.pure(
+              _see_other(s"/web/${app}/login")
+                .addCookie(_expired_session_cookie)
+            )
+          case org.goldenport.Consequence.Failure(c) =>
+            _web_error_response(Some(app), HStatus.Unauthorized, c.displayMessage, s"/web/${app}/logout")
+        }
+      case None =>
+        IO.pure(
+          _see_other(s"/web/${app}/login")
+            .addCookie(_expired_session_cookie)
+        )
+    }
+
+  private[http] def _current_session(
+    req: org.http4s.Request[IO],
+    app: String
+  ): IO[HResponse[IO]] =
+    _auth_service match {
+      case Some(service) =>
+        given ExecutionContext = ExecutionContext.create()
+        service.currentSession(AuthenticationRequest(_request_attributes(req))) match {
+          case org.goldenport.Consequence.Success(summary) =>
+            _json(StaticFormAppRenderer.Page(summary.toJson.noSpaces))
+          case org.goldenport.Consequence.Failure(c) =>
+            _web_error_response(Some(app), HStatus.Unauthorized, c.displayMessage, s"/web/${app}/session")
+        }
+      case None =>
+        _web_error_response(Some(app), HStatus.ServiceUnavailable, "Authentication service is unavailable.", s"/web/${app}/session")
+    }
+
+  private def _auth_service: Option[AuthComponent.AuthService] =
+    engine.runtimeSubsystem
+      .findComponent(AuthComponent.name)
+      .flatMap(_.port.get[AuthComponent.AuthService])
+
+  private def _request_attributes(
+    req: org.http4s.Request[IO],
+    extra: Map[String, String] = Map.empty
+  ): Map[String, String] =
+    _request_header_record(req).asMap.view.mapValues(_.toString).toMap ++
+      req.uri.query.params.toMap ++
+      extra
+
+  private def _request_header_record(
+    req: org.http4s.Request[IO]
+  ): Record = {
+    val base = req.headers.headers.map(h => h.name.toString -> h.value).toVector
+    val enriched =
+      _session_id_(req) match {
+        case Some(sessionid) if !base.exists { case (k, _) => k.equalsIgnoreCase("x-textus-session") } =>
+          base :+ ("x-textus-session" -> sessionid)
+        case _ =>
+          base
+      }
+    Record.create(enriched)
+  }
+
+  private def _session_id_(
+    req: org.http4s.Request[IO]
+  ): Option[String] =
+    req.headers.headers
+      .collectFirst {
+        case h if h.name.toString.equalsIgnoreCase("x-textus-session") => h.value
+      }
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .orElse {
+        req.cookies.collectFirst {
+          case cookie if cookie.name.equalsIgnoreCase(_session_cookie_name) => cookie.content
+        }.map(_.trim).filter(_.nonEmpty)
+      }
+
+  private def _session_cookie_name: String =
+    s"textus-session-${NamingConventions.toNormalizedSegment(engine.runtimeSubsystem.name)}"
+
+  private def _session_cookie_(
+    sessionid: String
+  ): ResponseCookie =
+    ResponseCookie(
+      name = _session_cookie_name,
+      content = sessionid,
+      path = Some("/"),
+      httpOnly = true,
+      sameSite = Some(SameSite.Lax)
+    )
+
+  private def _expired_session_cookie: ResponseCookie =
+    ResponseCookie(
+      name = _session_cookie_name,
+      content = "",
+      path = Some("/"),
+      httpOnly = true,
+      sameSite = Some(SameSite.Lax),
+      maxAge = Some(0L)
+    )
+
+  private def _escape_html_(p: String): String =
+    Option(p).getOrElse("")
+      .replace("&", "&amp;")
+      .replace("<", "&lt;")
+      .replace(">", "&gt;")
+      .replace("\"", "&quot;")
+      .replace("'", "&#39;")
+
+  private def _escape_path_segment_(p: String): String =
+    java.net.URLEncoder.encode(Option(p).getOrElse(""), StandardCharsets.UTF_8)
+
   private def _is_form_enabled(
     app: String,
     service: String,
@@ -1980,7 +2181,13 @@ final class Http4sHttpServer(
   private def _web_authorization_subject(
     req: Option[org.http4s.Request[IO]]
   ): WebDescriptorAuthorization.Subject =
-    req.map(WebDescriptorAuthorization.Subject.fromHttp).getOrElse(WebDescriptorAuthorization.Subject())
+    req.map { r =>
+      val subject = WebDescriptorAuthorization.Subject.fromHttp(r)
+      if (!subject.anonymous || _session_id_(r).isEmpty)
+        subject
+      else
+        subject.copy(anonymous = false)
+    }.getOrElse(WebDescriptorAuthorization.Subject())
 
   private def _forbidden(): IO[HResponse[IO]] =
     IO.pure(HResponse[IO](HStatus.Forbidden).withEntity("Forbidden"))
@@ -2148,9 +2355,7 @@ final class Http4sHttpServer(
       case _ => HttpRequest.GET
     }
     val query = Record.create(req.uri.query.params.toVector)
-    val header = Record.create(
-      req.headers.headers.map(h => h.name.toString -> h.value)
-    )
+    val header = _request_header_record(req)
     val context = HttpContext(
       scheme = req.uri.scheme.map(_.value),
       authority = req.uri.authority.map(_.renderString),

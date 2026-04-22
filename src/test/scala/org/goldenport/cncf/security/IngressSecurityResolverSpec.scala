@@ -189,6 +189,87 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
       SecuritySubject.from(resolved.executionContext.security).isAuthenticated shouldBe true
     }
 
+    "restore authenticated security from x-textus-session header" in {
+      val subsystem = _subsystem(
+        fallbackEnabled = true,
+        providers = Vector(
+          _provider(
+            "session-header-provider",
+            req =>
+              req.sessionId match {
+                case Some("sess-header") =>
+                  Consequence.success(
+                    Some(
+                      AuthenticationResult(
+                        PrincipalId("user-header"),
+                        session = Some(org.goldenport.cncf.context.SessionContext(sessionId = Some("sess-header")))
+                      )
+                    )
+                  )
+                case _ =>
+                  Consequence.success(None)
+              }
+          )
+        )
+      )
+      val base = subsystem.components.head.logic.executionContext()
+
+      val result = IngressSecurityResolver.resolve(base, Map("x-textus-session" -> "sess-header"))
+
+      result shouldBe a[Consequence.Success[_]]
+      val resolved = result.toOption.get
+      resolved.executionContext.security.principal.id.value shouldBe "user-header"
+      resolved.executionContext.security.session.flatMap(_.sessionId) shouldBe Some("sess-header")
+    }
+
+    "prefer explicit x-textus-session over cookie session value" in {
+      val subsystem = _subsystem(
+        fallbackEnabled = true,
+        providers = Vector(
+          _provider(
+            "session-precedence-provider",
+            req =>
+              req.sessionId match {
+                case Some("sess-header") =>
+                  Consequence.success(
+                    Some(
+                      AuthenticationResult(
+                        PrincipalId("user-header"),
+                        session = Some(org.goldenport.cncf.context.SessionContext(sessionId = Some("sess-header")))
+                      )
+                    )
+                  )
+                case Some("sess-cookie") =>
+                  Consequence.success(
+                    Some(
+                      AuthenticationResult(
+                        PrincipalId("user-cookie"),
+                        session = Some(org.goldenport.cncf.context.SessionContext(sessionId = Some("sess-cookie")))
+                      )
+                    )
+                  )
+                case _ =>
+                  Consequence.success(None)
+              }
+          )
+        )
+      )
+      val base = subsystem.components.head.logic.executionContext()
+
+      val result = IngressSecurityResolver.resolve(
+        base,
+        Map(
+          "x-textus-session" -> "sess-header",
+          "cookie" -> "textus-session-securitytest=sess-cookie"
+        )
+      )
+
+      result shouldBe a[Consequence.Success[_]]
+      val resolved = result.toOption.get
+      resolved.executionContext.security.principal.id.value shouldBe "user-header"
+      resolved.executionContext.security.session.flatMap(_.sessionId) shouldBe Some("sess-header")
+    }
+
     "fallback to privilege resolution when providers do not resolve and fallback remains enabled" in {
       val subsystem = _subsystem(fallbackEnabled = true)
       val base = subsystem.components.head.logic.executionContext()

@@ -53,15 +53,24 @@ Current semantic direction:
 ## 4. Current Work Stack
 
 - A (DONE): AU-01 — Complete the CNCF auth/session contract on top of the existing `AuthenticationProvider` and subsystem security wiring.
-- B (ACTIVE): AU-02 — Add Web session login/logout/current-session flow at ingress/runtime.
-- C (PLANNED): AU-03 — Add `textus-user-account` adapter as the first provider.
-- D (PLANNED): CW-01 — Implement `Cwitter` auth-aware baseline.
+- B (DONE): AU-02 — Add Web session login/logout/current-session flow at ingress/runtime.
+- C (DONE): AU-03 — Add `textus-user-account` adapter as the first provider.
+- D (ACTIVE): CW-01 — Implement `Cwitter` auth-aware baseline.
 - E (PLANNED): CW-02 — Derive and implement the minimum user-management additions needed for mention/DM.
 
 Current note:
 - Phase 15 is closed and remains the scheduler/timer baseline.
 - Phase 16 starts auth-first before `Cwitter` feature build-out.
 - AU-01 is complete: provider `Some/None/Failure` semantics, runtime provider ordering, fallback behavior, and `ExecutionContext.security` carriage are fixed.
+- AU-02 is complete: app-owned login/logout/session routes, built-in `auth`
+  operations, subsystem cookie transport, and `x-textus-session` REST/client
+  session reuse now run through the provider boundary.
+- AU-03 is complete: `textus-user-account` now implements the CNCF auth
+  boundary and owns secret/refresh token lifecycle internally while exposing
+  only normalized principal/session state to CNCF.
+- browser cookie and `x-textus-session` continue to carry only the
+  provider-owned session id; provider tokens remain internal to
+  `textus-user-account`.
 - `Cwitter` is already scaffolded as `component/ + subsystem/` and is the
   concrete consumer for this phase.
 - local `component.d` staging is development-only; production remains
@@ -70,8 +79,8 @@ Current note:
 ## 5. Development Items
 
 - [x] AU-01: Complete the CNCF auth/session contract on top of the existing `AuthenticationProvider` and subsystem security wiring.
-- [ ] AU-02: Add Web session login/logout/current-session flow at ingress/runtime.
-- [ ] AU-03: Add `textus-user-account` adapter as the first provider.
+- [x] AU-02: Add Web session login/logout/current-session flow at ingress/runtime.
+- [x] AU-03: Add `textus-user-account` adapter as the first provider.
 - [ ] CW-01: Implement `Cwitter` auth-aware baseline.
 - [ ] CW-02: Derive and implement the minimum user-management additions needed for mention/DM.
 

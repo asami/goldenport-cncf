@@ -86,7 +86,7 @@ AU-01 must ensure:
 
 ## AU-02: Web Session Runtime Path
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -94,16 +94,21 @@ Make browser-oriented Web session auth the canonical Phase 16 runtime mode.
 
 ### Detailed Tasks
 
-- [ ] Add login success path that creates an authenticated session.
-- [ ] Add login failure path as deterministic `Consequence.Failure`.
-- [ ] Add logout of the current session.
-- [ ] Add current-session/current-user restoration at ingress.
-- [ ] Keep anonymous request behavior aligned with current authorization rules.
+- [x] Add login success path that creates an authenticated session.
+- [x] Add login failure path as deterministic `Consequence.Failure`.
+- [x] Add logout of the current session.
+- [x] Add current-session/current-user restoration at ingress.
+- [x] Keep anonymous request behavior aligned with current authorization rules.
+- [x] Reuse the same provider-owned session through browser cookie and
+      REST/client `x-textus-session` header.
 
 ### Expected Outcome
 
 - Browser/Web requests can authenticate once and restore principal/session on
   subsequent requests.
+- Built-in `auth.login`, `auth.logout`, and `auth.session` operations now back
+  the shared runtime flow.
+- `secret token` / `refresh token` management remains provider-owned.
 
 ### Guardrails
 
@@ -115,7 +120,7 @@ Make browser-oriented Web session auth the canonical Phase 16 runtime mode.
 
 ## AU-03: `textus-user-account` Provider Adapter
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -124,17 +129,21 @@ boundary.
 
 ### Detailed Tasks
 
-- [ ] Adapt login/logout/logout-all/current-account behavior into the CNCF auth
+- [x] Adapt login/logout/logout-all/current-account behavior into the CNCF auth
       contract.
-- [ ] Map account identity to principal id and principal attributes.
-- [ ] Restore provider-backed session state into `SecurityContext`.
-- [ ] Keep provider internals out of `Cwitter`.
-- [ ] Add executable coverage for the provider adapter contract.
+- [x] Map account identity to principal id and principal attributes.
+- [x] Restore provider-backed session state into `SecurityContext`.
+- [x] Keep provider internals out of `Cwitter`.
+- [x] Add executable coverage for the provider adapter contract.
 
 ### Expected Outcome
 
 - `textus-user-account` is the first working auth provider without becoming the
   canonical CNCF auth model.
+- secret token / refresh token lifecycle, rotation, and revocation remain
+  provider-owned and bound to account id inside `textus-user-account`.
+- CNCF continues to own only cookie/header transport, provider selection, and
+  normalized `ExecutionContext.security` restoration.
 
 ### Guardrails
 
@@ -145,7 +154,7 @@ boundary.
 
 ## CW-01: `Cwitter` Auth-Aware Baseline
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 
