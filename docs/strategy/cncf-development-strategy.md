@@ -334,11 +334,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: none (Phase 13 is closed; next phase selection is pending)
+- Current phase selection: none (Phase 15 is closed; next phase selection is pending)
 - Latest active phase dashboard: none
 - Latest active phase checklist: none
-- Latest closed phase dashboard: `docs/phase/phase-13.md`
-- Latest closed phase checklist: `docs/phase/phase-13-checklist.md`
+- Latest closed phase dashboard: `docs/phase/phase-15.md`
+- Latest closed phase checklist: `docs/phase/phase-15-checklist.md`
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
 ## 6. Explicit Non-Goals
@@ -359,6 +359,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 11: closed (`docs/phase/phase-11.md`)
 - Phase 12: closed (`docs/phase/phase-12.md`)
 - Phase 13: closed (`docs/phase/phase-13.md`)
+- Phase 14: closed (`docs/phase/phase-14.md`)
+- Phase 15: closed (`docs/phase/phase-15.md`)
 
 ## 8. Development Item Status
 
@@ -501,3 +503,29 @@ Completed in Phase 11.
   - subsystem construction via bound Components
   - executable wiring and assembly specifications
   - sample-facing wiring rules
+
+### 9.3 Execution Layer Expansion
+Completed in Phase 14.
+
+- Closed dashboard: `docs/phase/phase-14.md`
+- Closed checklist: `docs/phase/phase-14-checklist.md`
+- Completed scope:
+  - lightweight `WorkflowEngine` baseline
+  - workflow inspection/projection surfaces
+  - submission-only `JCL`
+  - JCL-to-workflow entrypoint integration
+  - retry/dead-letter hardening
+  - explicit saga-id propagation
+  - explicit-rule-only ABAC matching in event reception
+
+### 9.4 Job Scheduling and Timer Boundary
+Completed in Phase 15.
+
+- Closed dashboard: `docs/phase/phase-15.md`
+- Closed checklist: `docs/phase/phase-15-checklist.md`
+- Completed scope:
+  - shared bounded `JobEngine` scheduler for async execution
+  - explicit queue priority and normalized workflow priority semantics
+  - canonical built-in timer/scheduling boundary
+  - bounded one-shot delayed root job start
+  - `Consequence[JobId]` job submission contract for ordinary submit-time failures

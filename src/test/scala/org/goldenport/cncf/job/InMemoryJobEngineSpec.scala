@@ -1,5 +1,6 @@
 package org.goldenport.cncf.job
 
+import java.time.Instant
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
@@ -41,7 +42,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       val ctx = ExecutionContext.test()
       val task = ActionTask(ActionId.generate(), action, actionEngine, None)
 
-      val jobid = jobEngine.submit(List(task), ctx)
+      val jobid = _jobid(jobEngine.submit(List(task), ctx))
       val result = _await_result_(jobEngine, jobid)
 
       result.isDefined shouldBe true
@@ -65,9 +66,9 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       val queued = _ValueTask("queued")
 
       When("two async jobs are submitted")
-      val first = jobEngine.submit(List(blocker), ExecutionContext.test())
+      val first = _jobid(jobEngine.submit(List(blocker), ExecutionContext.test()))
       entered.await(1, TimeUnit.SECONDS) shouldBe true
-      val second = jobEngine.submit(List(queued), ExecutionContext.test())
+      val second = _jobid(jobEngine.submit(List(queued), ExecutionContext.test()))
 
       Then("the second job remains submitted with an async queued timeline event")
       _await_condition_ {
@@ -96,9 +97,9 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       val second = _ConcurrencyTask("second", running, maxRunning, None, release)
 
       When("both jobs are submitted")
-      val firstId = jobEngine.submit(List(first), ExecutionContext.test())
+      val firstId = _jobid(jobEngine.submit(List(first), ExecutionContext.test()))
       firstEntered.await(1, TimeUnit.SECONDS) shouldBe true
-      val secondId = jobEngine.submit(List(second), ExecutionContext.test())
+      val secondId = _jobid(jobEngine.submit(List(second), ExecutionContext.test()))
       Thread.sleep(100L)
 
       Then("only one job is running at a time")
@@ -124,8 +125,8 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       val second = _ConcurrencyTask("second", running, maxRunning, Some(entered), release)
 
       When("both jobs are submitted")
-      val firstId = jobEngine.submit(List(first), ExecutionContext.test())
-      val secondId = jobEngine.submit(List(second), ExecutionContext.test())
+      val firstId = _jobid(jobEngine.submit(List(first), ExecutionContext.test()))
+      val secondId = _jobid(jobEngine.submit(List(second), ExecutionContext.test()))
 
       Then("both jobs can start in parallel")
       entered.await(1, TimeUnit.SECONDS) shouldBe true
@@ -146,10 +147,10 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       val release = new CountDownLatch(1)
       val order = ArrayBuffer.empty[String]
 
-      val blockerId = jobEngine.submit(List(_BlockingTask(entered, release, "blocker")), ExecutionContext.test())
+      val blockerId = _jobid(jobEngine.submit(List(_BlockingTask(entered, release, "blocker")), ExecutionContext.test()))
       entered.await(1, TimeUnit.SECONDS) shouldBe true
-      val lowId = jobEngine.submit(List(_RecordingTask("low", order)), ExecutionContext.test(), JobSubmitOption(priority = 10))
-      val highId = jobEngine.submit(List(_RecordingTask("high", order)), ExecutionContext.test(), JobSubmitOption(priority = -10))
+      val lowId = _jobid(jobEngine.submit(List(_RecordingTask("low", order)), ExecutionContext.test(), JobSubmitOption(priority = 10)))
+      val highId = _jobid(jobEngine.submit(List(_RecordingTask("high", order)), ExecutionContext.test(), JobSubmitOption(priority = -10)))
 
       When("worker capacity becomes available")
       release.countDown()
@@ -171,10 +172,10 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       val release = new CountDownLatch(1)
       val order = ArrayBuffer.empty[String]
 
-      val blockerId = jobEngine.submit(List(_BlockingTask(entered, release, "blocker")), ExecutionContext.test())
+      val blockerId = _jobid(jobEngine.submit(List(_BlockingTask(entered, release, "blocker")), ExecutionContext.test()))
       entered.await(1, TimeUnit.SECONDS) shouldBe true
-      val firstId = jobEngine.submit(List(_RecordingTask("first", order)), ExecutionContext.test(), JobSubmitOption(priority = 0))
-      val secondId = jobEngine.submit(List(_RecordingTask("second", order)), ExecutionContext.test(), JobSubmitOption(priority = 0))
+      val firstId = _jobid(jobEngine.submit(List(_RecordingTask("first", order)), ExecutionContext.test(), JobSubmitOption(priority = 0)))
+      val secondId = _jobid(jobEngine.submit(List(_RecordingTask("second", order)), ExecutionContext.test(), JobSubmitOption(priority = 0)))
 
       When("worker capacity becomes available")
       release.countDown()
@@ -192,12 +193,12 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       val jobEngine = InMemoryJobEngine.create(
         InMemoryJobEngine.SchedulerConfig(workerCount = 1)
       )
-      val parentId = jobEngine.submit(List(_ValueTask("parent")), ExecutionContext.test())
+      val parentId = _jobid(jobEngine.submit(List(_ValueTask("parent")), ExecutionContext.test()))
       _await_result_(jobEngine, parentId)
 
       val entered = new CountDownLatch(1)
       val release = new CountDownLatch(1)
-      val blockerId = jobEngine.submit(List(_BlockingTask(entered, release, "blocker")), ExecutionContext.test())
+      val blockerId = _jobid(jobEngine.submit(List(_BlockingTask(entered, release, "blocker")), ExecutionContext.test()))
       entered.await(1, TimeUnit.SECONDS) shouldBe true
 
       When("a same-job async task is enqueued while the worker is busy")
@@ -222,23 +223,23 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
         InMemoryJobEngine.SchedulerConfig(workerCount = 1)
       )
       val order = ArrayBuffer.empty[String]
-      val parentId = jobEngine.submit(
+      val parentId = _jobid(jobEngine.submit(
         List(_ValueTask("parent")),
         ExecutionContext.test(),
         JobSubmitOption(priority = -5)
-      )
+      ))
       _await_result_(jobEngine, parentId)
 
       val entered = new CountDownLatch(1)
       val release = new CountDownLatch(1)
-      val blockerId = jobEngine.submit(List(_BlockingTask(entered, release, "blocker")), ExecutionContext.test())
+      val blockerId = _jobid(jobEngine.submit(List(_BlockingTask(entered, release, "blocker")), ExecutionContext.test()))
       entered.await(1, TimeUnit.SECONDS) shouldBe true
 
-      val regularId = jobEngine.submit(
+      val regularId = _jobid(jobEngine.submit(
         List(_RecordingTask("regular", order)),
         ExecutionContext.test(),
         JobSubmitOption(priority = 5)
-      )
+      ))
 
       When("a same-job async task is enqueued after the lower-priority job")
       val _ = jobEngine.enqueueTaskInJob(parentId, _RecordingTask("same-job", order), ExecutionContext.test()).toOption.get
@@ -251,7 +252,124 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       order.synchronized(order.toVector) shouldBe Vector("same-job", "regular")
       jobEngine.shutdown()
     }
+
+    "keep delayed async submit in Submitted until its scheduled start time" in {
+      Given("an async job with a one-shot delayed start")
+      val jobEngine = InMemoryJobEngine.create()
+      val scheduledAt = Instant.now().plusMillis(150L)
+      val jobId = _jobid(jobEngine.submit(
+        List(_ValueTask("delayed")),
+        ExecutionContext.test(),
+        JobSubmitOption(scheduledStartAt = Some(scheduledAt))
+      ))
+
+      When("the job is queried before the due time")
+      val beforeDue = jobEngine.query(jobId).get
+
+      Then("it remains submitted and records delayed scheduling")
+      beforeDue.status shouldBe JobStatus.Submitted
+      beforeDue.scheduledStartAt shouldBe Some(scheduledAt)
+      beforeDue.timeline.events.exists(_.kind == "job.delayed.scheduled") shouldBe true
+
+      And("it executes after the due time through the shared scheduler")
+      val result = _await_result_(jobEngine, jobId)
+      result shouldBe a[Some[_]]
+      jobEngine.query(jobId).get.timeline.events.exists(_.kind == "job.delayed.enqueued") shouldBe true
+      jobEngine.shutdown()
+    }
+
+    "treat scheduledStartAt at or before now as immediate async execution" in {
+      Given("an async job whose scheduled start is already due")
+      val jobEngine = InMemoryJobEngine.create()
+
+      When("the job is submitted")
+      val jobId = _jobid(jobEngine.submit(
+        List(_ValueTask("immediate")),
+        ExecutionContext.test(),
+        JobSubmitOption(scheduledStartAt = Some(Instant.now().minusSeconds(1)))
+      ))
+
+      Then("it behaves like an immediate async submit")
+      _await_result_(jobEngine, jobId) shouldBe a[Some[_]]
+      jobEngine.query(jobId).get.timeline.events.exists(_.kind == "job.async.queued") shouldBe true
+      jobEngine.shutdown()
+    }
+
+    "reject delayed start beyond the built-in maximum window" in {
+      Given("a delayed start request beyond the supported maximum")
+      val jobEngine = InMemoryJobEngine.create()
+
+      When("the job is submitted")
+      val result = jobEngine.submit(
+          List(_ValueTask("too-late")),
+          ExecutionContext.test(),
+          JobSubmitOption(scheduledStartAt = Some(Instant.now().plusSeconds(16 * 60L)))
+        )
+
+      Then("submission fails deterministically")
+      result shouldBe a[Consequence.Failure[_]]
+      result match {
+        case Consequence.Failure(c) =>
+          c.show should include ("scheduledStartAt exceeds built-in max delay")
+        case _ =>
+          fail("expected delayed submit failure")
+      }
+      jobEngine.shutdown()
+    }
+
+    "rehydrate persistent delayed jobs after engine restart" in {
+      Given("a persistent delayed-start job and shared durable state")
+      val state = InMemoryJobEngine.State()
+      val scheduledAt = Instant.now().plusMillis(120L)
+      val engine1 = new InMemoryJobEngine(runtimeState = state)(scala.concurrent.ExecutionContext.global)
+      val jobId = _jobid(engine1.submit(
+        List(_ValueTask("rehydrated")),
+        ExecutionContext.test(),
+        JobSubmitOption(scheduledStartAt = Some(scheduledAt))
+      ))
+      engine1.query(jobId).flatMap(_.scheduledStartAt) shouldBe Some(scheduledAt)
+
+      When("the engine is restarted before the delayed start fires")
+      engine1.shutdown()
+      val engine2 = new InMemoryJobEngine(runtimeState = state)(scala.concurrent.ExecutionContext.global)
+
+      Then("the delayed job is rehydrated and eventually executes")
+      _await_result_(engine2, jobId) shouldBe a[Some[_]]
+      engine2.shutdown()
+    }
+
+    "enqueue due delayed jobs into the shared queue under worker saturation" in {
+      Given("a due delayed-start job and a busy single-worker scheduler")
+      val jobEngine = InMemoryJobEngine.create(
+        InMemoryJobEngine.SchedulerConfig(workerCount = 1)
+      )
+      val blockerEntered = new CountDownLatch(1)
+      val blockerRelease = new CountDownLatch(1)
+      val blockerId = _jobid(jobEngine.submit(List(_BlockingTask(blockerEntered, blockerRelease, "blocker")), ExecutionContext.test()))
+      blockerEntered.await(1, TimeUnit.SECONDS) shouldBe true
+      val scheduledAt = Instant.now().plusMillis(100L)
+      val delayedId = _jobid(jobEngine.submit(
+        List(_ValueTask("queued-after-due")),
+        ExecutionContext.test(),
+        JobSubmitOption(scheduledStartAt = Some(scheduledAt))
+      ))
+
+      When("the delayed start becomes due while the worker is still occupied")
+      _await_condition_ {
+        jobEngine.query(delayedId).exists(_.timeline.events.exists(_.kind == "job.delayed.enqueued"))
+      } shouldBe true
+
+      Then("the job remains submitted until worker capacity is available")
+      jobEngine.getStatus(delayedId) shouldBe Some(JobStatus.Submitted)
+      blockerRelease.countDown()
+      _await_result_(jobEngine, blockerId)
+      _await_result_(jobEngine, delayedId) shouldBe a[Some[_]]
+      jobEngine.shutdown()
+    }
   }
+
+  private def _jobid(p: Consequence[JobId]): JobId =
+    p.toOption.get
 
   private final case class _ValueTask(
     value: String,

@@ -33,8 +33,8 @@ The following built-in timing behavior is in scope:
 - bounded worker scheduling and concurrency control
 - delayed retry scheduling
 - re-enqueue of delayed retry into the shared job queue
-- bounded timing directly tied to job survivability or recovery, if later
-  admitted by `TM-02`
+- one-shot delayed root job start bounded to 15 minutes
+- bounded timing directly tied to job survivability or recovery
 
 These are valid because they are:
 
@@ -68,7 +68,8 @@ These needs belong to specialist engines, not to continued built-in expansion.
 - shared async scheduling
 - bounded operational timing for execution control
 - retry scheduling
-- recovery-driven delayed execution if explicitly admitted by a later phase
+- recovery-driven delayed execution
+- one-shot delayed root job start bounded to 15 minutes
 
 `JobEngine` must not become:
 
@@ -127,6 +128,9 @@ The current runtime behavior is classified as follows:
 - `OPS-01`
   - `RetryLater` uses delayed retry scheduling and then rejoins the shared
     queue
+- `TM-02`
+  - one-shot delayed root job start is allowed through `JobSubmitOption`
+  - maximum built-in non-retry delay is 15 minutes
 
 This accepted behavior does **not** imply:
 

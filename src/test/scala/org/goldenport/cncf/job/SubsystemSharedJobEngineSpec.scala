@@ -10,7 +10,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 28, 2026
- * @version Apr.  3, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SubsystemSharedJobEngineSpec extends AnyWordSpec with Matchers with Eventually {
@@ -27,7 +27,7 @@ final class SubsystemSharedJobEngineSpec extends AnyWordSpec with Matchers with 
         List(SleepTask(ActionId.generate(), 1000L)),
         submitCtx,
         JobSubmitOption(runMode = JobRunMode.Async, requestSummary = Some("shared-job-engine"))
-      )
+      ).toOption.get
 
       eventually {
         jobControl.jobEngine.query(jobId).isDefined shouldBe true
@@ -51,7 +51,7 @@ final class SubsystemSharedJobEngineSpec extends AnyWordSpec with Matchers with 
         List(SleepTask(ActionId.generate(), 5000L)),
         submitCtx,
         JobSubmitOption(runMode = JobRunMode.Async, requestSummary = Some("subsystem-execute-job-control"))
-      )
+      ).toOption.get
 
       eventually {
         admin.jobEngine.getStatus(jobId) should (be (Some(JobStatus.Submitted)) or be (Some(JobStatus.Running)))

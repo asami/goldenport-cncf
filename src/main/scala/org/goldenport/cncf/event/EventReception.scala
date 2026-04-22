@@ -874,8 +874,7 @@ object EventReception {
             ),
             executionNotes = Vector("event no matched subscription")
           )
-          val _ = engine.submit(List(_NoMatchEventTask(input)), ctx, option)
-          Consequence.unit
+          engine.submit(List(_NoMatchEventTask(input)), ctx, option).map(_ => ())
       }
 
     private def _effective_attributes(
@@ -1683,14 +1682,14 @@ object EventReception {
                     )
                   )
                   val submit = () => engine.submit(List(_DispatchActionTask(actionname, eventwithsaga)), submitctx, option)
-                  if (_has_action_scope(dispatchctx.cncfCore.scope))
+                  if (_has_action_scope(dispatchctx.cncfCore.scope)) {
                     dispatchctx.runtime.unitOfWork.stagePostCommit {
                       val _ = submit()
                     }
-                  else {
-                    val _ = submit()
+                    Consequence.unit
+                  } else {
+                    submit().map(_ => ())
                   }
-                  Consequence.unit
                 case None =>
                   _failure("async event reception requires job engine")
               }

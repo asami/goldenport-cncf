@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 21, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlCommandSpec
@@ -25,7 +25,7 @@ final class JobControlCommandSpec
       Given("a running job and content-manager privilege")
       val engine = InMemoryJobEngine.create()
       val task = ActionTask(ActionId.generate(), _sleep_action("slow", 300L, "ok"), ActionEngine.create(), None)
-      val jobid = engine.submit(List(task), ExecutionContext.test())
+      val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
       _await_status(engine, jobid, Set(JobStatus.Running, JobStatus.Succeeded))
 
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
@@ -45,7 +45,7 @@ final class JobControlCommandSpec
       Given("a succeeded job")
       val engine = InMemoryJobEngine.create()
       val task = ActionTask(ActionId.generate(), _success_action("done", "ok"), ActionEngine.create(), None)
-      val jobid = engine.submit(List(task), ExecutionContext.test())
+      val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
       _await_status(engine, jobid, Set(JobStatus.Succeeded))
 
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
@@ -68,7 +68,7 @@ final class JobControlCommandSpec
       Given("a cancelled long-running job")
       val engine = InMemoryJobEngine.create()
       val task = ActionTask(ActionId.generate(), _sleep_action("slow", 800L, "ok"), ActionEngine.create(), None)
-      val jobid = engine.submit(List(task), ExecutionContext.test())
+      val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
       _await_status(engine, jobid, Set(JobStatus.Running, JobStatus.Succeeded))
 
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
@@ -99,7 +99,7 @@ final class JobControlCommandSpec
       Given("a job and user privilege")
       val engine = InMemoryJobEngine.create()
       val task = ActionTask(ActionId.generate(), _success_action("cmd", "ok"), ActionEngine.create(), None)
-      val jobid = engine.submit(List(task), ExecutionContext.test())
+      val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
 
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.User)
 
@@ -117,6 +117,9 @@ final class JobControlCommandSpec
       }
     }
   }
+
+  private def _jobid(p: Consequence[JobId]): JobId =
+    p.toOption.get
 
   private def _success_action(actionname: String, value: String): CommandAction =
     new CommandAction() {

@@ -16,7 +16,6 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- *  version Mar. 21, 2026
  * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -1052,7 +1051,7 @@ final class EventReceptionSpec
         )
       )
       val base = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-      val parent = jobengine.submit(Nil, base)
+      val parent = _jobid(jobengine.submit(Nil, base))
       given ExecutionContext = ExecutionContext.withJobContext(
         base,
         JobContext(
@@ -1179,7 +1178,7 @@ final class EventReceptionSpec
         )
       )
       val base = _shared_event_context(recorder, store)
-      val rootJobId = jobengine.submit(Nil, base)
+      val rootJobId = _jobid(jobengine.submit(Nil, base))
       given ExecutionContext = ExecutionContext.withJobContext(
         base,
         JobContext(
@@ -1249,7 +1248,7 @@ final class EventReceptionSpec
         )
       )
       val base = _shared_event_context(recorder, store)
-      val rootJobId = jobengine.submit(Nil, base)
+      val rootJobId = _jobid(jobengine.submit(Nil, base))
       given ExecutionContext = ExecutionContext.withJobContext(
         base,
         JobContext(
@@ -1322,7 +1321,7 @@ final class EventReceptionSpec
         )
       )
       val base = _shared_event_context(recorder, store)
-      val rootJobId = jobengine.submit(Nil, base)
+      val rootJobId = _jobid(jobengine.submit(Nil, base))
       given ExecutionContext = ExecutionContext.withJobContext(
         base,
         JobContext(jobId = Some(rootJobId), taskId = Some(TaskId.generate()), actionId = Some(ActionId.generate()))
@@ -1568,7 +1567,7 @@ final class EventReceptionSpec
 
       val matched = {
         val managerBase = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-        val managerParent = jobengine.submit(Nil, managerBase)
+        val managerParent = _jobid(jobengine.submit(Nil, managerBase))
         given ExecutionContext = ExecutionContext.withJobContext(
           managerBase,
           JobContext(
@@ -1607,7 +1606,7 @@ final class EventReceptionSpec
       When("the ABAC condition misses for a user context")
       val missed = {
         val userCtx = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
-        val userParent = jobengine.submit(Nil, userCtx)
+        val userParent = _jobid(jobengine.submit(Nil, userCtx))
         given ExecutionContext = ExecutionContext.withJobContext(
           userCtx,
           JobContext(
@@ -2109,10 +2108,10 @@ final class EventReceptionSpec
     def asyncEnqueues: Vector[(JobId, String)] =
       _asyncEnqueues
 
-    def submit(tasks: List[JobTask], ctx: ExecutionContext): JobId =
+    def submit(tasks: List[JobTask], ctx: ExecutionContext): Consequence[JobId] =
       submit(tasks, ctx, JobSubmitOption())
 
-    def submit(tasks: List[JobTask], ctx: ExecutionContext, option: JobSubmitOption): JobId = {
+    def submit(tasks: List[JobTask], ctx: ExecutionContext, option: JobSubmitOption): Consequence[JobId] = {
       _options = _options :+ option
       _delegate.submit(tasks, ctx, option)
     }
@@ -2145,6 +2144,9 @@ final class EventReceptionSpec
     def queryTimeline(jobId: JobId, offset: Int, limit: Int): Option[JobTimelinePage] = _delegate.queryTimeline(jobId, offset, limit)
     override def metrics = _delegate.metrics
   }
+
+  private def _jobid(p: Consequence[JobId]): JobId =
+    p.toOption.get
 
   private def _shared_event_context(
     recorder: CommitRecorder,

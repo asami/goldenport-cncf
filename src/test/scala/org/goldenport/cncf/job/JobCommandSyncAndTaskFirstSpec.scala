@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 21, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobCommandSyncAndTaskFirstSpec
@@ -29,7 +29,7 @@ final class JobCommandSyncAndTaskFirstSpec
       val ctx = ExecutionContext.test()
       val action = _command_action("sync", "Command(sync)")
       val task = ActionTask(ActionId.generate(), action, component.actionEngine, Some(component))
-      val jobid = component.logic.submitJob(List(task), ctx)
+      val jobid = component.logic.submitJob(List(task), ctx).toOption.get
 
       When("awaiting command result explicitly")
       val result = component.logic.awaitJobResult(jobid)

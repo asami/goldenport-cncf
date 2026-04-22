@@ -37,7 +37,7 @@ final class JobRetryOperationalSpec
       )
 
       When("the job is submitted")
-      val jobId = engine.submit(List(task), ExecutionContext.test())
+      val jobId = _jobid(engine.submit(List(task), ExecutionContext.test()))
       val model = _await_query(engine, jobId)
 
       Then("the job succeeds after automatic retries and records retry attempts")
@@ -61,7 +61,7 @@ final class JobRetryOperationalSpec
         succeedAt = 2
       )
       val engine1 = new InMemoryJobEngine(state, schedule)(scala.concurrent.ExecutionContext.global)
-      val jobId = engine1.submit(List(task), ExecutionContext.test())
+      val jobId = _jobid(engine1.submit(List(task), ExecutionContext.test()))
       val queued = _await_condition {
         engine1.query(jobId).exists(_.retry.nextRetryDueAt.nonEmpty)
       }
@@ -95,7 +95,7 @@ final class JobRetryOperationalSpec
       )
 
       When("the retries are exhausted")
-      val jobId = engine.submit(List(task), ExecutionContext.test())
+      val jobId = _jobid(engine.submit(List(task), ExecutionContext.test()))
       val model = _await_query(engine, jobId, statuses = Set(JobStatus.Failed))
 
       Then("the final state is dead-lettered with recovery visibility")
@@ -128,11 +128,11 @@ final class JobRetryOperationalSpec
       val blockerRelease = new CountDownLatch(1)
 
       When("a RetryLater job becomes due while the worker is still busy")
-      val jobId = engine.submit(List(task), ExecutionContext.test())
+      val jobId = _jobid(engine.submit(List(task), ExecutionContext.test()))
       _await_condition {
         engine.query(jobId).exists(_.retry.nextRetryDueAt.nonEmpty)
       } shouldBe true
-      val blockerId = engine.submit(List(_BlockingTask(blockerEntered, blockerRelease, "blocker")), ExecutionContext.test())
+      val blockerId = _jobid(engine.submit(List(_BlockingTask(blockerEntered, blockerRelease, "blocker")), ExecutionContext.test()))
       blockerEntered.await(1, TimeUnit.SECONDS) shouldBe true
 
       Then("the retry is enqueued and waits for worker availability")
@@ -168,18 +168,18 @@ final class JobRetryOperationalSpec
       val blockerEntered = new CountDownLatch(1)
       val blockerRelease = new CountDownLatch(1)
 
-      val retryId = engine.submit(
+      val retryId = _jobid(engine.submit(
         List(retryTask),
         ExecutionContext.test(),
         JobSubmitOption(priority = -5)
-      )
+      ))
       _await_condition {
         engine.query(retryId).exists(_.retry.nextRetryDueAt.nonEmpty)
       } shouldBe true
 
-      val blockerId = engine.submit(List(_BlockingTask(blockerEntered, blockerRelease, "blocker")), ExecutionContext.test())
+      val blockerId = _jobid(engine.submit(List(_BlockingTask(blockerEntered, blockerRelease, "blocker")), ExecutionContext.test()))
       blockerEntered.await(1, TimeUnit.SECONDS) shouldBe true
-      val regularId = engine.submit(List(_RecordingTask("regular", order)), ExecutionContext.test(), JobSubmitOption(priority = 0))
+      val regularId = _jobid(engine.submit(List(_RecordingTask("regular", order)), ExecutionContext.test(), JobSubmitOption(priority = 0)))
 
       When("the delayed retry becomes due while the worker is still busy")
       _await_condition {
@@ -207,7 +207,7 @@ final class JobRetryOperationalSpec
       )
 
       When("the job fails")
-      val jobId = engine.submit(List(task), ExecutionContext.test())
+      val jobId = _jobid(engine.submit(List(task), ExecutionContext.test()))
       val model = _await_query(engine, jobId, statuses = Set(JobStatus.Failed))
 
       Then("it is marked as poison without automatic retry")
@@ -225,6 +225,9 @@ final class JobRetryOperationalSpec
     message: String
   ): Conclusion =
     Conclusion.simple(message).copy(disposition = Disposition(action))
+
+  private def _jobid(p: Consequence[JobId]): JobId =
+    p.toOption.get
 
   private final case class _CountingTask(
     actionId: ActionId = ActionId.generate(),

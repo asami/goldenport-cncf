@@ -1,5 +1,6 @@
 package org.goldenport.cncf.component.builtin.jobcontrol
 
+import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
 import org.goldenport.cncf.context.ExecutionContext
@@ -51,7 +52,7 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers {
           ),
           executionNotes = Vector("event reception policy source: compatibility-mapping")
         )
-      )
+      ).toOption.get
       given ExecutionContext = ExecutionContext.test()
 
       service.getJobStatus(jobId) match {
@@ -87,7 +88,7 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers {
           persistence = JobPersistencePolicy.Persistent,
           requestSummary = Some("ops-01-retry-visibility")
         )
-      )
+      ).toOption.get
       given ExecutionContext = ExecutionContext.test()
 
       _await_status(service, jobId)
@@ -99,6 +100,31 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers {
           model.retry.exhausted shouldBe true
           model.retry.deadLetter shouldBe true
           model.retry.recoveryRequired shouldBe true
+        case Consequence.Failure(conclusion) =>
+          fail(conclusion.show)
+      }
+    }
+
+    "expose scheduled start visibility on job inspection surfaces" in {
+      val subsystem = DefaultSubsystemFactory.default(mode = Some("command"))
+      val admin = subsystem.components.find(_.name == "admin").get
+      val jobControl = subsystem.components.find(_.name == "job_control").get
+      val service = jobControl.port.get[JobControlComponent.JobService].get
+      val scheduledAt = Instant.now().plusMillis(150L)
+      val jobId = admin.logic.submitJob(
+        List(_ImmediateTask(ActionId.generate())),
+        ExecutionContext.create(),
+        JobSubmitOption(
+          persistence = JobPersistencePolicy.Persistent,
+          scheduledStartAt = Some(scheduledAt),
+          requestSummary = Some("tm-02-delayed-start")
+        )
+      ).toOption.get
+      given ExecutionContext = ExecutionContext.test()
+
+      service.getJobStatus(jobId) match {
+        case Consequence.Success(model) =>
+          model.scheduledStartAt shouldBe Some(scheduledAt)
         case Consequence.Failure(conclusion) =>
           fail(conclusion.show)
       }

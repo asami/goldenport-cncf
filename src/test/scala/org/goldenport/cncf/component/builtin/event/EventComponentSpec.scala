@@ -30,7 +30,7 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
         List(SleepTask(ActionId.generate(), 10L)),
         ctx,
         JobSubmitOption(runMode = JobRunMode.Async, requestSummary = Some("event-component"))
-      )
+      ).toOption.get
 
       val searchReq = Request(
         component = Some("event"),
@@ -142,7 +142,7 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
             "failure.policy" -> "retry"
           )
         )
-      )
+      ).toOption.get
       _await_job(admin.jobEngine, jobId)
 
       val loadReq = Request(

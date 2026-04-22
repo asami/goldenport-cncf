@@ -262,7 +262,7 @@ object JobControlComponent {
       requestSummary: Option[String],
       persistence: JobPersistencePolicy
     )(using org.goldenport.cncf.context.ExecutionContext): Consequence[(JobId, Consequence[OperationResponse])] =
-      _resolve_target_action(selector, parameters).map { case (target, action) =>
+      _resolve_target_action(selector, parameters).flatMap { case (target, action) =>
         val task = ActionTask(ActionId.generate(), action, target.actionEngine, Some(target))
         val option = JobSubmitOption(
           persistence = persistence,
@@ -270,8 +270,9 @@ object JobControlComponent {
           parameters = parameters ++ Map("jcl.target.action" -> selector),
           executionNotes = Vector("jcl submission")
         )
-        val jobid = component.jobEngine.submit(List(task), summon[org.goldenport.cncf.context.ExecutionContext], option)
-        (jobid, component.logic.awaitJobResult(jobid))
+        component.jobEngine.submit(List(task), summon[org.goldenport.cncf.context.ExecutionContext], option).map { jobid =>
+          (jobid, component.logic.awaitJobResult(jobid))
+        }
       }
 
     private def _submit_workflow(
@@ -849,6 +850,7 @@ object JobControlComponent {
       "submitter-session-id" -> model.submitter.sessionId.getOrElse(""),
       "created-at" -> model.createdAt.toString,
       "updated-at" -> model.updatedAt.toString,
+      "scheduled-start-at" -> model.scheduledStartAt.map(_.toString).getOrElse(""),
       "result-success" -> model.resultSummary.success,
       "result-message" -> model.resultSummary.message.getOrElse(""),
       "result" -> model.result.map(_.print).getOrElse(""),

@@ -35,7 +35,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  4, 2026
  *  version Feb. 27, 2026
- * @version Apr. 11, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
@@ -161,15 +161,15 @@ private case class RecordingService(
       case action: CommandAction =>
         val actionid = ActionId.generate()
         val task = ActionTask(actionid, action, logic.component.actionEngine, Some(logic.component))
-        val jobid = logic.submitJob(List(task), executioncontext)
-        _lastJobId = Some(jobid)
-        Consequence.success(OperationResponse.Scalar(jobid.value).toResponse)
+        logic.submitJob(List(task), executioncontext).map { jobid =>
+          _lastJobId = Some(jobid)
+          OperationResponse.Scalar(jobid.value).toResponse
+        }
       case action: QueryAction =>
         _lastJobId = None
         val actionid = ActionId.generate()
         val task = ActionTask(actionid, action, logic.component.actionEngine, Some(logic.component))
-        val jobid = logic.submitJob(List(task), executioncontext)
-        _await_job_result(jobid).map(_.toResponse)
+        logic.submitJob(List(task), executioncontext).flatMap(jobid => _await_job_result(jobid).map(_.toResponse))
       case _ =>
         Consequence.operationInvalid("OperationRequest must be Action")
     }

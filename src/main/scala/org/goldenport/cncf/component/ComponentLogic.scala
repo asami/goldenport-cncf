@@ -26,7 +26,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
  *  version Mar. 31, 2026
- * @version Apr. 21, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -132,8 +132,7 @@ case class ComponentLogic(
           case _: CommandAction =>
             _execute_command_action(task, action, scopedCtx)
           case _ =>
-            val jobid = submitJob(List(task), scopedCtx)
-            Consequence.success(OperationResponse.Scalar(jobid.value))
+            submitJob(List(task), scopedCtx).map(jobid => OperationResponse.Scalar(jobid.value))
       }
     }
   }
@@ -157,10 +156,8 @@ case class ComponentLogic(
   private def _execute_query_action(
     task: ActionTask,
     ctx: ExecutionContext
-  ): Consequence[OperationResponse] = {
-    val jobid = submitJob(List(task), ctx)
-    awaitJobResult(jobid)
-  }
+  ): Consequence[OperationResponse] =
+    submitJob(List(task), ctx).flatMap(jobid => awaitJobResult(jobid))
 
   private def _execute_command_action(
     task: ActionTask,
@@ -176,21 +173,19 @@ case class ComponentLogic(
     mode match {
       case CommandExecutionMode.AsyncJob =>
         val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Async)
-        val jobid = submitJob(List(task), ctx, option)
-        Consequence.success(OperationResponse.Scalar(jobid.value))
+        submitJob(List(task), ctx, option).map(jobid => OperationResponse.Scalar(jobid.value))
       case CommandExecutionMode.AsyncJobAndAwait =>
         val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Async)
-        val jobid = submitJob(List(task), ctx, option)
-        awaitJobResult(jobid)
+        submitJob(List(task), ctx, option).flatMap(jobid => awaitJobResult(jobid))
       case CommandExecutionMode.SyncJob =>
         val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Sync)
-        val jobid = submitJob(List(task), ctx, option)
-        awaitJobResult(jobid)
+        submitJob(List(task), ctx, option).flatMap(jobid => awaitJobResult(jobid))
       case CommandExecutionMode.SyncJobAsyncInterface =>
         val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Async)
-        val jobid = submitJob(List(task), ctx, option)
-        val _ = awaitJobResult(jobid)
-        Consequence.success(OperationResponse.Scalar(jobid.value))
+        submitJob(List(task), ctx, option).flatMap { jobid =>
+          val _ = awaitJobResult(jobid)
+          Consequence.success(OperationResponse.Scalar(jobid.value))
+        }
       case CommandExecutionMode.SyncDirectNoJob =>
         execute(createActionCall(action, ctx))
     }
@@ -242,19 +237,15 @@ case class ComponentLogic(
     isscriptcomponent && iscommandmode
   }
 
-  def submitJob(tasks: List[JobTask], ctx: ExecutionContext): JobId =
-    {
-      component.jobEngine.submit(tasks, ctx, _default_submit_option(tasks))
-    }
+  def submitJob(tasks: List[JobTask], ctx: ExecutionContext): Consequence[JobId] =
+    component.jobEngine.submit(tasks, ctx, _default_submit_option(tasks))
 
   def submitJob(
     tasks: List[JobTask],
     ctx: ExecutionContext,
     option: JobSubmitOption
-  ): JobId =
-    {
-      component.jobEngine.submit(tasks, ctx, option)
-    }
+  ): Consequence[JobId] =
+    component.jobEngine.submit(tasks, ctx, option)
 
   def getJobStatus(jobId: JobId): Option[JobStatus] =
     component.jobEngine.getStatus(jobId)

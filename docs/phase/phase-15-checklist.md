@@ -40,6 +40,13 @@ Phase 15 work proceeds in this order:
 This order keeps CNCF aligned with the Pareto 80/20 rule and prevents scheduler
 usage from expanding implicitly.
 
+Phase closure note:
+
+- Phase 15 closed on Apr. 22, 2026.
+- All planned work items in this phase are complete.
+- Submission now returns `Consequence[JobId]` so ordinary submit-time failures
+  stay inside the operational failure model.
+
 ---
 
 ## JS-01: Shared Job Scheduler for Async Execution
@@ -166,7 +173,7 @@ TM-01 must answer:
 
 ## TM-02: Bounded Non-Retry Delayed Execution
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -181,14 +188,20 @@ TM-02 must answer:
 
 ### Detailed Tasks
 
-- [ ] Decide whether bounded non-retry delay is allowed at all.
-- [ ] Define constraints if allowed.
-- [ ] Confirm that cron/recurrence and long-lived schedules remain out of scope.
+- [x] Decide whether bounded non-retry delay is allowed at all.
+- [x] Define constraints if allowed.
+- [x] Confirm that cron/recurrence and long-lived schedules remain out of scope.
 
 ### Expected Outcome
 
 - CNCF either rejects or tightly bounds non-retry delayed execution in built-in
   job control.
+
+Current decision:
+
+- admit one-shot delayed root job start only
+- keep the maximum built-in non-retry delay at 15 minutes
+- keep `JCL`, workflow timers, recurrence, and long-lived schedules out of scope
 
 ### Guardrails
 

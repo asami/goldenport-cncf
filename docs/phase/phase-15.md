@@ -1,6 +1,6 @@
 # Phase 15 — Job Scheduling and Timer Boundary
 
-status = open
+status = closed
 
 ## 1. Purpose of This Document
 
@@ -31,7 +31,7 @@ Current semantic direction:
 - `JS-01` is complete.
 - `PR-01` is complete.
 - `TM-01` is complete.
-- `TM-02` is the active next item.
+- `TM-02` is complete.
 - Priority normalization follows scheduler implementation in the same phase.
 - Async execution must always pass through Job management.
 - This rule applies at operation-call and event-driven execution granularity.
@@ -39,6 +39,10 @@ Current semantic direction:
 - Built-in timing is limited to operational `JobEngine` control.
 - Timer semantics are not added to `WorkflowEngine` or `JCL`.
 - Retry and delay support remain bounded operational scheduling only.
+- One-shot delayed root job start is admitted as a bounded built-in job-control
+  feature with a 15-minute maximum window.
+- Job submission now returns `Consequence[JobId]` so ordinary submit-time
+  failures remain operational failures instead of exception escapes.
 
 ## 3. Non-Goals
 
@@ -53,7 +57,7 @@ Current semantic direction:
 - A (DONE): JS-01 — Route all async execution through the bounded shared `JobEngine` scheduler.
 - B (DONE): PR-01 — Add explicit job queue priority and normalize workflow priority semantics.
 - C (DONE): TM-01 — Define the timer and scheduling boundary around the built-in scheduler.
-- D (ACTIVE): TM-02 — Decide whether any bounded non-retry delayed execution is allowed inside job control.
+- D (DONE): TM-02 — Decide whether any bounded non-retry delayed execution is allowed inside job control.
 
 Current note:
 - Phase 14 is closed and remains the built-in execution baseline.
@@ -61,13 +65,19 @@ Current note:
   built-in scheduler model.
 - External engine integration remains a carryover item in Phase 14 and is not
   the default theme of Phase 15.
+- Phase 15 is closed on Apr. 22, 2026 with the job scheduling/timer baseline fixed:
+  - shared bounded `JobEngine` scheduler for async execution
+  - explicit queue priority with normalized workflow priority semantics
+  - canonical built-in timer/scheduling boundary
+  - bounded one-shot delayed root job start
+  - `Consequence[JobId]` submission contract for ordinary submit-time failures
 
 ## 5. Development Items
 
 - [x] JS-01: Route all async execution through the bounded shared `JobEngine` scheduler.
 - [x] PR-01: Add explicit job queue priority and normalize workflow priority semantics.
 - [x] TM-01: Define the timer and scheduling boundary around the built-in scheduler.
-- [ ] TM-02: Decide whether any bounded non-retry delayed execution is allowed inside job control.
+- [x] TM-02: Decide whether any bounded non-retry delayed execution is allowed inside job control.
 
 ## 6. Next Phase Candidates
 

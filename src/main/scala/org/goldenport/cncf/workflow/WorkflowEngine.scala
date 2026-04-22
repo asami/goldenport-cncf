@@ -375,7 +375,7 @@ object WorkflowEngine {
       event: ReceptionDomainEvent,
       actionName: String
     )(using ctx: ExecutionContext): Consequence[(JobId, String)] =
-      _resolve_target_action(entry, event, actionName).map { case (component, action, resolvedselector) =>
+      _resolve_target_action(entry, event, actionName).flatMap { case (component, action, resolvedselector) =>
         val task = ActionTask(ActionId.generate(), action, component.actionEngine, Some(component))
         val option = JobSubmitOption(
           persistence = JobPersistencePolicy.Persistent,
@@ -392,7 +392,7 @@ object WorkflowEngine {
             s"workflow action: $resolvedselector"
           )
         )
-        (subsystem().jobEngine.submit(List(task), ctx, option), resolvedselector)
+        subsystem().jobEngine.submit(List(task), ctx, option).map(jobid => (jobid, resolvedselector))
       }
 
     private def _resolve_target_action(

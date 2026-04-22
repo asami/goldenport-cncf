@@ -1,5 +1,6 @@
 package org.goldenport.cncf.job
 
+import java.time.Instant
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
@@ -27,7 +28,7 @@ final class JobQueryReadModelSpec
       val ctx = ExecutionContext.test()
 
       When("job completes")
-      val jobid = engine.submit(List(task), ctx)
+      val jobid = _jobid(engine.submit(List(task), ctx))
       val result = _await_result(engine, jobid)
       val read = _await_query(engine, jobid)
 
@@ -44,7 +45,7 @@ final class JobQueryReadModelSpec
       val engine = InMemoryJobEngine.create()
       val task1 = ActionTask(ActionId.generate(), _success_action("first", "1"), ActionEngine.create(), None)
       val task2 = ActionTask(ActionId.generate(), _success_action("second", "2"), ActionEngine.create(), None)
-      val jobid = engine.submit(List(task1, task2), ExecutionContext.test())
+      val jobid = _jobid(engine.submit(List(task1, task2), ExecutionContext.test()))
       val _ = _await_result(engine, jobid)
 
       When("querying tasks/timeline with same pagination twice")
@@ -63,15 +64,15 @@ final class JobQueryReadModelSpec
     "expose persistent vs ephemeral origin explicitly" in {
       Given("one persistent job and one ephemeral job")
       val engine = InMemoryJobEngine.create()
-      val persistentId = engine.submit(
+      val persistentId = _jobid(engine.submit(
         List(ActionTask(ActionId.generate(), _success_action("persist", "ok"), ActionEngine.create(), None)),
         ExecutionContext.test()
-      )
-      val ephemeralId = engine.submit(
+      ))
+      val ephemeralId = _jobid(engine.submit(
         List(ActionTask(ActionId.generate(), _success_action("ephemeral", "ok"), ActionEngine.create(), None)),
         ExecutionContext.test(),
         JobSubmitOption(persistence = JobPersistencePolicy.Ephemeral)
-      )
+      ))
 
       val _ = _await_result(engine, persistentId)
       val _ = _await_result(engine, ephemeralId)
@@ -98,7 +99,7 @@ final class JobQueryReadModelSpec
         parameters = Map("p1" -> "v1"),
         executionNotes = Vector("note-1")
       )
-      val jobid = engine.submit(List(task), ExecutionContext.test(), option)
+      val jobid = _jobid(engine.submit(List(task), ExecutionContext.test(), option))
       val _ = _await_result(engine, jobid)
 
       When("querying read model")
@@ -114,6 +115,25 @@ final class JobQueryReadModelSpec
       read.debug.executionNotes should contain("note-1")
       read.traceTree.roots.nonEmpty shouldBe true
       read.submitter.principalId shouldBe "test-user-principal"
+    }
+
+    "expose scheduled start time for delayed job submission" in {
+      Given("a delayed async job submission")
+      val engine = InMemoryJobEngine.create()
+      val scheduledAt = Instant.now().plusMillis(120L)
+      val task = ActionTask(ActionId.generate(), _success_action("delayedRead", "done"), ActionEngine.create(), None)
+      val jobid = _jobid(engine.submit(
+        List(task),
+        ExecutionContext.test(),
+        JobSubmitOption(scheduledStartAt = Some(scheduledAt))
+      ))
+
+      When("querying the read model before completion")
+      val read = engine.query(jobid).get
+
+      Then("the scheduled start time is projected explicitly")
+      read.scheduledStartAt shouldBe Some(scheduledAt)
+      _await_result(engine, jobid)
     }
 
     "expose event-triggered lineage explicitly in the read model" in {
@@ -146,7 +166,7 @@ final class JobQueryReadModelSpec
       )
 
       When("querying the completed job")
-      val jobid = engine.submit(List(task), ExecutionContext.test(), option)
+      val jobid = _jobid(engine.submit(List(task), ExecutionContext.test(), option))
       val _ = _await_result(engine, jobid)
       val read = engine.query(jobid).get
 
@@ -181,7 +201,7 @@ final class JobQueryReadModelSpec
       )
 
       When("the job fails")
-      val jobid = engine.submit(List(task), ExecutionContext.test(), option)
+      val jobid = _jobid(engine.submit(List(task), ExecutionContext.test(), option))
       val _ = _await_result(engine, jobid)
       val read = engine.query(jobid).get
 
@@ -205,7 +225,7 @@ final class JobQueryReadModelSpec
       )
 
       When("the job fails")
-      val jobid = engine.submit(List(task), ExecutionContext.test(), option)
+      val jobid = _jobid(engine.submit(List(task), ExecutionContext.test(), option))
       val _ = _await_result(engine, jobid)
       val read = engine.query(jobid).get
 
@@ -218,7 +238,7 @@ final class JobQueryReadModelSpec
       Given("a completed job")
       val engine = InMemoryJobEngine.create()
       val task = ActionTask(ActionId.generate(), _success_action("visible", "ok"), ActionEngine.create(), None)
-      val jobid = engine.submit(List(task), ExecutionContext.test())
+      val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
       val _ = _await_result(engine, jobid)
 
       When("queryVisible is called as the submitting user")
@@ -252,6 +272,9 @@ final class JobQueryReadModelSpec
       allowed.toOption.flatten.map(_.jobId) shouldBe Some(jobid)
     }
   }
+
+  private def _jobid(p: Consequence[JobId]): JobId =
+    p.toOption.get
 
   private def _success_action(actionname: String, value: String): CommandAction =
     new CommandAction() {

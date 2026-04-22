@@ -224,6 +224,7 @@ final case class JobSubmitOption(
   persistence: JobPersistencePolicy = JobPersistencePolicy.Persistent,
   runMode: JobRunMode = JobRunMode.Async,
   priority: Int = 0,
+  scheduledStartAt: Option[Instant] = None,
   requestSummary: Option[String] = None,
   parameters: Map[String, String] = Map.empty,
   executionNotes: Vector[String] = Vector.empty
@@ -381,6 +382,7 @@ final case class JobQueryReadModel(
   submitter: JobSubmitter,
   createdAt: Instant,
   updatedAt: Instant,
+  scheduledStartAt: Option[Instant],
   tasks: JobTaskPage,
   timeline: JobTimelinePage,
   traceTree: JobTraceTree,
@@ -442,8 +444,8 @@ object JobQueryPolicy {
 }
 
 trait JobEngine {
-  def submit(tasks: List[JobTask], ctx: ExecutionContext): JobId
-  def submit(tasks: List[JobTask], ctx: ExecutionContext, option: JobSubmitOption): JobId
+  def submit(tasks: List[JobTask], ctx: ExecutionContext): Consequence[JobId]
+  def submit(tasks: List[JobTask], ctx: ExecutionContext, option: JobSubmitOption): Consequence[JobId]
   def getStatus(jobId: JobId): Option[JobStatus]
   def getResult(jobId: JobId): Option[JobResult]
   def control(
@@ -504,6 +506,7 @@ final class InMemoryJobEngine(
 
   _start_scheduler_workers_()
 
+  _rehydrate_delayed_starts_()
   _rehydrate_delayed_retries_()
 
   def withEventStore(store: EventStore): InMemoryJobEngine = {
@@ -518,14 +521,15 @@ final class InMemoryJobEngine(
       _scheduler.shutdownNow()
     }
 
-  def submit(tasks: List[JobTask], ctx: ExecutionContext): JobId =
+  def submit(tasks: List[JobTask], ctx: ExecutionContext): Consequence[JobId] =
     submit(tasks, ctx, _default_submit_option(tasks))
 
   def submit(
     tasks: List[JobTask],
     ctx: ExecutionContext,
     option: JobSubmitOption
-  ): JobId = {
+  ): Consequence[JobId] =
+    _validate_submit_option_(option).map { _ =>
     val jobid = JobId.generate()
     val now = Instant.now()
     val initialdebug = JobDebugInfo(
@@ -541,6 +545,7 @@ final class InMemoryJobEngine(
       result = None,
       persistence = option.persistence,
       priority = option.priority,
+      scheduledStartAt = option.scheduledStartAt.filter(_.isAfter(now)),
       createdAt = now,
       updatedAt = now,
       taskReadModels = Vector.empty,
@@ -567,8 +572,22 @@ final class InMemoryJobEngine(
     )
     option.runMode match {
       case JobRunMode.Async =>
-        _append_timeline_(jobid, "job.async.queued", None, None, None)
-        _enqueue_work_(SchedulerWorkItem.JobRun(_next_sequence_(), option.priority, jobid))
+        option.scheduledStartAt.filter(_.isAfter(now)) match {
+          case Some(scheduledAt) =>
+            _append_timeline_(jobid, "job.delayed.scheduled", None, None, Some(scheduledAt.toString))
+            _append_event_(
+              name = "job.delayed.scheduled",
+              payload = Map(
+                "job-id" -> jobid.value,
+                "status" -> JobStatus.Submitted.toString,
+                "scheduled-start-at" -> scheduledAt.toString
+              )
+            )
+            _schedule_delayed_start_(jobid, scheduledAt)
+          case None =>
+            _append_timeline_(jobid, "job.async.queued", None, None, None)
+            _enqueue_work_(SchedulerWorkItem.JobRun(_next_sequence_(), option.priority, jobid))
+        }
       case JobRunMode.Sync =>
         _run_job_sync_(jobid, tasks, ctx)
     }
@@ -602,6 +621,7 @@ final class InMemoryJobEngine(
         submitter = JobSubmitter.from(record.submittedContext),
         createdAt = record.createdAt,
         updatedAt = record.updatedAt,
+        scheduledStartAt = record.scheduledStartAt,
         tasks = tasks,
         timeline = timeline,
         traceTree = _trace_tree(record),
@@ -945,6 +965,7 @@ final class InMemoryJobEngine(
         status = JobStatus.Submitted,
         result = None,
         retry = _clear_runtime_retry_state(record.retry),
+        scheduledStartAt = None,
         updatedAt = now
       )
     )
@@ -1461,6 +1482,18 @@ final class InMemoryJobEngine(
       case _ => None
     }
 
+  private def _validate_submit_option_(option: JobSubmitOption): Consequence[Unit] =
+    option.scheduledStartAt match {
+      case Some(scheduledAt) if option.runMode == JobRunMode.Sync && scheduledAt.isAfter(Instant.now()) =>
+        Consequence.argumentInvalid("scheduledStartAt requires async runMode")
+      case Some(scheduledAt) if scheduledAt.isAfter(Instant.now().plus(InMemoryJobEngine.MaxNonRetryDelay)) =>
+        Consequence.argumentInvalid(
+          s"scheduledStartAt exceeds built-in max delay: ${InMemoryJobEngine.MaxNonRetryDelay.toMinutes} minutes"
+        )
+      case _ =>
+        Consequence.unit
+    }
+
   private def _request_parameters(tasks: List[JobTask]): Map[String, String] =
     tasks.headOption.collect {
       case m: ActionTask =>
@@ -1742,6 +1775,42 @@ final class InMemoryJobEngine(
       }
     }
 
+  private def _schedule_delayed_start_(
+    jobid: JobId,
+    dueAt: Instant
+  ): Unit = {
+    val delayMillis = math.max(0L, dueAt.toEpochMilli - Instant.now().toEpochMilli)
+    _scheduler.schedule(
+      new Runnable {
+        override def run(): Unit =
+          _run_scheduled_start_(jobid)
+      },
+      delayMillis,
+      TimeUnit.MILLISECONDS
+    )
+  }
+
+  private def _run_scheduled_start_(jobid: JobId): Unit =
+    _get_record(jobid).foreach { record =>
+      if (
+        record.status == JobStatus.Submitted &&
+        record.retry.kind == JobRetryKind.None &&
+        record.scheduledStartAt.exists(!_.isAfter(Instant.now()))
+      ) {
+        _append_timeline_(jobid, "job.delayed.enqueued", None, None, record.scheduledStartAt.map(_.toString))
+        _append_timeline_(jobid, "job.async.queued", None, None, Some("delayed-start"))
+        _append_event_(
+          name = "job.delayed.enqueued",
+          payload = Map(
+            "job-id" -> jobid.value,
+            "status" -> JobStatus.Submitted.toString,
+            "scheduled-start-at" -> record.scheduledStartAt.map(_.toString).getOrElse("")
+          )
+        )
+        _enqueue_work_(SchedulerWorkItem.JobRun(_next_sequence_(), record.priority, jobid))
+      }
+    }
+
   private def _rehydrate_delayed_retries_(): Unit = {
     val records = _durable_jobs.values().toArray(new Array[JobRecord](0)).toVector
     records.foreach { record =>
@@ -1754,9 +1823,29 @@ final class InMemoryJobEngine(
       }
     }
   }
+
+  private def _rehydrate_delayed_starts_(): Unit = {
+    val records = _durable_jobs.values().toArray(new Array[JobRecord](0)).toVector
+    records.foreach { record =>
+      if (
+        record.status == JobStatus.Submitted &&
+        record.retry.kind == JobRetryKind.None &&
+        record.scheduledStartAt.nonEmpty
+      ) {
+        val scheduledAt = record.scheduledStartAt.get
+        if (scheduledAt.isAfter(Instant.now()))
+          _schedule_delayed_start_(record.id, scheduledAt)
+        else
+          _run_scheduled_start_(record.id)
+      }
+    }
+  }
 }
 
 object InMemoryJobEngine {
+  val MaxNonRetryDelay: java.time.Duration =
+    java.time.Duration.ofMinutes(15)
+
   final case class SchedulerConfig(
     workerCount: Int = 1
   )
@@ -1837,6 +1926,7 @@ final case class JobRecord(
   result: Option[JobResult],
   persistence: JobPersistencePolicy,
   priority: Int,
+  scheduledStartAt: Option[Instant] = None,
   createdAt: Instant,
   updatedAt: Instant,
   taskReadModels: Vector[JobTaskReadModel],
