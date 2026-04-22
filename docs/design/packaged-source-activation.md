@@ -44,6 +44,16 @@ The following are development-time activation paths:
   - are searchable
   - are not auto-activated by default
 
+The standard component repository is also a packaged search source.
+
+- default local cache root: `~/.cncf/repository`
+- standard component layout:
+  - `org/simplemodeling/car/<name>/<version>/<name>-<version>.car`
+- standard subsystem layout:
+  - `org/simplemodeling/sar/<name>/<version>/<name>-<version>.sar`
+- subsystem descriptors may declare components by `name + version`
+  and rely on this standard repository without extra runtime configuration
+
 ### Packaged activation
 
 `component.d` is the local active packaged directory.

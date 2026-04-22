@@ -11,13 +11,11 @@ import org.goldenport.cncf.path.AliasResolver
 
 /*
  * @since   Mar. 26, 2026
- * @version Mar. 26, 2026
+ * @version Apr. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 object TextusIdentitySubsystemFactory {
   private val _descriptor_path = TextusIdentitySubsystemDescriptor.DefaultPath
-  private val _identity_repo_root = Paths.get("/Users/asami/src/dev2026/textus-identity")
-  private val _user_account_repo_root = Paths.get("/Users/asami/src/dev2026/textus-user-account")
 
   private lazy val _descriptor: TextusIdentitySubsystemDescriptor =
     TextusIdentitySubsystemDescriptor.load(_descriptor_path).toOption
@@ -57,7 +55,7 @@ object TextusIdentitySubsystemFactory {
     val subsystem =
       Subsystem(
         name = descriptor.subsystemName,
-        version = descriptor.componentVersion,
+        version = descriptor.componentVersionOption,
         scopeContext = Some(
           context.kind match {
             case ScopeKind.Runtime =>
@@ -105,7 +103,7 @@ object TextusIdentitySubsystemFactory {
     value: String
   ): Option[Vector[ComponentRepository.Specification]] = {
     val normalized = _normalize_repository_spec_value(value)
-    ComponentRepository.parseSpecs(normalized, _identity_repo_root).toOption
+    ComponentRepository.parseSpecs(normalized, Paths.get("").toAbsolutePath.normalize).toOption
   }
 
   private def _normalize_repository_spec_value(
@@ -122,7 +120,7 @@ object TextusIdentitySubsystemFactory {
       .mkString(",")
 
   private def _default_repository_spec: ComponentRepository.Specification =
-    ComponentRepository.ScalaCliRepository.Specification(_user_account_repo_root)
+    ComponentRepository.ComponentDirRepository.Specification(ComponentRepository.defaultStandardRepositoryDir())
 
   private def _matches_descriptor_component(
     component: Component,

@@ -15,8 +15,8 @@ final class TextusIdentitySubsystemDescriptorSpec extends AnyWordSpec with Match
 
       descriptor.subsystemName shouldBe "textus-identity"
       descriptor.componentName shouldBe "textus-user-account"
-      descriptor.coordinate shouldBe "org.simplemodeling.car:textus-user-account:0.1.0"
-      descriptor.componentVersion shouldBe Some("0.1.0")
+      descriptor.componentVersion shouldBe "0.1.0"
+      descriptor.componentVersionOption shouldBe Some("0.1.0")
     }
   }
 }

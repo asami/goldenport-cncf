@@ -16,7 +16,7 @@ import org.goldenport.cncf.subsystem.Subsystem
  * @since   Jan. 30, 2026
  *  version Feb.  5, 2026
  *  version Mar. 26, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositorySpace(
@@ -250,9 +250,9 @@ object ComponentRepositorySpace {
         }
         _default_repository_dir(cwd) match {
           case Some(dir) =>
-            Right(_append_spec_if_missing(merged, ComponentRepository.ComponentDirRepository.Specification(dir)))
+            _append_default_standard_repository(merged, Some(dir))
           case None =>
-            Right(merged)
+            _append_default_standard_repository(merged, None)
         }
     }
 
@@ -278,6 +278,11 @@ object ComponentRepositorySpace {
 
   private def _default_repository_dir(cwd: Path): Option[Path] = {
     val dir = cwd.resolve("repository.d").normalize
+    if (Files.isDirectory(dir)) Some(dir) else None
+  }
+
+  private def _default_standard_repository_dir(): Option[Path] = {
+    val dir = ComponentRepository.defaultStandardRepositoryDir()
     if (Files.isDirectory(dir)) Some(dir) else None
   }
 
@@ -311,6 +316,25 @@ object ComponentRepositorySpace {
       case _ =>
         if (specs.contains(spec)) specs else specs :+ spec
     }
+
+  private def _append_default_standard_repository(
+    specs: Vector[ComponentRepository.Specification],
+    existingSearchDir: Option[Path]
+  ): Either[String, Vector[ComponentRepository.Specification]] = {
+    val withSearch =
+      existingSearchDir match {
+        case Some(dir) =>
+          _append_spec_if_missing(specs, ComponentRepository.ComponentDirRepository.Specification(dir))
+        case None =>
+          specs
+      }
+    _default_standard_repository_dir() match {
+      case Some(dir) =>
+        Right(_append_spec_if_missing(withSearch, ComponentRepository.ComponentDirRepository.Specification(dir)))
+      case None =>
+        Right(withSearch)
+    }
+  }
 
   def component_extra_function(
     specs: Seq[ComponentRepository.Specification]

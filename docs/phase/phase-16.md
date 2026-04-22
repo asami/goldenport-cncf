@@ -25,6 +25,7 @@ This document is a progress dashboard, not a design journal.
   - `textus-user-account` = separate `CAR`
   - local development uses `subsystem/component.d/*.car`
   - production resolves by standard repository using `name + version`
+    from the default local cache root `~/.cncf/repository`
 
 Current semantic direction:
 

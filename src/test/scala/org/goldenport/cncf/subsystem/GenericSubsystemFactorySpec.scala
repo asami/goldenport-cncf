@@ -53,8 +53,8 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           """subsystem: mcprag
             |version: 0.1.0-SNAPSHOT
             |components:
-            |  - component: textus-mcp-rag
-            |    coordinate: org.textus:textus-mcp-rag:0.1.0-SNAPSHOT
+            |  - name: textus-mcp-rag
+            |    version: 0.1.0-SNAPSHOT
             |    extension_bindings:
             |      knowledge_source_adapters:
             |        - key: view
@@ -104,8 +104,8 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           """subsystem: mcprag
             |version: 0.1.0-SNAPSHOT
             |components:
-            |  - component: textus-mcp-rag
-            |    coordinate: org.textus:textus-mcp-rag:0.1.0-SNAPSHOT
+            |  - name: textus-mcp-rag
+            |    version: 0.1.0-SNAPSHOT
             |""".stripMargin,
           StandardCharsets.UTF_8
         )
@@ -171,8 +171,8 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
           """subsystem: textus-identity
             |version: 0.1.0-SNAPSHOT
             |components:
-            |  - component: textus-user-account
-            |    coordinate: org.simplemodeling.car:textus-user-account:0.1.0-SNAPSHOT
+            |  - name: textus-user-account
+            |    version: 0.1.0-SNAPSHOT
             |""".stripMargin,
           StandardCharsets.UTF_8
         )
@@ -208,6 +208,51 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
         subsystem.descriptor.map(_.subsystemName) shouldBe Some("textus-identity")
         subsystem.components.map(_.name) should contain ("spec")
         subsystem.components.flatMap(_.artifactMetadata).flatMap(_.component) should contain ("textus-user-account")
+      }
+    }
+
+    "resolve descriptor components from the default standard repository using name and version without repository config" in {
+      _with_temp_dir { homedir =>
+        val cachedir = homedir.resolve(".cncf").resolve("repository").resolve("org").resolve("simplemodeling").resolve("car").resolve("textus-user-account").resolve("0.1.0-SNAPSHOT")
+        Files.createDirectories(cachedir)
+        val fakecomponentjar = _create_fake_component_jar(homedir.resolve("assets").resolve("component-main.jar"))
+        val componentDescriptor = homedir.resolve("component-descriptor.json")
+        Files.writeString(
+          componentDescriptor,
+          """{"name":"textus-user-account","version":"0.1.0-SNAPSHOT","componentName":"textus-user-account"}"""
+        )
+        _create_car(
+          cachedir.resolve("textus-user-account-0.1.0-SNAPSHOT.car"),
+          Seq(
+            "component/main.jar" -> fakecomponentjar,
+            "component-descriptor.json" -> componentDescriptor
+          )
+        )
+
+        val descriptorPath = Files.createTempFile("generic-subsystem-factory-default-standard", ".yaml")
+        Files.writeString(
+          descriptorPath,
+          """subsystem: textus-identity
+            |version: 0.1.0-SNAPSHOT
+            |components:
+            |  - name: textus-user-account
+            |    version: 0.1.0-SNAPSHOT
+            |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+
+        val descriptor = GenericSubsystemDescriptor.load(descriptorPath).toOption.get
+        val originalhome = System.getProperty("user.home")
+        try {
+          System.setProperty("user.home", homedir.toString)
+          val subsystem = GenericSubsystemFactory.default(descriptor)
+
+          subsystem.name shouldBe "textus-identity"
+          subsystem.components.flatMap(_.artifactMetadata).flatMap(_.component) should contain ("textus-user-account")
+        } finally {
+          if (originalhome == null) System.clearProperty("user.home")
+          else System.setProperty("user.home", originalhome)
+        }
       }
     }
 

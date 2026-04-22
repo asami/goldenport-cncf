@@ -14,7 +14,7 @@ import org.scalatest.BeforeAndAfterAll
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.component.{ComponentCreate, ComponentOrigin}
+import org.goldenport.cncf.component.{ComponentCreate, ComponentDescriptor, ComponentOrigin}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.configuration.{Configuration, ResolvedConfiguration}
 import org.goldenport.configuration.ConfigurationTrace
@@ -194,6 +194,44 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         metadata.effectiveConfig.get("feature") shouldBe Some("sar")
         metadata.effectiveConfig.get("log.level") shouldBe Some("info")
         metadata.effectiveConfig.get("endpoint") shouldBe Some("https://example.invalid")
+      }
+    }
+
+    "discover a requested component from the default standard repository layout" in {
+      val subsystem = new Subsystem(
+        name = "test-standard-repo",
+        configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      )
+      val origin = ComponentOrigin.Repository("component-dir")
+      _with_temp_dir { repositoryroot =>
+        val artifactdir = repositoryroot.resolve("org").resolve("simplemodeling").resolve("car").resolve("textus-user-account").resolve("0.1.0-SNAPSHOT")
+        Files.createDirectories(artifactdir)
+        val fakecomponentjar = _create_fake_component_jar(repositoryroot.resolve("assets").resolve("component-main-standard.jar"))
+        val manifest = repositoryroot.resolve("manifest-standard.json")
+        Files.writeString(
+          manifest,
+          """{"name":"textus-user-account","version":"0.1.0-SNAPSHOT","component":"textus-user-account"}"""
+        )
+        _create_car(
+          artifactdir.resolve("textus-user-account-0.1.0-SNAPSHOT.car"),
+          Seq(
+            "component/main.jar" -> fakecomponentjar,
+            "meta/manifest.json" -> manifest
+          )
+        )
+        val repository = new ComponentRepository.ComponentDirRepository(
+          repositoryroot,
+          ComponentCreate(
+            subsystem,
+            origin,
+            Vector(ComponentDescriptor(name = Some("textus-user-account"), version = Some("0.1.0-SNAPSHOT"), componentName = Some("textus-user-account")))
+          ),
+          ComponentRepository.resolvePackagePrefixes()
+        )
+        val components = repository.discover()
+
+        components.map(_.name) should contain ("spec")
+        components.flatMap(_.artifactMetadata).flatMap(_.component) should contain ("textus-user-account")
       }
     }
 

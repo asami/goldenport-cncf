@@ -15,7 +15,7 @@ import org.goldenport.cncf.security.OperationAuthorizationRule
 /*
  * @since   Apr.  7, 2026
  *  version Apr. 11, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -57,20 +57,23 @@ final case class GenericSubsystemPortBinding(
 
 final case class GenericSubsystemComponentBinding(
   componentName: String,
+  version: Option[String] = None,
   coordinate: Option[String] = None,
   extensionBindings: Record = Record.empty,
   api: Vector[GenericSubsystemPortBinding] = Vector.empty,
   spi: Vector[GenericSubsystemPortBinding] = Vector.empty
 ) {
   def componentVersion: Option[String] =
-    coordinate.flatMap(GenericSubsystemDescriptor.coordinateParts(_).lift(2))
+    version.orElse(coordinate.flatMap(GenericSubsystemDescriptor.coordinateVersion))
 
   def runtimeComponentName: String =
     GenericSubsystemDescriptor.runtimeComponentName(componentName)
 
   def toComponentDescriptor: ComponentDescriptor =
     ComponentDescriptor(
-      componentName = Some(runtimeComponentName),
+      name = Some(componentName),
+      version = componentVersion,
+      componentName = Some(componentName),
       extensionBindings = extensionBindings
     )
 
@@ -271,6 +274,20 @@ object GenericSubsystemDescriptor {
   def coordinateParts(coordinate: String): Vector[String] =
     coordinate.split(":").toVector.map(_.trim).filter(_.nonEmpty)
 
+  def coordinateArtifact(coordinate: String): Option[String] =
+    coordinateParts(coordinate) match {
+      case Vector(_, artifact, _) => Some(artifact)
+      case Vector(artifact, _) => Some(artifact)
+      case _ => None
+    }
+
+  def coordinateVersion(coordinate: String): Option[String] =
+    coordinateParts(coordinate) match {
+      case Vector(_, _, version) => Some(version)
+      case Vector(_, version) => Some(version)
+      case _ => None
+    }
+
   def runtimeComponentName(componentName: String): String = {
     val normalized = componentName.trim
     val stripped =
@@ -416,14 +433,17 @@ object GenericSubsystemDescriptor {
   private def _binding_from_record(path: Path, rec: Record, defaultName: Option[String]): Option[GenericSubsystemComponentBinding] = {
     val componentName = _string(rec, "component", "componentName", "name").orElse(defaultName)
     componentName.map { name =>
+      val version = _string(rec, "version")
       val coordinate = _string(rec, "coordinate")
       coordinate.foreach { c =>
-        val parts = coordinateParts(c)
-        require(parts.size == 3, s"invalid component coordinate: $c")
-        require(parts(1) == name, s"component coordinate artifact must match component name: component=$name coordinate=$c")
+        val artifact = coordinateArtifact(c).getOrElse(throw new IllegalArgumentException(s"invalid component coordinate: $c"))
+        val cversion = coordinateVersion(c).getOrElse(throw new IllegalArgumentException(s"invalid component coordinate: $c"))
+        require(artifact == name, s"component coordinate artifact must match component name: component=$name coordinate=$c")
+        version.foreach(v => require(v == cversion, s"component version must match coordinate version: component=$name version=$v coordinate=$c"))
       }
       GenericSubsystemComponentBinding(
         componentName = name,
+        version = version,
         coordinate = coordinate,
         extensionBindings = _record_value(rec, List("extension_bindings", "extensionBindings", "extension_binding")).getOrElse(Record.empty),
         api = _ports_from_record(rec, "api"),
@@ -736,15 +756,18 @@ object GenericSubsystemDescriptor {
       val componentName = _string(rec, "component", "componentName", "name")
       componentName match {
         case Some(name) =>
+          val version = _string(rec, "version")
           val coordinate = _string(rec, "coordinate")
           coordinate.foreach { c =>
-            val parts = coordinateParts(c)
-            require(parts.size == 3, s"invalid component coordinate: $c")
-            require(parts(1) == name, s"component coordinate artifact must match component name: component=$name coordinate=$c")
+            val artifact = coordinateArtifact(c).getOrElse(throw new IllegalArgumentException(s"invalid component coordinate: $c"))
+            val cversion = coordinateVersion(c).getOrElse(throw new IllegalArgumentException(s"invalid component coordinate: $c"))
+            require(artifact == name, s"component coordinate artifact must match component name: component=$name coordinate=$c")
+            version.foreach(v => require(v == cversion, s"component version must match coordinate version: component=$name version=$v coordinate=$c"))
           }
           Consequence.success(
             GenericSubsystemComponentBinding(
               componentName = name,
+              version = version,
               coordinate = coordinate,
               extensionBindings = _record_value(rec, List("extension_bindings", "extensionBindings", "extension_binding")).getOrElse(Record.empty)
             )

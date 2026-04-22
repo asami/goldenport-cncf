@@ -12,7 +12,7 @@ import org.goldenport.cncf.path.AliasResolver
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 11, 2026
+ * @version Apr. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -203,9 +203,9 @@ object GenericSubsystemFactory {
     values match {
       case Some(value) =>
         _parse_repository_specs(value)
-          .getOrElse(Vector.empty)
+          .getOrElse(Vector(_default_repository_spec))
       case None =>
-        Vector.empty
+        Vector(_default_repository_spec)
     }
   }
 
@@ -213,6 +213,9 @@ object GenericSubsystemFactory {
     value: String
   ): Option[Vector[ComponentRepository.Specification]] =
     ComponentRepository.parseSpecs(_normalize_repository_spec_value(value), Paths.get("").toAbsolutePath.normalize).toOption
+
+  private def _default_repository_spec: ComponentRepository.Specification =
+    ComponentRepository.ComponentDirRepository.Specification(ComponentRepository.defaultStandardRepositoryDir())
 
   private def _with_assembly_descriptor_override(
     descriptor: GenericSubsystemDescriptor,

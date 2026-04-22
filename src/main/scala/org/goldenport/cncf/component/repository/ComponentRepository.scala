@@ -26,7 +26,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Jan. 29, 2026
  *  version Feb.  5, 2026
  *  version Mar. 22, 2026
- * @version Apr. 11, 2026
+ * @version Apr. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -38,6 +38,8 @@ object ComponentRepository extends GlobalObservable {
   private val _component_dir_type = "component-dir"
   private val _scala_cli_default_dir = ".scala-build"
   private val _component_dir_default_dir = "component.dir"
+  private val _standard_repository_group_path = Paths.get("org", "simplemodeling", "car")
+  private val _standard_subsystem_group_path = Paths.get("org", "simplemodeling", "sar")
 
   sealed abstract class Specification {
     def build(params: ComponentCreate): ComponentRepository
@@ -84,6 +86,9 @@ object ComponentRepository extends GlobalObservable {
         Vector.empty
     }
   }
+
+  def defaultStandardRepositoryDir(): Path =
+    Paths.get(sys.props.getOrElse("user.home", "."), ".cncf", "repository").normalize
 
   private def _parse_spec(
     spec: String,
@@ -196,8 +201,12 @@ object ComponentRepository extends GlobalObservable {
       } else {
         val log = PersistentBootstrapLog.forClass(classOf[ComponentDirRepository], ObservabilityScopeDefaults.Bootstrap)
         val origin = ComponentOrigin.Repository("component-dir")
-        // TEMPORARY: Simple JAR class scanning. TODO: Add META-INF/component.yaml-based discovery.
-        val components = _discover_from_artifacts(basedir = baseDir, params = params, origin = origin, log = log)
+        val artifacts = _requested_component_artifacts(baseDir, params)
+        val components =
+          if (artifacts.nonEmpty)
+            artifacts.flatMap(_discover_artifact(_, params, origin, log))
+          else
+            _discover_from_artifacts(basedir = baseDir, params = params, origin = origin, log = log)
         if (components.nonEmpty) {
           components
         } else {
@@ -258,6 +267,7 @@ object ComponentRepository extends GlobalObservable {
         case _ =>
           None
       }.find(_matches_subsystem_descriptor(_, subsystemName))
+        .orElse(_resolve_standard_subsystem_descriptor(baseDir, subsystemName))
     }
   }
 
@@ -276,6 +286,7 @@ object ComponentRepository extends GlobalObservable {
         case _ =>
           None
       }.find(_matches_component_descriptor(_, componentName))
+        .orElse(_resolve_standard_component_descriptor(baseDir, componentName))
     }
   }
 
@@ -391,6 +402,133 @@ object ComponentRepository extends GlobalObservable {
       }
     }
   }
+
+  private def _requested_component_artifacts(
+    basedir: Path,
+    params: ComponentCreate
+  ): Vector[Artifact] = {
+    val requests =
+      params.componentDescriptors.flatMap { d =>
+        d.componentName.orElse(d.name).map(n => (n, d.version))
+      }.distinct
+    requests.flatMap { case (name, version) =>
+      _resolve_requested_component_artifact(basedir, name, version)
+    }.distinct
+  }
+
+  private def _resolve_requested_component_artifact(
+    basedir: Path,
+    componentName: String,
+    version: Option[String]
+  ): Vector[Artifact] = {
+    val flat = _list_matching_artifacts(basedir, componentName, version)
+    if (flat.nonEmpty)
+      flat
+    else
+      _resolve_standard_component_artifact(basedir, componentName, version).toVector
+  }
+
+  private def _list_matching_artifacts(
+    basedir: Path,
+    componentName: String,
+    version: Option[String]
+  ): Vector[Artifact] = {
+    val prefix = version.map(v => s"${componentName}-${v}").getOrElse(componentName)
+    _list_artifacts(basedir).filter { artifact =>
+      val filename = artifact.path.getFileName.toString
+      artifact.kind match {
+        case ArtifactKind.Car | ArtifactKind.CarDir =>
+          filename == s"${componentName}.car" ||
+          filename == s"${componentName}.zip" ||
+          filename.startsWith(prefix)
+        case _ =>
+          false
+      }
+    }
+  }
+
+  private def _resolve_standard_component_descriptor(
+    basedir: Path,
+    componentName: String
+  ): Option[ComponentDescriptor] =
+    _resolve_standard_component_artifact(basedir, componentName, None).iterator.flatMap {
+      case Artifact(path, ArtifactKind.Car) =>
+        ComponentDescriptorLoader.loadArchive(path).toOption
+      case Artifact(path, ArtifactKind.CarDir) =>
+        ComponentDescriptorLoader.load(path).toOption.flatMap(_.headOption)
+      case _ =>
+        None
+    }.toSeq.headOption
+
+  private def _resolve_standard_component_artifact(
+    basedir: Path,
+    componentName: String,
+    version: Option[String]
+  ): Option[Artifact] = {
+    val componentRoot = basedir.resolve(_standard_repository_group_path).resolve(componentName)
+    if (!Files.isDirectory(componentRoot)) {
+      None
+    } else {
+      val versions =
+        version.map(v => Vector(v)).getOrElse(_version_dirs_desc(componentRoot))
+      versions.iterator.flatMap { v =>
+        val artifact = componentRoot.resolve(v).resolve(s"${componentName}-${v}.car")
+        if (Files.isRegularFile(artifact)) Some(Artifact(artifact, ArtifactKind.Car)) else None
+      }.toSeq.headOption
+    }
+  }
+
+  private def _resolve_standard_subsystem_descriptor(
+    basedir: Path,
+    subsystemName: String
+  ): Option[GenericSubsystemDescriptor] =
+    _resolve_standard_subsystem_artifact(basedir, subsystemName).flatMap {
+      case Artifact(path, ArtifactKind.Sar) => GenericSubsystemDescriptor.load(path).toOption
+      case Artifact(path, ArtifactKind.SarDir) => GenericSubsystemDescriptor.load(path).toOption
+      case _ => None
+    }
+
+  private def _resolve_standard_subsystem_artifact(
+    basedir: Path,
+    subsystemName: String
+  ): Option[Artifact] = {
+    val subsystemRoot = basedir.resolve(_standard_subsystem_group_path).resolve(subsystemName)
+    if (!Files.isDirectory(subsystemRoot)) {
+      None
+    } else {
+      _version_dirs_desc(subsystemRoot).iterator.flatMap { v =>
+        val artifact = subsystemRoot.resolve(v).resolve(s"${subsystemName}-${v}.sar")
+        if (Files.isRegularFile(artifact)) Some(Artifact(artifact, ArtifactKind.Sar)) else None
+      }.toSeq.headOption
+    }
+  }
+
+  private def _version_dirs_desc(root: Path): Vector[String] = {
+    val stream = Files.list(root)
+    try {
+      stream.iterator.asScala
+        .filter(Files.isDirectory(_))
+        .map(_.getFileName.toString)
+        .toVector
+        .sorted(Ordering[String].reverse)
+    } finally {
+      stream.close()
+    }
+  }
+
+  private def _discover_artifact(
+    artifact: Artifact,
+    params: ComponentCreate,
+    origin: ComponentOrigin,
+    log: BootstrapLog
+  ): Seq[Component] =
+    artifact.kind match {
+      case ArtifactKind.Jar => _discover_component_from_jar(artifact.path, params, origin, log)
+      case ArtifactKind.Car => _discover_component_from_car(artifact.path, params, origin, log)
+      case ArtifactKind.CarDir => _discover_component_from_car_dir(artifact.path, params, origin, log)
+      case ArtifactKind.Sar => _discover_component_from_sar(artifact.path, params, origin, log)
+      case ArtifactKind.SarDir => _discover_component_from_sar_dir(artifact.path, params, origin, log)
+    }
 
   private enum ArtifactKind {
     case Jar

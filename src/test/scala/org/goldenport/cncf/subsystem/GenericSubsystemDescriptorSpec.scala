@@ -13,15 +13,15 @@ import org.scalatest.wordspec.AnyWordSpec
  */
 final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
   "GenericSubsystemDescriptor" should {
-    "load component extension bindings from the formal YAML schema" in {
+    "load component extension bindings from the formal YAML schema using name and version" in {
       val path = Files.createTempFile("generic-subsystem-descriptor", ".yaml")
       Files.writeString(
         path,
         """subsystem: mcprag
           |version: 0.1.0-SNAPSHOT
           |components:
-          |  - component: textus-mcp-rag
-          |    coordinate: org.textus:textus-mcp-rag:0.1.0-SNAPSHOT
+          |  - name: textus-mcp-rag
+          |    version: 0.1.0-SNAPSHOT
           |    extension_bindings:
           |      knowledge_source_adapters:
           |        - key: view
@@ -41,6 +41,8 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.subsystemName shouldBe "mcprag"
       descriptor.componentVersion shouldBe Some("0.1.0-SNAPSHOT")
       descriptor.runtimeComponentNames shouldBe Vector("McpRag")
+      componentDescriptor.name shouldBe Some("textus-mcp-rag")
+      componentDescriptor.version shouldBe Some("0.1.0-SNAPSHOT")
       keys shouldBe Vector("view")
     }
 
@@ -51,8 +53,8 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         """subsystem: textus-identity
           |version: 0.1.0-SNAPSHOT
           |components:
-          |  - component: textus-user-account
-          |    coordinate: org.textus:textus-user-account:0.1.0-SNAPSHOT
+          |  - name: textus-user-account
+          |    version: 0.1.0-SNAPSHOT
           |security:
           |  authentication:
           |    convention: enabled
@@ -93,8 +95,8 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
         """subsystem: textus-sample
           |version: 0.1.0-SNAPSHOT
           |components:
-          |  - component: notice-board
-          |    coordinate: org.textus:notice-board:0.1.0-SNAPSHOT
+          |  - name: notice-board
+          |    version: 0.1.0-SNAPSHOT
           |operationAuthorization:
           |  notice-board.notice.post-notice:
           |    allowAnonymous: true
@@ -114,6 +116,25 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
       post.allowAnonymous shouldBe true
       post.anonymousOperationModes.map(_.name) shouldBe Vector("develop", "test")
       admin.operationModes.map(_.name) shouldBe Vector("production")
+    }
+
+    "keep legacy coordinate parsing for backward compatibility" in {
+      val path = Files.createTempFile("generic-subsystem-coordinate-descriptor", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: textus-sample
+          |version: 0.1.0-SNAPSHOT
+          |components:
+          |  - component: notice-board
+          |    coordinate: org.textus:notice-board:0.1.0-SNAPSHOT
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = GenericSubsystemDescriptor.load(path).toOption.get
+
+      descriptor.componentBindings.head.componentName shouldBe "notice-board"
+      descriptor.componentBindings.head.componentVersion shouldBe Some("0.1.0-SNAPSHOT")
     }
 
 
