@@ -15,9 +15,9 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Active phase: not fixed (`phase-15.md` is closed)
-- Active checklist: none
-- Active theme: not fixed
+- Active phase: `phase-16.md`
+- Active checklist: `phase-16-checklist.md`
+- Active theme: authentication baseline with `Cwitter`
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`
