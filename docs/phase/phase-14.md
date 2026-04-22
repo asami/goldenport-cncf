@@ -46,8 +46,8 @@ Current semantic direction:
 - B (DONE): WF-02 — Add workflow inspection/projection surfaces.
 - C (DONE): JCL-01 — Define and add `JCL` job/batch submission baseline.
 - D (DONE): JCL-02 — Connect `JCL` to workflow entrypoints.
-- E (ACTIVE): OPS-01 — Add retry/dead-letter operational hardening after workflow/JCL baseline.
-- F (SUSPENDED): OPS-02 — Add saga identity / ABAC follow-up only if still in scope after A-E.
+- E (DONE): OPS-01 — Add retry/dead-letter operational hardening after workflow/JCL baseline.
+- F (ACTIVE): OPS-02 — Add saga identity / ABAC follow-up only if still in scope after A-E.
 
 Current note:
 - Phase 13 is closed and remains frozen.
@@ -67,6 +67,12 @@ Current note:
   - JCL starts workflow through a synthetic start event
   - workflow progression remains authoritative in `WorkflowEngine`
   - resulting jobs remain authoritative in `job_control`
+- `OPS-01` retry/dead-letter hardening is implemented and validated:
+  - retry classification uses `Conclusion.disposition.userAction`
+  - `RetryNow` uses immediate automatic retry
+  - `RetryLater` uses delayed automatic retry with built-in `1 / 5 / 15 minutes`
+  - delayed retry state is stored in existing job authority and rehydrated by the scheduler
+  - dead-letter / poison visibility remains authoritative in `job_control` and `event`
 
 ## 5. Development Items
 
@@ -74,7 +80,7 @@ Current note:
 - [x] WF-02: Add workflow inspection/projection surfaces.
 - [x] JCL-01: Define and add `JCL` job/batch submission baseline.
 - [x] JCL-02: Connect `JCL` to workflow entrypoints.
-- [ ] OPS-01: Add retry/dead-letter operational hardening after workflow/JCL baseline.
+- [x] OPS-01: Add retry/dead-letter operational hardening after workflow/JCL baseline.
 - [ ] OPS-02: Add saga identity / ABAC follow-up only if still in scope after A-E.
 
 ## 6. Next Phase Candidates

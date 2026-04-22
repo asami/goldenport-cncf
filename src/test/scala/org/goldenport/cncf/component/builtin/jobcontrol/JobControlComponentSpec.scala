@@ -1,9 +1,11 @@
 package org.goldenport.cncf.component.builtin.jobcontrol
 
 import org.goldenport.Consequence
+import org.goldenport.Conclusion
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.job.{ActionId, ActionTask, JobPersistencePolicy, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded}
+import org.goldenport.cncf.job.{ActionId, ActionTask, JobPersistencePolicy, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded, TaskFailed}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.provisional.conclusion.Disposition
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -66,6 +68,39 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers {
           fail(conclusion.show)
       }
     }
+
+    "expose retry and recovery visibility on job inspection surfaces" in {
+      val subsystem = DefaultSubsystemFactory.default(mode = Some("command"))
+      val admin = subsystem.components.find(_.name == "admin").get
+      val jobControl = subsystem.components.find(_.name == "job_control").get
+      val service = jobControl.port.get[JobControlComponent.JobService].get
+      val task = _FailureTask(
+        ActionId.generate(),
+        Conclusion.simple("retry-now").copy(disposition = Disposition(Disposition.UserAction.RetryNow))
+      )
+      val jobId = admin.logic.submitJob(
+        List(task),
+        ExecutionContext.create(),
+        JobSubmitOption(
+          persistence = JobPersistencePolicy.Persistent,
+          requestSummary = Some("ops-01-retry-visibility")
+        )
+      )
+      given ExecutionContext = ExecutionContext.test()
+
+      _await_status(service, jobId)
+
+      service.getJobStatus(jobId) match {
+        case Consequence.Success(model) =>
+          model.retry.kind.print shouldBe "now"
+          model.retry.attemptCount shouldBe 3
+          model.retry.exhausted shouldBe true
+          model.retry.deadLetter shouldBe true
+          model.retry.recoveryRequired shouldBe true
+        case Consequence.Failure(conclusion) =>
+          fail(conclusion.show)
+      }
+    }
   }
 
   private final case class _ImmediateTask(
@@ -75,5 +110,33 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers {
       val _ = ctx
       TaskSucceeded(OperationResponse.Scalar("ok"))
     }
+  }
+
+  private final case class _FailureTask(
+    actionId: ActionId,
+    conclusion: Conclusion
+  ) extends JobTask {
+    def run(ctx: ExecutionContext): TaskOutcome = {
+      val _ = ctx
+      TaskFailed(conclusion)
+    }
+  }
+
+  private def _await_status(
+    service: JobControlComponent.JobService,
+    jobId: org.goldenport.cncf.job.JobId,
+    timeoutMillis: Long = 3000L
+  )(using ExecutionContext): Unit = {
+    val deadline = System.currentTimeMillis() + timeoutMillis
+    var done = false
+    while (!done && System.currentTimeMillis() < deadline) {
+      service.getJobStatus(jobId) match {
+        case Consequence.Success(model) if Set("Succeeded", "Failed", "Cancelled").contains(model.status.toString) =>
+          done = true
+        case _ =>
+          Thread.sleep(10L)
+      }
+    }
+    done shouldBe true
   }
 }

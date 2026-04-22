@@ -1308,6 +1308,14 @@ object AdminComponent {
         "saga-relation",
         "failure-policy",
         "failure-disposition",
+        "retry-kind",
+        "retry-attempt-count",
+        "retry-max-attempts",
+        "retry-next-due-at",
+        "retry-exhausted",
+        "recovery-required",
+        "dead-letter",
+        "poison",
         "source-subsystem",
         "source-component",
         "target-subsystem",
@@ -1319,11 +1327,11 @@ object AdminComponent {
       ),
       "event-surface" -> Record.data(
         "selector" -> "event.event.load_event",
-        "summary" -> "Authoritative detail for queued dispatch contract and persisted event metadata."
+        "summary" -> "Authoritative detail for queued dispatch contract and persisted event metadata, including dead-letter and poison outcomes."
       ),
       "job-surface" -> Record.data(
         "selector" -> "job_control.job.get_job_status",
-        "summary" -> "Authoritative detail for final child-job lineage and async failure disposition."
+        "summary" -> "Authoritative detail for final child-job lineage, async failure disposition, and retry recovery state."
       )
     )
 

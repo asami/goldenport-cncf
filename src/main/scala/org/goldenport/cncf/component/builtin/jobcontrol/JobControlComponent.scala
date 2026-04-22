@@ -871,6 +871,15 @@ object JobControlComponent {
       "saga-relation" -> model.lineage.sagaRelation.getOrElse(""),
       "failure-policy" -> model.lineage.failurePolicy.getOrElse(""),
       "failure-disposition" -> model.lineage.failureDisposition.print,
+      "retry-kind" -> model.retry.kind.print,
+      "retry-attempt-count" -> model.retry.attemptCount,
+      "retry-max-attempts" -> model.retry.maxAttempts,
+      "retry-next-due-at" -> model.retry.nextRetryDueAt.map(_.toString).getOrElse(""),
+      "retry-exhausted" -> model.retry.exhausted,
+      "recovery-required" -> model.retry.recoveryRequired,
+      "dead-letter" -> model.retry.deadLetter,
+      "poison" -> model.retry.poison,
+      "retry-user-action" -> model.retry.lastFailureUserAction.getOrElse(""),
       "task-count" -> model.tasks.totalCount,
       "tasks" -> model.tasks.tasks.map { task =>
         Record.data(

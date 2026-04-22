@@ -1,12 +1,13 @@
 package org.goldenport.cncf.job
 
 import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.{ConcurrentHashMap, Executors, ScheduledExecutorService, TimeUnit}
 import scala.concurrent.{ExecutionContext as ScalaExecutionContext, Future}
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.consequence.Failures
 import org.goldenport.id.UniversalId
 import org.goldenport.observation.Descriptor
+import org.goldenport.provisional.conclusion.Disposition
 import org.goldenport.provisional.observation.Taxonomy
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, QueryAction}
@@ -344,6 +345,31 @@ final case class JobTraceTree(
   roots: Vector[JobTraceTaskNode]
 )
 
+enum JobRetryKind {
+  case None
+  case Immediate
+  case Delayed
+
+  def print: String = this match {
+    case JobRetryKind.None => "none"
+    case JobRetryKind.Immediate => "now"
+    case JobRetryKind.Delayed => "later"
+  }
+}
+
+final case class JobRetryState(
+  kind: JobRetryKind = JobRetryKind.None,
+  attemptCount: Int = 0,
+  maxAttempts: Int = 3,
+  nextRetryDueAt: Option[Instant] = None,
+  exhausted: Boolean = false,
+  recoveryRequired: Boolean = false,
+  deadLetter: Boolean = false,
+  poison: Boolean = false,
+  lastFailureUserAction: Option[String] = None,
+  lastFailureMessage: Option[String] = None
+)
+
 final case class JobQueryReadModel(
   jobId: JobId,
   status: JobStatus,
@@ -357,6 +383,7 @@ final case class JobQueryReadModel(
   traceTree: JobTraceTree,
   debug: JobDebugInfo,
   lineage: JobEventLineage,
+  retry: JobRetryState,
   resultSummary: JobResultSummary,
   result: Option[OperationResponse]
 )
@@ -449,16 +476,27 @@ trait JobEngine {
 }
 
 final class InMemoryJobEngine(
+  val runtimeState: InMemoryJobEngine.State = InMemoryJobEngine.State(),
+  val retrySchedule: InMemoryJobEngine.RetrySchedule = InMemoryJobEngine.RetrySchedule.default
+)(
   implicit val executionContext: ScalaExecutionContext
 ) extends JobEngine {
-  private val _durable_jobs = new ConcurrentHashMap[JobId, JobRecord]()
-  private val _runtime_jobs = new ConcurrentHashMap[JobId, JobRecord]()
+  import InMemoryJobEngine._
+  private val _durable_jobs = runtimeState.durableJobs
+  private val _runtime_jobs = runtimeState.runtimeJobs
   private var _event_store: Option[EventStore] = None
+  private val _scheduler: ScheduledExecutorService =
+    Executors.newSingleThreadScheduledExecutor()
+
+  _rehydrate_delayed_retries_()
 
   def withEventStore(store: EventStore): InMemoryJobEngine = {
     _event_store = Some(store)
     this
   }
+
+  def shutdown(): Unit =
+    _scheduler.shutdownNow()
 
   def submit(tasks: List[JobTask], ctx: ExecutionContext): JobId =
     submit(tasks, ctx, _default_submit_option(tasks))
@@ -547,6 +585,7 @@ final class InMemoryJobEngine(
         traceTree = _trace_tree(record),
         debug = record.debug,
         lineage = _event_lineage(record),
+        retry = record.retry,
         resultSummary = _result_summary(record),
         result = record.result.collect { case JobResult.Success(res) => res }
       )
@@ -798,6 +837,7 @@ final class InMemoryJobEngine(
       record.copy(
         status = JobStatus.Submitted,
         result = None,
+        retry = _clear_runtime_retry_state(record.retry),
         updatedAt = now
       )
     )
@@ -1068,6 +1108,8 @@ final class InMemoryJobEngine(
       if (record.baseTasksCompleted && record.activeTaskCount == 0) {
         record.deferredResult match {
           case Some(JobResult.Failure(c)) if record.status != JobStatus.Cancelled =>
+            _handle_failed_settlement_(jobid, record, c)
+          case Some(JobResult.Failure(c)) =>
             _append_timeline_(jobid, "job.failed", None, None, c.observation.getEffectiveMessage)
             _update_record_(jobid, JobStatus.Failed, Some(JobResult.Failure(c)))
             _append_event_(
@@ -1076,7 +1118,8 @@ final class InMemoryJobEngine(
                 "job-id" -> jobid.value,
                 "status" -> JobStatus.Failed.toString,
                 "message" -> c.show
-              )
+              ),
+              attributes = _retry_event_attributes_(record.retry)
             )
           case Some(success @ JobResult.Success(_)) =>
             _append_timeline_(jobid, "job.succeeded", None, None, None)
@@ -1326,7 +1369,8 @@ final class InMemoryJobEngine(
 
   private def _append_event_(
     name: String,
-    payload: Map[String, Any]
+    payload: Map[String, Any],
+    attributes: Map[String, String] = Map.empty
   ): Unit =
     _event_store.foreach { store =>
       val _ = store.append(
@@ -1336,7 +1380,7 @@ final class InMemoryJobEngine(
             name = name,
             kind = name,
             payload = payload,
-            attributes = Map.empty,
+            attributes = attributes,
             createdAt = Instant.now(),
             persistent = true,
             status = EventRecord.Status.Stored,
@@ -1345,9 +1389,289 @@ final class InMemoryJobEngine(
         )
       )
     }
+
+  private def _handle_failed_settlement_(
+    jobid: JobId,
+    record: JobRecord,
+    conclusion: Conclusion
+  ): Unit =
+    _retry_policy_(conclusion, record.retry.attemptCount) match {
+      case RetryPolicy.None =>
+        val retry = _terminal_retry_state_(record.retry, conclusion, poison = true)
+        _append_timeline_(jobid, "job.poison", None, None, conclusion.observation.getEffectiveMessage)
+        _append_timeline_(jobid, "job.failed", None, None, conclusion.observation.getEffectiveMessage)
+        _update_record_with_retry_(jobid, JobStatus.Failed, Some(JobResult.Failure(conclusion)), retry)
+        _append_failure_event_(jobid, conclusion, retry)
+      case RetryPolicy.Immediate(nextAttempt, maxAttempts) =>
+        _append_timeline_(jobid, "job.retry.immediate.submitted", None, None, Some(s"$nextAttempt/$maxAttempts"))
+        _update_record_for_retry_(jobid, record, JobRetryKind.Immediate, nextAttempt, None, conclusion)
+        _append_retry_event_(jobid, "job.retry.immediate.submitted", conclusion, record.retry.copy(
+          kind = JobRetryKind.Immediate,
+          attemptCount = nextAttempt,
+          maxAttempts = maxAttempts,
+          lastFailureUserAction = _user_action_name_(conclusion),
+          lastFailureMessage = conclusion.observation.getEffectiveMessage
+        ))
+        _run_job_async_(jobid, record.tasks, record.submittedContext)
+      case RetryPolicy.Delayed(nextAttempt, dueAt, maxAttempts) =>
+        _append_timeline_(jobid, "job.retry.delayed.scheduled", None, None, Some(s"$nextAttempt/$maxAttempts @ ${dueAt.toString}"))
+        _update_record_for_retry_(jobid, record, JobRetryKind.Delayed, nextAttempt, Some(dueAt), conclusion)
+        val scheduled = record.retry.copy(
+          kind = JobRetryKind.Delayed,
+          attemptCount = nextAttempt,
+          maxAttempts = maxAttempts,
+          nextRetryDueAt = Some(dueAt),
+          lastFailureUserAction = _user_action_name_(conclusion),
+          lastFailureMessage = conclusion.observation.getEffectiveMessage
+        )
+        _append_retry_event_(jobid, "job.retry.delayed.scheduled", conclusion, scheduled)
+        _schedule_delayed_retry_(jobid, dueAt)
+      case RetryPolicy.Exhausted(kind, attempts, maxAttempts) =>
+        val retry = _terminal_retry_state_(
+          record.retry.copy(
+            kind = kind,
+            attemptCount = attempts,
+            maxAttempts = maxAttempts
+          ),
+          conclusion,
+          poison = false
+        )
+        _append_timeline_(jobid, "job.retry.exhausted", None, None, Some(s"$attempts/$maxAttempts"))
+        _append_timeline_(jobid, "job.dead-letter", None, None, conclusion.observation.getEffectiveMessage)
+        _append_timeline_(jobid, "job.failed", None, None, conclusion.observation.getEffectiveMessage)
+        _update_record_with_retry_(jobid, JobStatus.Failed, Some(JobResult.Failure(conclusion)), retry)
+        _append_failure_event_(jobid, conclusion, retry)
+    }
+
+  private def _update_record_for_retry_(
+    jobid: JobId,
+    record: JobRecord,
+    kind: JobRetryKind,
+    attemptCount: Int,
+    nextDueAt: Option[Instant],
+    conclusion: Conclusion
+  ): Unit =
+    _put_record(
+      record.copy(
+        status = JobStatus.Submitted,
+        result = None,
+        deferredResult = None,
+        baseTasksCompleted = false,
+        retry = JobRetryState(
+          kind = kind,
+          attemptCount = attemptCount,
+          maxAttempts = retrySchedule.maxRetries,
+          nextRetryDueAt = nextDueAt,
+          exhausted = false,
+          recoveryRequired = false,
+          deadLetter = false,
+          poison = false,
+          lastFailureUserAction = _user_action_name_(conclusion),
+          lastFailureMessage = conclusion.observation.getEffectiveMessage
+        ),
+        updatedAt = Instant.now()
+      )
+    )
+
+  private def _update_record_with_retry_(
+    jobid: JobId,
+    status: JobStatus,
+    result: Option[JobResult],
+    retry: JobRetryState
+  ): Unit =
+    _mutate_record(jobid) { record =>
+      record.copy(
+        status = status,
+        result = result.orElse(record.result),
+        retry = retry,
+        updatedAt = Instant.now()
+      )
+    }
+
+  private def _clear_runtime_retry_state(
+    retry: JobRetryState
+  ): JobRetryState =
+    retry.copy(
+      nextRetryDueAt = None,
+      exhausted = false,
+      recoveryRequired = false,
+      deadLetter = false,
+      poison = false
+    )
+
+  private def _terminal_retry_state_(
+    current: JobRetryState,
+    conclusion: Conclusion,
+    poison: Boolean
+  ): JobRetryState =
+    current.copy(
+      nextRetryDueAt = None,
+      exhausted = !poison,
+      recoveryRequired = true,
+      deadLetter = !poison,
+      poison = poison,
+      lastFailureUserAction = _user_action_name_(conclusion),
+      lastFailureMessage = conclusion.observation.getEffectiveMessage
+    )
+
+  private def _append_failure_event_(
+    jobid: JobId,
+    conclusion: Conclusion,
+    retry: JobRetryState
+  ): Unit =
+    _append_event_(
+      name = "job.failed",
+      payload = Map(
+        "job-id" -> jobid.value,
+        "status" -> JobStatus.Failed.toString,
+        "message" -> conclusion.show
+      ),
+      attributes = _retry_event_attributes_(retry)
+    )
+
+  private def _append_retry_event_(
+    jobid: JobId,
+    name: String,
+    conclusion: Conclusion,
+    retry: JobRetryState
+  ): Unit =
+    _append_event_(
+      name = name,
+      payload = Map(
+        "job-id" -> jobid.value,
+        "status" -> JobStatus.Submitted.toString,
+        "message" -> conclusion.show
+      ),
+      attributes = _retry_event_attributes_(retry)
+    )
+
+  private def _retry_event_attributes_(
+    retry: JobRetryState
+  ): Map[String, String] =
+    Map(
+      "cncf.job.retryKind" -> retry.kind.print,
+      "cncf.job.retryAttemptCount" -> retry.attemptCount.toString,
+      "cncf.job.retryMaxAttempts" -> retry.maxAttempts.toString,
+      "cncf.job.retryNextDueAt" -> retry.nextRetryDueAt.map(_.toString).getOrElse(""),
+      "cncf.job.retryExhausted" -> retry.exhausted.toString,
+      "cncf.job.recoveryRequired" -> retry.recoveryRequired.toString,
+      "cncf.job.deadLetter" -> retry.deadLetter.toString,
+      "cncf.job.poison" -> retry.poison.toString,
+      "cncf.job.userAction" -> retry.lastFailureUserAction.getOrElse("")
+    )
+
+  private def _retry_policy_(
+    conclusion: Conclusion,
+    retryCount: Int
+  ): RetryPolicy = {
+    val max = retrySchedule.maxRetries
+    conclusion.disposition.userAction match {
+      case Some(Disposition.UserAction.RetryNow) =>
+        if (retryCount < max)
+          RetryPolicy.Immediate(retryCount + 1, max)
+        else
+          RetryPolicy.Exhausted(JobRetryKind.Immediate, retryCount, max)
+      case Some(Disposition.UserAction.RetryLater) =>
+        if (retryCount < max) {
+          val nextAttempt = retryCount + 1
+          val dueAt = Instant.now().plusMillis(retrySchedule.delayedRetryDelays(nextAttempt - 1).toMillis)
+          RetryPolicy.Delayed(nextAttempt, dueAt, max)
+        } else {
+          RetryPolicy.Exhausted(JobRetryKind.Delayed, retryCount, max)
+        }
+      case _ =>
+        RetryPolicy.None
+    }
+  }
+
+  private def _user_action_name_(conclusion: Conclusion): Option[String] =
+    conclusion.disposition.userAction.map(_.name)
+
+  private def _schedule_delayed_retry_(
+    jobid: JobId,
+    dueAt: Instant
+  ): Unit = {
+    val delayMillis = math.max(0L, dueAt.toEpochMilli - Instant.now().toEpochMilli)
+    _scheduler.schedule(
+      new Runnable {
+        override def run(): Unit =
+          _run_scheduled_retry_(jobid)
+      },
+      delayMillis,
+      TimeUnit.MILLISECONDS
+    )
+  }
+
+  private def _run_scheduled_retry_(jobid: JobId): Unit =
+    _get_record(jobid).foreach { record =>
+      if (
+        record.status == JobStatus.Submitted &&
+        record.retry.kind == JobRetryKind.Delayed &&
+        record.retry.nextRetryDueAt.exists(!_.isAfter(Instant.now()))
+      ) {
+        _append_timeline_(jobid, "job.retry.delayed.submitted", None, None, Some(s"${record.retry.attemptCount}/${record.retry.maxAttempts}"))
+        _append_event_(
+          name = "job.retry.delayed.submitted",
+          payload = Map(
+            "job-id" -> jobid.value,
+            "status" -> JobStatus.Submitted.toString
+          ),
+          attributes = _retry_event_attributes_(record.retry.copy(nextRetryDueAt = None))
+        )
+        _put_record(
+          record.copy(
+            retry = record.retry.copy(nextRetryDueAt = None),
+            updatedAt = Instant.now()
+          )
+        )
+        _run_job_async_(jobid, record.tasks, record.submittedContext)
+      }
+    }
+
+  private def _rehydrate_delayed_retries_(): Unit = {
+    val records = _durable_jobs.values().toArray(new Array[JobRecord](0)).toVector
+    records.foreach { record =>
+      if (
+        record.retry.kind == JobRetryKind.Delayed &&
+        record.status == JobStatus.Submitted &&
+        record.retry.nextRetryDueAt.nonEmpty
+      ) {
+        _schedule_delayed_retry_(record.id, record.retry.nextRetryDueAt.get)
+      }
+    }
+  }
 }
 
 object InMemoryJobEngine {
+  final case class RetrySchedule(
+    delayedRetryDelays: Vector[java.time.Duration],
+    maxRetries: Int = 3
+  )
+
+  object RetrySchedule {
+    val default: RetrySchedule = RetrySchedule(
+      delayedRetryDelays = Vector(
+        java.time.Duration.ofMinutes(1),
+        java.time.Duration.ofMinutes(5),
+        java.time.Duration.ofMinutes(15)
+      ),
+      maxRetries = 3
+    )
+  }
+
+  final case class State(
+    durableJobs: ConcurrentHashMap[JobId, JobRecord] = new ConcurrentHashMap[JobId, JobRecord](),
+    runtimeJobs: ConcurrentHashMap[JobId, JobRecord] = new ConcurrentHashMap[JobId, JobRecord]()
+  )
+
+  private sealed trait RetryPolicy
+  private object RetryPolicy {
+    case object None extends RetryPolicy
+    final case class Immediate(nextAttempt: Int, maxAttempts: Int) extends RetryPolicy
+    final case class Delayed(nextAttempt: Int, dueAt: Instant, maxAttempts: Int) extends RetryPolicy
+    final case class Exhausted(kind: JobRetryKind, attempts: Int, maxAttempts: Int) extends RetryPolicy
+  }
+
   def create(): InMemoryJobEngine =
     new InMemoryJobEngine()(scala.concurrent.ExecutionContext.global)
 }
@@ -1364,6 +1688,7 @@ final case class JobRecord(
   taskReadModels: Vector[JobTaskReadModel],
   timeline: Vector[JobTimelineEvent],
   debug: JobDebugInfo,
+  retry: JobRetryState = JobRetryState(),
   deferredResult: Option[JobResult] = None,
   activeTaskCount: Int = 0,
   baseTasksCompleted: Boolean = false

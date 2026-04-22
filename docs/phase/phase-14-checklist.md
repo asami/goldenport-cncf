@@ -155,7 +155,7 @@ submission and orchestration.
 
 ## OPS-01: Retry and Dead-Letter Hardening
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -163,21 +163,27 @@ Add operational hardening only after the workflow/JCL baseline exists.
 
 ### Detailed Tasks
 
-- [ ] Define retry orchestration strategy.
-- [ ] Define dead-letter / poison-event handling.
-- [ ] Define operator recovery visibility.
-- [ ] Align retry/dead-letter behavior with existing disposition visibility.
+- [x] Define retry orchestration strategy.
+- [x] Define dead-letter / poison-event handling.
+- [x] Define operator recovery visibility.
+- [x] Align retry/dead-letter behavior with existing disposition visibility.
 
 ### Expected Outcome
 
 - CNCF execution becomes more operationally survivable without changing the
   core workflow/JCL separation.
+- Built-in retry interpretation is fixed:
+  - `RetryNow` => immediate retry, max 3 retries
+  - `RetryLater` => delayed retry, backoff `1 / 5 / 15 minutes`, max 3 retries
+  - `FixInput` / `Escalation` / absent hint => terminal now
+  - retry exhaustion => dead-letter
+  - non-retryable terminal failure => poison
 
 ---
 
 ## OPS-02: Saga Identity and ABAC Follow-Up
 
-Status: SUSPENDED
+Status: ACTIVE
 
 ### Objective
 

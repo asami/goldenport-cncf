@@ -2,11 +2,13 @@ package org.goldenport.cncf.component.builtin.event
 
 import java.time.Instant
 import org.goldenport.Consequence
+import org.goldenport.Conclusion
 import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.event.{EventId, EventLane, EventRecord}
-import org.goldenport.cncf.job.{ActionId, ActionTask, JobId, JobRunMode, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded}
+import org.goldenport.cncf.job.{ActionId, ActionTask, JobId, JobRunMode, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded, TaskFailed}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.provisional.conclusion.Disposition
 import org.goldenport.protocol.{Argument, Request, Response}
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.matchers.should.Matchers
@@ -14,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 28, 2026
- * @version Apr. 21, 2026
+ * @version Apr. 22, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventComponentSpec extends AnyWordSpec with Matchers {
@@ -119,6 +121,46 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
           fail(conclusion.show)
       }
     }
+
+    "expose dead-letter and poison metadata for event-triggered failures" in {
+      val subsystem = DefaultSubsystemFactory.default(mode = Some("command"))
+      val admin = subsystem.components.find(_.name == "admin").get
+      val ctx = ExecutionContext.create()
+      val jobId = admin.logic.submitJob(
+        List(_FailureTask(
+          ActionId.generate(),
+          Conclusion.simple("retry-now").copy(disposition = Disposition(Disposition.UserAction.RetryNow))
+        )),
+        ctx,
+        JobSubmitOption(
+          requestSummary = Some("event-triggered-retry"),
+          parameters = Map(
+            "event.name" -> "person.created",
+            "reception.jobRelation" -> "newjob",
+            "failure.policy" -> "retry"
+          )
+        )
+      )
+      _await_job(admin.jobEngine, jobId)
+
+      val loadReq = Request(
+        component = Some("event"),
+        service = Some("event_admin"),
+        operation = "load_job_events",
+        arguments = List(Argument("id", jobId.value)),
+        switches = Nil,
+        properties = Nil
+      )
+      subsystem.execute(loadReq) match {
+        case Consequence.Success(res) =>
+          val value = res.toString
+          value should include ("retry_exhausted")
+          value should include ("dead_letter")
+          value should include ("recovery_required")
+        case Consequence.Failure(conclusion) =>
+          fail(conclusion.show)
+      }
+    }
   }
 
   private final case class SleepTask(
@@ -130,5 +172,32 @@ final class EventComponentSpec extends AnyWordSpec with Matchers {
       Thread.sleep(durationMillis)
       TaskSucceeded(OperationResponse.Void())
     }
+  }
+
+  private final case class _FailureTask(
+    actionId: ActionId,
+    conclusion: Conclusion
+  ) extends JobTask {
+    def run(ctx: ExecutionContext): TaskOutcome = {
+      val _ = ctx
+      TaskFailed(conclusion)
+    }
+  }
+
+  private def _await_job(
+    engine: org.goldenport.cncf.job.JobEngine,
+    jobId: JobId,
+    timeoutMillis: Long = 4000L
+  ): Unit = {
+    val deadline = System.currentTimeMillis() + timeoutMillis
+    var status = engine.getStatus(jobId)
+    while (
+      status.forall(s => s != org.goldenport.cncf.job.JobStatus.Failed && s != org.goldenport.cncf.job.JobStatus.Succeeded) &&
+      System.currentTimeMillis() < deadline
+    ) {
+      Thread.sleep(10L)
+      status = engine.getStatus(jobId)
+    }
+    status should contain (org.goldenport.cncf.job.JobStatus.Failed)
   }
 }
