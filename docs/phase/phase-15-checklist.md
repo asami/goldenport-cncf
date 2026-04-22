@@ -129,7 +129,7 @@ PR-01 must ensure:
 
 ## TM-01: Timer and Scheduling Boundary
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -145,10 +145,10 @@ TM-01 must answer:
 
 ### Detailed Tasks
 
-- [ ] Define the built-in allowed timer/scheduling scope.
-- [ ] Define the built-in non-goals for timer/scheduling.
-- [ ] Define ownership split across `JobEngine`, `WorkflowEngine`, `JCL`, and external engines.
-- [ ] Confirm that current retry scheduling remains valid under the boundary.
+- [x] Define the built-in allowed timer/scheduling scope.
+- [x] Define the built-in non-goals for timer/scheduling.
+- [x] Define ownership split across `JobEngine`, `WorkflowEngine`, `JCL`, and external engines.
+- [x] Confirm that current retry scheduling remains valid under the boundary.
 
 ### Expected Outcome
 
@@ -166,7 +166,7 @@ TM-01 must answer:
 
 ## TM-02: Bounded Non-Retry Delayed Execution
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 

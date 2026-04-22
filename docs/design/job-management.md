@@ -7,6 +7,10 @@ of Job management within the Cloud-Native Component Framework.
 Job management is a foundational runtime concern.
 This document is normative.
 
+For the canonical timer and scheduling boundary around Job management, see:
+
+    - docs/design/timer-scheduling-boundary.md
+
 
 ----------------------------------------------------------------------
 1. Purpose of Job Management
@@ -118,6 +122,10 @@ It must not become:
     - a business-calendar scheduler
     - a workflow timer platform
     - a human-task scheduler
+
+The normative allowed/disallowed timing split is fixed in:
+
+    - docs/design/timer-scheduling-boundary.md
 
 
 ----------------------------------------------------------------------

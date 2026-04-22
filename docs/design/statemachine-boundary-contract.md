@@ -86,11 +86,14 @@ This means:
 - state machine stays the semantic source/planner
 - workflow remains an orchestration layer outside the state machine boundary
 - JobEngine remains the execution substrate
+- timer and scheduling semantics are not implied by state machine or workflow
+  integration
 
 For the execution-platform boundary, including the Pareto 80/20
 product-boundary rule, see:
 
 - `docs/design/execution-platform-boundary.md`
+- `docs/design/timer-scheduling-boundary.md`
 
 ## Non-Goals
 

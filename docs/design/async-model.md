@@ -9,6 +9,11 @@ Event, and asynchronous execution semantics.
 
 This document is normative.
 
+For the canonical timer and scheduling boundary around asynchronous execution,
+see:
+
+    - docs/design/timer-scheduling-boundary.md
+
 
 ----------------------------------------------------------------------
 1. Purpose of the Asynchronous Model
@@ -120,6 +125,10 @@ Rules:
     - asynchronous execution start is controlled by Job management
     - asynchronous execution must not bypass the JobEngine-owned scheduler
     - application-internal branching/selection remains application-owned for now
+
+The normative timer/scheduling split for that scheduler is fixed in:
+
+    - docs/design/timer-scheduling-boundary.md
 
 Jobs decouple:
 

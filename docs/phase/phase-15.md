@@ -30,11 +30,15 @@ Current semantic direction:
 - Phase 15 combines execution-model work and timer-boundary work.
 - `JS-01` is complete.
 - `PR-01` is complete.
-- `TM-01` is the active next item.
+- `TM-01` is complete.
+- `TM-02` is the active next item.
 - Priority normalization follows scheduler implementation in the same phase.
 - Async execution must always pass through Job management.
 - This rule applies at operation-call and event-driven execution granularity.
 - Timer-rich orchestration remains outside the built-in Pareto 80/20 boundary.
+- Built-in timing is limited to operational `JobEngine` control.
+- Timer semantics are not added to `WorkflowEngine` or `JCL`.
+- Retry and delay support remain bounded operational scheduling only.
 
 ## 3. Non-Goals
 
@@ -48,8 +52,8 @@ Current semantic direction:
 
 - A (DONE): JS-01 — Route all async execution through the bounded shared `JobEngine` scheduler.
 - B (DONE): PR-01 — Add explicit job queue priority and normalize workflow priority semantics.
-- C (ACTIVE): TM-01 — Define the timer and scheduling boundary around the built-in scheduler.
-- D (PENDING): TM-02 — Decide whether any bounded non-retry delayed execution is allowed inside job control.
+- C (DONE): TM-01 — Define the timer and scheduling boundary around the built-in scheduler.
+- D (ACTIVE): TM-02 — Decide whether any bounded non-retry delayed execution is allowed inside job control.
 
 Current note:
 - Phase 14 is closed and remains the built-in execution baseline.
@@ -62,7 +66,7 @@ Current note:
 
 - [x] JS-01: Route all async execution through the bounded shared `JobEngine` scheduler.
 - [x] PR-01: Add explicit job queue priority and normalize workflow priority semantics.
-- [ ] TM-01: Define the timer and scheduling boundary around the built-in scheduler.
+- [x] TM-01: Define the timer and scheduling boundary around the built-in scheduler.
 - [ ] TM-02: Decide whether any bounded non-retry delayed execution is allowed inside job control.
 
 ## 6. Next Phase Candidates
@@ -75,5 +79,6 @@ Current note:
 - `docs/design/execution-platform-boundary.md`
 - `docs/design/job-management.md`
 - `docs/design/statemachine-boundary-contract.md`
+- `docs/design/timer-scheduling-boundary.md`
 - `docs/phase/phase-14.md`
 - `docs/phase/phase-14-checklist.md`

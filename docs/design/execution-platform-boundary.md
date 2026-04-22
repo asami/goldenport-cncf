@@ -24,6 +24,10 @@ This is the same product strategy used by Static Form Web App:
 - do not grow it into a full specialist platform
 - use external dedicated engines when advanced needs become primary
 
+For the canonical timer and scheduling rule, see:
+
+- `docs/design/timer-scheduling-boundary.md`
+
 ## Built-In Execution Scope
 
 CNCF provides two built-in execution capabilities:
@@ -53,6 +57,11 @@ Built-in Job Management does not cover:
 - branch/loop/parallel execution language
 - timer-rich orchestration
 - business transition semantics
+
+The normative allowed/disallowed timer split for built-in job-centric
+scheduling is fixed in:
+
+- `docs/design/timer-scheduling-boundary.md`
 
 ### Built-In Workflow
 
@@ -149,6 +158,10 @@ Built-in scheduler ownership is job-centric:
 - WorkflowEngine and JCL do not own independent schedulers
 - timing support remains limited to operational job control rather than a
   general scheduling platform
+
+The canonical timer boundary for this scheduler model is defined in:
+
+- `docs/design/timer-scheduling-boundary.md`
 
 Workflow instances are not Jobs.
 Jobs remain the execution substrate used by command/event/workflow paths.
