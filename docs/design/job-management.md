@@ -80,7 +80,48 @@ regardless of trigger type.
 
 
 ----------------------------------------------------------------------
-5. Job Lifecycle
+5. Asynchronous Scheduling Boundary
+----------------------------------------------------------------------
+
+Built-in asynchronous execution is owned by Job management.
+
+Rules:
+
+    - asynchronous execution must enter Job management first
+    - asynchronous execution must not bypass the JobEngine scheduler
+    - command operation execution and event-driven execution are the required
+      granularity for this rule
+    - command/event/workflow/JCL async paths at that granularity all execute
+      through the same Job management path
+    - built-in scheduling is job-centric, not a general scheduler platform
+    - selection inside application logic remains application-owned unless a
+      later design freezes a narrower runtime rule
+
+The built-in scheduler is the JobEngine-owned job scheduler.
+
+Its purpose is to:
+
+    - control asynchronous start timing
+    - flatten load
+    - preserve traceability
+    - make execution/backlog visible
+
+This scheduler may own:
+
+    - async job queueing
+    - bounded worker concurrency
+    - delayed retry enqueue/execution
+
+It must not become:
+
+    - a cron engine
+    - a business-calendar scheduler
+    - a workflow timer platform
+    - a human-task scheduler
+
+
+----------------------------------------------------------------------
+6. Job Lifecycle
 ----------------------------------------------------------------------
 
 A Job has a lifecycle.
@@ -101,7 +142,7 @@ it must not resume execution.
 
 
 ----------------------------------------------------------------------
-6. Failure Semantics
+7. Failure Semantics
 ----------------------------------------------------------------------
 
 Failures are first-class outcomes.
@@ -123,7 +164,7 @@ Failure handling policy is not defined here.
 
 
 ----------------------------------------------------------------------
-7. Retry Semantics
+8. Retry Semantics
 ----------------------------------------------------------------------
 
 Retries are an operational concern.
@@ -145,7 +186,7 @@ linked to the same logical Job.
 
 
 ----------------------------------------------------------------------
-8. Compensation and Abort
+9. Compensation and Abort
 ----------------------------------------------------------------------
 
 Abort represents intentional termination.
@@ -167,7 +208,7 @@ not business compensation logic.
 
 
 ----------------------------------------------------------------------
-9. Relationship to ExecutionContext
+10. Relationship to ExecutionContext
 ----------------------------------------------------------------------
 
 Each Job is associated with an ExecutionContext.
@@ -183,7 +224,7 @@ must coordinate with ExecutionContext lifecycle.
 
 
 ----------------------------------------------------------------------
-10. Persistence and Storage
+11. Persistence and Storage
 ----------------------------------------------------------------------
 
 Job persistence is implementation-dependent.
@@ -204,7 +245,7 @@ Persistence strategy must not leak into domain logic.
 
 
 ----------------------------------------------------------------------
-11. Observability
+12. Observability and Metrics
 ----------------------------------------------------------------------
 
 Job management enables observability.
@@ -216,13 +257,28 @@ Typical signals include:
     - status
     - error summaries
     - correlation identifiers
+    - queue backlog
+    - scheduler start timing
+    - retry delay timing
+    - worker saturation indicators
 
 Integration with tracing and metrics
-is expected but not defined here.
+is mandatory for asynchronous execution.
+
+Rules:
+
+    - asynchronous execution must remain traceable through Job management
+    - metrics must be collected from the JobEngine-owned scheduler path
+    - queueing/execution timing must be attributable to a Job
+    - metrics must be accurate enough for performance tuning and incident
+      investigation
+
+If asynchronous work bypasses Job management,
+the model fails its observability obligation.
 
 
 ----------------------------------------------------------------------
-12. Product Boundary
+13. Product Boundary
 ----------------------------------------------------------------------
 
 Job management is part of the CNCF built-in execution layer and follows
@@ -232,6 +288,7 @@ Its built-in scope is intentionally limited to the high-frequency 80%
 of operational needs:
 
     - submission
+    - bounded async scheduling
     - lifecycle/result visibility
     - await/query/history
     - retry/cancel/suspend/resume
@@ -247,7 +304,7 @@ For the execution-platform boundary, see:
     - `docs/design/execution-platform-boundary.md`
 
 ----------------------------------------------------------------------
-13. Relationship to Consumers (e.g. SIE)
+14. Relationship to Consumers (e.g. SIE)
 ----------------------------------------------------------------------
 
 Consumers such as Semantic Integration Engine:

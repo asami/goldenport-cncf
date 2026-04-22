@@ -15,8 +15,9 @@ This directory does **not** contain design details or thinking processes.
 
 Current baseline:
 
-- Active phase: not fixed yet
-- Active checklist: not fixed yet
+- Active phase: `phase-15.md`
+- Active checklist: `phase-15-checklist.md`
+- Active theme: job scheduling and timer boundary
 - Closed phase set currently includes:
   - `phase-4.md`
   - `phase-5.md`

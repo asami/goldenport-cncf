@@ -38,12 +38,14 @@ These capabilities cooperate, but they are not the same layer.
 Built-in Job Management covers:
 
 - job submission
+- bounded async scheduling
 - sequential batch submission
 - job lifecycle/status/result
 - await/query/history
 - retry/cancel/suspend/resume
 - lineage/failure disposition/inspection
 - job-level failure hooks through named actions
+- scheduler-driven metrics/traceability for async execution
 
 Built-in Job Management does not cover:
 
@@ -128,9 +130,25 @@ execution and does not replace `JobEngine`.
 It remains authoritative for:
 
 - submission
+- async scheduling
 - lifecycle/result
 - control/query
 - execution visibility
+- queue/backlog visibility
+- scheduler metrics for tuning and incident investigation
+
+Built-in scheduler ownership is job-centric:
+
+- the built-in scheduler is the JobEngine-owned job scheduler
+- asynchronous execution must pass through JobEngine so it remains tracked,
+  traceable, and measurable
+- this applies to operation-call execution and event-driven execution
+  granularity
+- application-internal selection logic remains outside the current built-in
+  scheduling rule
+- WorkflowEngine and JCL do not own independent schedulers
+- timing support remains limited to operational job control rather than a
+  general scheduling platform
 
 Workflow instances are not Jobs.
 Jobs remain the execution substrate used by command/event/workflow paths.

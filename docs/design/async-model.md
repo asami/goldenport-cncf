@@ -116,6 +116,10 @@ Rules:
     - every Command execution is tracked as a Job
     - Event-triggered execution is also tracked as Jobs
     - Jobs provide observability and lifecycle control
+    - this rule applies at operation-call and event-driven execution granularity
+    - asynchronous execution start is controlled by Job management
+    - asynchronous execution must not bypass the JobEngine-owned scheduler
+    - application-internal branching/selection remains application-owned for now
 
 Jobs decouple:
 
@@ -199,6 +203,9 @@ Required capabilities include:
     - correlation identifiers
     - execution tracing
     - Job state inspection
+    - queue/backlog visibility
+    - scheduler timing visibility
+    - retry/delay visibility
 
 Observability is not optional
 in asynchronous systems.
@@ -220,6 +227,7 @@ Consumers must not:
     - assume synchronous behavior
     - block on execution completion by default
     - bypass Job tracking
+    - bypass the JobEngine scheduler for asynchronous start
 
 Asynchrony must remain visible.
 
