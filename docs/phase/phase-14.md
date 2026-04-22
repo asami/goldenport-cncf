@@ -1,6 +1,6 @@
 # Phase 14 — Execution Layer Expansion
 
-status = open
+status = closed
 
 ## 1. Purpose of This Document
 
@@ -78,6 +78,14 @@ Current note:
   - `job_control` and `event` project `saga-id` separately from `saga-relation`
   - ABAC conditions are supported only inside explicit reception rules
   - ABAC miss is treated as explicit-rule non-match and does not create a new precedence tier
+- Phase 14 is closed on Apr. 22, 2026 with the execution-layer baseline fixed:
+  - built-in `WorkflowEngine`
+  - workflow inspection surface
+  - submission-only `JCL`
+  - JCL to workflow entrypoints
+  - retry/dead-letter scheduler
+  - explicit `saga-id` propagation
+  - explicit-rule-only ABAC matching
 
 ## 5. Development Items
 
@@ -88,9 +96,11 @@ Current note:
 - [x] OPS-01: Add retry/dead-letter operational hardening after workflow/JCL baseline.
 - [x] OPS-02: Add saga identity / ABAC follow-up only if still in scope after A-E.
 
-## 6. Next Phase Candidates
+## 6. Carryover / Next Candidates
 
-- NP-1401: External engine integration boundary for specialist orchestration.
+- Carryover: External engine integration boundary for specialist orchestration.
+  - This remains a deferred follow-up from the completed built-in execution baseline.
+  - It is not the default theme of Phase 15.
 - NP-1402: Timer/schedule semantics beyond the built-in Pareto 80/20 boundary.
 - NP-1403: Connector-heavy or human-task workflow beyond the built-in workflow scope.
 
