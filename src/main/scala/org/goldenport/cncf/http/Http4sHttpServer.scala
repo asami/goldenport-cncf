@@ -995,6 +995,8 @@ final class Http4sHttpServer(
       val started = System.nanoTime()
       for {
         form <- _to_plain_form_record(req)
+        query = Record.create(req.uri.query.params.toVector)
+        header = _request_header_record_with_auth(app, req, query, form)
         res = _dispatch_operation(
           app,
           service,
@@ -1002,8 +1004,8 @@ final class Http4sHttpServer(
           HttpRequest.fromPath(
             method = HttpRequest.POST,
             path = s"/${app}/${service}/${operation}",
-            query = Record.create(req.uri.query.params.toVector),
-            header = _request_header_record(req),
+            query = query,
+            header = header,
             form = _operation_dispatch_form(form)
           )
         )
@@ -2106,12 +2108,14 @@ final class Http4sHttpServer(
     && !path.contains("\r")
     && !path.contains("\n")
 
-  private def _request_header_record(
-    req: org.http4s.Request[IO]
+  private[http] def _request_header_record(
+    req: org.http4s.Request[IO],
+    query: Record = Record.empty,
+    form: Record = Record.empty
   ): Record = {
     val base = req.headers.headers.map(h => h.name.toString -> h.value).toVector
     val enriched =
-      _session_id_(req) match {
+      _session_id_(req, query, form) match {
         case Some(sessionid) if !base.exists { case (k, _) => k.equalsIgnoreCase("x-textus-session") } =>
           base :+ ("x-textus-session" -> sessionid)
         case _ =>
@@ -2120,8 +2124,58 @@ final class Http4sHttpServer(
     Record.create(enriched)
   }
 
-  private def _session_id_(
-    req: org.http4s.Request[IO]
+  private def _request_header_record_with_auth(
+    app: String,
+    req: org.http4s.Request[IO],
+    query: Record,
+    form: Record
+  ): Record = {
+    val header = _request_header_record(req, query, form)
+    val attrs = (header.asMap ++ query.asMap ++ form.asMap).view.mapValues(_.toString).toMap
+    val authRequest = org.goldenport.cncf.security.AuthenticationRequest(attrs)
+    _current_session_result(authRequest) match {
+      case org.goldenport.Consequence.Success(Some(result)) =>
+        val enriched = header.asNameStringVector ++ Vector(
+          "principalId" -> result.principalId.value,
+          "principal_id" -> result.principalId.value,
+          "authenticated" -> "true"
+        ) ++ result.attributes.toVector
+        Record.create(enriched)
+      case _ =>
+        header
+    }
+  }
+
+  private def _current_session_result(
+    request: org.goldenport.cncf.security.AuthenticationRequest
+  ): org.goldenport.Consequence[Option[org.goldenport.cncf.security.AuthenticationResult]] = {
+    val providers = engine.runtimeSubsystem.components.flatMap(_.authenticationProviders)
+    val base = engine.runtimeSubsystem.components
+      .find(_.authenticationProviders.nonEmpty)
+      .orElse(engine.runtimeSubsystem.components.headOption)
+      .map(_.logic.executionContext())
+      .getOrElse(ExecutionContext.create())
+
+    def go(
+      rest: List[org.goldenport.cncf.security.AuthenticationProvider]
+    ): org.goldenport.Consequence[Option[org.goldenport.cncf.security.AuthenticationResult]] =
+      rest match {
+        case Nil =>
+          org.goldenport.Consequence.success(None)
+        case head :: tail =>
+          head.currentSession(request)(using base).flatMap {
+            case Some(result) => org.goldenport.Consequence.success(Some(result))
+            case None => go(tail)
+          }
+      }
+
+    go(providers.toList)
+  }
+
+  private[http] def _session_id_(
+    req: org.http4s.Request[IO],
+    query: Record = Record.empty,
+    form: Record = Record.empty
   ): Option[String] =
     req.headers.headers
       .collectFirst {
@@ -2134,6 +2188,8 @@ final class Http4sHttpServer(
           case cookie if cookie.name.equalsIgnoreCase(_session_cookie_name) => cookie.content
         }.map(_.trim).filter(_.nonEmpty)
       }
+      .orElse(form.getString("x-textus-session").map(_.trim).filter(_.nonEmpty))
+      .orElse(query.getString("x-textus-session").map(_.trim).filter(_.nonEmpty))
 
   private def _session_cookie_name: String =
     s"textus-session-${NamingConventions.toNormalizedSegment(engine.runtimeSubsystem.name)}"

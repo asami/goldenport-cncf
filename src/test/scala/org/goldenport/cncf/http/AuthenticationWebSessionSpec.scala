@@ -171,6 +171,38 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
       login.status.code shouldBe 303
       _header(login, "Location") shouldBe Some("/web/cwitter")
     }
+
+    "normalize form-api session id from header, cookie, form, and query in that order" in {
+      val provider = new _SessionProvider(Map.empty, Map.empty)
+      val subsystem = _subsystem(provider)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val query = org.goldenport.record.Record.create(Vector("x-textus-session" -> "query-session"))
+      val form = org.goldenport.record.Record.create(Vector("x-textus-session" -> "form-session"))
+      val headerRequest = _get_request("/form-api/cwitter/timeline/create-post")
+        .putHeaders(Header.Raw(ci"x-textus-session", "header-session"))
+      val cookieRequest = _get_request("/form-api/cwitter/timeline/create-post")
+        .putHeaders(Header.Raw(ci"Cookie", s"${_cookie_name(subsystem)}=cookie-session"))
+
+      server._session_id_(headerRequest, query, form) shouldBe Some("header-session")
+      server._session_id_(cookieRequest, query, form) shouldBe Some("cookie-session")
+      server._session_id_(_get_request("/form-api/cwitter/timeline/create-post"), query, form) shouldBe Some("form-session")
+      server._session_id_(_get_request("/form-api/cwitter/timeline/create-post"), query, org.goldenport.record.Record.empty) shouldBe Some("query-session")
+    }
+
+    "promote fallback form-api session id into the auth header record" in {
+      val provider = new _SessionProvider(Map.empty, Map.empty)
+      val subsystem = _subsystem(provider)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val request = _post_form_request("/form-api/cwitter/timeline/create-post", "body=hello")
+      val headers = server._request_header_record(
+        request,
+        org.goldenport.record.Record.empty,
+        org.goldenport.record.Record.create(Vector("x-textus-session" -> "form-session"))
+      )
+
+      headers.getString("x-textus-session") shouldBe Some("form-session")
+    }
   }
 
   private def _subsystem(

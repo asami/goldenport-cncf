@@ -51,7 +51,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 22, 2026
+ * @version Apr. 23, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -2863,6 +2863,40 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       dispatcher.forms.last.getString("body") shouldBe Some("hello")
       dispatcher.forms.last.getString("accessToken") shouldBe Some("abc")
       dispatcher.forms.last.getString("crud.origin.href") shouldBe None
+    }
+
+    "promote x-textus-session from form payload into Form API auth headers" in {
+      val subsystem = _form_type_fixture_subsystem()
+      val selector = "notice-board.notice.post-secret-notice"
+      val descriptor = WebDescriptor(expose = Map(selector -> WebDescriptor.Exposure.Protected))
+      val dispatcher = new RecordingWebOperationDispatcher(
+        new StaticWebOperationDispatcher(
+          HttpResponse.Text(
+            HttpStatus.Ok,
+            ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+            Bag.text("posted", StandardCharsets.UTF_8)
+          )
+        )
+      )
+      val server = new Http4sHttpServer(
+        new HttpExecutionEngine(subsystem, Some(descriptor)),
+        operationDispatcherOption = Some(dispatcher)
+      )
+
+      val response = server
+        ._submit_operation_form_api(
+          _post_form_request(
+            "/form-api/notice-board/notice/post-secret-notice",
+            "body=hello&x-textus-session=form-session"
+          ),
+          "notice-board",
+          "notice",
+          "post-secret-notice"
+        )
+        .unsafeRunSync()
+
+      response.status.code shouldBe 200
+      dispatcher.headers.last.getString("x-textus-session") shouldBe Some("form-session")
     }
 
     "keep internal operations invisible from HTML and Form API surfaces" in {
@@ -7306,6 +7340,7 @@ private final class RecordingWebOperationDispatcher(
 ) extends WebOperationDispatcher {
   private val _paths = ListBuffer.empty[String]
   private val _forms = ListBuffer.empty[Record]
+  private val _headers = ListBuffer.empty[Record]
 
   def targetName: String = "recording"
 
@@ -7317,12 +7352,19 @@ private final class RecordingWebOperationDispatcher(
     _forms.toVector
   }
 
+  def headers: Vector[Record] = _headers.synchronized {
+    _headers.toVector
+  }
+
   def dispatch(request: HttpRequest): HttpResponse = {
     _paths.synchronized {
       _paths += request.path.asString
     }
     _forms.synchronized {
       _forms += request.form
+    }
+    _headers.synchronized {
+      _headers += request.header
     }
     delegate.dispatch(request)
   }
