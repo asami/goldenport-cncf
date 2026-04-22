@@ -92,7 +92,7 @@ JS-01 must ensure:
 
 ## PR-01: Queue Priority and Workflow Priority Normalization
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -110,10 +110,10 @@ PR-01 must ensure:
 
 ### Detailed Tasks
 
-- [ ] Add explicit job queue priority to the async submission contract.
-- [ ] Define ready-queue ordering as `priority asc, FIFO`.
-- [ ] Normalize workflow registration winner semantics to smaller-first.
-- [ ] Preserve deterministic equal-priority ambiguity failure for workflow bootstrap.
+- [x] Add explicit job queue priority to the async submission contract.
+- [x] Define ready-queue ordering as `priority asc, FIFO`.
+- [x] Normalize workflow registration winner semantics to smaller-first.
+- [x] Preserve deterministic equal-priority ambiguity failure for workflow bootstrap.
 
 ### Expected Outcome
 
@@ -129,7 +129,7 @@ PR-01 must ensure:
 
 ## TM-01: Timer and Scheduling Boundary
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 

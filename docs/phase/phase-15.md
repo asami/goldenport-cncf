@@ -29,7 +29,8 @@ Current semantic direction:
 - Phase 14 remains closed and fixed.
 - Phase 15 combines execution-model work and timer-boundary work.
 - `JS-01` is complete.
-- `PR-01` is the active next item.
+- `PR-01` is complete.
+- `TM-01` is the active next item.
 - Priority normalization follows scheduler implementation in the same phase.
 - Async execution must always pass through Job management.
 - This rule applies at operation-call and event-driven execution granularity.
@@ -46,8 +47,8 @@ Current semantic direction:
 ## 4. Current Work Stack
 
 - A (DONE): JS-01 — Route all async execution through the bounded shared `JobEngine` scheduler.
-- B (ACTIVE): PR-01 — Add explicit job queue priority and normalize workflow priority semantics.
-- C (PENDING): TM-01 — Define the timer and scheduling boundary around the built-in scheduler.
+- B (DONE): PR-01 — Add explicit job queue priority and normalize workflow priority semantics.
+- C (ACTIVE): TM-01 — Define the timer and scheduling boundary around the built-in scheduler.
 - D (PENDING): TM-02 — Decide whether any bounded non-retry delayed execution is allowed inside job control.
 
 Current note:
@@ -60,7 +61,7 @@ Current note:
 ## 5. Development Items
 
 - [x] JS-01: Route all async execution through the bounded shared `JobEngine` scheduler.
-- [ ] PR-01: Add explicit job queue priority and normalize workflow priority semantics.
+- [x] PR-01: Add explicit job queue priority and normalize workflow priority semantics.
 - [ ] TM-01: Define the timer and scheduling boundary around the built-in scheduler.
 - [ ] TM-02: Decide whether any bounded non-retry delayed execution is allowed inside job control.
 

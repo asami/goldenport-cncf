@@ -3,6 +3,7 @@ package org.goldenport.cncf.job
 import java.time.Duration
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
+import scala.collection.mutable.ArrayBuffer
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.provisional.conclusion.Disposition
@@ -153,6 +154,48 @@ final class JobRetryOperationalSpec
       engine.shutdown()
     }
 
+    "preserve original priority when delayed retries become runnable" in {
+      Given("a delayed retry with higher priority than an already-queued regular job")
+      val engine = new InMemoryJobEngine(
+        retrySchedule = InMemoryJobEngine.RetrySchedule(
+          delayedRetryDelays = Vector(Duration.ofMillis(80L), Duration.ofMillis(120L), Duration.ofMillis(160L))
+        ),
+        schedulerConfig = InMemoryJobEngine.SchedulerConfig(workerCount = 1)
+      )(scala.concurrent.ExecutionContext.global)
+      val order = ArrayBuffer.empty[String]
+      val attempts = new AtomicInteger(0)
+      val retryTask = _PriorityRetryTask(order, attempts)
+      val blockerEntered = new CountDownLatch(1)
+      val blockerRelease = new CountDownLatch(1)
+
+      val retryId = engine.submit(
+        List(retryTask),
+        ExecutionContext.test(),
+        JobSubmitOption(priority = -5)
+      )
+      _await_condition {
+        engine.query(retryId).exists(_.retry.nextRetryDueAt.nonEmpty)
+      } shouldBe true
+
+      val blockerId = engine.submit(List(_BlockingTask(blockerEntered, blockerRelease, "blocker")), ExecutionContext.test())
+      blockerEntered.await(1, TimeUnit.SECONDS) shouldBe true
+      val regularId = engine.submit(List(_RecordingTask("regular", order)), ExecutionContext.test(), JobSubmitOption(priority = 0))
+
+      When("the delayed retry becomes due while the worker is still busy")
+      _await_condition {
+        engine.query(retryId).exists(_.retry.nextRetryDueAt.isEmpty)
+      } shouldBe true
+      blockerRelease.countDown()
+      _await_query(engine, blockerId)
+      _await_query(engine, retryId)
+      _await_query(engine, regularId)
+
+      Then("the delayed retry keeps its original priority when it joins the ready queue")
+      order.synchronized(order.toVector) shouldBe Vector("retry", "regular")
+      attempts.get() shouldBe 2
+      engine.shutdown()
+    }
+
     "fail immediately as poison when retry is not requested" in {
       Given("a job that fails without retry-worthiness")
       val engine = InMemoryJobEngine.create()
@@ -210,6 +253,39 @@ final class JobRetryOperationalSpec
       entered.countDown()
       release.await(2, TimeUnit.SECONDS)
       TaskSucceeded(OperationResponse.Scalar(value))
+    }
+  }
+
+  private final case class _RecordingTask(
+    value: String,
+    trace: ArrayBuffer[String],
+    actionId: ActionId = ActionId.generate()
+  ) extends JobTask {
+    def run(ctx: ExecutionContext): TaskOutcome = {
+      val _ = ctx
+      trace.synchronized {
+        trace += value
+      }
+      TaskSucceeded(OperationResponse.Scalar(value))
+    }
+  }
+
+  private final case class _PriorityRetryTask(
+    trace: ArrayBuffer[String],
+    attempts: AtomicInteger,
+    actionId: ActionId = ActionId.generate()
+  ) extends JobTask {
+    def run(ctx: ExecutionContext): TaskOutcome = {
+      val _ = ctx
+      val current = attempts.incrementAndGet()
+      if (current == 1)
+        TaskFailed(_failure(Disposition.UserAction.RetryLater, "priority-retry"))
+      else {
+        trace.synchronized {
+          trace += "retry"
+        }
+        TaskSucceeded(OperationResponse.Scalar("retry"))
+      }
     }
   }
 

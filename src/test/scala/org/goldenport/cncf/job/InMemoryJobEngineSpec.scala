@@ -2,6 +2,7 @@ package org.goldenport.cncf.job
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
+import scala.collection.mutable.ArrayBuffer
 import org.goldenport.Consequence
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.Response
@@ -136,6 +137,56 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       jobEngine.shutdown()
     }
 
+    "run lower numeric priority jobs before higher numeric priority jobs" in {
+      Given("a busy single-worker scheduler and two queued jobs with different priorities")
+      val jobEngine = InMemoryJobEngine.create(
+        InMemoryJobEngine.SchedulerConfig(workerCount = 1)
+      )
+      val entered = new CountDownLatch(1)
+      val release = new CountDownLatch(1)
+      val order = ArrayBuffer.empty[String]
+
+      val blockerId = jobEngine.submit(List(_BlockingTask(entered, release, "blocker")), ExecutionContext.test())
+      entered.await(1, TimeUnit.SECONDS) shouldBe true
+      val lowId = jobEngine.submit(List(_RecordingTask("low", order)), ExecutionContext.test(), JobSubmitOption(priority = 10))
+      val highId = jobEngine.submit(List(_RecordingTask("high", order)), ExecutionContext.test(), JobSubmitOption(priority = -10))
+
+      When("worker capacity becomes available")
+      release.countDown()
+      _await_result_(jobEngine, blockerId)
+      _await_result_(jobEngine, lowId)
+      _await_result_(jobEngine, highId)
+
+      Then("the lower numeric priority runs first")
+      order.toVector shouldBe Vector("high", "low")
+      jobEngine.shutdown()
+    }
+
+    "preserve FIFO order for same-priority queued jobs" in {
+      Given("a busy single-worker scheduler and two queued jobs with the same priority")
+      val jobEngine = InMemoryJobEngine.create(
+        InMemoryJobEngine.SchedulerConfig(workerCount = 1)
+      )
+      val entered = new CountDownLatch(1)
+      val release = new CountDownLatch(1)
+      val order = ArrayBuffer.empty[String]
+
+      val blockerId = jobEngine.submit(List(_BlockingTask(entered, release, "blocker")), ExecutionContext.test())
+      entered.await(1, TimeUnit.SECONDS) shouldBe true
+      val firstId = jobEngine.submit(List(_RecordingTask("first", order)), ExecutionContext.test(), JobSubmitOption(priority = 0))
+      val secondId = jobEngine.submit(List(_RecordingTask("second", order)), ExecutionContext.test(), JobSubmitOption(priority = 0))
+
+      When("worker capacity becomes available")
+      release.countDown()
+      _await_result_(jobEngine, blockerId)
+      _await_result_(jobEngine, firstId)
+      _await_result_(jobEngine, secondId)
+
+      Then("queue order remains FIFO within the same priority")
+      order.toVector shouldBe Vector("first", "second")
+      jobEngine.shutdown()
+    }
+
     "queue same-job async tasks before execution" in {
       Given("a completed parent job and a busy single-worker scheduler")
       val jobEngine = InMemoryJobEngine.create(
@@ -162,6 +213,42 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       _await_condition_ {
         jobEngine.query(parentId).exists(_.tasks.tasks.exists(_.taskId == taskId))
       } shouldBe true
+      jobEngine.shutdown()
+    }
+
+    "inherit parent priority for same-job async tasks" in {
+      Given("a completed high-priority parent job and a competing lower-priority job")
+      val jobEngine = InMemoryJobEngine.create(
+        InMemoryJobEngine.SchedulerConfig(workerCount = 1)
+      )
+      val order = ArrayBuffer.empty[String]
+      val parentId = jobEngine.submit(
+        List(_ValueTask("parent")),
+        ExecutionContext.test(),
+        JobSubmitOption(priority = -5)
+      )
+      _await_result_(jobEngine, parentId)
+
+      val entered = new CountDownLatch(1)
+      val release = new CountDownLatch(1)
+      val blockerId = jobEngine.submit(List(_BlockingTask(entered, release, "blocker")), ExecutionContext.test())
+      entered.await(1, TimeUnit.SECONDS) shouldBe true
+
+      val regularId = jobEngine.submit(
+        List(_RecordingTask("regular", order)),
+        ExecutionContext.test(),
+        JobSubmitOption(priority = 5)
+      )
+
+      When("a same-job async task is enqueued after the lower-priority job")
+      val _ = jobEngine.enqueueTaskInJob(parentId, _RecordingTask("same-job", order), ExecutionContext.test()).toOption.get
+      release.countDown()
+      _await_result_(jobEngine, blockerId)
+      _await_result_(jobEngine, regularId)
+
+      Then("the same-job task inherits the parent priority and runs first")
+      _await_condition_(order.synchronized(order.size == 2)) shouldBe true
+      order.synchronized(order.toVector) shouldBe Vector("same-job", "regular")
       jobEngine.shutdown()
     }
   }
@@ -205,6 +292,20 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       entered.foreach(_.countDown())
       release.await(2, TimeUnit.SECONDS)
       running.decrementAndGet()
+      TaskSucceeded(OperationResponse.Scalar(value))
+    }
+  }
+
+  private final case class _RecordingTask(
+    value: String,
+    trace: ArrayBuffer[String],
+    actionId: ActionId = ActionId.generate()
+  ) extends JobTask {
+    def run(ctx: ExecutionContext): TaskOutcome = {
+      val _ = ctx
+      trace.synchronized {
+        trace += value
+      }
       TaskSucceeded(OperationResponse.Scalar(value))
     }
   }

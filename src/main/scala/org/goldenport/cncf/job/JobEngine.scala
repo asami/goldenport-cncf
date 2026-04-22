@@ -1,7 +1,7 @@
 package org.goldenport.cncf.job
 
 import java.time.Instant
-import java.util.concurrent.{ConcurrentHashMap, Executors, LinkedBlockingQueue, ScheduledExecutorService, TimeUnit, ExecutorService}
+import java.util.concurrent.{ConcurrentHashMap, Executors, PriorityBlockingQueue, ScheduledExecutorService, TimeUnit, ExecutorService}
 import java.util.concurrent.atomic.AtomicLong
 import scala.concurrent.ExecutionContext as ScalaExecutionContext
 import org.goldenport.{Conclusion, Consequence}
@@ -223,6 +223,7 @@ enum JobPersistencePolicy {
 final case class JobSubmitOption(
   persistence: JobPersistencePolicy = JobPersistencePolicy.Persistent,
   runMode: JobRunMode = JobRunMode.Async,
+  priority: Int = 0,
   requestSummary: Option[String] = None,
   parameters: Map[String, String] = Map.empty,
   executionNotes: Vector[String] = Vector.empty
@@ -490,8 +491,13 @@ final class InMemoryJobEngine(
   private var _event_store: Option[EventStore] = None
   private val _scheduler: ScheduledExecutorService =
     Executors.newSingleThreadScheduledExecutor()
-  private val _work_queue = new LinkedBlockingQueue[SchedulerWorkItem]()
   private val _work_sequence = new AtomicLong(0L)
+  private val _work_queue = new PriorityBlockingQueue[SchedulerWorkItem](
+    11,
+    java.util.Comparator
+      .comparingInt[SchedulerWorkItem](_.priority)
+      .thenComparingLong(_.sequence)
+  )
   private val _worker_pool: ExecutorService =
     Executors.newFixedThreadPool(math.max(1, schedulerConfig.workerCount))
   @volatile private var _shutdown_requested = false
@@ -534,6 +540,7 @@ final class InMemoryJobEngine(
       status = JobStatus.Submitted,
       result = None,
       persistence = option.persistence,
+      priority = option.priority,
       createdAt = now,
       updatedAt = now,
       taskReadModels = Vector.empty,
@@ -561,7 +568,7 @@ final class InMemoryJobEngine(
     option.runMode match {
       case JobRunMode.Async =>
         _append_timeline_(jobid, "job.async.queued", None, None, None)
-        _enqueue_work_(SchedulerWorkItem.JobRun(_next_sequence_(), jobid))
+        _enqueue_work_(SchedulerWorkItem.JobRun(_next_sequence_(), option.priority, jobid))
       case JobRunMode.Sync =>
         _run_job_sync_(jobid, tasks, ctx)
     }
@@ -659,7 +666,8 @@ final class InMemoryJobEngine(
       case Some(_) =>
         val taskid = TaskId.generate()
         _append_timeline_(jobId, "job.same-job-async.queued", Some(taskid), ctx.jobContext.currentTask, Some(task.operationName.getOrElse(task.actionId.print)))
-        _enqueue_work_(SchedulerWorkItem.SameJobTask(_next_sequence_(), jobId, task, ctx, taskid))
+        val priority = _get_record(jobId).map(_.priority).getOrElse(0)
+        _enqueue_work_(SchedulerWorkItem.SameJobTask(_next_sequence_(), priority, jobId, task, ctx, taskid))
         Consequence.success(taskid)
       case None =>
         Consequence.operationNotFound(s"job:${jobId.value}")
@@ -697,11 +705,11 @@ final class InMemoryJobEngine(
 
   private def _run_scheduler_work_(work: SchedulerWorkItem): Unit =
     work match {
-      case SchedulerWorkItem.JobRun(_, jobid) =>
+      case SchedulerWorkItem.JobRun(_, _, jobid) =>
         _run_job_record_(jobid, Some("job-run"))
-      case SchedulerWorkItem.RetryRun(_, jobid) =>
+      case SchedulerWorkItem.RetryRun(_, _, jobid) =>
         _run_job_record_(jobid, Some("retry-run"))
-      case SchedulerWorkItem.SameJobTask(_, jobid, task, ctx, forcedTaskId) =>
+      case SchedulerWorkItem.SameJobTask(_, _, jobid, task, ctx, forcedTaskId) =>
         _run_queued_same_job_task_(jobid, task, ctx, forcedTaskId, Some("same-job-task"))
     }
 
@@ -949,7 +957,7 @@ final class InMemoryJobEngine(
       )
     )
     _append_timeline_(jobid, "job.async.queued", None, None, Some("retry"))
-    _enqueue_work_(SchedulerWorkItem.RetryRun(_next_sequence_(), jobid))
+    _enqueue_work_(SchedulerWorkItem.RetryRun(_next_sequence_(), record.priority, jobid))
   }
 
   private def _append_timeline_for_control_(
@@ -1517,7 +1525,7 @@ final class InMemoryJobEngine(
           lastFailureMessage = conclusion.observation.getEffectiveMessage
         ))
         _append_timeline_(jobid, "job.async.queued", None, None, Some("retry-now"))
-        _enqueue_work_(SchedulerWorkItem.RetryRun(_next_sequence_(), jobid))
+        _enqueue_work_(SchedulerWorkItem.RetryRun(_next_sequence_(), record.priority, jobid))
       case RetryPolicy.Delayed(nextAttempt, dueAt, maxAttempts) =>
         _append_timeline_(jobid, "job.retry.delayed.scheduled", None, None, Some(s"$nextAttempt/$maxAttempts @ ${dueAt.toString}"))
         _update_record_for_retry_(jobid, record, JobRetryKind.Delayed, nextAttempt, Some(dueAt), conclusion)
@@ -1730,7 +1738,7 @@ final class InMemoryJobEngine(
             updatedAt = Instant.now()
           )
         )
-        _enqueue_work_(SchedulerWorkItem.RetryRun(_next_sequence_(), jobid))
+        _enqueue_work_(SchedulerWorkItem.RetryRun(_next_sequence_(), record.priority, jobid))
       }
     }
 
@@ -1788,22 +1796,26 @@ object InMemoryJobEngine {
 
   private sealed trait SchedulerWorkItem {
     def sequence: Long
+    def priority: Int
     def jobId: JobId
   }
 
   private object SchedulerWorkItem {
     final case class JobRun(
       sequence: Long,
+      priority: Int,
       jobId: JobId
     ) extends SchedulerWorkItem
 
     final case class RetryRun(
       sequence: Long,
+      priority: Int,
       jobId: JobId
     ) extends SchedulerWorkItem
 
     final case class SameJobTask(
       sequence: Long,
+      priority: Int,
       jobId: JobId,
       task: JobTask,
       ctx: ExecutionContext,
@@ -1824,6 +1836,7 @@ final case class JobRecord(
   status: JobStatus,
   result: Option[JobResult],
   persistence: JobPersistencePolicy,
+  priority: Int,
   createdAt: Instant,
   updatedAt: Instant,
   taskReadModels: Vector[JobTaskReadModel],

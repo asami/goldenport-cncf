@@ -189,7 +189,7 @@ object WorkflowEngine {
         case Vector(entry) =>
           _handle_entry(entry, event)
         case xs =>
-          val sorted = xs.sortBy(x => (-x.registration.priority.value, x.order))
+          val sorted = xs.sortBy(x => (x.registration.priority.value, x.order))
           _handle_entry(sorted.head, event)
       }
     }

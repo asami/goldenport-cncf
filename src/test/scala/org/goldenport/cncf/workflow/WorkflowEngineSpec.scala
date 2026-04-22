@@ -188,7 +188,7 @@ final class WorkflowEngineSpec
       trace shouldBe empty
     }
 
-    "use the highest-priority registration and reject equal-priority ambiguity at bootstrap" in {
+    "use the smallest-priority registration and reject equal-priority ambiguity at bootstrap" in {
       Given("multiple workflow registrations for the same event and collection")
       val trace = ArrayBuffer.empty[String]
       val entityid = _entity_id("priority_1")
@@ -235,8 +235,8 @@ final class WorkflowEngineSpec
       val instance = fixture.subsystem.workflowEngine.instances.head
       _await_job_completion(fixture, instance.relatedJobIds.head)
 
-      Then("the highest-priority registration wins")
-      trace.toVector shouldBe Vector("workflow.advanceOrderHigh")
+      Then("the smallest numeric priority registration wins")
+      trace.toVector shouldBe Vector("workflow.advanceOrderLow")
 
       And("equal-priority ambiguity is rejected during bootstrap")
       val subsystem = TestComponentFactory.emptySubsystem("workflow-ambiguous")
