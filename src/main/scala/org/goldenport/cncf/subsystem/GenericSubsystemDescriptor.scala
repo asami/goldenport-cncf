@@ -34,8 +34,22 @@ final case class GenericSubsystemAuthenticationBinding(
   providers: Vector[GenericSubsystemAuthenticationProviderBinding] = Vector.empty
 )
 
+final case class GenericSubsystemMessageDeliveryProviderBinding(
+  name: String,
+  component: String,
+  channel: Option[String] = None,
+  enabled: Option[Boolean] = None,
+  priority: Option[Int] = None,
+  isDefault: Option[Boolean] = None
+)
+
+final case class GenericSubsystemMessageDeliveryBinding(
+  providers: Vector[GenericSubsystemMessageDeliveryProviderBinding] = Vector.empty
+)
+
 final case class GenericSubsystemSecurityBinding(
-  authentication: Option[GenericSubsystemAuthenticationBinding] = None
+  authentication: Option[GenericSubsystemAuthenticationBinding] = None,
+  messageDelivery: Option[GenericSubsystemMessageDeliveryBinding] = None
 )
 
 final case class GenericSubsystemBuiltinBinding(
@@ -816,12 +830,50 @@ object GenericSubsystemDescriptor {
       )
     }
 
-  given RecordDecoder[GenericSubsystemSecurityBinding] with
-    def fromRecord(rec: Record): Consequence[GenericSubsystemSecurityBinding] =
-      _record_value(rec, List("authentication")) match {
-        case Some(auth) => summon[RecordDecoder[GenericSubsystemAuthenticationBinding]].fromRecord(auth).map(x => GenericSubsystemSecurityBinding(Some(x)))
-        case None => Consequence.success(GenericSubsystemSecurityBinding(None))
+  given RecordDecoder[GenericSubsystemMessageDeliveryProviderBinding] with
+    def fromRecord(rec: Record): Consequence[GenericSubsystemMessageDeliveryProviderBinding] = {
+      val name = _string(rec, "name")
+      val component = _string(rec, "component")
+      (name, component) match {
+        case (Some(n), Some(c)) =>
+          Consequence.success(
+            GenericSubsystemMessageDeliveryProviderBinding(
+              name = n,
+              component = c,
+              channel = _string(rec, "channel"),
+              enabled = _boolean(rec, "enabled"),
+              priority = _int(rec, "priority"),
+              isDefault = _boolean(rec, "default", "isDefault")
+            )
+          )
+        case _ =>
+          Consequence.argumentMissing("message-delivery provider name/component")
       }
+    }
+
+  given RecordDecoder[GenericSubsystemMessageDeliveryBinding] with
+    def fromRecord(rec: Record): Consequence[GenericSubsystemMessageDeliveryBinding] = {
+      val providers = rec.getAny("providers") match {
+        case Some(xs: Seq[?]) =>
+          xs.toVector.flatMap(_any_to_record).flatMap(r => summon[RecordDecoder[GenericSubsystemMessageDeliveryProviderBinding]].fromRecord(r).toOption)
+        case _ =>
+          Vector.empty
+      }
+      Consequence.success(
+        GenericSubsystemMessageDeliveryBinding(
+          providers = providers
+        )
+      )
+    }
+
+  given RecordDecoder[GenericSubsystemSecurityBinding] with
+    def fromRecord(rec: Record): Consequence[GenericSubsystemSecurityBinding] = {
+      val auth = _record_value(rec, List("authentication"))
+        .flatMap(r => summon[RecordDecoder[GenericSubsystemAuthenticationBinding]].fromRecord(r).toOption)
+      val messageDelivery = _record_value(rec, List("message_delivery", "messageDelivery", "notification"))
+        .flatMap(r => summon[RecordDecoder[GenericSubsystemMessageDeliveryBinding]].fromRecord(r).toOption)
+      Consequence.success(GenericSubsystemSecurityBinding(auth, messageDelivery))
+    }
 
   given RecordDecoder[GenericSubsystemBuiltinBinding] with
     def fromRecord(rec: Record): Consequence[GenericSubsystemBuiltinBinding] =

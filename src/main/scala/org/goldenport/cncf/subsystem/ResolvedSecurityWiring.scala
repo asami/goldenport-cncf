@@ -2,6 +2,7 @@ package org.goldenport.cncf.subsystem
 
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.security.AuthenticationProvider
+import org.goldenport.cncf.messagedelivery.MessageDeliveryProvider
 
 /*
  * Runtime-resolved security wiring for a subsystem.
@@ -42,8 +43,33 @@ final case class ResolvedAuthenticationWiring(
     providers.filter(_.enabled)
 }
 
+final case class ResolvedMessageDeliveryProviderBinding(
+  name: String,
+  componentName: String,
+  channel: Option[String] = None,
+  enabled: Boolean = true,
+  priority: Int = 0,
+  isDefault: Boolean = false,
+  source: ResolvedMessageDeliveryProviderBinding.Source = ResolvedMessageDeliveryProviderBinding.Source.Convention,
+  provider: Option[MessageDeliveryProvider] = None
+)
+
+object ResolvedMessageDeliveryProviderBinding {
+  enum Source {
+    case Descriptor, Convention
+  }
+}
+
+final case class ResolvedMessageDeliveryWiring(
+  providers: Vector[ResolvedMessageDeliveryProviderBinding] = Vector.empty
+) {
+  def enabledProviders: Vector[ResolvedMessageDeliveryProviderBinding] =
+    providers.filter(_.enabled)
+}
+
 final case class ResolvedSecurityWiring(
-  authentication: ResolvedAuthenticationWiring = ResolvedAuthenticationWiring()
+  authentication: ResolvedAuthenticationWiring = ResolvedAuthenticationWiring(),
+  messageDelivery: ResolvedMessageDeliveryWiring = ResolvedMessageDeliveryWiring()
 )
 
 object ResolvedSecurityWiring {
@@ -84,11 +110,40 @@ object ResolvedSecurityWiring {
           )
         }
       }.filterNot(x => explicitKeys.contains((_normalize(x.componentName), _normalize(x.name))))
+    val explicitMessageDelivery = descriptor.toVector.flatMap(_.security.toVector).flatMap(_.messageDelivery.toVector).flatMap { delivery =>
+      delivery.providers.map { p =>
+        ResolvedMessageDeliveryProviderBinding(
+          name = p.name,
+          componentName = GenericSubsystemDescriptor.runtimeComponentName(p.component),
+          channel = p.channel,
+          enabled = p.enabled.getOrElse(true),
+          priority = p.priority.getOrElse(0),
+          isDefault = p.isDefault.getOrElse(false),
+          source = ResolvedMessageDeliveryProviderBinding.Source.Descriptor,
+          provider = _find_message_delivery_provider(components, GenericSubsystemDescriptor.runtimeComponentName(p.component), p.name)
+        )
+      }
+    }
+    val explicitMessageDeliveryKeys = explicitMessageDelivery.map(x => (_normalize(x.componentName), _normalize(x.name))).toSet
+    val conventionMessageDelivery = components.flatMap { component =>
+      component.messageDeliveryProviders.map { provider =>
+        ResolvedMessageDeliveryProviderBinding(
+          name = provider.name,
+          componentName = _component_runtime_name(component),
+          source = ResolvedMessageDeliveryProviderBinding.Source.Convention,
+          provider = Some(provider)
+        )
+      }
+    }.filterNot(x => explicitMessageDeliveryKeys.contains((_normalize(x.componentName), _normalize(x.name))))
     ResolvedSecurityWiring(
       authentication = ResolvedAuthenticationWiring(
         conventionEnabled = conventionEnabled,
         fallbackPrivilegeEnabled = fallbackPrivilegeEnabled,
         providers = (explicit ++ convention).sortBy(x => (-x.priority, _normalize(x.componentName), _normalize(x.name)))
+      ),
+      messageDelivery = ResolvedMessageDeliveryWiring(
+        providers = (explicitMessageDelivery ++ conventionMessageDelivery)
+          .sortBy(x => (-x.priority, _normalize(x.componentName), _normalize(x.name)))
       )
     )
   }
@@ -105,6 +160,13 @@ object ResolvedSecurityWiring {
       .map(GenericSubsystemDescriptor.runtimeComponentName)
       .orElse(scala.util.Try(component.name).toOption)
       .getOrElse(component.getClass.getSimpleName.stripSuffix("$"))
+
+  private def _find_message_delivery_provider(
+    components: Vector[Component],
+    componentName: String,
+    providerName: String
+  ): Option[MessageDeliveryProvider] =
+    components.find(c => _normalize(_component_runtime_name(c)) == _normalize(componentName)).flatMap(_.messageDeliveryProviders.find(p => _normalize(p.name) == _normalize(providerName)))
 
   private def _is_enabled(value: String): Boolean =
     value.trim.toLowerCase match {

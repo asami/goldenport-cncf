@@ -10,6 +10,7 @@ import org.goldenport.cncf.component.builtin.debug.DebugComponent
 import org.goldenport.cncf.component.builtin.event.EventComponent
 import org.goldenport.cncf.component.builtin.jobcontrol.JobControlComponent
 import org.goldenport.cncf.component.builtin.metrics.MetricsComponent
+import org.goldenport.cncf.component.builtin.messagedeliverystub.MessageDeliveryStubComponent
 import org.goldenport.cncf.component.builtin.specification.SpecificationComponent
 import org.goldenport.cncf.component.builtin.workflow.WorkflowComponent
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
@@ -53,6 +54,7 @@ object DefaultSubsystemFactory {
       JobControlComponent.Factory,
       WorkflowComponent.Factory,
       MetricsComponent.Factory,
+      MessageDeliveryStubComponent.Factory,
       _spec
     ).flatMap(_.create(params).participants)
   }

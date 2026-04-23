@@ -34,6 +34,7 @@ import org.goldenport.cncf.operation.{CmlOperationAccess, CmlOperationDefinition
 import org.goldenport.cncf.statemachine.{CmlStateMachineDefinition, StateMachinePlannerProvider}
 import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition, EventReception, EventReceptionRule, EventStore}
 import org.goldenport.cncf.security.AuthenticationProvider
+import org.goldenport.cncf.messagedelivery.MessageDeliveryProvider
 import org.goldenport.cncf.projection.{HelpProjection, DescribeProjection, SchemaProjection, OpenApiProjection, McpProjection, TreeProjection, StateMachineProjection}
 import org.goldenport.cncf.workflow.WorkflowDefinition
 import cats.data.NonEmptyVector
@@ -263,6 +264,7 @@ abstract class Component() extends Component.Core.Holder {
   def componentDefinitionRecords: Vector[Record] = Vector.empty
   def subsystemDefinitionRecords: Vector[Record] = Vector.empty
   def authenticationProviders: Vector[AuthenticationProvider] = Vector.empty
+  def messageDeliveryProviders: Vector[MessageDeliveryProvider] = Vector.empty
 
   def artifactMetadata: Option[Component.ArtifactMetadata] =
     _artifact_metadata

@@ -35,6 +35,8 @@ Phase 16 work proceeds in this order:
 4. CW-01 implements the `Cwitter` auth-aware baseline on that contract.
 5. CW-02 derives the minimum extra user-management capability needed for
    mention/DM.
+6. AU-04 adds message-delivery SPI plus stub-backed password reset and optional
+   2FA.
 
 This order keeps the auth boundary CNCF-owned and avoids hard-wiring `Cwitter`
 directly to provider internals.
@@ -113,7 +115,8 @@ Make browser-oriented Web session auth the canonical Phase 16 runtime mode.
 ### Guardrails
 
 - No OAuth/OIDC.
-- No SSO/MFA.
+- No SSO.
+- No mandatory/global MFA policy in this phase.
 - No token-pair-first design.
 
 ---
@@ -211,9 +214,56 @@ mention and direct-message flows.
 
 ---
 
+## AU-04: Notification SPI, Password Reset, and Optional 2FA
+
+Status: DONE
+
+### Objective
+
+Introduce a CNCF-managed message-delivery provider boundary, then use it from
+`textus-user-account` to add password reset and optional two-factor
+authentication without adding a second auth abstraction.
+
+### Detailed Tasks
+
+- [x] Add `MessageDeliveryProvider`, `UnifiedMessage`,
+      `MessageDeliveryResult`, and `MessageDeliveryProviderRuntime` in CNCF.
+- [x] Add subsystem message-delivery provider wiring parallel to auth wiring.
+- [x] Add a built-in stub message-delivery component for local/test use.
+- [x] Implement password reset request/confirm flows in
+      `textus-user-account`.
+- [x] Implement optional email-backed 2FA enrollment and login challenge in
+      `textus-user-account`.
+- [x] Update account Web UI wording to use `Handle`, `Handle or Email`, and
+      explicit field help.
+- [x] Add executable coverage for message-delivery runtime wiring, password reset,
+      and 2FA challenge behavior.
+
+### Expected Outcome
+
+- CNCF owns message-delivery provider SPI, provider resolution, and runtime
+  invocation.
+- `textus-user-account` owns password reset token state, 2FA enrollment, and
+  login challenge state.
+- Local/test flows run against the built-in message-delivery stub without any real
+  SMTP/SMS provider.
+- Existing non-2FA Cwitter login/post/DM baseline remains green.
+
+### Guardrails
+
+- No second auth abstraction beside `AuthenticationProvider`.
+- No direct SMTP/SMS SDK calls from `textus-user-account` business logic.
+- No mandatory/global MFA policy in this phase.
+- Real email/SMS provider integration is deferred until after the stub-backed
+  flow is stable.
+
+---
+
 ## Deferred / Out-of-Scope Notes
 
 - External identity federation.
-- SSO / MFA.
+- SSO.
+- Mandatory/global MFA policy.
+- Real email/SMS message-delivery providers.
 - Multiple-provider precedence beyond the first provider baseline.
 - Separate profile/domain expansion for `Cwitter`.

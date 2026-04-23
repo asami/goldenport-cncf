@@ -34,6 +34,43 @@ final class ComponentProviderBundleDiscoverySpec
       component.isPrimaryParticipant shouldBe true
       component.factoryOption shouldBe Some(_ProvidedComponent.Factory.PrimaryFactory)
     }
+
+    "resolve an impl factory when the accepted component class already lives under impl" in {
+      Given("component class under impl package with sibling component factory")
+      val subsystem = TestComponentFactory.emptySubsystem("provider-impl-factory")
+
+      When("provider resolves the impl-packaged class source")
+      val provided = ComponentProvider.provide(
+        ComponentSource.ClassDef(classOf[org.goldenport.cncf.component.repository.fixture.impl._ImplBackedComponent], "test"),
+        subsystem,
+        ComponentOrigin.Repository("provider-test")
+      )
+
+      Then("the sibling impl factory is used instead of no-arg component instantiation")
+      val component = provided.getOrElse(fail("component was not provided"))
+      component.name shouldBe "impl-backed-primary"
+      component.isPrimaryParticipant shouldBe true
+      component.factoryOption shouldBe Some(org.goldenport.cncf.component.repository.fixture.impl.ComponentFactory.PrimaryFactory)
+    }
+
+    "resolve a plain component factory when the accepted component class already lives under impl" in {
+      Given("component class under impl package with sibling plain component factory")
+      val subsystem = TestComponentFactory.emptySubsystem("provider-plain-factory")
+
+      When("provider resolves the impl-packaged class source")
+      val provided = ComponentProvider.provide(
+        ComponentSource.ClassDef(classOf[org.goldenport.cncf.component.repository.fixture.plain._PlainFactoryBackedComponent], "test"),
+        subsystem,
+        ComponentOrigin.Repository("provider-test")
+      )
+
+      Then("the plain factory is used instead of no-arg component instantiation")
+      val component = provided.getOrElse(fail("component was not provided"))
+      component.name shouldBe "plain-factory-primary"
+      component.isPrimaryParticipant shouldBe true
+      component.factoryOption.getOrElse(fail("factory was not attached")).getClass.getName shouldBe
+        "org.goldenport.cncf.component.repository.fixture.plain.ComponentFactory"
+    }
   }
 }
 

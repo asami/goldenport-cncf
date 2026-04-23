@@ -3,6 +3,7 @@ package org.goldenport.cncf.subsystem
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.messagedelivery.{UnifiedMessage, MessageDeliveryProvider, MessageDeliveryResult}
 import org.goldenport.cncf.security.{AuthenticationProvider, AuthenticationRequest, AuthenticationResult}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -102,11 +103,59 @@ final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
       wiring.authentication.fallbackPrivilegeEnabled shouldBe false
       wiring.authentication.providers shouldBe empty
     }
+
+    "resolve message-delivery providers with descriptor precedence and deterministic ordering" in {
+      val descriptor = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("<memory>"),
+        subsystemName = "textus-identity",
+        componentBindings = Vector(
+          GenericSubsystemComponentBinding("textus-message-delivery-stub")
+        ),
+        security = Some(
+          GenericSubsystemSecurityBinding(
+            messageDelivery = Some(
+              GenericSubsystemMessageDeliveryBinding(
+                providers = Vector(
+                  GenericSubsystemMessageDeliveryProviderBinding(
+                    name = "textus-message-delivery-stub",
+                    component = "textus-message-delivery-stub",
+                    channel = Some("email"),
+                    enabled = Some(true),
+                    priority = Some(100),
+                    isDefault = Some(true)
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+      val component = _messageDeliveryComponent(
+        "MessageDeliveryStub",
+        "textus-message-delivery-stub",
+        Vector(_messageDeliveryProvider("textus-message-delivery-stub"), _messageDeliveryProvider("other-message-delivery"))
+      )
+
+      val wiring = ResolvedSecurityWiring.resolve(Some(descriptor), Vector(component))
+
+      wiring.messageDelivery.providers.map(x => (x.componentName, x.name, x.source.toString)) shouldBe Vector(
+        ("MessageDeliveryStub", "textus-message-delivery-stub", "Descriptor"),
+        ("MessageDeliveryStub", "other-message-delivery", "Convention")
+      )
+      wiring.messageDelivery.providers.head.priority shouldBe 100
+      wiring.messageDelivery.providers.head.isDefault shouldBe true
+      wiring.messageDelivery.providers.head.provider.map(_.name) shouldBe Some("textus-message-delivery-stub")
+    }
   }
 
-  private def _component(name: String, providers: Vector[AuthenticationProvider]): Component =
+  private def _component(
+    name: String,
+    providers: Vector[AuthenticationProvider],
+    messageDeliveryProviders0: Vector[MessageDeliveryProvider] = Vector.empty
+  ): Component =
     new Component() {
       override def authenticationProviders: Vector[AuthenticationProvider] = providers
+      override def messageDeliveryProviders: Vector[MessageDeliveryProvider] = messageDeliveryProviders0
     }.withArtifactMetadata(
       Component.ArtifactMetadata(
         sourceType = "spec",
@@ -116,10 +165,33 @@ final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
       )
     )
 
+  private def _messageDeliveryComponent(
+    name: String,
+    descriptorComponent: String,
+    providers: Vector[MessageDeliveryProvider]
+  ): Component =
+    new Component() {
+      override def messageDeliveryProviders: Vector[MessageDeliveryProvider] = providers
+    }.withArtifactMetadata(
+      Component.ArtifactMetadata(
+        sourceType = "spec",
+        name = name,
+        version = "0.0.0",
+        component = Some(descriptorComponent)
+      )
+    )
+
   private def _provider(pname: String): AuthenticationProvider =
     new AuthenticationProvider {
       override val name: String = pname
       def authenticate(request: AuthenticationRequest)(using ExecutionContext): Consequence[Option[AuthenticationResult]] =
         Consequence.success(None)
+    }
+
+  private def _messageDeliveryProvider(pname: String): MessageDeliveryProvider =
+    new MessageDeliveryProvider {
+      override val name: String = pname
+      def send(message: UnifiedMessage)(using ExecutionContext): Consequence[MessageDeliveryResult] =
+        Consequence.success(MessageDeliveryResult())
     }
 }

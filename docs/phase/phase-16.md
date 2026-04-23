@@ -17,8 +17,10 @@ This document is a progress dashboard, not a design journal.
   second auth model.
 - Treat `textus-user-account` as the first provider implementation behind the
   CNCF auth boundary.
-- Keep `Cwitter` login/logout UX app-owned while auth/session behavior remains
+- Keep `Cwitter` app navigation app-owned while auth/session behavior remains
   CNCF-owned.
+- Let `textus-user-account` own account UI for signup, password reset, and
+  optional 2FA flows.
 - Keep deployment as multi-CAR within one subsystem:
   - `Cwitter` component = `CAR`
   - `Cwitter` subsystem = `SAR`
@@ -38,15 +40,23 @@ Current semantic direction:
 - Web session is the canonical Phase 16 auth mode.
 - `textus-user-account` account identity is the `Cwitter` user identity in this
   phase.
-- `Cwitter` owns login/logout UX and uses CNCF auth/session behavior.
+- `Cwitter` owns app navigation and uses CNCF auth/session behavior.
+- `textus-user-account` owns account UI for signup, reset, and optional 2FA
+  while CNCF continues to own transport/runtime integration.
+- CNCF owns message-delivery provider SPI, subsystem wiring, and runtime
+  invocation.
 - no separate `Cwitter` profile entity is introduced in this phase.
 
 ## 3. Non-Goals
 
 - No OAuth/OIDC federation.
-- No SSO or MFA.
+- No SSO.
+- No mandatory/global MFA policy; only optional provider-owned 2FA is in
+  scope.
 - No external IdP protocol implementation.
 - No token-pair-first auth model.
+- No real SMTP/SMS delivery provider in this phase; message-delivery stays
+  stub-backed.
 - No second auth abstraction beside the existing `AuthenticationProvider` path.
 - No separate `Cwitter` profile model unless Phase 16 proves it unavoidable.
 
@@ -57,6 +67,7 @@ Current semantic direction:
 - C (DONE): AU-03 — Add `textus-user-account` adapter as the first provider.
 - D (DONE): CW-01 — Implement `Cwitter` auth-aware baseline.
 - E (DONE): CW-02 — Derive and implement the minimum user-management additions needed for mention/DM.
+- F (DONE): AU-04 — Add message-delivery SPI with stub-backed password reset and optional 2FA.
 
 Current note:
 - Phase 15 is closed and remains the scheduler/timer baseline.
@@ -71,6 +82,11 @@ Current note:
 - browser cookie and `x-textus-session` continue to carry only the
   provider-owned session id; provider tokens remain internal to
   `textus-user-account`.
+- AU-04 is complete: CNCF now resolves message-delivery providers through subsystem
+  wiring, ships a built-in stub provider, and `textus-user-account` uses that
+  boundary for password reset and optional email-backed 2FA.
+- password reset tokens and 2FA challenge state remain provider-owned inside
+  `textus-user-account`; CNCF only invokes message delivery.
 - `Cwitter` is already scaffolded as `component/ + subsystem/` and is the
   concrete consumer for this phase.
 - local `component.d` staging is development-only; production remains
@@ -83,12 +99,14 @@ Current note:
 - [x] AU-03: Add `textus-user-account` adapter as the first provider.
 - [x] CW-01: Implement `Cwitter` auth-aware baseline.
 - [x] CW-02: Derive and implement the minimum user-management additions needed for mention/DM.
+- [x] AU-04: Add message-delivery SPI with stub-backed password reset and optional 2FA.
 
 ## 6. Next Candidates
 
-- CW-03: Clarify whether Cwitter needs a separate profile/domain model after the auth baseline lands.
+- CW-03: Run Cwitter manually, capture real-use UX/runtime issues, and fix them without adding a separate profile model.
 - NP-1601: Provider replacement and multiple-provider precedence beyond the first provider baseline.
-- NP-1602: External identity/federation after the built-in Web session baseline is complete.
+- NP-1602: Real email/SMS message-delivery providers after the stub-backed message-delivery path is stable.
+- NP-1603: External identity/federation after the built-in Web session baseline is complete.
 
 ## 7. References
 
