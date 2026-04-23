@@ -154,7 +154,7 @@ boundary.
 
 ## CW-01: `Cwitter` Auth-Aware Baseline
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -163,11 +163,11 @@ Implement the first authenticated `Cwitter` baseline using the generated
 
 ### Detailed Tasks
 
-- [ ] Add login/logout UX owned by `Cwitter`.
-- [ ] Add authenticated posting flow.
-- [ ] Add current-user-aware request handling.
-- [ ] Keep `Cwitter` deployment in `CAR + SAR` shape.
-- [ ] Add scenario coverage for authenticated posting through the shared
+- [x] Add login/logout UX owned by `Cwitter`.
+- [x] Add authenticated posting flow.
+- [x] Add current-user-aware request handling.
+- [x] Keep `Cwitter` deployment in `CAR + SAR` shape.
+- [x] Add scenario coverage for authenticated posting through the shared
       auth/session flow.
 
 ### Expected Outcome
@@ -183,7 +183,7 @@ Implement the first authenticated `Cwitter` baseline using the generated
 
 ## CW-02: Minimum User-Management Additions for Mention / DM
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -192,12 +192,12 @@ mention and direct-message flows.
 
 ### Detailed Tasks
 
-- [ ] Fix stable user handle / lookup behavior.
-- [ ] Add mention target lookup.
-- [ ] Add DM recipient resolution.
-- [ ] Enforce authenticated sender semantics.
-- [ ] Enforce participant/owner visibility boundaries.
-- [ ] Ensure session invalidation does not leave stale user context.
+- [x] Fix stable user handle / lookup behavior.
+- [x] Add mention target lookup.
+- [x] Add DM recipient resolution.
+- [x] Enforce authenticated sender semantics.
+- [x] Enforce participant/owner visibility boundaries.
+- [x] Ensure session invalidation does not leave stale user context.
 
 ### Expected Outcome
 

@@ -55,8 +55,8 @@ Current semantic direction:
 - A (DONE): AU-01 — Complete the CNCF auth/session contract on top of the existing `AuthenticationProvider` and subsystem security wiring.
 - B (DONE): AU-02 — Add Web session login/logout/current-session flow at ingress/runtime.
 - C (DONE): AU-03 — Add `textus-user-account` adapter as the first provider.
-- D (ACTIVE): CW-01 — Implement `Cwitter` auth-aware baseline.
-- E (PLANNED): CW-02 — Derive and implement the minimum user-management additions needed for mention/DM.
+- D (DONE): CW-01 — Implement `Cwitter` auth-aware baseline.
+- E (DONE): CW-02 — Derive and implement the minimum user-management additions needed for mention/DM.
 
 Current note:
 - Phase 15 is closed and remains the scheduler/timer baseline.
@@ -81,8 +81,8 @@ Current note:
 - [x] AU-01: Complete the CNCF auth/session contract on top of the existing `AuthenticationProvider` and subsystem security wiring.
 - [x] AU-02: Add Web session login/logout/current-session flow at ingress/runtime.
 - [x] AU-03: Add `textus-user-account` adapter as the first provider.
-- [ ] CW-01: Implement `Cwitter` auth-aware baseline.
-- [ ] CW-02: Derive and implement the minimum user-management additions needed for mention/DM.
+- [x] CW-01: Implement `Cwitter` auth-aware baseline.
+- [x] CW-02: Derive and implement the minimum user-management additions needed for mention/DM.
 
 ## 6. Next Candidates
 

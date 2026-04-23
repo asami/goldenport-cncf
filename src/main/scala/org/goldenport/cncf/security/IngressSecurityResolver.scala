@@ -125,8 +125,10 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       case None =>
         if (_fallback_privilege_enabled(base))
           _resolve_privilege(attributes).map(_security_context(_, attributes))
-        else
+        else if (_has_authentication_material(request))
           Consequence.securityPermissionDenied[SecurityContext]("Privilege fallback is disabled by resolved security wiring.")
+        else
+          _resolve_privilege(attributes).map(_security_context(_, attributes))
     }.flatMap { security =>
       val privilege = _resolve_privilege_from_security(security)
       val ctx0 = ExecutionContext.withSecurityContext(base, security)
@@ -273,6 +275,16 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     _subsystem_from_scope(base.cncfCore.scope)
       .map(_.resolvedSecurityWiring.authentication.fallbackPrivilegeEnabled)
       .getOrElse(true)
+
+  private def _has_authentication_material(request: AuthenticationRequest): Boolean =
+    request.accessToken.exists(_.trim.nonEmpty) ||
+      request.refreshToken.exists(_.trim.nonEmpty) ||
+      request.sessionId.exists(_.trim.nonEmpty) ||
+      request.attribute("username").exists(_.trim.nonEmpty) ||
+      request.attribute("password").exists(_.trim.nonEmpty) ||
+      request.attribute("email").exists(_.trim.nonEmpty) ||
+      request.attribute("loginName").exists(_.trim.nonEmpty) ||
+      request.attribute("login_name").exists(_.trim.nonEmpty)
 
   @annotation.tailrec
   private def _subsystem_from_scope(

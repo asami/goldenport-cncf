@@ -164,6 +164,18 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
       result shouldBe a[Consequence.Failure[_]]
     }
 
+    "allow anonymous resolution when providers are configured but no authentication material is present" in {
+      val subsystem = _subsystem(fallbackEnabled = false)
+      val base = subsystem.components.head.logic.executionContext()
+
+      val result = IngressSecurityResolver.resolve(base, Map.empty[String, String])
+
+      result shouldBe a[Consequence.Success[_]]
+      val resolved = result.toOption.get
+      resolved.executionContext.security.principal.id.value shouldBe "anonymous"
+      resolved.executionContext.security.level shouldBe SecurityLevel("anonymous")
+    }
+
     "preserve authenticated session metadata in execution context security" in {
       val session = org.goldenport.cncf.context.SessionContext(
         sessionId = Some("sess-1"),
