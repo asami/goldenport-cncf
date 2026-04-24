@@ -38,6 +38,57 @@ final class WebOperationAuthorizationPolicySpec extends AnyWordSpec with Matcher
 
       rule.allowAnonymous shouldBe false
     }
+
+    "deny production admin operations by default" in {
+      val subsystem = _subsystem_with_admin()
+      val rule = WebOperationAuthorizationPolicy
+        .operationRule(
+          subsystem,
+          "admin.config.show",
+          RuntimeConfig.default.copy(operationMode = OperationMode.Production)
+        )
+        .getOrElse(fail("admin operation rule is missing"))
+
+      rule.deny shouldBe true
+    }
+
+    "require system privilege and system admin role for production system admin" in {
+      val subsystem = _subsystem_with_admin()
+      val rule = WebOperationAuthorizationPolicy
+        .operationRule(
+          subsystem,
+          "admin.config.show",
+          RuntimeConfig.default.copy(
+            operationMode = OperationMode.Production,
+            webProductionAdminEnabled = true
+          )
+        )
+        .getOrElse(fail("admin operation rule is missing"))
+
+      rule.minimumPrivilege shouldBe Some("system")
+      rule.roles shouldBe Vector("system_admin")
+      rule.requireAuthenticated shouldBe true
+      rule.requireProviderAuthentication shouldBe true
+    }
+
+    "require operator privilege and component roles for production component admin" in {
+      val subsystem = _subsystem_with_admin()
+      val rule = WebOperationAuthorizationPolicy
+        .operationRule(
+          subsystem,
+          "admin.entity.create",
+          RuntimeConfig.default.copy(
+            operationMode = OperationMode.Production,
+            webProductionAdminEnabled = true
+          )
+        )
+        .getOrElse(fail("admin operation rule is missing"))
+
+      rule.minimumPrivilege shouldBe Some("operator")
+      rule.roles shouldBe Vector("component_operator", "system_admin")
+      rule.requireAuthenticated shouldBe true
+      rule.requireProviderAuthentication shouldBe true
+    }
   }
 
   private def _subsystem_with_admin(): Subsystem = {

@@ -29,7 +29,7 @@ import org.goldenport.cncf.entity.runtime.EntityCollection
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.observability.ObservabilityEngine
 import org.goldenport.cncf.projection.{SecurityDeploymentMarkdownProjection, SecurityDeploymentProjection}
-import org.goldenport.cncf.security.{OperationAuthorizationProvider, OperationAuthorizationRule}
+import org.goldenport.cncf.security.{AdminAuthorizationPolicy, OperationAuthorizationProvider, OperationAuthorizationRule}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAssemblyDescriptorSource, Subsystem}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
@@ -62,7 +62,7 @@ object AdminComponent {
     def operationAuthorization(
       runtimeConfig: RuntimeConfig
     ): OperationAuthorizationRule =
-      OperationAuthorizationRule.developAnonymousAdmin(runtimeConfig)
+      AdminAuthorizationPolicy.operationRule("admin.system", runtimeConfig)
   }
 
   object Factory extends Component.SinglePrimaryBundleFactory {

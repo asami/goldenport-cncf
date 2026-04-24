@@ -14,7 +14,14 @@ import org.goldenport.record.Record
 final case class OperationAuthorizationRule(
   operationModes: Vector[OperationMode] = Vector.empty,
   allowAnonymous: Boolean = false,
-  anonymousOperationModes: Vector[OperationMode] = Vector.empty
+  anonymousOperationModes: Vector[OperationMode] = Vector.empty,
+  deny: Boolean = false,
+  requireAuthenticated: Boolean = false,
+  requireProviderAuthentication: Boolean = false,
+  minimumPrivilege: Option[String] = None,
+  roles: Vector[String] = Vector.empty,
+  scopes: Vector[String] = Vector.empty,
+  capabilities: Vector[String] = Vector.empty
 )
 
 object OperationAuthorizationRule {
@@ -30,8 +37,23 @@ object OperationAuthorizationRule {
     OperationAuthorizationRule(
       operationModes = _operation_modes(record, "operationModes", "operation_modes", "modes"),
       allowAnonymous = _boolean(record, "allowAnonymous", "allow_anonymous").getOrElse(false),
-      anonymousOperationModes = _operation_modes(record, "anonymousOperationModes", "anonymous_operation_modes", "anonymousModes", "anonymous_modes")
+      anonymousOperationModes = _operation_modes(record, "anonymousOperationModes", "anonymous_operation_modes", "anonymousModes", "anonymous_modes"),
+      deny = _boolean(record, "deny", "denied").getOrElse(false),
+      requireAuthenticated = _boolean(record, "requireAuthenticated", "require_authenticated", "authenticated").getOrElse(false),
+      requireProviderAuthentication = _boolean(record, "requireProviderAuthentication", "require_provider_authentication", "providerAuthenticated", "provider_authenticated").getOrElse(false),
+      minimumPrivilege = _string(record, "minimumPrivilege", "minimum_privilege", "privilege"),
+      roles = _string_vector(record, List("roles", "role")),
+      scopes = _string_vector(record, List("scopes", "scope")),
+      capabilities = _string_vector(record, List("capabilities", "capability"))
     )
+
+  private def _string(
+    record: Record,
+    keys: String*
+  ): Option[String] =
+    keys.iterator.map(record.getString).collectFirst {
+      case Some(s) if s.trim.nonEmpty => s.trim
+    }
 
   private def _operation_modes(
     record: Record,
@@ -78,7 +100,9 @@ object OperationAuthorization {
     selector: String,
     rule: OperationAuthorizationRule
   )(using ctx: ExecutionContext): Consequence[Unit] =
-    if (rule.operationModes.nonEmpty && !rule.operationModes.contains(ctx.operationMode))
+    if (rule.deny)
+      _denied(selector, "denied")
+    else if (rule.operationModes.nonEmpty && !rule.operationModes.contains(ctx.operationMode))
       _denied(selector, "operation-mode")
     else if (ctx.security.subjectKind == SubjectKind.Anonymous && !rule.allowAnonymous)
       _denied(selector, "anonymous")
@@ -88,8 +112,41 @@ object OperationAuthorization {
         !rule.anonymousOperationModes.contains(ctx.operationMode)
     )
       _denied(selector, "anonymous-operation-mode")
+    else if (rule.requireAuthenticated && !SecuritySubject.current.isAuthenticated)
+      _denied(selector, "authenticated")
+    else if (rule.requireProviderAuthentication && !SecuritySubject.current.isProviderAuthenticated)
+      _denied(selector, "provider-authentication")
+    else if (rule.minimumPrivilege.exists(x => !ctx.security.hasPrivilegeAtLeast(x)))
+      _denied(selector, "minimum-privilege")
+    else if (!_roles_allowed(rule.roles))
+      _denied(selector, "role")
+    else if (!_scopes_allowed(rule.scopes))
+      _denied(selector, "scope")
+    else if (!_capabilities_allowed(rule.capabilities))
+      _denied(selector, "capability")
     else
       Consequence.unit
+
+  private def _roles_allowed(
+    required: Vector[String]
+  )(using ctx: ExecutionContext): Boolean =
+    _category_allowed(required, SecuritySubject.current.roles)
+
+  private def _scopes_allowed(
+    required: Vector[String]
+  )(using ctx: ExecutionContext): Boolean =
+    _category_allowed(required, SecuritySubject.current.scopes)
+
+  private def _capabilities_allowed(
+    required: Vector[String]
+  )(using ctx: ExecutionContext): Boolean =
+    _category_allowed(required, SecuritySubject.current.capabilities)
+
+  private def _category_allowed(
+    required: Vector[String],
+    actual: Set[String]
+  ): Boolean =
+    required.isEmpty || required.exists(x => actual.contains(SecuritySubject.normalize(x)))
 
   private def _denied[A](
     selector: String,

@@ -19,6 +19,11 @@ The canonical runtime carrier is `OperationAuthorizationRule`:
 - `anonymousOperationModes`: operation modes in which anonymous invocation is
   allowed when `allowAnonymous` is true. Empty means anonymous invocation is not
   further restricted by operation mode.
+- `minimumPrivilege`: minimum runtime/system privilege ceiling required for the
+  operation.
+- `roles`, `scopes`, and `capabilities`: operational policy requirements after
+  the privilege ceiling has been satisfied.
+- `deny`: explicit deny rule used for disabled built-in policy surfaces.
 
 An Operation definition may supply the rule by implementing
 `OperationAuthorizationProvider`. Generated CML Operations should use this path.
@@ -61,10 +66,14 @@ Operation implementations should not inspect `production` / `develop` mode or
 anonymous-user settings for ordinary admission control.
 
 The built-in admin component uses the shared
-`OperationAuthorizationRule.developAnonymousAdmin` factory. That factory is also
-the expected default for generated or declarative admin-like Operations that
-want local anonymous access in `develop` and `test`, but never in `production`
-or `demo`.
+admin authorization policy. In `develop` and `test`, this preserves the
+`OperationAuthorizationRule.developAnonymousAdmin` behavior. In `production`,
+admin operations are denied by default; when explicitly enabled, access still
+requires both a sufficient privilege ceiling and the configured admin roles.
+
+`privilege` is not a replacement for roles. It is the CNCF runtime/system
+capability ceiling and should remain coarse-grained. Role, scope, and
+capability carry the operational policy.
 
 ## Relation To WebDescriptor
 

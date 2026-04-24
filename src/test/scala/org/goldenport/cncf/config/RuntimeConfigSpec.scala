@@ -18,6 +18,46 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
 
       config.operationMode shouldBe OperationMode.Develop
       config.webDevelopAnonymousAdmin shouldBe true
+      config.webProductionAdminEnabled shouldBe false
+      config.webProductionAdminSystemRoles shouldBe Vector("system_admin")
+      config.webProductionAdminComponentRoles shouldBe Vector("component_operator", "system_admin")
+      config.webProductionAdminJobsRoles shouldBe Vector("system_admin", "audit_viewer")
+    }
+
+    "parse production admin gate configuration and aliases" in {
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.RuntimeWebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true"),
+          RuntimeConfig.RuntimeWebProductionAdminSystemRolesKey -> ConfigurationValue.StringValue("system_admin,platform_admin"),
+          RuntimeConfig.RuntimeWebProductionAdminComponentRolesKey -> ConfigurationValue.StringValue("component_operator system_admin"),
+          RuntimeConfig.RuntimeWebProductionAdminJobsRolesKey -> ConfigurationValue.StringValue("audit_viewer|system_admin")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      val config = RuntimeConfig.from(configuration)
+
+      config.webProductionAdminEnabled shouldBe true
+      config.webProductionAdminSystemRoles shouldBe Vector("system_admin", "platform_admin")
+      config.webProductionAdminComponentRoles shouldBe Vector("component_operator", "system_admin")
+      config.webProductionAdminJobsRoles shouldBe Vector("audit_viewer", "system_admin")
+    }
+
+    "keep CSV parsing for execution history filters independent from admin role token parsing" in {
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.ExecutionHistoryFilterOperationContainsKey ->
+            ConfigurationValue.StringValue("notice search|with pipe,admin jobs")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      val config = RuntimeConfig.from(configuration)
+
+      config.executionHistoryConfig.filters.map(_.operationContains) shouldBe Vector(
+        Some("notice search|with pipe"),
+        Some("admin jobs")
+      )
     }
 
     "parse operation mode independently from run mode" in {

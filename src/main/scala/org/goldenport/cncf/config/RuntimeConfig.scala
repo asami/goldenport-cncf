@@ -33,6 +33,10 @@ final case class RuntimeConfig(
   webOperationDispatcher: String = RuntimeConfig.DefaultWebOperationDispatcher,
   webOperationDispatcherRestBaseUrl: Option[String] = None,
   webDevelopAnonymousAdmin: Boolean = RuntimeConfig.DefaultWebDevelopAnonymousAdmin,
+  webProductionAdminEnabled: Boolean = RuntimeConfig.DefaultWebProductionAdminEnabled,
+  webProductionAdminSystemRoles: Vector[String] = RuntimeConfig.DefaultWebProductionAdminSystemRoles,
+  webProductionAdminComponentRoles: Vector[String] = RuntimeConfig.DefaultWebProductionAdminComponentRoles,
+  webProductionAdminJobsRoles: Vector[String] = RuntimeConfig.DefaultWebProductionAdminJobsRoles,
   commandExecutionMode: Option[CommandExecutionMode] = None,
   executionHistoryConfig: ObservabilityEngine.ExecutionHistoryConfig =
     ObservabilityEngine.ExecutionHistoryConfig()
@@ -95,6 +99,14 @@ object RuntimeConfig {
   val RuntimeWebOperationDispatcherRestBaseUrlKey = "textus.runtime.web.operation.dispatcher.rest.base-url"
   val WebDevelopAnonymousAdminKey = "textus.web.develop.anonymous-admin"
   val RuntimeWebDevelopAnonymousAdminKey = "textus.runtime.web.develop.anonymous-admin"
+  val WebProductionAdminEnabledKey = "textus.web.production.admin.enabled"
+  val RuntimeWebProductionAdminEnabledKey = "textus.runtime.web.production.admin.enabled"
+  val WebProductionAdminSystemRolesKey = "textus.web.production.admin.system.roles"
+  val RuntimeWebProductionAdminSystemRolesKey = "textus.runtime.web.production.admin.system.roles"
+  val WebProductionAdminComponentRolesKey = "textus.web.production.admin.component.roles"
+  val RuntimeWebProductionAdminComponentRolesKey = "textus.runtime.web.production.admin.component.roles"
+  val WebProductionAdminJobsRolesKey = "textus.web.production.admin.jobs.roles"
+  val RuntimeWebProductionAdminJobsRolesKey = "textus.runtime.web.production.admin.jobs.roles"
 
   val DefaultServerEmulatorBaseUrl = "http://localhost/"
   val DefaultHttpDriverName = "real"
@@ -103,6 +115,10 @@ object RuntimeConfig {
   val DefaultLogFilePath = ".textus/data.d/trace.log"
   val DefaultWebOperationDispatcher = "local"
   val DefaultWebDevelopAnonymousAdmin = true
+  val DefaultWebProductionAdminEnabled = false
+  val DefaultWebProductionAdminSystemRoles = Vector("system_admin")
+  val DefaultWebProductionAdminComponentRoles = Vector("component_operator", "system_admin")
+  val DefaultWebProductionAdminJobsRoles = Vector("system_admin", "audit_viewer")
 
   val default: RuntimeConfig =
     RuntimeConfig(
@@ -117,6 +133,10 @@ object RuntimeConfig {
       webOperationDispatcher = DefaultWebOperationDispatcher,
       webOperationDispatcherRestBaseUrl = None,
       webDevelopAnonymousAdmin = DefaultWebDevelopAnonymousAdmin,
+      webProductionAdminEnabled = DefaultWebProductionAdminEnabled,
+      webProductionAdminSystemRoles = DefaultWebProductionAdminSystemRoles,
+      webProductionAdminComponentRoles = DefaultWebProductionAdminComponentRoles,
+      webProductionAdminJobsRoles = DefaultWebProductionAdminJobsRoles,
       commandExecutionMode = None,
       executionHistoryConfig = ObservabilityEngine.ExecutionHistoryConfig()
     )
@@ -190,6 +210,27 @@ object RuntimeConfig {
     val webDevelopAnonymousAdmin =
       _get_boolean(configuration, WebDevelopAnonymousAdminKey)
         .getOrElse(DefaultWebDevelopAnonymousAdmin)
+    val webProductionAdminEnabled =
+      _get_boolean(configuration, WebProductionAdminEnabledKey)
+        .getOrElse(DefaultWebProductionAdminEnabled)
+    val webProductionAdminSystemRoles =
+      _split_token_list(_get_string(configuration, WebProductionAdminSystemRolesKey))
+        .filter(_.nonEmpty) match {
+          case Vector() => DefaultWebProductionAdminSystemRoles
+          case roles => roles
+        }
+    val webProductionAdminComponentRoles =
+      _split_token_list(_get_string(configuration, WebProductionAdminComponentRolesKey))
+        .filter(_.nonEmpty) match {
+          case Vector() => DefaultWebProductionAdminComponentRoles
+          case roles => roles
+        }
+    val webProductionAdminJobsRoles =
+      _split_token_list(_get_string(configuration, WebProductionAdminJobsRolesKey))
+        .filter(_.nonEmpty) match {
+          case Vector() => DefaultWebProductionAdminJobsRoles
+          case roles => roles
+        }
     ObservabilityEngine.updateExecutionHistoryConfig(executionHistoryConfig)
     RuntimeConfig(
       logbackend,
@@ -203,6 +244,10 @@ object RuntimeConfig {
       webOperationDispatcher = webOperationDispatcher,
       webOperationDispatcherRestBaseUrl = webOperationDispatcherRestBaseUrl,
       webDevelopAnonymousAdmin = webDevelopAnonymousAdmin,
+      webProductionAdminEnabled = webProductionAdminEnabled,
+      webProductionAdminSystemRoles = webProductionAdminSystemRoles,
+      webProductionAdminComponentRoles = webProductionAdminComponentRoles,
+      webProductionAdminJobsRoles = webProductionAdminJobsRoles,
       commandExecutionMode = commandExecutionMode,
       executionHistoryConfig = executionHistoryConfig
     )
@@ -298,6 +343,11 @@ object RuntimeConfig {
   ): Vector[String] =
     value.toVector.flatMap(_.split(",").toVector.map(_.trim).filter(_.nonEmpty))
 
+  private def _split_token_list(
+    value: Option[String]
+  ): Vector[String] =
+    value.toVector.flatMap(_.split("[,|\\s]+").toVector.map(_.trim).filter(_.nonEmpty))
+
   private def _legacy_aliases(
     key: String
   ): Vector[String] = {
@@ -329,6 +379,10 @@ object RuntimeConfig {
         case WebOperationDispatcherKey => Vector(RuntimeWebOperationDispatcherKey)
         case WebOperationDispatcherRestBaseUrlKey => Vector(RuntimeWebOperationDispatcherRestBaseUrlKey)
         case WebDevelopAnonymousAdminKey => Vector(RuntimeWebDevelopAnonymousAdminKey)
+        case WebProductionAdminEnabledKey => Vector(RuntimeWebProductionAdminEnabledKey)
+        case WebProductionAdminSystemRolesKey => Vector(RuntimeWebProductionAdminSystemRolesKey)
+        case WebProductionAdminComponentRolesKey => Vector(RuntimeWebProductionAdminComponentRolesKey)
+        case WebProductionAdminJobsRolesKey => Vector(RuntimeWebProductionAdminJobsRolesKey)
         case _ => Vector.empty
       }
     val cncfAliases =

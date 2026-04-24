@@ -4,7 +4,7 @@ import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 23, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SecuritySubject(
@@ -14,6 +14,7 @@ final case class SecuritySubject(
   primaryGroup: Option[String],
   groups: Set[String],
   roles: Set[String],
+  scopes: Set[String] = Set.empty,
   privileges: Set[String],
   capabilities: Set[String],
   securityLevel: Set[String],
@@ -21,6 +22,10 @@ final case class SecuritySubject(
 ) {
   def isAuthenticated: Boolean =
     authenticationState == SecuritySubject.AuthenticationState.Authenticated
+
+  def isProviderAuthenticated: Boolean =
+    attributes.get(SecuritySubject.AuthenticationProvenanceAttribute)
+      .exists(x => SecuritySubject.normalize(x) == SecuritySubject.ProviderAuthenticationProvenance)
 
   def isAnonymous: Boolean =
     authenticationState == SecuritySubject.AuthenticationState.Anonymous
@@ -30,6 +35,9 @@ final case class SecuritySubject(
 
   def hasRole(name: String): Boolean =
     roles.contains(SecuritySubject.normalize(name))
+
+  def hasScope(name: String): Boolean =
+    scopes.contains(SecuritySubject.normalize(name))
 
   def hasPrivilege(name: String): Boolean =
     privileges.contains(SecuritySubject.normalize(name))
@@ -86,6 +94,9 @@ final case class SecuritySubject(
 }
 
 object SecuritySubject {
+  val AuthenticationProvenanceAttribute: String = "cncf.security.authentication.provenance"
+  val ProviderAuthenticationProvenance: String = "provider"
+
   enum AuthenticationState {
     case Anonymous, Authenticated, Unspecified
   }
@@ -107,6 +118,8 @@ object SecuritySubject {
       _tokens(attributes, "group", "group_id", "groups", "group_ids")
     val roleSet =
       _tokens(attributes, "role", "roles", "authority", "authorities")
+    val scopeSet =
+      _tokens(attributes, "scope", "scopes")
     val privilegeSet =
       _tokens(attributes, "privilege", "privilege_id", "privileges")
     val capabilitySet =
@@ -120,6 +133,7 @@ object SecuritySubject {
       primaryGroup = primaryGroup.map(normalize),
       groups = groupSet.map(normalize),
       roles = roleSet.map(normalize),
+      scopes = scopeSet.map(normalize),
       privileges = privilegeSet.map(normalize),
       capabilities = capabilitySet,
       securityLevel = levelSet,

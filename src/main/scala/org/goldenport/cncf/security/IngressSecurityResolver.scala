@@ -304,8 +304,20 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     request: AuthenticationRequest
   ): Consequence[Option[SecurityContext]] = {
     val _ = providers
-    AuthenticationProviderRuntime.authenticate(base, request).map(_.map(_.toSecurityContext))
+    AuthenticationProviderRuntime.authenticate(base, request).map(_.map(x => _provider_authenticated(x.toSecurityContext)))
   }
+
+  private def _provider_authenticated(
+    security: SecurityContext
+  ): SecurityContext =
+    security.copy(principal = new Principal {
+      val id: PrincipalId = security.principal.id
+      val attributes: Map[String, String] =
+        security.principal.attributes ++ Map(
+          SecuritySubject.AuthenticationProvenanceAttribute ->
+            SecuritySubject.ProviderAuthenticationProvenance
+        )
+    })
 
   private def _resolved_authentication_providers(base: ExecutionContext): Vector[AuthenticationProvider] =
     AuthenticationProviderRuntime.providers(base)
@@ -437,6 +449,12 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
         Consequence.success(SecurityContext.Privilege.User)
       case Some("applicationcontentmanager") | Some("contentmanager") | Some("contentadmin") =>
         Consequence.success(SecurityContext.Privilege.ApplicationContentManager)
+      case Some("operator") =>
+        Consequence.success(SecurityContext.Privilege.Operator)
+      case Some("system") | Some("systemoperator") | Some("systemadmin") =>
+        Consequence.success(SecurityContext.Privilege.System)
+      case Some("internal") | Some("subsystem") | Some("service") | Some("component") =>
+        Consequence.success(SecurityContext.Privilege.Internal)
       case Some(other) =>
         Consequence.operationInvalid(
           "security.resolve",
@@ -478,7 +496,15 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
         k == "subject_id" ||
         k == "subjectId" ||
         k == "principal_id" ||
-        k == "principalId"
+        k == "principalId" ||
+        k == "role" ||
+        k == "roles" ||
+        k == "scope" ||
+        k == "scopes" ||
+        k == "privilege" ||
+        k == "privileges" ||
+        k == "capability" ||
+        k == "capabilities"
     }
 
   private def _find_first(

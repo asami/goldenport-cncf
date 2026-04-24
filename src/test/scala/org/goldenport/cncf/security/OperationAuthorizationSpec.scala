@@ -2,7 +2,7 @@ package org.goldenport.cncf.security
 
 import org.goldenport.Consequence
 import org.goldenport.cncf.config.OperationMode
-import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, SecurityContext}
+import org.goldenport.cncf.context.{ExecutionContext, Principal, PrincipalId, RuntimeContext, SecurityContext}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -51,13 +51,60 @@ final class OperationAuthorizationSpec extends AnyWordSpec with Matchers {
 
       OperationAuthorization.authorize("notice-board.notice.draft", rule) shouldBe a[Consequence.Failure[_]]
     }
+
+    "require authenticated provenance when provider authentication is required" in {
+      val rule = OperationAuthorizationRule(
+        requireAuthenticated = true,
+        requireProviderAuthentication = true
+      )
+
+      {
+        given ExecutionContext = _context(
+          OperationMode.Production,
+          SecurityContext.Privilege.System,
+          Map(
+            "authenticated" -> "true",
+            "role" -> "system_admin",
+            "privilege" -> "system"
+          )
+        )
+        OperationAuthorization.authorize("admin.system.ping", rule) shouldBe a[Consequence.Failure[_]]
+      }
+      {
+        given ExecutionContext = _context(
+          OperationMode.Production,
+          SecurityContext.Privilege.System,
+          Map(
+            "authenticated" -> "true",
+            SecuritySubject.AuthenticationProvenanceAttribute ->
+              SecuritySubject.ProviderAuthenticationProvenance,
+            "role" -> "system_admin",
+            "privilege" -> "system"
+          )
+        )
+        OperationAuthorization.authorize("admin.system.ping", rule) shouldBe Consequence.unit
+      }
+    }
   }
 
   private def _context(
     operationMode: OperationMode,
-    privilege: SecurityContext.Privilege
+    privilege: SecurityContext.Privilege,
+    extraAttributes: Map[String, String] = Map.empty
   ): ExecutionContext = {
-    val base = ExecutionContext.create(privilege)
+    val base0 = ExecutionContext.create(privilege)
+    val base =
+      if (extraAttributes.isEmpty)
+        base0
+      else
+        ExecutionContext.withSecurityContext(
+          base0,
+          base0.security.copy(principal = new Principal {
+            val id: PrincipalId = base0.security.principal.id
+            val attributes: Map[String, String] =
+              base0.security.principal.attributes ++ extraAttributes
+          })
+        )
     val runtime = new RuntimeContext(
       core = base.runtime.core,
       unitOfWorkSupplier = () => base.unitOfWork,

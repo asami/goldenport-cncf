@@ -5,6 +5,7 @@ import java.nio.file.{Files, Path}
 import java.util.zip.ZipFile
 import scala.jdk.CollectionConverters.*
 import scala.util.Using
+import org.goldenport.bag.{Bag, BinaryBag}
 
 /*
  * @since   Apr. 20, 2026
@@ -14,6 +15,7 @@ import scala.util.Using
 sealed trait WebResourceRoot {
   def name: String
   def exists(relativePath: Path): Boolean
+  def readBinary(relativePath: Path): Option[BinaryBag]
   def readBytes(relativePath: Path): Option[Array[Byte]]
   def readText(relativePath: Path): Option[String]
 }
@@ -25,13 +27,18 @@ object WebResourceRoot {
     def exists(relativePath: Path): Boolean =
       _safe(relativePath) && Files.isRegularFile(root.resolve(relativePath))
 
-    def readBytes(relativePath: Path): Option[Array[Byte]] =
+    def readBinary(relativePath: Path): Option[BinaryBag] =
       Option.when(exists(relativePath)) {
-        Files.readAllBytes(root.resolve(relativePath))
+        Bag.file(root.resolve(relativePath)).promoteToBinary()
+      }
+
+    def readBytes(relativePath: Path): Option[Array[Byte]] =
+      readBinary(relativePath).map { bag =>
+        Using.resource(bag.openInputStream())(_.readAllBytes())
       }
 
     def readText(relativePath: Path): Option[String] =
-      readBytes(relativePath).map(bytes => new String(bytes, StandardCharsets.UTF_8))
+      readBinary(relativePath).map(_.asStringUnsafe())
   }
 
   final case class Archive(archive: Path) extends WebResourceRoot {
@@ -44,13 +51,13 @@ object WebResourceRoot {
         }
       }
 
-    def readBytes(relativePath: Path): Option[Array[Byte]] =
+    def readBinary(relativePath: Path): Option[BinaryBag] =
       _entry_name(relativePath).flatMap { entry =>
         Using.resource(new ZipFile(archive.toFile)) { zip =>
-          Option(zip.getEntry(entry)).filterNot(_.isDirectory).map { x =>
+          Option(zip.getEntry(entry)).filterNot(_.isDirectory).flatMap { x =>
             val in = zip.getInputStream(x)
             try {
-              in.readAllBytes()
+              Bag.create(in).toOption.map(_.promoteToBinary())
             } finally {
               in.close()
             }
@@ -58,8 +65,13 @@ object WebResourceRoot {
         }
       }
 
+    def readBytes(relativePath: Path): Option[Array[Byte]] =
+      readBinary(relativePath).map { bag =>
+        Using.resource(bag.openInputStream())(_.readAllBytes())
+      }
+
     def readText(relativePath: Path): Option[String] =
-      readBytes(relativePath).map(bytes => new String(bytes, StandardCharsets.UTF_8))
+      readBinary(relativePath).map(_.asStringUnsafe())
 
     private def _entry_name(relativePath: Path): Option[String] =
       Option.when(_safe(relativePath)) {

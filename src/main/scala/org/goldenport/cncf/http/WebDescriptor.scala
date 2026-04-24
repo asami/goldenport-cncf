@@ -247,7 +247,11 @@ object WebDescriptor {
     capabilities: Vector[String] = Vector.empty,
     operationModes: Vector[OperationMode] = Vector.empty,
     anonymousOperationModes: Vector[OperationMode] = Vector.empty,
-    allowAnonymous: Boolean = false
+    allowAnonymous: Boolean = false,
+    deny: Boolean = false,
+    requireAuthenticated: Boolean = false,
+    requireProviderAuthentication: Boolean = false,
+    minimumPrivilege: Option[String] = None
   )
 
   final case class Form(
@@ -574,7 +578,23 @@ object WebDescriptor {
               anonymousOperationModes = _anonymous_operation_modes(r),
               allowAnonymous = _boolean(r, "allowAnonymous")
                 .orElse(_boolean(r, "allow-anonymous"))
-                .getOrElse(false)
+                .getOrElse(false),
+              deny = _boolean(r, "deny").getOrElse(false),
+              requireAuthenticated = _boolean(r, "requireAuthenticated")
+                .orElse(_boolean(r, "require-authenticated"))
+                .orElse(_boolean(r, "require_authenticated"))
+                .orElse(_boolean(r, "authenticated"))
+                .getOrElse(false),
+              requireProviderAuthentication = _boolean(r, "requireProviderAuthentication")
+                .orElse(_boolean(r, "require-provider-authentication"))
+                .orElse(_boolean(r, "require_provider_authentication"))
+                .orElse(_boolean(r, "providerAuthenticated"))
+                .orElse(_boolean(r, "provider-authenticated"))
+                .orElse(_boolean(r, "provider_authenticated"))
+                .getOrElse(false),
+              minimumPrivilege = r.getString("minimumPrivilege")
+                .orElse(r.getString("minimum-privilege"))
+                .orElse(r.getString("minimum_privilege"))
             )
           }
       }.toMap)

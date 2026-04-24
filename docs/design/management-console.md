@@ -14,8 +14,9 @@ client, and REST requests must observe the same Operation policy.
 `script`, or `server-emulator`). `OperationMode` describes the operational
 policy of the running system:
 
-- `production`: production policy. Anonymous admin access is denied unless the
-  target component/service/operation authorization parameters allow it.
+- `production`: production policy. Browser admin access is disabled by default.
+  It can be enabled only by explicit runtime configuration, and authenticated
+  sessions must still satisfy the privilege ceiling and role policy.
 - `demo`: demonstration policy. Anonymous admin access is denied unless the
   target component/service/operation authorization parameters allow it.
 - `develop`: development policy. Anonymous admin access may be allowed.
@@ -29,6 +30,34 @@ parameters allow anonymous access only in `develop` or `test` operation mode.
 This keeps local development usable before the full login/session mechanism
 exists, while preventing the same switch from opening admin surfaces in
 `production` or `demo`.
+
+Production admin is controlled separately from development anonymous admin:
+
+- `textus.web.production.admin.enabled`: default `false`.
+- `textus.web.production.admin.system.roles`: default `system_admin`.
+- `textus.web.production.admin.component.roles`: default
+  `component_operator,system_admin`.
+- `textus.web.production.admin.jobs.roles`: default
+  `system_admin,audit_viewer`.
+
+When production admin is enabled, authorization is a two-layer check:
+
+- `privilege` is the runtime/system capability ceiling and acts as a final
+  guard if role policy is misconfigured.
+- `role`, `scope`, and `capability` are operational policy grants.
+
+Initial admin privilege thresholds are:
+
+- `/web/system/admin`: `privilege >= system` plus a configured system admin
+  role.
+- `/web/{component}/admin`: `privilege >= operator` plus a configured component
+  admin role.
+- `/web/system/admin/jobs`: `privilege >= system` plus a configured jobs role.
+
+Production admin checks must use the session-derived `SecurityContext`.
+Protocol-level query/header stand-ins such as `role`, `principalId`, or
+`x-textus-role` remain useful for executable specs and development flows, but
+they are not trusted for production browser-admin admission.
 
 Component/service/operation authorization definitions are the primary extension
 point. They may declare operation-mode constraints, whether anonymous access is
@@ -51,6 +80,9 @@ The intended declaration vocabulary is:
 - `allowAnonymous`: whether an anonymous subject may invoke the Operation.
 - `anonymousOperationModes`: operation modes in which anonymous invocation is
   allowed when `allowAnonymous` is true.
+- `minimumPrivilege`: minimum runtime privilege ceiling required before role
+  policy can grant access.
+- `roles`, `scopes`, and `capabilities`: operational policy requirements.
 
 WebDescriptor `authorization` is not the source of truth for operation
 authorization. It is a Web ingress override or supplement for browser-facing

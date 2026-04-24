@@ -766,6 +766,28 @@ session is available. Development and test modes may allow anonymous admin
 access by configuration, but production must deny anonymous admin access unless
 an explicit policy says otherwise.
 
+Production admin policy is default-off. Enabling it requires
+`textus.web.production.admin.enabled=true`, but that switch only opens the
+policy path; it does not grant access by itself. The subject must come from the
+authenticated session's resolved `SecurityContext`, satisfy the required
+privilege ceiling, and match the configured admin roles. Query parameters and
+headers that carry stand-in identity or roles are not trusted for production
+admin admission.
+
+`privilege` and `role` have distinct responsibilities:
+
+- `privilege` is the CNCF runtime/system capability ceiling.
+- `role` is an operational policy grant.
+- `scope` and `capability` narrow where and what the role may do.
+
+The admin defaults are:
+
+- system admin: `privilege >= system`, role `system_admin`.
+- component admin: `privilege >= operator`, role `component_operator` or
+  `system_admin`.
+- job/admin diagnostics: `privilege >= system`, role `system_admin` or
+  `audit_viewer`.
+
 ## Bootstrap 5 UI Baseline
 
 Bootstrap 5 is the default UI vocabulary for framework-generated Web pages and

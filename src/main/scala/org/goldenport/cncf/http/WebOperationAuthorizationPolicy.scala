@@ -1,7 +1,7 @@
 package org.goldenport.cncf.http
 
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.security.OperationAuthorizationProvider
+import org.goldenport.cncf.security.{AdminAuthorizationPolicy, OperationAuthorizationProvider}
 import org.goldenport.cncf.subsystem.Subsystem
 
 /*
@@ -15,15 +15,28 @@ object WebOperationAuthorizationPolicy {
     operationSelector: String,
     runtimeConfig: RuntimeConfig
   ): Option[WebDescriptor.Authorization] =
-    subsystem.resolver.resolveOperationDefinition(operationSelector) match {
+    if (operationSelector.startsWith("admin."))
+      Some(_authorization(AdminAuthorizationPolicy.operationRule(operationSelector, runtimeConfig)))
+    else subsystem.resolver.resolveOperationDefinition(operationSelector) match {
       case Some(provider: OperationAuthorizationProvider) =>
-        val rule = provider.operationAuthorization(runtimeConfig)
-        Some(WebDescriptor.Authorization(
-          operationModes = rule.operationModes,
-          anonymousOperationModes = rule.anonymousOperationModes,
-          allowAnonymous = rule.allowAnonymous
-        ))
+        Some(_authorization(provider.operationAuthorization(runtimeConfig)))
       case _ =>
         None
     }
+
+  private def _authorization(
+    rule: org.goldenport.cncf.security.OperationAuthorizationRule
+  ): WebDescriptor.Authorization =
+    WebDescriptor.Authorization(
+      roles = rule.roles,
+      scopes = rule.scopes,
+      capabilities = rule.capabilities,
+      operationModes = rule.operationModes,
+      anonymousOperationModes = rule.anonymousOperationModes,
+      allowAnonymous = rule.allowAnonymous,
+      deny = rule.deny,
+      requireAuthenticated = rule.requireAuthenticated,
+      requireProviderAuthentication = rule.requireProviderAuthentication,
+      minimumPrivilege = rule.minimumPrivilege
+    )
 }

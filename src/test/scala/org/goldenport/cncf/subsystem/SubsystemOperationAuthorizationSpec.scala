@@ -36,7 +36,7 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
       subsystem.executeOperationResponse(request) shouldBe a[Consequence.Failure[_]]
     }
 
-    "allow the same admin operation in production when ingress security resolves an authenticated subject" in {
+    "deny production admin operation by default even when ingress security resolves a system admin subject" in {
       val subsystem = _subsystem(OperationMode.Production)
       val request = Request.of(
         component = "admin",
@@ -44,16 +44,31 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
         operation = "ping",
         properties = List(
           Property("principalId", "admin-test", None),
-          Property("cncf.security.privilege", "user", None)
+          Property("cncf.security.privilege", "system", None),
+          Property("role", "system_admin", None)
         )
       )
 
-      subsystem.executeOperationResponse(request) match {
-        case Consequence.Success(OperationResponse.Scalar(value)) =>
-          value.toString should include ("goldenport-cncf")
-        case other =>
-          fail(s"expected authenticated admin ping to execute but got $other")
-      }
+      subsystem.executeOperationResponse(request) shouldBe a[Consequence.Failure[_]]
+    }
+
+    "deny production admin operation when enabled but ingress security only resolved fallback system admin fields" in {
+      val subsystem = _subsystem(
+        OperationMode.Production,
+        RuntimeConfig.WebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+      )
+      val request = Request.of(
+        component = "admin",
+        service = "system",
+        operation = "ping",
+        properties = List(
+          Property("principalId", "admin-test", None),
+          Property("cncf.security.privilege", "system", None),
+          Property("role", "system_admin", None)
+        )
+      )
+
+      subsystem.executeOperationResponse(request) shouldBe a[Consequence.Failure[_]]
     }
 
     "allow anonymous admin dispatch in develop mode when the operation parameters permit it" in {
@@ -132,12 +147,15 @@ final class SubsystemOperationAuthorizationSpec extends AnyWordSpec with Matcher
     }
   }
 
-  private def _subsystem(operationMode: OperationMode): Subsystem = {
+  private def _subsystem(
+    operationMode: OperationMode,
+    entries: (String, ConfigurationValue)*
+  ): Subsystem = {
     val subsystem = TestComponentFactory.subsystemWithConfig(
       Map(
         RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue(operationMode.name),
         RuntimeConfig.WebDevelopAnonymousAdminKey -> ConfigurationValue.StringValue("true")
-      ),
+      ) ++ entries.toMap,
       name = s"subsystem-operation-authorization-${operationMode.name}"
     )
     val admin = AdminComponent.Factory.create(ComponentCreate(subsystem, ComponentOrigin.Builtin)).primary

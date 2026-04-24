@@ -37,7 +37,7 @@ import org.goldenport.cncf.observability.{DslChokepointContext, DslChokepointPha
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
 import org.goldenport.cncf.openapi.OpenApiProjector
 import org.goldenport.cncf.security.AuthenticationRequest
-import org.goldenport.bag.Bag
+import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
 
 /*
@@ -1763,33 +1763,33 @@ final class Http4sHttpServer(
   private[http] def _web_app_asset_content(
     webAppName: String,
     assetName: String
-  ): Option[(Array[Byte], MediaType)] =
+  ): Option[(BinaryBag, MediaType)] =
     _web_app_asset_content(webAppName, Vector(assetName))
 
   private[http] def _web_app_asset_content(
     webAppName: String,
     assetPath: Vector[String]
-  ): Option[(Array[Byte], MediaType)] =
+  ): Option[(BinaryBag, MediaType)] =
     _web_resource_roots().view.flatMap { root =>
       val path = _relative_path(
         org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName) +:
           "assets" +:
           assetPath
       )
-      root.readBytes(path).map(_ -> _asset_media_type(assetPath.lastOption.getOrElse("")))
+      root.readBinary(path).map(_ -> _asset_media_type(assetPath.lastOption.getOrElse("")))
     }.headOption
 
   private[http] def _web_global_asset_content(
     assetName: String
-  ): Option[(Array[Byte], MediaType)] =
+  ): Option[(BinaryBag, MediaType)] =
     _web_global_asset_content(Vector(assetName))
 
   private[http] def _web_global_asset_content(
     assetPath: Vector[String]
-  ): Option[(Array[Byte], MediaType)] =
+  ): Option[(BinaryBag, MediaType)] =
     _web_resource_roots().view.flatMap { root =>
       val path = _relative_path("assets" +: assetPath)
-      root.readBytes(path).map(_ -> _asset_media_type(assetPath.lastOption.getOrElse("")))
+      root.readBinary(path).map(_ -> _asset_media_type(assetPath.lastOption.getOrElse("")))
     }.headOption
 
   private[http] def _web_app_static_html_content(
@@ -1895,12 +1895,12 @@ final class Http4sHttpServer(
     }
 
   private def _asset_response(
-    content: Array[Byte],
+    content: BinaryBag,
     mediaType: MediaType
   ): IO[HResponse[IO]] =
     IO.pure(
       HResponse[IO](HStatus.Ok)
-        .withEntity(content)
+        .withEntity(fs2.io.readInputStream(IO(content.openInputStream()), 8192, closeAfterUse = true))
         .withContentType(`Content-Type`(mediaType, None))
     )
 
@@ -2302,13 +2302,13 @@ final class Http4sHttpServer(
     operationSelector: Option[String] = None
   ): Boolean = {
     val selector = Vector(app, service, operation).mkString(".")
-    val subject = _web_authorization_subject(req)
     val runtimeConfig = RuntimeConfig.from(engine.runtimeSubsystem.configuration)
+    val subject = _web_authorization_subject(req, runtimeConfig)
     val rule = engine.webDescriptor.authorization
       .get(selector)
       .orElse(
         operationSelector
-          .orElse(_admin_operation_selector(service, operation))
+          .orElse(_admin_operation_selector(app, service, operation))
           .flatMap(WebOperationAuthorizationPolicy.operationRule(engine.runtimeSubsystem, _, runtimeConfig))
       )
     val allowed =
@@ -2339,11 +2339,15 @@ final class Http4sHttpServer(
       .getOrElse(app)
 
   private def _admin_operation_selector(
+    app: String,
     service: String,
     operation: String
   ): Option[String] =
     service match {
-      case "admin" => Some("admin.config.show")
+      case "admin" =>
+        Some(if (app == "system") "admin.config.show" else "admin.entity.list")
+      case "admin.jobs" =>
+        Some("admin.execution.history")
       case "admin.entities" =>
         Some(if (operation == "index") "admin.entity.list" else "admin.entity.read")
       case "admin.data" =>
@@ -2354,15 +2358,70 @@ final class Http4sHttpServer(
     }
 
   private def _web_authorization_subject(
-    req: Option[org.http4s.Request[IO]]
+    req: Option[org.http4s.Request[IO]],
+    runtimeConfig: RuntimeConfig
   ): WebDescriptorAuthorization.Subject =
-    req.map { r =>
-      val subject = WebDescriptorAuthorization.Subject.fromHttp(r)
-      if (!subject.anonymous || _session_id_(r).isEmpty)
-        subject
-      else
-        subject.copy(anonymous = false)
-    }.getOrElse(WebDescriptorAuthorization.Subject())
+    if (runtimeConfig.operationMode == OperationMode.Production)
+      req.flatMap(_web_authorization_subject_from_session)
+        .getOrElse(WebDescriptorAuthorization.Subject())
+    else
+      req.map { r =>
+        val subject = WebDescriptorAuthorization.Subject.fromHttp(r)
+        if (!subject.anonymous || _session_id_(r).isEmpty)
+          subject
+        else
+          subject.copy(anonymous = false)
+      }.getOrElse(WebDescriptorAuthorization.Subject())
+
+  private def _web_authorization_subject_from_session(
+    req: org.http4s.Request[IO]
+  ): Option[WebDescriptorAuthorization.Subject] =
+    _session_id_(req).flatMap { sessionid =>
+      _auth_service.flatMap { service =>
+        given ExecutionContext = ExecutionContext.create()
+        service.currentSession(_session_authentication_request(sessionid)) match {
+          case org.goldenport.Consequence.Success(summary) if summary.authenticated =>
+            Some(_web_authorization_subject(summary))
+          case _ =>
+            None
+        }
+      }
+    }
+
+  private def _session_authentication_request(
+    sessionid: String
+  ): AuthenticationRequest =
+    AuthenticationRequest(Map("x-textus-session" -> sessionid))
+
+  private def _web_authorization_subject(
+    summary: AuthComponent.SessionSummary
+  ): WebDescriptorAuthorization.Subject = {
+    val attributes = summary.attributes
+    WebDescriptorAuthorization.Subject(
+      roles = _web_authorization_tokens(attributes, "role", "roles"),
+      scopes = _web_authorization_tokens(attributes, "scope", "scopes"),
+      capabilities = summary.capabilities.toSet ++ _web_authorization_tokens(attributes, "capability", "capabilities"),
+      privileges = _web_authorization_tokens(attributes, "privilege", "privileges") ++ Set(summary.securityLevel),
+      anonymous = !summary.authenticated,
+      authenticated = summary.authenticated,
+      providerAuthenticated = summary.authenticated
+    )
+  }
+
+  private def _web_authorization_tokens(
+    attributes: Map[String, String],
+    keys: String*
+  ): Set[String] = {
+    val targets = keys.map(_.toLowerCase(java.util.Locale.ROOT)).toSet
+    attributes.iterator
+      .collect {
+        case (key, value) if targets.contains(key.toLowerCase(java.util.Locale.ROOT)) => value
+      }
+      .flatMap(_.split("[,\\s|]+"))
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .toSet
+  }
 
   private def _forbidden_error(
     req: org.http4s.Request[IO],

@@ -32,9 +32,11 @@ import org.goldenport.record.Record
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, WebValidationHints, XBoolean, XDateTime, XInt, XString}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, ProcedureActionCall, QueryAction}
+import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentFactory, ComponentletDescriptor}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
+import org.goldenport.cncf.security.AuthenticationRequest
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace, QueryDirective, SearchResult, SearchableDataStore, TotalCountCapability}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityStoreSpace}
 import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateCommandDefinition, AggregateCreateDefinition, AggregateDefinition, AggregateMemberDefinition}
@@ -1557,7 +1559,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       server._web_resource_roots().map(_.name) shouldBe Vector(path.toString)
       server._component_web_app("notice-board", "notice-board", Vector.empty).unsafeRunSync().as[String].unsafeRunSync() should include ("Archive Notice Board")
       server._form_result_static_template("notice-board", "notice", "post-notice", 200) shouldBe Some("ARCHIVE SERVICE OPERATION")
-      server._web_app_asset_content("notice-board", "app.css").map(_._1) shouldBe Some(".archive-notice-board { color: #14532d; }\n")
+      server._web_app_asset_content("notice-board", "app.css")
+        .map(x => new String(x._1.openInputStream().readAllBytes(), StandardCharsets.UTF_8)) shouldBe Some(".archive-notice-board { color: #14532d; }\n")
     }
 
     "render component entity edit page contract" in {
@@ -3758,10 +3761,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       body should not include ("\"error\"")
     }
 
-    "allow authenticated component admin HTML route in production operation mode" in {
+    "deny forged query/header admin identity in production operation mode" in {
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.WebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
         ))
       )
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
@@ -3769,10 +3773,166 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val response = server
         .routes(null)
         .orNotFound
-        .run(_get_request("/web/notice-board/admin/entities/notice?principalId=admin-test"))
+        .run(_get_request("/web/notice-board/admin/entities/notice?principalId=admin-test&role=component_operator&privilege=operator"))
+        .unsafeRunSync()
+
+      response.status.code shouldBe 403
+    }
+
+    "strip forged authorization fields before resolving the production admin session" in {
+      val subsystem = _management_console_fixture_subsystem(
+        configuration = Configuration(Map(
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.WebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+        ))
+      )
+      _install_echoing_auth_session(
+        subsystem,
+        _session_summary(
+          "weak-session-with-forged-query",
+          "ordinary-user",
+          Map(
+            "role" -> "user",
+            "privilege" -> "user"
+          )
+        )
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        .routes(null)
+        .orNotFound
+        .run(
+          _with_session(
+            _get_request("/web/system/admin?role=system_admin&privilege=system"),
+            "weak-session-with-forged-query"
+          )
+        )
+        .unsafeRunSync()
+
+      response.status.code shouldBe 403
+    }
+
+    "allow component operator session to use component admin in production when explicitly enabled" in {
+      val subsystem = _management_console_fixture_subsystem(
+        configuration = Configuration(Map(
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.WebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+        ))
+      )
+      _install_auth_session(
+        subsystem,
+        _session_summary(
+          "component-admin-session",
+          "component-operator",
+          Map(
+            "role" -> "component_operator",
+            "privilege" -> "operator"
+          )
+        )
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        .routes(null)
+        .orNotFound
+        .run(_with_session(_get_request("/web/notice-board/admin/entities/notice"), "component-admin-session"))
         .unsafeRunSync()
 
       response.status.code shouldBe 200
+    }
+
+    "deny system admin role when production privilege ceiling is only user" in {
+      val subsystem = _management_console_fixture_subsystem(
+        configuration = Configuration(Map(
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.WebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+        ))
+      )
+      _install_auth_session(
+        subsystem,
+        _session_summary(
+          "weak-system-admin-session",
+          "weak-system-admin",
+          Map(
+            "role" -> "system_admin",
+            "privilege" -> "user"
+          )
+        )
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        .routes(null)
+        .orNotFound
+        .run(_with_session(_get_request("/web/system/admin"), "weak-system-admin-session"))
+        .unsafeRunSync()
+
+      response.status.code shouldBe 403
+    }
+
+    "allow system admin session to use system admin in production when explicitly enabled" in {
+      val subsystem = _management_console_fixture_subsystem(
+        configuration = Configuration(Map(
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.WebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+        ))
+      )
+      _install_auth_session(
+        subsystem,
+        _session_summary(
+          "system-admin-session",
+          "system-admin",
+          Map(
+            "role" -> "system_admin",
+            "privilege" -> "system"
+          )
+        )
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        .routes(null)
+        .orNotFound
+        .run(_with_session(_get_request("/web/system/admin"), "system-admin-session"))
+        .unsafeRunSync()
+
+      response.status.code shouldBe 200
+    }
+
+    "allow audit viewer session to read production admin jobs but not system admin home" in {
+      val subsystem = _management_console_fixture_subsystem(
+        configuration = Configuration(Map(
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.WebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
+        ))
+      )
+      _install_auth_session(
+        subsystem,
+        _session_summary(
+          "audit-viewer-session",
+          "audit-viewer",
+          Map(
+            "role" -> "audit_viewer",
+            "privilege" -> "system"
+          )
+        )
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val jobs = server
+        .routes(null)
+        .orNotFound
+        .run(_with_session(_get_request("/web/system/admin/jobs"), "audit-viewer-session"))
+        .unsafeRunSync()
+      val home = server
+        .routes(null)
+        .orNotFound
+        .run(_with_session(_get_request("/web/system/admin"), "audit-viewer-session"))
+        .unsafeRunSync()
+
+      jobs.status.code shouldBe 200
+      home.status.code shouldBe 403
     }
 
     "allow authenticated admin form API when develop anonymous admin is disabled" in {
@@ -3819,11 +3979,23 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       dispatcher.paths should not contain ("/admin/entity/create")
     }
 
-    "allow authenticated admin entity create POST in production operation mode" in {
+    "allow component operator admin entity create POST in production operation mode" in {
       val subsystem = _management_console_fixture_subsystem(
         configuration = Configuration(Map(
-          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"),
+          RuntimeConfig.WebProductionAdminEnabledKey -> ConfigurationValue.StringValue("true")
         ))
+      )
+      _install_auth_session(
+        subsystem,
+        _session_summary(
+          "component-admin-post-session",
+          "component-operator",
+          Map(
+            "role" -> "component_operator",
+            "privilege" -> "operator"
+          )
+        )
       )
       val engine = new HttpExecutionEngine(subsystem)
       val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
@@ -3831,9 +4003,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val response = server
         ._submit_component_admin_entity_create(
-          _post_form_request(
-            "/form/notice-board/admin/entities/notice/create?principalId=admin-test",
+          _with_session(
+            _post_form_request(
+              "/form/notice-board/admin/entities/notice/create",
             "fields=id%3Dnotice_2%0Atitle%3Dnew+notice%0Aauthor%3Dbob"
+            ),
+            "component-admin-post-session"
           ),
           "notice-board",
           "notice"
@@ -6754,6 +6929,92 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     Request[IO](
       method = Method.GET,
       uri = Uri.unsafeFromString(path)
+    )
+
+  private def _with_session(
+    req: Request[IO],
+    sessionid: String
+  ): Request[IO] =
+    req.putHeaders(
+      org.http4s.Header.Raw(org.typelevel.ci.CIString("X-Textus-Session"), sessionid)
+    )
+
+  private def _install_auth_session(
+    subsystem: Subsystem,
+    summary: AuthComponent.SessionSummary
+  ): Unit =
+    subsystem.findComponent(AuthComponent.name).foreach { component =>
+      component.withPort(Component.Port.of(new AuthComponent.AuthService {
+        def login(
+          request: AuthenticationRequest
+        )(using ExecutionContext): Consequence[AuthComponent.SessionSummary] =
+          Consequence.success(summary)
+
+        def logout(
+          request: AuthenticationRequest
+        )(using ExecutionContext): Consequence[AuthComponent.LogoutSummary] =
+          Consequence.success(AuthComponent.LogoutSummary(loggedOut = true, request.sessionId))
+
+        def currentSession(
+          request: AuthenticationRequest
+        )(using ExecutionContext): Consequence[AuthComponent.SessionSummary] =
+          if (request.sessionId.contains(summary.sessionId.getOrElse("")))
+            Consequence.success(summary)
+          else
+            Consequence.success(_anonymous_session_summary)
+      }))
+    }
+
+  private def _install_echoing_auth_session(
+    subsystem: Subsystem,
+    summary: AuthComponent.SessionSummary
+  ): Unit =
+    subsystem.findComponent(AuthComponent.name).foreach { component =>
+      component.withPort(Component.Port.of(new AuthComponent.AuthService {
+        def login(
+          request: AuthenticationRequest
+        )(using ExecutionContext): Consequence[AuthComponent.SessionSummary] =
+          Consequence.success(summary.copy(attributes = summary.attributes ++ request.attributes))
+
+        def logout(
+          request: AuthenticationRequest
+        )(using ExecutionContext): Consequence[AuthComponent.LogoutSummary] =
+          Consequence.success(AuthComponent.LogoutSummary(loggedOut = true, request.sessionId))
+
+        def currentSession(
+          request: AuthenticationRequest
+        )(using ExecutionContext): Consequence[AuthComponent.SessionSummary] =
+          if (request.sessionId.contains(summary.sessionId.getOrElse("")))
+            Consequence.success(summary.copy(attributes = summary.attributes ++ request.attributes))
+          else
+            Consequence.success(_anonymous_session_summary)
+      }))
+    }
+
+  private def _session_summary(
+    sessionid: String,
+    principalid: String,
+    attributes: Map[String, String]
+  ): AuthComponent.SessionSummary =
+    AuthComponent.SessionSummary(
+      sessionId = Some(sessionid),
+      principalId = Some(principalid),
+      subjectKind = "User",
+      securityLevel = attributes.getOrElse("privilege", "user"),
+      capabilities = Vector.empty,
+      authenticated = true,
+      attributes = attributes
+    )
+
+  private def _anonymous_session_summary: AuthComponent.SessionSummary =
+    AuthComponent.SessionSummary(
+      sessionId = None,
+      principalId = Some("anonymous"),
+      subjectKind = "Anonymous",
+      securityLevel = "anonymous",
+      capabilities = Vector.empty,
+      authenticated = false,
+      attributes = Map.empty
     )
 
   private def _coded_conclusion(

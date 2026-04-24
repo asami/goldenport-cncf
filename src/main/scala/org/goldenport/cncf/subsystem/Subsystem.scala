@@ -17,6 +17,7 @@ import org.goldenport.cncf.component.{
 }
 import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.component.ComponentLocator.NameLocator
+import org.goldenport.cncf.component.builtin.admin.AdminComponent
 import org.goldenport.cncf.component.builtin.debug.DebugComponent
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.http.{HttpDriver, HttpExecutionResult}
@@ -32,7 +33,7 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.protocol.OperationResponseFormatter
-import org.goldenport.cncf.security.{IngressSecurityResolver, OperationAuthorization, OperationAuthorizationProvider}
+import org.goldenport.cncf.security.{AdminAuthorizationPolicy, IngressSecurityResolver, OperationAuthorization, OperationAuthorizationProvider}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 
@@ -338,7 +339,9 @@ final class Subsystem(
     val (component, service, operation) = route
     val selector = s"${component.name}.${service.name}.${operation.name}"
     val runtimeConfig = RuntimeConfig.from(configuration)
-    val rule = operation match {
+    val rule = if (component.name == AdminComponent.name)
+      Some(AdminAuthorizationPolicy.operationRule(selector, runtimeConfig))
+    else operation match {
       case provider: OperationAuthorizationProvider =>
         Some(provider.operationAuthorization(runtimeConfig))
       case _ =>

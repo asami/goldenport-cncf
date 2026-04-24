@@ -142,6 +142,7 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
       val resolved = result.toOption.get
       resolved.executionContext.security.principal.id.value shouldBe "user-2"
       SecuritySubject.from(resolved.executionContext.security).isAuthenticated shouldBe true
+      SecuritySubject.from(resolved.executionContext.security).isProviderAuthenticated shouldBe true
     }
 
     "propagate provider failure instead of falling back to privilege resolution" in {
