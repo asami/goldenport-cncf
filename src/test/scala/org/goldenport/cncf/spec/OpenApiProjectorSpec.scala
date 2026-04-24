@@ -8,7 +8,7 @@ import io.circe.parser.parse
 
 /*
  * @since   Jan. 20, 2026
- * @version Jan. 20, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OpenApiProjectorSpec extends AnyWordSpec with Matchers {
@@ -48,7 +48,7 @@ final class OpenApiProjectorSpec extends AnyWordSpec with Matchers {
         }
       }
 
-      val clientPostMethods = pathsCursor.downField("/client/http/post")
+      val clientPostMethods = pathsCursor.downField("/rest/v1/client/http/post")
         .focus
         .flatMap(_.asObject)
         .getOrElse(fail("/client/http/post path missing"))

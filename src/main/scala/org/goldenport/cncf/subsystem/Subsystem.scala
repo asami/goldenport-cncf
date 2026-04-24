@@ -108,7 +108,8 @@ final class Subsystem(
   }
 
   def add(comps: Seq[Component]): Subsystem = {
-    val injected = comps.map(x => _inject_context(x.name, x))
+    val bootstrapped = comps.map(_component_factory.bootstrap)
+    val injected = bootstrapped.map(x => _inject_context(x.name, x))
     injected.foreach(_bind_runtime_services)
     _component_space = _component_space.add(injected)
     _rebuildResolver()

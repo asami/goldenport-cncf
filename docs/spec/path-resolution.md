@@ -8,15 +8,19 @@ This specification defines the path resolution rules used to derive a CanonicalP
 
 Current staged adoption scope:
 
-- CLI command path only (feature-flag gated)
+- CLI command path
+- HTTP REST path through the versioned `/rest/v1/...` transport namespace
 
-HTTP and script surfaces remain on the legacy runtime routing path until
-staged rollout is completed.
+Script surfaces remain on the legacy runtime routing path until staged rollout
+is completed.
 
 Public input contract (current policy):
 
 - CLI command canonical selector: `component.service.operation`
-- HTTP canonical path: `/component/service/operation`
+- HTTP canonical REST path: `/rest/v1/component/service/operation`
+
+HTTP path resolution strips the transport prefix `/rest/v1` before canonical
+component/service/operation resolution is applied.
 
 Compatibility policy (non-contract):
 

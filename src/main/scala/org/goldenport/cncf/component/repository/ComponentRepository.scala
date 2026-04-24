@@ -829,11 +829,6 @@ object ComponentRepository extends GlobalObservable {
         repositoryType = _component_dir_type
       )
       if (factoryComponents.nonEmpty) {
-        factoryComponents.foreach { comp =>
-          log.info(
-            s"[component-dir] initialized component=${comp.core.name} class=${comp.getClass.getName}"
-          )
-        }
         factoryComponents
       } else {
         _build_sources(classNames, loader, origin, log, tolerant = true) match {
@@ -842,7 +837,11 @@ object ComponentRepository extends GlobalObservable {
               case Consequence.Success(components) =>
                 components.headOption match {
                   case Some(first) =>
-                    log.info(s"[component-dir] artifact=${artifactname} provides component=${first.core.name}")
+                    val canonicalName =
+                      params.componentDescriptors.headOption
+                        .flatMap(x => x.componentName.orElse(x.name))
+                        .getOrElse(first.core.name)
+                    log.info(s"[component-dir] artifact=${artifactname} provides component=${canonicalName}")
                     Vector(first)
                   case None =>
                     log.warn(s"[component-dir] artifact=${artifactname} contains no valid components")

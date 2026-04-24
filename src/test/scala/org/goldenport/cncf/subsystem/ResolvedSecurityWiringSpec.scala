@@ -10,7 +10,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  9, 2026
- * @version Apr. 23, 2026
+ *  version Apr. 23, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
@@ -44,13 +45,13 @@ final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
           )
         )
       )
-      val component = _component("UserAccount", Vector(_provider("user-account"), _provider("other-provider")))
+      val component = _component("textus-user-account", Vector(_provider("user-account"), _provider("other-provider")))
 
       val wiring = ResolvedSecurityWiring.resolve(Some(descriptor), Vector(component))
 
       wiring.authentication.providers.map(x => (x.componentName, x.name, x.source.toString)) shouldBe Vector(
-        ("UserAccount", "user-account", "Descriptor"),
-        ("UserAccount", "other-provider", "Convention")
+        ("textus-user-account", "user-account", "Descriptor"),
+        ("textus-user-account", "other-provider", "Convention")
       )
       wiring.authentication.providers.head.priority shouldBe 100
       wiring.authentication.providers.head.isDefault shouldBe true
@@ -95,7 +96,7 @@ final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
           )
         )
       )
-      val component = _component("UserAccount", Vector(_provider("user-account")))
+      val component = _component("textus-user-account", Vector(_provider("user-account")))
 
       val wiring = ResolvedSecurityWiring.resolve(Some(descriptor), Vector(component))
 
@@ -139,8 +140,8 @@ final class ResolvedSecurityWiringSpec extends AnyWordSpec with Matchers {
       val wiring = ResolvedSecurityWiring.resolve(Some(descriptor), Vector(component))
 
       wiring.messageDelivery.providers.map(x => (x.componentName, x.name, x.source.toString)) shouldBe Vector(
-        ("MessageDeliveryStub", "textus-message-delivery-stub", "Descriptor"),
-        ("MessageDeliveryStub", "other-message-delivery", "Convention")
+        ("textus-message-delivery-stub", "textus-message-delivery-stub", "Descriptor"),
+        ("textus-message-delivery-stub", "other-message-delivery", "Convention")
       )
       wiring.messageDelivery.providers.head.priority shouldBe 100
       wiring.messageDelivery.providers.head.isDefault shouldBe true

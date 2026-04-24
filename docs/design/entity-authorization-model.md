@@ -210,6 +210,47 @@ Application-level defaults can use
 `EntityCreateDefaultsPolicy.withApplicationDefault`; entity-level overrides win
 over the application default.
 
+Security defaults must be chosen at the entity/component boundary. The framework
+must not treat missing `securityAttributes` as implicit public read. If a
+resource should be public-read by default, that must be expressed through the
+entity classification or through an explicit entity-scoped create-default
+policy, for example `public-content`, `cms`, or `public-read`.
+
+This keeps the default fail-closed for business/private entities while allowing
+selected public-content entities to opt in to public visibility without turning
+the whole component or subsystem public by accident.
+
+## Projected Entity And Raw Record
+
+Two data shapes are relevant during authorization:
+
+- projected entity / in-memory entity;
+- raw store record.
+
+The projected entity is the runtime object used by actions, resident working
+sets, and projections. It may intentionally omit framework-owned attributes such
+as fully expanded lifecycle or security metadata.
+
+The raw store record is the canonical persistence-facing shape after
+`EntityCreateDefaultsPolicy` and related store-side complement logic have been
+applied. It is the authoritative source for:
+
+- `securityAttributes`;
+- lifecycle defaults such as `postStatus` and `aliveness`;
+- trace/correlation enrichment and other framework-owned record complements.
+
+Search/list visibility filtering must therefore not assume that a projected
+entity carries every authorization-relevant field. When projected entity data is
+insufficient for permission evaluation, the runtime must evaluate visibility
+against the canonical raw store record rather than granting access from missing
+attributes.
+
+This boundary is deliberate:
+
+- projected entity: application/domain-facing runtime model;
+- raw record: canonical authorization/persistence model for framework-owned
+  defaults.
+
 ## Classification Axes
 
 The implemented model supports coarse classification before low-level access

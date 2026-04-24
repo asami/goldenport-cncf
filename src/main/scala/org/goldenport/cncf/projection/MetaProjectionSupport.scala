@@ -9,7 +9,7 @@ import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Mar.  5, 2026
- * @version Apr. 11, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -52,7 +52,7 @@ private[projection] object MetaProjectionSupport {
   }
 
   def components(base: Component): Vector[Component] =
-    base.subsystem.map(_.components.sortBy(_.name)).getOrElse(Vector(base))
+    base.subsystem.map(_.components.sortBy(_.name)).filter(_.nonEmpty).getOrElse(Vector(base))
 
   def resolve(base: Component, selector: Option[String]): Target = {
     val comps = components(base)
@@ -218,7 +218,13 @@ private[projection] object MetaProjectionSupport {
     NamingConventions.toNormalizedSelector(component.name, service.name, operation.name)
 
   private def _find_component(comps: Vector[Component], name: String): Option[Component] =
-    comps.find(x => NamingConventions.equivalentByNormalized(x.name, name))
+    comps.find { x =>
+      NamingConventions.equivalentByNormalized(x.name, name) ||
+        x.artifactMetadata.toVector.exists { metadata =>
+          metadata.component.exists(NamingConventions.equivalentByNormalized(_, name)) ||
+            NamingConventions.equivalentByNormalized(metadata.name, name)
+        }
+    }
 
   private def _find_service(component: Component, serviceName: String): Option[ServiceDefinition] =
     component.protocol.services.services.find(x => NamingConventions.equivalentByNormalized(x.name, serviceName))

@@ -9,7 +9,7 @@ import org.goldenport.cncf.directive.{Query, SearchResult}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityQuery, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
-import org.goldenport.cncf.security.{EntityAbacCondition, EntityAccessMode, EntityAccessRelation}
+import org.goldenport.cncf.security.{EntityAbacCondition, EntityAccessMode, EntityAccessRelation, OperationAccessPolicy}
 import org.goldenport.datatype.PathName
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -206,6 +206,64 @@ final class UnitOfWorkSearchAuthorizationSpec
       Then("privilege-visible entity remains visible")
       result.data.map(_.id) shouldBe Vector(p1.id)
       result.totalCount shouldBe Some(1)
+    }
+
+    "resolve search visibility from the stored raw record when projected entity omits security attributes" in {
+      Given("an owner and a projected entity whose in-memory shape does not carry security attributes")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(
+        datastorespace,
+        entitystorespace,
+        principalId = "reader-1"
+      )
+      given EntityPersistent[PublicEntity] = _public_persistent
+
+      val p1 = PublicEntity(EntityId("test", "public1", _cid), "private-post")
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(_cid),
+              Record.dataAuto(
+                "id" -> p1.id,
+                "name" -> p1.name,
+                "security_attributes" -> Record.dataAuto(
+                  "owner_id" -> "reader-1",
+                  "group_id" -> "reader-1",
+                  "privilege_id" -> "reader-1",
+                  "rights" -> Record.dataAuto(
+                    "owner" -> Record.dataAuto("read" -> true, "write" -> true, "execute" -> true),
+                    "group" -> Record.dataAuto("read" -> false, "write" -> false, "execute" -> false),
+                    "other" -> Record.dataAuto("read" -> false, "write" -> false, "execute" -> false)
+                  )
+                )
+              )
+            )
+          )
+        )
+      )
+
+      When("filtering entity-space search results")
+      val result = OperationAccessPolicy.filterVisibleSearchResult(
+        UnitOfWorkAuthorization(
+          resourceFamily = "domain",
+          resourceType = Some("PublicEntity"),
+          accessKind = "search/list"
+        ),
+        SearchResult(
+          query = Query.plan(PublicQuery.any, includeTotal = true),
+          data = Vector(p1),
+          totalCount = Some(1),
+          fetchedCount = 1
+        ),
+        summon[EntityPersistent[PublicEntity]]
+      ).toOption.getOrElse(fail("visibility filtering should succeed"))
+
+      Then("the stored security attributes are used for the visibility decision")
+      result.data.map(_.id) shouldBe Vector(p1.id)
+      result.totalCount shouldBe Some(1)
+      result.fetchedCount shouldBe 1
     }
 
     "emit diagnostics when natural condition filters search results" in {
@@ -716,6 +774,35 @@ final class UnitOfWorkSearchAuthorizationSpec
     )
   }
 
+  private object PublicQuery {
+    val any = PublicQuery(
+      id = Condition.any[EntityId],
+      name = Condition.any[String]
+    )
+  }
+
+  private final case class PublicQuery(
+    id: Condition[EntityId],
+    name: Condition[String]
+  ) {
+    def toRecord(): Record =
+      Record.dataAuto(
+        "id" -> id,
+        "name" -> name
+      )
+  }
+
+  private final case class PublicEntity(
+    id: EntityId,
+    name: String
+  ) {
+    def toRecord(): Record =
+      Record.dataAuto(
+        "id" -> id,
+        "name" -> name
+      )
+  }
+
   private final case class PersonQuery(
     id: Condition[EntityId],
     name: Condition[String]
@@ -749,6 +836,20 @@ final class UnitOfWorkSearchAuthorizationSpec
           Consequence.success(PersonEntity(entityId, entityName, entityOwnerId, entityGroupId, entityPrivilegeId, publishAt, customerId, accountId, tenantId, organizationId, assigneeId, participantId))
         case _ =>
           Consequence.argumentInvalid("invalid person record")
+  }
+
+  private val _public_persistent: EntityPersistent[PublicEntity] = new EntityPersistent[PublicEntity] {
+    def id(e: PublicEntity): EntityId = e.id
+    def toRecord(e: PublicEntity): Record = e.toRecord()
+    def fromRecord(r: Record): Consequence[PublicEntity] =
+      (
+        r.getAs[EntityId]("id"),
+        r.getString("name")
+      ) match
+        case (Some(entityId), Some(entityName)) =>
+          Consequence.success(PublicEntity(entityId, entityName))
+        case _ =>
+          Consequence.argumentInvalid("invalid public entity record")
   }
 
   private final class MemoryBackend extends LogBackend {

@@ -11,7 +11,7 @@ import org.goldenport.cncf.path.AliasResolver
 
 /*
  * @since   Mar. 26, 2026
- * @version Apr. 23, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object TextusIdentitySubsystemFactory {
@@ -127,11 +127,21 @@ object TextusIdentitySubsystemFactory {
     descriptorComponentName: String
   ): Boolean = {
     val runtimeName = _runtime_component_name(descriptorComponentName)
+    val legacyRuntimeName = _legacy_runtime_component_name(descriptorComponentName)
     component.name == runtimeName ||
-      component.artifactMetadata.flatMap(_.component).contains(descriptorComponentName)
+      component.name == legacyRuntimeName ||
+      component.artifactMetadata.exists(metadata =>
+        metadata.component.contains(descriptorComponentName) ||
+          metadata.name == descriptorComponentName
+      )
   }
 
   private def _runtime_component_name(
+    descriptorComponentName: String
+  ): String =
+    descriptorComponentName.trim
+
+  private def _legacy_runtime_component_name(
     descriptorComponentName: String
   ): String = {
     val normalized = descriptorComponentName.trim

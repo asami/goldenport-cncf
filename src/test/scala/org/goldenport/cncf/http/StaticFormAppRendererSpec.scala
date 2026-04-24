@@ -138,6 +138,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/system/performance")
       html should include ("/web/system/manual")
       html should include ("/web/console")
+      html should include ("Component Management Console")
+      html should include ("Component admin")
       html should include ("Web Descriptor")
       html should include ("Using built-in Web HTML app defaults.")
       html should include ("/web/system/admin/descriptor")
@@ -240,7 +242,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/system/manual")
       html should include ("Admin entries")
       html should include ("Management Console Controls")
+      html should include ("Deferred or unsupported")
+      html should include ("Raw selector")
       html should include ("entity.notice")
+      html should include ("Destination")
+      html should include ("Type")
       html should include ("optional")
     }
 
@@ -316,6 +322,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Configured Descriptor JSON")
       html should include ("descriptor-json-details")
       html should include ("<details")
+      html should include (">JSON<")
+      html should include (">YAML<")
       html should include ("/web/system/admin")
       html should include ("&quot;status&quot; : &quot;configured&quot;")
       html should include ("&quot;notice-board.notice.search-notices&quot; : &quot;public&quot;")
@@ -379,14 +387,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/web/system/performance")
       html should include ("/web/system/manual")
       html should include ("/web/console")
-      html should include ("Component Operations")
+      html should include ("Management Console Home")
       html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin/descriptor")
-      html should include ("Managed Data")
-      html should include ("Entity CRUD")
-      html should include ("Data CRUD")
-      html should include ("Aggregate CRUD")
-      html should include ("View read")
+      html should include ("Management Console Home")
+      html should include ("Open Entities")
+      html should include ("Open Data")
+      html should include ("Open Aggregates")
+      html should include ("Open Views")
+      html should include ("Open Descriptor")
+      html should include ("Open Forms")
+      html should include ("Technical details")
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin/entities")
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin/data")
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin/aggregates")
@@ -430,6 +441,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Completed Descriptor JSON")
       html should include ("Configured Descriptor JSON")
       html should include ("descriptor-json-details")
+      html should include (">JSON<")
+      html should include (">YAML<")
       html should include ("Descriptor Controls")
       html should include ("Filter descriptor tables")
       html should include ("No descriptor rows match the filter.")
@@ -437,6 +450,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Routes")
       html should include ("Form Access And Authorization")
       html should include ("Admin Surfaces")
+      html should include ("Destination")
+      html should include ("Support")
+      html should include ("Raw selector")
       html should include (s"href=\"/web/${componentPath}/notice-board\"")
       html should include ("href=\"/web/notice\"")
       html should include (s"href=\"/form/${componentPath}/notice/search-notices\"")
@@ -494,12 +510,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       componentHtml should include ("notice-admin")
       componentHtml should include ("car-bundled")
       componentHtml should include ("/web/notice-board/manual/notice-aggregate")
-      componentHtml should include ("class=\"row mb-0\"")
+      componentHtml should include ("manual-summary-table")
       serviceHtml should include ("Service reference")
       serviceHtml should include ("/web/notice-board/manual/notice-aggregate/approve-notice-aggregate")
       operationHtml should include ("Operation reference")
+      operationHtml should include ("/rest/v1/notice-board/notice-aggregate/approve-notice-aggregate")
+      operationHtml should include ("Parameters")
+      operationHtml should include ("Raw Help")
+      operationHtml should include (">JSON<")
+      operationHtml should include (">YAML<")
       operationHtml should include ("approve-notice-aggregate")
-      operationHtml should include ("web-empty-state")
       operationHtml should not include ("admin entity")
       operationHtml should not include ("method=\"post\"")
     }
@@ -559,7 +579,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       aliasManualHtml should include ("approve-notice-aggregate")
       openApiResponse.status.code shouldBe 200
       openApiJson should include (""""openapi"""")
-      openApiJson should include ("/notice-board/notice-aggregate/approve-notice-aggregate")
+      openApiJson should include ("/rest/v1/notice-board/notice-aggregate/approve-notice-aggregate")
     }
 
     "render component entity administration page" in {
@@ -1362,6 +1382,92 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       default.as[String].unsafeRunSync() should include ("Aliased Notice Board")
     }
 
+    "redirect / to /web and render onboarding help on /web in non-production when no default web route is configured" in {
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("develop")
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val root = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/"))).unsafeRunSync()
+      val web = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
+      val webHtml = web.as[String].unsafeRunSync()
+
+      root.status.code shouldBe 307
+      root.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/web")
+      web.status.code shouldBe 200
+      webHtml should include ("CNCF Runtime Help")
+      webHtml should include ("/web/system/manual")
+      webHtml should include ("/web/notice-board")
+      webHtml should not include ("/form/notice-board")
+    }
+
+    "redirect / to /web and keep /web strict in production when no default web route is configured" in {
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production")
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val root = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/"))).unsafeRunSync()
+      val web = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web"))).unsafeRunSync()
+
+      root.status.code shouldBe 307
+      root.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/web")
+      web.status.code shouldBe 404
+    }
+
+    "redirect /rest to the latest stable REST namespace" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/rest?mode=test"))).unsafeRunSync()
+
+      response.status.code shouldBe 307
+      response.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/rest/v1?mode=test")
+    }
+
+    "redirect versionless REST requests to /rest/v1 with method-preserving redirects" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(Request[IO](Method.POST, Uri.unsafeFromString("/rest/admin/system/ping?mode=test"))).unsafeRunSync()
+
+      response.status.code shouldBe 307
+      response.headers.get[org.http4s.headers.Location].map(_.uri.renderString) shouldBe Some("/rest/v1/admin/system/ping?mode=test")
+    }
+
+    "dispatch canonical REST requests through /rest/v1" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/rest/v1/admin/system/ping"))).unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 200
+      body should include ("runtime: goldenport-cncf")
+    }
+
+    "return not found for implicit top-level REST routes once /rest/v1 is canonical" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/admin/system/ping"))).unsafeRunSync()
+
+      response.status.code shouldBe 404
+    }
+
+    "leave /api unsupported" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/api/v1/admin/system/ping"))).unsafeRunSync()
+
+      response.status.code shouldBe 404
+    }
+
     "serve single component Web app through implicit SAR convenience aliases" in {
       val root = Files.createTempDirectory("cncf-web-implicit-alias-root-")
       Files.writeString(root.resolve("web-descriptor.yaml"), "web:\n  apps:\n    - name: notice-board\n", StandardCharsets.UTF_8)
@@ -1835,11 +1941,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val html = StaticFormAppRenderer.renderComponentAdminData(subsystem, component.name).map(_.body).getOrElse(fail("component data admin is missing"))
 
       html should include (s"${component.name} Data Administration")
-      html should include ("Data CRUD")
+      html should include ("Data record management")
       html should include ("class=\"card admin-card")
       html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin")
       html should include (s"/form/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}")
-      html should include ("not enabled in this baseline")
+      html should include (s"/web/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(component.name)}/admin/descriptor")
+      html should include ("Data record management")
+      html should include ("Implemented baseline")
+      html should include ("Delete flows")
     }
 
     "render component data pages from a live DataStore fixture" in {
@@ -1900,11 +2009,17 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         detail should include ("alice")
         detail should include ("class=\"card admin-card")
         detail should include ("class=\"btn btn-primary\"")
+        detail should include ("/web/notice-board/admin/data/audit")
+        detail should include ("/web/notice-board/admin")
         edit should include ("name=\"action\"")
         edit should include ("value=\"created\"")
         edit should include ("class=\"admin-form\"")
+        edit should include ("/web/notice-board/admin/data/audit/audit_1")
+        edit should include ("/web/notice-board/admin/data/audit")
         newly should include ("/form/notice-board/admin/data/audit/create")
         newly should include ("class=\"admin-form\"")
+        newly should include ("/web/notice-board/admin/data/audit")
+        newly should include ("/web/notice-board/admin/data")
       }
     }
 

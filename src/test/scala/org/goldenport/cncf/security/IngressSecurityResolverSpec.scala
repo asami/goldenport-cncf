@@ -12,7 +12,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- * @version Apr. 23, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
@@ -169,6 +169,63 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
       val base = subsystem.components.head.logic.executionContext()
 
       val result = IngressSecurityResolver.resolve(base, Map.empty[String, String])
+
+      result shouldBe a[Consequence.Success[_]]
+      val resolved = result.toOption.get
+      resolved.executionContext.security.principal.id.value shouldBe "anonymous"
+      resolved.executionContext.security.level shouldBe SecurityLevel("anonymous")
+    }
+
+    "allow anonymous resolution for public signup attributes when providers do not match and fallback privilege is disabled" in {
+      val subsystem = _subsystem(fallbackEnabled = false)
+      val base = subsystem.components.head.logic.executionContext()
+
+      val result = IngressSecurityResolver.resolve(
+        base,
+        Map(
+          "loginName" -> "new-user",
+          "email" -> "new-user@example.com",
+          "password" -> "secret123"
+        )
+      )
+
+      result shouldBe a[Consequence.Success[_]]
+      val resolved = result.toOption.get
+      resolved.executionContext.security.principal.id.value shouldBe "anonymous"
+      resolved.executionContext.security.level shouldBe SecurityLevel("anonymous")
+    }
+
+    "allow anonymous resolution when only a stale session id is present and fallback privilege is disabled" in {
+      val subsystem = _subsystem(fallbackEnabled = false)
+      val base = subsystem.components.head.logic.executionContext()
+
+      val result = IngressSecurityResolver.resolve(
+        base,
+        Map(
+          "x-textus-session" -> "missing-session",
+          "loginName" -> "new-user",
+          "email" -> "new-user@example.com",
+          "password" -> "secret123"
+        )
+      )
+
+      result shouldBe a[Consequence.Success[_]]
+      val resolved = result.toOption.get
+      resolved.executionContext.security.principal.id.value shouldBe "anonymous"
+      resolved.executionContext.security.level shouldBe SecurityLevel("anonymous")
+    }
+
+    "allow anonymous resolution for login credentials when providers do not match and fallback privilege is disabled" in {
+      val subsystem = _subsystem(fallbackEnabled = false)
+      val base = subsystem.components.head.logic.executionContext()
+
+      val result = IngressSecurityResolver.resolve(
+        base,
+        Map(
+          "username" -> "existing-user",
+          "password" -> "secret123"
+        )
+      )
 
       result shouldBe a[Consequence.Success[_]]
       val resolved = result.toOption.get

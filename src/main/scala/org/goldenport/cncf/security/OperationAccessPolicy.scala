@@ -13,7 +13,8 @@ import org.simplemodeling.model.value.SecurityAttributes
 
 /*
  * @since   Apr.  6, 2026
- * @version Apr. 19, 2026
+ *  version Apr. 19, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationAccessPolicy {
@@ -235,9 +236,10 @@ object OperationAccessPolicy {
       true
     else if (_matches_relation(record, authorization))
       true
-    else authorizeSimpleEntity(record, "read") match
-      case Consequence.Success(_) => true
-      case _ => false
+    else
+      _authorize_visible_record(record, tc.id(entity)) match
+        case Consequence.Success(_) => true
+        case _ => false
   }
 
   private def _visibility_evaluation[T](
@@ -254,7 +256,7 @@ object OperationAccessPolicy {
       case None if _matches_relation(record, authorization) =>
         (entity, true, None)
       case None =>
-        authorizeSimpleEntity(record, "read") match
+        _authorize_visible_record(record, tc.id(entity)) match
           case Consequence.Success(_) => (entity, true, None)
           case _ => (entity, false, None)
         }
@@ -490,6 +492,37 @@ object OperationAccessPolicy {
     accessKind: String
   ): Boolean =
     _security_attributes(record).exists(_.permissionFor(role, accessKind))
+
+  private def _authorize_visible_record(
+    record: Record,
+    id: EntityId
+  )(using ctx: ExecutionContext): Consequence[Unit] =
+    OperationAccessPolicy.authorizeSimpleEntity(record, "read") match
+      case s @ Consequence.Success(_) => s
+      case _ if _security_attributes(record).isEmpty =>
+        _load_raw_record(id).flatMap {
+          case Some(raw) => OperationAccessPolicy.authorizeSimpleEntity(raw, "read")
+          case None => Consequence.securityPermissionDenied(
+            "Security attributes are not available for authorization.",
+            Seq(
+              Descriptor.Facet.Name("security-attributes-missing"),
+              Descriptor.Facet.Parameter.argument("access-kind"),
+              Descriptor.Facet.Value("read"),
+              Descriptor.Facet.Id(_subject.subjectId)
+            )
+          )
+        }
+      case f => f
+
+  private def _load_raw_record(
+    id: EntityId
+  )(using ctx: ExecutionContext): Consequence[Option[Record]] =
+    for {
+      cid <- ctx.entityStoreSpace.dataStoreCollection(id)
+      dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
+      ds <- ctx.dataStoreSpace.dataStore(cid)
+      r <- ds.load(cid, dsid)
+    } yield r
 
   private def _security_attributes(
     record: Record

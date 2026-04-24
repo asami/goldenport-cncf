@@ -21,7 +21,7 @@ import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
  *  version Jan. 10, 2026
  *  version Feb. 26, 2026
  *  version Mar. 30, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -151,7 +151,7 @@ class StandardEntityStore(
     options: EntityCreateOptions = EntityCreateOptions.default
   )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = {
     val id = tc.id(entity) getOrElse createId(entity)
-    val rec = _complement_create_record(tc.toRecord(entity), id, options)
+    val rec = _complement_create_record(tc.toStoreRecord(entity), id, options)
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
@@ -179,7 +179,7 @@ class StandardEntityStore(
           "visible-count" -> visible.size
         )
       )
-      r <- visible.traverse(tc.fromRecord)
+      r <- visible.traverse(tc.fromStoreRecord)
     } yield r
   }
 
@@ -192,7 +192,7 @@ class StandardEntityStore(
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
       existing <- ds.load(cid, dsid)
-      rec = _complement_save_record(tc.toRecord(entity), id, existing)
+      rec = _complement_save_record(tc.toStoreRecord(entity), id, existing)
       r <- ds.save(cid, dsid, rec)
     } yield r
   }
@@ -201,7 +201,7 @@ class StandardEntityStore(
     changes: T
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = {
     val id = tc.id(changes)
-    val rec = _complement_update_record(tc.toRecord(changes), id)
+    val rec = _complement_update_record(tc.toStoreRecord(changes), id)
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
@@ -244,11 +244,12 @@ class StandardEntityStore(
   def search[T](
     query: EntityQuery[T]
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] = {
+    val storequery = EntityDirectiveQuery.mapPaths(query.query)(tc.storeFieldName)
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(query.collection)
       directive = QueryDirective(
-        query = DataStoreQuery.Expr(EntityDirectiveQuery.whereOf(query.query)),
-        order = _to_datastore_order(query.query.sort),
+        query = DataStoreQuery.Expr(EntityDirectiveQuery.whereOf(storequery)),
+        order = _to_datastore_order(EntityDirectiveQuery.sortOf(storequery)),
         limit = _to_datastore_limit(query.query),
         offset = query.query.offset.getOrElse(0)
       )
@@ -278,7 +279,7 @@ class StandardEntityStore(
         notdeleted.size,
         visible.size
       )
-      decoded <- visible.traverse(tc.fromRecord)
+      decoded <- visible.traverse(tc.fromStoreRecord)
       filtered = decoded.filter(x => EntityDirectiveQuery.matches(query.query, x))
       sorted = EntityDirectiveQuery.sortValues(filtered, query.query.sort)
       values = EntityDirectiveQuery.sliceValues(sorted, None, query.query.limit)

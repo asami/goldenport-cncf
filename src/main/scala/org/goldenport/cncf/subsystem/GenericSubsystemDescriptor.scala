@@ -14,8 +14,8 @@ import org.goldenport.cncf.security.OperationAuthorizationRule
 
 /*
  * @since   Apr.  7, 2026
- *  version Apr. 11, 2026
- * @version Apr. 23, 2026
+ *  version Apr. 23, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -302,22 +302,8 @@ object GenericSubsystemDescriptor {
       case _ => None
     }
 
-  def runtimeComponentName(componentName: String): String = {
-    val normalized = componentName.trim
-    val stripped =
-      if (normalized.startsWith("textus-")) normalized.stripPrefix("textus-")
-      else if (normalized.startsWith("textus_")) normalized.stripPrefix("textus_")
-      else normalized
-    if (stripped.exists(ch => ch == '-' || ch == '_'))
-      stripped
-        .split("[-_]")
-        .toVector
-        .filter(_.nonEmpty)
-        .map(_.toLowerCase.capitalize)
-        .mkString
-    else
-      stripped
-  }
+  def runtimeComponentName(componentName: String): String =
+    componentName.trim
 
   private def _resolve_descriptor_file(path: Path): Option[Path] =
     _canonical_descriptor_files

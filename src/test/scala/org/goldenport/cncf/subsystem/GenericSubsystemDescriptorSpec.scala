@@ -8,7 +8,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  8, 2026
- * @version Apr.  9, 2026
+ *  version Apr.  9, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
@@ -40,7 +41,7 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
 
       descriptor.subsystemName shouldBe "mcprag"
       descriptor.componentVersion shouldBe Some("0.1.0-SNAPSHOT")
-      descriptor.runtimeComponentNames shouldBe Vector("McpRag")
+      descriptor.runtimeComponentNames shouldBe Vector("textus-mcp-rag")
       componentDescriptor.name shouldBe Some("textus-mcp-rag")
       componentDescriptor.version shouldBe Some("0.1.0-SNAPSHOT")
       keys shouldBe Vector("view")
@@ -146,7 +147,7 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
       val provider = auth.providers.head
 
       descriptor.subsystemName shouldBe "textus-identity"
-      descriptor.runtimeComponentNames shouldBe Vector("UserAccount")
+      descriptor.runtimeComponentNames shouldBe Vector("textus-user-account")
       auth.convention shouldBe Some("enabled")
       auth.fallbackPrivilege shouldBe Some("disabled")
       provider.name shouldBe "user-account"

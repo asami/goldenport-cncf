@@ -26,13 +26,26 @@ machine-facing form metadata, and REST execution.
 /web/...       Web HTML pages
 /form/...      plain HTML FORM submission routes
 /form-api/...  JSON Form API definition and validation endpoints
-REST paths     JSON operation execution envelopes
+/rest/v1/...   canonical JSON REST execution envelopes
 ```
 
 `/web` pages are human-facing HTML pages. `/form` routes accept browser-native
 HTML FORM submissions and resolve to HTML result pages. `/form-api` routes are
-for JSON-oriented clients and form preparation. REST operation paths remain the
-canonical JSON execution surface.
+for JSON-oriented clients and form preparation. `/rest/v1` is the canonical
+JSON execution surface.
+
+Compatibility and root policy:
+
+- `/` redirects to `/web`
+- `/rest` and `/rest/{...}` redirect to the latest stable REST namespace
+- the current latest stable REST namespace is `/rest/v1`
+- `/api/...` is intentionally deferred and not part of the current public
+  contract
+
+REST versioning is major-only at the path level:
+
+- non-breaking additions remain within the same major version
+- breaking changes require a new namespace such as `/rest/v2/...`
 
 ## Static Form App
 

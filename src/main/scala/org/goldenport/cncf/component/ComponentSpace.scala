@@ -4,7 +4,8 @@ import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Jan.  8, 2026
- * @version Jan. 15, 2026
+ *  version Jan. 15, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentSpace(
@@ -30,7 +31,7 @@ final class ComponentSpace(
     locator match {
       case ComponentLocator.ComponentIdLocator(id) => _get_default_by_component_id(id)
       case ComponentLocator.NameLocator(name) =>
-        _by_name.get(name).orElse(_components.find(x => NamingConventions.equivalentByNormalized(x.name, name)))
+        _by_name.get(name).orElse(_components.find(x => _matches_component_name(x, name)))
     }
 
   def add(ps: Seq[Component]): ComponentSpace = {
@@ -66,4 +67,10 @@ final class ComponentSpace(
 }
 
 object ComponentSpace {
+  private def _matches_component_name(component: Component, name: String): Boolean =
+    NamingConventions.equivalentByNormalized(component.name, name) ||
+      component.artifactMetadata.toVector.exists { metadata =>
+        metadata.component.exists(NamingConventions.equivalentByNormalized(_, name)) ||
+          NamingConventions.equivalentByNormalized(metadata.name, name)
+      }
 }

@@ -13,8 +13,7 @@ import org.goldenport.schema.Schema
  * application policy before being stored here.
  *
  * @since   Mar. 27, 2026
- *  version Mar. 27, 2026
- * @version Apr. 16, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityRuntimeDescriptor(
@@ -25,6 +24,8 @@ final case class EntityRuntimeDescriptor(
   maxPartitions: Int,
   maxEntitiesPerPartition: Int,
   workingSet: Option[WorkingSetDescriptor] = None,
+  workingSetPolicy: Option[WorkingSetPolicy] = None,
+  workingSetPolicySource: Option[WorkingSetPolicySource] = None,
   schema: Option[Schema] = None,
   aggregateNames: Vector[String] = Vector.empty,
   viewNames: Vector[String] = Vector.empty,
@@ -40,6 +41,8 @@ final case class EntityRuntimeDescriptor(
       entityName = entityName,
       memoryPolicy = memoryPolicy,
       workingSet = workingSet.map(_.toDefinition),
+      workingSetPolicy = workingSetPolicy,
+      workingSetPolicySource = workingSetPolicySource,
       partitionStrategy = partitionStrategy,
       maxPartitions = maxPartitions,
       maxEntitiesPerPartition = maxEntitiesPerPartition

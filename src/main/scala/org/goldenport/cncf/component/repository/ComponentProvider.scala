@@ -20,7 +20,7 @@ import scala.util.control.NonFatal
  *  version Jan. 29, 2026
  *  version Feb. 15, 2026
  *  version Mar. 26, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentProvider {
@@ -148,7 +148,7 @@ object ComponentProvider {
     log: BootstrapLog
   ): Consequence[Component] = {
     factory.createPrimary(params) match {
-      case s @ Consequence.Success(_) =>
+      case s @ Consequence.Success(comp) =>
         s
       case Consequence.Failure(conclusion) =>
         log.warn(s"factory ${factory.className} failed for ${componentClass.getName}: ${conclusion.show}")

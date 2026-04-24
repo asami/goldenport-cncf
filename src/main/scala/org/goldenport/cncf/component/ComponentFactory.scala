@@ -20,7 +20,7 @@ import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityQuery, EntityStore}
 import org.goldenport.cncf.entity.aggregate.{AggregateAssembler, AggregateBuilder, AggregateCollection, AggregateSpace, AggregateDefinition, ContextualAggregateBuilder, ContextualAggregateCount, ContextualAggregateQuery}
 import org.goldenport.cncf.event.{ActionCallDispatcher, EventBus, EventReception, EventStore, EntitySubscriptionLimit}
-import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimeDescriptor, EntityRuntimePlan, EntitySpace, EntityStorage, PartitionedMemoryRealm, PartitionStrategy, WorkingSetDefinition, WorkingSetInitializer}
+import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimeDescriptor, EntityRuntimePlan, EntitySpace, EntityStorage, PartitionedMemoryRealm, PartitionStrategy, WorkingSetDefinition, WorkingSetDescriptor, WorkingSetInitializer, WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.entity.view.{Browser, ContextualBrowserCount, ContextualBrowserFind, ContextualBrowserQuery, ContextualViewBuilder, ViewDefinition, ViewBuilder, ViewCollection, ViewSpace}
 import org.goldenport.cncf.security.IngressSecurityResolver
@@ -42,7 +42,8 @@ import scala.util.Try
 final class ComponentFactory(
   private val _component_repository_space: ComponentRepositorySpace = ComponentRepositorySpace(),
   private val _collaborators: CollaboratorFactory = CollaboratorFactory.empty,
-  private val _runtime_entity_descriptors: Vector[EntityRuntimeDescriptor] = Vector.empty
+  private val _runtime_entity_descriptors: Vector[EntityRuntimeDescriptor] = Vector.empty,
+  private val _configuration: Option[ResolvedConfiguration] = None
 ) {
   def discover(): Vector[Component] = {
     val cs = _component_repository_space.discover()
@@ -50,7 +51,10 @@ final class ComponentFactory(
   }
 
   def bootstrap(component: Component): Component =
-    _bootstrap_collections(_initialize_special_component(component))
+    if (component.collectionsBootstrapped)
+      component
+    else
+      _bootstrap_collections(_initialize_special_component(component))
 
   private def _initialize_special_component(p: Component): Component =
     p match {
@@ -74,13 +78,13 @@ final class ComponentFactory(
   }
 
   private def _bootstrap_collections(component: Component): Component = {
-    _enrich_component_descriptors(component)
     val storesnapshot = scala.collection.concurrent.TrieMap.empty[EntityId, Any]
     // One EntitySpace per component. All collections in the component share it.
     val entityspace = component.entitySpace
     val aggregatespace = component.aggregateSpace
     val viewspace = component.viewSpace
     val plans = _default_entity_runtime_plans(component)
+    _enrich_component_descriptors(component, plans)
     val workingsetentities = _resolve_working_set_entity_names(component, plans)
     val _ = component.withWorkingSetEntityNames(workingsetentities)
     if (plans.nonEmpty)
@@ -95,20 +99,47 @@ final class ComponentFactory(
       _initialize_working_sets(component, entityspace, storesnapshot)
     _bootstrap_state_machine_planners(component, plans)
     _bootstrap_event_reception(component)
-    component
+    component.withCollectionsBootstrapped()
   }
 
   private def _enrich_component_descriptors(
-    component: Component
+    component: Component,
+    plans: Vector[EntityRuntimePlan[Any]]
   ): Unit = {
+    val plansByEntity = plans.map(p => _normalize_entity_name(p.entityName) -> p).toMap
     val descriptors = component.componentDescriptors.map { descriptor =>
       descriptor.copy(
-        entityRuntimeDescriptors = descriptor.entityRuntimeDescriptors.map(_enrich_entity_runtime_descriptor(component, _))
+        entityRuntimeDescriptors = descriptor.entityRuntimeDescriptors.map { runtimeDescriptor =>
+          val effective = plansByEntity
+            .get(_normalize_entity_name(runtimeDescriptor.entityName))
+            .map(_apply_entity_runtime_plan(runtimeDescriptor, _))
+            .getOrElse(runtimeDescriptor)
+          _enrich_entity_runtime_descriptor(component, effective)
+        }
       )
     }
     if (descriptors.nonEmpty)
       component.withComponentDescriptors(descriptors)
   }
+
+  private def _apply_entity_runtime_plan(
+    descriptor: EntityRuntimeDescriptor,
+    plan: EntityRuntimePlan[Any]
+  ): EntityRuntimeDescriptor =
+    descriptor.copy(
+      memoryPolicy = plan.memoryPolicy,
+      partitionStrategy = plan.partitionStrategy,
+      maxPartitions = plan.maxPartitions,
+      maxEntitiesPerPartition = plan.maxEntitiesPerPartition,
+      workingSet = plan.workingSet.map(ws =>
+        WorkingSetDescriptor(
+          entityName = ws.entityName,
+          entityIds = Vector.empty
+        )
+      ),
+      workingSetPolicy = plan.workingSetPolicy,
+      workingSetPolicySource = plan.workingSetPolicySource
+    )
 
   private def _enrich_entity_runtime_descriptor(
     component: Component,
@@ -1291,7 +1322,16 @@ final class ComponentFactory(
     plans: Vector[EntityRuntimePlan[Any]]
   ): Set[String] =
     if (plans.nonEmpty)
-      plans.flatMap(_.workingSet.map(_.entityName)).toSet
+      plans.flatMap { plan =>
+        if (plan.workingSet.isDefined)
+          Vector(plan.entityName)
+        else
+          plan.workingSetPolicy match {
+            case Some(WorkingSetPolicy.Disabled) | None => Vector.empty
+            case Some(_) if plan.memoryPolicy == EntityMemoryPolicy.LoadToMemory => Vector(plan.entityName)
+            case _ => Vector.empty
+          }
+      }.toSet
     else
       _default_working_sets(component).map(_.entityName).toSet
 
@@ -1303,24 +1343,124 @@ final class ComponentFactory(
   private def _default_entity_runtime_plans(
     component: Component
   ): Vector[EntityRuntimePlan[Any]] = {
-    val descriptors = _runtime_descriptors_for(component)
-    if (descriptors.nonEmpty)
-      descriptors.map(_.toPlan)
+    val declarative = _runtime_descriptors_for(component).map(_.toPlan)
+    val config = _config_entity_runtime_plans(component, declarative)
+    val code = _programmatic_entity_runtime_plans(component)
+    val merged = _merge_entity_runtime_plans(_merge_entity_runtime_plans(declarative, config), code)
+    if (merged.nonEmpty)
+      merged
+    else if (component.aggregateDefinitions.nonEmpty || component.viewDefinitions.nonEmpty)
+      _entity_collection_names(component).map(_legacy_memory_plan)
     else
-      component match {
-        case m: EntityRuntimePlanProvider =>
-          m.entityRuntimePlans
-        case _ =>
-          component.factory match {
-            case Some(m: EntityRuntimePlanProvider) =>
-              m.entityRuntimePlans
-            case _ if component.aggregateDefinitions.nonEmpty || component.viewDefinitions.nonEmpty =>
-              _entity_collection_names(component).map(_legacy_memory_plan)
-            case _ =>
-              Vector.empty
-          }
-      }
+      Vector.empty
   }
+
+  private def _programmatic_entity_runtime_plans(
+    component: Component
+  ): Vector[EntityRuntimePlan[Any]] =
+    component match {
+      case m: EntityRuntimePlanProvider =>
+        m.entityRuntimePlans.map(_normalize_code_working_set_policy_source)
+      case _ =>
+        component.factory match {
+          case Some(m: EntityRuntimePlanProvider) =>
+            m.entityRuntimePlans.map(_normalize_code_working_set_policy_source)
+          case _ =>
+            Vector.empty
+        }
+    }
+
+  private def _normalize_code_working_set_policy_source(
+    plan: EntityRuntimePlan[Any]
+  ): EntityRuntimePlan[Any] =
+    if (plan.workingSetPolicy.isDefined && plan.workingSetPolicySource.isEmpty)
+      plan.copy(workingSetPolicySource = Some(WorkingSetPolicySource.Code))
+    else
+      plan
+
+  private def _merge_entity_runtime_plans(
+    base: Vector[EntityRuntimePlan[Any]],
+    overrideplans: Vector[EntityRuntimePlan[Any]]
+  ): Vector[EntityRuntimePlan[Any]] = {
+    val overridebyentity = overrideplans.map(p => _normalize_entity_name(p.entityName) -> p).toMap
+    val mergedbase = base.map { plan =>
+      overridebyentity.get(_normalize_entity_name(plan.entityName)).getOrElse(plan)
+    }
+    val appended = overrideplans.filterNot(p =>
+      base.exists(x => _normalize_entity_name(x.entityName) == _normalize_entity_name(p.entityName))
+    )
+    mergedbase ++ appended
+  }
+
+  private def _config_entity_runtime_plans(
+    component: Component,
+    base: Vector[EntityRuntimePlan[Any]]
+  ): Vector[EntityRuntimePlan[Any]] =
+    _configuration.toVector.flatMap { conf =>
+      val componentnames = _config_component_names(component)
+      val candidates = (
+        base.map(_.entityName) ++ _entity_collection_names(component)
+      ).distinct
+      candidates.flatMap { entityname =>
+        componentnames.iterator.flatMap(name => _config_working_set_policy(conf, name, entityname)).toSeq.headOption.map { policy =>
+          val template = base.find(p => _normalize_entity_name(p.entityName) == _normalize_entity_name(entityname))
+            .getOrElse(_legacy_memory_plan(entityname))
+          template.copy(
+            workingSetPolicy = Some(policy),
+            workingSetPolicySource = Some(WorkingSetPolicySource.Config)
+          )
+        }
+      }
+    }
+
+  private def _config_component_names(
+    component: Component
+  ): Vector[String] =
+    Vector(
+      Some(component.name),
+      component.coreOption.map(_.name)
+    ).flatten ++
+      component.componentDescriptors.flatMap(d => Vector(d.name, d.componentName).flatten)
+        .distinct
+
+  private def _config_working_set_policy(
+    conf: ResolvedConfiguration,
+    componentname: String,
+    entityname: String
+  ): Option[WorkingSetPolicy] = {
+    val component = NamingConventions.toNormalizedSegment(componentname)
+    val entity = NamingConventions.toNormalizedSegment(entityname)
+    val prefixes = Vector(
+      s"cncf.entity.$component.$entity.working-set-policy",
+      s"cncf.entity.$component.$entity.working_set_policy",
+      s"cncf.entity.$entity.working-set-policy",
+      s"cncf.entity.$entity.working_set_policy"
+    )
+    val kind = prefixes.iterator.flatMap(prefix =>
+      Vector(
+        ConfigurationAccess.getString(conf, s"$prefix.kind")
+      )
+    ).collectFirst { case Some(value) => value }
+    val duration = prefixes.iterator.flatMap(prefix =>
+      Vector(
+        ConfigurationAccess.getString(conf, s"$prefix.duration"),
+        ConfigurationAccess.getString(conf, s"$prefix.window")
+      )
+    ).collectFirst { case Some(value) => value }
+    val timestampfield = prefixes.iterator.flatMap(prefix =>
+      Vector(
+        ConfigurationAccess.getString(conf, s"$prefix.timestamp-field"),
+        ConfigurationAccess.getString(conf, s"$prefix.timestampField"),
+        ConfigurationAccess.getString(conf, s"$prefix.timestamp_field")
+      )
+    ).collectFirst { case Some(value) => value }
+    kind.flatMap(value => WorkingSetPolicy.parse(value, duration, timestampfield).toOption)
+  }
+
+  private def _normalize_entity_name(
+    name: String
+  ): String =
+    NamingConventions.toNormalizedSegment(name)
 
   private def _bootstrap_collection_id(
     component: Component,
@@ -1348,7 +1488,7 @@ final class ComponentFactory(
     val module = _generated_entity_module(component, entityname)
     val persistent =
       module.flatMap(_extract_entity_persistent).orElse {
-        _generated_entity_persistent_module(component, entityname).flatMap(_as_entity_persistent)
+        _generated_entity_persistent_module(component, entityname).flatMap(x => _as_entity_persistent(x, module))
       }
     persistent.getOrElse(_entity_persistent_any)
   }
@@ -1378,9 +1518,9 @@ final class ComponentFactory(
     component: Component,
     entityname: String
   ): Option[AnyRef] = {
-    val packagename = Option(component.getClass.getPackage).map(_.getName).filter(_.nonEmpty)
+    val packagenames = _generated_module_package_names(component)
     val classname = _entity_class_name(entityname)
-    val candidates = packagename.toVector.flatMap { pkg =>
+    val candidates = packagenames.flatMap { pkg =>
       Vector(
         s"${pkg}.entity.${classname}$$given_EntityPersistent_${classname}$$",
         s"${pkg}.entity.read.${classname}$$given_EntityPersistent_${classname}$$",
@@ -1398,9 +1538,9 @@ final class ComponentFactory(
     component: Component,
     entityname: String
   ): Option[AnyRef] = {
-    val packagename = Option(component.getClass.getPackage).map(_.getName).filter(_.nonEmpty)
+    val packagenames = _generated_module_package_names(component)
     val classname = _entity_class_name(entityname)
-    val candidates = packagename.toVector.flatMap { pkg =>
+    val candidates = packagenames.flatMap { pkg =>
       Vector(
         s"${pkg}.entity.${classname}$$",
         s"${pkg}.entity.aggregate.${classname}$$",
@@ -1589,6 +1729,22 @@ final class ComponentFactory(
       .mkString
   }
 
+  private[component] def _generated_module_package_names(
+    component: Component
+  ): Vector[String] = {
+    val packageName = Option(component.getClass.getPackage).map(_.getName).filter(_.nonEmpty)
+    val parentPackageName =
+      packageName.flatMap { name =>
+        if (name.endsWith(".impl")) Option(name.stripSuffix(".impl")).filter(_.nonEmpty)
+        else None
+      }
+    Vector(
+      packageName,
+      parentPackageName,
+      Some("org.goldenport.cncf.component")
+    ).flatten.distinct
+  }
+
   private def _load_scala_module(
     loader: ClassLoader,
     className: String
@@ -1641,7 +1797,7 @@ final class ComponentFactory(
       fields
         .flatMap(f => _read_field(module, f))
         .find(x => _as_entity_persistent(x).nonEmpty)
-    fromNamedMethods.orElse(fromTypedMethods).orElse(fromNamedFields).orElse(fromTypedFields).flatMap(_as_entity_persistent)
+    fromNamedMethods.orElse(fromTypedMethods).orElse(fromNamedFields).orElse(fromTypedFields).flatMap(x => _as_entity_persistent(x, Some(module)))
   }
 
   private def _invoke_zero_arg(
@@ -1667,11 +1823,16 @@ final class ComponentFactory(
     }
 
   private def _as_entity_persistent(
-    raw: Any
+    raw: Any,
+    module: Option[AnyRef] = None
   ): Option[EntityPersistent[Any]] =
     raw match {
-      case m: EntityPersistent[?] => Some(m.asInstanceOf[EntityPersistent[Any]])
+      case m: EntityPersistent[?] =>
+        val bridge = m.asInstanceOf[EntityPersistent[Any]]
+        val mapping = module.map(_entity_persistent_store_field_mapping).getOrElse(Map.empty)
+        Some(_with_store_field_mapping(bridge, mapping))
       case m: AnyRef if _looks_like_entity_persistent(m) =>
+        val mapping = module.map(_entity_persistent_store_field_mapping).getOrElse(Map.empty)
         Some(new EntityPersistent[Any] {
           def id(e: Any): EntityId =
             _invoke_entity_persistent(m, "id", e).asInstanceOf[EntityId]
@@ -1681,9 +1842,79 @@ final class ComponentFactory(
 
           def fromRecord(r: Record): Consequence[Any] =
             _invoke_entity_persistent(m, "fromRecord", r).asInstanceOf[Consequence[Any]]
+
+          override def storeFieldName(logicalName: String): String =
+            mapping.getOrElse(logicalName, logicalName)
         })
       case _ => None
     }
+
+  private def _with_store_field_mapping(
+    bridge: EntityPersistent[Any],
+    mapping: Map[String, String]
+  ): EntityPersistent[Any] =
+    if (mapping.isEmpty)
+      bridge
+    else
+      new EntityPersistent[Any] {
+        def id(e: Any): EntityId = bridge.id(e)
+        def toRecord(e: Any): Record = bridge.toRecord(e)
+        def fromRecord(r: Record): Consequence[Any] = bridge.fromRecord(r)
+        override def toStoreRecord(e: Any): Record = bridge.toStoreRecord(e)
+        override def fromStoreRecord(r: Record): Consequence[Any] = bridge.fromStoreRecord(r)
+        override def storeFieldName(logicalName: String): String =
+          mapping.getOrElse(logicalName, bridge.storeFieldName(logicalName))
+      }
+
+  private def _entity_persistent_store_field_mapping(
+    module: AnyRef
+  ): Map[String, String] = {
+    val values = _module_string_constants(module)
+    val inputs = _module_string_lists(module)
+    values.collect {
+      case (propfield, logicalname) if propfield.startsWith("PROP_") =>
+        val suffix = propfield.stripPrefix("PROP_")
+        val inputkeys = inputs.getOrElse(s"INPUT_KEYS_$suffix", Nil)
+        val physical = inputkeys.find(_ != logicalname).getOrElse(logicalname)
+        logicalname -> physical
+    }.toMap
+  }
+
+  private def _module_string_constants(
+    module: AnyRef
+  ): Map[String, String] =
+    (_module_field_values(module) ++ _module_method_values(module)).collect {
+      case (name, s: String) => name -> s
+    }.toMap
+
+  private def _module_string_lists(
+    module: AnyRef
+  ): Map[String, List[String]] =
+    (_module_field_values(module) ++ _module_method_values(module)).flatMap {
+      case (name, value) =>
+        value match {
+        case xs: Iterable[?] =>
+          Some(name -> xs.iterator.collect { case s: String => s }.toList)
+        case xs: Array[?] =>
+          Some(name -> xs.iterator.collect { case s: String => s }.toList)
+        case _ =>
+          None
+        }
+    }.toMap
+
+  private def _module_field_values(
+    module: AnyRef
+  ): Vector[(String, Any)] =
+    module.getClass.getFields.iterator.toVector.flatMap { field =>
+      _read_field(module, field).map(field.getName -> _)
+    }
+
+  private def _module_method_values(
+    module: AnyRef
+  ): Vector[(String, Any)] =
+    module.getClass.getMethods.iterator.toVector
+      .filter(m => m.getParameterCount == 0 && m.getDeclaringClass != classOf[Object])
+      .flatMap(m => _invoke_zero_arg(module, m).map(m.getName -> _))
 
   private def _looks_like_entity_persistent(
     raw: AnyRef
@@ -1751,7 +1982,7 @@ object ComponentFactory {
     val componentDescriptors = _resolve_component_descriptors(cwd, c)
     val space = _build_component_repository_space(subsystem, cwd, c, componentDescriptors)
     val descriptors = componentDescriptors.flatMap(_.entityRuntimeDescriptors)
-    new ComponentFactory(space, collaborators, descriptors)
+    new ComponentFactory(space, collaborators, descriptors, Some(c))
   }
 
   private def _build_component_repository_space(
@@ -1773,7 +2004,7 @@ object ComponentFactory {
     val componentDescriptors = _resolve_component_descriptors(cwd, c, repositorySpecs)
     val space = ComponentRepositorySpace.create(subsystem, c, repositorySpecs, componentDescriptors)
     val descriptors = componentDescriptors.flatMap(_.entityRuntimeDescriptors)
-    new ComponentFactory(space, collaborators, descriptors)
+    new ComponentFactory(space, collaborators, descriptors, Some(c))
   }
 
   private val _component_descriptor_key = "cncf.component.descriptor"

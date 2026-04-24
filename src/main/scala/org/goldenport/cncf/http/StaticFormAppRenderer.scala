@@ -4,6 +4,7 @@ import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.component.ComponentOrigin
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.config.RuntimeConfig
@@ -16,7 +17,7 @@ import org.goldenport.record.Record
 import org.goldenport.value.BaseContent
 import org.goldenport.schema.{Multiplicity, ValueDomain, XBoolean, XDateTime, XInt, XString}
 import org.simplemodeling.model.datatype.EntityId
-import io.circe.Json
+import io.circe.{Json, JsonObject}
 import io.circe.parser.parse
 
 /*
@@ -51,7 +52,7 @@ object StaticFormAppRenderer {
     def withTotalCountPolicy(policy: WebDescriptor.TotalCountPolicy): PageRequest =
       copy(totalCountPolicy = policy)
   }
-final case class FormPageProperties(
+  final case class FormPageProperties(
   componentName: String,
   serviceName: String,
   operationName: String,
@@ -980,39 +981,65 @@ final case class FormPageProperties(
       component <- _find_component(subsystem, componentName)
       service <- component.protocol.services.services.find(x => NamingConventions.equivalentByNormalized(x.name, serviceName))
       operation <- service.operations.operations.find(x => NamingConventions.equivalentByNormalized(x.name, operationName))
-      if webDescriptor.isFormEnabled(_operation_selector(component.name, service.name, operation.name))
-    } yield {
-      val componentPath = NamingConventions.toNormalizedSegment(componentName)
-      val servicePath = NamingConventions.toNormalizedSegment(service.name)
-      val operationPath = NamingConventions.toNormalizedSegment(operation.name)
-      val formDescriptor = webDescriptor.form.get(_operation_selector(component.name, service.name, operation.name))
-      val adminFields = webDescriptor.adminOperationFields(componentPath, "aggregate", servicePath, operationPath)
-      val descriptorControls =
-        if (formDescriptor.exists(_.controls.nonEmpty))
-          formDescriptor.map(_.controls).getOrElse(Map.empty)
+      context <- {
+        val selectorCandidates = _operation_selector_candidates(component, componentName, service.name, operation.name)
+        val resolvedSelector = selectorCandidates.find(selector =>
+          webDescriptor.form.contains(selector) ||
+            webDescriptor.exposureOf(selector) != WebDescriptor.Exposure.Internal
+        ).orElse(selectorCandidates.headOption).getOrElse(_operation_selector(component.name, service.name, operation.name))
+        if (!webDescriptor.isFormEnabled(resolvedSelector))
+          None
+        else {
+          val componentPath = NamingConventions.toNormalizedSegment(componentName)
+          val servicePath = NamingConventions.toNormalizedSegment(service.name)
+          val operationPath = NamingConventions.toNormalizedSegment(operation.name)
+          val formDescriptor = webDescriptor.form.get(resolvedSelector)
+          val adminFields = webDescriptor.adminOperationFields(componentPath, "aggregate", servicePath, operationPath)
+          val descriptorControls =
+            if (formDescriptor.exists(_.controls.nonEmpty))
+              formDescriptor.map(_.controls).getOrElse(Map.empty)
+            else
+              _admin_field_controls(adminFields)
+          val operationParameters = operation.specification.request.parameters.toVector
+          val cmlParameters =
+            if (operationParameters.nonEmpty)
+              Vector.empty
+            else
+              _cml_operation_parameters(component, service.name, operation.name)
+          val webSchema = WebSchemaResolver.resolveOperationControls(
+            resolvedSelector,
+            operationParameters ++ cmlParameters,
+            descriptorControls
+          )
+          Some(OperationWebSchemaContext(
+            component,
+            service.name,
+            operation.name,
+            componentPath,
+            servicePath,
+            operationPath,
+            webSchema
+          ))
+        }
+      }
+    } yield
+      context
+
+  private def _operation_selector_candidates(
+    component: Component,
+    requestedComponentName: String,
+    serviceName: String,
+    operationName: String
+  ): Vector[String] =
+    (Vector(requestedComponentName, component.name) ++
+      component.artifactMetadata.toVector.flatMap(m => m.component.toVector :+ m.name))
+      .foldLeft(Vector.empty[String]) { (z, componentCandidate) =>
+        val selector = _operation_selector(componentCandidate, serviceName, operationName)
+        if (z.contains(selector))
+          z
         else
-          _admin_field_controls(adminFields)
-      val operationParameters = operation.specification.request.parameters.toVector
-      val cmlParameters =
-        if (operationParameters.nonEmpty)
-          Vector.empty
-        else
-          _cml_operation_parameters(component, service.name, operation.name)
-      val webSchema = WebSchemaResolver.resolveOperationControls(
-        _operation_selector(component.name, service.name, operation.name),
-        operationParameters ++ cmlParameters,
-        descriptorControls
-      )
-      OperationWebSchemaContext(
-        component,
-        service.name,
-        operation.name,
-        componentPath,
-        servicePath,
-        operationPath,
-        webSchema
-      )
-    }
+          z :+ selector
+      }
 
   private def _cml_operation_parameters(
     component: Component,
@@ -1847,6 +1874,59 @@ final case class FormPageProperties(
         ))
     }
 
+  def renderRuntimeLanding(
+    subsystem: Subsystem
+  ): Page = {
+    val runtime = RuntimeConfig.from(subsystem.configuration)
+    val appComponents = subsystem.components.filterNot(_.origin == ComponentOrigin.Builtin)
+    val effectiveComponents =
+      if (appComponents.nonEmpty) appComponents
+      else subsystem.components
+    val componentLinks = effectiveComponents.map { component =>
+      val path = NamingConventions.toNormalizedSegment(component.name)
+      s"""<li><strong>${_escape(component.name)}</strong>: <a href="/web/${_escape(path)}">App</a> · <a href="/web/${_escape(path)}/admin">Admin</a> · <a href="/web/${_escape(path)}/manual">Manual</a></li>"""
+    }.mkString("\n")
+    val recommendations =
+      if (componentLinks.isEmpty)
+        """<article>
+          |  <h2>Recommended Links</h2>
+          |  <ul>
+          |    <li><a href="/web/system/manual">System manual</a></li>
+          |    <li><a href="/web/system/admin">System admin</a></li>
+          |    <li><a href="/web/system/dashboard">System dashboard</a></li>
+          |    <li><a href="/web/system/performance">Performance</a></li>
+          |  </ul>
+          |</article>""".stripMargin
+      else
+        s"""<article>
+           |  <h2>Recommended Links</h2>
+           |  <ul>
+           |    <li><a href="/web/system/manual">System manual</a></li>
+           |    <li><a href="/web/system/admin">System admin</a></li>
+           |    <li><a href="/web/system/dashboard">System dashboard</a></li>
+           |    <li><a href="/web/system/performance">Performance</a></li>
+           |    ${componentLinks}
+           |  </ul>
+           |</article>""".stripMargin
+    Page(_simple_page(
+      title = "CNCF Runtime Help",
+      subtitle = "Development and demo entry points",
+      body =
+        s"""<article>
+           |  <h2>Runtime</h2>
+           |  <div class="table-responsive"><table class="table table-sm">
+           |    <tbody>
+           |      <tr><th>Subsystem</th><td>${_escape(subsystem.name)}</td></tr>
+           |      <tr><th>Operation mode</th><td>${_escape(runtime.operationMode.name)}</td></tr>
+           |      <tr><th>Components</th><td>${effectiveComponents.size}</td></tr>
+           |    </tbody>
+           |  </table></div>
+           |  <p>This page is shown only outside production when no explicit root or <code>/web</code> route is configured.</p>
+           |</article>
+           |${recommendations}""".stripMargin
+    ))
+  }
+
   def renderComponentManual(
     subsystem: Subsystem,
     componentName: String
@@ -1906,6 +1986,8 @@ final case class FormPageProperties(
       val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val rows = component.componentDescriptors.flatMap(_.entityRuntimeDescriptors).map { descriptor =>
         val entityPath = NamingConventions.toNormalizedSegment(descriptor.entityName)
+        val workingsetpolicy = descriptor.workingSetPolicy.map(_.label).getOrElse("none")
+        val policysource = descriptor.workingSetPolicySource.map(_.toString.toLowerCase).getOrElse("none")
         s"""<tr>
            |  <td><a href="/web/${componentPath}/admin/entities/${entityPath}">${_escape(descriptor.entityName)}</a></td>
            |  <td><code>${_escape(descriptor.collectionId.name)}</code></td>
@@ -1913,6 +1995,8 @@ final case class FormPageProperties(
            |  <td>${_escape(descriptor.operationKind.toString)}</td>
            |  <td>${_escape(descriptor.applicationDomain.toString)}</td>
            |  <td>${descriptor.workingSet.map(_.entityIds.size.toString).getOrElse("none")}</td>
+           |  <td><code>${_escape(workingsetpolicy)}</code></td>
+           |  <td>${_escape(policysource)}</td>
            |</tr>""".stripMargin
       }.mkString("\n")
       val body =
@@ -1920,7 +2004,7 @@ final case class FormPageProperties(
           _admin_empty_state("No entity runtime descriptors are registered for this component.")
         } else {
           s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
-             |  <thead><tr><th>Entity</th><th>Collection</th><th>Usage</th><th>Operation</th><th>Domain</th><th>Working set</th></tr></thead>
+             |  <thead><tr><th>Entity</th><th>Collection</th><th>Usage</th><th>Operation</th><th>Domain</th><th>Working set</th><th>Policy</th><th>Source</th></tr></thead>
              |  <tbody>${rows}</tbody>
              |</table></div>""".stripMargin
         }
@@ -3130,6 +3214,7 @@ final case class FormPageProperties(
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val rows = component.viewDefinitions.map { definition =>
+        val viewPath = NamingConventions.toNormalizedSegment(definition.name)
         val viewNames =
           if (definition.viewNames.isEmpty) "default"
           else definition.viewNames.map(_escape).mkString(", ")
@@ -3140,7 +3225,7 @@ final case class FormPageProperties(
           if (definition.sourceEvents.isEmpty) "none"
           else definition.sourceEvents.map(_escape).mkString(", ")
         s"""<tr>
-           |  <td>${_escape(definition.name)}</td>
+           |  <td><a href="/web/${componentPath}/admin/views/${viewPath}">${_escape(definition.name)}</a></td>
            |  <td>${_escape(definition.entityName)}</td>
            |  <td>${viewNames}</td>
            |  <td>${queries}</td>
@@ -3166,7 +3251,8 @@ final case class FormPageProperties(
         subtitle = "View read management baseline",
         body =
           s"""${nav}
-             |${_admin_card("View read", body)}""".stripMargin
+             |${_admin_card("View read", body)}
+             |${_admin_card("Deferred capabilities", "<p class=\"mb-0\">View mutation and rebuild controls stay deferred in this slice. This page exposes read/list drill-down only.</p>")}""".stripMargin
       ))
     }
 
@@ -3284,6 +3370,7 @@ final case class FormPageProperties(
     _find_component(subsystem, componentName).map { component =>
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val rows = component.aggregateDefinitions.map { definition =>
+        val aggregatePath = NamingConventions.toNormalizedSegment(definition.name)
         val members =
           if (definition.members.isEmpty) "none"
           else definition.members.map(m => _escape(s"${m.name}:${m.entityName}")).mkString(", ")
@@ -3300,7 +3387,7 @@ final case class FormPageProperties(
           if (definition.invariants.isEmpty) "none"
           else definition.invariants.map(i => _escape(i.name)).mkString(", ")
         s"""<tr>
-           |  <td>${_escape(definition.name)}</td>
+           |  <td><a href="/web/${componentPath}/admin/aggregates/${aggregatePath}">${_escape(definition.name)}</a></td>
            |  <td>${_escape(definition.entityName)}</td>
            |  <td>${members}</td>
            |  <td>${creates}</td>
@@ -3327,7 +3414,8 @@ final case class FormPageProperties(
         subtitle = "Aggregate CRUD management baseline",
         body =
           s"""${nav}
-             |${_admin_card("Aggregate CRUD", body)}""".stripMargin
+             |${_admin_card("Aggregate read", body)}
+             |${_admin_card("Deferred capabilities", "<p class=\"mb-0\">Aggregate mutation and destructive administration remain deferred. Use this surface for read/list drill-down and related operation handoff.</p>")}""".stripMargin
       ))
     }
 
@@ -3451,14 +3539,16 @@ final case class FormPageProperties(
       val componentPath = NamingConventions.toNormalizedSegment(component.name)
       val nav = _admin_nav_card(Vector(
         "Component admin" -> s"/web/${componentPath}/admin",
+        "Descriptor" -> s"/web/${componentPath}/admin/descriptor",
         "Operation forms" -> s"/form/${componentPath}"
       ))
       Page(_simple_page(
         title = s"${_escape(component.name)} Data Administration",
-        subtitle = "Data CRUD management baseline",
+        subtitle = "Data record management baseline",
         body =
           s"""${nav}
-             |${_admin_card("Data CRUD", "Data CRUD execution is not enabled in this baseline. This page reserves the component-scoped management entry point for datastore records and document-level data operations.")}""".stripMargin
+             |${_admin_card("Data record management", "<p>Concrete data collections use the existing list/detail/new/edit flows. Open a descriptor-backed data surface from the component descriptor or a direct collection link.</p><p class=\"mb-0\"><span class=\"badge text-bg-secondary\">Implemented baseline</span></p>")}
+             |${_admin_card("Deferred capabilities", "<p class=\"mb-0\">Delete flows, destructive confirmation patterns, and runtime configuration mutation remain deferred in this slice.</p>")}""".stripMargin
       ))
     }
 
@@ -3781,7 +3871,11 @@ final case class FormPageProperties(
     name: String
   ): Option[Component] =
     subsystem.components.find(x =>
-      NamingConventions.equivalentByNormalized(x.name, name)
+      NamingConventions.equivalentByNormalized(x.name, name) ||
+        x.artifactMetadata.toVector.exists { metadata =>
+          metadata.component.exists(NamingConventions.equivalentByNormalized(_, name)) ||
+            NamingConventions.equivalentByNormalized(metadata.name, name)
+        }
     )
 
   private def _operation_selector(
@@ -4019,13 +4113,74 @@ final case class FormPageProperties(
       }.mkString("\n")
       val version = component.artifactMetadata.map(_.version).getOrElse("unversioned")
       val componentlets = _componentlet_table(component)
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      val entityCount = component.componentDescriptors.flatMap(_.entityRuntimeDescriptors).size
+      val dataCount = _admin_surface_selector_count(webDescriptor, Some(componentPath), "data")
+      val aggregateCount = component.aggregateDefinitions.size
+      val viewCount = component.viewDefinitions.size
+      val formsCount = component.protocol.services.services.map(_.operations.operations.toVector.size).sum
+      val cards = _admin_entry_cards(Vector(
+        _admin_entry_card(
+          "Entities",
+          s"${_pluralize(entityCount, "runtime descriptor", "runtime descriptors")} ready for list/detail/new/edit.",
+          s"/web/${componentPath}/admin/entities",
+          Some(entityCount.toString)
+        ),
+        _admin_entry_card(
+          "Data",
+          if (dataCount > 0)
+            s"${_pluralize(dataCount, "descriptor surface", "descriptor surfaces")} available through data admin."
+          else
+            "Open descriptor-backed data collections and concrete datastore records.",
+          s"/web/${componentPath}/admin/data",
+          Some(dataCount.toString)
+        ),
+        _admin_entry_card(
+          "Aggregates",
+          s"${_pluralize(aggregateCount, "aggregate", "aggregates")} available for read/list drill-down.",
+          s"/web/${componentPath}/admin/aggregates",
+          Some(aggregateCount.toString)
+        ),
+        _admin_entry_card(
+          "Views",
+          s"${_pluralize(viewCount, "view definition", "view definitions")} available for read-only inspection.",
+          s"/web/${componentPath}/admin/views",
+          Some(viewCount.toString)
+        ),
+        _admin_entry_card(
+          "Descriptor",
+          "Inspect routes, forms, auth controls, and admin surfaces.",
+          s"/web/${componentPath}/admin/descriptor"
+        ),
+        _admin_entry_card(
+          "Forms",
+          s"${_pluralize(formsCount, "operation form", "operation forms")} available for controlled execution.",
+          s"/form/${componentPath}",
+          Some(formsCount.toString)
+        )
+      ))
+      val technicalDetails =
+        s"""<details class="mt-3">
+           |  <summary>Technical details</summary>
+           |  <article class="mt-3">
+           |    <h3>${_escape(component.name)}</h3>
+           |    <p>Version ${_escape(version)}</p>
+           |    ${componentlets}
+           |    ${services}
+           |  </article>
+           |</details>""".stripMargin
       s"""<article>
          |  <h2>${_escape(component.name)}</h2>
          |  <p>Version ${_escape(version)}</p>
-         |  ${componentlets}
-         |  ${services}
+         |  ${cards}
+         |  ${technicalDetails}
          |</article>""".stripMargin
     }.mkString("\n")
+    val componentInventory =
+      if (componentFormsPath.isEmpty)
+        _system_admin_component_inventory(components)
+      else
+        ""
     _simple_page(
       title = title,
       subtitle = subtitle,
@@ -4045,6 +4200,7 @@ final case class FormPageProperties(
            |  <h2>Navigation</h2>
            |  <p><a href="${_escape(dashboardPath)}">Dashboard</a> · <a href="${_escape(performancePath)}">Performance details</a> · <a href="/web/system/manual">Manual</a> · <a href="/web/console">Console</a></p>
            |</article>
+           |${componentInventory}
            |${_admin_operational_details(operationalDetails)}
            |${_component_admin_actions(componentFormsPath)}
            |<article>
@@ -4230,12 +4386,33 @@ final case class FormPageProperties(
     formsPath: Option[String]
   ): String =
     formsPath.map { path =>
+      val componentPath = path.stripPrefix("/form/")
       s"""<article>
-         |  <h2>Component Operations</h2>
-         |  <p><a href="${_escape(path)}">Operation forms</a></p>
-         |  ${_component_admin_management_links(path)}
+         |  <h2>Management Console Home</h2>
+         |  <p>Use the cards below for ordinary management work. Operation selectors and protocol paths stay available as technical reference only.</p>
+         |  ${_component_admin_management_cards(componentPath, path)}
+         |  <details class="mt-3">
+         |    <summary>Technical details</summary>
+         |    <div class="mt-3">
+         |      <p><a href="${_escape(path)}">Operation forms</a></p>
+         |      ${_component_admin_management_links(path)}
+         |    </div>
+         |  </details>
          |</article>""".stripMargin
     }.getOrElse("")
+
+  private def _component_admin_management_cards(
+    componentPath: String,
+    formsPath: String
+  ): String =
+    _admin_entry_cards(Vector(
+      _admin_entry_card("Entities", "List, detail, create, and update entity records.", s"/web/${componentPath}/admin/entities"),
+      _admin_entry_card("Data", "Manage concrete data collections and datastore records.", s"/web/${componentPath}/admin/data"),
+      _admin_entry_card("Aggregates", "Inspect aggregate records and aggregate-level operations.", s"/web/${componentPath}/admin/aggregates"),
+      _admin_entry_card("Views", "Browse read-only view projections and instance detail.", s"/web/${componentPath}/admin/views"),
+      _admin_entry_card("Descriptor", "Inspect descriptor controls and admin-surface mappings.", s"/web/${componentPath}/admin/descriptor"),
+      _admin_entry_card("Forms", "Open controlled operation forms outside the admin CRUD surfaces.", formsPath)
+    ))
 
   private def _component_admin_management_links(
     formsPath: String
@@ -4281,11 +4458,13 @@ final case class FormPageProperties(
       val rows = descriptor.admin.toVector.sortBy(_._1).map {
         case (selector, admin) =>
           val fields = admin.fields.map(_.name).mkString(", ")
-          s"""<tr><td><code>${_escape(selector)}</code></td><td>${_escape(admin.totalCount.name)}</td><td>${_escape(fields)}</td></tr>"""
+          val kind = _admin_surface_kind(selector).getOrElse("deferred")
+          val destination = _web_descriptor_admin_surface_destination(selector, None)
+          s"""<tr><td>${destination}</td><td>${_escape(kind)}</td><td>${_escape(admin.totalCount.name)}</td><td>${_escape(fields)}</td><td><code>${_escape(selector)}</code></td></tr>"""
       }.mkString("\n")
       s"""<h3>Management Console Controls</h3>
          |<div class="table-responsive"><table class="table table-sm">
-         |  <thead><tr><th>Surface</th><th>Total count</th><th>Fields</th></tr></thead>
+         |  <thead><tr><th>Destination</th><th>Type</th><th>Total count</th><th>Fields</th><th>Raw selector</th></tr></thead>
          |  <tbody>${rows}</tbody>
          |</table></div>""".stripMargin
     }
@@ -4453,7 +4632,7 @@ final case class FormPageProperties(
        |  <details class="descriptor-json-details">
        |    <summary class="h2 mb-3">${_escape(title)}</summary>
        |    <p>${_escape(description)}</p>
-       |    <pre class="bg-light border rounded p-3 mt-3"><code>${_escape(json)}</code></pre>
+       |    ${_raw_format_tabs(json, _json_to_yaml(json), "descriptor")}
        |  </details>
        |</article>""".stripMargin
 
@@ -4603,20 +4782,28 @@ final case class FormPageProperties(
           val required = field.control.required.map(value => s", required=${value}").getOrElse("")
           s"${field.name}:${control}${required}"
         }
+        val kind = _admin_surface_kind(selector).getOrElse("deferred")
+        val destination = _web_descriptor_admin_surface_destination(selector, componentSegment)
+        val support =
+          if (_web_descriptor_admin_surface_path(selector, componentSegment).isDefined) "implemented baseline"
+          else "deferred"
         s"""<tr data-descriptor-row>
-           |  <td>${_web_descriptor_admin_surface_link(selector, componentSegment)}</td>
+           |  <td>${destination}</td>
+           |  <td>${_escape(kind)}</td>
            |  <td>${_escape(admin.totalCount.name)}</td>
            |  <td>${_escape(_web_descriptor_csv(fields))}</td>
+           |  <td>${_escape(support)}</td>
+           |  <td><code>${_escape(selector)}</code></td>
            |</tr>""".stripMargin
     }
     val body =
       if (rows.isEmpty)
-        """<tr><td colspan="3" class="text-secondary">No Management Console surfaces are configured.</td></tr>"""
+        """<tr><td colspan="6" class="text-secondary">No Management Console surfaces are configured.</td></tr>"""
       else
         rows.mkString("\n")
     s"""<h3>Admin Surfaces <span class="badge text-bg-secondary">${rows.size}</span></h3>
        |<div class="table-responsive"><table class="table table-sm align-middle">
-       |  <thead><tr><th>Surface</th><th>Total count</th><th>Fields</th></tr></thead>
+       |  <thead><tr><th>Destination</th><th>Type</th><th>Total count</th><th>Fields</th><th>Support</th><th>Raw selector</th></tr></thead>
        |  <tbody>${body}</tbody>
        |</table></div>""".stripMargin
   }
@@ -4681,27 +4868,127 @@ final case class FormPageProperties(
         s"""<code>${_escape(selector)}</code>"""
     }
 
-  private def _web_descriptor_admin_surface_link(
+  private def _web_descriptor_admin_surface_path(
     selector: String,
     componentSegment: Option[String]
-  ): String = {
+  ): Option[String] = {
     def component_from_selector: Option[(String, String)] =
       selector.split("\\.", 3).toVector match {
         case Vector(component, surface, name) => Some(component -> s"${surface}.${name}")
         case _ => None
       }
-    val maybePath =
-      component_from_selector.flatMap {
-        case (component, rest) => _admin_surface_relative_path(rest).map(path => s"/web/${component}/admin/${path}")
-      }.orElse(
-        componentSegment.flatMap(component =>
-          _admin_surface_relative_path(selector).map(path => s"/web/${component}/admin/${path}")
-        )
+    component_from_selector.flatMap {
+      case (component, rest) => _admin_surface_relative_path(rest).map(path => s"/web/${component}/admin/${path}")
+    }.orElse(
+      componentSegment.flatMap(component =>
+        _admin_surface_relative_path(selector).map(path => s"/web/${component}/admin/${path}")
       )
+    )
+  }
+
+  private def _web_descriptor_admin_surface_destination(
+    selector: String,
+    componentSegment: Option[String]
+  ): String = {
+    val maybePath =
+      _web_descriptor_admin_surface_path(selector, componentSegment)
+    maybePath match {
+      case Some(path) => s"""<a href="${_escape(path)}"><code>${_escape(path)}</code></a>"""
+      case None => """<span class="text-secondary">Deferred or unsupported</span>"""
+    }
+  }
+
+  private def _web_descriptor_admin_surface_link(
+    selector: String,
+    componentSegment: Option[String]
+  ): String = {
+    val maybePath =
+      _web_descriptor_admin_surface_path(selector, componentSegment)
     maybePath match {
       case Some(path) => s"""<a href="${_escape(path)}"><code>${_escape(selector)}</code></a>"""
       case None => s"""<code>${_escape(selector)}</code>"""
     }
+  }
+
+  private def _admin_surface_kind(
+    selector: String
+  ): Option[String] =
+    (selector.split("\\.", 3).toVector match {
+      case Vector(surface, _) =>
+        _admin_surface_path(surface)
+      case Vector(_, surface, _) =>
+        _admin_surface_path(surface)
+      case _ =>
+        None
+    }).map {
+      case "entities" => "entity"
+      case "data" => "data"
+      case "aggregates" => "aggregate"
+      case "views" => "view"
+      case other => other
+    }
+
+  private def _admin_surface_selector_count(
+    descriptor: WebDescriptor,
+    componentSegment: Option[String],
+    kind: String
+  ): Int =
+    descriptor.admin.keys.count(selector =>
+      _admin_selector_matches_component(selector, componentSegment) &&
+      _admin_surface_kind(selector).contains(kind)
+    )
+
+  private def _pluralize(
+    n: Int,
+    singular: String,
+    plural: String
+  ): String =
+    if (n == 1) s"1 ${singular}" else s"${n} ${plural}"
+
+  private def _admin_entry_card(
+    title: String,
+    description: String,
+    href: String,
+    badge: Option[String] = None
+  ): String =
+    s"""<div class="col-12 col-md-6 col-xl-4">
+       |  <article class="card h-100 shadow-sm admin-card">
+       |    <div class="card-body">
+       |      <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+       |        <h3 class="h5 card-title mb-0">${_escape(title)}</h3>
+       |        ${badge.map(v => s"""<span class="badge text-bg-secondary">${_escape(v)}</span>""").getOrElse("")}
+       |      </div>
+       |      <p class="card-text text-body-secondary">${_escape(description)}</p>
+       |      <a class="btn btn-primary btn-sm" href="${_escape(href)}">Open ${_escape(title)}</a>
+       |    </div>
+       |  </article>
+       |</div>""".stripMargin
+
+  private def _admin_entry_cards(
+    cards: Vector[String]
+  ): String =
+    s"""<div class="row g-3">${cards.mkString("\n")}</div>"""
+
+  private def _system_admin_component_inventory(
+    components: Vector[Component]
+  ): String = {
+    val rows = components.sortBy(_.name).map { component =>
+      val componentPath = NamingConventions.toNormalizedSegment(component.name)
+      s"""<tr>
+         |  <td>${_escape(component.name)}</td>
+         |  <td><a href="/web/${componentPath}/admin">Component admin</a></td>
+         |  <td><a href="/web/${componentPath}/admin/descriptor">Descriptor</a></td>
+         |  <td><a href="/form/${componentPath}">Forms</a></td>
+         |</tr>""".stripMargin
+    }.mkString("\n")
+    s"""<article>
+       |  <h2>Component Management Console</h2>
+       |  <p>Use component admin pages for ordinary entity/data/view/aggregate work. System admin stays read-only.</p>
+       |  <div class="table-responsive"><table class="table table-sm table-hover align-middle">
+       |    <thead><tr><th>Component</th><th>Admin</th><th>Descriptor</th><th>Forms</th></tr></thead>
+       |    <tbody>${rows}</tbody>
+       |  </table></div>
+       |</article>""".stripMargin
   }
 
   private def _admin_surface_relative_path(
@@ -4986,9 +5273,9 @@ final case class FormPageProperties(
             |</div>""".stripMargin)}
          |${_manual_card("Children", childLinks)}
          |${componentletCard}
-         |${_manual_card("Help", _manual_record(help), Some("help"))}
-         |${_manual_card("Describe", _manual_record(describe), Some("describe"))}
-         |${_manual_card("Schema", _manual_record(schema), Some("schema"))}""".stripMargin
+         |${_manual_projection_card("Help", currentPath, help, Some("help"))}
+         |${_manual_projection_card("Describe", currentPath, describe, Some("describe"))}
+         |${_manual_projection_card("Schema", currentPath, schema, Some("schema"))}""".stripMargin
     _simple_page(title, subtitle, body)
   }
 
@@ -5013,9 +5300,9 @@ final case class FormPageProperties(
             |</div>""".stripMargin)}
          |${_manual_card("Components", componentLinks)}
          |${_manual_card("Console handoff", """<p class="mb-0">Use <a href="/web/console">System Console</a> for controlled operation entry. Manual pages remain read-only and do not inline operation actions.</p>""")}
-         |${_manual_card("Help", _manual_record(help), Some("help"))}
-         |${_manual_card("Describe", _manual_record(describe), Some("describe"))}
-         |${_manual_card("Schema", _manual_record(schema), Some("schema"))}""".stripMargin
+         |${_manual_projection_card("Help", "/web/system/manual", help, Some("help"))}
+         |${_manual_projection_card("Describe", "/web/system/manual", describe, Some("describe"))}
+         |${_manual_projection_card("Schema", "/web/system/manual", schema, Some("schema"))}""".stripMargin
     _simple_page("System Manual", "Read-only runtime reference", body)
   }
 
@@ -5042,8 +5329,491 @@ final case class FormPageProperties(
         s"""<a class="btn btn-sm btn-outline-primary" href="${_escape(currentPath + "/" + segment)}">${_escape(child)}</a>"""
       }.mkString("""<div class="d-flex flex-wrap gap-2">""", "\n", "</div>")
 
-  private def _manual_record(record: Record): String =
-    s"""<dl class="row mb-0">${_property_rows(record.asMap.map { case (k, v) => k -> _manual_value(v) })}</dl>"""
+  private def _manual_projection_card(
+    title: String,
+    currentPath: String,
+    record: Record,
+    id: Option[String] = None
+  ): String =
+    _manual_card(
+      title,
+      _manual_projection_body(title, currentPath, record),
+      id
+    )
+
+  private def _manual_projection_body(
+    title: String,
+    currentPath: String,
+    record: Record
+  ): String =
+    s"""${_manual_projection_summary(currentPath, record)}
+       |${_manual_raw_details(title, record)}""".stripMargin
+
+  private def _manual_projection_summary(
+    currentPath: String,
+    record: Record
+  ): String = {
+    val recordType = record.getString("type").getOrElse("")
+    recordType match {
+      case "operation" =>
+        _manual_operation_summary(currentPath, record)
+      case "service" =>
+        _manual_service_summary(record)
+      case "component" =>
+        _manual_component_summary(record)
+      case "subsystem" =>
+        _manual_subsystem_summary(record)
+      case "schema" =>
+        _manual_schema_summary(record)
+      case _ =>
+        _manual_generic_summary(record)
+    }
+  }
+
+  private def _manual_subsystem_summary(
+    record: Record
+  ): String = {
+    val name = record.getString("name").getOrElse("subsystem")
+    val summary = record.getString("summary").getOrElse("")
+    val children = _manual_seq_values(record.asMap.get("children"))
+    val detailComponents = _manual_record_values(record.asMap.get("details")).get("components").map(x => _manual_seq_values(Some(x))).getOrElse(Vector.empty)
+    val components = if (detailComponents.nonEmpty) detailComponents else children
+    s"""<p class="mb-3">${_escape(if (summary.nonEmpty) summary else s"Subsystem: $name")}</p>
+       |${_manual_kv_summary(Vector(
+         "Name" -> name,
+         "Component count" -> components.size.toString
+       ))}
+       |${_manual_badges("Components", components)}""".stripMargin
+  }
+
+  private def _manual_component_summary(
+    record: Record
+  ): String = {
+    val services = _manual_record_seq(record.asMap.get("services")).flatMap(_.getString("name"))
+    val componentlets = _manual_record_seq(record.asMap.get("componentlets")).flatMap(_.getString("name"))
+    val aggregates = _manual_record_seq(record.asMap.get("aggregates")).flatMap(_.getString("name"))
+    val views = _manual_record_seq(record.asMap.get("views")).flatMap(_.getString("name"))
+    val operationDefs = _manual_record_seq(record.asMap.get("operationDefinitions")).flatMap(_.getString("name"))
+    val artifact = _manual_record_values(record.asMap.get("artifact"))
+    s"""<p class="mb-3">${_escape(record.getString("summary").getOrElse(s"Component ${record.getString("name").getOrElse("")}"))}</p>
+       |${_manual_kv_summary(Vector(
+         "Name" -> record.getString("name").getOrElse(""),
+         "Origin" -> record.getString("origin").getOrElse(""),
+         "Artifact" -> artifact.get("name").flatMap(_manual_scalar).getOrElse(""),
+         "Version" -> artifact.get("version").flatMap(_manual_scalar).getOrElse(""),
+         "Service count" -> services.size.toString,
+         "Componentlet count" -> componentlets.size.toString,
+         "Aggregate count" -> aggregates.size.toString,
+         "View count" -> views.size.toString,
+         "Operation definition count" -> operationDefs.size.toString
+       ))}
+       |${_manual_badges("Services", services)}
+       |${_manual_badges("Componentlets", componentlets)}""".stripMargin
+  }
+
+  private def _manual_service_summary(
+    record: Record
+  ): String = {
+    val children = _manual_seq_values(record.asMap.get("children"))
+    val operations = _manual_record_seq(record.asMap.get("operations")).flatMap(_.getString("name"))
+    val items = if (operations.nonEmpty) operations else children
+    s"""<p class="mb-3">${_escape(record.getString("summary").getOrElse("Service reference"))}</p>
+       |${_manual_kv_summary(Vector(
+         "Service" -> record.getString("name").getOrElse(""),
+         "Operation count" -> items.size.toString
+       ))}
+       |${_manual_badges("Operations", items)}""".stripMargin
+  }
+
+  private def _manual_operation_summary(
+    currentPath: String,
+    record: Record
+  ): String = {
+    val qualifiedName = record.getString("name").getOrElse("")
+    val qualifiedSegments = qualifiedName.split("\\.").toVector.filter(_.nonEmpty)
+    val component = record.getString("component").orElse(qualifiedSegments.headOption).getOrElse("")
+    val service = record.getString("service").orElse(qualifiedSegments.lift(1)).getOrElse("")
+    val operation = qualifiedSegments.lift(2).orElse(Option(qualifiedName).filter(_.nonEmpty)).getOrElse("")
+    val selector = _manual_selector_map(record)
+    val details = _manual_record_values(record.asMap.get("details"))
+    val arguments = details.get("arguments").map(x => _manual_seq_values(Some(x))).getOrElse(Vector.empty)
+    val returns = details.get("returns").map(x => _manual_seq_values(Some(x))).getOrElse(Vector.empty)
+    val description = details.get("description").map(x => _manual_seq_values(Some(x))).getOrElse(Vector.empty).mkString(" ")
+    val selectorText = selector.get("canonical").flatMap(_manual_scalar).orElse(record.getString("selector")).getOrElse(qualifiedName)
+    val restPath = selector.get("rest").flatMap(_manual_scalar).map(_manual_canonical_rest_path).getOrElse(s"/rest/v1/${NamingConventions.toNormalizedSegment(component)}/${NamingConventions.toNormalizedSegment(service)}/${NamingConventions.toNormalizedSegment(operation)}")
+    val formPath = s"/form/${NamingConventions.toNormalizedSegment(component)}/${NamingConventions.toNormalizedSegment(service)}/${NamingConventions.toNormalizedSegment(operation)}"
+    val formApiPath = s"/form-api/${NamingConventions.toNormalizedSegment(component)}/${NamingConventions.toNormalizedSegment(service)}/${NamingConventions.toNormalizedSegment(operation)}"
+    val describeArgumentRows = _manual_record_seq(record.asMap.get("arguments")).map(_manual_parameter_row)
+    val parameterRows =
+      if (describeArgumentRows.nonEmpty)
+        describeArgumentRows
+      else
+        _manual_schema_parameters_from_help(details, component, service, operation)
+    s"""<p class="mb-3">${_escape(record.getString("summary").getOrElse("Operation reference"))}</p>
+       |${if (description.nonEmpty) s"""<p class="mb-3">${_escape(description)}</p>""" else ""}
+       |${_manual_kv_summary(Vector(
+         "Selector" -> selectorText,
+         "Component" -> component,
+         "Service" -> service,
+         "Operation" -> operation,
+         "Arguments" -> (if (parameterRows.nonEmpty) parameterRows.size else arguments.size).toString,
+         "Returns" -> returns.mkString(", ")
+       ))}
+       |${_manual_link_group(Vector(
+         "Web manual" -> currentPath,
+         "REST" -> restPath,
+         "Form" -> formPath,
+         "Form API" -> formApiPath,
+         "OpenAPI JSON" -> "/web/system/manual/openapi.json"
+       ))}
+       |${_manual_parameter_table(parameterRows)}
+       |${_manual_response_summary(returns)}""".stripMargin
+  }
+
+  private def _manual_canonical_rest_path(
+    path: String
+  ): String =
+    if (path == null || path.isEmpty)
+      ""
+    else if (path.startsWith("/rest/v"))
+      path
+    else if (path.startsWith("/"))
+      s"/rest/v1${path}"
+    else
+      s"/rest/v1/${path}"
+
+  private def _manual_schema_summary(
+    record: Record
+  ): String = {
+    val targetType = record.getString("targetType").getOrElse(record.getString("type").getOrElse(""))
+    targetType match {
+      case "operation" =>
+        val request = _manual_record_values(record.asMap.get("request"))
+        val response = _manual_record_values(record.asMap.get("response"))
+        val params = _manual_record_seq(request.get("parameters")).map(_manual_parameter_row)
+        val result = response.get("result").flatMap(_manual_scalar)
+        s"""${_manual_kv_summary(Vector(
+           "Schema target" -> record.getString("name").getOrElse(""),
+           "Parameter count" -> params.size.toString,
+           "Result" -> result.getOrElse("")
+         ))}
+         |${_manual_parameter_table(params)}
+         |${_manual_response_summary(result.toVector)}""".stripMargin
+      case "service" =>
+        val ops = _manual_record_seq(record.asMap.get("operations")).flatMap(_.getString("name"))
+        s"""${_manual_kv_summary(Vector(
+           "Schema target" -> record.getString("name").getOrElse(""),
+           "Operation count" -> ops.size.toString
+         ))}
+         |${_manual_badges("Operations", ops)}""".stripMargin
+      case "component" =>
+        val services = _manual_record_seq(record.asMap.get("services")).flatMap(_.getString("name"))
+        val aggregates = _manual_record_seq(record.asMap.get("aggregateCollections")).flatMap(_.getString("name"))
+        val views = _manual_record_seq(record.asMap.get("viewCollections")).flatMap(_.getString("name"))
+        s"""${_manual_kv_summary(Vector(
+           "Schema target" -> record.getString("name").getOrElse(""),
+           "Service count" -> services.size.toString,
+           "Aggregate count" -> aggregates.size.toString,
+           "View count" -> views.size.toString
+         ))}
+         |${_manual_badges("Services", services)}""".stripMargin
+      case _ =>
+        _manual_generic_summary(record)
+    }
+  }
+
+  private def _manual_generic_summary(
+    record: Record
+  ): String =
+    _manual_kv_summary(Vector(
+      "Type" -> record.getString("type").getOrElse(""),
+      "Name" -> record.getString("name").getOrElse(""),
+      "Summary" -> record.getString("summary").getOrElse("")
+    ))
+
+  private def _manual_response_summary(
+    returns: Vector[String]
+  ): String =
+    if (returns.isEmpty)
+      ""
+    else
+      s"""<section class="mt-3">
+         |  <h3 class="h6">Response</h3>
+         |  <p class="mb-0">${_escape(returns.mkString(", "))}</p>
+         |</section>""".stripMargin
+
+  private def _manual_parameter_table(
+    rows: Vector[Vector[String]]
+  ): String =
+    if (rows.isEmpty)
+      _web_empty_state("No parameter details.")
+    else {
+      val body = rows.map { row =>
+        s"""<tr>${row.map(x => s"<td>${_escape(x)}</td>").mkString}</tr>"""
+      }.mkString("\n")
+      s"""<section class="mt-3">
+         |  <h3 class="h6">Parameters</h3>
+         |  <div class="table-responsive">
+         |    <table class="table table-sm table-hover align-middle">
+         |      <thead><tr><th>Name</th><th>Kind</th><th>Type</th><th>Multiplicity</th><th>Help</th></tr></thead>
+         |      <tbody>
+         |        ${body}
+         |      </tbody>
+         |    </table>
+         |  </div>
+         |</section>""".stripMargin
+    }
+
+  private def _manual_schema_parameters_from_help(
+    details: Map[String, Any],
+    component: String,
+    service: String,
+    operation: String
+  ): Vector[Vector[String]] =
+    details.get("arguments").map(x => _manual_seq_values(Some(x))).getOrElse(Vector.empty).map { name =>
+      Vector(name, "argument", "", "", "")
+    }
+
+  private def _manual_parameter_row(
+    record: Record
+  ): Vector[String] =
+    Vector(
+      record.getString("name").getOrElse(""),
+      record.getString("kind").getOrElse(""),
+      record.getString("type").getOrElse(record.getString("datatype").getOrElse("")),
+      record.getString("multiplicity").getOrElse(""),
+      record.getString("help").orElse(record.getString("placeholder")).orElse(record.getString("default")).getOrElse("")
+    )
+
+  private def _manual_selector_map(
+    record: Record
+  ): Map[String, Any] =
+    _manual_record_values(record.asMap.get("selector"))
+
+  private def _manual_kv_summary(
+    items: Vector[(String, String)]
+  ): String = {
+    val effective = items.filter { case (_, v) => v != null && v.nonEmpty }
+    if (effective.isEmpty)
+      _web_empty_state("No summary details.")
+    else {
+      val rows = effective.map { case (key, value) =>
+        s"""<tr><th>${_escape(key)}</th><td><code>${_escape(value)}</code></td></tr>"""
+      }.mkString("\n")
+      s"""<div class="table-responsive">
+         |  <table class="table table-sm table-hover align-middle manual-summary-table mb-0">
+         |    <tbody>
+         |      ${rows}
+         |    </tbody>
+         |  </table>
+         |</div>""".stripMargin
+    }
+  }
+
+  private def _manual_link_group(
+    links: Vector[(String, String)]
+  ): String = {
+    val effective = links.filter { case (_, href) => href != null && href.nonEmpty }
+    if (effective.isEmpty)
+      ""
+    else
+      effective.map { case (label, href) =>
+        s"""<a class="btn btn-sm btn-outline-secondary" href="${_escape(href)}">${_escape(label)}</a>"""
+      }.mkString("""<div class="d-flex flex-wrap gap-2 mt-3">""", "\n", "</div>")
+  }
+
+  private def _manual_badges(
+    title: String,
+    items: Vector[String]
+  ): String =
+    if (items.isEmpty)
+      ""
+    else
+      s"""<section class="mt-3">
+         |  <h3 class="h6">${_escape(title)}</h3>
+         |  <div class="d-flex flex-wrap gap-2">${items.map(x => s"""<span class="badge text-bg-light border">${_escape(x)}</span>""").mkString("\n")}</div>
+         |</section>""".stripMargin
+
+  private def _manual_raw_details(
+    title: String,
+    record: Record
+  ): String =
+    val rendered = _manual_raw_json(record).map(_.spaces2).getOrElse(_manual_raw_text(record))
+    val yaml = _manual_raw_json(record).map(_json_to_yaml).getOrElse(_manual_raw_text(record))
+    s"""<details class="mt-3 manual-raw-details">
+       |  <summary>Raw ${_escape(title)}</summary>
+       |  ${_raw_format_tabs(rendered, yaml, "manual")}
+       |</details>""".stripMargin
+
+  private def _manual_raw_json(value: Any): Option[Json] =
+    value match {
+      case Some(x) => _manual_raw_json(x)
+      case None => Some(Json.Null)
+      case null => Some(Json.Null)
+      case r: Record =>
+        Some(Json.fromJsonObject(JsonObject.fromIterable(
+          r.asMap.toVector.sortBy(_._1.toString).flatMap { case (k, v) =>
+            _manual_raw_json(v).map(k -> _)
+          }
+        )))
+      case m: Map[?, ?] =>
+        Some(Json.fromJsonObject(JsonObject.fromIterable(
+          m.toVector.sortBy(_._1.toString).flatMap { case (k, v) =>
+            _manual_raw_json(v).map(k.toString -> _)
+          }
+        )))
+      case xs: Seq[?] =>
+        Some(Json.fromValues(xs.toVector.flatMap(_manual_raw_json)))
+      case s: String => Some(Json.fromString(s))
+      case b: Boolean => Some(Json.fromBoolean(b))
+      case i: Int => Some(Json.fromInt(i))
+      case l: Long => Some(Json.fromLong(l))
+      case d: Double if !d.isNaN && !d.isInfinity => Some(Json.fromDoubleOrNull(d))
+      case f: Float if !f.isNaN && !f.isInfinity => Some(Json.fromFloatOrNull(f))
+      case n: Number => Some(Json.fromString(n.toString))
+      case x => Some(Json.fromString(x.toString))
+    }
+
+  private def _manual_raw_text(value: Any, indent: Int = 0): String = {
+    val pad = "  " * indent
+    value match {
+      case Some(x) => _manual_raw_text(x, indent)
+      case None => "null"
+      case null => "null"
+      case r: Record =>
+        r.asMap.toVector.sortBy(_._1.toString).map { case (k, v) =>
+          s"${pad}${k}: ${_manual_raw_text(v, indent + 1).stripPrefix("  " * (indent + 1))}"
+        }.mkString("\n")
+      case m: Map[?, ?] =>
+        m.toVector.sortBy(_._1.toString).map { case (k, v) =>
+          s"${pad}${k}: ${_manual_raw_text(v, indent + 1).stripPrefix("  " * (indent + 1))}"
+        }.mkString("\n")
+      case xs: Seq[?] =>
+        xs.toVector.map { x =>
+          val rendered = _manual_raw_text(x, indent + 1)
+          if (rendered.contains("\n")) s"${pad}-\n$rendered" else s"${pad}- $rendered"
+        }.mkString("\n")
+      case x => x.toString
+    }
+  }
+
+  private def _manual_record_values(
+    value: Option[Any]
+  ): Map[String, Any] =
+    value match {
+      case Some(Some(x)) => _manual_record_values(Some(x))
+      case Some(r: Record) => r.asMap
+      case Some(m: Map[?, ?]) => m.toVector.collect { case (k: String, v) => k -> v }.toMap
+      case _ => Map.empty
+    }
+
+  private def _manual_record_seq(
+    value: Option[Any]
+  ): Vector[Record] =
+    value match {
+      case Some(Some(x)) => _manual_record_seq(Some(x))
+      case Some(xs: Seq[?]) => xs.collect { case r: Record => r }.toVector
+      case _ => Vector.empty
+    }
+
+  private def _manual_seq_values(
+    value: Option[Any]
+  ): Vector[String] =
+    value match {
+      case Some(Some(x)) => _manual_seq_values(Some(x))
+      case Some(xs: Seq[?]) => xs.toVector.flatMap(_manual_scalar)
+      case Some(x) => _manual_scalar(x).toVector
+      case None => Vector.empty
+    }
+
+  private def _manual_scalar(
+    value: Any
+  ): Option[String] =
+    value match {
+      case Some(x) => _manual_scalar(x)
+      case None => None
+      case null => None
+      case s: String if s.nonEmpty => Some(s)
+      case b: Boolean => Some(b.toString)
+      case n: Number => Some(n.toString)
+      case _ => None
+    }
+
+  private def _raw_format_tabs(
+    json: String,
+    yaml: String,
+    prefix: String
+  ): String = {
+    val token = s"${prefix}-${math.abs((json + yaml).hashCode)}"
+    s"""<div class="${_escape(prefix)}-raw-tabs mt-3">
+       |  <ul class="nav nav-tabs" id="${token}-tablist" role="tablist">
+       |    <li class="nav-item" role="presentation">
+       |      <button class="nav-link active" id="${token}-json-tab" data-bs-toggle="tab" data-bs-target="#${token}-json-pane" type="button" role="tab" aria-controls="${token}-json-pane" aria-selected="true">JSON</button>
+       |    </li>
+       |    <li class="nav-item" role="presentation">
+       |      <button class="nav-link" id="${token}-yaml-tab" data-bs-toggle="tab" data-bs-target="#${token}-yaml-pane" type="button" role="tab" aria-controls="${token}-yaml-pane" aria-selected="false">YAML</button>
+       |    </li>
+       |  </ul>
+       |  <div class="tab-content border border-top-0 rounded-bottom">
+       |    <div class="tab-pane fade show active" id="${token}-json-pane" role="tabpanel" aria-labelledby="${token}-json-tab" tabindex="0">
+       |      <pre class="bg-light border-0 rounded-0 rounded-bottom p-3 mb-0"><code>${_escape(json)}</code></pre>
+       |    </div>
+       |    <div class="tab-pane fade" id="${token}-yaml-pane" role="tabpanel" aria-labelledby="${token}-yaml-tab" tabindex="0">
+       |      <pre class="bg-light border-0 rounded-0 rounded-bottom p-3 mb-0"><code>${_escape(yaml)}</code></pre>
+       |    </div>
+       |  </div>
+       |</div>""".stripMargin
+  }
+
+  private def _json_to_yaml(jsonText: String): String =
+    io.circe.parser.parse(jsonText).toOption.map(_json_to_yaml).getOrElse(jsonText)
+
+  private def _json_to_yaml(json: Json): String = {
+    def go(value: Json, indent: Int): String = {
+      val pad = "  " * indent
+      value.fold(
+        jsonNull = "null",
+        jsonBoolean = _.toString,
+        jsonNumber = _.toString,
+        jsonString = s => _yaml_quote(s),
+        jsonArray = xs =>
+          if (xs.isEmpty) "[]"
+          else xs.toVector.map { item =>
+            item.fold(
+              jsonNull = s"${pad}- null",
+              jsonBoolean = b => s"${pad}- ${b}",
+              jsonNumber = n => s"${pad}- ${n}",
+              jsonString = s => s"${pad}- ${_yaml_quote(s)}",
+              jsonArray = _ => s"${pad}-\n${go(item, indent + 1)}",
+              jsonObject = _ => s"${pad}-\n${go(item, indent + 1)}"
+            )
+          }.mkString("\n"),
+        jsonObject = obj =>
+          if (obj.isEmpty) "{}"
+          else obj.toVector.map { case (key, item) =>
+            item.fold(
+              jsonNull = s"${pad}${key}: null",
+              jsonBoolean = b => s"${pad}${key}: ${b}",
+              jsonNumber = n => s"${pad}${key}: ${n}",
+              jsonString = s => s"${pad}${key}: ${_yaml_quote(s)}",
+              jsonArray = _ => s"${pad}${key}:\n${go(item, indent + 1)}",
+              jsonObject = _ => s"${pad}${key}:\n${go(item, indent + 1)}"
+            )
+          }.mkString("\n")
+      )
+    }
+    go(json, 0)
+  }
+
+  private def _yaml_quote(s: String): String =
+    "\"" + s.flatMap {
+      case '\\' => "\\\\"
+      case '"' => "\\\""
+      case '\n' => "\\n"
+      case '\r' => "\\r"
+      case '\t' => "\\t"
+      case c => c.toString
+    } + "\""
 
   private def _manual_card(
     title: String,
@@ -5058,15 +5828,6 @@ final case class FormPageProperties(
        |  </div>
        |</article>""".stripMargin
   }
-
-  private def _manual_value(value: Any): String =
-    value match {
-      case null => ""
-      case xs: Seq[?] => xs.map(_manual_value).mkString("[", ", ", "]")
-      case m: Map[?, ?] => m.toVector.map { case (k, v) => s"${k}=${_manual_value(v)}" }.mkString("{", ", ", "}")
-      case r: Record => r.asMap.map { case (k, v) => s"${k}=${_manual_value(v)}" }.mkString("{", ", ", "}")
-      case x => x.toString
-    }
 
   private def _simple_page(
     title: String,

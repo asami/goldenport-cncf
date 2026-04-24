@@ -21,7 +21,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  8, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
@@ -141,7 +142,7 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
       wiring.conventionEnabled shouldBe true
       wiring.fallbackPrivilegeEnabled shouldBe false
       wiring.providers.map(x => (x.componentName, x.name, x.source.toString)) shouldBe Vector(
-        ("UserAccount", "user-account", "Descriptor")
+        ("textus-user-account", "user-account", "Descriptor")
       )
       wiring.providers.head.kind shouldBe Some("human")
       wiring.providers.head.priority shouldBe 100

@@ -53,6 +53,13 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
       json.hcursor.get[String]("principalId").toOption shouldBe Some("alice")
       json.hcursor.get[String]("sessionId").toOption shouldBe Some(sessionid)
       json.hcursor.get[Boolean]("authenticated").toOption shouldBe Some(true)
+      val attrs = json.hcursor.downField("attributes")
+      attrs.get[String]("login_name").toOption shouldBe Some("alice")
+      attrs.get[String]("handle").toOption shouldBe Some("alice")
+      attrs.get[String]("shortid").toOption shouldBe Some("alice-short")
+      attrs.get[String]("email").toOption shouldBe Some("alice@example.com")
+      attrs.get[String]("access_token").toOption shouldBe None
+      attrs.get[String]("refresh_token").toOption shouldBe None
     }
 
     "clear cookie on logout and return anonymous current-session afterwards" in {
@@ -127,6 +134,10 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
         case OperationResponse.RecordResponse(record) =>
           record.getString("principalId") shouldBe Some("alice")
           record.getString("sessionId") shouldBe Some("sess-1")
+          record.getRecord("attributes").flatMap(_.getString("login_name")) shouldBe Some("alice")
+          record.getRecord("attributes").flatMap(_.getString("handle")) shouldBe Some("alice")
+          record.getRecord("attributes").flatMap(_.getString("shortid")) shouldBe Some("alice-short")
+          record.getRecord("attributes").flatMap(_.getString("access_token")) shouldBe None
         case other =>
           fail(s"unexpected response: $other")
       }
@@ -314,6 +325,14 @@ final class AuthenticationWebSessionSpec extends AnyWordSpec with Matchers {
     private def _result_(principalid: String, sessionid: String): AuthenticationResult =
       AuthenticationResult(
         principalId = PrincipalId(principalid),
+        attributes = Map(
+          "login_name" -> principalid,
+          "handle" -> principalid,
+          "shortid" -> s"${principalid}-short",
+          "email" -> s"${principalid}@example.com",
+          "access_token" -> s"access-${principalid}",
+          "refresh_token" -> s"refresh-${principalid}"
+        ),
         session = Some(SessionContext(sessionId = Some(sessionid)))
       )
   }

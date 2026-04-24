@@ -9,11 +9,12 @@ import org.slf4j.LoggerFactory
 /*
  * @since   Jan.  8, 2026
  *  version Jan. 20, 2026
- * @version Mar. 24, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object OpenApiProjector {
   private val log = LoggerFactory.getLogger("org.goldenport.cncf.openapi.OpenApiProjector")
+  private val RestBasePath = "/rest/v1"
 
   private final case class PathSpec(
     path: String,
@@ -58,10 +59,10 @@ object OpenApiProjector {
         val summary = _operation_summary(componentName, service, op)
         val description = _operation_description(componentName, service, op)
         log.trace(
-          s"[openapi:trace] path=/${normalizedComponent}/${normalizedService}/${normalizedOperation} method=$httpMethod"
+          s"[openapi:trace] path=${RestBasePath}/${normalizedComponent}/${normalizedService}/${normalizedOperation} method=$httpMethod"
         )
         PathSpec(
-          path = NamingConventions.toNormalizedPath(componentName, service.name, op.name),
+          path = s"${RestBasePath}${NamingConventions.toNormalizedPath(componentName, service.name, op.name)}",
           tag = s"experimental:${serviceTag}",
           component = componentName,
           service = service.name,

@@ -3,6 +3,7 @@ package org.goldenport.cncf.component
 import org.goldenport.record.Record
 import org.goldenport.record.RecordDecoder
 import org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor
+import org.goldenport.cncf.entity.runtime.{WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.security.{EntityApplicationDomain, EntityOperationKind, EntityUsageKind}
 import org.goldenport.cncf.component.ComponentDescriptor.given
 import org.scalatest.matchers.should.Matchers
@@ -10,8 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 13, 2026
- *  version Apr. 13, 2026
- * @version Apr. 16, 2026
+ *  version Apr. 16, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentDescriptorSpec extends AnyWordSpec with Matchers {
@@ -103,6 +104,34 @@ final class ComponentDescriptorSpec extends AnyWordSpec with Matchers {
 
       descriptor.componentlets.map(_.name) shouldBe Vector("notice-admin", "public-notice")
       descriptor.componentlets.forall(_.kind.isEmpty) shouldBe true
+    }
+
+    "decode nested recent working-set policy from descriptor" in {
+      val rec = Record.data(
+        "entity" -> "Post",
+        "workingSetPolicy" -> Record.data(
+          "kind" -> "recent",
+          "duration" -> "24h",
+          "timestampField" -> "postedAt"
+        )
+      )
+
+      val descriptor = summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(rec).toOption.get
+
+      descriptor.workingSetPolicy shouldBe Some(WorkingSetPolicy.Recent(java.time.Duration.ofHours(24), "postedAt"))
+      descriptor.workingSetPolicySource shouldBe Some(WorkingSetPolicySource.Cml)
+    }
+
+    "decode flat resident-all working-set policy keys" in {
+      val rec = Record.data(
+        "entity" -> "Post",
+        "working_set_policy_kind" -> "resident-all"
+      )
+
+      val descriptor = summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(rec).toOption.get
+
+      descriptor.workingSetPolicy shouldBe Some(WorkingSetPolicy.ResidentAll)
+      descriptor.workingSetPolicySource shouldBe Some(WorkingSetPolicySource.Cml)
     }
   }
 }

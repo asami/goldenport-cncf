@@ -19,8 +19,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- *  version Apr. 13, 2026
- * @version Apr. 23, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -278,13 +277,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
 
   private def _has_authentication_material(request: AuthenticationRequest): Boolean =
     request.accessToken.exists(_.trim.nonEmpty) ||
-      request.refreshToken.exists(_.trim.nonEmpty) ||
-      request.sessionId.exists(_.trim.nonEmpty) ||
-      request.attribute("username").exists(_.trim.nonEmpty) ||
-      request.attribute("password").exists(_.trim.nonEmpty) ||
-      request.attribute("email").exists(_.trim.nonEmpty) ||
-      request.attribute("loginName").exists(_.trim.nonEmpty) ||
-      request.attribute("login_name").exists(_.trim.nonEmpty)
+      request.refreshToken.exists(_.trim.nonEmpty)
 
   @annotation.tailrec
   private def _subsystem_from_scope(

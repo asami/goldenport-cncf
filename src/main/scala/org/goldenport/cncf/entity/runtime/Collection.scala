@@ -5,14 +5,14 @@ import org.goldenport.datatype.Identifier
 import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
 import org.simplemodeling.model.datatype.EntityId
-import org.goldenport.cncf.entity.EntityQuery
+import org.goldenport.cncf.entity.{EntityQuery, EntitySearchScope}
 import org.goldenport.cncf.directive.{Query, SearchResult}
 import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 
 /*
  * @since   Mar. 14, 2026
  *  version Mar. 30, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -24,8 +24,15 @@ final class EntityCollection[E](
   val storage: EntityStorage[E]
 ) extends Collection[E] {
   def put(entity: E): Unit = {
+    val id = descriptor.persistent.id(entity)
+    val resident = _is_resident(entity)
     storage.storeRealm.put(entity)
-    storage.memoryRealm.foreach(_.put(entity))
+    storage.memoryRealm.foreach { memory =>
+      if (resident)
+        memory.put(entity)
+      else
+        memory.remove(id)
+    }
   }
 
   def putRecord(record: Record): Consequence[Unit] =
@@ -59,7 +66,7 @@ final class EntityCollection[E](
           if (_is_logically_deleted(entity))
             Consequence.successOrEntityNotFound(Option.empty[E])(id)
           else {
-            memory.foreach(_.put(entity))
+            _cache_if_resident(entity)
             Consequence.success(entity)
           }
         }
@@ -68,7 +75,7 @@ final class EntityCollection[E](
           if (_is_logically_deleted(entity))
             Consequence.successOrEntityNotFound(Option.empty[E])(id)
           else {
-            memory.foreach(_.put(entity))
+            _cache_if_resident(entity)
             Consequence.success(entity)
           }
         }
@@ -117,13 +124,18 @@ final class EntityCollection[E](
     query: EntityQuery[?]
   )(using ctx: ExecutionContext): Consequence[SearchResult[E]] = {
     val visibilitypolicy = _visibility_policy(query.query)
-    val source =
-      storage.memoryRealm match {
-        case Some(memory) => memory.values
-        case None => storage.storeRealm.values
-      }
+    val source = query.scope match {
+      case EntitySearchScope.WorkingSet =>
+        if (_has_effective_working_set_policy) _working_set_source else _search_source
+      case EntitySearchScope.Store => _search_source
+    }
     val notdeleted = source.filterNot(_is_logically_deleted)
-    val visible = notdeleted.filter(v => _is_visible(descriptor.persistent.toRecord(v), visibilitypolicy))
+    val resident = query.scope match {
+      case EntitySearchScope.WorkingSet =>
+        if (_has_effective_working_set_policy) notdeleted.filter(_is_resident) else notdeleted
+      case EntitySearchScope.Store => notdeleted
+    }
+    val visible = resident.filter(v => _is_visible(descriptor.persistent.toRecord(v), visibilitypolicy))
     val filtered = visible.filter(v => Query.matches(query.query, v))
     val sorted = Query.sortValues(filtered, query.query.sort)
     val values = Query.sliceValues(sorted, query.query.offset, query.query.limit)
@@ -138,6 +150,47 @@ final class EntityCollection[E](
       )
     )
   }
+
+  private def _search_source: Vector[E] = {
+    val memory = storage.memoryRealm.map(_.values).getOrElse(Vector.empty)
+    if (memory.isEmpty) {
+      storage.storeRealm.values
+    } else {
+      val ids = memory.iterator.map(descriptor.persistent.id).toSet
+      memory ++ storage.storeRealm.values.filterNot(entity => ids.contains(descriptor.persistent.id(entity)))
+    }
+  }
+
+  private def _working_set_source: Vector[E] =
+    storage.memoryRealm.map(_.values).getOrElse(_search_source)
+
+  private def _cache_if_resident(
+    entity: E
+  ): Unit = {
+    val id = descriptor.persistent.id(entity)
+    storage.memoryRealm.foreach { memory =>
+      if (_is_resident(entity))
+        memory.put(entity)
+      else
+        memory.remove(id)
+    }
+  }
+
+  private def _is_resident(
+    entity: E
+  ): Boolean =
+    !_is_logically_deleted(entity) && (
+      descriptor.plan.workingSetPolicy match {
+        case Some(policy) => policy.isResident(descriptor.persistent.toRecord(entity))
+        case None => true
+      }
+    )
+
+  private def _has_effective_working_set_policy: Boolean =
+    descriptor.plan.workingSetPolicy match {
+      case Some(WorkingSetPolicy.Disabled) | None => false
+      case Some(_) => true
+    }
 
   private final case class _VisibilityPolicy(
     postStatuses: Option[Set[String]],

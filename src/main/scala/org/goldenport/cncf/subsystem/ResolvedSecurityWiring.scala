@@ -13,7 +13,7 @@ import org.goldenport.cncf.messagedelivery.MessageDeliveryProvider
  *   projection source for deployment diagrams/specifications.
  *
  * @since   Apr.  9, 2026
- * @version Apr.  9, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedAuthenticationProviderBinding(
@@ -157,6 +157,7 @@ object ResolvedSecurityWiring {
 
   private def _component_runtime_name(component: Component): String =
     component.artifactMetadata.flatMap(_.component)
+      .orElse(component.artifactMetadata.map(_.name))
       .map(GenericSubsystemDescriptor.runtimeComponentName)
       .orElse(scala.util.Try(component.name).toOption)
       .getOrElse(component.getClass.getSimpleName.stripSuffix("$"))

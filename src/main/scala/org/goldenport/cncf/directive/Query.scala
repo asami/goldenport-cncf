@@ -11,7 +11,7 @@ import org.goldenport.cncf.entity.EntityPersistableQuery
 /*
  * @since   Feb. 19, 2026
  *  version Mar. 30, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 case class Query[T](query: T) extends RecordPresentable {
@@ -693,11 +693,18 @@ object Query {
     case (a: BigDecimal, b: BigDecimal) => Some(a.compare(b))
     case (a: Instant, b: Instant) => Some(a.compareTo(b))
     case (a: String, b: String) => Some(a.compareTo(b))
+    case (a: String, b: Instant) =>
+      _parse_instant(a).map(_.compareTo(b))
+    case (a: Instant, b: String) =>
+      _parse_instant(b).map(a.compareTo)
     case (a: Comparable[Any @unchecked], b) if a.getClass.isInstance(b) =>
       Some(a.compareTo(b))
     case _ =>
       None
   }
+
+  private def _parse_instant(value: String): Option[Instant] =
+    scala.util.Try(Instant.parse(value.trim)).toOption
 
   private def _like(value: String, pattern: String, caseInsensitive: Boolean): Boolean = {
     val regex = "^" + java.util.regex.Pattern.quote(pattern)

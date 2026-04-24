@@ -14,11 +14,20 @@ import org.simplemodeling.model.datatype.EntityCollectionId
  * @since   Feb. 22, 2026
  *  version Feb. 27, 2026
  *  version Mar. 24, 2026
- * @version Apr. 17, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityPersistent[E] extends RecordCodex[E]
-    with Identified[E, EntityId]
+    with Identified[E, EntityId] {
+  def toStoreRecord(e: E): Record =
+    toRecord(e)
+
+  def fromStoreRecord(r: Record): Consequence[E] =
+    fromRecord(r)
+
+  def storeFieldName(logicalName: String): String =
+    logicalName
+}
 
 object EntityPersistent {
   def derived[E <: EntityPersistable](
@@ -33,6 +42,12 @@ object EntityPersistent {
 trait EntityPersistentCreate[E] extends RecordEncoder[E]
     with Identifiable[E, EntityId] {
   def collection(e: E): EntityCollectionId
+
+  def toStoreRecord(e: E): Record =
+    toRecord(e)
+
+  def storeFieldName(logicalName: String): String =
+    logicalName
 }
 
 object EntityPersistentCreate {
@@ -47,6 +62,15 @@ object EntityPersistentCreate {
 
 trait EntityPersistentQuery[E] extends RecordCodex[E] {
   def collection(e: E): EntityCollectionId
+
+  def toStoreRecord(e: E): Record =
+    toRecord(e)
+
+  def fromStoreRecord(r: Record): Consequence[E] =
+    fromRecord(r)
+
+  def storeFieldName(logicalName: String): String =
+    logicalName
 }
 
 object EntityPersistentQuery {
@@ -83,6 +107,15 @@ trait EntityPersistableQuery extends RecordPresentable
 
 trait EntityPersistentUpdate[E] extends RecordCodex[E] {
   def collection(e: E): EntityCollectionId
+
+  def toStoreRecord(e: E): Record =
+    toRecord(e)
+
+  def fromStoreRecord(r: Record): Consequence[E] =
+    fromRecord(r)
+
+  def storeFieldName(logicalName: String): String =
+    logicalName
 }
 
 object EntityPersistentUpdate {

@@ -13,7 +13,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 24, 2026
+ *  version Mar. 24, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryRuntimePlanActivationSpec
@@ -44,6 +45,26 @@ final class ComponentFactoryRuntimePlanActivationSpec
       collection.descriptor.plan.maxEntitiesPerPartition shouldBe 1
       collection.storage.storeRealm.values.size shouldBe 2
       memory.cachedEntityCount shouldBe 1
+    }
+
+    "bootstrap direct-added components when a subsystem receives an unbootstrapped instance" in {
+      Given("a subsystem and a component created directly from a bundle factory")
+      val subsystem = TestComponentFactory.emptySubsystem("runtime_plan_activation_direct_add")
+      val component = _component_factory_bundle().createPrimary(
+        ComponentCreate(subsystem, ComponentOrigin.Builtin)
+      )
+
+      When("the raw component is added to the subsystem")
+      subsystem.add(component)
+      val resolved = subsystem.findComponent("runtime_plan_activation_direct_add")
+        .getOrElse(fail("missing bootstrapped component"))
+      val collection = resolved.entity[Any]("person")
+
+      Then("subsystem add bootstraps collections and runtime plans")
+      resolved.collectionsBootstrapped shouldBe true
+      collection.descriptor.collectionId shouldBe EntityCollectionId("sys", "sys", "person")
+      collection.storage.storeRealm.values.size shouldBe 2
+      resolved.workingSetEntityNames should contain("person")
     }
   }
 
@@ -78,6 +99,40 @@ final class ComponentFactoryRuntimePlanActivationSpec
     )
     component.initialize(params)
   }
+
+  private def _component_factory_bundle(): Component.SinglePrimaryBundleFactory =
+    new Component.SinglePrimaryBundleFactory with EntityRuntimePlanProvider {
+      private val cid = EntityCollectionId("sys", "sys", "person")
+      private val first = _Entity(EntityId("tokyo", "sales", cid), "taro")
+      private val second = _Entity(EntityId("tokyo", "sales", cid), "jiro")
+
+      override def entityRuntimePlans: Vector[EntityRuntimePlan[Any]] =
+        Vector(
+          EntityRuntimePlan[Any](
+            entityName = "person",
+            memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+            workingSet = Some(WorkingSetDefinition[Any]("person", Vector(first, second))),
+            partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+            maxPartitions = 2,
+            maxEntitiesPerPartition = 1
+          )
+        )
+
+      override protected def create_Component(params: ComponentCreate): Component =
+        new Component() {}
+
+      override protected def create_Core(
+        params: ComponentCreate,
+        comp: Component
+      ): Component.Core =
+        Component.Core.create(
+          name = "runtime_plan_activation_direct_add",
+          componentid = ComponentId("runtime_plan_activation_direct_add"),
+          instanceid = ComponentInstanceId.default(ComponentId("runtime_plan_activation_direct_add")),
+          protocol = Protocol.empty,
+          factory = this
+        )
+    }
 
   private final case class _Entity(
     id: EntityId,

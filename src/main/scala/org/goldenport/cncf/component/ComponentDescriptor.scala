@@ -4,7 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.record.RecordDecoder
 import org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor
-import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, PartitionStrategy}
+import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.security.{EntityApplicationDomain, EntityOperationKind, EntityUsageKind}
 import org.simplemodeling.model.datatype.EntityCollectionId
 
@@ -13,9 +13,7 @@ import org.simplemodeling.model.datatype.EntityCollectionId
  * CAR-style local override.
  *
  * @since   Mar. 27, 2026
- *  version Apr.  8, 2026
- *  version Apr. 14, 2026
- * @version Apr. 16, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentletDescriptor(
@@ -56,6 +54,7 @@ object ComponentDescriptor {
         usageKind = _string(rec, "usageKind", "usage_kind", "entityUsage", "entity_usage").map(EntityUsageKind.parse).getOrElse(EntityUsageKind.default)
         operationKind = _string(rec, "operationKind", "operation_kind", "entityOperationKind", "entity_operation_kind").map(EntityOperationKind.parse).getOrElse(EntityOperationKind.default)
         applicationDomain = _string(rec, "applicationDomain", "application_domain", "entityApplicationDomain", "entity_application_domain").map(EntityApplicationDomain.parse).getOrElse(EntityApplicationDomain.default)
+        workingsetpolicy <- _working_set_policy(rec)
       } yield EntityRuntimeDescriptor(
         entityName = entityName,
         collectionId = EntityCollectionId(major, minor, name),
@@ -63,6 +62,8 @@ object ComponentDescriptor {
         partitionStrategy = partition,
         maxPartitions = maxPartitions,
         maxEntitiesPerPartition = maxEntities,
+        workingSetPolicy = workingsetpolicy,
+        workingSetPolicySource = workingsetpolicy.map(_ => WorkingSetPolicySource.Cml),
         usageKind = usageKind,
         operationKind = operationKind,
         applicationDomain = applicationDomain
@@ -164,6 +165,25 @@ object ComponentDescriptor {
 
   private def _string(rec: Record, keys: String*): Option[String] =
     keys.iterator.map(rec.getString).collectFirst { case Some(s) if s.trim.nonEmpty => s.trim }
+
+  private def _working_set_policy(
+    rec: Record
+  ): Consequence[Option[WorkingSetPolicy]] = {
+    val nested = _record_value(rec, List("workingSetPolicy", "working_set_policy"))
+    val source = nested.getOrElse(rec)
+    val kind = _string(source, "kind", "workingSetPolicyKind", "working_set_policy_kind")
+      .orElse(_string(rec, "workingSetPolicyKind", "working_set_policy_kind"))
+    val duration = _string(source, "duration", "window", "workingSetPolicyDuration", "working_set_policy_duration")
+      .orElse(_string(rec, "workingSetPolicyDuration", "working_set_policy_duration"))
+    val timestampfield = _string(source, "timestampField", "timestamp_field", "field")
+      .orElse(_string(rec, "workingSetPolicyTimestampField", "working_set_policy_timestamp_field"))
+    kind match {
+      case Some(value) =>
+        WorkingSetPolicy.parse(value, duration, timestampfield).map(Some(_))
+      case None =>
+        Consequence.success(None)
+    }
+  }
 
   private def _boolean(rec: Record, keys: String*): Option[Boolean] =
     keys.iterator.map(rec.getBoolean).collectFirst {

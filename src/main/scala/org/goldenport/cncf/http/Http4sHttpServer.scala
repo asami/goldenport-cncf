@@ -88,6 +88,8 @@ final class Http4sHttpServer(
   }
 
   private[http] def routes(wsb: WebSocketBuilder2[IO]) = HttpRoutes.of[IO] {
+      case req if _is_root_request(req) =>
+        IO.pure(_temporary_redirect(_redirect_target_with_query(req, "/web")))
       case GET -> Root / "mcp" =>
         _mcp_websocket(wsb, _mcp)
       case GET -> Root / "web" / "assets" / "bootstrap.min.css" =>
@@ -179,7 +181,11 @@ final class Http4sHttpServer(
       case GET -> Root / "web" =>
         _web_route_alias(Vector("web")).flatMap {
           case Some(response) => IO.pure(response)
-          case None => IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Web app route not found"))
+          case None =>
+            if (_show_runtime_landing)
+              _runtime_landing()
+            else
+              IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Web app route not found"))
         }
       case GET -> Root / "web" / component / webApp / "assets" / asset =>
         _web_app_asset(component, webApp, asset)
@@ -232,11 +238,13 @@ final class Http4sHttpServer(
         _validate_operation_form_api(req, app, service, operation)
       case req @ POST -> Root / "form-api" / app / service / operation =>
         _submit_operation_form_api(req, app, service, operation)
-      case req =>
+      case req if _is_rest_compatibility_request(req) =>
+        IO.pure(_temporary_redirect(_rest_latest_stable_target(req)))
+      case req if _is_rest_v1_request(req) =>
         try {
           val started = System.nanoTime()
           for {
-            core <- _to_http_request(req)
+            core <- _to_http_request(req, Some(_rest_execution_path(req)))
             res <- _to_http_response(execute(core))
           } yield {
             RuntimeDashboardMetrics.recordHtmlRequest(
@@ -258,6 +266,8 @@ final class Http4sHttpServer(
             )
             IO.pure(HResponse[IO](HStatus.InternalServerError))
         }
+      case _ =>
+        IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Route not found"))
   }
 
   private def _mcp_websocket(
@@ -355,6 +365,9 @@ final class Http4sHttpServer(
 
   private def _system_manual(): IO[HResponse[IO]] =
     _html(StaticFormAppRenderer.renderSystemManual(engine.runtimeSubsystem))
+
+  private def _runtime_landing(): IO[HResponse[IO]] =
+    _html(StaticFormAppRenderer.renderRuntimeLanding(engine.runtimeSubsystem))
 
   private def _system_manual_openapi(): IO[HResponse[IO]] =
     IO.pure(
@@ -996,14 +1009,15 @@ final class Http4sHttpServer(
       for {
         form <- _to_plain_form_record(req)
         query = Record.create(req.uri.query.params.toVector)
-        header = _request_header_record_with_auth(app, req, query, form)
+        header = _request_header_record(req, query, form)
+        componentSegment = _dispatch_component_segment(app)
         res = _dispatch_operation(
-          app,
+          componentSegment,
           service,
           operation,
           HttpRequest.fromPath(
             method = HttpRequest.POST,
-            path = s"/${app}/${service}/${operation}",
+            path = s"/${componentSegment}/${service}/${operation}",
             query = query,
             header = header,
             form = _operation_dispatch_form(form)
@@ -1092,7 +1106,7 @@ final class Http4sHttpServer(
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Form continuation not found"))
     }
 
-  private def _dispatch_operation(
+  private[http] def _dispatch_operation(
     app: String,
     service: String,
     operation: String,
@@ -1839,9 +1853,7 @@ final class Http4sHttpServer(
   private def _component_exists(
     componentName: String
   ): Boolean =
-    engine.runtimeSubsystem.components.exists(x =>
-      org.goldenport.cncf.naming.NamingConventions.equivalentByNormalized(x.name, componentName)
-    )
+    engine.runtimeSubsystem.findComponent(componentName).isDefined
 
   private def _safe_asset_name(
     assetName: String
@@ -1944,6 +1956,49 @@ final class Http4sHttpServer(
 
   private def _see_other(path: String): HResponse[IO] =
     HResponse[IO](HStatus.SeeOther).putHeaders(Location(Uri.unsafeFromString(path)))
+
+  private def _temporary_redirect(path: String): HResponse[IO] =
+    HResponse[IO](HStatus.TemporaryRedirect).putHeaders(Location(Uri.unsafeFromString(path)))
+
+  private def _is_root_request(req: org.http4s.Request[IO]): Boolean = {
+    val path = req.uri.path.renderString
+    path == "/" || path.isEmpty
+  }
+
+  private def _is_rest_v1_request(req: org.http4s.Request[IO]): Boolean = {
+    val path = req.uri.path.renderString
+    path == "/rest/v1" || path == "/rest/v1/" || path.startsWith("/rest/v1/")
+  }
+
+  private def _is_rest_compatibility_request(req: org.http4s.Request[IO]): Boolean = {
+    val path = req.uri.path.renderString
+    (path == "/rest" || path == "/rest/" || path.startsWith("/rest/")) &&
+      !_is_rest_v1_request(req)
+  }
+
+  private def _rest_execution_path(req: org.http4s.Request[IO]): String = {
+    val path = req.uri.path.renderString
+    val stripped =
+      if (path == "/rest/v1" || path == "/rest/v1/") "/"
+      else path.stripPrefix("/rest/v1")
+    if (stripped.isEmpty) "/" else stripped
+  }
+
+  private def _rest_latest_stable_target(req: org.http4s.Request[IO]): String = {
+    val path = req.uri.path.renderString
+    val redirectedPath =
+      if (path == "/rest" || path == "/rest/") "/rest/v1"
+      else s"/rest/v1${path.stripPrefix("/rest")}"
+    _redirect_target_with_query(req, redirectedPath)
+  }
+
+  private def _redirect_target_with_query(
+    req: org.http4s.Request[IO],
+    path: String
+  ): String = {
+    val query = req.uri.query.renderString
+    if (query.nonEmpty) s"$path?$query" else path
+  }
 
   private[http] def _login_page(
     req: org.http4s.Request[IO],
@@ -2124,54 +2179,6 @@ final class Http4sHttpServer(
     Record.create(enriched)
   }
 
-  private def _request_header_record_with_auth(
-    app: String,
-    req: org.http4s.Request[IO],
-    query: Record,
-    form: Record
-  ): Record = {
-    val header = _request_header_record(req, query, form)
-    val attrs = (header.asMap ++ query.asMap ++ form.asMap).view.mapValues(_.toString).toMap
-    val authRequest = org.goldenport.cncf.security.AuthenticationRequest(attrs)
-    _current_session_result(authRequest) match {
-      case org.goldenport.Consequence.Success(Some(result)) =>
-        val enriched = header.asNameStringVector ++ Vector(
-          "principalId" -> result.principalId.value,
-          "principal_id" -> result.principalId.value,
-          "authenticated" -> "true"
-        ) ++ result.attributes.toVector
-        Record.create(enriched)
-      case _ =>
-        header
-    }
-  }
-
-  private def _current_session_result(
-    request: org.goldenport.cncf.security.AuthenticationRequest
-  ): org.goldenport.Consequence[Option[org.goldenport.cncf.security.AuthenticationResult]] = {
-    val providers = engine.runtimeSubsystem.components.flatMap(_.authenticationProviders)
-    val base = engine.runtimeSubsystem.components
-      .find(_.authenticationProviders.nonEmpty)
-      .orElse(engine.runtimeSubsystem.components.headOption)
-      .map(_.logic.executionContext())
-      .getOrElse(ExecutionContext.create())
-
-    def go(
-      rest: List[org.goldenport.cncf.security.AuthenticationProvider]
-    ): org.goldenport.Consequence[Option[org.goldenport.cncf.security.AuthenticationResult]] =
-      rest match {
-        case Nil =>
-          org.goldenport.Consequence.success(None)
-        case head :: tail =>
-          head.currentSession(request)(using base).flatMap {
-            case Some(result) => org.goldenport.Consequence.success(Some(result))
-            case None => go(tail)
-          }
-      }
-
-    go(providers.toList)
-  }
-
   private[http] def _session_id_(
     req: org.http4s.Request[IO],
     query: Record = Record.empty,
@@ -2264,6 +2271,18 @@ final class Http4sHttpServer(
     RuntimeDashboardMetrics.recordAuthorizationDecision(!allowed)
     allowed
   }
+
+  private def _show_runtime_landing: Boolean =
+    RuntimeConfig.from(engine.runtimeSubsystem.configuration).operationMode != org.goldenport.cncf.config.OperationMode.Production
+
+  private def _dispatch_component_segment(
+    app: String
+  ): String =
+    engine.runtimeSubsystem
+      .findComponent(app)
+      .map(_.name)
+      .map(NamingConventions.toNormalizedSegment)
+      .getOrElse(app)
 
   private def _admin_operation_selector(
     service: String,
@@ -2447,7 +2466,8 @@ final class Http4sHttpServer(
   }
 
   private def _to_http_request(
-    req: org.http4s.Request[IO]
+    req: org.http4s.Request[IO],
+    pathOverride: Option[String] = None
   ): IO[HttpRequest] = {
     val method = req.method match {
       case org.http4s.Method.GET => HttpRequest.GET
@@ -2463,12 +2483,13 @@ final class Http4sHttpServer(
       authority = req.uri.authority.map(_.renderString),
       originalUri = Some(req.uri.renderString)
     )
+    val path = pathOverride.getOrElse(req.uri.path.renderString)
     val contentTypeHeader = req.headers.get[`Content-Type`]
 
     if (_is_multipart(contentTypeHeader))
-      _to_multipart_http_request(req, method, query, header, context)
+      _to_multipart_http_request(req, method, path, query, header, context)
     else
-      _to_regular_http_request(req, method, query, header, context, contentTypeHeader)
+      _to_regular_http_request(req, method, path, query, header, context, contentTypeHeader)
   }
 
   private def _is_multipart(contentType: Option[`Content-Type`]): Boolean =
@@ -2480,6 +2501,7 @@ final class Http4sHttpServer(
   private def _to_regular_http_request(
     req: org.http4s.Request[IO],
     method: HttpRequest.Method,
+    path: String,
     query: Record,
     header: Record,
     context: HttpContext,
@@ -2501,7 +2523,7 @@ final class Http4sHttpServer(
         }
       HttpRequest.fromPath(
         method = method,
-        path = req.uri.path.renderString,
+        path = path,
         query = query,
         header = header,
         body = bodyOption,
@@ -2513,6 +2535,7 @@ final class Http4sHttpServer(
   private def _to_multipart_http_request(
     req: org.http4s.Request[IO],
     method: HttpRequest.Method,
+    path: String,
     query: Record,
     header: Record,
     context: HttpContext
@@ -2540,7 +2563,7 @@ final class Http4sHttpServer(
           if (values.isEmpty) Record.empty else Record.create(values)
         HttpRequest.fromPath(
           method = method,
-          path = req.uri.path.renderString,
+          path = path,
           query = query,
           header = header,
           body = None,

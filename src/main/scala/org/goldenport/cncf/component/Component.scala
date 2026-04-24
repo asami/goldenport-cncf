@@ -75,6 +75,7 @@ abstract class Component() extends Component.Core.Holder {
   private var _bindings: Map[String, Component.Binding[?, ?]] = Map.empty
   private var _event_effect_record: Record = Record.empty
   private var _component_descriptors: Vector[ComponentDescriptor] = Vector.empty
+  private var _collections_bootstrapped: Boolean = false
   val entitySpace: EntitySpace = new EntitySpace()
   val aggregateSpace: AggregateSpace = new AggregateSpace()
   val viewSpace: ViewSpace = new ViewSpace()
@@ -103,6 +104,9 @@ abstract class Component() extends Component.Core.Holder {
   def componentDescriptors: Vector[ComponentDescriptor] =
     _component_descriptors
 
+  def collectionsBootstrapped: Boolean =
+    _collections_bootstrapped
+
   def entityRuntimeDescriptor(
     entityName: String
   ): Option[org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor] = {
@@ -117,6 +121,13 @@ abstract class Component() extends Component.Core.Holder {
     descriptors: Vector[ComponentDescriptor]
   ): Component = {
     _component_descriptors = descriptors
+    this
+  }
+
+  def withCollectionsBootstrapped(
+    value: Boolean = true
+  ): Component = {
+    _collections_bootstrapped = value
     this
   }
 

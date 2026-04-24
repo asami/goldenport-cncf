@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -85,6 +85,47 @@ final class EntityStoreQueryRouteSpec
       result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(p2.id))
       result.map(_.totalCount) shouldBe Consequence.success(Some(3))
       result.map(r => (r.offset, r.limit, r.fetchedCount)) shouldBe Consequence.success((Some(1), Some(1), 1))
+    }
+
+    "route logical query paths to physical store fields through EntityPersistent mapping" in {
+      Given("records stored under physical column names")
+      val collectionid = EntityCollectionId("test", "a", "post")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistent[PostedEntity] = _posted_persistent
+
+      val p1 = PostedEntity(EntityId("test", "p1", collectionid), "older", "2026-04-23T10:00:00Z")
+      val p2 = PostedEntity(EntityId("test", "p2", collectionid), "newer", "2026-04-24T10:00:00Z")
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(collectionid), p1.toStoreRecord),
+            DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(collectionid), p2.toStoreRecord)
+          )
+        )
+      )
+
+      When("searching and sorting by the logical postedAt field")
+      val planned = Query.plan(
+        condition = PostedQuery(
+          id = Condition.any[EntityId],
+          body = Condition.any[String],
+          postedAt = Condition.any[String]
+        ),
+        where = Query.Gte("postedAt", "2026-04-24T00:00:00Z"),
+        sort = Vector(Query.SortKey("postedAt", Query.SortDirection.Desc))
+      )
+      val result = entitystorespace.search(
+        UnitOfWorkOp.EntityStoreSearch(
+          query = EntityQuery(collectionid, planned, EntitySearchScope.Store),
+          tc = summon[EntityPersistent[PostedEntity]]
+        )
+      )
+
+      Then("the store-backed route uses the entity-owned physical field mapping")
+      result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(p2.id))
+      result.map(_.fetchedCount) shouldBe Consequence.success(1)
     }
 
     "return empty result when collection has not been created yet" in {
@@ -760,4 +801,57 @@ private def _update_candidate_persistent: EntityPersistent[UpdateCandidate] =
     def toRecord(e: UpdateCandidate): Record = e.toRecord()
     def fromRecord(r: Record): Consequence[UpdateCandidate] =
       Consequence.notImplemented("not used in this spec")
+  }
+
+private final case class PostedEntity(
+  id: EntityId,
+  body: String,
+  postedAt: String
+) {
+  def toStoreRecord: Record =
+    Record.dataAuto(
+      "id" -> id,
+      "body" -> body,
+      "posted_at" -> postedAt
+    )
+}
+
+private final case class PostedQuery(
+  id: Condition[EntityId],
+  body: Condition[String],
+  postedAt: Condition[String]
+) extends Query.ConditionShape
+
+private def _posted_persistent: EntityPersistent[PostedEntity] =
+  new EntityPersistent[PostedEntity] {
+    def id(e: PostedEntity): EntityId = e.id
+    def toRecord(e: PostedEntity): Record =
+      Record.dataAuto(
+        "id" -> e.id,
+        "body" -> e.body,
+        "postedAt" -> e.postedAt
+      )
+    override def toStoreRecord(e: PostedEntity): Record =
+      e.toStoreRecord
+    def fromRecord(r: Record): Consequence[PostedEntity] =
+      _record_to_posted(r)
+    override def fromStoreRecord(r: Record): Consequence[PostedEntity] =
+      _record_to_posted(r)
+    override def storeFieldName(logicalName: String): String =
+      logicalName match {
+        case "postedAt" => "posted_at"
+        case other => other
+      }
+
+    private def _record_to_posted(
+      r: Record
+    ): Consequence[PostedEntity] = {
+      val m = r.asMap
+      (m.get("id"), m.get("body"), m.get("postedAt").orElse(m.get("posted_at"))) match {
+        case (Some(id: EntityId), Some(body: String), Some(postedAt: String)) =>
+          Consequence.success(PostedEntity(id, body, postedAt))
+        case _ =>
+          Consequence.argumentInvalid("invalid posted record")
+      }
+    }
   }

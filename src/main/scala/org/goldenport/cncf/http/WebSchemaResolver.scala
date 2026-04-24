@@ -4,14 +4,15 @@ import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.protocol.spec.ParameterDefinition
 import org.goldenport.schema.{Schema, WebValidationHints}
+import scala.util.Try
 
 /*
  * Resolves CML/domain schema and WebDescriptor presentation overrides into a
  * Web-facing schema contract.
  *
  * @since   Apr. 16, 2026
- *  version Apr. 16, 2026
- * @version Apr. 17, 2026
+ *  version Apr. 17, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object WebSchemaResolver {
@@ -244,7 +245,8 @@ object WebSchemaResolver {
     fieldOrderStrategy: FieldOrderStrategy
   ): ResolvedWebSchema = {
     val runtimeDescriptor = _entity_runtime_descriptor(component, entityName, collectionName, surfaceName)
-    val schemaFields = _select_fields(runtimeDescriptor.flatMap(_.schema).map(fromSchema).getOrElse(Vector.empty), viewFields)
+    val effectiveSchema = runtimeDescriptor.flatMap(_.schema).orElse(_generated_entity_schema(component, entityName, collectionName, surfaceName))
+    val schemaFields = _select_fields(effectiveSchema.map(fromSchema).getOrElse(Vector.empty), viewFields)
     val fallback = if (schemaFields.nonEmpty) Vector.empty else fallbackFields
     val base =
       if (schemaFields.nonEmpty)
@@ -285,6 +287,18 @@ object WebSchemaResolver {
     _entity_name_candidates(entityName, collectionName, surfaceName)
       .iterator
       .flatMap(component.entityRuntimeDescriptor)
+      .toSeq
+      .headOption
+
+  private def _generated_entity_schema(
+    component: Component,
+    entityName: String,
+    collectionName: String,
+    surfaceName: String
+  ): Option[Schema] =
+    _entity_name_candidates(entityName, collectionName, surfaceName)
+      .iterator
+      .flatMap(_generated_entity_module(component, _).flatMap(_extract_schema))
       .toSeq
       .headOption
 
@@ -357,6 +371,69 @@ object WebSchemaResolver {
       validation = parameter.web.validation,
       source = Source.Schema
     )
+
+  private def _generated_entity_module(
+    component: Component,
+    entityName: String
+  ): Option[AnyRef] = {
+    val packageNames = _generated_module_package_names(component)
+    val className = _entity_class_name(entityName)
+    val candidates = packageNames.flatMap { pkg =>
+      Vector(
+        s"${pkg}.entity.${className}$$",
+        s"${pkg}.entity.aggregate.${className}$$",
+        s"${pkg}.entity.operation.${className}$$",
+        s"${pkg}.entity.read.${className}$$",
+        s"${pkg}.entity.view.${className}$$"
+      )
+    }
+    val loader = component.getClass.getClassLoader
+    candidates.iterator.flatMap(name => _load_scala_module(loader, name)).toSeq.headOption
+  }
+
+  private def _extract_schema(
+    module: AnyRef
+  ): Option[Schema] =
+    Try(module.getClass.getMethod("schema").invoke(module)).toOption.collect {
+      case schema: Schema => schema
+    }
+
+  private def _entity_class_name(
+    entityName: String
+  ): String =
+    NamingConventions.toNormalizedSegment(entityName)
+      .split("-")
+      .toVector
+      .filter(_.nonEmpty)
+      .map(s => s"${s.head.toUpper}${s.drop(1)}")
+      .mkString
+
+  private def _generated_module_package_names(
+    component: Component
+  ): Vector[String] =
+    Vector(
+      Option(component.getClass.getPackage).map(_.getName).filter(_.nonEmpty),
+      Some("org.goldenport.cncf.component")
+    ).flatten.distinct
+
+  private def _load_scala_module(
+    loader: ClassLoader,
+    className: String
+  ): Option[AnyRef] = {
+    val loaders = Vector(
+      Option(loader),
+      Option(Thread.currentThread.getContextClassLoader)
+    ).flatten.distinct
+    loaders.iterator.flatMap { cl =>
+      try {
+        val cls = Class.forName(className, true, cl)
+        val field = cls.getField("MODULE$")
+        Option(field.get(null).asInstanceOf[AnyRef])
+      } catch {
+        case _: Throwable => None
+      }
+    }.toSeq.headOption
+  }
 
   private def _with_control(
     field: ResolvedWebField,

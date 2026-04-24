@@ -17,7 +17,7 @@ import org.goldenport.schema.DataType
 
 /*
  * @since   Apr. 23, 2026
- * @version Apr. 23, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AuthComponent() extends Component {
@@ -30,7 +30,8 @@ object AuthComponent {
     subjectKind: String,
     securityLevel: String,
     capabilities: Vector[String],
-    authenticated: Boolean
+    authenticated: Boolean,
+    attributes: Map[String, String] = Map.empty
   ) {
     def toRecord: Record =
       Record.data(
@@ -39,7 +40,8 @@ object AuthComponent {
         "subjectKind" -> subjectKind,
         "securityLevel" -> securityLevel,
         "capabilities" -> capabilities,
-        "authenticated" -> authenticated
+        "authenticated" -> authenticated,
+        "attributes" -> Record.data(attributes.toVector.sortBy(_._1)*)
       )
 
     def toJson: Json =
@@ -49,7 +51,10 @@ object AuthComponent {
         "subjectKind" -> Json.fromString(subjectKind),
         "securityLevel" -> Json.fromString(securityLevel),
         "capabilities" -> Json.arr(capabilities.map(Json.fromString)*),
-        "authenticated" -> Json.fromBoolean(authenticated)
+        "authenticated" -> Json.fromBoolean(authenticated),
+        "attributes" -> Json.obj(attributes.toVector.sortBy(_._1).map { case (k, v) =>
+          k -> Json.fromString(v)
+        }*)
       )
   }
 
@@ -135,7 +140,8 @@ object AuthComponent {
         subjectKind = result.subjectKind.toString,
         securityLevel = result.level.value,
         capabilities = result.capabilities.toVector.map(_.name).sorted,
-        authenticated = true
+        authenticated = true,
+        attributes = _session_attributes_(result.attributes)
       )
 
     private lazy val _anonymous_summary_ =
@@ -145,8 +151,30 @@ object AuthComponent {
         subjectKind = SubjectKind.Anonymous.toString,
         securityLevel = SecurityContext.Privilege.Anonymous.level.value,
         capabilities = SecurityContext.Privilege.Anonymous.capabilities.toVector.map(_.name).sorted,
-        authenticated = false
+        authenticated = false,
+        attributes = Map.empty
       )
+
+    private def _session_attributes_(
+      attributes: Map[String, String]
+    ): Map[String, String] =
+      Option(attributes).getOrElse(Map.empty).filterNot { case (k, _) =>
+        val lower = k.toLowerCase(java.util.Locale.ROOT)
+        lower == "principalid" ||
+        lower == "principal_id" ||
+        lower == "authenticated" ||
+        lower == "access_token" ||
+        lower == "refreshtoken" ||
+        lower == "refresh_token" ||
+        lower == "clientid" ||
+        lower == "client_id" ||
+        lower == "deviceinfo" ||
+        lower == "device_info" ||
+        lower == "ipaddress" ||
+        lower == "ip_address" ||
+        lower == "useragent" ||
+        lower == "user_agent"
+      }
   }
 
   private final class AuthOperationDefinition(

@@ -2608,7 +2608,7 @@ object AdminComponent {
     subsystem: Subsystem,
     name: String
   ): Option[Component] =
-    subsystem.components.find(x => NamingConventions.equivalentByNormalized(x.name, name))
+    subsystem.findComponent(name)
 
   private def _entity_collection(
     component: Component,
