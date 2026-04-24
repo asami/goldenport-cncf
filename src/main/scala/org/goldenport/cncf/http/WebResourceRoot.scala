@@ -8,12 +8,13 @@ import scala.util.Using
 
 /*
  * @since   Apr. 20, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait WebResourceRoot {
   def name: String
   def exists(relativePath: Path): Boolean
+  def readBytes(relativePath: Path): Option[Array[Byte]]
   def readText(relativePath: Path): Option[String]
 }
 
@@ -24,10 +25,13 @@ object WebResourceRoot {
     def exists(relativePath: Path): Boolean =
       _safe(relativePath) && Files.isRegularFile(root.resolve(relativePath))
 
-    def readText(relativePath: Path): Option[String] =
+    def readBytes(relativePath: Path): Option[Array[Byte]] =
       Option.when(exists(relativePath)) {
-        Files.readString(root.resolve(relativePath), StandardCharsets.UTF_8)
+        Files.readAllBytes(root.resolve(relativePath))
       }
+
+    def readText(relativePath: Path): Option[String] =
+      readBytes(relativePath).map(bytes => new String(bytes, StandardCharsets.UTF_8))
   }
 
   final case class Archive(archive: Path) extends WebResourceRoot {
@@ -40,19 +44,22 @@ object WebResourceRoot {
         }
       }
 
-    def readText(relativePath: Path): Option[String] =
+    def readBytes(relativePath: Path): Option[Array[Byte]] =
       _entry_name(relativePath).flatMap { entry =>
         Using.resource(new ZipFile(archive.toFile)) { zip =>
           Option(zip.getEntry(entry)).filterNot(_.isDirectory).map { x =>
             val in = zip.getInputStream(x)
             try {
-              new String(in.readAllBytes(), StandardCharsets.UTF_8)
+              in.readAllBytes()
             } finally {
               in.close()
             }
           }
         }
       }
+
+    def readText(relativePath: Path): Option[String] =
+      readBytes(relativePath).map(bytes => new String(bytes, StandardCharsets.UTF_8))
 
     private def _entry_name(relativePath: Path): Option[String] =
       Option.when(_safe(relativePath)) {

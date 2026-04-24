@@ -11,7 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 14, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers {
@@ -92,6 +92,11 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |    - name: console
           |      path: /web/console
           |      kind: console
+          |      theme:
+          |        css:
+          |          - /web/console/assets/console-theme.css
+          |        variables:
+          |          primary: "#0f766e"
           |      assets:
           |        css:
           |          - /web/console/assets/console.css
@@ -118,6 +123,14 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |    js:
           |      - /web/assets/bootstrap.bundle.min.js
           |      - /web/notice-board/assets/app.js
+          |
+          |  theme:
+          |    name: shared
+          |    css:
+          |      - /web/assets/theme.css
+          |    variables:
+          |      body-bg: "#f8fafc"
+          |      primary: "#14532d"
           |""".stripMargin,
         StandardCharsets.UTF_8
       )
@@ -165,6 +178,8 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.adminFields("notice_board", "data", "audit").map(_.name) shouldBe Vector("id", "action", "actor")
       descriptor.apps.map(_.name) shouldBe Vector("manual", "console")
       descriptor.apps.map(_.path) shouldBe Vector("/web/manual", "/web/console")
+      descriptor.apps(1).theme.css shouldBe Vector("/web/console/assets/console-theme.css")
+      descriptor.apps(1).theme.variables("primary") shouldBe "#0f766e"
       descriptor.apps(1).assets.css shouldBe Vector("/web/console/assets/console.css")
       descriptor.apps(1).assets.js shouldBe Vector("/web/console/assets/console.js")
       descriptor.routes.map(_.path) shouldBe Vector("/web/notice-board", "/web")
@@ -178,6 +193,11 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.assets.autoComplete shouldBe false
       descriptor.assets.css shouldBe Vector("/web/assets/bootstrap.min.css", "/web/notice-board/assets/app.css")
       descriptor.assets.js shouldBe Vector("/web/assets/bootstrap.bundle.min.js", "/web/notice-board/assets/app.js")
+      descriptor.theme.name shouldBe Some("shared")
+      descriptor.theme.css shouldBe Vector("/web/assets/theme.css")
+      descriptor.theme.variables("primary") shouldBe "#14532d"
+      descriptor.themeFor(Some("console")).css shouldBe Vector("/web/assets/theme.css", "/web/console/assets/console-theme.css")
+      descriptor.themeFor(Some("console")).variables("primary") shouldBe "#0f766e"
       descriptor.resultAssets("notice-board", "notice", "search-notices").css shouldBe Vector(
         "/web/assets/bootstrap.min.css",
         "/web/notice-board/assets/app.css",

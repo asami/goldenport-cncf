@@ -12,7 +12,7 @@ import org.goldenport.record.Record
 
 /*
  * @since   Apr. 14, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
@@ -23,6 +23,7 @@ final case class WebDescriptor(
   form: Map[String, WebDescriptor.Form] = Map.empty,
   apps: Vector[WebDescriptor.App] = Vector.empty,
   routes: Vector[WebDescriptor.Route] = Vector.empty,
+  theme: WebDescriptor.Theme = WebDescriptor.Theme(),
   assets: WebDescriptor.Assets = WebDescriptor.Assets(),
   admin: Map[String, WebDescriptor.AdminSurface] = Map.empty
 ) {
@@ -32,6 +33,7 @@ final case class WebDescriptor(
       form.nonEmpty ||
       apps.nonEmpty ||
       routes.nonEmpty ||
+      theme != WebDescriptor.Theme() ||
       assets != WebDescriptor.Assets() ||
       admin.nonEmpty ||
       defaultView != WebTableColumnResolver.defaultViewName ||
@@ -61,6 +63,15 @@ final case class WebDescriptor(
       app.matches(name, Vector.empty) ||
         app.normalizedName == org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(name)
     ).map(_.assets).getOrElse(WebDescriptor.Assets())
+
+  def themeFor(appName: Option[String] = None): WebDescriptor.Theme =
+    appName
+      .flatMap(name => apps.find(app =>
+        app.matches(name, Vector.empty) ||
+          app.normalizedName == org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(name)
+      ).map(_.theme))
+      .map(theme.merge)
+      .getOrElse(theme)
 
   def formAssets(
     componentName: String,
@@ -289,7 +300,8 @@ object WebDescriptor {
     kind: String = "static-form",
     root: Option[String] = None,
     route: Option[String] = None,
-    assets: Assets = Assets()
+    assets: Assets = Assets(),
+    theme: Theme = Theme()
   ) {
     def normalizedName: String =
       _normalize_app_segment(name)
@@ -415,6 +427,22 @@ object WebDescriptor {
       )
   }
 
+  final case class Theme(
+    name: Option[String] = None,
+    css: Vector[String] = Vector.empty,
+    variables: Map[String, String] = Map.empty
+  ) {
+    def merge(rhs: Theme): Theme =
+      Theme(
+        rhs.name.orElse(name),
+        (css ++ rhs.css).distinct,
+        variables ++ rhs.variables
+      )
+
+    def toLayoutOptions: StaticFormAppLayout.ThemeOptions =
+      StaticFormAppLayout.ThemeOptions(name, css, variables)
+  }
+
   val empty: WebDescriptor = WebDescriptor()
 
   def formSelector(
@@ -457,6 +485,7 @@ object WebDescriptor {
       form = _form(web),
       apps = _apps(web),
       routes = _routes(web),
+      theme = _theme(web),
       assets = _assets(web),
       admin = _admin(web)
     )
@@ -592,6 +621,7 @@ object WebDescriptor {
         kind = record.getString("kind").map(_.trim).filter(_.nonEmpty).getOrElse("static-form"),
         root = root,
         route = record.getString("route").map(_.trim).filter(_.nonEmpty),
+        theme = _theme(record),
         assets = _assets(record)
       )
     }
@@ -616,6 +646,19 @@ object WebDescriptor {
           js = _string_vector(r, "js") ++ _string_vector(r, "scripts")
         )
       }.getOrElse(Assets())
+
+  private def _theme(record: Record): Theme =
+    _record_value(record, "theme")
+      .orElse(_record_value(record, "themes"))
+      .map { r =>
+        Theme(
+          name = _string(r, "name"),
+          css = _string_vector(r, "css") ++ _string_vector(r, "styles"),
+          variables = _record_value(r, "variables")
+            .map(_.asMap.toVector.map { case (key, value) => key -> value.toString }.toMap)
+            .getOrElse(Map.empty)
+        )
+      }.getOrElse(Theme())
 
   private def _route(record: Record): Option[Route] =
     for {

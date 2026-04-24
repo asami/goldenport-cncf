@@ -104,6 +104,8 @@ final class Http4sHttpServer(
         _textus_widgets_css()
       case GET -> Root / "web" / "assets" / "textus-widgets.js" =>
         _textus_widgets_js()
+      case req @ GET -> _ if _web_global_asset_path(req).nonEmpty =>
+        _web_global_asset(_web_global_asset_path(req).get)
       case GET -> Root / "web" / "system" / "dashboard" =>
         _subsystem_dashboard()
       case GET -> Root / "web" / "system" / "dashboard" / "state" =>
@@ -195,10 +197,12 @@ final class Http4sHttpServer(
             else
               IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Web app route not found"))
         }
-      case GET -> Root / "web" / component / webApp / "assets" / asset =>
-        _web_app_asset(component, webApp, asset)
-      case GET -> Root / "web" / app / "assets" / asset =>
-        _web_route_alias_asset(app, asset)
+      case req @ GET -> _ if _web_component_asset_path(req).nonEmpty =>
+        val (component, webApp, assetPath) = _web_component_asset_path(req).get
+        _web_app_asset(component, webApp, assetPath)
+      case req @ GET -> _ if _web_alias_asset_path(req).nonEmpty =>
+        val (app, assetPath) = _web_alias_asset_path(req).get
+        _web_route_alias_asset(app, assetPath)
       case GET -> Root / "web" / component / webApp / page =>
         _component_web_app(component, webApp, Vector(page))
       case GET -> Root / "web" / app =>
@@ -323,11 +327,7 @@ final class Http4sHttpServer(
 
   private def _subsystem_dashboard(): IO[HResponse[IO]] = {
     val p = StaticFormAppRenderer.renderSubsystemDashboard(engine.runtimeSubsystem)
-    IO.pure(
-      HResponse[IO](HStatus.Ok)
-        .withEntity(p.body)
-        .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-    )
+    _html(p)
   }
 
   private def _dashboard_state(
@@ -346,29 +346,17 @@ final class Http4sHttpServer(
 
   private def _system_performance(): IO[HResponse[IO]] = {
     val p = StaticFormAppRenderer.renderSystemPerformance(engine.runtimeSubsystem)
-    IO.pure(
-      HResponse[IO](HStatus.Ok)
-        .withEntity(p.body)
-        .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-    )
+    _html(p)
   }
 
   private def _system_admin(): IO[HResponse[IO]] = {
     val p = StaticFormAppRenderer.renderSystemAdmin(engine.runtimeSubsystem, engine.webDescriptor)
-    IO.pure(
-      HResponse[IO](HStatus.Ok)
-        .withEntity(p.body)
-        .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-    )
+    _html(p)
   }
 
   private def _system_admin_descriptor(): IO[HResponse[IO]] = {
     val p = StaticFormAppRenderer.renderSystemAdminDescriptor(engine.webDescriptor)
-    IO.pure(
-      HResponse[IO](HStatus.Ok)
-        .withEntity(p.body)
-        .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-    )
+    _html(p)
   }
 
   private def _system_admin_jobs(): IO[HResponse[IO]] =
@@ -469,20 +457,41 @@ final class Http4sHttpServer(
     webAppName: String,
     assetName: String
   ): IO[HResponse[IO]] =
+    _web_app_asset(componentName, webAppName, Vector(assetName))
+
+  private[http] def _web_app_asset(
+    componentName: String,
+    webAppName: String,
+    assetPath: Vector[String]
+  ): IO[HResponse[IO]] =
     if (!_component_exists(componentName))
       IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component Web app asset not found"))
-    else if (!_safe_asset_name(assetName))
+    else if (!_safe_asset_path(assetPath))
       IO.pure(HResponse[IO](HStatus.BadRequest).withEntity("Invalid Web app asset path"))
     else
-      _web_app_asset_content(webAppName, assetName) match {
+      _web_app_asset_content(webAppName, assetPath) match {
         case Some((content, mediaType)) =>
-          IO.pure(
-            HResponse[IO](HStatus.Ok)
-              .withEntity(content)
-              .withContentType(`Content-Type`(mediaType, Some(Charset.`UTF-8`)))
-          )
+          _asset_response(content, mediaType)
         case None =>
           IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component Web app asset not found"))
+      }
+
+  private[http] def _web_global_asset(
+    assetName: String
+  ): IO[HResponse[IO]] =
+    _web_global_asset(Vector(assetName))
+
+  private[http] def _web_global_asset(
+    assetPath: Vector[String]
+  ): IO[HResponse[IO]] =
+    if (!_safe_asset_path(assetPath))
+      IO.pure(HResponse[IO](HStatus.BadRequest).withEntity("Invalid Web asset path"))
+    else
+      _web_global_asset_content(assetPath) match {
+        case Some((content, mediaType)) =>
+          _asset_response(content, mediaType)
+        case None =>
+          IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Web asset not found"))
       }
 
   private[http] def _web_route_alias(
@@ -503,11 +512,17 @@ final class Http4sHttpServer(
     app: String,
     assetName: String
   ): IO[HResponse[IO]] =
+    _web_route_alias_asset(app, Vector(assetName))
+
+  private[http] def _web_route_alias_asset(
+    app: String,
+    assetPath: Vector[String]
+  ): IO[HResponse[IO]] =
     engine.webDescriptor.webRouteFor(Vector("web", app)) match {
       case Some(route) if route.remainingPath.isEmpty =>
-        _web_app_asset(route.target.normalizedComponent, route.target.normalizedApp, assetName)
+        _web_app_asset(route.target.normalizedComponent, route.target.normalizedApp, assetPath)
       case _ =>
-        _static_form_app(app, Vector("assets", assetName))
+        _static_form_app(app, "assets" +: assetPath)
     }
 
   private[http] def _component_web_app(
@@ -520,11 +535,7 @@ final class Http4sHttpServer(
     else
       _web_app_static_html_content(webAppName, page) match {
         case Some(content) =>
-          IO.pure(
-            HResponse[IO](HStatus.Ok)
-              .withEntity(content)
-              .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-          )
+          _html_content(content, Some(webAppName))
         case None =>
           _web_error_response(
             Some(webAppName),
@@ -549,216 +560,126 @@ final class Http4sHttpServer(
 
   private def _component_admin(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdmin(engine.runtimeSubsystem, app, engine.webDescriptor) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component admin not found"))
     }
 
   private def _component_admin_descriptor(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminDescriptor(engine.runtimeSubsystem, app, engine.webDescriptor) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component descriptor admin not found"))
     }
 
   private def _component_admin_entities(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminEntities(engine.runtimeSubsystem, app) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity admin not found"))
     }
 
   private def _component_admin_entity_type(req: HRequest[IO], app: String, entity: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminEntityType(engine.runtimeSubsystem, app, entity, _page_request(req), engine.webDescriptor, req.uri.query.params.toMap) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity type admin not found"))
     }
 
   private def _component_admin_entity_detail(req: HRequest[IO], app: String, entity: String, id: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminEntityDetail(engine.runtimeSubsystem, app, entity, id, engine.webDescriptor, req.uri.query.params.toMap) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity detail admin not found"))
     }
 
   private def _component_admin_entity_edit(req: HRequest[IO], app: String, entity: String, id: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminEntityEdit(engine.runtimeSubsystem, app, entity, id, values = req.uri.query.params.toMap, webDescriptor = engine.webDescriptor) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity edit admin not found"))
     }
 
   private def _component_admin_entity_new(app: String, entity: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminEntityNew(engine.runtimeSubsystem, app, entity, webDescriptor = engine.webDescriptor) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity new admin not found"))
     }
 
   private def _component_admin_data(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminData(engine.runtimeSubsystem, app) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data admin not found"))
     }
 
   private def _component_admin_data_type(req: HRequest[IO], app: String, data: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminDataType(engine.runtimeSubsystem, app, data, _page_request(req), engine.webDescriptor) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data type admin not found"))
     }
 
   private def _component_admin_data_detail(app: String, data: String, id: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminDataDetail(engine.runtimeSubsystem, app, data, id, engine.webDescriptor) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data detail admin not found"))
     }
 
   private def _component_admin_data_edit(app: String, data: String, id: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminDataEdit(engine.runtimeSubsystem, app, data, id, webDescriptor = engine.webDescriptor) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data edit admin not found"))
     }
 
   private def _component_admin_data_new(app: String, data: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminDataNew(engine.runtimeSubsystem, app, data, webDescriptor = engine.webDescriptor) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data new admin not found"))
     }
 
   private def _component_admin_views(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminViews(engine.runtimeSubsystem, app) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component view admin not found"))
     }
 
   private def _component_admin_view_detail(req: HRequest[IO], app: String, view: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminViewDetail(engine.runtimeSubsystem, app, view, _page_request(req), engine.webDescriptor) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component view detail admin not found"))
     }
 
   private def _component_admin_view_instance_detail(app: String, view: String, id: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminViewInstanceDetail(engine.runtimeSubsystem, app, view, id, engine.webDescriptor) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component view instance detail admin not found"))
     }
 
   private def _component_admin_aggregates(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminAggregates(engine.runtimeSubsystem, app) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component aggregate admin not found"))
     }
 
   private def _component_admin_aggregate_detail(req: HRequest[IO], app: String, aggregate: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminAggregateDetail(engine.runtimeSubsystem, app, aggregate, _page_request(req), engine.webDescriptor) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component aggregate detail admin not found"))
     }
 
   private def _component_admin_aggregate_instance_detail(app: String, aggregate: String, id: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentAdminAggregateInstanceDetail(engine.runtimeSubsystem, app, aggregate, id, engine.webDescriptor) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p)
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component aggregate instance detail admin not found"))
     }
@@ -768,12 +689,7 @@ final class Http4sHttpServer(
     page: Vector[String]
   ): IO[HResponse[IO]] =
     StaticFormAppRenderer.render(engine.runtimeSubsystem, app, page, engine.webDescriptor) match {
-      case Some(p) =>
-        IO.pure(
-          HResponse[IO](HStatus.Ok)
-            .withEntity(p.body)
-            .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
-        )
+      case Some(p) => _html(p, Some(app))
       case None =>
         _web_error_response(
           Some(app),
@@ -786,7 +702,7 @@ final class Http4sHttpServer(
   private def _form_index(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderFormIndex(engine.runtimeSubsystem, app, engine.webDescriptor) match {
       case Some(p) =>
-        _html(p)
+        _html(p, Some(app))
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Form App not found"))
     }
@@ -801,7 +717,7 @@ final class Http4sHttpServer(
       _forbidden_web(req, Some(app), Some(service), Some(operation))
     else StaticFormAppRenderer.renderOperationForm(engine.runtimeSubsystem, app, service, operation, engine.webDescriptor, req.uri.query.params.toMap) match {
       case Some(p) =>
-        _html(p)
+        _html(p, Some(app))
       case None =>
         IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form not found"))
     }
@@ -965,7 +881,7 @@ final class Http4sHttpServer(
                 Bag.text("Validation failed.", StandardCharsets.UTF_8)
               ), pageValues)
             ))
-            _html_status(page, HStatus.BadRequest).map { html =>
+            _html_status(page, HStatus.BadRequest, Some(app)).map { html =>
               RuntimeDashboardMetrics.recordHtmlRequest(
                 req.method.name,
                 req.uri.path.renderString,
@@ -1122,7 +1038,7 @@ final class Http4sHttpServer(
           _form_result_static_template(app, service, operation, res.code)
             .orElse(_form_descriptor(app, service, operation).flatMap(_.resultTemplate))
         )
-        _html(page).map { html =>
+        _html(page, Some(app)).map { html =>
           RuntimeDashboardMetrics.recordHtmlRequest(
             req.method.name,
             req.uri.path.renderString,
@@ -1568,7 +1484,7 @@ final class Http4sHttpServer(
       _form_result_static_template(app, service, operation, res.code)
         .orElse(_form_descriptor(app, service, operation).flatMap(_.resultTemplate))
     )
-    _html(page).map { html =>
+    _html(page, Some(app)).map { html =>
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
         req.uri.path.renderString,
@@ -1618,7 +1534,7 @@ final class Http4sHttpServer(
           _form_result_static_template(app, service, operation, res.code)
             .orElse(_form_descriptor(app, service, operation).flatMap(_.resultTemplate))
         )
-        html <- _html(page)
+        html <- _html(page, Some(app))
       } yield {
         RuntimeDashboardMetrics.recordHtmlRequest(
           req.method.name,
@@ -1759,12 +1675,12 @@ final class Http4sHttpServer(
             operation,
             engine.webDescriptor,
             _operation_form_values(form) ++ _error_values(response)
-          ).getOrElse(StaticFormAppRenderer.renderFormResult(properties)))
+          ).getOrElse(StaticFormAppRenderer.renderFormResult(properties)), Some(app))
         else
           _html(StaticFormAppRenderer.renderFormResult(
             properties,
             _form_result_static_template(app, service, operation, response.code).orElse(descriptor.flatMap(_.resultTemplate))
-          ))
+          ), Some(app))
     }
   }
 
@@ -1847,14 +1763,33 @@ final class Http4sHttpServer(
   private[http] def _web_app_asset_content(
     webAppName: String,
     assetName: String
-  ): Option[(String, MediaType)] =
+  ): Option[(Array[Byte], MediaType)] =
+    _web_app_asset_content(webAppName, Vector(assetName))
+
+  private[http] def _web_app_asset_content(
+    webAppName: String,
+    assetPath: Vector[String]
+  ): Option[(Array[Byte], MediaType)] =
     _web_resource_roots().view.flatMap { root =>
-      val path = Paths.get(
-        org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName),
-        "assets",
-        assetName
+      val path = _relative_path(
+        org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName) +:
+          "assets" +:
+          assetPath
       )
-      root.readText(path).map(_ -> _asset_media_type(assetName))
+      root.readBytes(path).map(_ -> _asset_media_type(assetPath.lastOption.getOrElse("")))
+    }.headOption
+
+  private[http] def _web_global_asset_content(
+    assetName: String
+  ): Option[(Array[Byte], MediaType)] =
+    _web_global_asset_content(Vector(assetName))
+
+  private[http] def _web_global_asset_content(
+    assetPath: Vector[String]
+  ): Option[(Array[Byte], MediaType)] =
+    _web_resource_roots().view.flatMap { root =>
+      val path = _relative_path("assets" +: assetPath)
+      root.readBytes(path).map(_ -> _asset_media_type(assetPath.lastOption.getOrElse("")))
     }.headOption
 
   private[http] def _web_app_static_html_content(
@@ -1914,6 +1849,61 @@ final class Http4sHttpServer(
   ): Boolean =
     assetName.nonEmpty && !assetName.contains("..") && !assetName.contains("/") && !assetName.contains("\\")
 
+  private def _safe_asset_path(
+    assetPath: Vector[String]
+  ): Boolean =
+    assetPath.nonEmpty && assetPath.forall(_safe_asset_name)
+
+  private def _relative_path(
+    segments: Vector[String]
+  ): Path =
+    Paths.get(segments.mkString("/"))
+
+  private def _web_path_segments(
+    req: org.http4s.Request[IO]
+  ): Vector[String] =
+    req.uri.path.renderString.split("/").toVector.filter(_.nonEmpty)
+
+  private def _web_global_asset_path(
+    req: org.http4s.Request[IO]
+  ): Option[Vector[String]] =
+    _web_path_segments(req) match {
+      case Vector("web", "assets", tail*) =>
+        Some(tail.toVector)
+      case _ =>
+        None
+    }
+
+  private def _web_component_asset_path(
+    req: org.http4s.Request[IO]
+  ): Option[(String, String, Vector[String])] =
+    _web_path_segments(req) match {
+      case Vector("web", component, webApp, "assets", tail*) =>
+        Some((component, webApp, tail.toVector))
+      case _ =>
+        None
+    }
+
+  private def _web_alias_asset_path(
+    req: org.http4s.Request[IO]
+  ): Option[(String, Vector[String])] =
+    _web_path_segments(req) match {
+      case Vector("web", app, "assets", tail*) =>
+        Some((app, tail.toVector))
+      case _ =>
+        None
+    }
+
+  private def _asset_response(
+    content: Array[Byte],
+    mediaType: MediaType
+  ): IO[HResponse[IO]] =
+    IO.pure(
+      HResponse[IO](HStatus.Ok)
+        .withEntity(content)
+        .withContentType(`Content-Type`(mediaType, None))
+    )
+
   private def _asset_media_type(
     assetName: String
   ): MediaType =
@@ -1922,8 +1912,18 @@ final class Http4sHttpServer(
       case x if x.endsWith(".js") => MediaType.application.javascript
       case x if x.endsWith(".json") => MediaType.application.json
       case x if x.endsWith(".html") => MediaType.text.html
+      case x if x.endsWith(".svg") => _media_type("image/svg+xml")
+      case x if x.endsWith(".png") => _media_type("image/png")
+      case x if x.endsWith(".jpg") || x.endsWith(".jpeg") => _media_type("image/jpeg")
+      case x if x.endsWith(".woff") => _media_type("font/woff")
+      case x if x.endsWith(".woff2") => _media_type("font/woff2")
       case _ => MediaType.text.plain
     }
+
+  private def _media_type(
+    value: String
+  ): MediaType =
+    MediaType.parse(value).fold(_ => MediaType.text.plain, identity)
 
   private[http] def _web_descriptor_config_root(): Option[WebResourceRoot] =
     RuntimeConfig.getString(engine.runtimeSubsystem.configuration, RuntimeConfig.WebDescriptorKey).map { value =>
@@ -2527,18 +2527,58 @@ final class Http4sHttpServer(
     StaticFormAppRenderer.isHiddenFormContextKey(key)
 
   private def _html(p: StaticFormAppRenderer.Page): IO[HResponse[IO]] =
+    _html(p, None)
+
+  private def _html(
+    p: StaticFormAppRenderer.Page,
+    appName: Option[String]
+  ): IO[HResponse[IO]] =
+    _html_content(p.body, appName)
+
+  private def _html_content(
+    body: String,
+    appName: Option[String]
+  ): IO[HResponse[IO]] =
     IO.pure(
       HResponse[IO](HStatus.Ok)
-        .withEntity(p.body)
+        .withEntity(_themed_html(body, appName))
         .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
     )
 
   private def _html_status(p: StaticFormAppRenderer.Page, status: HStatus): IO[HResponse[IO]] =
+    _html_status(p, status, None)
+
+  private def _html_status(
+    p: StaticFormAppRenderer.Page,
+    status: HStatus,
+    appName: Option[String]
+  ): IO[HResponse[IO]] =
     IO.pure(
       HResponse[IO](status)
-        .withEntity(p.body)
+        .withEntity(_themed_html(p.body, appName))
         .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
     )
+
+  private def _themed_html(
+    body: String,
+    appName: Option[String]
+  ): String = {
+    val descriptor = engine.webDescriptor
+    val baseAssets = appName
+      .map(name => descriptor.assets.merge(descriptor.appAssets(name)))
+      .getOrElse(descriptor.assets)
+    val themed = StaticFormAppLayout.completeThemeAssets(
+      body,
+      descriptor.themeFor(appName).toLayoutOptions
+    )
+    StaticFormAppLayout.completeDeclaredAssets(
+      themed,
+      StaticFormAppLayout.AssetCompletionOptions(
+        declaredCss = baseAssets.css,
+        declaredJs = baseAssets.js
+      )
+    )
+  }
 
   private def _json(p: StaticFormAppRenderer.Page): IO[HResponse[IO]] =
     IO.pure(

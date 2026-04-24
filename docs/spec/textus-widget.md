@@ -55,6 +55,44 @@ assets plus local Textus widget assets:
 Applications may add local CSS, but widget output must not depend on CDN access
 or a parallel CSS system.
 
+## Subsystem Theme CSS
+
+When multiple component-provided Web pages are composed into one application,
+the subsystem Web descriptor may declare a shared Bootstrap 5 theme. The theme
+is a presentation composition rule, not a component business contract.
+
+The canonical descriptor shape is:
+
+```yaml
+web:
+  theme:
+    name: example-brand
+    css:
+      - /web/assets/example-brand.css
+    variables:
+      primary: "#14532d"
+      body-bg: "#f7f4ec"
+      body-color: "#1f2933"
+```
+
+`theme.css` entries are inserted into HTML pages as stylesheet links. Theme
+variables are rendered as Bootstrap-compatible CSS custom properties on
+`:root`; keys that do not start with `--` are interpreted as Bootstrap
+variables by adding the `--bs-` prefix. For example, `primary` becomes
+`--bs-primary`.
+
+The runtime applies the subsystem theme to generated Web/manual/admin/form
+HTML pages and to component-owned static HTML pages returned through
+`/web/{component}/{app}` or descriptor aliases. Static component pages keep
+their own markup and may still declare local app CSS, but the subsystem theme
+is injected consistently so provider pages and application pages can share one
+visual language.
+
+Theme asset URLs are local Web assets. `/web/assets/{path}` resolves files from
+the subsystem Web resource root `assets/` directory or archive entry, including
+nested assets such as fonts and images. CDN themes are outside the default
+contract.
+
 ## Asset Auto-Completion
 
 Static Form App renderers complete widget assets for full HTML document

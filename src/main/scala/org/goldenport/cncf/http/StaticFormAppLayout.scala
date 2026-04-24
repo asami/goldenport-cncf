@@ -2,7 +2,7 @@ package org.goldenport.cncf.http
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppLayout {
@@ -13,6 +13,14 @@ object StaticFormAppLayout {
     declaredCss: Vector[String] = Vector.empty,
     declaredJs: Vector[String] = Vector.empty
   )
+  final case class ThemeOptions(
+    name: Option[String] = None,
+    css: Vector[String] = Vector.empty,
+    variables: Map[String, String] = Map.empty
+  ) {
+    def isEmpty: Boolean =
+      name.isEmpty && css.isEmpty && variables.isEmpty
+  }
 
   final case class Options(
     title: String,
@@ -106,6 +114,19 @@ object StaticFormAppLayout {
       _insert_js_asset_if_absent(z, src)
     }
   }
+
+  def completeThemeAssets(
+    html: String,
+    options: ThemeOptions
+  ): String =
+    if (options.isEmpty)
+      html
+    else {
+      val withCss = options.css.distinct.foldLeft(html) { (z, href) =>
+        _insert_css_asset_if_absent(z, href)
+      }
+      _insert_theme_variables_if_absent(withCss, options)
+    }
 
   def escape(value: String): String =
     value
@@ -215,6 +236,45 @@ object StaticFormAppLayout {
         s"""  <script src="${escape(asset)}"></script>
            |""".stripMargin
       )
+  }
+
+  private def _insert_theme_variables_if_absent(
+    html: String,
+    options: ThemeOptions
+  ): String =
+    if (options.variables.isEmpty || html.contains("data-textus-theme-vars"))
+      html
+    else
+      _insert_before(
+        html,
+        "</head>",
+        _theme_variables_style(options)
+      )
+
+  private def _theme_variables_style(
+    options: ThemeOptions
+  ): String = {
+    val name = options.name.getOrElse("default")
+    val vars = options.variables.toVector.sortBy(_._1).map {
+      case (key, value) =>
+        s"    ${_css_variable_name(key)}: ${escape(value)};"
+    }.mkString("\n")
+    s"""  <style data-textus-theme-vars="${escape(name)}">
+       |  :root {
+       |${vars}
+       |  }
+       |  </style>
+       |""".stripMargin
+  }
+
+  private def _css_variable_name(key: String): String = {
+    val normalized = key.trim
+    if (normalized.startsWith("--"))
+      normalized
+    else if (normalized.startsWith("bs-"))
+      s"--${normalized}"
+    else
+      s"--bs-${normalized}"
   }
 
   private def _has_declared_asset(

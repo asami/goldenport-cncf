@@ -285,8 +285,9 @@ descriptor for comparison and resolves component route placeholders such as
 `{component}` against the selected component, so operators can inspect the
 effective route for that component without leaving the component admin context.
 Completed descriptor JSON also exposes descriptor asset composition diagnostics:
-global assets, app assets, form assets, and the resolved asset lists used by
-component form indexes, operation input pages, and operation result pages.
+global assets, theme assets, app assets, form assets, and the resolved asset
+lists used by component form indexes, operation input pages, and operation
+result pages.
 The same information is rendered as Asset Composition tables before the raw
 JSON so operators can inspect configured scopes and completed page assets
 without reading the descriptor structure directly.
@@ -330,6 +331,9 @@ Lookup precedence is executable-speced as:
 
 Framework assets are served under `/web/assets/...` and are owned by the
 runtime. Bootstrap 5 and Textus widget local assets currently use this route.
+The same route also serves subsystem Web-root assets under `/web/assets/` so a
+SAR can provide a shared theme stylesheet such as `/web/assets/brand.css` and
+nested dependencies such as `/web/assets/fonts/brand.woff2`.
 
 Static Web app HTML should link framework assets through the framework route:
 
@@ -343,6 +347,30 @@ Static Web app HTML should link framework assets through the framework route:
 The framework asset route is stable across canonical component routes, SAR
 aliases, and implicit single-CAR aliases. Static pages must not use CDN URLs
 for baseline Bootstrap behavior or Textus widget behavior.
+
+The SAR Web Descriptor may declare a subsystem theme:
+
+```yaml
+web:
+  theme:
+    name: brand
+    css:
+      - /web/assets/brand.css
+    variables:
+      primary: "#14532d"
+      body-bg: "#f7f4ec"
+```
+
+The theme is applied as a Web composition concern. It is injected into
+generated Web/manual/admin/form HTML pages and into component-owned static HTML
+pages returned through canonical routes or SAR aliases. Theme variables are
+rendered as Bootstrap 5 CSS custom properties on `:root`; keys without a
+leading `--` are treated as Bootstrap variables by adding `--bs-`.
+
+Theme CSS is subsystem-wide by default. A Web app may add app-scoped theme CSS
+through `web.apps[].theme`; app theme settings merge after the subsystem theme
+so the common brand remains shared while a provider/application page can refine
+small local differences. App business logic must not depend on theme values.
 
 Static Form result rendering uses `web.assets` as composition input:
 

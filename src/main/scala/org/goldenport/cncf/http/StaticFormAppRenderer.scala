@@ -4671,6 +4671,7 @@ object StaticFormAppRenderer {
         "mode" -> Json.fromString(descriptor.auth.mode)
       ),
       "assets" -> _web_descriptor_assets_json(descriptor.assets),
+      "theme" -> _web_descriptor_theme_json(descriptor.theme),
       "assetComposition" -> (
         if (completed)
           _web_descriptor_asset_composition_json(descriptor, componentSegment)
@@ -4738,6 +4739,19 @@ object StaticFormAppRenderer {
       "autoComplete" -> Json.fromBoolean(assets.autoComplete),
       "css" -> Json.arr(assets.css.map(Json.fromString)*),
       "js" -> Json.arr(assets.js.map(Json.fromString)*)
+    )
+
+  private def _web_descriptor_theme_json(
+    theme: WebDescriptor.Theme
+  ): Json =
+    Json.obj(
+      "name" -> theme.name.map(Json.fromString).getOrElse(Json.Null),
+      "css" -> Json.arr(theme.css.map(Json.fromString)*),
+      "variables" -> Json.fromFields(
+        theme.variables.toVector.sortBy(_._1).map {
+          case (key, value) => key -> Json.fromString(value)
+        }
+      )
     )
 
   private def _web_descriptor_asset_composition_json(
@@ -5209,8 +5223,12 @@ object StaticFormAppRenderer {
     val forms = _web_descriptor_form_asset_entries(descriptor, componentSegment)
     val scopeRows =
       Vector(_web_descriptor_asset_scope_row("global", "web.assets", descriptor.assets)) ++
+        Vector(_web_descriptor_theme_scope_row("global", "web.theme", descriptor.theme)) ++
         descriptor.apps.map(app =>
           _web_descriptor_asset_scope_row("app", app.normalizedName, app.assets)
+        ) ++
+        descriptor.apps.map(app =>
+          _web_descriptor_theme_scope_row("app theme", app.normalizedName, app.theme)
         ) ++
         forms.map {
           case (selector, _, _, _, form) =>
@@ -5275,6 +5293,31 @@ object StaticFormAppRenderer {
        |  <td>${_web_descriptor_asset_url_list(assets.js)}</td>
        |</tr>""".stripMargin
 
+  private def _web_descriptor_theme_scope_row(
+    scope: String,
+    selector: String,
+    theme: WebDescriptor.Theme
+  ): String =
+    s"""<tr>
+       |  <td>${_escape(scope)}</td>
+       |  <td><code>${_escape(selector)}</code></td>
+       |  <td>true</td>
+       |  <td>${_web_descriptor_asset_url_list(theme.css)}${_web_descriptor_theme_variables(theme)}</td>
+       |  <td><span class="text-secondary">none</span></td>
+       |</tr>""".stripMargin
+
+  private def _web_descriptor_theme_variables(
+    theme: WebDescriptor.Theme
+  ): String =
+    if (theme.variables.isEmpty)
+      ""
+    else {
+      val vars = theme.variables.toVector.sortBy(_._1).map {
+        case (key, value) => s"${key}=${value}"
+      }.mkString(", ")
+      s"""<div><small class="text-secondary">variables: ${_escape(vars)}</small></div>"""
+    }
+
   private def _web_descriptor_resolved_asset_row(
     selector: String,
     page: String,
@@ -5303,6 +5346,7 @@ object StaticFormAppRenderer {
       "name" -> Json.fromString(app.name),
       "path" -> Json.fromString(app.path),
       "kind" -> Json.fromString(app.kind),
+      "theme" -> _web_descriptor_theme_json(app.theme),
       "assets" -> _web_descriptor_assets_json(app.assets)
     )
     val optionalFields = Vector(
