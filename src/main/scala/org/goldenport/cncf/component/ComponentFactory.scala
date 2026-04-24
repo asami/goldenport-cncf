@@ -36,7 +36,7 @@ import scala.util.Try
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Mar. 31, 2026
- * @version Apr. 22, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -390,8 +390,10 @@ final class ComponentFactory(
         storage = storage.copy(memoryRealm = Some(memoryRealm))
     }
 
-    val collection = new EntityCollection[Any](descriptor, storage)
-    entityspace.registerEntity(name, collection)
+    if (entityspace.entityOption[Any](name).isEmpty) {
+      val collection = new EntityCollection[Any](descriptor, storage)
+      entityspace.registerEntity(name, collection)
+    }
   }
 
   // Temporary entity bootstrap using service names.
@@ -421,8 +423,10 @@ final class ComponentFactory(
       )
       storage = storage.copy(memoryRealm = Some(memoryRealm))
 
-      val collection = new EntityCollection[Any](descriptor, storage)
-      entityspace.registerEntity(name, collection)
+      if (entityspace.entityOption[Any](name).isEmpty) {
+        val collection = new EntityCollection[Any](descriptor, storage)
+        entityspace.registerEntity(name, collection)
+      }
     }
   }
 
@@ -561,6 +565,8 @@ final class ComponentFactory(
     val custombindings = component.factory.toVector.flatMap(_.aggregate_collection_bindings(component))
     names.foreach { name =>
       custombindings.find(_.aggregate_name == name) match {
+        case _ if aggregatespace.collectionOption[Any](name).isDefined =>
+          ()
         case Some(binding) =>
           aggregatespace.register(name, binding.collection.asInstanceOf[AggregateCollection[Any]])
         case None =>
@@ -589,15 +595,17 @@ final class ComponentFactory(
     val names = _view_collection_names(component)
     names.foreach { name =>
       _resolve_view_definition(component, name).foreach { d =>
-        val builder = _default_view_builder(component, entityspace, d.entityName)
-        val collection = new ViewCollection[Any](builder)
-        val browser = _default_view_browser(component, entityspace, d.entityName, collection)
-        viewspace.register(name, collection, browser)
-        d.viewNames.distinct.foreach { viewname =>
-          viewspace.registerView(name, viewname, _default_named_view_browser(component, entityspace, d.entityName, viewname, collection))
-        }
-        d.queries.distinctBy(_.name).foreach { q =>
-          viewspace.registerView(name, q.name, _default_view_query_browser(component, entityspace, d.entityName, collection, q))
+        if (viewspace.collectionOption[Any](name).isEmpty) {
+          val builder = _default_view_builder(component, entityspace, d.entityName)
+          val collection = new ViewCollection[Any](builder)
+          val browser = _default_view_browser(component, entityspace, d.entityName, collection)
+          viewspace.register(name, collection, browser)
+          d.viewNames.distinct.foreach { viewname =>
+            viewspace.registerView(name, viewname, _default_named_view_browser(component, entityspace, d.entityName, viewname, collection))
+          }
+          d.queries.distinctBy(_.name).foreach { q =>
+            viewspace.registerView(name, q.name, _default_view_query_browser(component, entityspace, d.entityName, collection, q))
+          }
         }
       }
     }
@@ -1472,7 +1480,12 @@ final class ComponentFactory(
         _generated_entity_module(component, entityname)
           .flatMap(_extract_collection_id)
       }
-      .getOrElse(EntityCollectionId("sys", "sys", entityname))
+      .getOrElse(EntityCollectionId("sys", "sys", _entity_collection_id_part(entityname)))
+
+  private def _entity_collection_id_part(
+    name: String
+  ): String =
+    NamingConventions.toNormalizedSegment(name).replace('-', '_')
 
   private def _extract_schema(
     module: AnyRef

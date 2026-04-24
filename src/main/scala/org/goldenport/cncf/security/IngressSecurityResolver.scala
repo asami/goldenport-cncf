@@ -346,40 +346,30 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   private def _production_runtime_context_from_base(
     ctx: ExecutionContext
   ): ExecutionContext =
-    GlobalRuntimeContext.current match {
+    _global_runtime_context(ctx.cncfCore.scope) match {
       case Some(global) =>
-        lazy val context0: ExecutionContext = ExecutionContext.withRuntimeContext(ctx, runtime)
-        lazy val context: ExecutionContext =
-          global.commandExecutionMode.orElse(global.config.commandExecutionMode) match {
-            case Some(mode) =>
-              ExecutionContext.withFrameworkCommandExecutionMode(context0, mode)
-            case None =>
-              context0
-          }
-        lazy val runtime: RuntimeContext = new RuntimeContext(
-          core = ScopeContext.Core(
-            kind = ScopeKind.Runtime,
-            name = "ingress-security",
-            parent = Some(ctx.cncfCore.scope),
-            observabilityContext = ctx.observability,
-            httpDriverOption = Some(global.config.httpDriver),
-            datastore = Some(DataStoreContext(global.config.dataStoreSpace)),
-            entitystore = Some(EntityStoreContext(global.config.entityStoreSpace))
-          ),
-          unitOfWorkSupplier = () => new UnitOfWork(context),
-          unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
-            def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
-              new UnitOfWorkInterpreter(new UnitOfWork(context)).interpret(fa)
-          },
-          commitAction = _ => (),
-          abortAction = _ => (),
-          disposeAction = _ => (),
-          token = "ingress-security",
-          operationMode = global.config.operationMode
-        )
-        context
+        global.commandExecutionMode.orElse(global.config.commandExecutionMode) match {
+          case Some(mode) =>
+            ExecutionContext.withFrameworkCommandExecutionMode(ctx, mode)
+          case None =>
+            ctx
+        }
       case None =>
         ctx
+    }
+
+  @annotation.tailrec
+  private def _global_runtime_context(
+    scope: ScopeContext
+  ): Option[GlobalRuntimeContext] =
+    scope match {
+      case m: GlobalRuntimeContext =>
+        Some(m)
+      case other =>
+        other.parent match {
+          case Some(parent) => _global_runtime_context(parent)
+          case None => None
+        }
     }
 
   private def _minimal_trace_metadata(

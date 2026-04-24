@@ -125,6 +125,7 @@ object ResolvedSecurityWiring {
       }
     }
     val explicitMessageDeliveryKeys = explicitMessageDelivery.map(x => (_normalize(x.componentName), _normalize(x.name))).toSet
+    val explicitMessageDeliveryProviderNames = explicitMessageDelivery.map(x => _normalize(x.name)).toSet
     val conventionMessageDelivery = components.flatMap { component =>
       component.messageDeliveryProviders.map { provider =>
         ResolvedMessageDeliveryProviderBinding(
@@ -134,7 +135,10 @@ object ResolvedSecurityWiring {
           provider = Some(provider)
         )
       }
-    }.filterNot(x => explicitMessageDeliveryKeys.contains((_normalize(x.componentName), _normalize(x.name))))
+    }.filterNot { x =>
+      explicitMessageDeliveryKeys.contains((_normalize(x.componentName), _normalize(x.name))) ||
+        explicitMessageDeliveryProviderNames.contains(_normalize(x.name))
+    }
     ResolvedSecurityWiring(
       authentication = ResolvedAuthenticationWiring(
         conventionEnabled = conventionEnabled,
@@ -167,7 +171,11 @@ object ResolvedSecurityWiring {
     componentName: String,
     providerName: String
   ): Option[MessageDeliveryProvider] =
-    components.find(c => _normalize(_component_runtime_name(c)) == _normalize(componentName)).flatMap(_.messageDeliveryProviders.find(p => _normalize(p.name) == _normalize(providerName)))
+    components.find(c => _normalize(_component_runtime_name(c)) == _normalize(componentName)).
+      flatMap(_.messageDeliveryProviders.find(p => _normalize(p.name) == _normalize(providerName))).
+      orElse {
+        components.iterator.flatMap(_.messageDeliveryProviders).find(p => _normalize(p.name) == _normalize(providerName))
+      }
 
   private def _is_enabled(value: String): Boolean =
     value.trim.toLowerCase match {

@@ -9,7 +9,8 @@ import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.record.Record
 import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall, QueryAction, ResourceAccess}
 import cats.~>
-import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, EntityStoreContext, ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeKind}
+import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, EntityStoreContext, ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.backend.collaborator.Collaborator
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.{EventEngine, EventStore, ReceptionInput}
@@ -26,7 +27,7 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
  *  version Mar. 31, 2026
- * @version Apr. 22, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -324,6 +325,7 @@ case class ComponentLogic(
     driver: HttpDriver
   ): RuntimeContext = {
     val parent = component.scopeContext
+    val global = _global_runtime_context(parent)
     val core = RuntimeContext.core(
       name = "component-runtime",
       parent = Some(parent),
@@ -337,7 +339,7 @@ case class ComponentLogic(
       def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
         new UnitOfWorkInterpreter(uowsupplier()).interpret(fa)
     }
-    new RuntimeContext(
+    val runtime = new RuntimeContext(
       core = core,
       unitOfWorkSupplier = uowsupplier,
       unitOfWorkInterpreterFn = consequenceInterpreter,
@@ -351,14 +353,26 @@ case class ComponentLogic(
       },
       disposeAction = _ => (),
       token = "component-runtime-context",
-      operationMode = GlobalRuntimeContext.current
+      operationMode = global
         .map(_.config.operationMode)
-        .getOrElse(org.goldenport.cncf.config.RuntimeConfig.DefaultOperationMode),
+        .getOrElse(RuntimeConfig.DefaultOperationMode),
       transitionValidationHook = new PlannedTransitionValidationHook(
         component.stateMachinePlannerProvider
       )
     )
+    global.foreach(g => runtime.setResolvedParameters(g.resolvedParameters))
+    runtime
   }
+
+  private def _global_runtime_context(
+    scope: ScopeContext
+  ): Option[GlobalRuntimeContext] =
+    scope match {
+      case m: GlobalRuntimeContext =>
+        Some(m)
+      case other =>
+        other.parent.flatMap(_global_runtime_context)
+    }
 
   private def _fallback_http_driver_(): HttpDriver =
     new HttpDriver {

@@ -36,9 +36,13 @@ object ComponentProvider {
       def className: String = factory.getClass.getName
 
       def createPrimary(params: ComponentCreate): Consequence[Component] =
-        factory.create(params).participants.headOption match {
-          case Some(comp) => Consequence.success(comp)
-          case None => Consequence.componentInvalid(s"factory ${className} produced no components")
+        _catch_non_fatal {
+          factory.create(params)
+        }.flatMap { bundle =>
+          bundle.participants.headOption match {
+            case Some(comp) => Consequence.success(comp)
+            case None => Consequence.componentInvalid(s"factory ${className} produced no components")
+          }
         }
     }
 
@@ -226,6 +230,7 @@ object ComponentProvider {
     try {
       Consequence.success(f)
     } catch {
+      case e: LinkageError => Consequence.componentInvalid(e)
       case NonFatal(e) => Consequence.componentInvalid(e)
     }
   }

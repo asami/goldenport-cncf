@@ -26,7 +26,7 @@ import org.simplemodeling.model.directive.Condition
 
 /*
  * @since   Mar. 29, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallEntityAccessMetricsSpec
@@ -275,7 +275,7 @@ final class ActionCallEntityAccessMetricsSpec
         val ctx = _execution_context(datastorespace, entitystorespace)
         val cid = _cid("person_metrics_create_search")
         val component = TestComponentFactory.create("create_search", Protocol.empty)
-        component.entitySpace.registerEntity(cid.name, _empty_collection(cid))
+        component.entitySpace.registerEntity(cid.name, _empty_resident_collection(cid))
         val probe = _component_scoped_probe(component, ctx)
 
         When("creating through the unit-of-work entity-store path")
@@ -544,6 +544,18 @@ final class ActionCallEntityAccessMetricsSpec
   private def _empty_collection(
     cid: EntityCollectionId
   )(using EntityPersistent[TestPerson]): EntityCollection[TestPerson] = {
+    _empty_collection(cid, None)
+  }
+
+  private def _empty_resident_collection(
+    cid: EntityCollectionId
+  )(using EntityPersistent[TestPerson]): EntityCollection[TestPerson] =
+    _empty_collection(cid, Some(WorkingSetPolicy.ResidentAll))
+
+  private def _empty_collection(
+    cid: EntityCollectionId,
+    workingsetpolicy: Option[WorkingSetPolicy]
+  )(using EntityPersistent[TestPerson]): EntityCollection[TestPerson] = {
     val storerealm = new EntityRealm[TestPerson](
       entityName = cid.name,
       loader = EntityLoader[TestPerson](_ => None),
@@ -559,6 +571,7 @@ final class ActionCallEntityAccessMetricsSpec
         entityName = cid.name,
         memoryPolicy = EntityMemoryPolicy.LoadToMemory,
         workingSet = None,
+        workingSetPolicy = workingsetpolicy,
         partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
         maxPartitions = 4,
         maxEntitiesPerPartition = 16

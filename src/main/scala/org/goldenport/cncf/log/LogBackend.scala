@@ -8,7 +8,8 @@ import scala.collection.mutable.ListBuffer
 
 /*
  * @since   Jan.  7, 2026
- * @version Mar. 13, 2026
+ *  version Mar. 13, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 trait LogBackend {
@@ -137,10 +138,10 @@ object LogBackend {
 
 object LogBackendHolder {
   @volatile private var _backend: Option[LogBackend] =
-    Some(LogBackend.BootstrapLogBackend(LogBackend.StdoutBackend))
+    Some(LogBackend.BootstrapLogBackend(LogBackend.NopLogBackend))
 
   def reset(): Unit =
-    _backend = Some(LogBackend.BootstrapLogBackend(LogBackend.StdoutBackend))
+    _backend = Some(LogBackend.BootstrapLogBackend(LogBackend.NopLogBackend))
 
   def install(backend: LogBackend): Unit = {
     val old = _backend

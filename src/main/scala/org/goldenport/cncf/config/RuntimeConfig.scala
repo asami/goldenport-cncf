@@ -18,7 +18,7 @@ import org.goldenport.cncf.observability.ObservabilityEngine
  *  version Jan. 30, 2026
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -160,6 +160,11 @@ object RuntimeConfig {
         case None =>
           RuntimeDefaults.defaultLogBackend(mode)
       }
+    } match {
+      case backend if _is_test_runtime && _is_console_log_backend(backend) =>
+        LogBackend.NopLogBackend
+      case backend =>
+        backend
     }
     val loglevel = {
       val name = _get_string(configuration, LogLevelKey)
@@ -198,6 +203,22 @@ object RuntimeConfig {
       executionHistoryConfig = executionHistoryConfig
     )
   }
+
+  private def _is_console_log_backend(
+    backend: LogBackend
+  ): Boolean =
+    backend == LogBackend.StdoutBackend || backend == LogBackend.StderrBackend
+
+  private def _is_test_runtime: Boolean =
+    _is_truthy(sys.props.get("textus.test"))
+
+  private def _is_truthy(
+    value: Option[String]
+  ): Boolean =
+    value.exists { v =>
+      val normalized = v.trim.toLowerCase(java.util.Locale.ROOT)
+      normalized == "true" || normalized == "1" || normalized == "yes" || normalized == "on"
+    }
 
   def create(conf: ResolvedConfiguration): Consequence[RuntimeConfig] = Consequence {
     from(conf)

@@ -680,7 +680,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val edit = StaticFormAppRenderer.renderComponentAdminEntityEdit(subsystem, componentName, entityPath, recordId).map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
       list should include ("notice_1")
-      list should include ("<th>id</th><th>title</th><th>author</th><th>Actions</th>")
+      list should include ("<th>id</th><th>shortid</th><th>title</th><th>author</th><th>Actions</th>")
       list should include ("class=\"btn-group btn-group-sm\"")
       list should include ("board update")
       list should include ("alice")
@@ -1067,7 +1067,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         .map(_.body)
         .getOrElse(fail("component entity detail admin is missing"))
 
-      list should include ("<th>id</th><th>senderName</th><th>recipientName</th><th>subject</th><th>body</th><th>Actions</th>")
+      list should include ("<th>id</th><th>shortid</th><th>senderName</th><th>recipientName</th><th>subject</th><th>body</th><th>Actions</th>")
       list should include ("board update")
       list should not include ("<th>title</th>")
       list should not include ("<th>content</th>")
@@ -2341,7 +2341,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("notice")
       html should include ("notice:notice")
       html should include ("Read result")
-      html should include ("<th>id</th><th>label</th><th>status</th><th>Actions</th>")
+      html should include ("<th>id</th><th>Short ID</th><th>label</th><th>status</th><th>Actions</th>")
       html should include ("notice_1")
       html should include ("/web/notice-board/admin/aggregates/notice-aggregate/notice_1")
       html should include ("Result pages")
@@ -3602,10 +3602,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       json.hcursor.downField("submitPath").as[String].toOption shouldBe Some("/form/notice-board/admin/entities/notice/create")
       json.hcursor.downField("actions").downN(5).downField("path").as[String].toOption shouldBe Some("/form/notice-board/admin/entities/notice/{id}/update")
       fields.downN(0).downField("name").as[String].toOption shouldBe Some("id")
-      fields.downN(1).downField("name").as[String].toOption shouldBe Some("body")
-      fields.downN(1).downField("label").as[String].toOption shouldBe Some("Notice body")
-      fields.downN(1).downField("type").as[String].toOption shouldBe Some("textarea")
-      fields.downN(1).downField("help").as[String].toOption shouldBe Some("Notice body shown on the board.")
+      fields.downN(1).downField("name").as[String].toOption shouldBe Some("shortid")
+      fields.downN(2).downField("name").as[String].toOption shouldBe Some("body")
+      fields.downN(2).downField("label").as[String].toOption shouldBe Some("Notice body")
+      fields.downN(2).downField("type").as[String].toOption shouldBe Some("textarea")
+      fields.downN(2).downField("help").as[String].toOption shouldBe Some("Notice body shown on the board.")
     }
 
     "serve admin entity update form definition API from detail view fields" in {
@@ -3984,7 +3985,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       response.status.code shouldBe 200
       json.hcursor.downField("source").as[String].toOption shouldBe Some("Schema")
-      _json_field_names(fields) shouldBe Vector("id", "label", "note")
+      _json_field_names(fields) shouldBe Vector("id", "shortid", "label", "note")
     }
 
     "serve admin view form definition API from resolved view schema" in {
@@ -4045,7 +4046,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       response.status.code shouldBe 200
       json.hcursor.downField("source").as[String].toOption shouldBe Some("Schema")
-      _json_field_names(fields) shouldBe Vector("id", "label", "status")
+      _json_field_names(fields) shouldBe Vector("id", "shortid", "label", "status")
     }
 
     "serve admin aggregate form definition API from resolved aggregate schema" in {

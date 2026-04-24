@@ -72,6 +72,8 @@ lazy val root = project
     Test / fork := false,
     Test / parallelExecution := false,
     Test / classLoaderLayeringStrategy := ClassLoaderLayeringStrategy.Flat,
+    Test / javaOptions += "-Dtextus.test=true",
+    (Test / test / testOptions) += Tests.Setup(() => System.setProperty("textus.test", "true")),
     (Test / test / testOptions) += Tests.Argument(TestFrameworks.ScalaTest, "-l", "org.goldenport.tags.ManualSpec"),
     Test / testOnly / fork := true,
     Test / testOnly / testOptions := Seq.empty

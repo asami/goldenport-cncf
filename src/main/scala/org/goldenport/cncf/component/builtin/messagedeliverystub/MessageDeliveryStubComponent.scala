@@ -6,6 +6,7 @@ import scala.collection.concurrent.TrieMap
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.log.LogBackendHolder
 import org.goldenport.cncf.messagedelivery.{DeliveryChannel, UnifiedMessage, MessageDeliveryProvider, MessageDeliveryResult}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -15,7 +16,7 @@ import org.goldenport.protocol.spec.ServiceDefinitionGroup
  * Built-in stub message-delivery provider for local/test use.
  *
  * @since   Apr. 23, 2026
- * @version Apr. 23, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 class MessageDeliveryStubComponent() extends Component
@@ -82,7 +83,10 @@ object MessageDeliveryStubComponent:
         acceptedAt = now
       )
       _deliveries.update(providerMessageId, delivery)
-      println(s"[message-delivery-stub] channel=${message.channel.toString.toLowerCase(java.util.Locale.ROOT)} recipient=${message.recipient} subject=${message.subject.getOrElse("")} providerMessageId=$providerMessageId")
+      LogBackendHolder.backend.foreach(_.log(
+        "info",
+        s"[message-delivery-stub] channel=${message.channel.toString.toLowerCase(java.util.Locale.ROOT)} recipient=${message.recipient} subject=${message.subject.getOrElse("")} providerMessageId=$providerMessageId"
+      ))
       Consequence.success(
         MessageDeliveryResult(
           accepted = true,
