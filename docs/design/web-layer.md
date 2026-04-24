@@ -671,6 +671,30 @@ This preserves compatibility with stores where count is expensive or
 effectively unavailable. Optional degradation should return a reason/warning
 for HTML display rather than pretending that a total exists.
 
+## Structured Error Display
+
+Web, Form API, and REST error presentation is derived from the core
+`Consequence` / `Conclusion` model. CNCF does not define an independent
+application error-code hierarchy for these surfaces.
+
+The operational error code is the detail code carried by `Conclusion`. If a
+legacy boundary has only an HTTP status and message, CNCF may emit an explicit
+fallback code for compatibility, but the normative operational code source is
+`Conclusion`.
+
+HTML error pages use a two-layer presentation:
+
+- The primary page content shows a user-facing message and the operational
+  error code.
+- In non-production operation modes, a dedicated page-bottom debug area renders
+  structured error details as YAML.
+- In production operation mode, raw structured diagnostics, exception text, and
+  debug YAML are not rendered on the page.
+
+Form API and REST failures expose the same error projection as a structured
+envelope for JSON/YAML clients while preserving plain-text fallback behavior for
+legacy clients.
+
 ## Authorization
 
 Web authorization is not Web-only. Command, server, client, REST, Web HTML, and

@@ -24,10 +24,11 @@ import org.http4s.multipart.Multipart
 import org.http4s.server.websocket.WebSocketBuilder2
 import org.http4s.websocket.WebSocketFrame
 import org.goldenport.record.Record
+import org.goldenport.Conclusion
 import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
-import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.observability.{DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
@@ -40,7 +41,7 @@ import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
- * @version Apr. 23, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -131,47 +132,47 @@ final class Http4sHttpServer(
       case req @ POST -> Root / "web" / "system" / "jobs" / jobId / "await" =>
         _system_job_await(req, jobId)
       case req @ GET -> Root / "web" / "system" / "admin" =>
-        if (_is_web_authorized("system", "admin", "index", Some(req))) _system_admin() else _forbidden()
+        if (_is_web_authorized("system", "admin", "index", Some(req))) _system_admin() else _forbidden_web(req, Some("system"), Some("admin"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "admin" / "descriptor" =>
-        if (_is_web_authorized("system", "admin", "descriptor", Some(req))) _system_admin_descriptor() else _forbidden()
+        if (_is_web_authorized("system", "admin", "descriptor", Some(req))) _system_admin_descriptor() else _forbidden_web(req, Some("system"), Some("admin"), Some("descriptor"))
       case GET -> Root / "web" / app / "dashboard" / "state" =>
         _dashboard_state(Some(app))
       case req @ GET -> Root / "web" / app / "admin" =>
-        if (_is_web_authorized(app, "admin", "index", Some(req))) _component_admin(app) else _forbidden()
+        if (_is_web_authorized(app, "admin", "index", Some(req))) _component_admin(app) else _forbidden_web(req, Some(app), Some("admin"), Some("index"))
       case req @ GET -> Root / "web" / app / "admin" / "descriptor" =>
-        if (_is_web_authorized(app, "admin", "descriptor", Some(req))) _component_admin_descriptor(app) else _forbidden()
+        if (_is_web_authorized(app, "admin", "descriptor", Some(req))) _component_admin_descriptor(app) else _forbidden_web(req, Some(app), Some("admin"), Some("descriptor"))
       case req @ GET -> Root / "web" / app / "admin" / "entities" =>
-        if (_is_web_authorized(app, "admin.entities", "index", Some(req))) _component_admin_entities(app) else _forbidden()
+        if (_is_web_authorized(app, "admin.entities", "index", Some(req))) _component_admin_entities(app) else _forbidden_web(req, Some(app), Some("admin.entities"), Some("index"))
       case req @ GET -> Root / "web" / app / "admin" / "entities" / entity =>
-        if (_is_web_authorized(app, "admin.entities", entity, Some(req))) _component_admin_entity_type(req, app, entity) else _forbidden()
+        if (_is_web_authorized(app, "admin.entities", entity, Some(req))) _component_admin_entity_type(req, app, entity) else _forbidden_web(req, Some(app), Some("admin.entities"), Some(entity))
       case req @ GET -> Root / "web" / app / "admin" / "entities" / entity / "new" =>
-        if (_is_web_authorized(app, "admin.entities", entity, Some(req))) _component_admin_entity_new(app, entity) else _forbidden()
+        if (_is_web_authorized(app, "admin.entities", entity, Some(req))) _component_admin_entity_new(app, entity) else _forbidden_web(req, Some(app), Some("admin.entities"), Some(entity))
       case req @ GET -> Root / "web" / app / "admin" / "entities" / entity / id / "edit" =>
-        if (_is_web_authorized(app, "admin.entities", entity, Some(req))) _component_admin_entity_edit(req, app, entity, id) else _forbidden()
+        if (_is_web_authorized(app, "admin.entities", entity, Some(req))) _component_admin_entity_edit(req, app, entity, id) else _forbidden_web(req, Some(app), Some("admin.entities"), Some(entity))
       case req @ GET -> Root / "web" / app / "admin" / "entities" / entity / id =>
-        if (_is_web_authorized(app, "admin.entities", entity, Some(req))) _component_admin_entity_detail(req, app, entity, id) else _forbidden()
+        if (_is_web_authorized(app, "admin.entities", entity, Some(req))) _component_admin_entity_detail(req, app, entity, id) else _forbidden_web(req, Some(app), Some("admin.entities"), Some(entity))
       case req @ GET -> Root / "web" / app / "admin" / "data" =>
-        if (_is_web_authorized(app, "admin.data", "index", Some(req))) _component_admin_data(app) else _forbidden()
+        if (_is_web_authorized(app, "admin.data", "index", Some(req))) _component_admin_data(app) else _forbidden_web(req, Some(app), Some("admin.data"), Some("index"))
       case req @ GET -> Root / "web" / app / "admin" / "data" / data =>
-        if (_is_web_authorized(app, "admin.data", data, Some(req))) _component_admin_data_type(req, app, data) else _forbidden()
+        if (_is_web_authorized(app, "admin.data", data, Some(req))) _component_admin_data_type(req, app, data) else _forbidden_web(req, Some(app), Some("admin.data"), Some(data))
       case req @ GET -> Root / "web" / app / "admin" / "data" / data / "new" =>
-        if (_is_web_authorized(app, "admin.data", data, Some(req))) _component_admin_data_new(app, data) else _forbidden()
+        if (_is_web_authorized(app, "admin.data", data, Some(req))) _component_admin_data_new(app, data) else _forbidden_web(req, Some(app), Some("admin.data"), Some(data))
       case req @ GET -> Root / "web" / app / "admin" / "data" / data / id / "edit" =>
-        if (_is_web_authorized(app, "admin.data", data, Some(req))) _component_admin_data_edit(app, data, id) else _forbidden()
+        if (_is_web_authorized(app, "admin.data", data, Some(req))) _component_admin_data_edit(app, data, id) else _forbidden_web(req, Some(app), Some("admin.data"), Some(data))
       case req @ GET -> Root / "web" / app / "admin" / "data" / data / id =>
-        if (_is_web_authorized(app, "admin.data", data, Some(req))) _component_admin_data_detail(app, data, id) else _forbidden()
+        if (_is_web_authorized(app, "admin.data", data, Some(req))) _component_admin_data_detail(app, data, id) else _forbidden_web(req, Some(app), Some("admin.data"), Some(data))
       case req @ GET -> Root / "web" / app / "admin" / "aggregates" =>
-        if (_is_web_authorized(app, "admin.aggregates", "index", Some(req))) _component_admin_aggregates(app) else _forbidden()
+        if (_is_web_authorized(app, "admin.aggregates", "index", Some(req))) _component_admin_aggregates(app) else _forbidden_web(req, Some(app), Some("admin.aggregates"), Some("index"))
       case req @ GET -> Root / "web" / app / "admin" / "aggregates" / aggregate / id =>
-        if (_is_web_authorized(app, "admin.aggregates", aggregate, Some(req))) _component_admin_aggregate_instance_detail(app, aggregate, id) else _forbidden()
+        if (_is_web_authorized(app, "admin.aggregates", aggregate, Some(req))) _component_admin_aggregate_instance_detail(app, aggregate, id) else _forbidden_web(req, Some(app), Some("admin.aggregates"), Some(aggregate))
       case req @ GET -> Root / "web" / app / "admin" / "aggregates" / aggregate =>
-        if (_is_web_authorized(app, "admin.aggregates", aggregate, Some(req))) _component_admin_aggregate_detail(req, app, aggregate) else _forbidden()
+        if (_is_web_authorized(app, "admin.aggregates", aggregate, Some(req))) _component_admin_aggregate_detail(req, app, aggregate) else _forbidden_web(req, Some(app), Some("admin.aggregates"), Some(aggregate))
       case req @ GET -> Root / "web" / app / "admin" / "views" =>
-        if (_is_web_authorized(app, "admin.views", "index", Some(req))) _component_admin_views(app) else _forbidden()
+        if (_is_web_authorized(app, "admin.views", "index", Some(req))) _component_admin_views(app) else _forbidden_web(req, Some(app), Some("admin.views"), Some("index"))
       case req @ GET -> Root / "web" / app / "admin" / "views" / view / id =>
-        if (_is_web_authorized(app, "admin.views", view, Some(req))) _component_admin_view_instance_detail(app, view, id) else _forbidden()
+        if (_is_web_authorized(app, "admin.views", view, Some(req))) _component_admin_view_instance_detail(app, view, id) else _forbidden_web(req, Some(app), Some("admin.views"), Some(view))
       case req @ GET -> Root / "web" / app / "admin" / "views" / view =>
-        if (_is_web_authorized(app, "admin.views", view, Some(req))) _component_admin_view_detail(req, app, view) else _forbidden()
+        if (_is_web_authorized(app, "admin.views", view, Some(req))) _component_admin_view_detail(req, app, view) else _forbidden_web(req, Some(app), Some("admin.views"), Some(view))
       case GET -> Root / "web" / app / "manual" =>
         _component_manual(app)
       case GET -> Root / "web" / app / "manual" / service =>
@@ -245,7 +246,7 @@ final class Http4sHttpServer(
           val started = System.nanoTime()
           for {
             core <- _to_http_request(req, Some(_rest_execution_path(req)))
-            res <- _to_http_response(execute(core))
+            res <- _to_http_response(execute(core), Some(req))
           } yield {
             RuntimeDashboardMetrics.recordHtmlRequest(
               req.method.name,
@@ -776,7 +777,7 @@ final class Http4sHttpServer(
     operation: String
   ): IO[HResponse[IO]] =
     if (!_is_web_authorized(app, service, operation, Some(req)))
-      _forbidden()
+      _forbidden_web(req, Some(app), Some(service), Some(operation))
     else StaticFormAppRenderer.renderOperationForm(engine.runtimeSubsystem, app, service, operation, engine.webDescriptor, req.uri.query.params.toMap) match {
       case Some(p) =>
         _html(p)
@@ -791,15 +792,15 @@ final class Http4sHttpServer(
     operation: String
   ): IO[HResponse[IO]] =
     if (!_is_form_enabled(app, service, operation)) {
-      IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form API not found"))
+      _not_found_api_response(req, "Operation form API not found", Some(app), Some(service), Some(operation))
     } else if (!_is_web_authorized(app, service, operation, Some(req))) {
-      _forbidden()
+      _forbidden_api(req, Some(app), Some(service), Some(operation))
     } else {
       StaticFormAppRenderer.renderOperationFormDefinition(engine.runtimeSubsystem, app, service, operation, engine.webDescriptor) match {
         case Some(p) =>
           _json(p)
         case None =>
-          IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form API not found"))
+          _not_found_api_response(req, "Operation form API not found", Some(app), Some(service), Some(operation))
       }
     }
 
@@ -809,13 +810,13 @@ final class Http4sHttpServer(
     entity: String
   ): IO[HResponse[IO]] =
     if (!_is_web_authorized(app, "admin.entities", entity, Some(req))) {
-      _forbidden()
+      _forbidden_api(req, Some(app), Some("admin.entities"), Some(entity))
     } else {
       StaticFormAppRenderer.renderComponentAdminEntityFormDefinition(engine.runtimeSubsystem, app, entity, engine.webDescriptor) match {
         case Some(p) =>
           _json(p)
         case None =>
-          IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity form API not found"))
+          _not_found_api_response(req, "Component entity form API not found", Some(app), Some("admin.entities"), Some(entity))
       }
     }
 
@@ -826,13 +827,13 @@ final class Http4sHttpServer(
     id: String
   ): IO[HResponse[IO]] =
     if (!_is_web_authorized(app, "admin.entities", entity, Some(req))) {
-      _forbidden()
+      _forbidden_api(req, Some(app), Some("admin.entities"), Some(entity))
     } else {
       StaticFormAppRenderer.renderComponentAdminEntityUpdateFormDefinition(engine.runtimeSubsystem, app, entity, id, engine.webDescriptor) match {
         case Some(p) =>
           _json(p)
         case None =>
-          IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component entity update form API not found"))
+          _not_found_api_response(req, "Component entity update form API not found", Some(app), Some("admin.entities"), Some(entity))
       }
     }
 
@@ -842,13 +843,13 @@ final class Http4sHttpServer(
     data: String
   ): IO[HResponse[IO]] =
     if (!_is_web_authorized(app, "admin.data", data, Some(req))) {
-      _forbidden()
+      _forbidden_api(req, Some(app), Some("admin.data"), Some(data))
     } else {
       StaticFormAppRenderer.renderComponentAdminDataFormDefinition(engine.runtimeSubsystem, app, data, engine.webDescriptor) match {
         case Some(p) =>
           _json(p)
         case None =>
-          IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data form API not found"))
+          _not_found_api_response(req, "Component data form API not found", Some(app), Some("admin.data"), Some(data))
       }
     }
 
@@ -859,13 +860,13 @@ final class Http4sHttpServer(
     id: String
   ): IO[HResponse[IO]] =
     if (!_is_web_authorized(app, "admin.data", data, Some(req))) {
-      _forbidden()
+      _forbidden_api(req, Some(app), Some("admin.data"), Some(data))
     } else {
       StaticFormAppRenderer.renderComponentAdminDataUpdateFormDefinition(engine.runtimeSubsystem, app, data, id, engine.webDescriptor) match {
         case Some(p) =>
           _json(p)
         case None =>
-          IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component data update form API not found"))
+          _not_found_api_response(req, "Component data update form API not found", Some(app), Some("admin.data"), Some(data))
       }
     }
 
@@ -875,13 +876,13 @@ final class Http4sHttpServer(
     view: String
   ): IO[HResponse[IO]] =
     if (!_is_web_authorized(app, "admin.views", view, Some(req))) {
-      _forbidden()
+      _forbidden_api(req, Some(app), Some("admin.views"), Some(view))
     } else {
       StaticFormAppRenderer.renderComponentAdminViewFormDefinition(engine.runtimeSubsystem, app, view, engine.webDescriptor) match {
         case Some(p) =>
           _json(p)
         case None =>
-          IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component view form API not found"))
+          _not_found_api_response(req, "Component view form API not found", Some(app), Some("admin.views"), Some(view))
       }
     }
 
@@ -891,13 +892,13 @@ final class Http4sHttpServer(
     aggregate: String
   ): IO[HResponse[IO]] =
     if (!_is_web_authorized(app, "admin.aggregates", aggregate, Some(req))) {
-      _forbidden()
+      _forbidden_api(req, Some(app), Some("admin.aggregates"), Some(aggregate))
     } else {
       StaticFormAppRenderer.renderComponentAdminAggregateFormDefinition(engine.runtimeSubsystem, app, aggregate, engine.webDescriptor) match {
         case Some(p) =>
           _json(p)
         case None =>
-          IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Component aggregate form API not found"))
+          _not_found_api_response(req, "Component aggregate form API not found", Some(app), Some("admin.aggregates"), Some(aggregate))
       }
     }
 
@@ -910,7 +911,7 @@ final class Http4sHttpServer(
     if (!_is_form_enabled(app, service, operation)) {
       IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form not found"))
     } else if (!_is_web_authorized(app, service, operation, Some(req))) {
-      _forbidden()
+      _forbidden_web(req, Some(app), Some(service), Some(operation))
     } else {
     val started = System.nanoTime()
     for {
@@ -1001,9 +1002,9 @@ final class Http4sHttpServer(
     operation: String
   ): IO[HResponse[IO]] =
     if (!_is_form_enabled(app, service, operation)) {
-      IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form API not found"))
+      _not_found_api_response(req, "Operation form API not found", Some(app), Some(service), Some(operation))
     } else if (!_is_web_authorized(app, service, operation, Some(req))) {
-      _forbidden()
+      _forbidden_api(req, Some(app), Some(service), Some(operation))
     } else {
       val started = System.nanoTime()
       for {
@@ -1023,7 +1024,13 @@ final class Http4sHttpServer(
             form = _operation_dispatch_form(form)
           )
         )
-        out <- _to_http_response(res)
+        out <- _to_http_response(
+          res,
+          Some(req),
+          component = Some(app),
+          service = Some(service),
+          operation = Some(operation)
+        )
       } yield {
         RuntimeDashboardMetrics.recordHtmlRequest(
           req.method.name,
@@ -1042,9 +1049,9 @@ final class Http4sHttpServer(
     operation: String
   ): IO[HResponse[IO]] =
     if (!_is_form_enabled(app, service, operation)) {
-      IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form validation API not found"))
+      _not_found_api_response(req, "Operation form validation API not found", Some(app), Some(service), Some(operation))
     } else if (!_is_web_authorized(app, service, operation, Some(req))) {
-      _forbidden()
+      _forbidden_api(req, Some(app), Some(service), Some(operation))
     } else {
       for {
         form <- _to_plain_form_record(req)
@@ -1057,7 +1064,7 @@ final class Http4sHttpServer(
           engine.webDescriptor
         ) match {
           case Some(p) => _json(p)
-          case None => IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form validation API not found"))
+          case None => _not_found_api_response(req, "Operation form validation API not found", Some(app), Some(service), Some(operation))
         }
       } yield response
     }
@@ -1072,7 +1079,7 @@ final class Http4sHttpServer(
     if (!_is_form_enabled(app, service, operation))
       IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Form continuation not found"))
     else if (!_is_web_authorized(app, service, operation, Some(req)))
-      _forbidden()
+      _forbidden_web(req, Some(app), Some(service), Some(operation))
     else
     _form_continuations.get(id) match {
       case Some(continuation) if continuation.matches(app, service, operation) =>
@@ -1133,7 +1140,21 @@ final class Http4sHttpServer(
       case org.goldenport.Consequence.Success(response) =>
         response
       case org.goldenport.Consequence.Failure(conclusion) =>
-        HttpResponse.internalServerError(conclusion.toString)
+        val error = StructuredHttpError.fromConclusion(
+          conclusion,
+          HStatus.InternalServerError.code,
+          request.path.asString,
+          request.method.name,
+          _operation_mode,
+          component = Some(app),
+          service = Some(service),
+          operation = Some(operation)
+        )
+        HttpResponse.Text(
+          HttpStatus.InternalServerError,
+          ContentType(MimeType("application/json"), Some(StandardCharsets.UTF_8)),
+          Bag.text(error.envelopeJson, StandardCharsets.UTF_8)
+        )
     }
   }
 
@@ -1162,7 +1183,7 @@ final class Http4sHttpServer(
     id: String
   ): IO[HResponse[IO]] = {
     if (!_is_web_authorized(app, "admin.entities", entity, Some(req), Some("admin.entity.update")))
-      return _forbidden()
+      return _forbidden_web(req, Some(app), Some("admin.entities"), Some(entity))
     val started = System.nanoTime()
     for {
       form <- _to_plain_form_record(req)
@@ -1194,7 +1215,7 @@ final class Http4sHttpServer(
     entity: String
   ): IO[HResponse[IO]] = {
     if (!_is_web_authorized(app, "admin.entities", entity, Some(req), Some("admin.entity.create")))
-      return _forbidden()
+      return _forbidden_web(req, Some(app), Some("admin.entities"), Some(entity))
     val started = System.nanoTime()
     for {
       form <- _to_plain_form_record(req)
@@ -1226,7 +1247,7 @@ final class Http4sHttpServer(
     id: String
   ): IO[HResponse[IO]] = {
     if (!_is_web_authorized(app, "admin.data", data, Some(req), Some("admin.data.update")))
-      return _forbidden()
+      return _forbidden_web(req, Some(app), Some("admin.data"), Some(data))
     val started = System.nanoTime()
     for {
       form <- _to_plain_form_record(req)
@@ -1258,7 +1279,7 @@ final class Http4sHttpServer(
     data: String
   ): IO[HResponse[IO]] = {
     if (!_is_web_authorized(app, "admin.data", data, Some(req), Some("admin.data.create")))
-      return _forbidden()
+      return _forbidden_web(req, Some(app), Some("admin.data"), Some(data))
     val started = System.nanoTime()
     for {
       form <- _to_plain_form_record(req)
@@ -1493,7 +1514,7 @@ final class Http4sHttpServer(
     if (!_is_form_enabled(app, service, operation)) {
       IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form not found"))
     } else if (!_is_web_authorized(app, service, operation, Some(req))) {
-      _forbidden()
+      _forbidden_web(req, Some(app), Some(service), Some(operation))
     } else {
     val started = System.nanoTime()
     val query = _operation_dispatch_record(Record.create(req.uri.query.params.toVector))
@@ -1535,7 +1556,7 @@ final class Http4sHttpServer(
     if (!_is_form_enabled(app, service, operation)) {
       IO.pure(HResponse[IO](HStatus.NotFound).withEntity("Operation form not found"))
     } else if (!_is_web_authorized(app, service, operation, Some(req))) {
-      _forbidden()
+      _forbidden_web(req, Some(app), Some(service), Some(operation))
     } else {
       val started = System.nanoTime()
       val values = Map(
@@ -2093,7 +2114,7 @@ final class Http4sHttpServer(
                 .addCookie(_expired_session_cookie)
             )
           case org.goldenport.Consequence.Failure(c) =>
-            _web_error_response(Some(app), HStatus.Unauthorized, c.displayMessage, s"/web/${app}/logout")
+            _web_error_response(Some(app), HStatus.Unauthorized, c, s"/web/${app}/logout", req.method.name)
         }
       case None =>
         IO.pure(
@@ -2113,7 +2134,7 @@ final class Http4sHttpServer(
           case org.goldenport.Consequence.Success(summary) =>
             _json(StaticFormAppRenderer.Page(summary.toJson.noSpaces))
           case org.goldenport.Consequence.Failure(c) =>
-            _web_error_response(Some(app), HStatus.Unauthorized, c.displayMessage, s"/web/${app}/session")
+            _web_error_response(Some(app), HStatus.Unauthorized, c, s"/web/${app}/session", req.method.name)
         }
       case None =>
         _web_error_response(Some(app), HStatus.ServiceUnavailable, "Authentication service is unavailable.", s"/web/${app}/session")
@@ -2310,23 +2331,89 @@ final class Http4sHttpServer(
         subject.copy(anonymous = false)
     }.getOrElse(WebDescriptorAuthorization.Subject())
 
-  private def _forbidden(): IO[HResponse[IO]] =
-    IO.pure(HResponse[IO](HStatus.Forbidden).withEntity("Forbidden"))
+  private def _forbidden_error(
+    req: org.http4s.Request[IO],
+    component: Option[String],
+    service: Option[String],
+    operation: Option[String]
+  ): StructuredHttpError =
+    StructuredHttpError.fromConclusion(
+      Conclusion.securityPermissionDenied("Forbidden"),
+      HStatus.Forbidden.code,
+      req.uri.path.renderString,
+      req.method.name,
+      _operation_mode,
+      component = component,
+      service = service,
+      operation = operation
+    )
+
+  private def _forbidden_web(
+    req: org.http4s.Request[IO],
+    component: Option[String],
+    service: Option[String],
+    operation: Option[String]
+  ): IO[HResponse[IO]] = {
+    val error = _forbidden_error(req, component, service, operation)
+    _web_error_response(component, HStatus.Forbidden, error)
+  }
+
+  private def _forbidden_api(
+    req: org.http4s.Request[IO],
+    component: Option[String],
+    service: Option[String],
+    operation: Option[String]
+  ): IO[HResponse[IO]] =
+    _structured_error_response(req, _forbidden_error(req, component, service, operation))
 
   private[http] def _web_error_response(
     app: Option[String],
     status: HStatus,
     message: String,
     path: String
+  ): IO[HResponse[IO]] = {
+    val error = StructuredHttpError.fromMessage(
+      message,
+      status.code,
+      path,
+      "GET",
+      _operation_mode,
+      component = app
+    )
+    _web_error_response(app, status, error)
+  }
+
+  private[http] def _web_error_response(
+    app: Option[String],
+    status: HStatus,
+    conclusion: Conclusion,
+    path: String,
+    method: String = "GET"
+  ): IO[HResponse[IO]] = {
+    val error = StructuredHttpError.fromConclusion(
+      conclusion,
+      status.code,
+      path,
+      method,
+      _operation_mode,
+      component = app
+    )
+    _web_error_response(app, status, error)
+  }
+
+  private def _web_error_response(
+    app: Option[String],
+    status: HStatus,
+    error: StructuredHttpError
   ): IO[HResponse[IO]] =
     _web_error_template(app, status.code) match {
       case Some(template) =>
         _html_status(
-          StaticFormAppRenderer.renderErrorTemplate(app, status.code, message, path, template),
+          StaticFormAppRenderer.renderErrorTemplate(app, status.code, error.message, error.path, Some(error), template),
           status
         )
       case None =>
-        IO.pure(HResponse[IO](status).withEntity(message))
+        _html_status(StaticFormAppRenderer.renderStructuredErrorPage(app, error), status)
     }
 
   private def _create_form_continuation(
@@ -2426,6 +2513,66 @@ final class Http4sHttpServer(
         .withEntity(p.body)
         .withContentType(`Content-Type`(MediaType.application.json, Some(Charset.`UTF-8`)))
     )
+
+  private def _error_json_response(
+    error: StructuredHttpError
+  ): IO[HResponse[IO]] =
+    IO.pure(
+      HResponse[IO](HStatus.fromInt(error.status).getOrElse(HStatus.InternalServerError))
+        .withEntity(error.envelopeJson)
+        .withContentType(`Content-Type`(MediaType.application.json, Some(Charset.`UTF-8`)))
+    )
+
+  private def _error_yaml_response(
+    error: StructuredHttpError
+  ): IO[HResponse[IO]] =
+    IO.pure(
+      HResponse[IO](HStatus.fromInt(error.status).getOrElse(HStatus.InternalServerError))
+        .withEntity(error.envelopeYaml)
+        .withContentType(`Content-Type`(_yaml_media_type, Some(Charset.`UTF-8`)))
+    )
+
+  private def _structured_error_response(
+    req: org.http4s.Request[IO],
+    error: StructuredHttpError
+  ): IO[HResponse[IO]] =
+    if (_prefers_yaml(Some(req)))
+      _error_yaml_response(error)
+    else if (_prefers_plain_text(Some(req)))
+      IO.pure(
+        HResponse[IO](HStatus.fromInt(error.status).getOrElse(HStatus.InternalServerError))
+          .withEntity(error.message)
+          .withContentType(`Content-Type`(MediaType.text.plain, Some(Charset.`UTF-8`)))
+      )
+    else
+      _error_json_response(error)
+
+  private def _not_found_api_response(
+    req: org.http4s.Request[IO],
+    message: String,
+    component: Option[String] = None,
+    service: Option[String] = None,
+    operation: Option[String] = None
+  ): IO[HResponse[IO]] =
+    _structured_error_response(
+      req,
+      StructuredHttpError.fromMessage(
+        message,
+        HStatus.NotFound.code,
+        req.uri.path.renderString,
+        req.method.name,
+        _operation_mode,
+        component = component,
+        service = service,
+        operation = operation
+      )
+    )
+
+  private def _yaml_media_type: MediaType =
+    MediaType.parse("application/yaml").fold(_ => MediaType.text.plain, identity)
+
+  private def _operation_mode: OperationMode =
+    RuntimeConfig.from(engine.runtimeSubsystem.configuration).operationMode
 
   private def _to_plain_form_record(
     req: org.http4s.Request[IO]
@@ -2575,6 +2722,15 @@ final class Http4sHttpServer(
 
   private def _to_http_response(
     res: HttpResponse
+  ): IO[org.http4s.Response[IO]] =
+    _to_http_response(res, None)
+
+  private def _to_http_response(
+    res: HttpResponse,
+    req: Option[org.http4s.Request[IO]],
+    component: Option[String] = None,
+    service: Option[String] = None,
+    operation: Option[String] = None
   ): IO[org.http4s.Response[IO]] = {
     val status = res.code match {
       case 200 => HStatus.Ok
@@ -2585,6 +2741,31 @@ final class Http4sHttpServer(
       case _ => HStatus.InternalServerError
     }
     val body = res.getString.getOrElse("")
+    if (res.code >= 400 && _is_structured_error_body(res, body)) {
+      val mime = MediaType.parse(res.mime.value).fold(_ => MediaType.application.json, identity)
+      val charset: Option[org.http4s.Charset] =
+        res.charset.map(c => org.http4s.Charset.fromNioCharset(c))
+      IO.pure(
+        HResponse[IO](status)
+          .withEntity(body)
+          .withContentType(`Content-Type`(mime, charset))
+      )
+    } else if (res.code >= 400 && !_prefers_plain_text(req)) {
+      val error = StructuredHttpError.fromMessage(
+        if (body.trim.nonEmpty) body else s"HTTP ${res.code}",
+        status.code,
+        req.map(_.uri.path.renderString).getOrElse(""),
+        req.map(_.method.name).getOrElse(""),
+        _operation_mode,
+        component = component,
+        service = service,
+        operation = operation
+      )
+      if (_prefers_yaml(req))
+        _error_yaml_response(error)
+      else
+        _error_json_response(error)
+    } else {
     val mime = MediaType.parse(res.mime.value).fold(_ => MediaType.text.plain, identity)
     val charset: Option[org.http4s.Charset] =
       res.charset.map(c => org.http4s.Charset.fromNioCharset(c))
@@ -2592,7 +2773,39 @@ final class Http4sHttpServer(
     IO.pure(
       HResponse[IO](status).withEntity(body).withContentType(contentType)
     )
+    }
   }
+
+  private def _prefers_yaml(
+    req: Option[org.http4s.Request[IO]]
+  ): Boolean =
+    _accept_header(req).exists { value =>
+      val lower = value.toLowerCase(java.util.Locale.ROOT)
+      lower.contains("application/yaml") || lower.contains("text/yaml") || lower.contains("application/x-yaml")
+    }
+
+  private def _prefers_plain_text(
+    req: Option[org.http4s.Request[IO]]
+  ): Boolean =
+    _accept_header(req).exists { value =>
+      val lower = value.toLowerCase(java.util.Locale.ROOT)
+      lower.contains("text/plain") &&
+        !lower.contains("application/json") &&
+        !lower.contains("application/yaml") &&
+        !lower.contains("text/yaml")
+    }
+
+  private def _accept_header(
+    req: Option[org.http4s.Request[IO]]
+  ): Option[String] =
+    req.flatMap(_.headers.headers.find(_.name.toString.equalsIgnoreCase("Accept")).map(_.value))
+
+  private def _is_structured_error_body(
+    res: HttpResponse,
+    body: String
+  ): Boolean =
+    res.mime.value.toLowerCase(java.util.Locale.ROOT).contains("json") &&
+      body.contains("\"error\"")
 
   private def _page_request(
     req: HRequest[IO]

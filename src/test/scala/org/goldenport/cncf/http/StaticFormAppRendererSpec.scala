@@ -14,7 +14,8 @@ import io.circe.HCursor
 import io.circe.Json
 import io.circe.parser.parse
 import org.http4s.{MediaType, Method, Request, Uri}
-import org.goldenport.Consequence
+import org.goldenport.{Conclusion, Consequence}
+import org.goldenport.error.ErrorCode
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.http.HttpStatus
 import org.goldenport.bag.Bag
@@ -32,7 +33,7 @@ import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColu
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentFactory, ComponentletDescriptor}
-import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace, QueryDirective, SearchResult, SearchableDataStore, TotalCountCapability}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityStoreSpace}
@@ -51,7 +52,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 23, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -3041,6 +3042,77 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       apiResponse.status.code shouldBe 404
     }
 
+    "return structured JSON error envelope from Form API failures" in {
+      val subsystem = _form_type_fixture_subsystem()
+      val selector = "notice-board.notice.post-secret-notice"
+      val descriptor = WebDescriptor(expose = Map(selector -> WebDescriptor.Exposure.Protected))
+      val dispatcher = new StaticWebOperationDispatcher(
+        HttpResponse.Text(
+          HttpStatus.BadRequest,
+          ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+          Bag.text("bad request from operation", StandardCharsets.UTF_8)
+        )
+      )
+      val server = new Http4sHttpServer(
+        new HttpExecutionEngine(subsystem, Some(descriptor)),
+        operationDispatcherOption = Some(dispatcher)
+      )
+
+      val response = server
+        ._submit_operation_form_api(
+          _post_form_request("/form-api/notice-board/notice/post-secret-notice", "body=hello"),
+          "notice-board",
+          "notice",
+          "post-secret-notice"
+        )
+        .unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+      val json = parse(body).getOrElse(fail(body)).hcursor
+
+      response.status.code shouldBe 400
+      response.contentType.map(_.mediaType) shouldBe Some(MediaType.application.json)
+      json.downField("error").get[String]("message") shouldBe Right("bad request from operation")
+      json.downField("error").get[String]("code") shouldBe Right("http.400")
+      json.downField("error").downField("debug").get[String]("path") shouldBe Right("/form-api/notice-board/notice/post-secret-notice")
+    }
+
+    "return structured YAML error envelope from Form API failures when requested" in {
+      val subsystem = _form_type_fixture_subsystem()
+      val selector = "notice-board.notice.post-secret-notice"
+      val descriptor = WebDescriptor(expose = Map(selector -> WebDescriptor.Exposure.Protected))
+      val dispatcher = new StaticWebOperationDispatcher(
+        HttpResponse.Text(
+          HttpStatus.BadRequest,
+          ContentType(MimeType("text/plain"), Some(StandardCharsets.UTF_8)),
+          Bag.text("bad request from operation", StandardCharsets.UTF_8)
+        )
+      )
+      val server = new Http4sHttpServer(
+        new HttpExecutionEngine(subsystem, Some(descriptor)),
+        operationDispatcherOption = Some(dispatcher)
+      )
+      val request = _post_form_request(
+        "/form-api/notice-board/notice/post-secret-notice",
+        "body=hello"
+      ).putHeaders(org.http4s.Header.Raw(org.typelevel.ci.CIString("Accept"), "application/yaml"))
+
+      val response = server
+        ._submit_operation_form_api(
+          request,
+          "notice-board",
+          "notice",
+          "post-secret-notice"
+        )
+        .unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 400
+      response.contentType.map(_.mediaType.toString).getOrElse("") should include ("application/yaml")
+      body should include ("error:")
+      body should include ("message: bad request from operation")
+      body should include ("code: http.400")
+    }
+
     "record minimal runtime hooks when Web dispatch crosses the operation adapter" in {
       val subsystem = _form_type_fixture_subsystem()
       val selector = "notice-board.notice.post-secret-notice"
@@ -3599,8 +3671,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
           "notice"
         )
         .unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+      val json = parse(body).getOrElse(fail(body)).hcursor
 
       response.status.code shouldBe 403
+      response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.application.json)
+      json.downField("error").get[String]("message") shouldBe Right("Forbidden")
+      json.downField("error").downField("debug").get[String]("path") shouldBe Right("/form-api/notice-board/admin/entities/notice")
+      json.downField("error").downField("debug").get[String]("method") shouldBe Right("GET")
     }
 
     "deny anonymous admin form API in production operation mode" in {
@@ -3635,8 +3713,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         .orNotFound
         .run(_get_request("/web/notice-board/admin/entities/notice"))
         .unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
 
       response.status.code shouldBe 403
+      response.contentType.map(_.mediaType) shouldBe Some(org.http4s.MediaType.text.html)
+      body should include ("Request failed")
+      body should include ("Error code:")
+      body should include ("http.403")
+      body should not include ("structured-error-debug")
+      body should not include ("\"error\"")
     }
 
     "allow authenticated component admin HTML route in production operation mode" in {
@@ -4895,6 +4980,46 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("result.body")
       html should include ("error.path")
       html should not include ("<textus-error-panel")
+    }
+
+    "render non-production structured error debug YAML at the bottom of Web error pages" in {
+      val conclusion = _coded_conclusion("cncf.test.detail")
+      val error = StructuredHttpError.fromConclusion(
+        conclusion,
+        500,
+        "/web/notice-board/missing",
+        "GET",
+        OperationMode.Develop,
+        component = Some("notice-board")
+      )
+
+      val html = StaticFormAppRenderer.renderStructuredErrorPage(Some("notice-board"), error).body
+
+      html should include ("Request failed")
+      html should include ("cncf.test.detail")
+      html should include ("structured-error-debug")
+      html should include ("Debug error details")
+      html should include ("mode: develop")
+      html should include ("path: /web/notice-board/missing")
+    }
+
+    "hide structured debug YAML in production Web error pages while keeping the Conclusion detail code" in {
+      val conclusion = _coded_conclusion("cncf.test.production")
+      val error = StructuredHttpError.fromConclusion(
+        conclusion,
+        500,
+        "/web/notice-board/missing",
+        "GET",
+        OperationMode.Production,
+        component = Some("notice-board")
+      )
+
+      val html = StaticFormAppRenderer.renderStructuredErrorPage(Some("notice-board"), error).body
+
+      html should include ("cncf.test.production")
+      html should not include ("structured-error-debug")
+      html should not include ("Debug error details")
+      html should not include ("mode: production")
     }
 
     "redisplay the operation form with submitted values when stayOnError is enabled" in {
@@ -6597,6 +6722,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       uri = Uri.unsafeFromString(path)
     )
 
+  private def _coded_conclusion(
+    code: String
+  ): Conclusion = {
+    val conclusion = Conclusion.simple("coded failure")
+    conclusion.copy(status = conclusion.status.copy(detailCodes = List(_TestErrorCode(code))))
+  }
+
   private final case class _DataFixture(
     subsystem: Subsystem,
     runtime: GlobalRuntimeContext,
@@ -7449,6 +7581,10 @@ private final case class _SuccessfulAggregateActionCall(
     Consequence.success(OperationResponse.Scalar(s"${resultPrefix}:${value}"))
   }
 }
+
+private final case class _TestErrorCode(
+  id: String
+) extends ErrorCode
 
 private final class RecordingWebOperationDispatcher(
   delegate: WebOperationDispatcher

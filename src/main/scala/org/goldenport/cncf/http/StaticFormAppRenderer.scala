@@ -22,7 +22,7 @@ import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 22, 2026
+ * @version Apr. 24, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -1646,8 +1646,20 @@ object StaticFormAppRenderer {
     message: String,
     path: String,
     template: String
+  ): Page =
+    renderErrorTemplate(app, status, message, path, None, template)
+
+  def renderErrorTemplate(
+    app: Option[String],
+    status: Int,
+    message: String,
+    path: String,
+    error: Option[StructuredHttpError],
+    template: String
   ): Page = {
     val appName = app.getOrElse("system")
+    val panel = error.map(renderStructuredErrorPanel).getOrElse("")
+    val errorValues = error.map(_structured_error_values).getOrElse(Map.empty)
     val properties = FormPageProperties(
       appName,
       "web",
@@ -1659,21 +1671,83 @@ object StaticFormAppRenderer {
         "error.message" -> message,
         "error.body" -> message,
         "error.path" -> path,
+        "error.debugPanel" -> panel,
         "result.status" -> status.toString,
         "result.ok" -> "false",
         "result.body" -> message
-      )
+      ) ++ errorValues
     )
     val rendered = _render_template(template, properties, Map.empty)
+    val body = _append_structured_error_panel(rendered, panel)
     if (_is_html_document(template))
-      Page(rendered)
+      Page(body)
     else
       Page(_simple_page(
         title = s"HTTP ${status}",
         subtitle = _escape(path),
-        body = rendered
+        body = body
       ))
   }
+
+  def renderStructuredErrorPage(
+    app: Option[String],
+    error: StructuredHttpError
+  ): Page = {
+    val code = _escape(error.code)
+    val body =
+      s"""<section class="alert alert-danger" role="alert">
+         |  <h2 class="h5">Request failed</h2>
+         |  <p class="mb-2">${_escape(error.message)}</p>
+         |  <p class="mb-0"><strong>Error code:</strong> <code>${code}</code></p>
+         |</section>
+         |${renderStructuredErrorPanel(error)}""".stripMargin
+    Page(_simple_page(
+      title = s"HTTP ${error.status}",
+      subtitle = _escape(error.path),
+      body = body
+    ))
+  }
+
+  def renderStructuredErrorPanel(
+    error: StructuredHttpError
+  ): String =
+    if (!error.debugEnabled)
+      ""
+    else
+      s"""<section class="mt-4 structured-error-debug">
+         |  <details>
+         |    <summary>Debug error details</summary>
+         |    <p class="text-secondary mb-2">Structured error projection for non-production troubleshooting.</p>
+         |    <pre class="bg-light border rounded p-3"><code>${_escape(error.diagnosticYaml)}</code></pre>
+         |  </details>
+         |</section>""".stripMargin
+
+  private def _structured_error_values(
+    error: StructuredHttpError
+  ): Map[String, String] =
+    Map(
+      "error.code" -> error.code,
+      "error.detailCode" -> error.code,
+      "error.codeSource" -> error.codeSource,
+      "error.mode" -> error.operationMode.name,
+      "error.method" -> error.method,
+      "error.debugYaml" -> (if (error.debugEnabled) error.diagnosticYaml else "")
+    )
+
+  private def _append_structured_error_panel(
+    html: String,
+    panel: String
+  ): String =
+    if (panel.isEmpty || html.contains("structured-error-debug"))
+      html
+    else {
+      val marker = "</body>"
+      val index = html.toLowerCase(java.util.Locale.ROOT).lastIndexOf(marker)
+      if (index >= 0)
+        html.substring(0, index) + panel + html.substring(index)
+      else
+        html + panel
+    }
 
   def renderSystemJobTicket(
     jobId: String
