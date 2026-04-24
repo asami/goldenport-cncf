@@ -118,6 +118,7 @@ case class ComponentLogic(
     action: Action,
     ctx: ExecutionContext
   ): Consequence[OperationResponse] = {
+    ctx.runtime.clearExecutionMetadata()
     val actionscope = component.scopeContext.createChildScope(ScopeKind.Action, action.name)
     val scopedCtx = ctx.withScope(actionscope)
     val task = ActionTask(ActionId.generate(), action, component.actionEngine, Some(component))
@@ -158,7 +159,19 @@ case class ComponentLogic(
     task: ActionTask,
     ctx: ExecutionContext
   ): Consequence[OperationResponse] =
-    submitJob(List(task), ctx).flatMap(jobid => awaitJobResult(jobid))
+    if (ctx.framework.traceJob) {
+      val option = _default_submit_option(List(task)).copy(
+        persistence = JobPersistencePolicy.Persistent,
+        runMode = JobRunMode.Sync,
+        executionNotes = Vector("debug trace query")
+      )
+      submitJob(List(task), ctx, option).flatMap { jobid =>
+        _note_job_response(ctx, jobid)
+        awaitJobResult(jobid)
+      }
+    } else {
+      task.run(ctx).result
+    }
 
   private def _execute_command_action(
     task: ActionTask,
@@ -174,16 +187,26 @@ case class ComponentLogic(
     mode match {
       case CommandExecutionMode.AsyncJob =>
         val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Async)
-        submitJob(List(task), ctx, option).map(jobid => OperationResponse.Scalar(jobid.value))
+        submitJob(List(task), ctx, option).map { jobid =>
+          _note_job_response(ctx, jobid)
+          OperationResponse.Scalar(jobid.value)
+        }
       case CommandExecutionMode.AsyncJobAndAwait =>
         val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Async)
-        submitJob(List(task), ctx, option).flatMap(jobid => awaitJobResult(jobid))
+        submitJob(List(task), ctx, option).flatMap { jobid =>
+          _note_job_response(ctx, jobid)
+          awaitJobResult(jobid)
+        }
       case CommandExecutionMode.SyncJob =>
         val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Sync)
-        submitJob(List(task), ctx, option).flatMap(jobid => awaitJobResult(jobid))
+        submitJob(List(task), ctx, option).flatMap { jobid =>
+          _note_job_response(ctx, jobid)
+          awaitJobResult(jobid)
+        }
       case CommandExecutionMode.SyncJobAsyncInterface =>
         val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Async)
         submitJob(List(task), ctx, option).flatMap { jobid =>
+          _note_job_response(ctx, jobid)
           val _ = awaitJobResult(jobid)
           Consequence.success(OperationResponse.Scalar(jobid.value))
         }
@@ -278,6 +301,15 @@ case class ComponentLogic(
       case Some(JobResult.Failure(conclusion)) => Consequence.Failure(conclusion)
       case None => Consequence.stateConflict(s"job timeout: ${jobid.value}")
     }
+  }
+
+  private def _note_job_response(
+    ctx: ExecutionContext,
+    jobid: JobId
+  ): Unit = {
+    ctx.runtime.noteResponseJobId(jobid.value)
+    if (ctx.framework.traceJob)
+      ctx.runtime.noteDebugJobId(jobid.value)
   }
 
   def executionContext(): ExecutionContext =

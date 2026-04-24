@@ -11,10 +11,13 @@ import org.goldenport.observation.Descriptor
 import org.goldenport.provisional.conclusion.Disposition
 import org.goldenport.provisional.observation.Taxonomy
 import org.goldenport.protocol.operation.OperationResponse
+import org.goldenport.record.Record
+import org.goldenport.record.io.RecordEncoder
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentLogic}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.event.{EventId, EventLane, EventRecord, EventStore}
+import org.goldenport.cncf.observability.ObservabilityEngine
 
 /*
  * @since   Jan.  4, 2026
@@ -293,7 +296,14 @@ final case class JobTimelineEvent(
 final case class JobDebugInfo(
   requestSummary: Option[String],
   parameters: Map[String, String],
-  executionNotes: Vector[String]
+  executionNotes: Vector[String],
+  calltree: Option[Record] = None,
+  calltreeJson: Option[String] = None,
+  calltreeClob: Option[String] = None,
+  calltreeSaved: Boolean = false,
+  calltreeStorage: Option[String] = None,
+  calltreeSerializedBytes: Option[Int] = None,
+  calltreeDropReason: Option[String] = None
 )
 
 final case class JobEventLineage(
@@ -390,6 +400,7 @@ final case class JobQueryReadModel(
   lineage: JobEventLineage,
   retry: JobRetryState,
   resultSummary: JobResultSummary,
+  calltree: Option[Record],
   result: Option[OperationResponse]
 )
 
@@ -461,6 +472,7 @@ trait JobEngine {
     }
 
   def query(jobId: JobId): Option[JobQueryReadModel]
+  def listJobs(limit: Int = 100, persistentOnly: Boolean = true): Vector[JobQueryReadModel] = Vector.empty
   def queryTasks(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTaskPage]
   def queryTimeline(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTimelinePage]
   def metrics: Option[JobMetrics] = None
@@ -629,9 +641,25 @@ final class InMemoryJobEngine(
         lineage = _event_lineage(record),
         retry = record.retry,
         resultSummary = _result_summary(record),
+        calltree = record.debug.calltree,
         result = record.result.collect { case JobResult.Success(res) => res }
       )
     }
+
+  override def listJobs(
+    limit: Int = 100,
+    persistentOnly: Boolean = true
+  ): Vector[JobQueryReadModel] = {
+    val durable = _durable_jobs.values().toArray(new Array[JobRecord](0)).toVector
+    val runtime =
+      if (persistentOnly) Vector.empty
+      else _runtime_jobs.values().toArray(new Array[JobRecord](0)).toVector
+    (durable ++ runtime)
+      .sortBy(_.updatedAt)
+      .reverse
+      .take(math.max(0, limit))
+      .flatMap(record => query(record.id))
+  }
 
   def queryTasks(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTaskPage] =
     _get_record(jobId).map(_task_page(_, offset, limit))
@@ -839,10 +867,11 @@ final class InMemoryJobEngine(
                   "traceId" -> ctx.observability.traceId.print
                 ) ++ ctx.observability.correlationId.map(x => "correlationId" -> x.print)
               )
-              val executioncontext = ExecutionContext.withJobContext(ctx, jobcontext)
+              val executioncontext = _job_execution_context(jobid, ctx, jobcontext)
               _append_task_running_(jobid, taskid, previous, startedat, task)
               task.run(executioncontext) match {
                 case TaskSucceeded(res) =>
+                  _capture_calltree_if_needed_(jobid, executioncontext, failed = false, startedat)
                   successResponse = Some(res)
                   _append_task_finished_(
                     jobid,
@@ -854,6 +883,7 @@ final class InMemoryJobEngine(
                   )
                   previous = Some(taskid)
                 case TaskFailed(c) =>
+                  _capture_calltree_if_needed_(jobid, executioncontext, failed = true, startedat)
                   failure = Some(c)
                   _append_task_finished_(
                     jobid,
@@ -897,11 +927,12 @@ final class InMemoryJobEngine(
       traceMetadata = Map("traceId" -> ctx.observability.traceId.print) ++
         ctx.observability.correlationId.map(x => "correlationId" -> x.print)
     )
-    val executioncontext = ExecutionContext.withJobContext(ctx, jobcontext)
+    val executioncontext = _job_execution_context(jobid, ctx, jobcontext)
     _append_task_running_(jobid, taskid, parent, startedat, task)
     val outcome = task.run(executioncontext)
     outcome match {
       case TaskSucceeded(res) =>
+        _capture_calltree_if_needed_(jobid, executioncontext, failed = false, startedat)
         _append_task_finished_(
           jobid,
           taskid,
@@ -911,6 +942,7 @@ final class InMemoryJobEngine(
           Instant.now()
         )
       case TaskFailed(c) =>
+        _capture_calltree_if_needed_(jobid, executioncontext, failed = true, startedat)
         _append_task_finished_(
           jobid,
           taskid,
@@ -924,6 +956,85 @@ final class InMemoryJobEngine(
     _settle_if_ready_(jobid)
     outcome
   }
+
+  private def _job_execution_context(
+    jobid: JobId,
+    ctx: ExecutionContext,
+    jobcontext: JobContext
+  ): ExecutionContext = {
+    val withjob = ExecutionContext.withJobContext(ctx, jobcontext)
+    _get_record(jobid).map(_.persistence) match {
+      case Some(JobPersistencePolicy.Persistent) if !withjob.observability.callTreeContext.isEnabled =>
+        ExecutionContext.withFrameworkCallTreeEnabled(withjob, enabled = true)
+      case _ =>
+        withjob
+    }
+  }
+
+  private def _capture_calltree_if_needed_(
+    jobid: JobId,
+    ctx: ExecutionContext,
+    failed: Boolean,
+    startedat: Instant
+  ): Unit =
+    _get_record(jobid).foreach { record =>
+      val elapsedmillis = java.time.Duration.between(startedat, Instant.now()).toMillis
+      val save = record.persistence == JobPersistencePolicy.Persistent && (
+        failed ||
+        ctx.framework.saveCallTree ||
+        elapsedmillis >= InMemoryJobEngine.DefaultSlowCallTreeThresholdMillis
+      )
+      if (record.persistence != JobPersistencePolicy.Persistent) {
+        _mark_calltree_not_saved_(jobid, "not_persistent")
+      } else if (save) {
+        ctx.observability.callTreeContext.build() match {
+          case Some(tree) =>
+            _save_calltree_(jobid, ObservabilityEngine.callTreeRecord(tree, Some(jobid.value)))
+          case None =>
+            _mark_calltree_not_saved_(jobid, "not_captured")
+        }
+      } else {
+        _mark_calltree_not_saved_(jobid, "not_matched_policy")
+      }
+    }
+
+  private def _save_calltree_(
+    jobid: JobId,
+    record: Record
+  ): Unit = {
+    val json = RecordEncoder.json(record)
+    val bytes = json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length
+    val useclob = bytes > InMemoryJobEngine.CallTreeVarcharThresholdBytes
+    _mutate_record(jobid) { current =>
+      current.copy(
+        debug = current.debug.copy(
+          calltree = Some(record),
+          calltreeJson = if (useclob) None else Some(json),
+          calltreeClob = if (useclob) Some(json) else None,
+          calltreeSaved = true,
+          calltreeStorage = Some(if (useclob) "calltree_clob" else "calltree"),
+          calltreeSerializedBytes = Some(bytes),
+          calltreeDropReason = None
+        )
+      )
+    }
+  }
+
+  private def _mark_calltree_not_saved_(
+    jobid: JobId,
+    reason: String
+  ): Unit =
+    _mutate_record(jobid) { current =>
+      if (current.debug.calltreeSaved)
+        current
+      else
+        current.copy(
+          debug = current.debug.copy(
+            calltreeSaved = false,
+            calltreeDropReason = Some(reason)
+          )
+        )
+    }
 
   private def _control(
     jobid: JobId,
@@ -1843,6 +1954,9 @@ final class InMemoryJobEngine(
 }
 
 object InMemoryJobEngine {
+  val CallTreeVarcharThresholdBytes: Int = 8 * 1024
+  val DefaultSlowCallTreeThresholdMillis: Long = 1000L
+
   val MaxNonRetryDelay: java.time.Duration =
     java.time.Duration.ofMinutes(15)
 

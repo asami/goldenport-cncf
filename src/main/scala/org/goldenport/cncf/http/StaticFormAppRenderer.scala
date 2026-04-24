@@ -6,6 +6,7 @@ import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentOrigin
 import org.goldenport.cncf.naming.NamingConventions
+import org.goldenport.cncf.job.JobQueryReadModel
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.projection.{DescribeProjection, HelpProjection, SchemaProjection}
@@ -1804,7 +1805,11 @@ object StaticFormAppRenderer {
       "result.action.primary.name" -> "await",
       "result.action.primary.label" -> "Check result",
       "result.action.primary.href" -> awaitHref,
-      "result.action.primary.method" -> "POST"
+      "result.action.primary.method" -> "POST",
+      "result.action.detail.name" -> "debug-detail",
+      "result.action.detail.label" -> "Debug detail",
+      "result.action.detail.href" -> s"/web/system/admin/jobs/${_escape_path_segment(jobId)}",
+      "result.action.detail.method" -> "GET"
     )
 
   private def _system_job_template(
@@ -1813,6 +1818,7 @@ object StaticFormAppRenderer {
     s"""<article>
        |  <h2>${_escape(title)}</h2>
        |  <textus:job-ticket></textus:job-ticket>
+       |  <textus:action-link source="result.action.detail" class="btn btn-outline-secondary btn-sm"></textus:action-link>
        |  <textus-error-panel source="error"></textus-error-panel>
        |  <textus-result-view source="result.body"></textus-result-view>
        |  <textus-property-list source="result"></textus-property-list>
@@ -1893,6 +1899,115 @@ object StaticFormAppRenderer {
              _web_descriptor_json(webDescriptor, completed = false)
            )}""".stripMargin
     ))
+
+  def renderSystemAdminJobs(
+    subsystem: Subsystem
+  ): Page = {
+    val jobs = subsystem.jobEngine.listJobs(limit = 100, persistentOnly = true)
+    val rows =
+      if (jobs.isEmpty)
+        """<tr><td colspan="7" class="text-secondary">No persistent jobs have been retained yet. Run a request with <code>--debug.trace-job</code> or <code>textus.debug.trace-job=true</code>.</td></tr>"""
+      else
+        jobs.map(_system_admin_job_row).mkString("\n")
+    Page(_simple_page(
+      title = "System Admin Jobs",
+      subtitle = "Persistent job debug and calltree inspection",
+      body =
+        s"""<article>
+           |  <h2>Navigation</h2>
+           |  <p><a href="/web/system/admin">System admin</a> · <a href="/web/system/dashboard">System dashboard</a> · <a href="/form/admin/execution/history">Execution history</a></p>
+           |</article>
+           |<article>
+           |  <h2>Debug Jobs</h2>
+           |  <p>Query requests normally run directly. Requests submitted with <code>--debug.trace-job</code> are retained here for operational debugging.</p>
+           |  <div class="table-responsive mt-3">
+           |    <table class="table table-sm align-middle">
+           |      <thead><tr><th>Job</th><th>Status</th><th>Target</th><th>Result</th><th>Trace</th><th>Updated</th><th>Actions</th></tr></thead>
+           |      <tbody>${rows}</tbody>
+           |    </table>
+           |  </div>
+           |</article>""".stripMargin
+    ))
+  }
+
+  def renderSystemAdminJob(
+    subsystem: Subsystem,
+    model: JobQueryReadModel
+  ): Page = {
+    val target = _job_target(model)
+    val calltree = model.calltree.map(_job_calltree_panel).getOrElse(
+      """<p class="text-secondary">No calltree was saved for this job. Use <code>--debug.save-calltree</code>, or inspect failed/slow persistent jobs.</p>"""
+    )
+    val taskrows =
+      if (model.tasks.tasks.isEmpty)
+        """<tr><td colspan="7" class="text-secondary">No task records are available.</td></tr>"""
+      else
+        model.tasks.tasks.map { task =>
+          s"""<tr><td><code>${_escape(task.taskId.value)}</code></td><td>${_escape(task.status.toString)}</td><td>${_escape(task.component.getOrElse(""))}</td><td>${_escape(task.operation.getOrElse(""))}</td><td>${_escape(task.result.message.getOrElse(""))}</td><td>${_escape(task.startedAt.toString)}</td><td>${_escape(task.finishedAt.map(_.toString).getOrElse(""))}</td></tr>"""
+        }.mkString("\n")
+    val eventrows =
+      if (model.timeline.events.isEmpty)
+        """<tr><td colspan="5" class="text-secondary">No timeline events are available.</td></tr>"""
+      else
+        model.timeline.events.map { event =>
+          s"""<tr><td>${event.sequence}</td><td>${_escape(event.kind)}</td><td>${_escape(event.occurredAt.toString)}</td><td>${_escape(event.taskId.map(_.value).getOrElse(""))}</td><td>${_escape(event.note.getOrElse(""))}</td></tr>"""
+        }.mkString("\n")
+    Page(_simple_page(
+      title = s"System Admin Job ${model.jobId.value}",
+      subtitle = "Job-managed trace and calltree detail",
+      body =
+        s"""<article>
+           |  <h2>Navigation</h2>
+           |  <p><a href="/web/system/admin/jobs">Debug jobs</a> · <a href="/web/system/jobs/${_escape_path_segment(model.jobId.value)}">System job result</a> · <a href="/web/system/admin">System admin</a></p>
+           |</article>
+           |<article>
+           |  <h2>Summary</h2>
+           |  <dl class="row">
+           |    <dt class="col-sm-3">Job ID</dt><dd class="col-sm-9"><code>${_escape(model.jobId.value)}</code></dd>
+           |    <dt class="col-sm-3">Status</dt><dd class="col-sm-9">${_escape(model.status.toString)}</dd>
+           |    <dt class="col-sm-3">Persistence</dt><dd class="col-sm-9">${_escape(model.persistence.toString)}</dd>
+           |    <dt class="col-sm-3">Target</dt><dd class="col-sm-9"><code>${_escape(target)}</code></dd>
+           |    <dt class="col-sm-3">Result</dt><dd class="col-sm-9">${_escape(model.resultSummary.message.getOrElse(""))}</dd>
+           |    <dt class="col-sm-3">Trace ID</dt><dd class="col-sm-9"><code>${_escape(model.lineage.correlationId.getOrElse(model.debug.parameters.getOrElse("traceId", "")))}</code></dd>
+           |    <dt class="col-sm-3">Updated</dt><dd class="col-sm-9">${_escape(model.updatedAt.toString)}</dd>
+           |  </dl>
+           |</article>
+           |<article>
+           |  <h2>Calltree</h2>
+           |  ${calltree}
+           |</article>
+           |<article>
+           |  <h2>Tasks</h2>
+           |  <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Task</th><th>Status</th><th>Component</th><th>Operation</th><th>Message</th><th>Started</th><th>Finished</th></tr></thead><tbody>${taskrows}</tbody></table></div>
+           |</article>
+           |<article>
+           |  <h2>Timeline</h2>
+           |  <div class="table-responsive"><table class="table table-sm"><thead><tr><th>#</th><th>Kind</th><th>At</th><th>Task</th><th>Note</th></tr></thead><tbody>${eventrows}</tbody></table></div>
+           |</article>""".stripMargin
+    ))
+  }
+
+  private def _system_admin_job_row(
+    model: JobQueryReadModel
+  ): String = {
+    val target = _job_target(model)
+    val trace = model.lineage.correlationId
+      .orElse(model.debug.parameters.get("traceId"))
+      .getOrElse("")
+    s"""<tr><td><code>${_escape(model.jobId.value)}</code></td><td>${_escape(model.status.toString)}</td><td><code>${_escape(target)}</code></td><td>${_escape(model.resultSummary.message.getOrElse(""))}</td><td><code>${_escape(trace)}</code></td><td>${_escape(model.updatedAt.toString)}</td><td><a href="/web/system/admin/jobs/${_escape_path_segment(model.jobId.value)}">Open</a></td></tr>"""
+  }
+
+  private def _job_target(
+    model: JobQueryReadModel
+  ): String =
+    model.tasks.tasks.headOption.map { task =>
+      Vector(task.component, task.service, task.operation).flatten.filter(_.nonEmpty).mkString(".")
+    }.filter(_.nonEmpty).orElse(model.debug.requestSummary).getOrElse("")
+
+  private def _job_calltree_panel(
+    record: Record
+  ): String =
+    s"""<pre class="bg-light border rounded p-3"><code>${_escape(record.show)}</code></pre>"""
 
   def renderComponentAdmin(
     subsystem: Subsystem,
@@ -4304,6 +4419,7 @@ object StaticFormAppRenderer {
         |    </ul>
         |  </div></div>
         |  <ul>
+        |    <li><a href="/web/system/admin/jobs">Debug jobs</a></li>
         |    <li><a href="/form/admin/execution/diagnostics">Execution diagnostics</a></li>
         |    <li><a href="/form/admin/execution/history">Execution history</a></li>
         |    <li><a href="/form/admin/execution/calltree">Latest calltree</a></li>
@@ -6543,7 +6659,8 @@ object StaticFormAppRenderer {
       val ticket = _render_job_ticket(ticketAttrs, properties)
       val actions = _render_job_actions(attrs, properties)
       val systemHref = s"/web/system/jobs/${_escape_path_segment(jobId)}"
-      s"""<section class="textus-job-panel border rounded p-3 mb-3 bg-light"><div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3"><div><h3 class="h5 mb-1">${_escape(title)}</h3><p class="text-secondary mb-0">${_escape(description)}</p></div><a class="btn btn-outline-secondary btn-sm" href="${_escape(systemHref)}">Open job page</a></div>${ticket}${actions}</section>"""
+      val adminHref = s"/web/system/admin/jobs/${_escape_path_segment(jobId)}"
+      s"""<section class="textus-job-panel border rounded p-3 mb-3 bg-light"><div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3"><div><h3 class="h5 mb-1">${_escape(title)}</h3><p class="text-secondary mb-0">${_escape(description)}</p></div><div class="d-flex gap-2"><a class="btn btn-outline-secondary btn-sm" href="${_escape(systemHref)}">Open job page</a><a class="btn btn-outline-secondary btn-sm" href="${_escape(adminHref)}">Debug detail</a></div></div>${ticket}${actions}</section>"""
     }
   }
 

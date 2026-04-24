@@ -5,12 +5,13 @@ import org.goldenport.Consequence
 import org.goldenport.protocol.{Request, Response}
 import org.goldenport.cncf.component.ComponentOrigin
 import org.goldenport.cncf.subsystem.Subsystem
+import org.goldenport.cncf.context.RuntimeContext
 
 /*
  * @since   Jan.  8, 2026
  *  version Jan.  9, 2026
  *  version Mar. 19, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class HttpExecutionEngine(
@@ -27,6 +28,9 @@ final class HttpExecutionEngine(
   def execute(req: HttpRequest): HttpResponse =
     subsystem.executeHttp(req)
 
+  def executeWithMetadata(req: HttpRequest): HttpExecutionResult =
+    subsystem.executeHttpWithMetadata(req)
+
   def execute(req: Request): Consequence[Response] =
     subsystem.execute(req)
 
@@ -40,6 +44,11 @@ final class HttpExecutionEngine(
       subsystem.components.map(_.name)
   }
 }
+
+final case class HttpExecutionResult(
+  response: HttpResponse,
+  metadata: RuntimeContext.ExecutionMetadata
+)
 
 object HttpExecutionEngine {
   import org.goldenport.cncf.subsystem.{DefaultSubsystemFactory, Subsystem}

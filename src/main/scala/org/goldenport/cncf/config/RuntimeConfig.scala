@@ -18,7 +18,7 @@ import org.goldenport.cncf.observability.ObservabilityEngine
  *  version Jan. 30, 2026
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -49,8 +49,12 @@ object RuntimeConfig {
   val RuntimeOperationModeKey = "textus.runtime.operation-mode"
   val CommandExecutionModeKey = "textus.command.execution-mode"
   val RuntimeCommandExecutionModeKey = "textus.runtime.command.execution-mode"
-  val CallTreeKey = "textus.calltree"
-  val RuntimeCallTreeKey = "textus.runtime.calltree"
+  val DebugCallTreeKey = "textus.debug.calltree"
+  val RuntimeDebugCallTreeKey = "textus.runtime.debug.calltree"
+  val DebugTraceJobKey = "textus.debug.trace-job"
+  val RuntimeDebugTraceJobKey = "textus.runtime.debug.trace-job"
+  val DebugSaveCallTreeKey = "textus.debug.save-calltree"
+  val RuntimeDebugSaveCallTreeKey = "textus.runtime.debug.save-calltree"
   val ExecutionHistoryRecentLimitKey = "textus.execution.history.recent-limit"
   val RuntimeExecutionHistoryRecentLimitKey = "textus.runtime.execution.history.recent-limit"
   val ExecutionHistoryFilteredLimitKey = "textus.execution.history.filtered-limit"
@@ -304,7 +308,9 @@ object RuntimeConfig {
         case ModeKey => Vector(RuntimeModeKey)
         case OperationModeKey => Vector(RuntimeOperationModeKey)
         case CommandExecutionModeKey => Vector(RuntimeCommandExecutionModeKey)
-        case CallTreeKey => Vector(RuntimeCallTreeKey)
+        case DebugCallTreeKey => Vector(RuntimeDebugCallTreeKey)
+        case DebugTraceJobKey => Vector(RuntimeDebugTraceJobKey)
+        case DebugSaveCallTreeKey => Vector(RuntimeDebugSaveCallTreeKey)
         case ExecutionHistoryRecentLimitKey => Vector(RuntimeExecutionHistoryRecentLimitKey)
         case ExecutionHistoryFilteredLimitKey => Vector(RuntimeExecutionHistoryFilteredLimitKey)
         case ExecutionHistoryFilterOperationContainsKey => Vector(RuntimeExecutionHistoryFilterOperationContainsKey)

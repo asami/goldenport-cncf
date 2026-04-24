@@ -15,9 +15,7 @@ import scala.xml.{Elem, NodeSeq, Text}
 /*
  * @since   Mar. 13, 2026
  *  version Mar. 28, 2026
- *  version Apr.  5, 2026
- *  version Apr. 15, 2026
- * @version Apr. 17, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationResponseFormatter {
@@ -28,18 +26,36 @@ object OperationResponseFormatter {
     request: Request,
     response: OperationResponse,
     mode: RunMode
+  ): Response =
+    toResponse(request, response, mode, RuntimeContext.ExecutionMetadata.empty)
+
+  def toResponse(
+    request: Request,
+    response: OperationResponse,
+    mode: RunMode,
+    metadata: RuntimeContext.ExecutionMetadata
   ): Response = {
     val format = _resolve_format(request, mode)
     val shape = _resolve_shape(request)
     response match {
       case OperationResponse.RecordResponse(record) =>
+        val data = _output_record(record)
         val payload =
-          if (shape == "envelope") _envelope_record(request, _execution_record_for_record, _output_record(record))
-          else _output_record(record)
+          _with_inline_debug(data, metadata).getOrElse {
+            if (shape == "envelope") _envelope_record(request, _execution_record_for_record, data)
+            else data
+          }
         _record_response(_structured_format(format, shape), payload)
       case scalar: OperationResponse.Scalar[?] if shape == "envelope" =>
-        val payload = _envelope_scalar(request, scalar.print)
+        val payload = _with_inline_debug(_scalar_data(scalar.print), metadata).getOrElse(_envelope_scalar(request, scalar.print))
         _record_response(_structured_format(format, shape), payload)
+      case scalar: OperationResponse.Scalar[?] =>
+        _with_inline_debug(scalar.print, metadata) match {
+          case Some(payload) =>
+            _record_response(_structured_format(format, shape), payload)
+          case None =>
+            response.toResponse
+        }
       case _ =>
         response.toResponse
     }
@@ -180,6 +196,19 @@ object OperationResponseFormatter {
       "textus-execution" -> execution,
       "data" -> data
     )
+
+  private def _with_inline_debug(
+    data: Any,
+    metadata: RuntimeContext.ExecutionMetadata
+  ): Option[Record] =
+    metadata.inlineCallTree.map { calltree =>
+      Record.data(
+        "data" -> data,
+        "debug" -> Record.data(
+          "calltree" -> calltree
+        )
+      )
+    }
 
   private def _execution_record_for_record: Record =
     Record.data(

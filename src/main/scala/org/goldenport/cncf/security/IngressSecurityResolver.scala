@@ -19,7 +19,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -150,7 +150,9 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     val withobservability = _restore_observability(attributes, ctx).getOrElse(ctx)
     val withjob = _restore_job_context(attributes, withobservability).getOrElse(withobservability)
     val withmode = _restore_command_execution_mode(attributes, withjob).getOrElse(withjob)
-    _restore_calltree_mode(attributes, withmode).getOrElse(withmode)
+    val withcalltree = _restore_debug_calltree_mode(attributes, withmode).getOrElse(withmode)
+    val withtrace = _restore_debug_trace_job_mode(attributes, withcalltree).getOrElse(withcalltree)
+    _restore_debug_save_calltree_mode(attributes, withtrace).getOrElse(withtrace)
   }
 
   private def _restore_command_execution_mode(
@@ -169,20 +171,58 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       ExecutionContext.withFrameworkCommandExecutionMode(ctx, mode)
     }
 
-  private def _restore_calltree_mode(
+  private def _restore_debug_calltree_mode(
     attributes: Map[String, String],
     ctx: ExecutionContext
   ): Option[ExecutionContext] =
     _find_first(
       attributes,
       Vector(
-        RuntimeConfig.CallTreeKey,
-        RuntimeConfig.RuntimeCallTreeKey,
-        "cncf.calltree",
-        "cncf.runtime.calltree"
+        RuntimeConfig.DebugCallTreeKey,
+        RuntimeConfig.RuntimeDebugCallTreeKey,
+        "cncf.debug.calltree",
+        "cncf.runtime.debug.calltree",
+        "x-textus-debug-calltree",
+        "X-Textus-Debug-Calltree"
       )
     ).map(_is_truthy).map { enabled =>
-      ExecutionContext.withFrameworkCallTreeEnabled(ctx, enabled)
+      ExecutionContext.withFrameworkInlineCallTreeEnabled(ctx, enabled)
+    }
+
+  private def _restore_debug_trace_job_mode(
+    attributes: Map[String, String],
+    ctx: ExecutionContext
+  ): Option[ExecutionContext] =
+    _find_first(
+      attributes,
+      Vector(
+        RuntimeConfig.DebugTraceJobKey,
+        RuntimeConfig.RuntimeDebugTraceJobKey,
+        "cncf.debug.trace-job",
+        "cncf.runtime.debug.trace-job",
+        "x-textus-debug-trace-job",
+        "X-Textus-Debug-Trace-Job"
+      )
+    ).map(_is_truthy).map { enabled =>
+      ExecutionContext.withFrameworkTraceJobEnabled(ctx, enabled)
+    }
+
+  private def _restore_debug_save_calltree_mode(
+    attributes: Map[String, String],
+    ctx: ExecutionContext
+  ): Option[ExecutionContext] =
+    _find_first(
+      attributes,
+      Vector(
+        RuntimeConfig.DebugSaveCallTreeKey,
+        RuntimeConfig.RuntimeDebugSaveCallTreeKey,
+        "cncf.debug.save-calltree",
+        "cncf.runtime.debug.save-calltree",
+        "x-textus-debug-save-calltree",
+        "X-Textus-Debug-Save-Calltree"
+      )
+    ).map(_is_truthy).map { enabled =>
+      ExecutionContext.withFrameworkSaveCallTreeEnabled(ctx, enabled)
     }
 
   private def _is_truthy(p: String): Boolean = {

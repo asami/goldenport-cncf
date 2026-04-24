@@ -4,7 +4,8 @@ import org.goldenport.http.{HttpRequest, HttpResponse}
 
 /*
  * @since   Jan.  9, 2026
- * @version Jan.  9, 2026
+ *  version Jan.  9, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class HttpServer(
@@ -12,4 +13,7 @@ abstract class HttpServer(
 ) {
   def execute(req: HttpRequest): HttpResponse =
     engine.execute(req)
+
+  def executeWithMetadata(req: HttpRequest): HttpExecutionResult =
+    engine.executeWithMetadata(req)
 }

@@ -31,7 +31,7 @@ import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, WebValidationHints, XBoolean, XDateTime, XInt, XString}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
-import org.goldenport.cncf.action.{ActionCall, ProcedureActionCall, QueryAction}
+import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentFactory, ComponentletDescriptor}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
@@ -41,6 +41,7 @@ import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollecti
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.view.{Browser, ViewBuilder, ViewCollection, ViewDefinition, ViewQueryDefinition}
 import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField}
+import org.goldenport.cncf.job.{ActionId, ActionTask, JobPersistencePolicy, JobRunMode, JobSubmitOption}
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
@@ -152,6 +153,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Operator Checklist")
       html should include ("job_control.job.get_job_status")
       html should include ("event.event.load_event")
+      html should include ("/web/system/admin/jobs")
       html should include ("/form/admin/execution/diagnostics")
       html should include ("Operational Details")
       html should include ("Assembly")
@@ -160,6 +162,37 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Execution")
       html should include ("/form/admin/execution/history")
       html should include ("/form/admin/execution/calltree")
+    }
+
+    "render system admin jobs list and detail pages" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val action = _RendererJobAction(GRequest.of(
+        component = "renderer",
+        service = "job",
+        operation = "debug-query"
+      ))
+      val task = ActionTask(ActionId.generate(), action, ActionEngine.create(), None)
+      val jobid = subsystem.jobEngine.submit(
+        List(task),
+        ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.test(), enabled = true),
+        JobSubmitOption(
+          persistence = JobPersistencePolicy.Persistent,
+          runMode = JobRunMode.Sync,
+          executionNotes = Vector("debug trace query")
+        )
+      ).toOption.getOrElse(fail("job submission failed"))
+      val model = subsystem.jobEngine.query(jobid).getOrElse(fail("job read model missing"))
+
+      val list = StaticFormAppRenderer.renderSystemAdminJobs(subsystem).body
+      val detail = StaticFormAppRenderer.renderSystemAdminJob(subsystem, model).body
+
+      list should include ("System Admin Jobs")
+      list should include (jobid.value)
+      list should include (s"/web/system/admin/jobs/${jobid.value}")
+      detail should include ("Job-managed trace and calltree detail")
+      detail should include ("Calltree")
+      detail should include ("Timeline")
+      detail should include ("debug-query")
     }
 
     "render resolved runtime configuration with masking rules on system admin page" in {
@@ -7476,6 +7509,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     } yield record
     loaded.toOption.flatten.getOrElse(fail(s"notice store record is missing: ${id.print}"))
   }
+}
+
+private final case class _RendererJobAction(
+  request: GRequest
+) extends QueryAction() {
+  override def createCall(core: ActionCall.Core): ActionCall =
+    _RendererJobActionCall(core)
+}
+
+private final case class _RendererJobActionCall(
+  core: ActionCall.Core
+) extends ProcedureActionCall {
+  override def execute(): Consequence[OperationResponse] =
+    Consequence.success(OperationResponse.Scalar("renderer-job-ok"))
 }
 
 private final case class _NoticeEntity(

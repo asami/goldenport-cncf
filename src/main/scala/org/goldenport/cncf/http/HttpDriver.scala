@@ -6,12 +6,13 @@ import java.nio.charset.{Charset, StandardCharsets}
 import org.goldenport.bag.Bag
 import org.goldenport.datatype.{ContentType, MimeType}
 import org.goldenport.http.{HttpResponse, HttpStatus}
+import org.goldenport.record.Record
 import org.slf4j.LoggerFactory
 
 /*
  * @since   Jan. 11, 2026
  *  version Feb.  7, 2026
- * @version Apr. 11, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 trait HttpDriver {
@@ -91,6 +92,21 @@ final class UrlConnectionHttpDriver(
     val contentType = _content_type(conn.getContentType)
     val status = _status(code)
     HttpResponse.Text(status, contentType, Bag.text(text, StandardCharsets.UTF_8))
+      .withHeader(_response_header(conn))
+  }
+
+  private def _response_header(
+    conn: HttpURLConnection
+  ): Record = {
+    val values = conn.getHeaderFields.entrySet().toArray.toVector.flatMap { entry =>
+      val e = entry.asInstanceOf[java.util.Map.Entry[String, java.util.List[String]]]
+      Option(e.getKey).flatMap { key =>
+        Option(e.getValue).flatMap(values =>
+          values.toArray.toVector.collectFirst { case v: String if v != null => key -> v }
+        )
+      }
+    }.sortBy { case (key, _) => key.toLowerCase(java.util.Locale.ROOT) }
+    Record.create(values)
   }
 
   private def _response_stream(

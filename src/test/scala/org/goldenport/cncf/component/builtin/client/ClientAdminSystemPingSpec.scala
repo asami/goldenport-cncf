@@ -2,31 +2,34 @@ package org.goldenport.cncf.component.builtin.client
 
 import cats.~>
 
+import java.io.{ByteArrayOutputStream, PrintStream}
 import java.nio.charset.StandardCharsets
 import org.goldenport.bag.Bag
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.ActionCall
-import org.goldenport.cncf.cli.CncfRuntime
-import org.goldenport.cncf.config.ClientConfig
+import org.goldenport.cncf.cli.{ClientOperation, CncfRuntime}
+import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.cncf.component.builtin.client.ClientComponent
-import org.goldenport.cncf.context.{ExecutionContext, ObservabilityContext, RuntimeContext, ScopeContext}
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ObservabilityContext, RuntimeContext, ScopeContext}
+import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.datatype.MimeBody
 import org.goldenport.datatype.{ContentType, MimeType}
 import org.goldenport.http.{HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.operation.OperationResponse
-import org.goldenport.protocol.{Property, Request, Response}
+import org.goldenport.protocol.{Argument, Property, Request, Response}
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.egress.EgressCollection
 import org.goldenport.protocol.handler.ingress.IngressCollection
 import org.goldenport.protocol.handler.projection.ProjectionCollection
 import org.goldenport.protocol.spec as spec
+import org.goldenport.record.Record
 import org.goldenport.test.matchers.ConsequenceMatchers
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -147,6 +150,136 @@ class ClientAdminSystemPingSpec
           None,
           Map.empty
         )
+      )
+    }
+
+    "print debug job reference to stderr only when trace-job is requested" in {
+      Given("a client component whose HTTP response includes a debug job header")
+      val response = _response_pong()
+        .withHeader(Record.data("X-Textus-Job-Id" -> "job-client-1"))
+      val driver = new FakeHttpDriver(response)
+      val harness = _build_harness(driver)
+      val _ = harness.component.withApplicationConfig(
+        org.goldenport.cncf.component.Component.ApplicationConfig(
+          httpDriver = Some(driver)
+        )
+      )
+      val out = new ByteArrayOutputStream()
+      val err = new ByteArrayOutputStream()
+
+      When("the client command is executed with the debug trace-job option")
+      val exit = Console.withOut(new PrintStream(out)) {
+        Console.withErr(new PrintStream(err)) {
+          new CncfRuntime().executeClient(
+            harness.subsystem,
+            Array("--debug.trace-job", "http", "get", "/admin/system/ping")
+          )
+        }
+      }
+
+      Then("stdout remains the response body and stderr receives the admin job reference")
+      exit shouldBe 0
+      out.toString(StandardCharsets.UTF_8) should include ("pong")
+      err.toString(StandardCharsets.UTF_8) should include ("Debug job: job-client-1")
+      err.toString(StandardCharsets.UTF_8) should include ("/web/system/admin/jobs/job-client-1")
+      driver.calls shouldBe Vector(
+        HttpCall("GET", s"${ClientConfig.DefaultBaseUrl}/admin/system/ping?textus.debug.trace-job=true", None, Map.empty)
+      )
+    }
+
+    "not print debug job reference without trace-job request" in {
+      Given("a client component whose HTTP response includes a debug job header")
+      val response = _response_pong()
+        .withHeader(Record.data("X-Textus-Job-Id" -> "job-client-1"))
+      val driver = new FakeHttpDriver(response)
+      val harness = _build_harness(driver)
+      val _ = harness.component.withApplicationConfig(
+        org.goldenport.cncf.component.Component.ApplicationConfig(
+          httpDriver = Some(driver)
+        )
+      )
+      val out = new ByteArrayOutputStream()
+      val err = new ByteArrayOutputStream()
+
+      When("the client command is executed without the debug trace-job option")
+      val exit = Console.withOut(new PrintStream(out)) {
+        Console.withErr(new PrintStream(err)) {
+          new CncfRuntime().executeClient(
+            harness.subsystem,
+            Array("http", "get", "/admin/system/ping")
+          )
+        }
+      }
+
+      Then("stdout remains the response body and stderr has no debug job noise")
+      exit shouldBe 0
+      out.toString(StandardCharsets.UTF_8) should include ("pong")
+      err.toString(StandardCharsets.UTF_8) should not include ("Debug job:")
+      driver.calls shouldBe Vector(
+        HttpCall("GET", s"${ClientConfig.DefaultBaseUrl}/admin/system/ping", None, Map.empty)
+      )
+    }
+
+    "delegate ClientOperation mode dispatch to the canonical client execution path" in {
+      Given("a runtime client-mode request and a response with a debug job header")
+      val response = _response_pong()
+        .withHeader(Record.data("X-Textus-Job-Id" -> "job-client-2"))
+      val driver = new FakeHttpDriver(response)
+      val harness = _build_harness(driver)
+      val _ = harness.component.withApplicationConfig(
+        org.goldenport.cncf.component.Component.ApplicationConfig(
+          httpDriver = Some(driver)
+        )
+      )
+      val request = Request(
+        component = None,
+        service = None,
+        operation = "client",
+        arguments = List(
+          Argument("arg1", "--debug.trace-job", None),
+          Argument("arg2", "http", None),
+          Argument("arg3", "get", None),
+          Argument("arg4", "/admin/system/ping", None)
+        ),
+        switches = Nil,
+        properties = Nil
+      )
+      val out = new ByteArrayOutputStream()
+      val err = new ByteArrayOutputStream()
+
+      When("ClientOperation executes the request")
+      val runtime = GlobalRuntimeContext.create(
+        "client-operation-dispatch-spec",
+        RuntimeConfig.default.copy(
+          httpDriver = driver,
+          mode = org.goldenport.cncf.cli.RunMode.Client
+        ),
+        org.goldenport.configuration.ResolvedConfiguration(
+          org.goldenport.configuration.Configuration.empty,
+          org.goldenport.configuration.ConfigurationTrace.empty
+        ),
+        ExecutionContext.create().observability,
+        AliasResolver.empty
+      )
+      val previous = GlobalRuntimeContext.current
+      val exit =
+        try {
+          GlobalRuntimeContext.current = Some(runtime)
+          Console.withOut(new PrintStream(out)) {
+            Console.withErr(new PrintStream(err)) {
+              ClientOperation(harness.subsystem).execute(request)
+            }
+          }
+        } finally {
+          GlobalRuntimeContext.current = previous
+        }
+
+      Then("the same canonical client debug behavior is used")
+      exit shouldBe 0
+      out.toString(StandardCharsets.UTF_8) should include ("pong")
+      err.toString(StandardCharsets.UTF_8) should include ("Debug job: job-client-2")
+      driver.calls shouldBe Vector(
+        HttpCall("GET", s"${ClientConfig.DefaultBaseUrl}/admin/system/ping?textus.debug.trace-job=true", None, Map.empty)
       )
     }
   }

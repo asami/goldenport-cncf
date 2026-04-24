@@ -17,9 +17,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 22, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
- *  version Apr. 10, 2026
- * @version Apr. 14, 2026
  */
 final class ComponentLogicOperationDefinitionSemanticsSpec
   extends AnyWordSpec
@@ -41,7 +40,7 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       When("the action is executed")
       val result = component.logic.executeAction(action.asInstanceOf[Action], ExecutionContext.create())
 
-      Then("the job is awaited and the action response is returned")
+      Then("the query is executed directly and the action response is returned")
       result match {
         case Consequence.Success(OperationResponse.Scalar(value)) =>
           value shouldBe "fetch-ok"
@@ -73,6 +72,88 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
         case other =>
           fail(s"unexpected result: $other")
       }
+    }
+
+    "keep normal query jobs ephemeral but retain debug query jobs as persistent" in {
+      Given("a component operation defined as QUERY")
+      val component = _component()
+      val req = Request.of(
+        component = component.name,
+        service = "entity",
+        operation = "fetchPerson"
+      )
+      val action = component.logic.makeOperationRequest(req).toOption.getOrElse(fail("action creation failed")).asInstanceOf[Action]
+
+      When("the query is executed normally")
+      val normal = component.logic.executeAction(action, ExecutionContext.create())
+
+      Then("the normal result is returned and no persistent job is listed")
+      normal.toOption.map(_.print) shouldBe Some("fetch-ok")
+      component.jobEngine.listJobs().map(_.debug.executionNotes).flatten should not contain ("debug trace query")
+
+      When("the same query is executed with debug trace-job enabled")
+      val debugctx = ExecutionContext.withFrameworkTraceJobEnabled(ExecutionContext.create(), enabled = true)
+      val debug = component.logic.executeAction(action, debugctx)
+
+      Then("the result shape is unchanged but a persistent debug job is retained")
+      debug.toOption.map(_.print) shouldBe Some("fetch-ok")
+      val jobs = component.jobEngine.listJobs()
+      jobs.exists(_.debug.executionNotes.contains("debug trace query")) shouldBe true
+      jobs.head.persistence shouldBe org.goldenport.cncf.job.JobPersistencePolicy.Persistent
+    }
+
+    "retain job-specific calltree for debug query when calltree is enabled" in {
+      Given("a debug trace-job query execution context with calltree save enabled")
+      val component = _component()
+      val req = Request.of(
+        component = component.name,
+        service = "entity",
+        operation = "fetchPerson"
+      )
+      val action = component.logic.makeOperationRequest(req).toOption.getOrElse(fail("action creation failed")).asInstanceOf[Action]
+      val debugctx = ExecutionContext.withFrameworkSaveCallTreeEnabled(
+        ExecutionContext.withFrameworkTraceJobEnabled(ExecutionContext.create(), enabled = true),
+        enabled = true
+      )
+
+      When("the query is executed")
+      val result = component.logic.executeAction(action, debugctx)
+
+      Then("the result is returned and the retained job exposes a calltree")
+      result.toOption.map(_.print) shouldBe Some("fetch-ok")
+      val job = component.jobEngine.listJobs().headOption.getOrElse(fail("debug job missing"))
+      job.calltree should not be empty
+      job.calltree.map(_.show).getOrElse("") should include ("action:operation_definition_semantics_spec.entity.fetchPerson")
+      job.debug.calltreeSaved shouldBe true
+      job.debug.calltreeStorage shouldBe Some("calltree")
+      job.debug.calltreeSerializedBytes.exists(_ > 0) shouldBe true
+      job.debug.calltreeDropReason shouldBe None
+    }
+
+    "save job-specific calltree for failed persistent debug query" in {
+      Given("a debug trace-job query execution context without explicit save-calltree")
+      val component = _component()
+      val req = Request.of(
+        component = component.name,
+        service = "entity",
+        operation = "fetchFailure"
+      )
+      val action = component.logic.makeOperationRequest(req).toOption.getOrElse(fail("action creation failed")).asInstanceOf[Action]
+      val debugctx = ExecutionContext.withFrameworkTraceJobEnabled(ExecutionContext.create(), enabled = true)
+
+      When("the query fails under persistent debug job execution")
+      val result = component.logic.executeAction(action, debugctx)
+
+      Then("the failed job is retained and the calltree is saved by error policy")
+      result match {
+        case Consequence.Failure(_) => succeed
+        case other => fail(s"unexpected result: $other")
+      }
+      val job = component.jobEngine.listJobs().headOption.getOrElse(fail("debug job missing"))
+      job.status shouldBe org.goldenport.cncf.job.JobStatus.Failed
+      job.debug.calltreeSaved shouldBe true
+      job.debug.calltreeStorage shouldBe Some("calltree")
+      job.calltree should not be empty
     }
 
     "validate request values while building a generated VO before action execution" in {
@@ -165,7 +246,8 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
             name = "entity",
             operations = spec.OperationDefinitionGroup(
               operations = NonEmptyVector.of(
-              _ActionOperation("fetchPerson", "fetch-ok"),
+                _ActionOperation("fetchPerson", "fetch-ok"),
+                _FailingOperation("fetchFailure"),
                 _RecordOperation("fetchAddress"),
                 _ValidatedRecordOperation("fetchAddressValidated"),
                 _ActionOperation("savePerson", "save-ok"),
@@ -191,6 +273,13 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
             kind = "QUERY",
             inputType = "FetchAddress",
             outputType = "AddressView",
+            inputValueKind = "QUERY_VALUE"
+          ),
+          CmlOperationDefinition(
+            name = "fetchFailure",
+            kind = "QUERY",
+            inputType = "FetchFailure",
+            outputType = "FailureView",
             inputValueKind = "QUERY_VALUE"
           ),
           CmlOperationDefinition(
@@ -261,6 +350,34 @@ private final case class _PlainActionCall(
 ) extends ProcedureActionCall {
   override def execute(): Consequence[OperationResponse] =
     Consequence.success(OperationResponse.Scalar(value))
+}
+
+private final case class _FailingOperation(
+  opname: String
+) extends spec.OperationDefinition {
+  override val specification: spec.OperationDefinition.Specification =
+    spec.OperationDefinition.Specification(
+      name = opname,
+      request = spec.RequestDefinition(),
+      response = spec.ResponseDefinition.void
+    )
+
+  override def createOperationRequest(req: Request): Consequence[OperationRequest] =
+    Consequence.success(_FailingAction(req))
+}
+
+private final case class _FailingAction(
+  request: Request
+) extends Action {
+  override def createCall(core: ActionCall.Core): ActionCall =
+    _FailingActionCall(core)
+}
+
+private final case class _FailingActionCall(
+  core: ActionCall.Core
+) extends ProcedureActionCall {
+  override def execute(): Consequence[OperationResponse] =
+    Consequence.operationInvalid("debug trace query failure")
 }
 
 private final case class _RecordOperation(

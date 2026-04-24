@@ -25,8 +25,7 @@ import org.goldenport.cncf.http.RuntimeDashboardMetrics
  *  version Jan. 29, 2026
  *  version Feb.  6, 2026
  *  version Mar. 13, 2026
- *  version Apr. 12, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -133,6 +132,14 @@ class ActionEngine(
               ec.runtime.dispose()
             } finally {
               calltree.leave()
+              val builtCallTree = calltree.build()
+              if (ec.framework.inlineCallTree) {
+                builtCallTree.foreach { tree =>
+                  ec.runtime.noteInlineCallTree(
+                    ObservabilityEngine.callTreeRecord(tree, ec.jobContext.jobId.map(_.value))
+                  )
+                }
+              }
               executionOutcome.foreach { outcome =>
                 RuntimeDashboardMetrics.recordActionCall(outcome.isLeft)
                 ObservabilityEngine.recordActionExecution(
@@ -140,7 +147,8 @@ class ActionEngine(
                   parameters = call.request.toRecord,
                   parametersText = params.usedText.getOrElse(""),
                   outcome = outcome,
-                  calltree = calltree.build()
+                  jobId = ec.jobContext.jobId.map(_.value),
+                  calltree = builtCallTree
                 )
               }
             }

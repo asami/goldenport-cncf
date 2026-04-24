@@ -104,6 +104,9 @@ object ExecutionContext {
   final case class FrameworkParameter(
     commandExecutionMode: Option[CommandExecutionMode] = None,
     callTreeEnabled: Boolean = false,
+    inlineCallTree: Boolean = false,
+    traceJob: Boolean = false,
+    saveCallTree: Boolean = false,
     dslChokepointHooks: Option[Vector[DslChokepointHook]] = None
   )
 
@@ -248,6 +251,75 @@ object ExecutionContext {
           observability = observability,
           framework = i.cncfCore.framework.copy(
             callTreeEnabled = enabled
+          )
+        )
+      )
+    case _ =>
+      ctx
+  }
+
+  def withFrameworkInlineCallTreeEnabled(
+    ctx: ExecutionContext,
+    enabled: Boolean
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      val observability =
+        if (enabled && !i.cncfCore.observability.callTreeContext.isEnabled)
+          i.cncfCore.observability.copy(callTreeContext = CallTreeContext.enabled)
+        else
+          i.cncfCore.observability
+      i.copy(
+        cncfCore = i.cncfCore.copy(
+          observability = observability,
+          framework = i.cncfCore.framework.copy(
+            callTreeEnabled = i.cncfCore.framework.callTreeEnabled || enabled,
+            inlineCallTree = enabled
+          )
+        )
+      )
+    case _ =>
+      ctx
+  }
+
+  def withFrameworkTraceJobEnabled(
+    ctx: ExecutionContext,
+    enabled: Boolean
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      val observability =
+        if (enabled && !i.cncfCore.observability.callTreeContext.isEnabled)
+          i.cncfCore.observability.copy(callTreeContext = CallTreeContext.enabled)
+        else
+          i.cncfCore.observability
+      i.copy(
+        cncfCore = i.cncfCore.copy(
+          observability = observability,
+          framework = i.cncfCore.framework.copy(
+            callTreeEnabled = i.cncfCore.framework.callTreeEnabled || enabled,
+            traceJob = enabled
+          )
+        )
+      )
+    case _ =>
+      ctx
+  }
+
+  def withFrameworkSaveCallTreeEnabled(
+    ctx: ExecutionContext,
+    enabled: Boolean
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      val observability =
+        if (enabled && !i.cncfCore.observability.callTreeContext.isEnabled)
+          i.cncfCore.observability.copy(callTreeContext = CallTreeContext.enabled)
+        else
+          i.cncfCore.observability
+      i.copy(
+        cncfCore = i.cncfCore.copy(
+          observability = observability,
+          framework = i.cncfCore.framework.copy(
+            callTreeEnabled = i.cncfCore.framework.callTreeEnabled || enabled,
+            saveCallTree = enabled
           )
         )
       )

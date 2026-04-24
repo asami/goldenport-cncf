@@ -6,18 +6,36 @@ This document defines the runtime result projection semantics for CNCF calltree
 observability.
 
 The calltree projection is intended for operation-level execution inspection and
-performance tuning. It is returned as part of the operation result data only when
-the generic calltree meta option is enabled.
+performance tuning. It is captured by the ExecutionContext and is returned as
+debug data only when the inline debug option is enabled.
 
 ## Enablement
 
-The primary configuration key is:
+The primary configuration keys are:
 
-- `textus.calltree`
+- `textus.debug.calltree`
+- `textus.debug.trace-job`
+- `textus.debug.save-calltree`
 
-The CLI-facing meta option is:
+The CLI-facing meta options are:
 
-- `--calltree`
+- `--debug.calltree`
+- `--debug.trace-job`
+- `--debug.save-calltree`
+
+`--debug.calltree` returns the captured CallTree in the operation response
+under top-level debug data. It does not make a Query retained as an inspectable
+job.
+
+For request debugging that must survive the immediate response, use debug trace-job
+execution:
+
+- CLI/client: `--debug.trace-job`
+- HTTP/curl property: `textus.debug.trace-job=true`
+- HTTP/curl header: `X-Textus-Debug-Trace-Job: true`
+
+`--debug.save-calltree` requests CallTree storage on a persistent job even when
+the execution succeeds and is not slow.
 
 Older compatibility aliases may remain where already implemented, but new
 documentation and samples should use the `textus.*` namespace and avoid a
@@ -26,9 +44,9 @@ process itself.
 
 ## Result Placement
 
-When enabled, the operation result may include:
+When inline debug is enabled, the operation result may include:
 
-- `calltree`
+- `debug.calltree`
 
 This projection is part of the operation result data. It is not an admin-only
 report and it is not emitted as a side-channel log.
@@ -106,6 +124,7 @@ record should include:
 - result type
 - result summary
 - captured time
+- job id, when execution happened inside a managed job
 - calltree projection, when calltree capture was enabled for that action
 
 The initial retention policy is two-tiered:
@@ -115,6 +134,25 @@ The initial retention policy is two-tiered:
 
 The intent is to make production use bounded by default while still allowing
 debug-targeted executions to survive beyond the short recent window.
+
+Job-managed debugging is the canonical path for target-request calltree
+inspection. Normal Query executions are direct synchronous executions. When
+`textus.debug.trace-job=true` is present, Query execution remains
+response-compatible but the JobEngine uses a persistent job so operators can inspect:
+
+- `/web/system/admin/jobs`
+- `/web/system/admin/jobs/{jobId}`
+- `job_control.job.get_job_calltree`
+
+HTTP responses that create or return a managed debug job include
+`X-Textus-Job-Id`. The CLI client reads that protocol header and, only when
+`--debug.trace-job` is explicitly requested, prints
+`Debug job: <jobId> (/web/system/admin/jobs/<jobId>)` to stderr. The response
+body/stdout contract remains the original operation result.
+
+The older `admin.execution.history` and `admin.execution.calltree` surfaces
+remain useful as execution-history references, but target-request debugging
+should prefer the job-specific admin detail page.
 
 Configuration keys:
 

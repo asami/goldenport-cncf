@@ -15,6 +15,7 @@ import com.comcast.ip4s.Host
 import com.comcast.ip4s.Port
 import io.circe.Json
 import org.http4s.{HttpRoutes, MediaType, Request as HRequest, Response as HResponse, ResponseCookie, SameSite, Status as HStatus, Uri}
+import org.http4s.Header
 import org.http4s.ember.server.EmberServerBuilder
 import org.http4s.headers.{`Content-Type`, Location}
 import org.http4s.Charset
@@ -23,13 +24,15 @@ import org.http4s.dsl.io.*
 import org.http4s.multipart.Multipart
 import org.http4s.server.websocket.WebSocketBuilder2
 import org.http4s.websocket.WebSocketFrame
+import org.typelevel.ci.CIString
 import org.goldenport.record.Record
 import org.goldenport.Conclusion
 import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
-import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.naming.NamingConventions
+import org.goldenport.cncf.job.JobId
 import org.goldenport.cncf.observability.{DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
 import org.goldenport.cncf.openapi.OpenApiProjector
@@ -135,6 +138,10 @@ final class Http4sHttpServer(
         if (_is_web_authorized("system", "admin", "index", Some(req))) _system_admin() else _forbidden_web(req, Some("system"), Some("admin"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "admin" / "descriptor" =>
         if (_is_web_authorized("system", "admin", "descriptor", Some(req))) _system_admin_descriptor() else _forbidden_web(req, Some("system"), Some("admin"), Some("descriptor"))
+      case req @ GET -> Root / "web" / "system" / "admin" / "jobs" =>
+        if (_is_web_authorized("system", "admin.jobs", "index", Some(req))) _system_admin_jobs() else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some("index"))
+      case req @ GET -> Root / "web" / "system" / "admin" / "jobs" / jobId =>
+        if (_is_web_authorized("system", "admin.jobs", jobId, Some(req))) _system_admin_job(req, jobId) else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some(jobId))
       case GET -> Root / "web" / app / "dashboard" / "state" =>
         _dashboard_state(Some(app))
       case req @ GET -> Root / "web" / app / "admin" =>
@@ -246,7 +253,7 @@ final class Http4sHttpServer(
           val started = System.nanoTime()
           for {
             core <- _to_http_request(req, Some(_rest_execution_path(req)))
-            res <- _to_http_response(execute(core), Some(req))
+            res <- _to_http_execution_response(executeWithMetadata(core), Some(req))
           } yield {
             RuntimeDashboardMetrics.recordHtmlRequest(
               req.method.name,
@@ -363,6 +370,20 @@ final class Http4sHttpServer(
         .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
     )
   }
+
+  private def _system_admin_jobs(): IO[HResponse[IO]] =
+    _html(StaticFormAppRenderer.renderSystemAdminJobs(engine.runtimeSubsystem))
+
+  private def _system_admin_job(
+    req: org.http4s.Request[IO],
+    jobId: String
+  ): IO[HResponse[IO]] =
+    JobId.parse(jobId).toOption.flatMap(engine.runtimeSubsystem.jobEngine.query) match {
+      case Some(model) =>
+        _html(StaticFormAppRenderer.renderSystemAdminJob(engine.runtimeSubsystem, model))
+      case None =>
+        _html_status(StaticFormAppRenderer.renderSystemJobResult(jobId, HttpResponse.notFound(s"job not found: $jobId")), HStatus.NotFound)
+    }
 
   private def _system_manual(): IO[HResponse[IO]] =
     _html(StaticFormAppRenderer.renderSystemManual(engine.runtimeSubsystem))
@@ -1012,7 +1033,7 @@ final class Http4sHttpServer(
         query = Record.create(req.uri.query.params.toVector)
         header = _request_header_record(req, query, form)
         componentSegment = _dispatch_component_segment(app)
-        res = _dispatch_operation(
+        result = _dispatch_operation_result(
           componentSegment,
           service,
           operation,
@@ -1024,8 +1045,9 @@ final class Http4sHttpServer(
             form = _operation_dispatch_form(form)
           )
         )
-        out <- _to_http_response(
-          res,
+        res = result.response
+        out <- _to_http_execution_response(
+          result,
           Some(req),
           component = Some(app),
           service = Some(service),
@@ -1118,7 +1140,15 @@ final class Http4sHttpServer(
     service: String,
     operation: String,
     request: HttpRequest
-  ): HttpResponse = {
+  ): HttpResponse =
+    _dispatch_operation_result(app, service, operation, request).response
+
+  private[http] def _dispatch_operation_result(
+    app: String,
+    service: String,
+    operation: String,
+    request: HttpRequest
+  ): HttpExecutionResult = {
     given ExecutionContext = ExecutionContext.create()
     val context = DslChokepointContext(
       domain = "web",
@@ -1134,7 +1164,7 @@ final class Http4sHttpServer(
     )
     DslChokepointRunner.run(context) {
       DslChokepointRunner.phase(context, DslChokepointPhase.Method) {
-        org.goldenport.Consequence.success(_operation_dispatcher.dispatch(request))
+        org.goldenport.Consequence.success(_operation_dispatcher.dispatchWithMetadata(request))
       }
     } match {
       case org.goldenport.Consequence.Success(response) =>
@@ -1150,10 +1180,13 @@ final class Http4sHttpServer(
           service = Some(service),
           operation = Some(operation)
         )
-        HttpResponse.Text(
-          HttpStatus.InternalServerError,
-          ContentType(MimeType("application/json"), Some(StandardCharsets.UTF_8)),
-          Bag.text(error.envelopeJson, StandardCharsets.UTF_8)
+        HttpExecutionResult(
+          HttpResponse.Text(
+            HttpStatus.InternalServerError,
+            ContentType(MimeType("application/json"), Some(StandardCharsets.UTF_8)),
+            Bag.text(error.envelopeJson, StandardCharsets.UTF_8)
+          ),
+          RuntimeContext.ExecutionMetadata.empty
         )
     }
   }
@@ -2723,7 +2756,16 @@ final class Http4sHttpServer(
   private def _to_http_response(
     res: HttpResponse
   ): IO[org.http4s.Response[IO]] =
-    _to_http_response(res, None)
+    _to_http_response_with_metadata(res, None, None, None, None, RuntimeContext.ExecutionMetadata.empty)
+
+  private def _to_http_execution_response(
+    result: HttpExecutionResult,
+    req: Option[org.http4s.Request[IO]],
+    component: Option[String] = None,
+    service: Option[String] = None,
+    operation: Option[String] = None
+  ): IO[org.http4s.Response[IO]] =
+    _to_http_response_with_metadata(result.response, req, component, service, operation, result.metadata)
 
   private def _to_http_response(
     res: HttpResponse,
@@ -2731,6 +2773,16 @@ final class Http4sHttpServer(
     component: Option[String] = None,
     service: Option[String] = None,
     operation: Option[String] = None
+  ): IO[org.http4s.Response[IO]] =
+    _to_http_response_with_metadata(res, req, component, service, operation, RuntimeContext.ExecutionMetadata.empty)
+
+  private def _to_http_response_with_metadata(
+    res: HttpResponse,
+    req: Option[org.http4s.Request[IO]],
+    component: Option[String],
+    service: Option[String],
+    operation: Option[String],
+    metadata: RuntimeContext.ExecutionMetadata
   ): IO[org.http4s.Response[IO]] = {
     val status = res.code match {
       case 200 => HStatus.Ok
@@ -2746,7 +2798,7 @@ final class Http4sHttpServer(
       val charset: Option[org.http4s.Charset] =
         res.charset.map(c => org.http4s.Charset.fromNioCharset(c))
       IO.pure(
-        HResponse[IO](status)
+        _with_job_id_header(HResponse[IO](status), metadata)
           .withEntity(body)
           .withContentType(`Content-Type`(mime, charset))
       )
@@ -2771,10 +2823,21 @@ final class Http4sHttpServer(
       res.charset.map(c => org.http4s.Charset.fromNioCharset(c))
     val contentType = `Content-Type`(mime, charset)
     IO.pure(
-      HResponse[IO](status).withEntity(body).withContentType(contentType)
+      _with_job_id_header(HResponse[IO](status), metadata).withEntity(body).withContentType(contentType)
     )
     }
   }
+
+  private def _with_job_id_header(
+    response: HResponse[IO],
+    metadata: RuntimeContext.ExecutionMetadata
+  ): HResponse[IO] =
+    metadata.responseJobId.orElse(metadata.debugJobId) match {
+      case Some(jobid) if jobid.nonEmpty =>
+        response.putHeaders(Header.Raw(CIString("X-Textus-Job-Id"), jobid))
+      case _ =>
+        response
+    }
 
   private def _prefers_yaml(
     req: Option[org.http4s.Request[IO]]

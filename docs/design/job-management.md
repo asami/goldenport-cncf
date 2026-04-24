@@ -276,6 +276,8 @@ is mandatory for asynchronous execution.
 Rules:
 
     - asynchronous execution must remain traceable through Job management
+    - explicit debug trace-job execution must make target requests inspectable through
+      Job management without changing normal request result contracts
     - metrics must be collected from the JobEngine-owned scheduler path
     - queueing/execution timing must be attributable to a Job
     - metrics must be accurate enough for performance tuning and incident
@@ -283,6 +285,23 @@ Rules:
 
 If asynchronous work bypasses Job management,
 the model fails its observability obligation.
+
+Query execution uses direct synchronous execution by default for performance.
+When a caller supplies the debug trace-job option
+(`textus.debug.trace-job=true` or CLI `--debug.trace-job`), Query execution
+must use a persistent job and still return the same logical Query result. The
+retained job becomes the canonical target for trace, timeline, result summary,
+and calltree inspection.
+
+HTTP adapters must publish the job reference as `X-Textus-Job-Id` whenever a
+request creates or returns a managed job. CLI client adapters may use that
+header for stderr-only debug guidance, but must not alter stdout/body result
+contracts.
+
+The job-control service must expose job-specific debug data from the persisted
+job record. `job_control.job.get_job_calltree` returns the saved CallTree state
+for a specific job and must not fall back to process-global "latest execution"
+state.
 
 
 ----------------------------------------------------------------------

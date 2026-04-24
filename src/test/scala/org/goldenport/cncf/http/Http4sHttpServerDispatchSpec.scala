@@ -133,6 +133,47 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       body should not include ("principal_id")
       body should not include ("authenticated")
     }
+
+    "return debug job id header for debug trace-job form-api requests" in {
+      val root = Files.createTempDirectory("http4s-http-server-debug-trace-job-spec")
+      val web = root.resolve("web.yaml")
+      Files.writeString(
+        web,
+        """expose:
+          |  debug.http.echo: public
+          |form:
+          |  debug.http.echo:
+          |    enabled: true
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val configuration = ResolvedConfiguration(
+        Configuration(
+          Map(
+            RuntimeConfig.WebDescriptorKey ->
+              ConfigurationValue.StringValue(web.toString)
+          )
+        ),
+        ConfigurationTrace.empty
+      )
+      val subsystem = DefaultSubsystemFactory.default(None, configuration)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server
+        ._submit_operation_form_api(
+          _post_form_request(
+            "/form-api/debug/http/echo?textus.debug.trace-job=true&textus.debug.calltree=true",
+            "body=hello"
+          ),
+          "debug",
+          "http",
+          "echo"
+        )
+        .unsafeRunSync()
+
+      response.status.code shouldBe 200
+      response.headers.get(ci"X-Textus-Job-Id").map(_.head.value).getOrElse("") should include ("cncf-job-job")
+    }
   }
 
   private def _post_form_request(path: String, body: String): HRequest[IO] =

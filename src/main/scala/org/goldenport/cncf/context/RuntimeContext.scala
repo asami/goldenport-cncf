@@ -20,8 +20,7 @@ import org.goldenport.util.StringUtils
  * @since   Dec. 21, 2025
  *  version Jan. 18, 2026
  *  version Mar. 31, 2026
- *  version Apr. 11, 2026
- * @version Apr. 17, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -38,6 +37,8 @@ final class RuntimeContext(
   val entityCreateDefaultsPolicy: EntityCreateDefaultsPolicy = EntityCreateDefaultsPolicy.default
 ) extends ScopeContext() {
   private var _resolved_parameters: Option[ResolvedParameters] = None
+  private var _execution_metadata: RuntimeContext.ExecutionMetadata =
+    RuntimeContext.ExecutionMetadata.empty
 
   lazy val unitOfWork: UnitOfWork = unitOfWorkSupplier()
 
@@ -63,9 +64,39 @@ final class RuntimeContext(
 
   def clearResolvedParameters(): Unit =
     _resolved_parameters = None
+
+  def executionMetadata: RuntimeContext.ExecutionMetadata =
+    _execution_metadata
+
+  def updateExecutionMetadata(
+    f: RuntimeContext.ExecutionMetadata => RuntimeContext.ExecutionMetadata
+  ): Unit =
+    _execution_metadata = f(_execution_metadata)
+
+  def noteResponseJobId(jobid: String): Unit =
+    updateExecutionMetadata(_.copy(responseJobId = Some(jobid)))
+
+  def noteDebugJobId(jobid: String): Unit =
+    updateExecutionMetadata(_.copy(debugJobId = Some(jobid)))
+
+  def noteInlineCallTree(calltree: Record): Unit =
+    updateExecutionMetadata(_.copy(inlineCallTree = Some(calltree)))
+
+  def clearExecutionMetadata(): Unit =
+    _execution_metadata = RuntimeContext.ExecutionMetadata.empty
 }
 
 object RuntimeContext {
+  final case class ExecutionMetadata(
+    responseJobId: Option[String] = None,
+    debugJobId: Option[String] = None,
+    inlineCallTree: Option[Record] = None
+  )
+
+  object ExecutionMetadata {
+    val empty: ExecutionMetadata = ExecutionMetadata()
+  }
+
   final case class Context(
     propertyName: PropertyNameContext = PropertyNameContext.default,
     formatting: FormattingContext = FormattingContext.default,

@@ -14,7 +14,7 @@ import org.goldenport.observation.calltree.CallTree
 /*
  * @since   Jan.  7, 2026
  *  version Jan. 29, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class OperationContext(
@@ -22,6 +22,15 @@ final case class OperationContext(
 )
 
 object ObservabilityEngine {
+  def callTreeRecord(
+    calltree: CallTree,
+    jobId: Option[String] = None
+  ): Record =
+    Record.data(
+      "job_id" -> jobId.getOrElse(""),
+      "calltree" -> _calltree_records(calltree.toRecord)
+    )
+
   final case class ExecutionHistoryFilter(
     operationContains: Option[String] = None
   ) {
@@ -47,6 +56,7 @@ object ObservabilityEngine {
     resultType: String,
     resultSummary: String,
     capturedAt: Instant,
+    jobId: Option[String],
     calltree: Option[CallTree]
   ) {
     def toRecord: Record =
@@ -59,7 +69,8 @@ object ObservabilityEngine {
         "outcome" -> outcome,
         "result_type" -> resultType,
         "result_summary" -> resultSummary,
-        "captured_at" -> capturedAt.toString
+        "captured_at" -> capturedAt.toString,
+        "job_id" -> jobId.getOrElse("")
         )
       ) ++ calltree.map(tree => Record.data("calltree" -> _calltree_records(tree.toRecord))).getOrElse(Record.empty)
 
@@ -74,15 +85,19 @@ object ObservabilityEngine {
         "result_type" -> resultType,
         "result_summary" -> resultSummary,
         "captured_at" -> capturedAt.toString,
+        "job_id" -> jobId.getOrElse(""),
         "calltree" -> calltree.map(tree => _calltree_records(tree.toRecord)).getOrElse(Vector.empty)
         )
       )
 
     private def _calltree_records(record: Record): Vector[Any] =
-      record.asMap.toVector
-        .sortBy { case (k, _) => scala.util.Try(k.toString.toInt).toOption.getOrElse(Int.MaxValue) }
-        .map(_._2)
+      ObservabilityEngine._calltree_records(record)
   }
+
+  private def _calltree_records(record: Record): Vector[Any] =
+    record.asMap.toVector
+      .sortBy { case (k, _) => scala.util.Try(k.toString.toInt).toOption.getOrElse(Int.MaxValue) }
+      .map(_._2)
 
   @volatile private var _execution_history_config: ExecutionHistoryConfig = ExecutionHistoryConfig()
   private var _execution_history_sequence: Long = 0L
@@ -134,6 +149,7 @@ object ObservabilityEngine {
     parameters: Record,
     parametersText: String,
     outcome: Either[Conclusion, OperationResponse],
+    jobId: Option[String] = None,
     calltree: Option[CallTree]
   ): Unit =
     synchronized {
@@ -148,6 +164,7 @@ object ObservabilityEngine {
           resultType = outcome.fold(_ => "Conclusion", _result_type_),
           resultSummary = outcome.fold(_failure_summary_, _result_summary_),
           capturedAt = Instant.now(),
+          jobId = jobId,
           calltree = calltree
         )
         val config = _execution_history_config

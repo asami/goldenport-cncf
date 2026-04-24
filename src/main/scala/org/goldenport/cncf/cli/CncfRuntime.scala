@@ -1627,6 +1627,7 @@ object CncfRuntime extends GlobalObservable {
       case _ =>
         _print_response(res.toResponse)
     }
+    ()
   }
 
   private def _client_component(
@@ -2356,7 +2357,9 @@ private[cli] object RuntimeOptionsParser {
     format: Option[String] = None,
     pathResolutionCommand: Boolean = false,
     commandExecutionMode: Option[String] = None,
-    calltree: Boolean = false
+    debugCalltree: Boolean = false,
+    debugTraceJob: Boolean = false,
+    debugSaveCalltree: Boolean = false
   )
 
   def extract(
@@ -2375,8 +2378,12 @@ private[cli] object RuntimeOptionsParser {
         options = options.copy(json = true)
       } else if (_is_property(current, "--debug")) {
         options = options.copy(debug = true)
-      } else if (_is_property(current, "--calltree")) {
-        options = options.copy(calltree = true)
+      } else if (_is_property(current, "--debug.calltree")) {
+        options = options.copy(debugCalltree = true)
+      } else if (_is_property(current, "--debug.trace-job")) {
+        options = options.copy(debugTraceJob = true)
+      } else if (_is_property(current, "--debug.save-calltree")) {
+        options = options.copy(debugSaveCalltree = true)
       } else if (current == "--no-exit") {
         options = options.copy(noExit = true)
       } else if (_is_property(current, "--format") || _is_property(current, "-format")) {
@@ -2396,6 +2403,12 @@ private[cli] object RuntimeOptionsParser {
             options = options.copy(pathResolutionCommand = _is_truthy(value))
           case Some((key, value)) if _is_command_execution_mode_key(key) =>
             options = options.copy(commandExecutionMode = Some(value))
+          case Some((key, value)) if _is_debug_calltree_key(key) =>
+            options = options.copy(debugCalltree = _is_truthy(value))
+          case Some((key, value)) if _is_debug_trace_job_key(key) =>
+            options = options.copy(debugTraceJob = _is_truthy(value))
+          case Some((key, value)) if _is_debug_save_calltree_key(key) =>
+            options = options.copy(debugSaveCalltree = _is_truthy(value))
           case Some((key, value)) if _is_framework_key(key) =>
             ()
           case Some((key, value)) if _is_framework_alias(key) =>
@@ -2411,6 +2424,12 @@ private[cli] object RuntimeOptionsParser {
             options = options.copy(pathResolutionCommand = _is_truthy(args(i + 1)))
           } else if (_is_command_execution_mode_key(current.drop(2))) {
             options = options.copy(commandExecutionMode = Some(args(i + 1)))
+          } else if (_is_debug_calltree_key(current.drop(2))) {
+            options = options.copy(debugCalltree = _is_truthy(args(i + 1)))
+          } else if (_is_debug_trace_job_key(current.drop(2))) {
+            options = options.copy(debugTraceJob = _is_truthy(args(i + 1)))
+          } else if (_is_debug_save_calltree_key(current.drop(2))) {
+            options = options.copy(debugSaveCalltree = _is_truthy(args(i + 1)))
           }
           i = i + 1
         }
@@ -2441,7 +2460,9 @@ private[cli] object RuntimeOptionsParser {
       b += Property("textus.format", value, None)
     }
     if (options.debug) b += Property("textus.debug", "true", None)
-    if (options.calltree) b += Property(RuntimeConfig.CallTreeKey, "true", None)
+    if (options.debugCalltree) b += Property(RuntimeConfig.DebugCallTreeKey, "true", None)
+    if (options.debugTraceJob) b += Property(RuntimeConfig.DebugTraceJobKey, "true", None)
+    if (options.debugSaveCalltree) b += Property(RuntimeConfig.DebugSaveCallTreeKey, "true", None)
     if (options.noExit) b += Property("textus.no-exit", "true", None)
     options.commandExecutionMode.foreach { value =>
       b += Property(RuntimeConfig.CommandExecutionModeKey, value, None)
@@ -2459,12 +2480,16 @@ private[cli] object RuntimeOptionsParser {
     current: String
   ): Boolean =
     current.startsWith("--") && current.contains("=") ||
-      (current.startsWith("-") && !current.startsWith("--") && current.contains("="))
+      (current.startsWith("-") && !current.startsWith("--") && current.contains("=")) ||
+      ((current.startsWith("textus.") || current.startsWith("cncf.")) && current.contains("="))
 
   private def _extract_key_value(
     current: String
   ): Option[(String, String)] = {
-    val raw = if (current.startsWith("--")) current.drop(2) else current.drop(1)
+    val raw =
+      if (current.startsWith("--")) current.drop(2)
+      else if (current.startsWith("-")) current.drop(1)
+      else current
     val parts = raw.split("=", 2)
     if (parts.length == 2) Some(parts(0) -> parts(1)) else None
   }
@@ -2521,6 +2546,30 @@ private[cli] object RuntimeOptionsParser {
       key == "cncf.runtime.command.execution-mode" ||
       key == "runtime.command.execution-mode" ||
       key == "command.execution-mode"
+
+  private def _is_debug_calltree_key(
+    key: String
+  ): Boolean =
+    key == RuntimeConfig.DebugCallTreeKey ||
+      key == RuntimeConfig.RuntimeDebugCallTreeKey ||
+      key == "cncf.debug.calltree" ||
+      key == "cncf.runtime.debug.calltree"
+
+  private def _is_debug_trace_job_key(
+    key: String
+  ): Boolean =
+    key == RuntimeConfig.DebugTraceJobKey ||
+      key == RuntimeConfig.RuntimeDebugTraceJobKey ||
+      key == "cncf.debug.trace-job" ||
+      key == "cncf.runtime.debug.trace-job"
+
+  private def _is_debug_save_calltree_key(
+    key: String
+  ): Boolean =
+    key == RuntimeConfig.DebugSaveCallTreeKey ||
+      key == RuntimeConfig.RuntimeDebugSaveCallTreeKey ||
+      key == "cncf.debug.save-calltree" ||
+      key == "cncf.runtime.debug.save-calltree"
 
   private def _is_truthy(value: String): Boolean = {
     val normalized = value.trim.toLowerCase
@@ -2691,11 +2740,12 @@ class CncfRuntime() extends GlobalObservable {
       case Right(xs) => xs
     }
     val result = _to_request(subsystem, normalizedArgs).flatMap { req =>
-      subsystem.execute(req)
+      subsystem.executeResponseWithMetadata(req)
     }
     result match {
       case Consequence.Success(res) =>
-        _print_response(res)
+        _print_response(res.response)
+        _print_debug_job_reference(res.metadata)
       case Consequence.Failure(conclusion) =>
         _print_error(conclusion)
     }
@@ -2952,19 +3002,25 @@ class CncfRuntime() extends GlobalObservable {
 
   def executeClient(subsystem: Subsystem, args: Array[String]): Int = {
     val operations = _component_operation_fqns(subsystem)
+    val (runtimeOptions, cleanArgs) = RuntimeOptionsParser.extract(args.toIndexedSeq)
+    val runtimeProperties = RuntimeOptionsParser.properties(runtimeOptions)
+      .filter(p => _is_client_debug_passthrough_key(p.name))
     observe_trace(
       s"executeClient start args=${args.mkString(" ")} componentCount=${subsystem.components.size} operations=${_operation_sample(operations)}"
     )
     val result = _client_component(subsystem).flatMap { component =>
-        parseClientArgs(subsystem, args).flatMap { req =>
+        parseClientArgs(subsystem, cleanArgs.toArray).flatMap { req0 =>
+        val req = req0.copy(properties = req0.properties ++ runtimeProperties)
         _client_action_from_request(req).flatMap { action =>
-          component.execute(action)
+          component.execute(action).map(_ -> _request_debug_trace_job(req))
         }
       }
     }
     result match {
-      case Consequence.Success(res) =>
+      case Consequence.Success((res, debugTraceJob)) =>
         _print_operation_response(res)
+        if (debugTraceJob)
+          _print_debug_job_reference(res)
       case Consequence.Failure(conclusion) =>
         _print_error(conclusion)
     }
@@ -3426,11 +3482,12 @@ class CncfRuntime() extends GlobalObservable {
       case Right(xs) => xs
     }
     val result = _to_request(subsystem, normalizedArgs).flatMap { req =>
-      subsystem.execute(req)
+      subsystem.executeResponseWithMetadata(req)
     }
     result match {
       case Consequence.Success(res) =>
-        _print_response(res)
+        _print_response(res.response)
+        _print_debug_job_reference(res.metadata)
       case Consequence.Failure(conclusion) =>
         _print_error(conclusion)
     }
@@ -3927,6 +3984,63 @@ class CncfRuntime() extends GlobalObservable {
   private def _print_response(res: Response): Unit =
     println(res.print)
 
+  private def _print_debug_job_reference(
+    metadata: RuntimeContext.ExecutionMetadata
+  ): Unit =
+    metadata.debugJobId
+      .filter(_.nonEmpty)
+      .foreach(_print_debug_job_reference)
+
+  private def _print_debug_job_reference(
+    response: OperationResponse
+  ): Unit =
+    response match {
+      case OperationResponse.Http(http) =>
+        http.headerValue("X-Textus-Job-Id").foreach(_print_debug_job_reference)
+      case _ =>
+        ()
+    }
+
+  private def _print_debug_job_reference(
+    jobid: String
+  ): Unit =
+    Console.err.println(s"Debug job: ${jobid} (/web/system/admin/jobs/${jobid})")
+
+  private def _request_debug_trace_job(
+    req: Request
+  ): Boolean =
+    req.properties.exists { p =>
+      _is_debug_trace_job_key(p.name) && _is_truthy(p.value.toString)
+    }
+
+  private def _is_debug_trace_job_key(
+    key: String
+  ): Boolean =
+    key == RuntimeConfig.DebugTraceJobKey ||
+      key == RuntimeConfig.RuntimeDebugTraceJobKey ||
+      key == "cncf.debug.trace-job" ||
+      key == "cncf.runtime.debug.trace-job"
+
+  private def _is_client_debug_passthrough_key(
+    key: String
+  ): Boolean =
+    key == RuntimeConfig.DebugCallTreeKey ||
+      key == RuntimeConfig.RuntimeDebugCallTreeKey ||
+      key == RuntimeConfig.DebugSaveCallTreeKey ||
+      key == RuntimeConfig.RuntimeDebugSaveCallTreeKey ||
+      key == "cncf.debug.calltree" ||
+      key == "cncf.runtime.debug.calltree" ||
+      key == "cncf.debug.save-calltree" ||
+      key == "cncf.runtime.debug.save-calltree" ||
+      _is_debug_trace_job_key(key)
+
+  private def _is_truthy(
+    value: String
+  ): Boolean = {
+    val normalized = value.trim.toLowerCase(java.util.Locale.ROOT)
+    normalized == "true" || normalized == "1" || normalized == "yes" || normalized == "on"
+  }
+
   private def _print_operation_response(res: OperationResponse): Unit = {
     res match {
       case OperationResponse.Http(http) =>
@@ -3937,6 +4051,7 @@ class CncfRuntime() extends GlobalObservable {
       case _ =>
         _print_response(res.toResponse)
     }
+    ()
   }
 
   private def _print_error(c: Conclusion): Unit = {

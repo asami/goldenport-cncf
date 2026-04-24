@@ -707,7 +707,9 @@ Prefer a concrete semantic owner:
 - `textus.http.driver`
 - `textus.mode`
 - `textus.command.execution-mode`
-- `textus.calltree`
+- `textus.debug.calltree`
+- `textus.debug.trace-job`
+- `textus.debug.save-calltree`
 - `textus.discover.classes`
 - `textus.component.factory-class`
 - `textus.workspace`
@@ -720,8 +722,16 @@ Prefer a concrete semantic owner:
 - `textus.logging.level`
 - `textus.logging.file.path`
 
-`textus.calltree` controls the operation result calltree projection described
-in `docs/design/observability/calltree-runtime-result.md`.
+`textus.debug.calltree` controls the operation result calltree projection
+described in `docs/design/observability/calltree-runtime-result.md`.
+
+`textus.debug.trace-job` requests job-managed debugging for a target request.
+Normal Query execution is direct synchronous execution, but trace-job Query
+execution is retained as a persistent JobEngine record while preserving the
+normal Query response.
+
+`textus.debug.save-calltree` requests persistent job CallTree storage even when
+the execution succeeds and is not slow.
 
 `textus.execution.history.*` controls the retained action execution history
 used by `admin.execution.history` and `admin.execution.calltree`.
@@ -736,6 +746,7 @@ Examples to avoid for new primary keys:
 - `textus.runtime.mode`
 - `textus.runtime.command.execution-mode`
 - `textus.runtime.calltree`
+- `textus.runtime.debug.trace-job`
 - `textus.runtime.discover.classes`
 - `textus.runtime.component-factory-class`
 - `textus.runtime.workspace`

@@ -32,6 +32,7 @@ object JobControlComponent {
   trait JobService {
     def getJobStatus(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobQueryReadModel]
     def loadJobHistory(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobTimelinePage]
+    def getJobCalltree(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record]
     def getJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobResult]
     def awaitJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[OperationResponse]
     def describeJobDefinition(body: String): Consequence[JobBatchDefinition]
@@ -61,6 +62,7 @@ object JobControlComponent {
       val idrequest = _job_id_request
       val getJobStatus = new GetJobStatusOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobQueryReadModel"))))
       val loadJobHistory = new LoadJobHistoryOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobTimelinePage"))))
+      val getJobCalltree = new GetJobCalltreeOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("Record"))))
       val getJobResult = new GetJobResultOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("JobResult"))))
       val awaitJobResult = new AwaitJobResultOperationDefinition(request = idrequest, response = spec.ResponseDefinition(result = List(DataType.Named("OperationResponse"))))
       val bodyrequest = _body_request
@@ -89,7 +91,7 @@ object JobControlComponent {
       val jobService = spec.ServiceDefinition(
         name = "job",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(getJobStatus, loadJobHistory, getJobResult, awaitJobResult, describeJobDefinition, submitJobDefinition, submitJobBatch)
+          operations = NonEmptyVector.of(getJobStatus, loadJobHistory, getJobCalltree, getJobResult, awaitJobResult, describeJobDefinition, submitJobDefinition, submitJobBatch)
         )
       )
       val jobAdminService = spec.ServiceDefinition(
@@ -147,6 +149,14 @@ object JobControlComponent {
             case None => Consequence.operationNotFound(s"job history:${jobId.value}")
           }
         case None => Consequence.operationNotFound(s"job:${jobId.value}")
+      }
+
+    def getJobCalltree(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
+      component.jobEngine.queryVisible(jobId).map {
+        case Some(model) =>
+          _job_calltree_record(model)
+        case None =>
+          _job_calltree_not_found_record(jobId)
       }
 
     def getJobResult(jobId: JobId)(using org.goldenport.cncf.context.ExecutionContext): Consequence[JobResult] =
@@ -438,6 +448,23 @@ object JobControlComponent {
       }
   }
 
+  private final class GetJobCalltreeOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+        spec.OperationDefinition.Specification(
+        name = "get_job_calltree",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _job_id(req).map { jobid =>
+        GetJobCalltreeAction(req, jobid)
+      }
+  }
+
   private final class GetJobResultOperationDefinition(
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition
@@ -569,6 +596,14 @@ object JobControlComponent {
       LoadJobHistoryCall(core, jobId)
   }
 
+  private final case class GetJobCalltreeAction(
+    request: Request,
+    jobId: JobId
+  ) extends SyncJobAction {
+    def createCall(core: ActionCall.Core): ActionCall =
+      GetJobCalltreeCall(core, jobId)
+  }
+
   private final case class GetJobResultAction(
     request: Request,
     jobId: JobId
@@ -656,6 +691,22 @@ object JobControlComponent {
         case Some(component) =>
           component.port.get[JobService].map(_.loadJobHistory(jobId)(using core.executionContext)) match {
             case Some(result) => result.map(page => OperationResponse.RecordResponse(_timeline_record(jobId, page)))
+            case None => Consequence.serviceUnavailable("job service is not available")
+          }
+        case None =>
+          Consequence.serviceUnavailable("component is not initialized")
+      }
+  }
+
+  private final case class GetJobCalltreeCall(
+    core: ActionCall.Core,
+    jobId: JobId
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      core.component match {
+        case Some(component) =>
+          component.port.get[JobService].map(_.getJobCalltree(jobId)(using core.executionContext)) match {
+            case Some(result) => result.map(OperationResponse.RecordResponse.apply)
             case None => Consequence.serviceUnavailable("job service is not available")
           }
         case None =>
@@ -883,6 +934,11 @@ object JobControlComponent {
       "dead-letter" -> model.retry.deadLetter,
       "poison" -> model.retry.poison,
       "retry-user-action" -> model.retry.lastFailureUserAction.getOrElse(""),
+      "calltree" -> model.calltree.map(_.show).getOrElse(""),
+      "calltree-saved" -> model.debug.calltreeSaved,
+      "calltree-storage" -> model.debug.calltreeStorage.getOrElse(""),
+      "calltree-serialized-bytes" -> model.debug.calltreeSerializedBytes.getOrElse(0),
+      "calltree-drop-reason" -> model.debug.calltreeDropReason.getOrElse(""),
       "task-count" -> model.tasks.totalCount,
       "tasks" -> model.tasks.tasks.map { task =>
         Record.data(
@@ -917,6 +973,28 @@ object JobControlComponent {
       "total-count" -> page.totalCount,
       "fetched-count" -> page.fetchedCount,
       "events" -> page.events.map(_timeline_event_record)
+    )
+
+  private def _job_calltree_record(
+    model: JobQueryReadModel
+  ): Record =
+    Record.data(
+      "job-id" -> model.jobId.value,
+      "calltree-saved" -> model.debug.calltreeSaved,
+      "calltree-storage" -> model.debug.calltreeStorage.getOrElse(""),
+      "calltree-serialized-bytes" -> model.debug.calltreeSerializedBytes.getOrElse(0),
+      "calltree-drop-reason" -> model.debug.calltreeDropReason.getOrElse(""),
+      "calltree" -> model.calltree.getOrElse(Record.empty)
+    )
+
+  private def _job_calltree_not_found_record(
+    jobId: JobId
+  ): Record =
+    Record.data(
+      "job-id" -> jobId.value,
+      "calltree-saved" -> false,
+      "calltree-drop-reason" -> "job_not_found",
+      "calltree" -> Record.empty
     )
 
   private def _timeline_event_record(

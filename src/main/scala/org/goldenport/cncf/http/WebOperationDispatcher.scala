@@ -7,16 +7,20 @@ import org.goldenport.datatype.{ContentType, MimeType}
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.http.HttpStatus
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.context.RuntimeContext
 
 /*
  * @since   Apr. 15, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 trait WebOperationDispatcher {
   def targetName: String
 
   def dispatch(request: HttpRequest): HttpResponse
+
+  def dispatchWithMetadata(request: HttpRequest): HttpExecutionResult =
+    HttpExecutionResult(dispatch(request), RuntimeContext.ExecutionMetadata.empty)
 }
 
 object WebOperationDispatcher {
@@ -44,6 +48,9 @@ object WebOperationDispatcher {
 
     def dispatch(request: HttpRequest): HttpResponse =
       engine.execute(request)
+
+    override def dispatchWithMetadata(request: HttpRequest): HttpExecutionResult =
+      engine.executeWithMetadata(request)
   }
 
   final case class Rest(

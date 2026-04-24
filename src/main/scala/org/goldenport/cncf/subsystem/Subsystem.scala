@@ -19,7 +19,7 @@ import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.component.ComponentLocator.NameLocator
 import org.goldenport.cncf.component.builtin.debug.DebugComponent
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
-import org.goldenport.cncf.http.HttpDriver
+import org.goldenport.cncf.http.{HttpDriver, HttpExecutionResult}
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.event.{EventBus, EventEngine, EventReception, EventStore}
@@ -53,6 +53,16 @@ final class Subsystem(
   val aliasResolver: AliasResolver = GlobalRuntimeContext.current.map(_.aliasResolver).getOrElse(AliasResolver.empty),
   runMode: RunMode = GlobalRuntimeContext.current.map(_.runtimeMode).getOrElse(RunMode.Server)
 ) {
+  final case class ExecutionResult(
+    response: OperationResponse,
+    metadata: RuntimeContext.ExecutionMetadata
+  )
+
+  final case class FormattedExecutionResult(
+    response: Response,
+    metadata: RuntimeContext.ExecutionMetadata
+  )
+
   private var _component_factory: ComponentFactory = ComponentFactory()
   private var _component_space: ComponentSpace = ComponentSpace()
   private var _resolver: OperationResolver = OperationResolver.empty
@@ -214,22 +224,38 @@ final class Subsystem(
     _resolver = OperationResolver.build(_component_space.components)
     _resolved_security_wiring = ResolvedSecurityWiring.resolve(_descriptor, _component_space.components)
 
-  def executeHttp(req: HttpRequest): HttpResponse = {
+  def executeHttp(req: HttpRequest): HttpResponse =
+    executeHttpWithMetadata(req).response
+
+  def executeHttpWithMetadata(req: HttpRequest): HttpExecutionResult = {
     _resolve_route(req) match {
       case Some((component, service, operation)) =>
         _execute_http(component, service, operation, req)
       case None =>
-        _not_found()
+        HttpExecutionResult(_not_found(), RuntimeContext.ExecutionMetadata.empty)
     }
   }
 
   def execute(request: Request): Consequence[Response] = {
-    executeOperationResponse(request).map(_to_response(request, _))
+    executeResponseWithMetadata(request).map(_.response)
+  }
+
+  def executeResponseWithMetadata(request: Request): Consequence[FormattedExecutionResult] = {
+    executeWithMetadata(request).map { result =>
+      FormattedExecutionResult(
+        _to_response(request, result.response, result.metadata),
+        result.metadata
+      )
+    }
   }
 
   def executeOperationResponse(request: Request): Consequence[OperationResponse] = {
+    executeWithMetadata(request).map(_.response)
+  }
+
+  def executeWithMetadata(request: Request): Consequence[ExecutionResult] = {
     val domainRequest = _domain_request(request)
-    val r: Consequence[OperationResponse] = for {
+    val r: Consequence[ExecutionResult] = for {
       route <- _resolve_route(request) match {
         case Some(r) =>
           Consequence.success(r)
@@ -244,7 +270,9 @@ final class Subsystem(
           component.logic.makeOperationRequest(domainRequest).flatMap { r =>
           r match {
             case action: Action =>
-              component.logic.executeAction(action, security.executionContext)
+              component.logic.executeAction(action, security.executionContext).map { response =>
+                ExecutionResult(response, security.executionContext.runtime.executionMetadata)
+              }
             case _ =>
               Consequence.argumentInvalid("OperationRequest must be Action")
           }
@@ -362,6 +390,13 @@ final class Subsystem(
     response: OperationResponse
   ): Response =
     OperationResponseFormatter.toResponse(request, response, _http_run_mode)
+
+  private def _to_response(
+    request: Request,
+    response: OperationResponse,
+    metadata: RuntimeContext.ExecutionMetadata
+  ): Response =
+    OperationResponseFormatter.toResponse(request, response, _http_run_mode, metadata)
 
   private def _apply_request_glue(
     binding: Option[GenericSubsystemResolvedWiringBinding],
@@ -581,27 +616,28 @@ final class Subsystem(
     service: ServiceDefinition,
     operation: OperationDefinition,
     req: HttpRequest
-  ): HttpResponse = {
+  ): HttpExecutionResult = {
 //    _ensure_system_context(component)
     val _ = service
-    val r: Consequence[Response] = for {
+    val r: Consequence[(Response, RuntimeContext.ExecutionMetadata)] = for {
       ingress <- Consequence.fromOption(
         component.protocol.handler.ingresses
           .findByInput(classOf[HttpRequest]),
         "HTTP ingress not configured"
       )
       request0 <- ingress.encode(operation, req)
-      request = request0.component match {
-        case Some(_) => request0
+      request1 = request0.copy(properties = request0.properties ++ _framework_properties_from_http(req))
+      request = request1.component match {
+        case Some(_) => request1
         case None =>
           Request.ofHttpRequest(
             req,
             component = component.name,
             service = service.name,
             operation = operation.name,
-            arguments = request0.arguments,
-            switches = request0.switches,
-            properties = request0.properties
+            arguments = request1.arguments,
+            switches = request1.switches,
+            properties = request1.properties
           )
       }
       // enrichedRequest = if (component.name == DebugComponent.name) {
@@ -616,13 +652,14 @@ final class Subsystem(
       // Route HTTP ingress through the standard request execution path so
       // request-derived execution mode, security, and other ingress context
       // are applied consistently with command/client execution.
-      response <- execute(request)
-    } yield response
+      result <- executeWithMetadata(request)
+      response = _to_response(request, result.response, result.metadata)
+    } yield response -> result.metadata
     r match {
-      case Consequence.Success(res) =>
-        _egress(component).encode(operation, res)
+      case Consequence.Success((res, metadata)) =>
+        HttpExecutionResult(_egress(component).encode(operation, res), metadata)
       case Consequence.Failure(c) =>
-        _failure_response(c)
+        HttpExecutionResult(_failure_response(c), RuntimeContext.ExecutionMetadata.empty)
     }
   }
 
@@ -634,6 +671,33 @@ final class Subsystem(
       .getOrElse {
         throw new IllegalStateException("HTTP egress not configured")
       }
+
+  private def _framework_properties_from_http(
+    req: HttpRequest
+  ): List[Property] = {
+    val query = req.query.asMap.toVector.collect {
+      case (name, value) if _is_http_framework_key(name) =>
+        Property(name, value.toString, None)
+    }
+    val header = req.header.asMap.toVector.collect {
+      case (name, value) if name.equalsIgnoreCase("x-textus-debug-calltree") =>
+        Property("x-textus-debug-calltree", value.toString, None)
+      case (name, value) if name.equalsIgnoreCase("x-textus-debug-trace-job") =>
+        Property("x-textus-debug-trace-job", value.toString, None)
+      case (name, value) if name.equalsIgnoreCase("x-textus-debug-save-calltree") =>
+        Property("x-textus-debug-save-calltree", value.toString, None)
+      case (name, value) if name.equalsIgnoreCase("x-textus-session") =>
+        Property("x-textus-session", value.toString, None)
+    }
+    (query ++ header).toList
+  }
+
+  private def _is_http_framework_key(
+    name: String
+  ): Boolean =
+    name.startsWith("textus.") ||
+      name.startsWith("cncf.") ||
+      name.startsWith("query.")
 
   private def _not_found(): HttpResponse =
     HttpResponse.notFound()
