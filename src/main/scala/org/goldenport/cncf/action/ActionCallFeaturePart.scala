@@ -29,6 +29,7 @@ import org.goldenport.cncf.entity.CreateResult
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
+import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.action.AggregateBehavior
 import org.goldenport.cncf.observability.{DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.configuration.ConfigurationValue
@@ -38,7 +39,7 @@ import org.goldenport.configuration.ConfigurationValue
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 30, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -732,6 +733,18 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     "query" -> query.query.toString
   )
 
+  private def _entity_search_working_set_loading_attributes(
+    query: EntityQuery[?],
+    state: org.goldenport.cncf.entity.runtime.WorkingSetLoadState
+  ): Record = Record.dataAuto(
+    "entity" -> query.collection.name,
+    "source" -> "entity-store",
+    "outcome" -> "fallback",
+    "reason" -> "working-set-loading",
+    "workingSetState" -> state.label,
+    "query" -> query.query.toString
+  )
+
   private def _is_entity_not_found(
     conclusion: org.goldenport.Conclusion
   ): Boolean = {
@@ -760,6 +773,15 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   )(using tc: EntityPersistent[T]): ExecUowM[Option[T]] = {
     _emit_entity_access("entity.load.start", _entity_load_attributes(id, "unknown", "start"))
     val effectivetc = _effective_entity_persistent(id.collection, tc)
+    if (!_working_set_enabled) {
+      _emit_entity_access("entity.load.bypass.entity-space", _entity_load_attributes(id, "entity-space", "bypass"))
+      val op = UnitOfWorkOp.EntityStoreLoad(
+        id,
+        effectivetc,
+        _entity_uow_authorization(Some(id.collection.name), Some(id), "read")
+      )
+      return ConsequenceT.liftF(Free.liftF(op))
+    }
     component.flatMap(_.entitySpace.entityOption(id.collection).map(_.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]])) match {
       case Some(collection) =>
         _emit_entity_access("entity.load.try.entity-space", _entity_load_attributes(id, "entity-space", "try"))
@@ -886,6 +908,10 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     val effectivetc = _effective_entity_persistent(query.collection, tc)
     if (query.scope == EntitySearchScope.Store)
       return _entity_store_search_direct(query, effectivetc)
+    if (!_working_set_enabled) {
+      _emit_entity_access("entity.search.bypass.entity-space", _entity_search_attributes(query, "entity-space", "bypass"))
+      return _entity_store_search_direct(query, effectivetc)
+    }
     component.flatMap(_.entitySpace.entityOption(query.collection).map(_.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]])) match {
       case Some(collection) =>
         if (_bypass_entity_space_resident_search) {
@@ -893,6 +919,13 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
           _entity_store_search_direct(query, tc)
         } else {
           _emit_entity_access("entity.search.try.entity-space", _entity_search_attributes(query, "entity-space", "try"))
+          if (collection.shouldFallbackToStoreForWorkingSet(query)) {
+            val state = collection.workingSetStatus.state
+            _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(query, "entity-store", "fallback"))
+            if (collection.workingSetStatus.isInitializing)
+              _emit_entity_access("entity.search.fallback.working-set-loading", _entity_search_working_set_loading_attributes(query, state))
+            return _entity_store_search_direct(query, effectivetc)
+          }
           val hasworkingsetpolicy =
             collection.descriptor.plan.workingSetPolicy match {
               case Some(org.goldenport.cncf.entity.runtime.WorkingSetPolicy.Disabled) | None => false
@@ -901,7 +934,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
           val hasresident =
             query.scope match {
               case EntitySearchScope.WorkingSet =>
-                hasworkingsetpolicy && collection.storage.memoryRealm.exists(_.values.nonEmpty)
+                hasworkingsetpolicy && collection.workingSetSearchAvailable
               case EntitySearchScope.Store =>
                 collection.storage.storeRealm.values.nonEmpty ||
                   collection.storage.memoryRealm.exists(_.values.nonEmpty)
@@ -918,17 +951,12 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
             )
           } else {
             _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(query, "entity-store", "fallback"))
-            val op = UnitOfWorkOp.EntityStoreSearch(
-              query,
-              effectivetc,
-              _entity_uow_authorization(Some(query.collection.name), None, "search/list")
-            )
-            ConsequenceT.liftF(Free.liftF(op))
+            _entity_store_search_direct(query, effectivetc)
           }
         }
       case None =>
         _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(query, "entity-store", "fallback"))
-        _entity_store_search(query, effectivetc)
+        _entity_store_search_direct(query, effectivetc)
     }
   }
 
@@ -941,6 +969,15 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       tc,
       _entity_uow_authorization(Some(query.collection.name), None, "search/list")
     )
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
+  private def _entity_store_load_direct[T](
+    id: EntityId,
+    tc: EntityPersistent[T]
+  ): ExecUowM[Option[T]] = {
+    _emit_entity_access("entity.load.bypass.entity-space", _entity_load_attributes(id, "entity-space", "bypass"))
+    val op = UnitOfWorkOp.EntityStoreLoadDirect(id, tc)
     ConsequenceT.liftF(Free.liftF(op))
   }
 
@@ -968,6 +1005,12 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       "textus.entity.search.bypass-resident",
       "cncf.entity.search.bypass-resident"
     )
+
+  private def _working_set_enabled: Boolean =
+    execution_context.framework.workingSetEnabled &&
+      !org.goldenport.cncf.context.GlobalRuntimeContext.current.exists { global =>
+        global.runtimeMode == RunMode.Command || global.runtimeMode == RunMode.Client
+      }
 
   private def _config_bool(primary: String, compatibility: String): Boolean =
     _config_bool(primary) || _config_bool(compatibility)

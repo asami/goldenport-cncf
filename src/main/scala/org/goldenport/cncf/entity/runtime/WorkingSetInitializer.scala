@@ -1,5 +1,7 @@
 package org.goldenport.cncf.entity.runtime
 
+import scala.concurrent.{ExecutionContext as ScalaExecutionContext, Future}
+import scala.util.control.NonFatal
 
 /*
  * WorkingSetInitializer
@@ -11,7 +13,7 @@ package org.goldenport.cncf.entity.runtime
  *
  * @since   Mar. 14, 2026
  *  version Mar. 15, 2026
- * @version Apr. 11, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkingSetInitializer(
@@ -44,6 +46,27 @@ final class WorkingSetInitializer(
         }
     }
   }
+
+  def preloadAsync[E](
+    spec: WorkingSetDefinition[E]
+  )(using ScalaExecutionContext): Unit =
+    _storage[E](spec.entityName).foreach { storage =>
+      storage.memoryRealm match {
+        case Some(memory) =>
+          storage.workingSetStatus.markLoading()
+          Future {
+            try {
+              spec.entities.iterator.foreach(memory.put)
+              storage.workingSetStatus.markReady()
+            } catch {
+              case NonFatal(e) =>
+                storage.workingSetStatus.markFailed(e.getMessage)
+            }
+          }
+        case None =>
+          storage.workingSetStatus.markDisabled()
+      }
+    }
 
   private def _storage[E](entityname: String): Option[EntityStorage[E]] =
     // Unregistered entities in working set definitions are ignored.

@@ -6,7 +6,7 @@ import org.simplemodeling.model.datatype.EntityCollectionId
 /*
  * @since   Mar. 14, 2026
  *  version Mar. 27, 2026
- * @version Apr. 20, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 // Component-local container for entity collections.
@@ -31,6 +31,9 @@ class EntitySpace {
 
   def entityOption[E](name: String): Option[EntityCollection[E]] =
     _entity_collections.get(name).map(_.asInstanceOf[EntityCollection[E]])
+
+  def entityNames: Vector[String] =
+    _entity_collections.keys.toVector.sorted
 
   def resolveEntityId(
     name: String,

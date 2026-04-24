@@ -12,7 +12,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp
 /*
  * @since   Mar. 14, 2026
  *  version Mar. 30, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 trait Collection[A] {
@@ -23,6 +23,23 @@ final class EntityCollection[E](
   val descriptor: EntityDescriptor[E],
   val storage: EntityStorage[E]
 ) extends Collection[E] {
+  def workingSetStatus: WorkingSetStatus =
+    storage.workingSetStatus.get
+
+  def residentCount: Int =
+    storage.memoryRealm.map(_.values.size).getOrElse(0)
+
+  def workingSetSearchAvailable: Boolean =
+    _has_effective_working_set_policy && workingSetStatus.isReady
+
+  def hasEffectiveWorkingSetPolicy: Boolean =
+    _has_effective_working_set_policy
+
+  def shouldFallbackToStoreForWorkingSet(
+    query: EntityQuery[?]
+  ): Boolean =
+    query.scope == EntitySearchScope.WorkingSet && _has_effective_working_set_policy && !workingSetStatus.isReady
+
   def put(entity: E): Unit = {
     val id = descriptor.persistent.id(entity)
     val resident = _is_resident(entity)
@@ -126,13 +143,13 @@ final class EntityCollection[E](
     val visibilitypolicy = _visibility_policy(query.query)
     val source = query.scope match {
       case EntitySearchScope.WorkingSet =>
-        if (_has_effective_working_set_policy) _working_set_source else _search_source
+        if (workingSetSearchAvailable) _working_set_source else _search_source
       case EntitySearchScope.Store => _search_source
     }
     val notdeleted = source.filterNot(_is_logically_deleted)
     val resident = query.scope match {
       case EntitySearchScope.WorkingSet =>
-        if (_has_effective_working_set_policy) notdeleted.filter(_is_resident) else notdeleted
+        if (workingSetSearchAvailable) notdeleted.filter(_is_resident) else notdeleted
       case EntitySearchScope.Store => notdeleted
     }
     val visible = resident.filter(v => _is_visible(descriptor.persistent.toRecord(v), visibilitypolicy))

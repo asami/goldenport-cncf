@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 16, 2026
  *  version Mar. 24, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityCollectionSearchConditionSpec
@@ -216,6 +216,7 @@ final class EntityCollectionSearchConditionSpec
 
       collection.put(recent)
       collection.put(old)
+      collection.storage.workingSetStatus.markReady()
 
       memoryrealm.get(recent.id) shouldBe Some(recent)
       memoryrealm.get(old.id) shouldBe None

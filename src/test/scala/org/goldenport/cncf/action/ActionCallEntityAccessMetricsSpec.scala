@@ -8,7 +8,7 @@ import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext,
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.directive.{Query, SearchResult}
 import org.goldenport.cncf.entity.runtime.*
-import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntityStore, EntityStoreSpace}
+import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.cncf.component.ComponentDescriptor
@@ -26,7 +26,7 @@ import org.simplemodeling.model.directive.Condition
 
 /*
  * @since   Mar. 29, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallEntityAccessMetricsSpec
@@ -260,6 +260,127 @@ final class ActionCallEntityAccessMetricsSpec
         _metric_count("entity.search.bypass.entity-space", "entity-space") shouldBe 1L
         _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 0L
         _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
+      }
+    }
+
+    "fallback to datastore while a working set is still loading" in {
+      EntityAccessMetricsRegistry.shared.synchronized {
+        Given("an entity has a working-set policy but the resident set is still boot-loading")
+        EntityAccessMetricsRegistry.shared.clear()
+        given EntityPersistent[TestPerson] = _persistent
+
+        val datastorespace = DataStoreSpace.default()
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        val ctx = _execution_context(datastorespace, entitystorespace)
+        given ExecutionContext = ctx
+        val cid = _cid("person_metrics_working_set_loading")
+        val stored = TestPerson.privateOwnedBy(EntityId("test", "loading_store", cid), "loading-store", 30, "test-principal")
+        val _ = datastorespace.inject(
+          DataStoreSpace.Seed(
+            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), stored.toRecord()))
+          )
+        )
+        val component = TestComponentFactory.create("metrics_working_set_loading", Protocol.empty)
+        val collection = _empty_resident_collection(cid)
+        collection.storage.workingSetStatus.markLoading()
+        component.entitySpace.registerEntity(cid.name, collection)
+        val query: EntityQuery[TestPerson] = EntityQuery(
+          cid,
+          Query(TestPersonQuery(
+            id = Condition.any[EntityId],
+            name = Condition.any[String],
+            age = Condition.any[Int]
+          )),
+          EntitySearchScope.WorkingSet
+        )
+
+        When("searching the working-set scope before async loading has completed")
+        val result = _probe(component, ctx).search[TestPerson](query)
+
+        Then("the query is served directly from the datastore and the boot fallback is counted")
+        result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(stored.id))
+        _metric_count("entity.search.fallback.entity-store", "entity-store") shouldBe 1L
+        _metric_count(
+          "entity.search.fallback.working-set-loading",
+          "entity-store",
+          reason = Some("working-set-loading"),
+          workingSetState = Some("loading")
+        ) shouldBe 1L
+        _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
+        _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 0L
+      }
+    }
+
+    "bypass working set search when framework working sets are disabled" in {
+      EntityAccessMetricsRegistry.shared.synchronized {
+        Given("a resident entity and a datastore-backed entity under disabled framework working sets")
+        EntityAccessMetricsRegistry.shared.clear()
+        given EntityPersistent[TestPerson] = _persistent
+
+        val datastorespace = DataStoreSpace.default()
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        val basectx = _execution_context(datastorespace, entitystorespace)
+        val ctx = ExecutionContext.withFrameworkWorkingSetEnabled(basectx, enabled = false)
+        given ExecutionContext = ctx
+        val cid = _cid("person_metrics_working_set_disabled")
+        val resident = TestPerson(EntityId("test", "resident_disabled", cid), "resident-disabled", 20)
+        val stored = TestPerson.privateOwnedBy(EntityId("test", "stored_disabled", cid), "stored-disabled", 30, "test-principal")
+        val _ = datastorespace.inject(
+          DataStoreSpace.Seed(
+            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), stored.toRecord()))
+          )
+        )
+        val component = TestComponentFactory.create("metrics_working_set_disabled", Protocol.empty)
+        component.entitySpace.registerEntity(cid.name, _resident_collection(cid, resident, Some(WorkingSetPolicy.ResidentAll)))
+        val query: EntityQuery[TestPerson] = EntityQuery(
+          cid,
+          Query(TestPersonQuery(
+            id = Condition.any[EntityId],
+            name = Condition.any[String],
+            age = Condition.any[Int]
+          )),
+          EntitySearchScope.WorkingSet
+        )
+
+        When("searching through ActionCallEntityStorePart with framework working sets disabled")
+        val result = _probe(component, ctx).search[TestPerson](query)
+
+        Then("the resident set is bypassed and the datastore remains the source of truth")
+        result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(stored.id))
+        _metric_count("entity.search.bypass.entity-space", "entity-space") shouldBe 1L
+        _metric_count("entity.search.hit.data-store", "data-store") shouldBe 1L
+        _metric_count("entity.search.hit.entity-space", "entity-space") shouldBe 0L
+      }
+    }
+
+    "keep read authorization when framework working sets are disabled" in {
+      EntityAccessMetricsRegistry.shared.synchronized {
+        Given("a disabled working-set context and a private datastore entity owned by another subject")
+        EntityAccessMetricsRegistry.shared.clear()
+        given EntityPersistent[TestPerson] = _persistent
+
+        val datastorespace = DataStoreSpace.default()
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        val basectx = _execution_context(datastorespace, entitystorespace, manager = false)
+        val ctx = ExecutionContext.withFrameworkWorkingSetEnabled(basectx, enabled = false)
+        given ExecutionContext = ctx
+        val cid = _cid("person_metrics_working_set_disabled_load_auth")
+        val id = EntityId("test", "disabled_load_auth", cid)
+        val stored = TestPerson.privateOwnedBy(id, "disabled-load-auth", 30, "other-owner")
+        val _ = datastorespace.inject(
+          DataStoreSpace.Seed(
+            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), stored.toRecord()))
+          )
+        )
+        val component = TestComponentFactory.create("metrics_working_set_disabled_load_auth", Protocol.empty)
+
+        When("loading through ActionCallEntityStorePart with framework working sets disabled")
+        val result = _probe(component, ctx).load[TestPerson](id)
+
+        Then("the direct-store path still enforces read authorization")
+        result shouldBe a[Consequence.Failure[_]]
+        _metric_count("entity.load.bypass.entity-space", "entity-space") shouldBe 1L
+        _metric_count("entity.load.hit.data-store", "data-store") shouldBe 0L
       }
     }
 
@@ -502,16 +623,24 @@ final class ActionCallEntityAccessMetricsSpec
 
   private def _metric_count(
     name: String,
-    source: String
+    source: String,
+    reason: Option[String] = None,
+    workingSetState: Option[String] = None
   ): Long =
     EntityAccessMetricsRegistry.shared.snapshot()
-      .find(x => x.name == name && x.source.contains(source))
+      .find(x =>
+        x.name == name &&
+          x.source.contains(source) &&
+          reason.forall(x.reason.contains) &&
+          workingSetState.forall(x.workingSetState.contains)
+      )
       .map(_.count)
       .getOrElse(0L)
 
   private def _resident_collection(
     cid: EntityCollectionId,
-    entity: TestPerson
+    entity: TestPerson,
+    workingsetpolicy: Option[WorkingSetPolicy] = None
   )(using EntityPersistent[TestPerson]): EntityCollection[TestPerson] = {
     val storerealm = new EntityRealm[TestPerson](
       entityName = cid.name,
@@ -529,16 +658,22 @@ final class ActionCallEntityAccessMetricsSpec
         entityName = cid.name,
         memoryPolicy = EntityMemoryPolicy.LoadToMemory,
         workingSet = None,
+        workingSetPolicy = workingsetpolicy,
         partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
         maxPartitions = 4,
         maxEntitiesPerPartition = 16
       ),
       persistent = summon[EntityPersistent[TestPerson]]
     )
-    new EntityCollection[TestPerson](
+    val collection = new EntityCollection[TestPerson](
       descriptor = descriptor,
       storage = EntityStorage(storerealm, Some(memoryrealm))
     )
+    workingsetpolicy match {
+      case Some(_) => collection.storage.workingSetStatus.markReady()
+      case None => collection.storage.workingSetStatus.markDisabled()
+    }
+    collection
   }
 
   private def _empty_collection(
@@ -578,10 +713,15 @@ final class ActionCallEntityAccessMetricsSpec
       ),
       persistent = summon[EntityPersistent[TestPerson]]
     )
-    new EntityCollection[TestPerson](
+    val collection = new EntityCollection[TestPerson](
       descriptor = descriptor,
       storage = EntityStorage(storerealm, Some(memoryrealm))
     )
+    workingsetpolicy match {
+      case Some(_) => collection.storage.workingSetStatus.markReady()
+      case None => collection.storage.workingSetStatus.markDisabled()
+    }
+    collection
   }
 
   private def _persistent: EntityPersistent[TestPerson] =

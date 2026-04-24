@@ -14,6 +14,8 @@ import org.goldenport.cncf.observability.CallTreeContext
 import org.goldenport.process.ShellCommandExecutor
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.cncf.security.OperationAccessPolicy
+import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
+import org.goldenport.record.Record
 
 /*
  * Interpreter for UnitOfWorkOp.
@@ -26,7 +28,7 @@ import org.goldenport.cncf.security.OperationAccessPolicy
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 29, 2026
- * @version Apr. 21, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -117,7 +119,12 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreLoad[t] @unchecked) =>
       withCallTree("uow:entityspace:load") {
-        _authorize(m.authorization, Some(() => _load_record(m.id))).flatMap(_ => _entity_space_load(m))
+        _authorize(m.authorization, Some(() => _load_record(m.id))).flatMap { _ =>
+          if (_working_set_enabled)
+            _entity_space_load(m)
+          else
+            _entity_store_space.load(m)
+        }
       }
 
     case m: (UnitOfWorkOp.EntityStoreLoadDirect[t] @unchecked) =>
@@ -186,7 +193,12 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreSearch[t] @unchecked) =>
       withCallTree("uow:entityspace:search") {
-        _authorize(m.authorization).flatMap(_ => _entity_space_search(m))
+        _authorize(m.authorization).flatMap { _ =>
+          if (_working_set_enabled)
+            _entity_space_search(m)
+          else
+            _entity_store_space.search(m).flatMap(_filter_search_result(m, _))
+        }
       }
 
     case m: (UnitOfWorkOp.EntityStoreSearchDirect[t] @unchecked) =>
@@ -247,6 +259,16 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     _component_option
       .flatMap(_.entitySpace.entityOption[T](name)) match {
       case Some(collection) =>
+        if (op.query.scope == EntitySearchScope.WorkingSet && !collection.hasEffectiveWorkingSetPolicy) {
+          _emit_entity_search_fallback(op.query.collection.name)
+          return _entity_store_space.search(op).flatMap(_filter_search_result(op, _))
+        }
+        if (collection.shouldFallbackToStoreForWorkingSet(op.query)) {
+          _emit_entity_search_fallback(op.query.collection.name)
+          if (collection.workingSetStatus.isInitializing)
+            _emit_working_set_loading_fallback(op.query.collection.name, collection.workingSetStatus.state.label)
+          return _entity_store_space.search(op).flatMap(_filter_search_result(op, _))
+        }
         collection.search(op.query).flatMap { result =>
           if (result.data.nonEmpty || collection.storage.storeRealm.values.nonEmpty || collection.storage.memoryRealm.exists(_.values.nonEmpty))
             _filter_search_result(op, result)
@@ -262,6 +284,40 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         _entity_store_space.search(op).flatMap(_filter_search_result(op, _))
     }
   }
+
+  private def _working_set_enabled: Boolean =
+    uow.executionContext.framework.workingSetEnabled &&
+      !org.goldenport.cncf.context.GlobalRuntimeContext.current.exists { global =>
+        global.runtimeMode == org.goldenport.cncf.cli.RunMode.Command ||
+          global.runtimeMode == org.goldenport.cncf.cli.RunMode.Client
+      }
+
+  private def _emit_working_set_loading_fallback(
+    entityName: String,
+    state: String
+  ): Unit =
+    EntityAccessMetricsRegistry.shared.record(
+      "entity.search.fallback.working-set-loading",
+      Record.dataAuto(
+        "entity" -> entityName,
+        "source" -> "entity-store",
+        "outcome" -> "fallback",
+        "reason" -> "working-set-loading",
+        "workingSetState" -> state
+      )
+    )
+
+  private def _emit_entity_search_fallback(
+    entityName: String
+  ): Unit =
+    EntityAccessMetricsRegistry.shared.record(
+      "entity.search.fallback.entity-store",
+      Record.dataAuto(
+        "entity" -> entityName,
+        "source" -> "entity-store",
+        "outcome" -> "fallback"
+      )
+    )
 
   private def _entity_space_evict(
     id: EntityId

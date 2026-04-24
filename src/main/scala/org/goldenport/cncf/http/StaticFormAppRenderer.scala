@@ -2177,6 +2177,11 @@ object StaticFormAppRenderer {
         val entityPath = NamingConventions.toNormalizedSegment(descriptor.entityName)
         val workingsetpolicy = descriptor.workingSetPolicy.map(_.label).getOrElse("none")
         val policysource = descriptor.workingSetPolicySource.map(_.toString.toLowerCase).getOrElse("none")
+        val collection = component.entitySpace.entityOption[Any](descriptor.collectionId.name)
+        val workingSetStatus = collection.map(_.workingSetStatus)
+        val workingSetState = workingSetStatus.map(_.state.label).getOrElse("unknown")
+        val residentCount = collection.map(_.residentCount).getOrElse(0)
+        val workingSetError = workingSetStatus.flatMap(_.error).getOrElse("")
         s"""<tr>
            |  <td><a href="/web/${componentPath}/admin/entities/${entityPath}">${_escape(descriptor.entityName)}</a></td>
            |  <td><code>${_escape(descriptor.collectionId.name)}</code></td>
@@ -2186,6 +2191,9 @@ object StaticFormAppRenderer {
            |  <td>${descriptor.workingSet.map(_.entityIds.size.toString).getOrElse("none")}</td>
            |  <td><code>${_escape(workingsetpolicy)}</code></td>
            |  <td>${_escape(policysource)}</td>
+           |  <td><code>${_escape(workingSetState)}</code></td>
+           |  <td>${residentCount}</td>
+           |  <td>${_escape(workingSetError)}</td>
            |</tr>""".stripMargin
       }.mkString("\n")
       val body =
@@ -2193,7 +2201,7 @@ object StaticFormAppRenderer {
           _admin_empty_state("No entity runtime descriptors are registered for this component.")
         } else {
           s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
-             |  <thead><tr><th>Entity</th><th>Collection</th><th>Usage</th><th>Operation</th><th>Domain</th><th>Working set</th><th>Policy</th><th>Source</th></tr></thead>
+             |  <thead><tr><th>Entity</th><th>Collection</th><th>Usage</th><th>Operation</th><th>Domain</th><th>Working set</th><th>Policy</th><th>Source</th><th>Status</th><th>Resident</th><th>Error</th></tr></thead>
              |  <tbody>${rows}</tbody>
              |</table></div>""".stripMargin
         }

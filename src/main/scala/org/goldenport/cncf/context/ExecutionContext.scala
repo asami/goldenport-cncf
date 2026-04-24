@@ -42,7 +42,7 @@ import cats.~>
  *  version Dec. 31, 2025
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -103,6 +103,7 @@ object ExecutionContext {
 
   final case class FrameworkParameter(
     commandExecutionMode: Option[CommandExecutionMode] = None,
+    workingSetEnabled: Boolean = true,
     callTreeEnabled: Boolean = false,
     inlineCallTree: Boolean = false,
     traceJob: Boolean = false,
@@ -231,6 +232,22 @@ object ExecutionContext {
         cncfCore = i.cncfCore.copy(
           framework = i.cncfCore.framework.copy(
             commandExecutionMode = Some(mode)
+          )
+        )
+      )
+    case _ =>
+      ctx
+  }
+
+  def withFrameworkWorkingSetEnabled(
+    ctx: ExecutionContext,
+    enabled: Boolean
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(
+        cncfCore = i.cncfCore.copy(
+          framework = i.cncfCore.framework.copy(
+            workingSetEnabled = enabled
           )
         )
       )

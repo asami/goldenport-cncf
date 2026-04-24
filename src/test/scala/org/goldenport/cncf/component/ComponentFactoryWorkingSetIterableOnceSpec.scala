@@ -18,7 +18,10 @@ import org.goldenport.cncf.entity.runtime.{
   EntityStorage,
   PartitionStrategy,
   PartitionedMemoryRealm,
-  WorkingSetDefinition
+  WorkingSetDefinition,
+  WorkingSetInitializer,
+  WorkingSetLoadState,
+  WorkingSetPolicy
 }
 import org.goldenport.record.Record
 import org.scalacheck.{Gen, Prop, Test}
@@ -29,8 +32,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- *  version Apr. 10, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryWorkingSetIterableOnceSpec
@@ -105,6 +107,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
 
       Then("store realm and memory realm are both populated from the same source")
       storerealm.get(id) shouldBe Some(entity)
+      _await_working_set_ready(collection) shouldBe true
       memoryrealm.get(id) shouldBe Some(entity)
       snapshot.get(id) shouldBe Some(entity)
     }
@@ -179,6 +182,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
         _initialize_working_sets_from_plan(factory, Vector(plan), entityspace, snapshot)
 
         storerealm.get(id) shouldBe Some(entity)
+        _await_working_set_ready(collection) shouldBe true
         memoryrealm.get(id) shouldBe Some(entity)
         snapshot.get(id) shouldBe Some(entity)
       }
@@ -254,6 +258,7 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
         _initialize_working_sets_from_plan(factory, Vector(plan), entityspace, snapshot)
 
         storerealm.get(id) == Some(entity) &&
+        _await_working_set_ready(collection) &&
         memoryrealm.get(id) == Some(entity) &&
         snapshot.get(id) == Some(entity)
       }
@@ -264,7 +269,122 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
       )
       result.passed shouldBe true
     }
+
+    "schedule async preload without consuming the source on the startup thread" in {
+      Given("a working-set source that records when its iterator is consumed")
+      val entityspace = new EntitySpace
+      val cid = EntityCollectionId("test", "a", "sample")
+      val id = EntityId("m", "async", cid)
+      val entity = WorkingSetEntity(id, "async")
+      val source = new RecordingIterableOnce[Any](Iterator.single(entity))
+      val queued = new QueuedExecutionContext
+
+      given EntityPersistent[Any] = _any_persistent
+
+      val storerealm = new EntityRealm[Any](
+        entityName = "sample",
+        loader = EntityLoader[Any](_ => None),
+        state = new IdRef2[EntityRealmState[Any]](EntityRealmState(Map.empty))
+      )
+      val memoryrealm = new PartitionedMemoryRealm[Any](
+        strategy = PartitionStrategy.byOrganizationMonthUTC,
+        idOf = _.asInstanceOf[WorkingSetEntity].id
+      )
+      val collection = new EntityCollection[Any](
+        descriptor = _descriptor(cid),
+        storage = EntityStorage(storerealm, Some(memoryrealm))
+      )
+      entityspace.registerEntity("sample", collection)
+
+      When("async preload is scheduled")
+      new WorkingSetInitializer(entityspace).preloadAsync(WorkingSetDefinition[Any]("sample", source))(using queued)
+
+      Then("the source is not consumed until the queued background task runs")
+      source.consumed shouldBe false
+      collection.storage.workingSetStatus.get.state shouldBe WorkingSetLoadState.Loading
+
+      queued.runAll()
+      _await_working_set_ready(collection) shouldBe true
+      source.consumed shouldBe true
+      memoryrealm.get(id) shouldBe Some(entity)
+    }
+
+    "leave policy-only working set initializing instead of marking ready from an empty store realm" in {
+      Given("a runtime plan with a working-set policy but no explicit preload snapshot")
+      val factory = new ComponentFactory()
+      val entityspace = new EntitySpace
+      val snapshot = TrieMap.empty[EntityId, Any]
+      val cid = EntityCollectionId("test", "a", "sample")
+
+      given EntityPersistent[Any] = _any_persistent
+
+      val storerealm = new EntityRealm[Any](
+        entityName = "sample",
+        loader = EntityLoader[Any](_ => None),
+        state = new IdRef2[EntityRealmState[Any]](EntityRealmState(Map.empty))
+      )
+      val memoryrealm = new PartitionedMemoryRealm[Any](
+        strategy = PartitionStrategy.byOrganizationMonthUTC,
+        idOf = _.asInstanceOf[WorkingSetEntity].id
+      )
+      val collection = new EntityCollection[Any](
+        descriptor = _descriptor(cid, Some(WorkingSetPolicy.ResidentAll)),
+        storage = EntityStorage(storerealm, Some(memoryrealm))
+      )
+      entityspace.registerEntity("sample", collection)
+      val plan = EntityRuntimePlan[Any](
+        entityName = "sample",
+        memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+        workingSet = None,
+        workingSetPolicy = Some(WorkingSetPolicy.ResidentAll),
+        partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+        maxPartitions = 4,
+        maxEntitiesPerPartition = 16
+      )
+
+      When("working sets are initialized from policy-only runtime plans")
+      _initialize_working_sets_from_plan(factory, Vector(plan), entityspace, snapshot)
+
+      Then("the collection remains initializing so searches keep direct-store fallback")
+      collection.storage.workingSetStatus.get.state shouldBe WorkingSetLoadState.Loading
+      collection.workingSetSearchAvailable shouldBe false
+      collection.shouldFallbackToStoreForWorkingSet(org.goldenport.cncf.entity.EntityQuery(cid, org.goldenport.cncf.directive.Query.plan(Record.empty))) shouldBe true
+    }
   }
+
+  private def _any_persistent: EntityPersistent[Any] =
+    new EntityPersistent[Any] {
+      def id(e: Any): EntityId =
+        e match {
+          case m: WorkingSetEntity => m.id
+          case _ => throw new IllegalStateException("unsupported entity")
+        }
+      def toRecord(e: Any): Record =
+        e match {
+          case m: WorkingSetEntity => m.toRecord()
+          case _ => Record.empty
+        }
+      def fromRecord(r: Record): Consequence[Any] =
+        Consequence.notImplemented("not used in this spec")
+    }
+
+  private def _descriptor(
+    cid: EntityCollectionId,
+    policy: Option[WorkingSetPolicy] = None
+  )(using EntityPersistent[Any]): EntityDescriptor[Any] =
+    EntityDescriptor[Any](
+      collectionId = cid,
+      plan = EntityRuntimePlan[Any](
+        entityName = "sample",
+        memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+        workingSet = None,
+        workingSetPolicy = policy,
+        partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+        maxPartitions = 4,
+        maxEntitiesPerPartition = 16
+      ),
+      persistent = summon[EntityPersistent[Any]]
+    )
 
   private def _initialize_working_sets_from_plan(
     factory: ComponentFactory,
@@ -275,13 +395,58 @@ final class ComponentFactoryWorkingSetIterableOnceSpec
     val method = classOf[ComponentFactory].getDeclaredMethods
       .find(m =>
         m.getName.contains("_initialize_working_sets_from_plan") &&
-        m.getParameterCount == 3
+        m.getParameterCount == 3 &&
+        m.getParameterTypes.headOption.exists(_.getName.contains("Vector"))
       )
       .getOrElse(
         fail("private method _initialize_working_sets_from_plan(plans, entityspace, snapshot) is not found")
       )
     method.setAccessible(true)
     val _ = method.invoke(factory, plans, entityspace, snapshot)
+  }
+
+  private def _await_working_set_ready(
+    collection: EntityCollection[Any]
+  ): Boolean = {
+    val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(2)
+    while (!collection.storage.workingSetStatus.get.isReady && System.nanoTime() < deadline) {
+      Thread.sleep(10)
+    }
+    collection.storage.workingSetStatus.get.isReady
+  }
+}
+
+private final class RecordingIterableOnce[A](
+  delegate: Iterator[A]
+) extends IterableOnce[A] {
+  @volatile private var _consumed = false
+
+  def consumed: Boolean =
+    _consumed
+
+  def iterator: Iterator[A] = {
+    _consumed = true
+    delegate
+  }
+}
+
+private final class QueuedExecutionContext extends scala.concurrent.ExecutionContext {
+  private var _tasks: Vector[Runnable] = Vector.empty
+
+  def execute(runnable: Runnable): Unit = synchronized {
+    _tasks = _tasks :+ runnable
+  }
+
+  def reportFailure(cause: Throwable): Unit =
+    throw cause
+
+  def runAll(): Unit = {
+    val tasks = synchronized {
+      val r = _tasks
+      _tasks = Vector.empty
+      r
+    }
+    tasks.foreach(_.run())
   }
 }
 

@@ -634,6 +634,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       component.componentDescriptors.flatMap(_.entityRuntimeDescriptors).headOption match {
         case Some(descriptor) =>
           html should include ("class=\"table table-sm table-hover align-middle\"")
+          html should include ("Status")
+          html should include ("Resident")
           html should include (s"/web/${componentPath}/admin/entities/${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(descriptor.entityName)}")
         case None =>
           html should include ("No entity runtime descriptors")

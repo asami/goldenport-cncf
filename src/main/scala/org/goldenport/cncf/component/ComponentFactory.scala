@@ -8,6 +8,7 @@ import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.configuration.ResolvedConfiguration
 import org.goldenport.cncf.config.ConfigurationAccess
+import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.backend.collaborator.{Collaborator, CollaboratorFactory}
 import org.goldenport.cncf.collaborator.api
 import org.goldenport.cncf.component.repository.{ComponentRepository, ComponentRepositorySpace}
@@ -15,7 +16,7 @@ import org.goldenport.cncf.component.repository.ComponentSource
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.datastore.{DataStore, TotalCountCapability}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityQuery, EntityStore}
 import org.goldenport.cncf.entity.aggregate.{AggregateAssembler, AggregateBuilder, AggregateCollection, AggregateSpace, AggregateDefinition, ContextualAggregateBuilder, ContextualAggregateCount, ContextualAggregateQuery}
@@ -36,7 +37,7 @@ import scala.util.Try
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Mar. 31, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -93,10 +94,14 @@ final class ComponentFactory(
       _bootstrap_entities(component, entityspace, storesnapshot)
     _bootstrap_aggregates(component, aggregatespace, entityspace)
     _bootstrap_views(component, viewspace, entityspace)
-    if (plans.nonEmpty)
-      _initialize_working_sets_from_plan(plans, entityspace, storesnapshot)
-    else
-      _initialize_working_sets(component, entityspace, storesnapshot)
+    if (_working_set_enabled_for_runtime) {
+      if (plans.nonEmpty)
+        _initialize_working_sets_from_plan(plans, entityspace, storesnapshot)
+      else
+        _initialize_working_sets(component, entityspace, storesnapshot)
+    } else {
+      _disable_working_sets(entityspace)
+    }
     _bootstrap_state_machine_planners(component, plans)
     _bootstrap_event_reception(component)
     component.withCollectionsBootstrapped()
@@ -1291,7 +1296,7 @@ final class ComponentFactory(
     _default_working_sets(component).foreach { spec =>
       val entities = spec.entities.iterator.toVector
       _prime_store(entitySpace, storesnapshot, spec.entityName, entities)
-      initializer.preload(spec.copy(entities = entities))
+      initializer.preloadAsync(spec.copy(entities = entities))(using scala.concurrent.ExecutionContext.global)
     }
   }
 
@@ -1302,13 +1307,47 @@ final class ComponentFactory(
   ): Unit = {
     val initializer = new WorkingSetInitializer(entitySpace)
     plans.foreach { plan =>
-      plan.workingSet.foreach { ws =>
-        val entities = ws.entities.iterator.toVector
-        _prime_store(entitySpace, storesnapshot, ws.entityName, entities)
-        initializer.preload(ws.copy(entities = entities))
+      plan.workingSet match {
+        case Some(ws) =>
+          val entities = ws.entities.iterator.toVector
+          _prime_store(entitySpace, storesnapshot, ws.entityName, entities)
+          initializer.preloadAsync(ws.copy(entities = entities))(using scala.concurrent.ExecutionContext.global)
+        case None if _has_effective_working_set_policy(plan) =>
+          entitySpace.entityOption[Any](plan.entityName).foreach { collection =>
+            // Policy-only working sets need a persistent-store scan before they
+            // can be declared ready. Until that loader is wired, keep status
+            // initializing so search uses direct store fallback.
+            if (collection.storage.memoryRealm.isDefined)
+              collection.storage.workingSetStatus.markLoading()
+            else
+              collection.storage.workingSetStatus.markDisabled()
+          }
+        case None =>
+          entitySpace.entityOption[Any](plan.entityName).foreach(_.storage.workingSetStatus.markDisabled())
       }
     }
   }
+
+  private def _disable_working_sets(
+    entitySpace: EntitySpace
+  ): Unit =
+    entitySpace.entityNames.foreach { name =>
+      entitySpace.entityOption[Any](name).foreach(_.storage.workingSetStatus.markDisabled())
+    }
+
+  private def _working_set_enabled_for_runtime: Boolean =
+    GlobalRuntimeContext.current.map(_.runtimeMode) match {
+      case Some(RunMode.Command) | Some(RunMode.Client) => false
+      case _ => true
+    }
+
+  private def _has_effective_working_set_policy(
+    plan: EntityRuntimePlan[Any]
+  ): Boolean =
+    plan.workingSetPolicy match {
+      case Some(WorkingSetPolicy.Disabled) | None => false
+      case Some(_) => true
+    }
 
   private def _prime_store[E](
     entitySpace: EntitySpace,

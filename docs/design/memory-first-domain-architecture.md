@@ -195,6 +195,27 @@ A realistic estimate shows:
 
 This easily fits within modern memory limits.
 
+### 8.1 Startup and Direct-Store Fallback
+
+The working set is a resident execution/cache layer, not the source of truth.
+Subsystem startup must therefore not block on full working-set population.
+
+Startup behavior:
+
+- explicit seed/preload data is written to the store synchronously first
+- admission into the memory-resident working set may run asynchronously
+- while an entity working set is `not_started` or `loading`, working-set scoped
+  search falls back to direct EntityStore/DataStore search
+- boot-time direct-search fallback is counted as runtime metrics
+- once loading is `ready`, working-set scoped search uses the resident set
+- a policy-only working set must not be marked `ready` until the persistent
+  store loader has considered the store-backed population; otherwise an
+  empty resident set can mask persisted rows
+
+Command/client execution is store-first and does not use the resident working
+set. This avoids paying resident-cache startup and consistency costs for short
+lived command-line invocations.
+
 ---
 
 ## 9. Event Handling with In-Memory Tasks
