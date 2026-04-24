@@ -23,6 +23,7 @@ final case class WebDescriptor(
   form: Map[String, WebDescriptor.Form] = Map.empty,
   apps: Vector[WebDescriptor.App] = Vector.empty,
   routes: Vector[WebDescriptor.Route] = Vector.empty,
+  pages: Map[String, WebDescriptor.PageCustomization] = Map.empty,
   theme: WebDescriptor.Theme = WebDescriptor.Theme(),
   assets: WebDescriptor.Assets = WebDescriptor.Assets(),
   admin: Map[String, WebDescriptor.AdminSurface] = Map.empty
@@ -72,6 +73,20 @@ final case class WebDescriptor(
       ).map(_.theme))
       .map(theme.merge)
       .getOrElse(theme)
+
+  def pageCustomization(
+    componentName: Option[String],
+    appName: Option[String]
+  ): Option[WebDescriptor.PageCustomization] = {
+    val app = appName.map(WebDescriptor.normalizeSelector)
+    val component = componentName.map(WebDescriptor.normalizeSelector)
+    val candidates =
+      (for {
+        c <- component.toVector
+        a <- app.toVector
+      } yield s"${c}.${a}") ++ app.toVector
+    candidates.collectFirst(Function.unlift(pages.get))
+  }
 
   def formAssets(
     componentName: String,
@@ -249,13 +264,24 @@ object WebDescriptor {
     controlType: Option[String] = None,
     hidden: Boolean = false,
     system: Boolean = false,
+    label: Option[String] = None,
     values: Vector[String] = Vector.empty,
     multiple: Boolean = false,
     required: Option[Boolean] = None,
     readonly: Boolean = false,
     placeholder: Option[String] = None,
     help: Option[String] = None,
+    defaultValue: Option[String] = None,
     validation: org.goldenport.schema.WebValidationHints = org.goldenport.schema.WebValidationHints.empty
+  )
+
+  final case class PageCustomization(
+    title: Option[String] = None,
+    heading: Option[String] = None,
+    subtitle: Option[String] = None,
+    submitLabel: Option[String] = None,
+    fields: Vector[String] = Vector.empty,
+    controls: Map[String, FormControl] = Map.empty
   )
 
   enum TotalCountPolicy {
@@ -485,6 +511,7 @@ object WebDescriptor {
       form = _form(web),
       apps = _apps(web),
       routes = _routes(web),
+      pages = _pages(web),
       theme = _theme(web),
       assets = _assets(web),
       admin = _admin(web)
@@ -595,12 +622,32 @@ object WebDescriptor {
       controlType = _string(record, "type").orElse(_string(record, "controlType")).orElse(_string(record, "control-type")),
       hidden = _boolean(record, "hidden").getOrElse(false),
       system = _boolean(record, "system").getOrElse(false),
+      label = _string(record, "label"),
       values = _string_vector(record, "values"),
       multiple = _boolean(record, "multiple").getOrElse(false),
       required = _boolean(record, "required"),
       readonly = _boolean(record, "readonly").orElse(_boolean(record, "readOnly")).orElse(_boolean(record, "read-only")).getOrElse(false),
       placeholder = _string(record, "placeholder"),
-      help = _string(record, "help")
+      help = _string(record, "help"),
+      defaultValue = _string(record, "defaultValue").orElse(_string(record, "default-value")).orElse(_string(record, "value"))
+    )
+
+  private def _pages(record: Record): Map[String, PageCustomization] =
+    _record_value(record, "pages")
+      .map(_.asMap.toVector.flatMap {
+        case (key, value) =>
+          _any_to_record(value).map(r => _normalize_selector(key) -> _page_customization(r))
+      }.toMap)
+      .getOrElse(Map.empty)
+
+  private def _page_customization(record: Record): PageCustomization =
+    PageCustomization(
+      title = _string(record, "title"),
+      heading = _string(record, "heading"),
+      subtitle = _string(record, "subtitle").orElse(_string(record, "description")),
+      submitLabel = _string(record, "submitLabel").orElse(_string(record, "submit-label")),
+      fields = _string_vector(record, "fields"),
+      controls = _form_controls(record)
     )
 
   private def _apps(record: Record): Vector[App] =
@@ -779,6 +826,9 @@ object WebDescriptor {
 
   private def _normalize_app_segment(value: String): String =
     value.trim.toLowerCase.replace("_", "-")
+
+  def normalizeSelector(value: String): String =
+    _normalize_selector(value)
 
   private def _normalize_selector(value: String): String =
     value.split("\\.").toVector.map(_normalize_selector_segment).mkString(".")

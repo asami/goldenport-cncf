@@ -23,7 +23,7 @@ import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -1488,7 +1488,7 @@ object StaticFormAppRenderer {
     label: Option[String] = None,
     validationMessages: Vector[FormValidationMessage] = Vector.empty
   ): String = {
-    val displayLabel = label.getOrElse(name)
+    val displayLabel = label.orElse(descriptor.flatMap(_.label)).getOrElse(name)
     val invalidClass = if (validationMessages.nonEmpty) " is-invalid" else ""
     val validationAttr = _validation_attribute_text(descriptor.map(_.validation).getOrElse(org.goldenport.schema.WebValidationHints.empty))
     val feedback =
@@ -4702,6 +4702,21 @@ object StaticFormAppRenderer {
             )
         }
       ),
+      "pages" -> Json.fromFields(
+        descriptor.pages.toVector.sortBy(_._1).map {
+          case (selector, page) =>
+            selector -> Json.obj(
+              "title" -> page.title.map(Json.fromString).getOrElse(Json.Null),
+              "heading" -> page.heading.map(Json.fromString).getOrElse(Json.Null),
+              "subtitle" -> page.subtitle.map(Json.fromString).getOrElse(Json.Null),
+              "submitLabel" -> page.submitLabel.map(Json.fromString).getOrElse(Json.Null),
+              "fields" -> Json.arr(page.fields.map(Json.fromString)*),
+              "controls" -> Json.fromFields(page.controls.toVector.sortBy(_._1).map {
+                case (name, control) => name -> _web_descriptor_form_control_json(control)
+              })
+            )
+        }
+      ),
       "admin" -> Json.fromFields(
         descriptor.admin.toVector.sortBy(_._1).map {
           case (selector, admin) =>
@@ -4711,11 +4726,13 @@ object StaticFormAppRenderer {
                 Json.obj(
                   "name" -> Json.fromString(field.name),
                   "type" -> field.control.controlType.map(Json.fromString).getOrElse(Json.Null),
+                  "label" -> field.control.label.map(Json.fromString).getOrElse(Json.Null),
                   "required" -> field.control.required.map(Json.fromBoolean).getOrElse(Json.Null),
                   "hidden" -> Json.fromBoolean(field.control.hidden),
                   "readonly" -> Json.fromBoolean(field.control.readonly),
                   "placeholder" -> field.control.placeholder.map(Json.fromString).getOrElse(Json.Null),
                   "help" -> field.control.help.map(Json.fromString).getOrElse(Json.Null),
+                  "defaultValue" -> field.control.defaultValue.map(Json.fromString).getOrElse(Json.Null),
                   "values" -> Json.arr(field.control.values.map(Json.fromString)*)
                 )
               )*)
@@ -4731,6 +4748,21 @@ object StaticFormAppRenderer {
         descriptor.routes.map(_web_descriptor_route_json)*
       )
     ).spaces2
+
+  private def _web_descriptor_form_control_json(
+    control: WebDescriptor.FormControl
+  ): Json =
+    Json.obj(
+      "type" -> control.controlType.map(Json.fromString).getOrElse(Json.Null),
+      "label" -> control.label.map(Json.fromString).getOrElse(Json.Null),
+      "required" -> control.required.map(Json.fromBoolean).getOrElse(Json.Null),
+      "hidden" -> Json.fromBoolean(control.hidden),
+      "readonly" -> Json.fromBoolean(control.readonly),
+      "placeholder" -> control.placeholder.map(Json.fromString).getOrElse(Json.Null),
+      "help" -> control.help.map(Json.fromString).getOrElse(Json.Null),
+      "defaultValue" -> control.defaultValue.map(Json.fromString).getOrElse(Json.Null),
+      "values" -> Json.arr(control.values.map(Json.fromString)*)
+    )
 
   private def _web_descriptor_assets_json(
     assets: WebDescriptor.Assets

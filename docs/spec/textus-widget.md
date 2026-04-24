@@ -241,6 +241,15 @@ CML entity/value/operation metadata
 selection, labels, help, placeholders, and control hints. It must not become the
 primary schema source.
 
+For provider-owned static pages, `WebDescriptor.pages` may supply light
+composition metadata keyed by `{component}.{app}` with app-only fallback. Static
+pages that want to participate must expose stable `data-textus-page`,
+`data-textus-field`, and `data-textus-role` hooks. The supported customization
+surface is limited to page title/heading/subtitle, submit label, field
+visibility/order, and field label/help/placeholder/default values. This surface
+does not alter provider operation schemas or introduce application-specific
+business fields into provider models.
+
 If a widget needs metadata that the shared schema cannot express, the preferred
 fix is to extend `org.goldenport.schema.Schema` or the shared Web schema model
 rather than add a widget-only metadata path.

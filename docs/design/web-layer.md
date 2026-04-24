@@ -372,6 +372,34 @@ through `web.apps[].theme`; app theme settings merge after the subsystem theme
 so the common brand remains shared while a provider/application page can refine
 small local differences. App business logic must not depend on theme values.
 
+Provider-owned common pages may expose stable `data-textus-*` hooks so the
+subsystem can apply light page customization without copying the page. The SAR
+Web Descriptor may declare `web.pages` entries keyed by `{component}.{app}` with
+an app-only fallback. This customization is intentionally narrow: title,
+heading, subtitle, submit label, field ordering/visibility, and field
+label/help/placeholder/default values. Full layout or behavioral customization
+must be implemented as an application-owned page that calls the provider API.
+
+```yaml
+web:
+  pages:
+    textus-user-account.signup:
+      heading: Create account
+      fields: [loginName, email, password]
+      controls:
+        name:
+          defaultValue: Cwitter user
+        title:
+          defaultValue: member
+        loginName:
+          label: Login name
+          help: Application public identity may be derived from this value.
+```
+
+`fields` controls visible field order. Fields not listed are hidden only when
+they are optional or have a descriptor-provided `defaultValue`; required fields
+without a default remain visible to preserve the provider operation contract.
+
 Static Form result rendering uses `web.assets` as composition input:
 
 - `autoComplete: false` disables automatic framework asset insertion.

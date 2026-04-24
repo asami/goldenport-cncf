@@ -12,7 +12,7 @@ import scala.util.Try
  *
  * @since   Apr. 16, 2026
  *  version Apr. 17, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 object WebSchemaResolver {
@@ -96,12 +96,13 @@ object WebSchemaResolver {
         hidden = hidden,
         system = system,
         values = values,
-        multiple = multiple,
-        required = Some(required),
-        readonly = readonly,
-        placeholder = placeholder,
-        help = help,
-        validation = validation
+      multiple = multiple,
+      required = Some(required),
+      readonly = readonly,
+      label = label,
+      placeholder = placeholder,
+      help = help,
+      validation = validation
       )
   }
 
@@ -467,8 +468,10 @@ object WebSchemaResolver {
       multiple = base.multiple || overrideControl.multiple,
       required = overrideControl.required.orElse(base.required),
       readonly = base.readonly || overrideControl.readonly,
+      label = overrideControl.label.orElse(base.label),
       placeholder = overrideControl.placeholder.orElse(base.placeholder),
       help = overrideControl.help.orElse(base.help),
+      defaultValue = overrideControl.defaultValue.orElse(base.defaultValue),
       validation = _merge_validation(base.validation, overrideControl.validation)
     )
 

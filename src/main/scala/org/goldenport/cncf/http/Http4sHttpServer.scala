@@ -44,7 +44,7 @@ import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -535,7 +535,7 @@ final class Http4sHttpServer(
     else
       _web_app_static_html_content(webAppName, page) match {
         case Some(content) =>
-          _html_content(content, Some(webAppName))
+          _html_content(content, Some(webAppName), Some(componentName))
         case None =>
           _web_error_response(
             Some(webAppName),
@@ -2539,9 +2539,16 @@ final class Http4sHttpServer(
     body: String,
     appName: Option[String]
   ): IO[HResponse[IO]] =
+    _html_content(body, appName, None)
+
+  private def _html_content(
+    body: String,
+    appName: Option[String],
+    componentName: Option[String]
+  ): IO[HResponse[IO]] =
     IO.pure(
       HResponse[IO](HStatus.Ok)
-        .withEntity(_themed_html(body, appName))
+        .withEntity(_themed_html(body, appName, componentName))
         .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
     )
 
@@ -2555,20 +2562,22 @@ final class Http4sHttpServer(
   ): IO[HResponse[IO]] =
     IO.pure(
       HResponse[IO](status)
-        .withEntity(_themed_html(p.body, appName))
+        .withEntity(_themed_html(p.body, appName, None))
         .withContentType(`Content-Type`(MediaType.text.html, Some(Charset.`UTF-8`)))
     )
 
   private def _themed_html(
     body: String,
-    appName: Option[String]
+    appName: Option[String],
+    componentName: Option[String] = None
   ): String = {
     val descriptor = engine.webDescriptor
     val baseAssets = appName
       .map(name => descriptor.assets.merge(descriptor.appAssets(name)))
       .getOrElse(descriptor.assets)
+    val customized = _page_customized_html(body, componentName, appName)
     val themed = StaticFormAppLayout.completeThemeAssets(
-      body,
+      customized,
       descriptor.themeFor(appName).toLayoutOptions
     )
     StaticFormAppLayout.completeDeclaredAssets(
@@ -2578,6 +2587,162 @@ final class Http4sHttpServer(
         declaredJs = baseAssets.js
       )
     )
+  }
+
+  private def _page_customized_html(
+    body: String,
+    componentName: Option[String],
+    appName: Option[String]
+  ): String =
+    engine.webDescriptor.pageCustomization(componentName, appName) match {
+      case Some(page) =>
+        _insert_before(
+          body,
+          "</body>",
+          _page_customization_script(page)
+        )
+      case None =>
+        body
+    }
+
+  private def _page_customization_script(
+    page: WebDescriptor.PageCustomization
+  ): String = {
+    val json = _page_customization_json(page).noSpaces.replace("</", "<\\/")
+    s"""|  <script id="textus-page-customization" type="application/json">${json}</script>
+        |  <script>
+        |    (function() {
+        |      const source = document.getElementById("textus-page-customization");
+        |      if (!source) return;
+        |      let config = {};
+        |      try { config = JSON.parse(source.textContent || "{}"); } catch (_) { return; }
+        |
+        |      function text(role, value) {
+        |        if (!value) return;
+        |        document.querySelectorAll("[data-textus-role='" + role + "']").forEach(function(node) {
+        |          node.textContent = value;
+        |        });
+        |      }
+        |
+        |      function esc(name) {
+        |        if (window.CSS && CSS.escape) return CSS.escape(name);
+        |        return String(name).replace(/["'\\\\\\]]/g, "\\\\$$&");
+        |      }
+        |
+        |      function input(name) {
+        |        return document.querySelector("[name='" + esc(name) + "']");
+        |      }
+        |
+        |      function applyControl(name, control) {
+        |        const field = document.querySelector("[data-textus-field='" + esc(name) + "']");
+        |        const element = input(name);
+        |        if (control.label && field) {
+        |          const label = field.querySelector("label");
+        |          if (label) label.textContent = control.label;
+        |        }
+        |        if (control.help && field) {
+        |          const help = field.querySelector(".form-text");
+        |          if (help) help.textContent = control.help;
+        |        }
+        |        if (control.placeholder && element) element.setAttribute("placeholder", control.placeholder);
+        |        if (control.defaultValue !== undefined && control.defaultValue !== null && element && !element.value) element.value = control.defaultValue;
+        |      }
+        |
+        |      function fieldRequired(name) {
+        |        const element = input(name);
+        |        return !!(element && element.required);
+        |      }
+        |
+        |      function hideField(name) {
+        |        const field = document.querySelector("[data-textus-field='" + esc(name) + "']");
+        |        if (field) field.classList.add("d-none");
+        |      }
+        |
+        |      function showField(name) {
+        |        const field = document.querySelector("[data-textus-field='" + esc(name) + "']");
+        |        if (field) field.classList.remove("d-none");
+        |      }
+        |
+        |      function reorder(fields) {
+        |        if (!fields || !fields.length) return;
+        |        const first = document.querySelector("[data-textus-field]");
+        |        if (!first || !first.parentElement) return;
+        |        const parent = first.parentElement;
+        |        fields.forEach(function(name) {
+        |          const field = document.querySelector("[data-textus-field='" + esc(name) + "']");
+        |          if (field && field.parentElement === parent) parent.appendChild(field);
+        |        });
+        |      }
+        |
+        |      if (config.title) document.title = config.title;
+        |      text("heading", config.heading);
+        |      text("subtitle", config.subtitle);
+        |      text("submit", config.submitLabel);
+        |
+        |      const controls = config.controls || {};
+        |      Object.keys(controls).forEach(function(name) { applyControl(name, controls[name] || {}); });
+        |      if (config.fields && config.fields.length) {
+        |        const allowed = new Set(config.fields);
+        |        document.querySelectorAll("[data-textus-field]").forEach(function(field) {
+        |          const name = field.getAttribute("data-textus-field");
+        |          if (allowed.has(name)) {
+        |            showField(name);
+        |          } else {
+        |            const control = controls[name] || {};
+        |            if (!fieldRequired(name) || (control.defaultValue !== undefined && control.defaultValue !== null)) {
+        |              applyControl(name, control);
+        |              hideField(name);
+        |            }
+        |          }
+        |        });
+        |        reorder(config.fields);
+        |      }
+        |    })();
+        |  </script>
+        |""".stripMargin
+  }
+
+  private def _page_customization_json(
+    page: WebDescriptor.PageCustomization
+  ): Json =
+    Json.obj(
+      "title" -> _json_option(page.title),
+      "heading" -> _json_option(page.heading),
+      "subtitle" -> _json_option(page.subtitle),
+      "submitLabel" -> _json_option(page.submitLabel),
+      "fields" -> Json.arr(page.fields.map(Json.fromString)*),
+      "controls" -> Json.obj(page.controls.toVector.sortBy(_._1).map {
+        case (name, control) => name -> _form_control_json(control)
+      }*)
+    )
+
+  private def _form_control_json(
+    control: WebDescriptor.FormControl
+  ): Json = {
+    val optional = Vector(
+      control.label.map("label" -> Json.fromString(_)),
+      control.help.map("help" -> Json.fromString(_)),
+      control.placeholder.map("placeholder" -> Json.fromString(_)),
+      control.defaultValue.map("defaultValue" -> Json.fromString(_))
+    ).flatten
+    Json.obj(
+      (optional :+ ("hidden" -> Json.fromBoolean(control.hidden)))*
+    )
+  }
+
+  private def _json_option(value: Option[String]): Json =
+    value.map(Json.fromString).getOrElse(Json.Null)
+
+  private def _insert_before(
+    html: String,
+    marker: String,
+    insertion: String
+  ): String = {
+    val index = html.toLowerCase(java.util.Locale.ROOT).lastIndexOf(marker.toLowerCase(java.util.Locale.ROOT))
+    if (index < 0)
+      html + "\n" + insertion
+    else
+      html.substring(0, index) + insertion + html.substring(index)
   }
 
   private def _json(p: StaticFormAppRenderer.Page): IO[HResponse[IO]] =

@@ -115,6 +115,26 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
           |        component: notice-board
           |        app: notice-board
           |
+          |  pages:
+          |    textus-user-account.signup:
+          |      title: Create account
+          |      heading: Create account
+          |      subtitle: Use a shared Textus account for this application.
+          |      submitLabel: Create account
+          |      fields:
+          |        - loginName
+          |        - email
+          |        - password
+          |      controls:
+          |        loginName:
+          |          label: Login name
+          |          help: Public application identity may be derived from this value.
+          |          placeholder: example_user
+          |        title:
+          |          defaultValue: member
+          |        password:
+          |          label: Password
+          |
           |  assets:
           |    autoComplete: false
           |    css:
@@ -188,6 +208,16 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.routes.head.target.app shouldBe "notice-board"
       descriptor.webRouteFor(Vector("web", "notice-board")).map(_.target.app) shouldBe Some("notice-board")
       descriptor.webRouteFor(Vector("web", "notice-board", "about")).map(_.remainingPath) shouldBe Some(Vector("about"))
+      descriptor.pages("textus-user-account.signup").title shouldBe Some("Create account")
+      descriptor.pages("textus-user-account.signup").heading shouldBe Some("Create account")
+      descriptor.pages("textus-user-account.signup").subtitle shouldBe Some("Use a shared Textus account for this application.")
+      descriptor.pages("textus-user-account.signup").submitLabel shouldBe Some("Create account")
+      descriptor.pages("textus-user-account.signup").fields shouldBe Vector("loginName", "email", "password")
+      descriptor.pages("textus-user-account.signup").controls("loginName").label shouldBe Some("Login name")
+      descriptor.pages("textus-user-account.signup").controls("loginName").help shouldBe Some("Public application identity may be derived from this value.")
+      descriptor.pages("textus-user-account.signup").controls("loginName").placeholder shouldBe Some("example_user")
+      descriptor.pages("textus-user-account.signup").controls("title").defaultValue shouldBe Some("member")
+      descriptor.pageCustomization(Some("textus-user-account"), Some("signup")).flatMap(_.title) shouldBe Some("Create account")
       descriptor.webRouteFor(Vector("web", "notice-board", "about")).map(_.kind) shouldBe Some(WebDescriptor.RouteKind.Alias)
       descriptor.webRouteFor(Vector("web", "other")).map(_.kind) shouldBe Some(WebDescriptor.RouteKind.Default)
       descriptor.assets.autoComplete shouldBe false
@@ -468,6 +498,14 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.isFormEnabled(protectedSelector) shouldBe true
       descriptor.isFormEnabled(internalSelector) shouldBe false
       descriptor.isFormEnabled("notice-board.notice.unlisted") shouldBe false
+    }
+
+    "keep page customization separate from operation form exposure controls" in {
+      val descriptor = WebDescriptor(
+        pages = Map("signup" -> WebDescriptor.PageCustomization(heading = Some("Create account")))
+      )
+
+      descriptor.isFormEnabled("notice-board.notice.search-notices") shouldBe true
     }
 
     "allow Web Tier authorization when every configured category matches at least one subject value" in {

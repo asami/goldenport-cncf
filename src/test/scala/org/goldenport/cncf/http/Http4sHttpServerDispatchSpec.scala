@@ -22,7 +22,7 @@ import org.typelevel.ci.CIStringSyntax
 
 /*
  * @since   Apr. 24, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
@@ -200,13 +200,32 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
           |      theme:
           |        css:
           |          - /web/assets/console-theme.css
+          |  pages:
+          |    debug.debug-app:
+          |      title: Branded Debug
+          |      heading: Branded debug page
+          |      subtitle: Customized by subsystem WebDescriptor.
+          |      submitLabel: Continue
+          |      fields:
+          |        - email
+          |      controls:
+          |        email:
+          |          label: Email address
+          |          help: Shared account email.
+          |          placeholder: user@example.test
           |""".stripMargin,
         StandardCharsets.UTF_8
       )
       Files.writeString(
         root.resolve("debug-app").resolve("index.html"),
         """<!doctype html>
-          |<html><head><title>Debug App</title></head><body><main>Debug</main></body></html>
+          |<html><head><title>Debug App</title></head><body data-textus-page="debug-app"><main>
+          |  <h1 data-textus-role="heading">Debug</h1>
+          |  <p data-textus-role="subtitle">Original.</p>
+          |  <div data-textus-field="email"><label for="email">Email</label><input id="email" name="email" required><div class="form-text">Email help.</div></div>
+          |  <div data-textus-field="phoneNumber"><label for="phoneNumber">Phone</label><input id="phoneNumber" name="phoneNumber"><div class="form-text">Phone help.</div></div>
+          |  <button data-textus-role="submit">Submit</button>
+          |</main></body></html>
           |""".stripMargin,
         StandardCharsets.UTF_8
       )
@@ -238,6 +257,9 @@ class Http4sHttpServerDispatchSpec extends AnyWordSpec with Matchers {
       body should include ("/web/debug/debug-app/assets/app-theme.css")
       body should include ("data-textus-theme-vars=\"brand\"")
       body should include ("--bs-primary: #14532d")
+      body should include ("textus-page-customization")
+      body should include ("Branded debug page")
+      body should include ("user@example.test")
       asset.status.code shouldBe 200
       asset.as[String].unsafeRunSync() should include ("var(--bs-primary)")
       nestedGlobalAsset.status.code shouldBe 200
