@@ -43,6 +43,22 @@ final class EntityStoreQueryRouteSpec
       storeRecord shouldBe entity.toRecord()
       decoded shouldBe Consequence.success(entity)
     }
+
+    "produce view records through the explicit view boundary API" in {
+      Given("an entity whose DB record differs from its view record")
+      val id = EntityId("test", "view_1", EntityCollectionId("test", "a", "store_decode"))
+      val entity = StoreDecodeEntity(id, "view-name")
+      val persistent = _store_decode_persistent
+
+      When("requesting a view record")
+      val viewRecord = persistent.toViewRecord(entity, "admin", Vector("presentationName"))
+      val storeRecord = persistent.toStoreRecord(entity)
+
+      Then("the view boundary does not expose the DB field shape")
+      viewRecord.getString("presentationName") shouldBe Some("view-name")
+      viewRecord.getString("store_name") shouldBe None
+      storeRecord.getString("store_name") shouldBe Some("view-name")
+    }
   }
 
   "EntityStoreSpace.search" should {
@@ -443,6 +459,51 @@ final class EntityStoreQueryRouteSpec
       )
       loaded.map(_.map(_.name)) shouldBe Consequence.success(Some("hanako"))
       loaded.map(_.map(_.age)) shouldBe Consequence.success(Some(20))
+    }
+
+    "apply patch update by id through EntityPersistentUpdate.toStoreRecord" in {
+      Given("a seeded store-shaped entity and a patch with a different view shape")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistentUpdate[StorePatchCandidate] = _store_patch_candidate_persistent
+
+      val collectionid = EntityCollectionId("test", "a", "store_patch_candidate")
+      val id = EntityId("test", "sp1", collectionid)
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(collectionid),
+              Record.dataAuto(
+                "id" -> id,
+                "store_name" -> "before"
+              )
+            )
+          )
+        )
+      )
+
+      When("updating by id with a store-aware patch")
+      val updated = entitystorespace.updateById(
+        UnitOfWorkOp.EntityStoreUpdateById(
+          id = id,
+          patch = StorePatchCandidate(Update.set("after")),
+          tc = summon[EntityPersistentUpdate[StorePatchCandidate]]
+        )
+      )
+      val loaded = for {
+        _ <- updated
+        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
+        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec <- ds.load(cid, dsid)
+      } yield rec
+
+      Then("the datastore update uses the store field name, not the view field name")
+      updated shouldBe Consequence.unit
+      loaded.map(_.flatMap(_.getString("store_name"))) shouldBe Consequence.success(Some("after"))
+      loaded.map(_.flatMap(_.getString("displayName"))) shouldBe Consequence.success(None)
     }
 
     "auto-complement create defaults from ExecutionContext on entity-store route" in {
@@ -882,6 +943,31 @@ private object PersonPatch {
     } yield PersonPatch(n, a)
   }
 }
+
+private final case class StorePatchCandidate(
+  name: Update[String]
+) extends EntityPersistableUpdate {
+  def toRecord(): Record =
+    Record.dataAuto(
+      "displayName" -> name
+    )
+}
+
+private def _store_patch_candidate_persistent: EntityPersistentUpdate[StorePatchCandidate] =
+  new EntityPersistentUpdate[StorePatchCandidate] {
+    private val _collectionid = EntityCollectionId("test", "a", "store_patch_candidate")
+
+    def toRecord(e: StorePatchCandidate): Record = e.toRecord()
+    def fromRecord(r: Record): Consequence[StorePatchCandidate] =
+      Consequence.notImplemented("not used in this spec")
+    override def toStoreRecord(e: StorePatchCandidate): Record =
+      Record.dataAuto(
+        "store_name" -> e.name
+      )
+    override def fromStoreRecord(r: Record): Consequence[StorePatchCandidate] =
+      Consequence.notImplemented("not used in this spec")
+    def collection(e: StorePatchCandidate): EntityCollectionId = _collectionid
+  }
 
 private final case class PersonQuery(
   id: Condition[EntityId],

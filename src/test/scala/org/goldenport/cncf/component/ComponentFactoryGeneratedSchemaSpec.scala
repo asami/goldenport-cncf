@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 16, 2026
  *  version Apr. 20, 2026
- * @version Apr. 24, 2026
+ *  version Apr. 24, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryGeneratedSchemaSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -84,6 +85,26 @@ final class ComponentFactoryGeneratedSchemaSpec extends AnyWordSpec with Matcher
       mapping.get("postedAt") shouldBe Some("posted_at")
       mapping.get("body") shouldBe Some("body")
     }
+
+    "prefer explicit store record methods on reflective EntityPersistent bridges" in {
+      Given("a generated-style persistent module with distinct view and store methods")
+      val factory = new ComponentFactory()
+      val method = classOf[ComponentFactory].getDeclaredMethods
+        .find(_.getName == "_as_entity_persistent")
+        .getOrElse(fail("_as_entity_persistent is missing"))
+      method.setAccessible(true)
+      val entity = _GeneratedStyleEntity(EntityId("test", "reflective_store", EntityCollectionId("test", "a", "generated_style")), "hello", "2026-04-26T00:00:00Z")
+
+      When("ComponentFactory wraps the module as EntityPersistent")
+      val persistent = method.invoke(factory, _GeneratedStyleStorePersistentModule, None)
+        .asInstanceOf[Option[EntityPersistent[Any]]]
+        .getOrElse(fail("persistent bridge was not created"))
+
+      Then("store APIs use the explicit store methods instead of compatibility toRecord/fromRecord")
+      persistent.toRecord(entity).getString("postedAt") shouldBe Some("2026-04-26T00:00:00Z")
+      persistent.toStoreRecord(entity).getString("posted_at") shouldBe Some("2026-04-26T00:00:00Z")
+      persistent.fromStoreRecord(persistent.toStoreRecord(entity)).map(_.asInstanceOf[_GeneratedStyleEntity].postedAt) shouldBe Consequence.success("2026-04-26T00:00:00Z")
+    }
   }
 }
 
@@ -108,3 +129,30 @@ private final case class _GeneratedStyleEntity(
   body: String,
   postedAt: String
 )
+
+private object _GeneratedStyleStorePersistentModule {
+  def id(e: _GeneratedStyleEntity): EntityId = e.id
+  def toRecord(e: _GeneratedStyleEntity): Record =
+    Record.dataAuto(
+      "id" -> e.id,
+      "body" -> e.body,
+      "postedAt" -> e.postedAt
+    )
+  def fromRecord(r: Record): Consequence[_GeneratedStyleEntity] =
+    Consequence.argumentInvalid("view record decoder must not be used for store records")
+  def toStoreRecord(e: _GeneratedStyleEntity): Record =
+    Record.dataAuto(
+      "id" -> e.id,
+      "body" -> e.body,
+      "posted_at" -> e.postedAt
+    )
+  def fromStoreRecord(r: Record): Consequence[_GeneratedStyleEntity] = {
+    val m = r.asMap
+    (m.get("id"), m.get("body"), m.get("posted_at")) match {
+      case (Some(id: EntityId), Some(body: String), Some(postedAt: String)) =>
+        Consequence.success(_GeneratedStyleEntity(id, body, postedAt))
+      case _ =>
+        Consequence.argumentInvalid("invalid generated style store record")
+    }
+  }
+}

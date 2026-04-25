@@ -24,7 +24,7 @@ import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.datastore.{DataStore, Query as DataStoreQuery, QueryDirective, QueryLimit, TotalCountCapability}
 import org.goldenport.cncf.directive.{Query as EntityQuery}
-import org.goldenport.cncf.entity.{EntityDisplayable, EntityPersistable}
+import org.goldenport.cncf.entity.EntityPersistable
 import org.goldenport.cncf.entity.runtime.EntityCollection
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.observability.ObservabilityEngine
@@ -48,7 +48,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
- * @version Apr. 22, 2026
+ *  version Apr. 22, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -2019,7 +2020,7 @@ object AdminComponent {
               result.data
             else
               _entity_values(collection).drop(paging.offset).take(paging.fetchPageSize)
-          values.map(x => collection.descriptor.persistent.toRecord(x)).asInstanceOf[Vector[Any]]
+          values.map(x => collection.descriptor.persistent.toViewRecord(x, "admin", Vector.empty)).asInstanceOf[Vector[Any]]
         }
       case None =>
         Consequence.success(Vector.empty)
@@ -2246,7 +2247,7 @@ object AdminComponent {
       _entity_values(collection)
         .find(x => collection.descriptor.persistent.id(x) == canonicalId)
     }
-      .map(x => _entity_display_record(x, collection.descriptor.persistent.toRecord(x), fields))
+      .map(x => collection.descriptor.persistent.toViewRecord(x, "admin", fields))
 
   private def _entity_view_fields(
     component: Component,
@@ -2260,34 +2261,6 @@ object AdminComponent {
       )
       .flatMap(_.fieldsFor(view))
       .getOrElse(Vector.empty)
-
-  private def _entity_display_record(
-    value: Any,
-    fallback: Record,
-    fields: Vector[String]
-  ): Record =
-    if (fields.isEmpty)
-      fallback
-    else
-      value match {
-        case displayable: EntityDisplayable => displayable.toDisplayRecord("admin", fields)
-        case _ => _filter_record(fallback, fields)
-      }
-
-  private def _filter_record(
-    record: Record,
-    fields: Vector[String]
-  ): Record = {
-    val source = record.asMap
-    val rows = fields.flatMap { field =>
-      source.find { case (key, _) => _normalized_field_name(key) == _normalized_field_name(field) }
-        .map { case (_, value) => field -> value }
-    }
-    Record.dataAuto(rows*)
-  }
-
-  private def _normalized_field_name(name: String): String =
-    name.filter(_.isLetterOrDigit).toLowerCase(java.util.Locale.ROOT)
 
   private def _entity_values[A](
     collection: EntityCollection[A]
@@ -2346,10 +2319,9 @@ object AdminComponent {
     val items = result.data.map { x =>
       val entityId = collection.descriptor.persistent.id(x)
       val id = entityId.value
-      val sourceRecord = collection.descriptor.persistent.toRecord(x)
-      val record = _entity_display_record(x, sourceRecord, fields)
+      val record = collection.descriptor.persistent.toViewRecord(x, "admin", fields)
       val label = _record_label(record).getOrElse(id)
-      _AdminReadItem(id, label, _record_text(record), sourceRecord.getString("shortid").orElse(Some(entityId.parts.entropy)))
+      _AdminReadItem(id, label, _record_text(record), record.getString("shortid").orElse(Some(entityId.parts.entropy)))
     }
     _Page(
       items.take(paging.pageSize),
@@ -2373,9 +2345,8 @@ object AdminComponent {
       _page_values(_entity_values(collection).map { x =>
         val entityId = collection.descriptor.persistent.id(x)
         val id = entityId.value
-        val sourceRecord = collection.descriptor.persistent.toRecord(x)
-        val record = _entity_display_record(x, sourceRecord, fields)
-        _AdminReadItem(id, _record_label(record).getOrElse(id), _record_text(record), sourceRecord.getString("shortid").orElse(Some(entityId.parts.entropy)))
+        val record = collection.descriptor.persistent.toViewRecord(x, "admin", fields)
+        _AdminReadItem(id, _record_label(record).getOrElse(id), _record_text(record), record.getString("shortid").orElse(Some(entityId.parts.entropy)))
       }, paging, decision)
 
   private def _prefetched_page_values[A](

@@ -14,7 +14,8 @@ import org.simplemodeling.model.datatype.EntityCollectionId
  * @since   Feb. 22, 2026
  *  version Feb. 27, 2026
  *  version Mar. 24, 2026
- * @version Apr. 24, 2026
+ *  version Apr. 24, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityPersistent[E] extends RecordCodex[E]
@@ -27,6 +28,17 @@ trait EntityPersistent[E] extends RecordCodex[E]
 
   def storeFieldName(logicalName: String): String =
     logicalName
+
+  def toViewRecord(e: E, view: String, fields: Vector[String]): Record = {
+    val fallback = toRecord(e)
+    if (fields.isEmpty)
+      fallback
+    else
+      e match {
+        case displayable: EntityDisplayable => displayable.toDisplayRecord(view, fields)
+        case _ => EntityPersistent.filterViewRecord(fallback, fields)
+      }
+  }
 }
 
 object EntityPersistent {
@@ -37,6 +49,21 @@ object EntityPersistent {
     def toRecord(e: E) = e.toRecord()
     def fromRecord(r: Record) = from(r)
   }
+
+  def filterViewRecord(
+    record: Record,
+    fields: Vector[String]
+  ): Record = {
+    val source = record.asMap
+    val rows = fields.flatMap { field =>
+      source.find { case (key, _) => _normalized_field_name(key) == _normalized_field_name(field) }
+        .map { case (_, value) => field -> value }
+    }
+    Record.dataAuto(rows*)
+  }
+
+  private def _normalized_field_name(name: String): String =
+    name.filter(_.isLetterOrDigit).toLowerCase(java.util.Locale.ROOT)
 }
 
 trait EntityPersistentCreate[E] extends RecordEncoder[E]

@@ -52,7 +52,9 @@ Current semantic direction:
 
 - A (DONE): SS-01 — Define Record Purpose Taxonomy and boundary rules.
 - B (DONE): SS-02 — Formalize `EntityPersistent.toStoreRecord/fromStoreRecord` as the storage API.
-- C (PLANNED): SS-03 — Classify and migrate CNCF storage call sites to purpose-specific APIs.
+- C1 (DONE): SS-03A — Migrate DB Record boundary call sites to store APIs.
+- C2 (DONE): SS-03B — Add and use the View Record boundary API for entity presentation.
+- C3 (PLANNED): SS-03C — Classify remaining Logic Record call sites for typed-access migration.
 - D (PLANNED): SS-04 — Add typed SimpleEntity security/permission access for authorization.
 - E (PLANNED): SS-05 — Define and implement SimpleEntity storage-shape policy for management fields, permission, and nested values.
 - F (PLANNED): SS-06 — Expose storage-shape metadata in manual/admin/projection surfaces.
@@ -71,7 +73,9 @@ Current note:
 
 - [x] SS-01: Define Record Purpose Taxonomy and boundary rules.
 - [x] SS-02: Formalize `EntityPersistent.toStoreRecord/fromStoreRecord` as the storage API.
-- [ ] SS-03: Classify and migrate CNCF storage call sites to purpose-specific APIs.
+- [x] SS-03A: Migrate DB Record boundary call sites to store APIs.
+- [x] SS-03B: Add and use the View Record boundary API for entity presentation.
+- [ ] SS-03C: Classify remaining Logic Record call sites for typed-access migration.
 - [ ] SS-04: Add typed SimpleEntity security/permission access for authorization.
 - [ ] SS-05: Define and implement SimpleEntity storage-shape policy for management fields, permission, and nested values.
 - [ ] SS-06: Expose storage-shape metadata in manual/admin/projection surfaces.

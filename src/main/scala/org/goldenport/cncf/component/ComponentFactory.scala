@@ -37,7 +37,8 @@ import scala.util.Try
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Mar. 31, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -1895,6 +1896,16 @@ final class ComponentFactory(
           def fromRecord(r: Record): Consequence[Any] =
             _invoke_entity_persistent(m, "fromRecord", r).asInstanceOf[Consequence[Any]]
 
+          override def toStoreRecord(e: Any): Record =
+            _invoke_entity_persistent_option(m, "toStoreRecord", e)
+              .map(_.asInstanceOf[Record])
+              .getOrElse(toRecord(e))
+
+          override def fromStoreRecord(r: Record): Consequence[Any] =
+            _invoke_entity_persistent_option(m, "fromStoreRecord", r)
+              .map(_.asInstanceOf[Consequence[Any]])
+              .getOrElse(fromRecord(r))
+
           override def storeFieldName(logicalName: String): String =
             mapping.getOrElse(logicalName, logicalName)
         })
@@ -1987,6 +1998,15 @@ final class ComponentFactory(
       .getOrElse(throw new IllegalStateException(s"EntityPersistent bridge method not found: ${raw.getClass.getName}.${name}"))
     method.invoke(raw, arg.asInstanceOf[AnyRef])
   }
+
+  private def _invoke_entity_persistent_option(
+    raw: AnyRef,
+    name: String,
+    arg: Any
+  ): Option[Any] =
+    raw.getClass.getMethods.toVector
+      .find(m => m.getName == name && m.getParameterCount == 1)
+      .map(_.invoke(raw, arg.asInstanceOf[AnyRef]))
 
   private def _legacy_memory_plan(
     entityname: String

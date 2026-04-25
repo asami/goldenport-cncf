@@ -32,12 +32,15 @@ Phase 17 work proceeds in this order:
 1. SS-01 defines the Record Purpose Taxonomy and boundary rules.
 2. SS-02 formalizes existing `EntityPersistent.toStoreRecord/fromStoreRecord`
    as the storage API while preserving compatibility.
-3. SS-03 migrates CNCF internal storage call sites to purpose-specific API names.
-4. SS-04 introduces typed SimpleEntity security/permission access so
+3. SS-03A migrates DB Record boundary call sites to store APIs.
+4. SS-03B introduces and applies the View Record boundary API.
+5. SS-03C classifies the remaining Logic Record call sites before typed-access
+   migration.
+6. SS-04 introduces typed SimpleEntity security/permission access so
    authorization stops depending on generic record-path lookup.
-5. SS-05 implements the storage-shape policy for management fields, permission,
+7. SS-05 implements the storage-shape policy for management fields, permission,
    and nested/repeated values.
-6. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
+8. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
 
 This order avoids changing DB record shape before Record purpose, API boundary,
 and security access boundary are clear.
@@ -116,31 +119,88 @@ Formalize existing `toStoreRecord` / `fromStoreRecord` as the DB Record API for 
 
 ---
 
-## SS-03: CNCF Storage Call Site Migration
+## SS-03A: DB Record Boundary Call Site Migration
+
+Status: DONE
+
+### Objective
+
+Migrate DB/datastore boundary paths away from generic `toRecord` / `fromRecord` names.
+
+### Detailed Tasks
+
+- [x] Migrate remaining DB boundary paths in `EntityStoreSpace` to explicit store APIs.
+- [x] Ensure import seed writes use `EntityPersistent.toStoreRecord`.
+- [x] Ensure patch update conversion uses `EntityPersistentUpdate.toStoreRecord`.
+- [x] Ensure reflective `EntityPersistent` bridges prefer explicit `toStoreRecord/fromStoreRecord` when available.
+- [x] Add regression specs for import seed, patch update, and reflective persistent bridge behavior.
+
+### Expected Outcome
+
+- DB boundary call sites are visibly storage-oriented.
+- Store-specific physical field names are not lost through compatibility `toRecord`.
+
+### Guardrails
+
+- Do not change physical DB record shape.
+- Do not perform broad mechanical replacement of every `toRecord` call.
+
+---
+
+## SS-03B: View Record Boundary API
+
+Status: DONE
+
+### Objective
+
+Introduce an explicit entity View Record API and stop routing admin/entity presentation through storage-oriented APIs.
+
+### Detailed Tasks
+
+- [x] Add `EntityPersistent.toViewRecord` as the explicit entity View Record API.
+- [x] Migrate admin entity display paths from persistence `toRecord` to `toViewRecord`.
+- [x] Keep `EntityDisplayable.toDisplayRecord` as the view-specific projection hook under `toViewRecord`.
+- [x] Add regression specs proving View Record output does not expose DB field shape.
+
+### Expected Outcome
+
+- View boundary call sites are visibly presentation-oriented.
+- Admin/entity presentation no longer calls persistence `toRecord` directly.
+
+### Guardrails
+
+- Do not use View Records as persistence or authorization input.
+- Do not redesign admin UI in this slice.
+
+---
+
+## SS-03C: Logic Record Call Site Classification
 
 Status: PLANNED
 
 ### Objective
 
-Classify CNCF internal record use and migrate storage paths away from generic `toRecord` / `fromRecord` names.
+Classify remaining internal Logic Record paths that still inspect generic `Record` and prepare their migration to typed accessors in SS-04/SS-05.
 
 ### Detailed Tasks
 
-- [ ] Migrate `EntityStore` create/load/save/update/search paths to explicit storage APIs where not already done.
-- [ ] Migrate `EntityStoreSpace`, `UnitOfWorkInterpreter`, and runtime collection paths where they handle storage records.
-- [ ] Leave admin/diagnostic/presentation records on presentation-specific APIs.
-- [ ] Mark transitional record-path authorization call sites explicitly.
-- [ ] Add regression specs for create/load/search/update after migration.
+- [ ] Classify `UnitOfWorkInterpreter` authorization records as authorization Logic Record usage.
+- [ ] Classify `ActionCallFeaturePart` entity record lookups as authorization/operation Logic Record usage.
+- [ ] Classify runtime `Collection` lifecycle, visibility, and working-set policy record reads as lifecycle/working-set Logic Record usage.
+- [ ] Document which paths move to SS-04 typed security/permission access.
+- [ ] Document which paths move to SS-05 lifecycle/storage-shape policy.
+- [ ] Add focused specs before changing behavior in SS-04/SS-05.
 
 ### Expected Outcome
 
-- Storage call sites are visibly storage-oriented.
-- Presentation/request/descriptor/debug records are not accidentally treated as persistence contracts.
+- Remaining generic `toRecord` calls are accounted for by purpose.
+- No Logic Record path is accidentally treated as DB Record or View Record.
+- SS-04 and SS-05 can implement typed access without redoing taxonomy work.
 
 ### Guardrails
 
-- Do not perform broad mechanical replacement of every `toRecord` call.
-- Each migrated call site must be classified by purpose.
+- Do not implement typed authorization/lifecycle access in SS-03C unless the task is explicitly promoted.
+- Do not remove compatibility `toRecord` paths before SS-04/SS-05 replacements exist.
 
 ---
 

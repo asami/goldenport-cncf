@@ -16,7 +16,8 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
  *  version Feb. 25, 2026
  *  version Mar. 27, 2026
  *  version Apr. 13, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {
@@ -63,6 +64,7 @@ class EntityStoreSpace {
         val createTc = new EntityPersistentCreate[T] {
           def id(e: T): Option[EntityId] = Some(tc.id(e))
           def toRecord(e: T): org.goldenport.record.Record = tc.toRecord(e)
+          override def toStoreRecord(e: T): org.goldenport.record.Record = tc.toStoreRecord(e)
           def collection(e: T): EntityCollectionId = tc.id(e).collection
         }
         given EntityPersistentCreate[T] = createTc
@@ -73,8 +75,9 @@ class EntityStoreSpace {
           dscid <- dataStoreCollection(cid)
           dsid <- dataStoreEntryId(id)
           ds <- ctx.dataStoreSpace.dataStore(dscid)
-          _ <- ds.create(dscid, dsid, tc.toRecord(entry.entity)).recoverWith { case _ =>
-            ds.save(dscid, dsid, tc.toRecord(entry.entity))
+          record = tc.toStoreRecord(entry.entity)
+          _ <- ds.create(dscid, dsid, record).recoverWith { case _ =>
+            ds.save(dscid, dsid, record)
           }
         } yield ()
       }
@@ -105,7 +108,7 @@ class EntityStoreSpace {
   }
 
   def updateById[T](op: EntityStoreUpdateById[T])(using ctx: ExecutionContext): Consequence[Unit] = {
-    val changes = Update.toChangesRecord(op.tc.toRecord(op.patch))
+    val changes = Update.toChangesRecord(op.tc.toStoreRecord(op.patch))
     if (changes.isEmpty)
       Consequence.unit
     else

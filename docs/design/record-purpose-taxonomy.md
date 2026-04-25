@@ -57,7 +57,7 @@ The categories are intentionally separate:
 | Mutation Record | `EntityPersistentCreate`, `EntityPersistentUpdate` | Property changes requested by create/update before runtime complement/translation. |
 | Query Record | `EntityPersistentQuery`, `Query` | Property criteria for search/filter/sort, not persisted entity data. |
 | Logic Record | runtime logic, authorization, lifecycle, working-set policy | Property view used by runtime logic. Prefer typed accessors for new code. |
-| Presentation Record | Web/admin/API/manual response projections | Human/API display shape. Must not be used as persistence input without explicit conversion. |
+| Presentation Record | `EntityPersistent.toViewRecord`, Web/admin/API/manual response projections | Human/API display shape. Must not be used as persistence input without explicit conversion. |
 | Request Record | operation/action request projection | Request property shape. Must not be persisted as entity data directly. |
 | Descriptor Record | component/subsystem/config descriptors | Metadata/config property shape. Not entity storage. |
 | Diagnostic Record | logs, debug panels, error envelopes, raw admin details | Operational diagnostic property shape. Not authoritative domain or storage data. |
@@ -82,11 +82,14 @@ Phase 17 implementation proceeds in this order:
 1. Define this taxonomy and use it as the design contract.
 2. Formalize existing `EntityPersistent.toStoreRecord` / `fromStoreRecord` as
    the DB Record API in SS-02.
-3. Migrate CNCF storage call sites to purpose-specific storage APIs in SS-03.
-4. Replace SimpleEntity authorization record-path assumptions with typed
+3. Migrate CNCF DB Record boundary call sites to store APIs in SS-03A.
+4. Add and apply the View Record boundary API in SS-03B.
+5. Classify remaining Logic Record call sites for typed-access migration in
+   SS-03C.
+6. Replace SimpleEntity authorization record-path assumptions with typed
    security/permission access in SS-04.
-5. Implement SimpleEntity storage-shape rules in SS-05.
-6. Expose storage-shape decisions in manual/admin/projections in SS-06.
+7. Implement SimpleEntity storage-shape rules in SS-05.
+8. Expose storage-shape decisions in manual/admin/projections in SS-06.
 
 ## Compatibility
 
@@ -100,6 +103,11 @@ by the surrounding API.
 `toRecord` / `fromRecord` may remain the compatibility bridge required by
 `RecordCodex` / `RecordEncoder`, but code crossing the datastore boundary should
 prefer the explicit store names.
+
+`toViewRecord` is the formal View Record API for entity presentation boundaries.
+It may delegate to `EntityDisplayable.toDisplayRecord` when an entity supplies a
+view-specific projection, and otherwise falls back to compatibility `toRecord`
+with optional field filtering.
 
 ## References
 
