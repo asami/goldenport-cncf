@@ -1,5 +1,6 @@
 package org.goldenport.cncf.protocol
 
+import java.time.ZoneId
 import java.util.Locale
 import org.goldenport.protocol.{Request, Response}
 import org.goldenport.protocol.operation.OperationResponse
@@ -83,16 +84,29 @@ object OperationResponseFormatter {
   ): Record =
     _runtime_context.transformRecord(record)
 
-  private def _runtime_context: RuntimeContext.Context =
-    _configuration_string("textus.locale")
+  private def _runtime_context: RuntimeContext.Context = {
+    val base = RuntimeContext.Context.default
+    val formatting0 = base.formatting
+    val formatting1 = _configuration_string("textus.locale")
       .orElse(_configuration_string("cncf.locale"))
-      .map(locale => RuntimeContext.Context.default.copy(
-        formatting = RuntimeContext.Context.default.formatting.copy(locale = _locale(locale))
-      ))
-      .getOrElse(RuntimeContext.Context.default)
+      .flatMap(_locale)
+      .map(formatting0.withLocale)
+      .getOrElse(formatting0)
+    val formatting2 = _configuration_string("textus.timeZone")
+      .orElse(_configuration_string("textus.timezone"))
+      .orElse(_configuration_string("cncf.timeZone"))
+      .orElse(_configuration_string("cncf.timezone"))
+      .flatMap(_timezone)
+      .map(formatting1.withTimezone)
+      .getOrElse(formatting1)
+    base.copy(formatting = formatting2)
+  }
 
-  private def _locale(value: String): Locale =
-    Locale.forLanguageTag(value.trim.replace('_', '-'))
+  private def _locale(value: String): Option[Locale] =
+    Option(value).map(_.trim).filter(_.nonEmpty).map(x => Locale.forLanguageTag(x.replace('_', '-')))
+
+  private def _timezone(value: String): Option[ZoneId] =
+    scala.util.Try(ZoneId.of(value.trim)).toOption
 
   private def _resolve_format(
     request: Request,

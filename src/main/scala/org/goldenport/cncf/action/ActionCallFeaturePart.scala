@@ -26,6 +26,7 @@ import org.goldenport.cncf.entity.EntityQuery
 import org.goldenport.cncf.entity.EntitySearchScope
 import org.goldenport.cncf.entity.EntityCreateOptions
 import org.goldenport.cncf.entity.CreateResult
+import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
@@ -294,9 +295,39 @@ trait ActionCallRepositoryPart extends ActionCallFeaturePart { self: ActionCall.
   )(id: EntityId): Consequence[Option[Record]] =
     component.flatMap(_aggregate_entity_collection_name(_, aggregateName)).
       flatMap(name => component.flatMap(_.entitySpace.entityOption[Any](name))) match {
-        case Some(collection) => collection.resolve(id).map(x => Some(collection.descriptor.persistent.toRecord(x)))
+        case Some(collection) => _aggregate_load_record_from_collection(collection, id)
         case None => Consequence.success(None)
       }
+
+  private def _aggregate_load_record_from_collection(
+    collection: org.goldenport.cncf.entity.runtime.EntityCollection[Any],
+    id: EntityId
+  ): Consequence[Option[Record]] = {
+    def torecord(entity: Any): Record =
+      collection.descriptor.persistent.toRecord(entity)
+
+    collection.resolve(id).map(x => Some(torecord(x))).recoverWith {
+      case conclusion if _is_aggregate_record_not_found(conclusion) =>
+        given EntityPersistent[Any] =
+          collection.descriptor.persistent.asInstanceOf[EntityPersistent[Any]]
+        EntityStore.standard().load[Any](id)(using summon[EntityPersistent[Any]], execution_context).map {
+          _.map(torecord)
+        }
+      case conclusion =>
+        Consequence.Failure(conclusion)
+    }
+  }
+
+  private def _is_aggregate_record_not_found(
+    conclusion: org.goldenport.Conclusion
+  ): Boolean = {
+    val symptom = conclusion.observation.taxonomy.symptom
+    val message = conclusion.show.toLowerCase
+    symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.NotFound ||
+      message.contains("not found") ||
+      message.contains("not-found") ||
+      message.contains("notfound")
+  }
 
   private def _aggregate_entity_collection_name(
     component: org.goldenport.cncf.component.Component,

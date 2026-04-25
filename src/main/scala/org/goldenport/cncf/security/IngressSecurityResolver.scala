@@ -2,6 +2,8 @@ package org.goldenport.cncf.security
 
 import cats.free.Free
 import cats.~>
+import java.time.ZoneId
+import java.util.Locale
 import org.goldenport.{Consequence, ConsequenceT}
 import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.config.RuntimeConfig
@@ -98,7 +100,8 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     privilege.flatMap { p =>
       val ctx0 = ExecutionContext.withSecurityContext(ExecutionContext.create(p), _security_context(p, attributes))
       val ctx1 = _production_runtime_context(ctx0)
-      val ctx = _bind_context(attributes, ctx1)
+      val ctx2 = _restore_formatting_context(ctx0.security, ctx1)
+      val ctx = _bind_context(attributes, ctx2)
       if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
         Consequence.success(ResolvedIngressSecurity(ctx, p, caps))
       else
@@ -132,7 +135,8 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       val privilege = _resolve_privilege_from_security(security)
       val ctx0 = ExecutionContext.withSecurityContext(base, security)
       val ctx1 = _production_runtime_context_from_base(ctx0)
-      val ctx = _bind_context(attributes, ctx1)
+      val ctx2 = _restore_formatting_context(security, ctx1)
+      val ctx = _bind_context(attributes, ctx2)
       if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
         Consequence.success(ResolvedIngressSecurity(ctx, privilege, caps))
       else
@@ -224,6 +228,65 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
     ).map(_is_truthy).map { enabled =>
       ExecutionContext.withFrameworkSaveCallTreeEnabled(ctx, enabled)
     }
+
+  private def _restore_formatting_context(
+    security: SecurityContext,
+    ctx: ExecutionContext
+  ): ExecutionContext = {
+    val attrs = security.principal.attributes
+    val base = ctx.runtime.context
+    val formatting0 = base.formatting
+    val formatting1 = _find_first(attrs, Vector("locale", "user.locale", "textus.locale"))
+      .flatMap(_parse_locale)
+      .map(formatting0.withLocale)
+      .getOrElse(formatting0)
+    val formatting2 = _find_first(attrs, Vector("timeZone", "timezone", "time_zone", "user.timeZone", "user.timezone"))
+      .flatMap(_parse_timezone)
+      .map(formatting1.withTimezone)
+      .getOrElse(formatting1)
+    if (formatting2 == formatting0)
+      ctx
+    else
+      ExecutionContext.withRuntimeContextContext(
+        ctx,
+        base.copy(formatting = formatting2)
+      )
+  }
+
+  private def _parse_locale(p: String): Option[Locale] = {
+    val value = Option(p).map(_.trim).getOrElse("")
+    if (value.isEmpty)
+      None
+    else
+      Some(Locale.forLanguageTag(value.replace('_', '-')))
+  }
+
+  private def _parse_timezone(p: String): Option[ZoneId] =
+    scala.util.Try(ZoneId.of(p.trim)).toOption
+
+  private def _runtime_context_from_config(
+    global: GlobalRuntimeContext
+  ): RuntimeContext.Context = {
+    val base = RuntimeContext.Context.default
+    val formatting0 = base.formatting
+    val formatting1 = _config_string(global, Vector("textus.locale", "cncf.locale"))
+      .flatMap(_parse_locale)
+      .map(formatting0.withLocale)
+      .getOrElse(formatting0)
+    val formatting2 = _config_string(global, Vector("textus.timeZone", "textus.timezone", "cncf.timeZone", "cncf.timezone"))
+      .flatMap(_parse_timezone)
+      .map(formatting1.withTimezone)
+      .getOrElse(formatting1)
+    base.copy(formatting = formatting2)
+  }
+
+  private def _config_string(
+    global: GlobalRuntimeContext,
+    keys: Vector[String]
+  ): Option[String] =
+    keys.iterator
+      .flatMap(key => RuntimeConfig.getString(global.resolvedConfiguration, key))
+      .find(_.trim.nonEmpty)
 
   private def _is_truthy(p: String): Boolean = {
     val lower = Option(p).getOrElse("").trim.toLowerCase(java.util.Locale.ROOT)
@@ -388,6 +451,7 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
           abortAction = _ => (),
           disposeAction = _ => (),
           token = "ingress-security",
+          context = _runtime_context_from_config(global),
           operationMode = global.config.operationMode
         )
         context
@@ -400,11 +464,17 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
   ): ExecutionContext =
     _global_runtime_context(ctx.cncfCore.scope) match {
       case Some(global) =>
+        val context = _runtime_context_from_config(global)
+        val ctx0 =
+          if (ctx.runtime.context == context)
+            ctx
+          else
+            ExecutionContext.withRuntimeContextContext(ctx, context)
         global.commandExecutionMode.orElse(global.config.commandExecutionMode) match {
           case Some(mode) =>
-            ExecutionContext.withFrameworkCommandExecutionMode(ctx, mode)
+            ExecutionContext.withFrameworkCommandExecutionMode(ctx0, mode)
           case None =>
-            ctx
+            ctx0
         }
       case None =>
         ctx

@@ -223,6 +223,12 @@ object ExecutionContext {
       ctx
   }
 
+  def withRuntimeContextContext(
+    ctx: ExecutionContext,
+    context: RuntimeContext.Context
+  ): ExecutionContext =
+    withRuntimeContext(ctx, ctx.runtime.withContext(context))
+
   def withFrameworkCommandExecutionMode(
     ctx: ExecutionContext,
     mode: CommandExecutionMode

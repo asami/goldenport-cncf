@@ -1,5 +1,7 @@
 package org.goldenport.cncf.security
 
+import java.time.ZoneId
+import java.util.Locale
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, PrincipalId, ScopeContext, ScopeKind, SecurityLevel, TraceId}
@@ -12,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
@@ -257,6 +259,29 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
       resolved.executionContext.security.session.map(_.sessionId) shouldBe Some(Some("sess-1"))
       resolved.executionContext.security.session.map(_.tokenId) shouldBe Some(Some("token-1"))
       SecuritySubject.from(resolved.executionContext.security).isAuthenticated shouldBe true
+    }
+
+    "restore locale and timezone from authenticated provider attributes" in {
+      val subsystem = _subsystem(
+        fallbackEnabled = true,
+        providers = Vector(
+          _provider(
+            "locale-provider",
+            _ => Consequence.success(Some(AuthenticationResult(
+              PrincipalId("user-locale"),
+              attributes = Map("locale" -> "ja-JP", "timeZone" -> "Asia/Tokyo")
+            )))
+          )
+        )
+      )
+      val base = subsystem.components.head.logic.executionContext()
+
+      val result = IngressSecurityResolver.resolve(base, Map("access_token" -> "locale-token"))
+
+      result shouldBe a[Consequence.Success[_]]
+      val resolved = result.toOption.get
+      resolved.executionContext.runtime.context.formatting.locale shouldBe Locale.forLanguageTag("ja-JP")
+      resolved.executionContext.runtime.context.formatting.timezone shouldBe ZoneId.of("Asia/Tokyo")
     }
 
     "restore authenticated security from x-textus-session header" in {

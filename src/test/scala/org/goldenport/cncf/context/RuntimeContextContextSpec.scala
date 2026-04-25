@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  5, 2026
- * @version Apr.  5, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContextContextSpec
@@ -37,6 +37,7 @@ final class RuntimeContextContextSpec
       Given("a formatting context with Asia/Tokyo timezone")
       val ctx = RuntimeContext.Context(
         formatting = RuntimeContext.FormattingContext(
+          locale = Locale.US,
           timezone = ZoneId.of("Asia/Tokyo")
         )
       )
@@ -48,7 +49,7 @@ final class RuntimeContextContextSpec
       val transformed = ctx.transformRecord(record)
 
       Then("the timestamp is rendered as a timezone-adjusted string")
-      transformed.getString("updated_at") shouldBe Some("2026-04-05T09:00:00+09:00")
+      transformed.getString("updated_at").map(_.replace('\u202f', ' ')) shouldBe Some("Apr 5, 2026, 9:00:00 AM")
     }
 
     "optionally render numbers as localized strings" in {
