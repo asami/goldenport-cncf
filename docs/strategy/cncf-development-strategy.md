@@ -377,6 +377,27 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - No separate Cwitter profile model.
 - Artifact (work): `docs/phase/phase-16.md`.
 
+### Phase 17: SimpleEntity Storage Shape
+- Goal: make the entity storage boundary explicit and define deterministic
+  SimpleEntity DB storage-shape rules.
+- Scope:
+- Treat `EntityPersistent` as the canonical entity storage boundary.
+- Separate storage records from request, presentation, descriptor, diagnostic,
+  and admin records.
+- Introduce/standardize explicit storage-oriented APIs such as `toStoreRecord`
+  and `fromStoreRecord` after the Record purpose taxonomy is fixed.
+- Define SimpleEntity storage rules for management fields, permission,
+  independent value objects, and repeated value objects.
+- Move SimpleEntity authorization away from ad hoc `Record` path semantics
+  toward typed security/permission access.
+- Non-goals:
+- No broad persistence engine replacement.
+- No DB migration framework in this phase.
+- No Blob payload storage.
+- No permission model redesign beyond the access boundary required to stop
+  using generic record-path lookup.
+- Artifact (work): `docs/phase/phase-17.md`.
+
 ## 4. Relationship Between Phases
 - Later phases depend on earlier phases.
 - Phase 1.5 constrains Phase 2 and Phase 3.
@@ -391,9 +412,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: none (Phase 16 is closed; next phase selection is pending)
-- Latest active phase dashboard: none
-- Latest active phase checklist: none
+- Current phase selection: Phase 17 — SimpleEntity Storage Shape
+- Latest active phase dashboard: `docs/phase/phase-17.md`
+- Latest active phase checklist: `docs/phase/phase-17-checklist.md`
 - Latest closed phase dashboard: `docs/phase/phase-16.md`
 - Latest closed phase checklist: `docs/phase/phase-16-checklist.md`
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
@@ -419,6 +440,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 14: closed (`docs/phase/phase-14.md`)
 - Phase 15: closed (`docs/phase/phase-15.md`)
 - Phase 16: closed (`docs/phase/phase-16.md`)
+- Phase 17: open (`docs/phase/phase-17.md`)
 
 ## 8. Development Item Status
 
@@ -437,6 +459,14 @@ completed, it moves to the completed development item history below.
 - Web/UI generation:
   - wireframe/UI generation strategy above Static Form primitives
   - clarify responsibility split between generated UI and hand-written static pages
+- Web admin integration:
+  - allow component CARs to provide component-owned Web admin pages
+  - let the CNCF system admin console discover and integrate those component
+    admin pages into its navigation and management surface
+  - keep CNCF responsible for admin authorization, navigation composition, and
+    system-level framing
+  - keep component CARs responsible for component-specific admin content and
+    local admin routes
 - SPA hosting and API gateway remain separate modes, not implicit extensions of
   the current Static Form baseline.
 - Source references:
@@ -499,19 +529,11 @@ Closed in Phase 13. This remains a reference area for Phase 14+ extensions and r
 - External knowledge graph integration
 
 ### 8.7 SimpleEntity Storage Shape
-- Treat `EntityPersistent` as the entity storage boundary and tighten
-  purpose-specific record projection handling.
-- Consider migrating `EntityPersistent.toRecord` toward an explicit
-  `toStorageRecord` API to avoid mixing storage, request, presentation, and
-  diagnostic record purposes.
-- Define SimpleEntity DB storage rules:
-  - expand management-oriented value objects into DB columns;
-  - keep policy/security handling out of ad hoc `Record` path semantics;
-  - store `permission` as a compact encoded field, with typed security access;
-  - encode semantically independent value objects by default;
-  - encode repeated value objects unless promoted to independent entities or
-    collections.
-- Source note: `docs/journal/2026/04/simpleentity-db-storage-shape-note.md`.
+Promoted to Phase 17.
+
+- Active dashboard: `docs/phase/phase-17.md`
+- Active checklist: `docs/phase/phase-17-checklist.md`
+- Source note: `docs/journal/2026/04/simpleentity-db-storage-shape-note.md`
 
 ### 8.8 Builtin Blob Management Component
 - Add builtin Blob management component independent of the SimpleEntity storage

@@ -216,8 +216,8 @@ Strict handling rule:
 
 Candidate purpose-specific names for new or refactored APIs:
 
-- `toStorageRecord`;
-- `fromStorageRecord`;
+- `toStoreRecord`;
+- `fromStoreRecord`;
 - `toCreateRecord`;
 - `toUpdateRecord`;
 - `toRequestRecord`;
@@ -226,18 +226,19 @@ Candidate purpose-specific names for new or refactored APIs:
 
 Existing `EntityPersistent.toRecord` can remain as the inherited
 `RecordEncoder` method, but documentation and call sites should treat it as
-`toStorageRecord` semantically.
+`toStoreRecord` semantically. The normative taxonomy is now maintained in
+`docs/design/record-purpose-taxonomy.md`.
 
 ## EntityPersistent API Migration Candidate
 
-Renaming the storage-side API from `toRecord` to `toStorageRecord` is likely
+Renaming the storage-side API from `toRecord` to `toStoreRecord` is likely
 worth the migration cost.
 
 Reason:
 
 - `EntityPersistent` is CNCF-owned and already represents persistence;
 - call sites are mostly inside CNCF entity/unit-of-work/runtime code and specs;
-- the name `toStorageRecord` makes accidental reuse as presentation/request
+- the name `toStoreRecord` makes accidental reuse as presentation/request
   record visibly wrong;
 - it gives generated code a clearer contract for SimpleEntity storage shape.
 
@@ -247,11 +248,11 @@ Recommended migration path:
 
    ```scala
    trait EntityPersistent[E] extends Identified[E, EntityId] {
-     def toStorageRecord(e: E): Record
-     def fromStorageRecord(r: Record): Consequence[E]
+     def toStoreRecord(e: E): Record
+     def fromStoreRecord(r: Record): Consequence[E]
 
-     final def toRecord(e: E): Record = toStorageRecord(e)
-     final def fromRecord(r: Record): Consequence[E] = fromStorageRecord(r)
+     final def toRecord(e: E): Record = toStoreRecord(e)
+     final def fromRecord(r: Record): Consequence[E] = fromStoreRecord(r)
    }
    ```
 
