@@ -72,7 +72,7 @@ Phase 17 classifies remaining Logic Record use as follows:
 
 | Logic context | Current shape | Target |
 | --- | --- | --- |
-| Authorization | entity or aggregate `toRecord` passed to authorization checks | typed security/permission access in SS-04 |
+| Authorization | entity or aggregate `toRecord` passed to authorization checks | `EntityPersistent.securityAttributes` typed access; raw record fallback remains transitional |
 | Lifecycle | `deletedAt`, `postStatus`, `aliveness`, and audit fields read from a generic record | typed lifecycle access in SS-05 |
 | Working-set policy | residency policy reads entity properties from a generic record | typed policy input/storage-shape policy in SS-05 |
 | Identity lookup | runtime lookup reads management identity such as `shortid` from a generic record | typed management-field access in SS-05 |
@@ -85,8 +85,11 @@ Phase 17 classifies remaining Logic Record use as follows:
   persistence or policy code unless explicitly converted.
 - Storage records must not be presented directly without an explicit presentation
   formatter/projection.
-- Logic that needs entity management/security data should move toward typed
-  accessors; raw `Record` path lookup is transitional compatibility.
+- Logic that needs entity security data should use typed accessors such as
+  `EntityPersistent.securityAttributes`; raw `Record` path lookup is
+  transitional compatibility.
+- Logic that needs lifecycle, management identity, or working-set policy data
+  should move to typed accessors in SS-05.
 - Descriptor/config records are configuration contracts and must not be reused as
   runtime entity records.
 - Query records represent criteria, not stored entity state.

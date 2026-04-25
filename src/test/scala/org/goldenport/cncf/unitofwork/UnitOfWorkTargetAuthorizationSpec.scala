@@ -11,13 +11,14 @@ import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 import org.goldenport.cncf.security.{AggregateAuthorization, EntityAbacCondition, EntityAccessMode, EntityAccessRelation, EntityApplicationDomain, EntityOperationKind, ServiceOperationModel}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.simplemodeling.model.value.SecurityAttributes
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkTargetAuthorizationSpec
@@ -161,6 +162,70 @@ final class UnitOfWorkTargetAuthorizationSpec
 
       result shouldBe Consequence.unit
       _load_name(id) shouldBe Consequence.success(Some("taro-2"))
+    }
+
+    "allow save from typed security access when entity record omits security attributes" in {
+      given ExecutionContext = _execution_context(
+        principalId = "typed-owner"
+      )
+      given EntityPersistent[TypedSecurityTargetEntity] = _typed_security_target_persistent
+
+      val id = EntityId("test", "save_typed_security", _cid)
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Unit](
+            UnitOfWorkOp.EntityStoreSave(
+              entity = TypedSecurityTargetEntity(id, "typed-after", "typed-owner"),
+              tc = summon[EntityPersistent[TypedSecurityTargetEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("TypedSecurityTarget"),
+                  targetId = Some(id),
+                  accessKind = "update"
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result shouldBe Consequence.unit
+      _load_name(id) shouldBe Consequence.success(Some("typed-after"))
+    }
+
+    "reject save from typed security access for a non-owner entity record without security attributes" in {
+      given ExecutionContext = _execution_context(
+        principalId = "typed-other"
+      )
+      given EntityPersistent[TypedSecurityTargetEntity] = _typed_security_target_persistent
+
+      val id = EntityId("test", "save_typed_security_denied", _cid)
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Unit](
+            UnitOfWorkOp.EntityStoreSave(
+              entity = TypedSecurityTargetEntity(id, "typed-denied", "typed-owner"),
+              tc = summon[EntityPersistent[TypedSecurityTargetEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("TypedSecurityTarget"),
+                  targetId = Some(id),
+                  accessKind = "update"
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result shouldBe a[Consequence.Failure[_]]
+      _load_name(id) shouldBe Consequence.success(None)
     }
 
     "reject update for a non-owner non-group non-privileged user" in {
@@ -1125,6 +1190,39 @@ final class UnitOfWorkTargetAuthorizationSpec
         case _ =>
           Consequence.argumentInvalid("invalid person record")
   }
+
+  private final case class TypedSecurityTargetEntity(
+    id: EntityId,
+    name: String,
+    ownerId: String
+  ) {
+    def toRecord(): Record =
+      Record.dataAuto(
+        "id" -> id,
+        "name" -> name,
+        "securityAttributes" -> _security_record("stale-owner")
+      )
+  }
+
+  private val _typed_security_target_persistent: EntityPersistent[TypedSecurityTargetEntity] =
+    new EntityPersistent[TypedSecurityTargetEntity] {
+      def id(e: TypedSecurityTargetEntity): EntityId = e.id
+      def toRecord(e: TypedSecurityTargetEntity): Record = e.toRecord()
+      def fromRecord(r: Record): Consequence[TypedSecurityTargetEntity] =
+        (
+          r.getAs[EntityId]("id"),
+          r.getString("name")
+        ) match
+          case (Some(entityId), Some(entityName)) =>
+            Consequence.success(TypedSecurityTargetEntity(entityId, entityName, "typed-owner"))
+          case _ =>
+            Consequence.argumentInvalid("invalid typed security target record")
+      override def securityAttributes(e: TypedSecurityTargetEntity): Option[SecurityAttributes] =
+        Some(SecurityAttributes.ownedBy(e.ownerId))
+    }
+
+  private def _security_record(ownerId: String): Record =
+    SecurityAttributes.ownedBy(ownerId).toRecord
 
   private val _person_patch_persistent: EntityPersistentUpdate[PersonPatch] = new EntityPersistentUpdate[PersonPatch] {
     def collection(e: PersonPatch): EntityCollectionId = _cid

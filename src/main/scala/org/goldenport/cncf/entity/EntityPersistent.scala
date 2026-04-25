@@ -9,12 +9,12 @@ import org.goldenport.record.RecordCodex
 import org.goldenport.record.RecordPresentable
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.datatype.EntityCollectionId
+import org.simplemodeling.model.value.SecurityAttributes
 
 /*
  * @since   Feb. 22, 2026
  *  version Feb. 27, 2026
  *  version Mar. 24, 2026
- *  version Apr. 24, 2026
  * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -39,9 +39,28 @@ trait EntityPersistent[E] extends RecordCodex[E]
         case _ => EntityPersistent.filterViewRecord(fallback, fields)
       }
   }
+
+  def securityAttributes(e: E): Option[SecurityAttributes] =
+    SecurityAttributes.fromRecord(toRecord(e))
+
+  def authorizationRecord(e: E): Record = {
+    val base = toRecord(e)
+    authorizationRecord(e, base)
+  }
+
+  def authorizationRecord(e: E, base: Record): Record =
+    securityAttributes(e) match {
+      case Some(attributes) =>
+        EntityPersistent.withoutSecurityAttributes(base) ++ Record.dataAuto("security_attributes" -> attributes.toRecord)
+      case None =>
+        base
+    }
 }
 
 object EntityPersistent {
+  def withoutSecurityAttributes(record: Record): Record =
+    Record(record.fields.filterNot(field => _normalized_field_name(field.key) == "securityattributes"))
+
   def derived[E <: EntityPersistable](
     from: Record => Consequence[E]
   ): EntityPersistent[E] = new EntityPersistent[E] {

@@ -14,13 +14,14 @@ import org.goldenport.datatype.PathName
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.simplemodeling.model.directive.Condition
+import org.simplemodeling.model.value.SecurityAttributes
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkSearchAuthorizationSpec
@@ -261,6 +262,40 @@ final class UnitOfWorkSearchAuthorizationSpec
       ).toOption.getOrElse(fail("visibility filtering should succeed"))
 
       Then("the stored security attributes are used for the visibility decision")
+      result.data.map(_.id) shouldBe Vector(p1.id)
+      result.totalCount shouldBe Some(1)
+      result.fetchedCount shouldBe 1
+    }
+
+    "resolve search visibility from typed security access when entity record omits security attributes" in {
+      Given("an owner and an entity whose record shape intentionally omits security attributes")
+      given ExecutionContext = _execution_context(
+        DataStoreSpace.default(),
+        new EntityStoreSpace().addEntityStore(EntityStore.standard()),
+        principalId = "typed-owner"
+      )
+      given EntityPersistent[TypedSecurityEntity] = _typed_security_persistent
+
+      val p1 = TypedSecurityEntity(EntityId("test", "typed1", _cid), "typed-visible", "typed-owner")
+      val p2 = TypedSecurityEntity(EntityId("test", "typed2", _cid), "typed-hidden", "other-owner")
+
+      When("filtering search results through OperationAccessPolicy")
+      val result = OperationAccessPolicy.filterVisibleSearchResult(
+        UnitOfWorkAuthorization(
+          resourceFamily = "domain",
+          resourceType = Some("TypedSecurityEntity"),
+          accessKind = "search/list"
+        ),
+        SearchResult(
+          query = Query.plan(TypedSecurityQuery.any, includeTotal = true),
+          data = Vector(p1, p2),
+          totalCount = Some(2),
+          fetchedCount = 2
+        ),
+        summon[EntityPersistent[TypedSecurityEntity]]
+      ).toOption.getOrElse(fail("visibility filtering should succeed"))
+
+      Then("typed security attributes are used instead of record-path security attributes")
       result.data.map(_.id) shouldBe Vector(p1.id)
       result.totalCount shouldBe Some(1)
       result.fetchedCount shouldBe 1
@@ -803,6 +838,31 @@ final class UnitOfWorkSearchAuthorizationSpec
       )
   }
 
+  private object TypedSecurityQuery {
+    val any = TypedSecurityQuery(
+      id = Condition.any[EntityId],
+      name = Condition.any[String]
+    )
+  }
+
+  private final case class TypedSecurityQuery(
+    id: Condition[EntityId],
+    name: Condition[String]
+  )
+
+  private final case class TypedSecurityEntity(
+    id: EntityId,
+    name: String,
+    ownerId: String
+  ) {
+    def toRecord(): Record =
+      Record.dataAuto(
+        "id" -> id,
+        "name" -> name,
+        "security_attributes" -> _security_record("stale-owner")
+      )
+  }
+
   private final case class PersonQuery(
     id: Condition[EntityId],
     name: Condition[String]
@@ -851,6 +911,18 @@ final class UnitOfWorkSearchAuthorizationSpec
         case _ =>
           Consequence.argumentInvalid("invalid public entity record")
   }
+
+  private val _typed_security_persistent: EntityPersistent[TypedSecurityEntity] = new EntityPersistent[TypedSecurityEntity] {
+    def id(e: TypedSecurityEntity): EntityId = e.id
+    def toRecord(e: TypedSecurityEntity): Record = e.toRecord()
+    def fromRecord(r: Record): Consequence[TypedSecurityEntity] =
+      Consequence.notImplemented("not used in this spec")
+    override def securityAttributes(e: TypedSecurityEntity): Option[SecurityAttributes] =
+      Some(SecurityAttributes.ownedBy(e.ownerId))
+  }
+
+  private def _security_record(ownerId: String): Record =
+    SecurityAttributes.ownedBy(ownerId).toRecord
 
   private final class MemoryBackend extends LogBackend {
     private val _lines = ListBuffer.empty[String]

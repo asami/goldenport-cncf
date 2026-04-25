@@ -223,7 +223,7 @@ Classify remaining internal Logic Record paths that still inspect generic `Recor
 
 ## SS-04: Typed SimpleEntity Security Access
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -231,10 +231,24 @@ Stop making SimpleEntity authorization depend on generic `Record` path shape.
 
 ### Detailed Tasks
 
-- [ ] Define typed security/permission accessor surface for stored entities.
-- [ ] Support owner/group/role/privilege/permission inspection without assuming `security_attributes` / `securityAttributes` record aliases.
-- [ ] Keep raw-record authorization as a transitional fallback only.
-- [ ] Add specs showing compressed/encoded permission can still be authorized through typed access.
+- [x] Define typed security/permission accessor surface for stored entities.
+- [x] Support owner/group/role/privilege/permission inspection without assuming `security_attributes` / `securityAttributes` record aliases.
+- [x] Keep raw-record authorization as a transitional fallback only.
+- [x] Add specs showing authorization can use typed access even when the entity record omits security attributes.
+
+### Implementation Notes
+
+- `EntityPersistent.securityAttributes(entity)` is the typed security access
+  hook.
+- `EntityPersistent.authorizationRecord(entity)` is a compatibility bridge for
+  authorization paths that still need a `Record` while SS-05 is pending.
+- `OperationAccessPolicy` now prefers typed `SecurityAttributes` when an
+  `EntityPersistent` can provide them.
+- Raw-record authorization remains a fallback for legacy persistent
+  implementations and direct datastore records.
+- Search/list visibility and save/update target authorization are covered by
+  executable specs where the entity `toRecord` intentionally omits
+  `security_attributes`.
 
 ### Expected Outcome
 

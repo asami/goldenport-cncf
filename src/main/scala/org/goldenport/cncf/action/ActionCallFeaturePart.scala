@@ -40,7 +40,7 @@ import org.goldenport.configuration.ConfigurationValue
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 30, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -852,7 +852,10 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       case Some(authorization) =>
         OperationAccessPolicy.authorizeUnitOfWorkDefault(
           authorization,
-          _ => _entity_store_record(id).map(_.orElse(Some(tc.toRecord(entity))))
+          _ => _entity_store_record(id).map {
+            case Some(record) => Some(tc.authorizationRecord(entity, record))
+            case None => Some(tc.authorizationRecord(entity))
+          }
         ).map(_ => Some(entity))
       case None =>
         Consequence.success(Some(entity))
