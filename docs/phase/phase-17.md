@@ -60,6 +60,7 @@ Current semantic direction:
 - E1a (DONE): SS-05A-A — Fix storage-shape classification order and rules.
 - E2 (DONE): SS-05B — Implement SimpleEntity storage-shape policy.
 - E3a (DONE): SS-05C-A — Add typed security override regression specs.
+- E3b (DONE): SS-05C-B — Add runtime storage-shape coverage.
 - E3 (PLANNED): SS-05C — Add storage-shape executable coverage.
 - F (PLANNED): SS-06 — Expose storage-shape metadata in manual/admin/projection surfaces.
 
@@ -85,6 +86,7 @@ Current note:
 - [x] SS-05A-A: Fix storage-shape classification order and rules.
 - [x] SS-05B: Implement SimpleEntity storage-shape policy.
 - [x] SS-05C-A: Add typed security override regression specs.
+- [x] SS-05C-B: Add runtime storage-shape coverage.
 - [ ] SS-05C: Add storage-shape executable coverage.
 - [ ] SS-06: Expose storage-shape metadata in manual/admin/projection surfaces.
 

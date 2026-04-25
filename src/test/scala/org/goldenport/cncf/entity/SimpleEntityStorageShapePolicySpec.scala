@@ -12,6 +12,36 @@ import org.simplemodeling.model.value.SecurityAttributes
  */
 final class SimpleEntityStorageShapePolicySpec extends AnyWordSpec with Matchers {
   "SimpleEntityStorageShapePolicy" should {
+    "roundtrip compact permission JSON without legacy rights fields" in {
+      val source = SecurityAttributes.publicOwnedBy("owner").copy(
+        rights = SecurityAttributes.Rights(
+          owner = SecurityAttributes.Rights.Permissions(read = true, write = true, execute = false),
+          group = SecurityAttributes.Rights.Permissions(read = true, write = false, execute = false),
+          other = SecurityAttributes.Rights.Permissions(read = false, write = false, execute = false)
+        )
+      )
+
+      val json = SimpleEntityStorageShapePolicy.permissionJson(source.rights)
+      val decoded = SimpleEntityStorageShapePolicy.permissionRightsFromJson(json)
+
+      decoded shouldBe Some(source.rights)
+      json.contains("securityAttributes") shouldBe false
+      json.contains("security_attributes") shouldBe false
+    }
+
+    "use target names for framework management fields and leave domain scalar names unchanged" in {
+      SimpleEntityStorageShapePolicy.targetName("shortId") shouldBe "short_id"
+      SimpleEntityStorageShapePolicy.targetName("createdAt") shouldBe "created_at"
+      SimpleEntityStorageShapePolicy.targetName("updatedBy") shouldBe "updated_by"
+      SimpleEntityStorageShapePolicy.targetName("postStatus") shouldBe "post_status"
+      SimpleEntityStorageShapePolicy.targetName("ownerId") shouldBe "owner_id"
+      SimpleEntityStorageShapePolicy.targetName("groupId") shouldBe "group_id"
+      SimpleEntityStorageShapePolicy.targetName("privilegeId") shouldBe "privilege_id"
+      SimpleEntityStorageShapePolicy.targetName("name") shouldBe "name"
+      SimpleEntityStorageShapePolicy.targetName("age") shouldBe "age"
+      SimpleEntityStorageShapePolicy.targetName("body") shouldBe "body"
+    }
+
     "prefer target storage security identity over stale legacy security attributes" in {
       val targetRights = SecurityAttributes.privateOwnedBy("target_owner").rights
       val record = Record.dataAuto(

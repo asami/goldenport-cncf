@@ -43,8 +43,9 @@ Phase 17 work proceeds in this order:
 9. SS-05B implements the runtime storage-shape policy for management fields,
    security identity, and permission.
 10. SS-05C-A adds typed security override regression specs.
-11. SS-05C adds executable coverage for the target storage shape.
-12. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
+11. SS-05C-B adds runtime storage-shape coverage.
+12. SS-05C adds executable coverage for the remaining target storage shape.
+13. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
 
 This order avoids changing DB record shape before Record purpose, API boundary,
 and security access boundary are clear.
@@ -383,13 +384,14 @@ Lock the implemented SS-05B behavior with executable specs.
 ### Completed Sub-Slices
 
 - [x] SS-05C-A: Typed security override regression specs.
+- [x] SS-05C-B: Runtime storage-shape coverage.
 
 ### Detailed Tasks
 
-- [ ] Add specs proving management fields are expanded.
-- [ ] Add specs proving permission is compact JSON text.
-- [ ] Add specs proving typed authorization works from compact permission.
-- [ ] Add specs proving scalar domain attributes remain ordinary columns.
+- [x] Add specs proving management fields are expanded.
+- [x] Add specs proving permission is compact JSON text.
+- [x] Add specs proving typed authorization works from compact permission.
+- [x] Add specs proving scalar domain attributes remain ordinary columns.
 - [ ] Add specs proving independent value objects are encoded.
 - [ ] Add specs proving repeated value objects are encoded.
 - [ ] Add specs proving promoted child/entity storage is not flattened into the parent.
@@ -403,6 +405,36 @@ Lock the implemented SS-05B behavior with executable specs.
 ### Guardrails
 
 - Specs must describe behavior, not generated-code incidental details.
+
+---
+
+## SS-05C-B: Runtime Storage-Shape Coverage
+
+Status: DONE
+
+### Objective
+
+Lock the SS-05B runtime storage-shape implementation with executable specs.
+
+### Completed Tasks
+
+- [x] Prove runtime create defaults emit target snake_case management and
+  security identity fields.
+- [x] Prove runtime create defaults emit compact `permission` JSON and not
+  legacy `rights` / `securityAttributes` containers.
+- [x] Prove store save/update/delete complement paths write target snake_case
+  audit/state/trace fields.
+- [x] Prove runtime update audit fields override caller-supplied stale audit
+  values.
+- [x] Prove scalar domain attributes remain ordinary store columns.
+- [x] Prove compact permission remains decodable by the storage-shape policy.
+
+### Guardrails
+
+- Compatibility input may still accept legacy security shapes, but runtime target
+  output remains snake_case plus compact `permission`.
+- Nested/repeated value object encoding and generated-code storage shape remain
+  follow-up SS-05C work.
 
 ---
 

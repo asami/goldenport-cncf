@@ -28,10 +28,10 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
       )
 
       targetRecord.getString("short_id") shouldBe Some(entityId.parts.entropy)
-      targetRecord.getString("shortid") shouldBe None
+      _assert_no_legacy_target_fields(targetRecord)
     }
 
-    "complement lifecycle audit fields as Instant and non-optional updater fields" in {
+    "complement lifecycle audit fields using target storage names" in {
       given ExecutionContext = ExecutionContext.test()
       given EntityPersistentCreate[TestCreate] = _persistent_create
       val target = EntityCollectionId("test", "a", "target_entity")
@@ -43,12 +43,13 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
         EntityCreateOptions.default
       )
 
-      _any(targetRecord, "createdAt", "created_at") shouldBe a[Instant]
-      _any(targetRecord, "updatedAt", "updated_at") shouldBe a[Instant]
+      targetRecord.getAny("created_at").getOrElse(fail("created_at should exist")) shouldBe a[Instant]
+      targetRecord.getAny("updated_at").getOrElse(fail("updated_at should exist")) shouldBe a[Instant]
       targetRecord.getString("created_by") shouldBe Some("test_user_principal")
       targetRecord.getString("updated_by") shouldBe Some("test_user_principal")
-      targetRecord.getString("createdBy") shouldBe None
-      targetRecord.getString("updatedBy") shouldBe None
+      targetRecord.getString("post_status").map(_.toLowerCase(java.util.Locale.ROOT).contains("published")) shouldBe Some(true)
+      targetRecord.getString("aliveness").map(_.toLowerCase(java.util.Locale.ROOT).contains("alive")) shouldBe Some(true)
+      _assert_no_legacy_target_fields(targetRecord)
     }
 
     "preserve explicitly supplied shortid create value" in {
@@ -63,7 +64,7 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
       )
 
       targetRecord.getString("short_id") shouldBe Some("manual-shortid")
-      targetRecord.getString("shortid") shouldBe None
+      _assert_no_legacy_target_fields(targetRecord)
     }
 
     "override create defaults by entity collection" in {
@@ -97,9 +98,7 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
       rights.flatMap(_.getRecord("owner")).flatMap(_.getBoolean("execute")) shouldBe Some(false)
       rights.flatMap(_.getRecord("other")).flatMap(_.getBoolean("read")) shouldBe Some(false)
       rights.flatMap(_.getRecord("other")).flatMap(_.getBoolean("execute")) shouldBe Some(false)
-      targetRecord.getRecord("rights") shouldBe None
-      targetRecord.getRecord("securityAttributes") shouldBe None
-      targetRecord.getRecord("security_attributes") shouldBe None
+      _assert_no_legacy_target_fields(targetRecord)
     }
 
     "support public-read create defaults for cms-like entities" in {
@@ -157,9 +156,12 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
       rights.flatMap(_.getRecord("other")).flatMap(_.getBoolean("read")) shouldBe Some(true)
       rights.flatMap(_.getRecord("other")).flatMap(_.getBoolean("write")) shouldBe Some(false)
       rights.flatMap(_.getRecord("other")).flatMap(_.getBoolean("execute")) shouldBe Some(false)
-      targetRecord.getAny("publish_at").orElse(targetRecord.getAny("publishAt")) should not be empty
-      targetRecord.getAny("public_at").orElse(targetRecord.getAny("publicAt")) should not be empty
-      targetRecord.getString("published_by").orElse(targetRecord.getString("publishedBy")) shouldBe Some("test_user_principal")
+      targetRecord.getAny("publish_at") should not be empty
+      targetRecord.getAny("public_at") should not be empty
+      targetRecord.getString("published_by") shouldBe Some("test_user_principal")
+      targetRecord.getAny("publishAt") shouldBe None
+      targetRecord.getAny("publicAt") shouldBe None
+      targetRecord.getString("publishedBy") shouldBe None
     }
 
     "keep execute false for task-like create defaults" in {
@@ -194,8 +196,10 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
         EntityCreateOptions.default
       )
 
-      targetRecord.getString("owner_id").orElse(targetRecord.getString("ownerId")) shouldBe Some("seller_organization")
-      targetRecord.getString("group_id").orElse(targetRecord.getString("groupId")) shouldBe Some("sales_ops")
+      targetRecord.getString("owner_id") shouldBe Some("seller_organization")
+      targetRecord.getString("group_id") shouldBe Some("sales_ops")
+      targetRecord.getString("ownerId") shouldBe None
+      targetRecord.getString("groupId") shouldBe None
     }
 
     "select tenant and organization ids with selector policies" in {
@@ -215,8 +219,10 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
         EntityCreateOptions.default
       )
 
-      targetRecord.getString("tenant_id").orElse(targetRecord.getString("tenantId")) shouldBe Some("tenant_a")
-      targetRecord.getString("organization_id").orElse(targetRecord.getString("organizationId")) shouldBe Some("seller_org")
+      targetRecord.getString("tenant_id") shouldBe Some("tenant_a")
+      targetRecord.getString("organization_id") shouldBe Some("seller_org")
+      targetRecord.getString("tenantId") shouldBe None
+      targetRecord.getString("organizationId") shouldBe None
     }
 
     "select entity-level create defaults by entity name" in {
@@ -245,11 +251,11 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
         EntityCreateOptions.default
       )
 
-      salesOrderRecord.getString("owner_id").orElse(salesOrderRecord.getString("ownerId")) shouldBe Some("seller_organization")
-      salesOrderRecord.getString("group_id").orElse(salesOrderRecord.getString("groupId")) shouldBe Some("sales_ops")
-      salesOrderRecord.getString("tenant_id").orElse(salesOrderRecord.getString("tenantId")) shouldBe Some("tenant_a")
-      salesOrderRecord.getString("organization_id").orElse(salesOrderRecord.getString("organizationId")) shouldBe Some("seller_org")
-      invoiceRecord.getString("owner_id").orElse(invoiceRecord.getString("ownerId")) shouldBe Some("test_user_principal")
+      salesOrderRecord.getString("owner_id") shouldBe Some("seller_organization")
+      salesOrderRecord.getString("group_id") shouldBe Some("sales_ops")
+      salesOrderRecord.getString("tenant_id") shouldBe Some("tenant_a")
+      salesOrderRecord.getString("organization_id") shouldBe Some("seller_org")
+      invoiceRecord.getString("owner_id") shouldBe Some("test_user_principal")
       invoiceRecord.getString("tenant_id").orElse(invoiceRecord.getString("tenantId")) shouldBe None
       invoiceRecord.getString("organization_id").orElse(invoiceRecord.getString("organizationId")) shouldBe None
     }
@@ -285,12 +291,12 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
         EntityCreateOptions.default
       )
 
-      customerRecord.getString("owner_id").orElse(customerRecord.getString("ownerId")) shouldBe Some("application_owner")
-      customerRecord.getString("group_id").orElse(customerRecord.getString("groupId")) shouldBe Some("application_group")
-      customerRecord.getString("tenant_id").orElse(customerRecord.getString("tenantId")) shouldBe Some("tenant_a")
-      salesOrderRecord.getString("owner_id").orElse(salesOrderRecord.getString("ownerId")) shouldBe Some("seller_organization")
-      salesOrderRecord.getString("group_id").orElse(salesOrderRecord.getString("groupId")) shouldBe Some("sales_ops")
-      salesOrderRecord.getString("tenant_id").orElse(salesOrderRecord.getString("tenantId")) shouldBe Some("tenant_b")
+      customerRecord.getString("owner_id") shouldBe Some("application_owner")
+      customerRecord.getString("group_id") shouldBe Some("application_group")
+      customerRecord.getString("tenant_id") shouldBe Some("tenant_a")
+      salesOrderRecord.getString("owner_id") shouldBe Some("seller_organization")
+      salesOrderRecord.getString("group_id") shouldBe Some("sales_ops")
+      salesOrderRecord.getString("tenant_id") shouldBe Some("tenant_b")
     }
   }
 
@@ -302,8 +308,21 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
       .orElse(record.getRecord("security_attributes").flatMap(_.getRecord("rights")))
       .orElse(record.getRecord("securityAttributes").flatMap(_.getRecord("rights")))
 
-  private def _any(record: Record, primary: String, secondary: String): Any =
-    record.getAny(primary).orElse(record.getAny(secondary)).getOrElse(fail(s"missing $primary/$secondary"))
+  private def _assert_no_legacy_target_fields(record: Record): Unit = {
+    record.getAny("shortid") shouldBe None
+    record.getAny("shortId") shouldBe None
+    record.getAny("createdAt") shouldBe None
+    record.getAny("updatedAt") shouldBe None
+    record.getAny("createdBy") shouldBe None
+    record.getAny("updatedBy") shouldBe None
+    record.getAny("postStatus") shouldBe None
+    record.getAny("ownerId") shouldBe None
+    record.getAny("groupId") shouldBe None
+    record.getAny("privilegeId") shouldBe None
+    record.getAny("rights") shouldBe None
+    record.getAny("securityAttributes") shouldBe None
+    record.getAny("security_attributes") shouldBe None
+  }
 
   private def _custom_policy: EntityCreateDefaultsPolicy =
     new EntityCreateDefaultsPolicy {

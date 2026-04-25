@@ -201,12 +201,17 @@ class StandardEntityStore(
     changes: T
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Unit] = {
     val id = tc.id(changes)
-    val rec = _complement_update_record(tc.toStoreRecord(changes), id)
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
-      r <- ds.update(cid, dsid, rec)
+      existing <- ds.load(cid, dsid)
+      base <- existing match {
+        case Some(record) => Consequence.success(record)
+        case None => Consequence.DataStoreNotFound(dsid.print)
+      }
+      rec = _merge_update_record(base, _complement_update_record(tc.toStoreRecord(changes), id))
+      r <- ds.save(cid, dsid, rec)
     } yield r
   }
 
@@ -221,7 +226,7 @@ class StandardEntityStore(
       r <- current match {
         case Some(rec) =>
           if (_is_soft_delete_target(rec))
-            ds.update(cid, dsid, _soft_delete_record(rec))
+            ds.save(cid, dsid, _merge_update_record(rec, _soft_delete_record(rec)))
           else
             ds.delete(cid, dsid)
         case None =>
@@ -581,6 +586,43 @@ class StandardEntityStore(
       includesStateDefaults = false,
       createOptions = EntityCreateOptions.default
     )
+
+  private def _merge_update_record(
+    existing: Record,
+    changes: Record
+  ): Record = {
+    val changedkeys = changes.keySet
+    val retained = Record(_retained_existing_managed_record(existing).fields.filterNot(f => changedkeys.contains(f.key)))
+    val domain = Record(SimpleEntityStorageShapePolicy.withoutManagedFields(existing).fields.filterNot(f => changedkeys.contains(f.key)))
+    changes ++ retained ++ domain
+  }
+
+  private def _retained_existing_managed_record(
+    existing: Record
+  ): Record = {
+    val fields = Vector(
+      "id",
+      "shortid",
+      "name",
+      "createdAt",
+      "createdBy",
+      "postStatus",
+      "aliveness",
+      "ownerId",
+      "groupId",
+      "privilegeId",
+      "permission",
+      "tenantId",
+      "organizationId",
+      "publishAt",
+      "publicAt",
+      "publishedBy"
+    ).flatMap { name =>
+      SimpleEntityStorageShapePolicy.value(existing, name)
+        .map(SimpleEntityStorageShapePolicy.targetName(name) -> _)
+    }
+    Record.dataAuto(fields*)
+  }
 
   private def _complement_record(
     record: Record,
