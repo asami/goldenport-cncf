@@ -62,6 +62,22 @@ The categories are intentionally separate:
 | Descriptor Record | component/subsystem/config descriptors | Metadata/config property shape. Not entity storage. |
 | Diagnostic Record | logs, debug panels, error envelopes, raw admin details | Operational diagnostic property shape. Not authoritative domain or storage data. |
 
+## Logic Record Classification
+
+Logic Records are temporary internal property views used by framework logic while
+typed accessors are being introduced. They are not DB Records and must not be
+treated as presentation output.
+
+Phase 17 classifies remaining Logic Record use as follows:
+
+| Logic context | Current shape | Target |
+| --- | --- | --- |
+| Authorization | entity or aggregate `toRecord` passed to authorization checks | typed security/permission access in SS-04 |
+| Lifecycle | `deletedAt`, `postStatus`, `aliveness`, and audit fields read from a generic record | typed lifecycle access in SS-05 |
+| Working-set policy | residency policy reads entity properties from a generic record | typed policy input/storage-shape policy in SS-05 |
+| Identity lookup | runtime lookup reads management identity such as `shortid` from a generic record | typed management-field access in SS-05 |
+| Aggregate operation | aggregate/member records are assembled from generic record projections | aggregate projection boundary review in SS-04/SS-05 |
+
 ## Boundary Rules
 
 - Storage paths must use `EntityPersistent` storage semantics.

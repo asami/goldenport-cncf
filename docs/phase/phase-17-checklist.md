@@ -176,7 +176,7 @@ Introduce an explicit entity View Record API and stop routing admin/entity prese
 
 ## SS-03C: Logic Record Call Site Classification
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -184,18 +184,35 @@ Classify remaining internal Logic Record paths that still inspect generic `Recor
 
 ### Detailed Tasks
 
-- [ ] Classify `UnitOfWorkInterpreter` authorization records as authorization Logic Record usage.
-- [ ] Classify `ActionCallFeaturePart` entity record lookups as authorization/operation Logic Record usage.
-- [ ] Classify runtime `Collection` lifecycle, visibility, and working-set policy record reads as lifecycle/working-set Logic Record usage.
-- [ ] Document which paths move to SS-04 typed security/permission access.
-- [ ] Document which paths move to SS-05 lifecycle/storage-shape policy.
-- [ ] Add focused specs before changing behavior in SS-04/SS-05.
+- [x] Classify `UnitOfWorkInterpreter` authorization records as authorization Logic Record usage.
+- [x] Classify `ActionCallFeaturePart` entity record lookups as authorization/operation Logic Record usage.
+- [x] Classify runtime `Collection` lifecycle, visibility, and working-set policy record reads as lifecycle/working-set Logic Record usage.
+- [x] Document which paths move to SS-04 typed security/permission access.
+- [x] Document which paths move to SS-05 lifecycle/storage-shape policy.
+- [x] Keep behavior unchanged; add focused specs only when SS-04/SS-05 changes behavior.
+
+### Classification
+
+| Call site | Current Record use | Purpose | Next work |
+| --- | --- | --- | --- |
+| `UnitOfWorkInterpreter` save/update authorization | `m.tc.toRecord(m.entity)` passed to authorization | Authorization Logic Record | SS-04 typed security/permission access |
+| `ActionCallFeaturePart` entity authorization fallback | `tc.toRecord(entity)` used when store record lookup is unavailable | Authorization Logic Record | SS-04 typed security/permission access |
+| `ActionCallFeaturePart` aggregate create/update authorization | `aggregate.toRecord()` passed to aggregate authorization | Operation/authorization Logic Record | SS-04 aggregate authorization review |
+| `ActionCallFeaturePart` aggregate load from collection | `collection.descriptor.persistent.toRecord(entity)` produces aggregate member record | Operation Logic Record | SS-04/SS-05 aggregate projection boundary review |
+| runtime `Collection` short-id lookup | `descriptor.persistent.toRecord(entity)` reads `shortid` | Identity/lookup Logic Record | SS-05 storage-shape policy for management fields |
+| runtime `Collection` visibility filtering | `descriptor.persistent.toRecord(entity)` reads lifecycle fields | Lifecycle Logic Record | SS-05 typed lifecycle access |
+| runtime `Collection` working-set policy | `descriptor.persistent.toRecord(entity)` feeds residency policy | Working-set Logic Record | SS-05 typed policy input / storage-shape policy |
+| runtime `Collection` logical delete check | `descriptor.persistent.toRecord(entity)` reads `deletedAt`, `postStatus`, `aliveness` | Lifecycle Logic Record | SS-05 typed lifecycle access |
+| `ComponentDescriptor` and descriptor loaders | `fromRecord` decodes component/subsystem metadata | Descriptor Record | Not SS-04/SS-05 |
+| `AdminComponent` generic `RecordPresentable` helpers | `presentable.toRecord()` formats generic values | View/Diagnostic helper | Not entity DB/View boundary; keep as generic fallback |
+| `EntityPersistent` default methods and derived helpers | compatibility `toRecord/fromRecord` bridge | Compatibility bridge | Keep until replacement APIs cover all call sites |
 
 ### Expected Outcome
 
 - Remaining generic `toRecord` calls are accounted for by purpose.
 - No Logic Record path is accidentally treated as DB Record or View Record.
 - SS-04 and SS-05 can implement typed access without redoing taxonomy work.
+- DB and View boundary paths remain separated from internal Logic Record paths.
 
 ### Guardrails
 
