@@ -151,7 +151,7 @@ boundary.
 ### Guardrails
 
 - No direct provider-specific dependency from `Cwitter` business logic.
-- Local `component.d` staging remains development-only.
+- Local `repository.d` staging remains development-only.
 
 ---
 

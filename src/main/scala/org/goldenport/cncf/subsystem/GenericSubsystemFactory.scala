@@ -13,7 +13,7 @@ import org.goldenport.cncf.path.AliasResolver
 /*
  * @since   Apr.  7, 2026
  *  version Apr. 23, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -35,6 +35,16 @@ object GenericSubsystemFactory {
       .filter(_.nonEmpty)
       .map(Paths.get(_))
 
+  def componentArchivePath(
+    configuration: ResolvedConfiguration
+  ): Option[Path] =
+    RuntimeConfig
+      .getString(configuration, RuntimeConfig.ComponentFileKey)
+      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeComponentFileKey))
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .map(Paths.get(_))
+
   def loadDescriptor(
     configuration: ResolvedConfiguration
   ): Option[GenericSubsystemDescriptor] =
@@ -50,6 +60,24 @@ object GenericSubsystemFactory {
         ComponentRepository.resolveSubsystemDescriptor(_repository_specs(configuration), name)
           .map(_with_assembly_descriptor_override(_, configuration))
       }
+    }.orElse {
+      componentArchivePath(configuration).flatMap { path =>
+        GenericSubsystemDescriptor.loadComponentArchive(path).toOption
+          .map(_with_assembly_descriptor_override(_, configuration))
+      }
+    }.orElse {
+      RuntimeConfig
+        .getString(configuration, RuntimeConfig.ComponentNameKey)
+        .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeComponentNameKey))
+        .map(_.trim)
+        .filter(_.nonEmpty)
+        .map { name =>
+          GenericSubsystemDescriptor(
+            path = Paths.get(".").toAbsolutePath.normalize,
+            subsystemName = name,
+            componentBindings = Vector(GenericSubsystemComponentBinding(name))
+          )
+        }
     }
 
   def default(

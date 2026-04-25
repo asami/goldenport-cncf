@@ -83,6 +83,8 @@ object RuntimeConfig {
   val RuntimeComponentNameKey = "textus.runtime.component"
   val RuntimeSubsystemDescriptorKey = "textus.runtime.subsystem.descriptor"
   val RuntimeSubsystemFileKey = "textus.runtime.subsystem.file"
+  val ComponentFileKey = "textus.component.file"
+  val RuntimeComponentFileKey = "textus.runtime.component.file"
   val AssemblyDescriptorKey = "textus.assembly.descriptor"
   val WebDescriptorKey = "textus.web.descriptor"
   val RepositoryDirKey = "textus.repository.dir"
@@ -373,6 +375,7 @@ object RuntimeConfig {
         case ComponentNameKey => Vector(RuntimeComponentNameKey)
         case SubsystemDescriptorKey => Vector(RuntimeSubsystemDescriptorKey)
         case SubsystemFileKey => Vector(RuntimeSubsystemFileKey)
+        case ComponentFileKey => Vector(RuntimeComponentFileKey)
         case LogBackendKey => Vector(RuntimeLogBackendKey)
         case LogLevelKey => Vector(RuntimeLogLevelKey)
         case LogFilePathKey => Vector(RuntimeLogFilePathKey)

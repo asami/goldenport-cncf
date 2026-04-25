@@ -26,7 +26,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Jan. 29, 2026
  *  version Feb.  5, 2026
  *  version Mar. 22, 2026
- * @version Apr. 23, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -36,6 +36,7 @@ sealed abstract class ComponentRepository {
 object ComponentRepository extends GlobalObservable {
   private val _scala_cli_type = "scala-cli"
   private val _component_dir_type = "component-dir"
+  private val _component_file_type = "component-file"
   private val _scala_cli_default_dir = ".scala-build"
   private val _component_dir_default_dir = "component.dir"
   private val _standard_repository_group_path = Paths.get("org", "simplemodeling", "car")
@@ -49,6 +50,9 @@ object ComponentRepository extends GlobalObservable {
     def resolveComponentDescriptor(
       componentName: String
     ): Option[ComponentDescriptor] = None
+    def resolveComponentArchivePath(
+      componentName: String
+    ): Option[Path] = None
   }
 
   def parseSpecs(
@@ -102,6 +106,14 @@ object ComponentRepository extends GlobalObservable {
       case `_component_dir_type` =>
         val dir = _resolve_dir(dirOpt, _component_dir_default_dir, baseDir)
         Right(ComponentDirRepository.Specification(dir))
+      case `_component_file_type` =>
+        dirOpt match {
+          case Some(_) =>
+            val file = _resolve_dir(dirOpt, "", baseDir)
+            Right(ComponentFileRepository.Specification(file))
+          case None =>
+            Left("component-file repository requires a CAR path")
+        }
       case other =>
         Left(s"unknown component repository type: ${other}")
     }
@@ -237,6 +249,54 @@ object ComponentRepository extends GlobalObservable {
         componentName: String
       ): Option[ComponentDescriptor] =
         ComponentRepository.resolveComponentDescriptorFromComponentDir(baseDir, componentName)
+
+      override def resolveComponentArchivePath(
+        componentName: String
+      ): Option[Path] =
+        ComponentRepository.resolveComponentArchivePathFromComponentDir(baseDir, componentName)
+    }
+  }
+
+  final class ComponentFileRepository(
+    file: Path,
+    params: ComponentCreate,
+    packagePrefixes: Seq[String]
+  ) extends ComponentRepository {
+    def discover(): Seq[Component] = {
+      if (!Files.isRegularFile(file)) {
+        Nil
+      } else {
+        val log = PersistentBootstrapLog.forClass(classOf[ComponentFileRepository], ObservabilityScopeDefaults.Bootstrap)
+        val origin = ComponentOrigin.Repository("component-file")
+        val artifact = Artifact(file, ArtifactKind.Car)
+        _discover_artifact(artifact, params, origin, log)
+      }
+    }
+  }
+
+  object ComponentFileRepository {
+    final case class Specification(
+      file: Path
+    ) extends ComponentRepository.Specification {
+      def build(params: ComponentCreate): ComponentRepository =
+        new ComponentFileRepository(
+          file = file,
+          params = params,
+          packagePrefixes = ComponentRepository.resolvePackagePrefixes()
+        )
+
+      override def resolveComponentDescriptor(
+        componentName: String
+      ): Option[ComponentDescriptor] =
+        if (Files.isRegularFile(file))
+          ComponentDescriptorLoader.loadArchive(file).toOption.filter(_matches_component_descriptor(_, componentName))
+        else
+          None
+
+      override def resolveComponentArchivePath(
+        componentName: String
+      ): Option[Path] =
+        resolveComponentDescriptor(componentName).map(_ => file)
     }
   }
 
@@ -251,6 +311,12 @@ object ComponentRepository extends GlobalObservable {
     componentName: String
   ): Option[ComponentDescriptor] =
     specs.iterator.flatMap(_.resolveComponentDescriptor(componentName)).toSeq.headOption
+
+  def resolveComponentArchivePath(
+    specs: Seq[Specification],
+    componentName: String
+  ): Option[Path] =
+    specs.iterator.flatMap(_.resolveComponentArchivePath(componentName)).toSeq.headOption
 
   def resolveSubsystemDescriptorFromComponentDir(
     baseDir: Path,
@@ -287,6 +353,27 @@ object ComponentRepository extends GlobalObservable {
           None
       }.find(_matches_component_descriptor(_, componentName))
         .orElse(_resolve_standard_component_descriptor(baseDir, componentName))
+    }
+  }
+
+  def resolveComponentArchivePathFromComponentDir(
+    baseDir: Path,
+    componentName: String
+  ): Option[Path] = {
+    if (!Files.isDirectory(baseDir)) {
+      None
+    } else {
+      _list_artifacts(baseDir).iterator.flatMap {
+        case Artifact(path, ArtifactKind.Car) =>
+          ComponentDescriptorLoader.loadArchive(path).toOption
+            .filter(_matches_component_descriptor(_, componentName))
+            .map(_ => path)
+        case _ =>
+          None
+      }.toSeq.headOption
+        .orElse(_resolve_standard_component_artifact(baseDir, componentName, None).collect {
+          case Artifact(path, ArtifactKind.Car) => path
+        })
     }
   }
 
@@ -622,7 +709,7 @@ object ComponentRepository extends GlobalObservable {
     sourceType: String
   ): Consequence[Vector[Component]] = {
     val baseOrigin = _component_origin_for_archive(
-      repositoryType = _component_dir_type,
+      repositoryType = origin.label,
       carDescriptor = extracted.descriptor,
       sarDescriptor = sarDescriptor,
       fallback = origin
@@ -635,6 +722,7 @@ object ComponentRepository extends GlobalObservable {
       version = extracted.descriptor.version.getOrElse("0.1.0"),
       component = extracted.descriptor.componentName,
       subsystem = sarDescriptor.map(_.subsystemName).orElse(extracted.descriptor.subsystemName),
+      archivePath = Some(artifactPath.toString),
       effectiveExtensions = effectiveExtensions,
       effectiveConfig = effectiveConfig
     )

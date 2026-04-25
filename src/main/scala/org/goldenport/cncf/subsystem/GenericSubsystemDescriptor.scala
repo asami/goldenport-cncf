@@ -15,7 +15,7 @@ import org.goldenport.cncf.security.OperationAuthorizationRule
 /*
  * @since   Apr.  7, 2026
  *  version Apr. 23, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -226,6 +226,192 @@ object GenericSubsystemDescriptor {
     "assembly-descriptor.xml"
   )
 
+  def mergeComponentDefaults(
+    defaults: GenericSubsystemDescriptor,
+    overrideDescriptor: GenericSubsystemDescriptor
+  ): GenericSubsystemDescriptor =
+    overrideDescriptor.copy(
+      version = overrideDescriptor.version.orElse(defaults.version),
+      componentBindings = _merge_component_bindings(defaults.componentBindings, overrideDescriptor.componentBindings),
+      extensions = defaults.extensions ++ overrideDescriptor.extensions,
+      config = defaults.config ++ overrideDescriptor.config,
+      wiring = _merge_record(defaults.wiring, overrideDescriptor.wiring),
+      security = _merge_security(defaults.security, overrideDescriptor.security),
+      builtin = overrideDescriptor.builtin.orElse(defaults.builtin),
+      operationAuthorization = defaults.operationAuthorization ++ overrideDescriptor.operationAuthorization,
+      assemblyDescriptor = defaults.assemblyDescriptor
+    )
+
+  def applyAssemblyOverride(
+    descriptor: GenericSubsystemDescriptor,
+    source: GenericSubsystemAssemblyDescriptorSource
+  ): GenericSubsystemDescriptor = {
+    val rec = source.record
+    val bindings = _bindings_from_record(source.path.getOrElse(descriptor.path), rec)
+    val overrideDescriptor = descriptor.copy(
+      subsystemName = _string(rec, "subsystem", "subsystemName", "name").getOrElse(descriptor.subsystemName),
+      version = _string(rec, "version").orElse(descriptor.version),
+      componentBindings = if (bindings.nonEmpty) bindings else descriptor.componentBindings,
+      extensions = descriptor.extensions ++ _string_map_value(rec, List("extension", "extensions")),
+      config = descriptor.config ++ _string_map_value(rec, List("config")),
+      wiring = _merge_record(descriptor.wiring, _wiring_value(rec)),
+      security = _merge_security(
+        descriptor.security,
+        _record_value(rec, List("security")).flatMap(r => summon[RecordDecoder[GenericSubsystemSecurityBinding]].fromRecord(r).toOption)
+      ),
+      builtin = _record_value(rec, List("builtin", "builtins"))
+        .flatMap(r => summon[RecordDecoder[GenericSubsystemBuiltinBinding]].fromRecord(r).toOption)
+        .orElse(descriptor.builtin),
+      operationAuthorization = descriptor.operationAuthorization ++ _operation_authorization_value(rec),
+      assemblyDescriptor = Some(_merge_assembly_sources(descriptor.assemblyDescriptor, source))
+    )
+    overrideDescriptor
+  }
+
+  private def _merge_assembly_sources(
+    defaults: Option[GenericSubsystemAssemblyDescriptorSource],
+    overrideSource: GenericSubsystemAssemblyDescriptorSource
+  ): GenericSubsystemAssemblyDescriptorSource =
+    defaults match {
+      case Some(base) =>
+        overrideSource.copy(record = _merge_assembly_records(base.record, overrideSource.record))
+      case None =>
+        overrideSource
+    }
+
+  private def _merge_assembly_records(
+    defaults: Record,
+    overrides: Record
+  ): Record = {
+    val base = defaults.asMap
+    val over = overrides.asMap
+    val wiring = _merge_assembly_wiring(base.get("wiring"), over.get("wiring"))
+    val entries = base.toVector ++ over.toVector.filterNot(_._1 == "wiring")
+    wiring match {
+      case Some(value) => Record.create(entries.filterNot(_._1 == "wiring") :+ ("wiring" -> value))
+      case None => Record.create(entries)
+    }
+  }
+
+  private def _merge_assembly_wiring(
+    defaults: Option[Any],
+    overrides: Option[Any]
+  ): Option[Vector[Record]] = {
+    val base = defaults.toVector.flatMap(_wiring_records)
+    val over = overrides.toVector.flatMap(_wiring_records)
+    if (base.isEmpty && over.isEmpty) {
+      None
+    } else {
+      val overrideKeys = over.flatMap(_wiring_binding_key).toSet
+      Some(base.filterNot(r => _wiring_binding_key(r).exists(overrideKeys.contains)) ++ over)
+    }
+  }
+
+  private def _wiring_records(value: Any): Vector[Record] =
+    value match {
+      case xs: Seq[?] => xs.toVector.flatMap(_any_to_record)
+      case xs: java.util.List[?] => xs.asScala.toVector.flatMap(_any_to_record)
+      case _ => Vector.empty
+    }
+
+  private def _wiring_binding_key(rec: Record): Option[String] =
+    rec.getRecord("from").flatMap { from =>
+      for {
+        component <- _string(from, "component")
+        service <- _string(from, "service")
+        operation <- _string(from, "operation")
+      } yield Vector(component, service, operation, _string(from, "api").getOrElse("")).map(_comparison_key).mkString("/")
+    }
+
+  private def _merge_record(
+    defaults: Record,
+    overrides: Record
+  ): Record =
+    if (defaults.asMap.isEmpty) overrides
+    else if (overrides.asMap.isEmpty) defaults
+    else Record.create(defaults.asMap.toVector ++ overrides.asMap.toVector)
+
+  private def _merge_component_bindings(
+    defaults: Vector[GenericSubsystemComponentBinding],
+    overrides: Vector[GenericSubsystemComponentBinding]
+  ): Vector[GenericSubsystemComponentBinding] =
+    if (overrides.isEmpty) {
+      defaults
+    } else {
+      val overrideByName = overrides.map(x => _comparison_key(x.componentName) -> x).toMap
+      val defaultKeys = defaults.map(x => _comparison_key(x.componentName)).toSet
+      defaults.map(x => overrideByName.getOrElse(_comparison_key(x.componentName), x)) ++
+        overrides.filterNot(x => defaultKeys.contains(_comparison_key(x.componentName)))
+    }
+
+  private def _merge_security(
+    defaults: Option[GenericSubsystemSecurityBinding],
+    overrides: Option[GenericSubsystemSecurityBinding]
+  ): Option[GenericSubsystemSecurityBinding] =
+    (defaults, overrides) match {
+      case (None, None) => None
+      case (Some(x), None) => Some(x)
+      case (None, Some(x)) => Some(x)
+      case (Some(a), Some(b)) =>
+        Some(GenericSubsystemSecurityBinding(
+          authentication = _merge_authentication(a.authentication, b.authentication),
+          messageDelivery = _merge_message_delivery(a.messageDelivery, b.messageDelivery)
+        ))
+    }
+
+  private def _merge_authentication(
+    defaults: Option[GenericSubsystemAuthenticationBinding],
+    overrides: Option[GenericSubsystemAuthenticationBinding]
+  ): Option[GenericSubsystemAuthenticationBinding] =
+    (defaults, overrides) match {
+      case (None, None) => None
+      case (Some(x), None) => Some(x)
+      case (None, Some(x)) => Some(x)
+      case (Some(a), Some(b)) =>
+        Some(GenericSubsystemAuthenticationBinding(
+          convention = b.convention.orElse(a.convention),
+          fallbackPrivilege = b.fallbackPrivilege.orElse(a.fallbackPrivilege),
+          providers = _merge_authentication_providers(a.providers, b.providers)
+        ))
+    }
+
+  private def _merge_message_delivery(
+    defaults: Option[GenericSubsystemMessageDeliveryBinding],
+    overrides: Option[GenericSubsystemMessageDeliveryBinding]
+  ): Option[GenericSubsystemMessageDeliveryBinding] =
+    (defaults, overrides) match {
+      case (None, None) => None
+      case (Some(x), None) => Some(x)
+      case (None, Some(x)) => Some(x)
+      case (Some(a), Some(b)) =>
+        Some(GenericSubsystemMessageDeliveryBinding(
+          providers = _merge_message_delivery_providers(a.providers, b.providers)
+        ))
+    }
+
+  private def _merge_authentication_providers(
+    defaults: Vector[GenericSubsystemAuthenticationProviderBinding],
+    overrides: Vector[GenericSubsystemAuthenticationProviderBinding]
+  ): Vector[GenericSubsystemAuthenticationProviderBinding] =
+    _merge_by_name(defaults, overrides)(_.name)
+
+  private def _merge_message_delivery_providers(
+    defaults: Vector[GenericSubsystemMessageDeliveryProviderBinding],
+    overrides: Vector[GenericSubsystemMessageDeliveryProviderBinding]
+  ): Vector[GenericSubsystemMessageDeliveryProviderBinding] =
+    _merge_by_name(defaults, overrides)(_.name)
+
+  private def _merge_by_name[A](
+    defaults: Vector[A],
+    overrides: Vector[A]
+  )(name: A => String): Vector[A] = {
+    val overrideKeys = overrides.map(x => _comparison_key(name(x))).toSet
+    defaults.filterNot(x => overrideKeys.contains(_comparison_key(name(x)))) ++ overrides
+  }
+
+  private def _comparison_key(value: String): String =
+    Option(value).getOrElse("").trim.toLowerCase.replace("_", "").replace("-", "")
+
   def load(path: Path): Consequence[GenericSubsystemDescriptor] =
     if (!Files.exists(path))
       Consequence.resourceNotFound(s"subsystem descriptor path does not exist: ${path}")
@@ -243,6 +429,45 @@ object GenericSubsystemDescriptor {
 
   def loadArchive(path: Path): Consequence[GenericSubsystemDescriptor] =
     load(path)
+
+  def loadComponentArchive(path: Path): Consequence[GenericSubsystemDescriptor] =
+    ComponentDescriptorLoader.loadArchive(path).flatMap(fromComponentDescriptor(path, _))
+
+  def fromComponentDescriptor(
+    path: Path,
+    descriptor: ComponentDescriptor
+  ): Consequence[GenericSubsystemDescriptor] = {
+    val componentname =
+      descriptor.componentName.orElse(descriptor.name).getOrElse(path.getFileName.toString.stripSuffix(".car"))
+    val primary = GenericSubsystemComponentBinding(
+      componentName = componentname,
+      version = descriptor.version,
+      coordinate = None,
+      extensionBindings = descriptor.extensionBindings
+    )
+    _load_assembly_descriptor_consequence(path, "component-car").flatMap { assembly =>
+      _decode_optional_assembly_shape(path, assembly).map { shape =>
+        val bindings =
+          shape.map(_.componentBindings).filter(_.nonEmpty).map { xs =>
+            if (xs.exists(x => runtimeComponentName(x.componentName) == runtimeComponentName(componentname))) xs
+            else primary +: xs
+          }.getOrElse(Vector(primary))
+        GenericSubsystemDescriptor(
+          path = path,
+          subsystemName = shape.map(_.subsystemName).getOrElse(descriptor.subsystemName.getOrElse(componentname)),
+          version = shape.flatMap(_.version).orElse(descriptor.version),
+          componentBindings = bindings,
+          extensions = descriptor.extensions ++ shape.map(_.extensions).getOrElse(Map.empty),
+          config = descriptor.config ++ shape.map(_.config).getOrElse(Map.empty),
+          wiring = shape.map(_.wiring).getOrElse(Record.empty),
+          assemblyDescriptor = assembly,
+          security = shape.flatMap(_.security),
+          builtin = shape.flatMap(_.builtin),
+          operationAuthorization = shape.map(_.operationAuthorization).getOrElse(Map.empty)
+        )
+      }
+    }
+  }
 
   def loadAssemblyDescriptor(path: Path): Option[GenericSubsystemAssemblyDescriptorSource] =
     if (!Files.exists(path))
@@ -317,7 +542,7 @@ object GenericSubsystemDescriptor {
 
   private def _is_archive_file(path: Path): Boolean = {
     val name = path.getFileName.toString.toLowerCase
-    name.endsWith(".sar") || name.endsWith(".zip")
+    name.endsWith(".sar") || name.endsWith(".car") || name.endsWith(".zip")
   }
 
   private def _load_record(
@@ -326,6 +551,35 @@ object GenericSubsystemDescriptor {
   ): Option[GenericSubsystemAssemblyDescriptorSource] =
     DescriptorRecordLoader.load(path).toOption.flatMap(_.headOption).map { record =>
       GenericSubsystemAssemblyDescriptorSource(record, source, Some(path))
+    }
+
+  private def _load_assembly_descriptor_consequence(
+    path: Path,
+    source: String
+  ): Consequence[Option[GenericSubsystemAssemblyDescriptorSource]] =
+    if (!Files.exists(path))
+      Consequence.success(None)
+    else if (Files.isDirectory(path))
+      _resolve_assembly_descriptor_file(path) match {
+        case Some(file) => _load_record_consequence(file, source).map(Some(_))
+        case None => Consequence.success(None)
+      }
+    else if (_is_archive_file(path))
+      _load_assembly_descriptor_from_archive_consequence(path, source)
+    else
+      _load_record_consequence(path, source).map(Some(_))
+
+  private def _load_record_consequence(
+    path: Path,
+    source: String
+  ): Consequence[GenericSubsystemAssemblyDescriptorSource] =
+    DescriptorRecordLoader.load(path).flatMap { records =>
+      records.headOption match {
+        case Some(record) =>
+          Consequence.success(GenericSubsystemAssemblyDescriptorSource(record, source, Some(path)))
+        case None =>
+          Consequence.resourceInvalid(s"assembly descriptor is empty: ${path}")
+      }
     }
 
   private def _load_assembly_descriptor_from_archive(
@@ -341,6 +595,31 @@ object GenericSubsystemDescriptor {
       }
     }
   }
+
+  private def _load_assembly_descriptor_from_archive_consequence(
+    path: Path,
+    source: String
+  ): Consequence[Option[GenericSubsystemAssemblyDescriptorSource]] = {
+    val uri = URI.create(s"jar:${path.toUri}")
+    Using.resource(FileSystems.newFileSystem(uri, Map.empty[String, String].asJava)) { fs =>
+      _resolve_assembly_descriptor_file(fs.getPath("/")) match {
+        case Some(file) => _load_record_consequence(file, source).map(Some(_))
+        case None => Consequence.success(None)
+      }
+    }
+  }
+
+  private def _decode_optional_assembly_shape(
+    path: Path,
+    assembly: Option[GenericSubsystemAssemblyDescriptorSource]
+  ): Consequence[Option[Shape]] =
+    assembly match {
+      case Some(source) =>
+        summon[RecordDecoder[Shape]].fromRecord(source.record).map(Some(_)).leftMap { c =>
+          c.copy(observation = c.observation.copy(cause = c.observation.cause.withMessage(s"${c.displayMessage} in assembly descriptor of ${path}")))
+        }
+      case None => Consequence.success(None)
+    }
 
   private def _load_archive_file(path: Path): Consequence[GenericSubsystemDescriptor] = {
     val uri = URI.create(s"jar:${path.toUri}")

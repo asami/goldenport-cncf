@@ -50,7 +50,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
  *  version Mar. 30, 2026
- * @version Apr. 22, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -469,6 +469,7 @@ object Component {
     version: String,
     component: Option[String] = None,
     subsystem: Option[String] = None,
+    archivePath: Option[String] = None,
     effectiveExtensions: Map[String, String] = Map.empty,
     effectiveConfig: Map[String, String] = Map.empty
   )

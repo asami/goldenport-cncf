@@ -25,7 +25,7 @@ This document is a progress dashboard, not a design journal.
   - `Cwitter` component = `CAR`
   - `Cwitter` subsystem = `SAR`
   - `textus-user-account` = separate `CAR`
-  - local development uses `subsystem/component.d/*.car`
+  - local development uses `repository.d/*.car` as a component search source
   - production resolves by standard repository using `name + version`
     from the default local cache root `~/.cncf/repository`
 
@@ -89,7 +89,7 @@ Current note:
   `textus-user-account`; CNCF only invokes message delivery.
 - `Cwitter` is already scaffolded as `component/ + subsystem/` and is the
   concrete consumer for this phase.
-- local `component.d` staging is development-only; production remains
+- local `repository.d` staging is development-only; production remains
   repository-first.
 
 ## 5. Development Items

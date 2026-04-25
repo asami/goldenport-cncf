@@ -14,14 +14,14 @@ import org.scalatest.BeforeAndAfterAll
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.cncf.workarea.WorkAreaSpace
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.component.{ComponentCreate, ComponentDescriptor, ComponentOrigin}
+import org.goldenport.cncf.component.{ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentOrigin}
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.configuration.{Configuration, ResolvedConfiguration}
 import org.goldenport.configuration.ConfigurationTrace
 
 /*
  * @since   Feb.  4, 2026
- * @version Apr. 10, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
@@ -94,6 +94,52 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         head.artifactMetadata.map(_.name) shouldBe Some("demo-component")
         head.artifactMetadata.map(_.version) shouldBe Some("0.1.0")
         head.artifactMetadata.map(_.effectiveExtensions.get("driver").getOrElse("")) shouldBe Some("car")
+      }
+    }
+
+    "treat component-file CAR as one component and ignore embedded component.d contents" in {
+      val subsystem = new Subsystem(
+        name = "test-component-file-embedded",
+        configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+      )
+      val origin = ComponentOrigin.Repository("component-file")
+      _with_temp_dir { componentdir =>
+        val appjar = _create_fake_component_jar(componentdir.resolve("assets").resolve("app-main.jar"))
+        val providerjar = _create_fake_component_jar(componentdir.resolve("assets").resolve("provider-main.jar"))
+        val appmanifest = componentdir.resolve("manifest-app.json")
+        val providermanifest = componentdir.resolve("manifest-provider.json")
+        Files.writeString(
+          appmanifest,
+          """{"name":"app-component","version":"1.0.0","component":"app"}"""
+        )
+        Files.writeString(
+          providermanifest,
+          """{"name":"textus-user-account","version":"1.0.0","component":"textus-user-account"}"""
+        )
+        val providercar = componentdir.resolve("textus-user-account.car")
+        _create_car(
+          providercar,
+          Seq(
+            "component/main.jar" -> providerjar,
+            "meta/manifest.json" -> providermanifest
+          )
+        )
+        val appcar = componentdir.resolve("app.car")
+        _create_car(
+          appcar,
+          Seq(
+            "component/main.jar" -> appjar,
+            "component.d/textus-user-account.car" -> providercar,
+            "meta/manifest.json" -> appmanifest
+          )
+        )
+
+        val repository = new ComponentRepository.ComponentFileRepository(appcar, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
+        val components = repository.discover()
+        val componentNames = components.flatMap(_.artifactMetadata).flatMap(_.component).toSet
+
+        componentNames should contain ("app")
+        componentNames should not contain ("textus-user-account")
       }
     }
 
@@ -256,6 +302,22 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
         )
         val repository = new ComponentRepository.ComponentDirRepository(componentdir, ComponentCreate(subsystem, origin), ComponentRepository.resolvePackagePrefixes())
         repository.discover() shouldBe empty
+      }
+    }
+
+    "reject a SAR file passed to the component archive descriptor loader" in {
+      _with_temp_dir { componentdir =>
+        val descriptorPath = componentdir.resolve("component-descriptor.json")
+        Files.writeString(descriptorPath, """{"component":{"name":"wrong-kind"},"version":"0.1.0"}""")
+        val sarpath = componentdir.resolve("wrong-kind.sar")
+        _create_zip(
+          sarpath,
+          Seq(
+            "component-descriptor.json" -> descriptorPath
+          )
+        )
+
+        ComponentDescriptorLoader.loadArchive(sarpath).toOption shouldBe empty
       }
     }
   }

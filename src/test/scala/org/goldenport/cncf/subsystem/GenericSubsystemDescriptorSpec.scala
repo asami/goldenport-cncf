@@ -2,14 +2,17 @@ package org.goldenport.cncf.subsystem
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.util.zip.{ZipEntry, ZipOutputStream}
 
+import org.goldenport.Consequence
+import org.goldenport.record.Record
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  8, 2026
  *  version Apr.  9, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
@@ -138,6 +141,190 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.componentBindings.head.componentVersion shouldBe Some("0.1.0-SNAPSHOT")
     }
 
+    "create a synthetic subsystem descriptor from component CAR assembly metadata" in {
+      val car = Files.createTempFile("component-with-assembly", ".car")
+      val descriptor =
+        """{"component":{"name":"cwitter"},"version":"0.0.1-SNAPSHOT"}"""
+      val assembly =
+        """subsystem: cwitter
+          |version: 0.0.1-SNAPSHOT
+          |components:
+          |  - name: cwitter
+          |    version: 0.0.1-SNAPSHOT
+          |  - name: textus-user-account
+          |    version: 0.1.1-SNAPSHOT
+          |security:
+          |  authentication:
+          |    convention: enabled
+          |    fallback_privilege: disabled
+          |""".stripMargin
+      _write_zip(
+        car,
+        Map(
+          "component-descriptor.json" -> descriptor,
+          "assembly-descriptor.yaml" -> assembly,
+          "web/web.yaml" -> "apps: []\n"
+        )
+      )
+
+      val loaded = GenericSubsystemDescriptor.loadComponentArchive(car).toOption.get
+
+      loaded.subsystemName shouldBe "cwitter"
+      loaded.componentBindings.map(_.componentName) shouldBe Vector("cwitter", "textus-user-account")
+      loaded.security.flatMap(_.authentication).flatMap(_.convention) shouldBe Some("enabled")
+      loaded.assemblyDescriptor.map(_.source) shouldBe Some("component-car")
+    }
+
+    "reject a component archive with an invalid assembly descriptor" in {
+      val car = Files.createTempFile("invalid-component-assembly", ".car")
+      val descriptor =
+        """{"component":{"name":"cwitter"},"version":"0.0.1-SNAPSHOT"}"""
+      val assembly =
+        """version: 0.0.1-SNAPSHOT
+          |components:
+          |  - name: cwitter
+          |""".stripMargin
+      _write_zip(
+        car,
+        Map(
+          "component-descriptor.json" -> descriptor,
+          "assembly-descriptor.yaml" -> assembly
+        )
+      )
+
+      GenericSubsystemDescriptor.loadComponentArchive(car) match {
+        case Consequence.Failure(_) => succeed
+        case Consequence.Success(value) => fail(s"expected invalid assembly descriptor failure but got ${value}")
+      }
+    }
+
+    "let a SAR descriptor inherit authentication provider defaults from a component CAR assembly descriptor" in {
+      val car = Files.createTempFile("cwitter-component-defaults", ".car")
+      val descriptor =
+        """{"component":{"name":"cwitter"},"version":"0.0.1-SNAPSHOT"}"""
+      val assembly =
+        """subsystem: cwitter
+          |version: 0.0.1-SNAPSHOT
+          |components:
+          |  - name: cwitter
+          |    version: 0.0.1-SNAPSHOT
+          |  - name: textus-user-account
+          |    version: 0.1.1-SNAPSHOT
+          |security:
+          |  authentication:
+          |    convention: enabled
+          |    fallback_privilege: disabled
+          |    providers:
+          |      - name: user-account
+          |        component: textus-user-account
+          |        kind: human
+          |        enabled: true
+          |        priority: 100
+          |        default: true
+          |""".stripMargin
+      _write_zip(
+        car,
+        Map(
+          "component-descriptor.json" -> descriptor,
+          "assembly-descriptor.yaml" -> assembly
+        )
+      )
+      val carDefaults = GenericSubsystemDescriptor.loadComponentArchive(car).toOption.get
+      val sar = Files.createTempFile("cwitter-sar-no-security", ".yaml")
+      Files.writeString(
+        sar,
+        """subsystem: cwitter
+          |version: 0.0.1-SNAPSHOT
+          |components:
+          |  - name: cwitter
+          |    version: 0.0.1-SNAPSHOT
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val sarDescriptor = GenericSubsystemDescriptor.load(sar).toOption.get
+
+      val effective = GenericSubsystemDescriptor.mergeComponentDefaults(carDefaults, sarDescriptor)
+      val provider = effective.security.flatMap(_.authentication).toVector.flatMap(_.providers).headOption.get
+
+      provider.name shouldBe "user-account"
+      provider.component shouldBe "textus-user-account"
+      effective.componentBindings.map(_.componentName) shouldBe Vector("cwitter", "textus-user-account")
+    }
+
+    "let a SAR assembly descriptor override a provider inherited from component CAR assembly defaults" in {
+      val base = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("cwitter.car"),
+        subsystemName = "cwitter",
+        componentBindings = Vector(GenericSubsystemComponentBinding("cwitter")),
+        security = Some(GenericSubsystemSecurityBinding(
+          authentication = Some(GenericSubsystemAuthenticationBinding(
+            providers = Vector(GenericSubsystemAuthenticationProviderBinding(
+              name = "user-account",
+              component = "textus-user-account",
+              kind = Some("human")
+            ))
+          ))
+        ))
+      )
+      val overrideSource = GenericSubsystemAssemblyDescriptorSource(
+        Record.data(
+          "security" -> Record.data(
+            "authentication" -> Record.data(
+              "providers" -> Vector(Record.data(
+                "name" -> "user-account",
+                "component" -> "custom-user-account",
+                "kind" -> "human",
+                "enabled" -> true,
+                "priority" -> 200,
+                "default" -> true
+              ))
+            )
+          )
+        ),
+        source = "sar",
+        path = Some(java.nio.file.Path.of("cwitter.sar"))
+      )
+
+      val effective = GenericSubsystemDescriptor.applyAssemblyOverride(base, overrideSource)
+      val provider = effective.security.flatMap(_.authentication).toVector.flatMap(_.providers).headOption.get
+
+      provider.name shouldBe "user-account"
+      provider.component shouldBe "custom-user-account"
+      provider.priority shouldBe Some(200)
+    }
+
+    "merge partial SAR assembly wiring overrides with inherited component CAR wiring" in {
+      val base = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("cwitter.car"),
+        subsystemName = "cwitter",
+        componentBindings = Vector(GenericSubsystemComponentBinding("cwitter")),
+        assemblyDescriptor = Some(GenericSubsystemAssemblyDescriptorSource(
+          Record.data(
+            "wiring" -> Vector(
+              _wiring_record("cwitter", "account", "signin", "textus-user-account", "account", "signin"),
+              _wiring_record("cwitter", "message", "deliver", "textus-message-delivery-stub", "message", "deliver")
+            )
+          ),
+          source = "component-car",
+          path = Some(java.nio.file.Path.of("cwitter.car"))
+        ))
+      )
+      val overrideSource = GenericSubsystemAssemblyDescriptorSource(
+        Record.data(
+          "wiring" -> Vector(
+            _wiring_record("cwitter", "account", "signin", "enterprise-user-account", "account", "signin")
+          )
+        ),
+        source = "sar",
+        path = Some(java.nio.file.Path.of("cwitter.sar"))
+      )
+
+      val effective = GenericSubsystemDescriptor.applyAssemblyOverride(base, overrideSource)
+      val bindings = effective.resolvedWiring
+
+      bindings.map(_.toComponent).toSet shouldBe Set("enterprise-user-account", "textus-message-delivery-stub")
+      bindings.count(_.fromService == "account") shouldBe 1
+    }
 
     "load the textus-identity journal sample with security authentication wiring" in {
       val path = java.nio.file.Path.of("/Users/asami/src/dev2025/cloud-native-component-framework/docs/journal/2026/04/2026-04-09-subsystem-descriptor-textus-identity.yaml")
@@ -159,4 +346,38 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
     }
 
   }
+
+  private def _write_zip(path: java.nio.file.Path, entries: Map[String, String]): Unit = {
+    val out = new ZipOutputStream(Files.newOutputStream(path))
+    try {
+      entries.foreach { case (name, content) =>
+        out.putNextEntry(new ZipEntry(name))
+        out.write(content.getBytes(StandardCharsets.UTF_8))
+        out.closeEntry()
+      }
+    } finally {
+      out.close()
+    }
+  }
+
+  private def _wiring_record(
+    fromComponent: String,
+    fromService: String,
+    fromOperation: String,
+    toComponent: String,
+    toService: String,
+    toOperation: String
+  ): Record =
+    Record.data(
+      "from" -> Record.data(
+        "component" -> fromComponent,
+        "service" -> fromService,
+        "operation" -> fromOperation
+      ),
+      "to" -> Record.data(
+        "component" -> toComponent,
+        "service" -> toService,
+        "operation" -> toOperation
+      )
+    )
 }

@@ -28,6 +28,36 @@ final case class WebDescriptor(
   assets: WebDescriptor.Assets = WebDescriptor.Assets(),
   admin: Map[String, WebDescriptor.AdminSurface] = Map.empty
 ) {
+  def mergeOverride(rhs: WebDescriptor): WebDescriptor = {
+    def merge_vector[A, K](
+      lhs: Vector[A],
+      rhs: Vector[A]
+    )(key: A => K): Vector[A] = {
+      val r = rhs.map(x => key(x) -> x).toMap
+      val keys = (lhs.map(key) ++ rhs.map(key)).distinct
+      val l = lhs.map(x => key(x) -> x).toMap
+      keys.flatMap(k => r.get(k).orElse(l.get(k)))
+    }
+
+    copy(
+      defaultView =
+        if (rhs.defaultView == WebTableColumnResolver.defaultViewName) defaultView
+        else rhs.defaultView,
+      expose = expose ++ rhs.expose,
+      auth =
+        if (rhs.auth == WebDescriptor.Auth()) auth
+        else rhs.auth,
+      authorization = authorization ++ rhs.authorization,
+      form = form ++ rhs.form,
+      apps = merge_vector(apps, rhs.apps)(_.normalizedName),
+      routes = merge_vector(routes, rhs.routes)(_.normalizedPathText),
+      pages = pages ++ rhs.pages,
+      theme = theme.merge(rhs.theme),
+      assets = assets.merge(rhs.assets),
+      admin = admin ++ rhs.admin
+    )
+  }
+
   def hasControls: Boolean =
     expose.nonEmpty ||
       authorization.nonEmpty ||

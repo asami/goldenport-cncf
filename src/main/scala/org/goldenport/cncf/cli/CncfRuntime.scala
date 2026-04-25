@@ -60,7 +60,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -476,9 +476,100 @@ object CncfRuntime extends GlobalObservable {
     val configuration = _resolve_configuration(cwd, args)
     val front = frontParameters(configuration, args)
     val invocation = canonicalInvocationParameters(configuration, front.residualArgs)
+    val withcomponentfile = _with_auto_component_file(cwd, args, configuration, invocation)
+    if (!withcomponentfile.sameElements(args))
+      return bootstrap(cwd, withcomponentfile)
     val repositories = repositoryParameters(configuration, args, cwd)
     RuntimeBootstrap(configuration, front, invocation, repositories)
   }
+
+  private def _with_auto_component_file(
+    cwd: Path,
+    args: Array[String],
+    configuration: ResolvedConfiguration,
+    invocation: RuntimeInvocationParameters
+  ): Array[String] = {
+    val hasComponentFile =
+      RuntimeConfig.getString(configuration, RuntimeConfig.ComponentFileKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeComponentFileKey).nonEmpty ||
+        args.exists(_.startsWith("--component-file=")) ||
+        args.contains("--component-file") ||
+        args.exists(_.startsWith(s"--${RuntimeConfig.ComponentFileKey}=")) ||
+        args.contains(s"--${RuntimeConfig.ComponentFileKey}") ||
+        args.exists(_.startsWith(s"--${RuntimeConfig.RuntimeComponentFileKey}=")) ||
+        args.contains(s"--${RuntimeConfig.RuntimeComponentFileKey}")
+    val hasSubsystem =
+      RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemFileKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeSubsystemFileKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemDescriptorKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeSubsystemDescriptorKey).nonEmpty
+    if (hasComponentFile || hasSubsystem) {
+      args
+    } else {
+      val archive = invocation.componentName match {
+        case Some(name) => _detect_component_archive(cwd, name)
+        case None => _detect_latest_component_archive(cwd)
+      }
+      archive.map { path =>
+        args ++ Array(s"--${RuntimeConfig.ComponentFileKey}=${path.toString}")
+      }.getOrElse(args)
+    }
+  }
+
+  private def _detect_component_archive(
+    cwd: Path,
+    componentname: String
+  ): Option[Path] = {
+    val roots = Vector(
+      cwd.resolve("component").resolve("target"),
+      cwd.resolve("target")
+    ).map(_.normalize)
+    roots.iterator.flatMap(_latest_component_archive(_, componentname)).toSeq.headOption
+  }
+
+  private def _detect_latest_component_archive(
+    cwd: Path
+  ): Option[Path] = {
+    val roots = Vector(
+      cwd.resolve("component").resolve("target"),
+      cwd.resolve("target")
+    ).map(_.normalize)
+    roots.iterator.flatMap(_latest_component_archive(_)).toSeq.headOption
+  }
+
+  private def _latest_component_archive(
+    root: Path,
+    componentname: String
+  ): Option[Path] =
+    _component_archives(root)
+      .filter { path =>
+        val name = path.getFileName.toString
+        name == s"${componentname}.car" || name.startsWith(s"${componentname}-")
+      }
+      .headOption
+
+  private def _latest_component_archive(
+    root: Path
+  ): Option[Path] =
+    _component_archives(root).headOption
+
+  private def _component_archives(
+    root: Path
+  ): Vector[Path] =
+    if (!Files.isDirectory(root)) {
+      Vector.empty
+    } else {
+      val stream = Files.list(root)
+      try {
+        stream.iterator.asScala
+          .filter(Files.isRegularFile(_))
+          .filter(path => path.getFileName.toString.endsWith(".car"))
+          .toVector
+          .sortBy(path => Files.getLastModifiedTime(path).toMillis)(Ordering.Long.reverse)
+      } finally {
+        stream.close()
+      }
+    }
 
   private[cncf] def repositoryParameters(
     configuration: ResolvedConfiguration,
@@ -560,10 +651,10 @@ object CncfRuntime extends GlobalObservable {
   ): RuntimeInvocationParameters = {
     val args = invocation.actualArgs
     val alreadySpecified =
-      args.exists(_.startsWith(s"--${RuntimeConfig.ComponentDirKey}=")) ||
+      _has_component_activation_arg(args) ||
         args.sliding(2).exists {
           case Array(k, _) =>
-            k == s"--${RuntimeConfig.ComponentDirKey}"
+            _is_component_activation_arg(k)
           case _ =>
             false
         }
@@ -571,17 +662,25 @@ object CncfRuntime extends GlobalObservable {
       invocation
     } else {
       invocation.componentName
-        .flatMap(name => _resolve_component_descriptor_entry(searchSpecs, name))
-        .flatMap { case (spec, _) =>
-          _active_spec_argument(spec)
-            .filterNot {
-              case (RuntimeConfig.ComponentDirKey, value) =>
-                _has_component_dir_config_arg(args, value)
-              case _ =>
-                false
+        .flatMap { name =>
+          _resolve_component_archive_entry(searchSpecs, name)
+            .map { path =>
+              invocation.copy(actualArgs = args ++ Array(s"--${RuntimeConfig.ComponentFileKey}=${path}"))
             }
-            .map { case (key, value) =>
-              invocation.copy(actualArgs = args ++ Array(s"--${key}=${value}"))
+            .orElse {
+              _resolve_component_descriptor_entry(searchSpecs, name)
+                .flatMap { case (spec, _) =>
+                  _active_spec_argument(spec)
+                    .filterNot {
+                      case (RuntimeConfig.ComponentDirKey, value) =>
+                        _has_component_dir_config_arg(args, value)
+                      case _ =>
+                        false
+                    }
+                    .map { case (key, value) =>
+                      invocation.copy(actualArgs = args ++ Array(s"--${key}=${value}"))
+                    }
+                }
             }
         }
         .getOrElse(invocation)
@@ -923,12 +1022,20 @@ object CncfRuntime extends GlobalObservable {
       spec.resolveComponentDescriptor(componentName).map(spec -> _)
     }.toSeq.headOption
 
+  private def _resolve_component_archive_entry(
+    specs: Vector[ComponentRepository.Specification],
+    componentName: String
+  ): Option[java.nio.file.Path] =
+    specs.iterator.flatMap(_.resolveComponentArchivePath(componentName)).toSeq.headOption
+
   private def _spec_argument(
     spec: ComponentRepository.Specification
   ): Option[String] =
     spec match {
       case ComponentRepository.ComponentDirRepository.Specification(baseDir) =>
         Some(s"component-dir:${baseDir}")
+      case ComponentRepository.ComponentFileRepository.Specification(file) =>
+        Some(s"component-file:${file}")
       case ComponentRepository.ScalaCliRepository.Specification(baseDir) =>
         Some(s"scala-cli:${baseDir}")
     }
@@ -944,12 +1051,38 @@ object CncfRuntime extends GlobalObservable {
         case _ => false
       }
 
+  private def _component_activation_keys: Vector[String] =
+    Vector(
+      RuntimeConfig.ComponentDirKey,
+      RuntimeConfig.ComponentFileKey,
+      RuntimeConfig.RuntimeComponentFileKey,
+      "cncf.component.dir",
+      "cncf.component.file",
+      "cncf.runtime.component.file"
+    )
+
+  private def _has_component_activation_arg(
+    args: Array[String]
+  ): Boolean =
+    args.exists { arg =>
+      arg == "--component-file" ||
+        _has_option_value(arg, _component_activation_keys)
+    }
+
+  private def _is_component_activation_arg(
+    arg: String
+  ): Boolean =
+    arg == "--component-file" ||
+      _is_option_name(arg, _component_activation_keys)
+
   private def _active_spec_argument(
     spec: ComponentRepository.Specification
   ): Option[(String, String)] =
     spec match {
       case ComponentRepository.ComponentDirRepository.Specification(baseDir) =>
         Some((RuntimeConfig.ComponentDirKey, baseDir.toString))
+      case ComponentRepository.ComponentFileRepository.Specification(file) =>
+        Some((RuntimeConfig.ComponentFileKey, file.toString))
       case _ =>
         None
     }
@@ -972,7 +1105,8 @@ object CncfRuntime extends GlobalObservable {
     specs: Seq[ComponentRepository.Specification]
   ): Subsystem => Seq[Component] =
     (subsystem: Subsystem) => {
-      val params = ComponentCreate(subsystem, ComponentOrigin.Builtin)
+      val descriptors = subsystem.descriptor.map(_.toComponentDescriptors).getOrElse(Vector.empty)
+      val params = ComponentCreate(subsystem, ComponentOrigin.Builtin, descriptors)
       specs.flatMap { spec =>
         val origin = _origin_for_spec(spec)
         spec.build(params.withOrigin(origin)).discover()
@@ -985,6 +1119,8 @@ object CncfRuntime extends GlobalObservable {
     spec match {
       case _: ComponentRepository.ComponentDirRepository.Specification =>
         ComponentOrigin.Repository("component-dir")
+      case _: ComponentRepository.ComponentFileRepository.Specification =>
+        ComponentOrigin.Repository("component-file")
       case _: ComponentRepository.ScalaCliRepository.Specification =>
         ComponentOrigin.Repository("scala-cli")
     }
@@ -2787,6 +2923,12 @@ class CncfRuntime() extends GlobalObservable {
       if (invocation.actualArgs.sameElements(args)) bootstrap0
       else CncfRuntime.bootstrap(cwd, invocation.actualArgs)
     val configuration = bootstrap.configuration
+    val resolvedSearchSpecs = bootstrap.repositories.searchRepositories match {
+      case Left(message) =>
+        throw new IllegalArgumentException(message)
+      case Right(specs) =>
+        specs
+    }
     val resolvedActiveSpecs = bootstrap.repositories.activeRepositories match {
       case Left(message) =>
         throw new IllegalArgumentException(message)
@@ -2826,13 +2968,27 @@ class CncfRuntime() extends GlobalObservable {
     } else {
       subsystem.setup(compfactory)
     }
-    val runtimeExtras = CncfRuntime.componentExtraFunction(resolvedActiveSpecs, bootstrap.front)
+    val runtimeSpecs =
+      if (subsystem.descriptor.nonEmpty)
+        _merge_component_specs(resolvedActiveSpecs, resolvedSearchSpecs)
+      else
+        resolvedActiveSpecs
+    val runtimeExtras = CncfRuntime.componentExtraFunction(runtimeSpecs, bootstrap.front)
     val extras = _collapse_component_duplicates(
       subsystem.components.toVector,
       (runtimeExtras(subsystem) ++ extraComponents(subsystem)).map(compfactory.bootstrap)
     )
     if (extras.nonEmpty) {
       subsystem.add(extras)
+    }
+    if (_apply_component_assembly_defaults(subsystem)) {
+      val inheritedExtras = _collapse_component_duplicates(
+        subsystem.components.toVector,
+        runtimeExtras(subsystem).map(compfactory.bootstrap)
+      )
+      if (inheritedExtras.nonEmpty) {
+        subsystem.add(inheritedExtras)
+      }
     }
     StartupImport.run(cwd, configuration, runconfig, subsystem) match {
       case Consequence.Success(_) =>
@@ -2842,6 +2998,58 @@ class CncfRuntime() extends GlobalObservable {
     }
     subsystem
   }
+
+  private def _apply_component_assembly_defaults(
+    subsystem: Subsystem
+  ): Boolean = {
+    var changed = false
+    subsystem.descriptor.foreach { descriptor =>
+      _primary_component_assembly_defaults(subsystem, descriptor).foreach { defaults =>
+        val merged = GenericSubsystemDescriptor.mergeComponentDefaults(defaults, descriptor)
+        val effective =
+          descriptor.assemblyDescriptor
+            .filterNot(src => _same_path(src.path, defaults.path))
+            .map(GenericSubsystemDescriptor.applyAssemblyOverride(merged, _))
+            .getOrElse(merged)
+        if (effective != descriptor) {
+          subsystem.withDescriptor(effective)
+          changed = true
+        }
+      }
+    }
+    changed
+  }
+
+  private def _primary_component_assembly_defaults(
+    subsystem: Subsystem,
+    descriptor: GenericSubsystemDescriptor
+  ): Option[GenericSubsystemDescriptor] = {
+    val primaryName = descriptor.componentBindings.headOption.map(_.componentName)
+    primaryName.flatMap { name =>
+      subsystem.components.find { component =>
+        val runtimeName =
+          component.artifactMetadata.flatMap(_.component)
+            .orElse(component.artifactMetadata.map(_.name))
+            .getOrElse(component.name)
+        _component_key(runtimeName) == _component_key(name)
+      }.flatMap { component =>
+        component.artifactMetadata.flatMap(_.archivePath).flatMap { path =>
+          val p = java.nio.file.Paths.get(path)
+          if (_same_path(Some(p), descriptor.path)) None
+          else GenericSubsystemDescriptor.loadComponentArchive(p).toOption
+        }
+      }
+    }
+  }
+
+  private def _same_path(
+    lhs: Option[java.nio.file.Path],
+    rhs: java.nio.file.Path
+  ): Boolean =
+    lhs.exists(p => p.toAbsolutePath.normalize == rhs.toAbsolutePath.normalize)
+
+  private def _component_key(value: String): String =
+    Option(value).getOrElse("").trim.toLowerCase.replace("_", "").replace("-", "")
 
   private def _collapse_component_duplicates(
     existing: Vector[Component],
@@ -2892,6 +3100,14 @@ class CncfRuntime() extends GlobalObservable {
       case (key, component) if !existingKeys.contains(key) => component
     }.toVector
   }
+
+  private def _merge_component_specs(
+    activeSpecs: Vector[ComponentRepository.Specification],
+    searchSpecs: Vector[ComponentRepository.Specification]
+  ): Vector[ComponentRepository.Specification] =
+    (activeSpecs ++ searchSpecs).foldLeft(Vector.empty[ComponentRepository.Specification]) { (z, x) =>
+      if (z.contains(x)) z else z :+ x
+    }
 
   private def _resolve_configuration(
     cwd: Path,

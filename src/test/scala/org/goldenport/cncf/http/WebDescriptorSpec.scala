@@ -1,10 +1,15 @@
 package org.goldenport.cncf.http
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 import java.util.zip.{ZipEntry, ZipOutputStream}
 
+import scala.util.Using
+
+import org.goldenport.protocol.Protocol
+import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceId}
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.subsystem.{GenericSubsystemDescriptor, Subsystem}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -508,6 +513,119 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.isFormEnabled("notice-board.notice.search-notices") shouldBe true
     }
 
+    "merge component CAR Web descriptors before runtime override descriptors" in {
+      val componentcar = Files.createTempFile("cncf-component-web", ".car")
+      val overridepath = Files.createTempFile("cncf-web-override", ".yaml")
+      try {
+        _write_zip(
+          componentcar,
+          Map(
+            "web/web.yaml" ->
+              """web:
+                |  expose:
+                |    textus-user-account.user.register: protected
+                |  apps:
+                |    - name: signup
+                |      path: /web/textus-user-account/signup
+                |      kind: static-form
+                |  routes:
+                |    - path: /web/textus-user-account/signup
+                |      target:
+                |        component: textus-user-account
+                |        app: signup
+                |""".stripMargin
+          )
+        )
+        Files.writeString(
+          overridepath,
+          """web:
+            |  expose:
+            |    textus-user-account.user.register: public
+            |  pages:
+            |    textus-user-account.signup:
+            |      heading: Create Cwitter account
+            |      fields:
+            |        - loginName
+            |        - email
+            |        - password
+            |""".stripMargin,
+          StandardCharsets.UTF_8
+        )
+        val configuration = ResolvedConfiguration(
+          Configuration(
+            Map(
+              RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(overridepath.toString)
+            )
+          ),
+          ConfigurationTrace.empty
+        )
+        val subsystem = new Subsystem(
+          name = "cwitter",
+          configuration = configuration
+        )
+        subsystem.add(_component("textus-user-account", componentcar))
+
+        val descriptor = WebDescriptorResolver.resolve(subsystem).toOption.get
+
+        descriptor.apps.map(_.name) should contain ("signup")
+        descriptor.routes.map(_.normalizedPathText) should contain ("/web/textus-user-account/signup")
+        descriptor.exposureOf("textus-user-account.user.register") shouldBe WebDescriptor.Exposure.Public
+        descriptor.pageCustomization(Some("textus-user-account"), Some("signup")).flatMap(_.heading) shouldBe Some("Create Cwitter account")
+      } finally {
+        Files.deleteIfExists(componentcar)
+        Files.deleteIfExists(overridepath)
+      }
+    }
+
+    "apply application component CAR Web defaults after provider component Web defaults" in {
+      val appcar = Files.createTempFile("cncf-app-component-web", ".car")
+      val providercar = Files.createTempFile("cncf-provider-web", ".car")
+      try {
+        _write_zip(
+          appcar,
+          Map(
+            "web/web.yaml" ->
+              """web:
+                |  pages:
+                |    textus-user-account.signup:
+                |      heading: App signup
+                |""".stripMargin
+          )
+        )
+        _write_zip(
+          providercar,
+          Map(
+            "web/web.yaml" ->
+              """web:
+                |  pages:
+                |    textus-user-account.signup:
+                |      heading: Provider signup
+                |""".stripMargin
+          )
+        )
+        val subsystem = new Subsystem(
+          name = "cwitter",
+          configuration = ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty)
+        ).withDescriptor(
+          GenericSubsystemDescriptor(
+            path = appcar,
+            subsystemName = "cwitter"
+          )
+        )
+        subsystem.add(Vector(
+          _component("cwitter", appcar),
+          _component("textus-user-account", providercar)
+        ))
+
+        val descriptor = WebDescriptorResolver.resolve(subsystem).toOption.get
+
+        descriptor.pageCustomization(Some("textus-user-account"), Some("signup")).flatMap(_.heading) shouldBe Some("App signup")
+      } finally {
+        Files.deleteIfExists(appcar)
+        Files.deleteIfExists(providercar)
+      }
+    }
+
     "allow Web Tier authorization when every configured category matches at least one subject value" in {
       val descriptor = WebDescriptor(
         authorization = Map(
@@ -612,4 +730,38 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       subject.capabilities should contain ("notice.admin")
     }
   }
+
+  private def _component(
+    componentname: String,
+    archivepath: Path
+  ): Component =
+    new Component() {
+      override val core: Component.Core =
+        Component.Core.create(
+          componentname,
+          ComponentId(componentname.replace("-", "_")),
+          ComponentInstanceId.default(ComponentId(componentname.replace("-", "_"))),
+          Protocol.empty
+        )
+    }.withArtifactMetadata(
+      Component.ArtifactMetadata(
+        sourceType = "car",
+        name = componentname,
+        version = "0.1.0",
+        component = Some(componentname),
+        archivePath = Some(archivepath.toString)
+      )
+    )
+
+  private def _write_zip(
+    path: Path,
+    entries: Map[String, String]
+  ): Unit =
+    Using.resource(new ZipOutputStream(Files.newOutputStream(path))) { zos =>
+      entries.foreach { case (name, content) =>
+        zos.putNextEntry(new ZipEntry(name))
+        zos.write(content.getBytes(StandardCharsets.UTF_8))
+        zos.closeEntry()
+      }
+    }
 }

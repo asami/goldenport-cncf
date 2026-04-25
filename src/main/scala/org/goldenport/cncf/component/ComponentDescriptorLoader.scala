@@ -1,7 +1,9 @@
 package org.goldenport.cncf.component
 
-import java.nio.file.{Files, Path}
+import java.net.URI
+import java.nio.file.{FileSystems, Files, Path}
 import scala.jdk.CollectionConverters.*
+import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.record.RecordDecoder
@@ -16,7 +18,8 @@ import org.goldenport.record.RecordDecoder
  *
  * @since   Mar. 27, 2026
  *  version Apr.  8, 2026
- * @version Apr. 14, 2026
+ *  version Apr. 14, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentDescriptorLoader {
@@ -54,6 +57,10 @@ object ComponentDescriptorLoader {
   def loadArchive(path: Path): Consequence[ComponentDescriptor] =
     if (!Files.exists(path))
       Consequence.resourceNotFound(s"component archive descriptor path does not exist: ${path}")
+    else if (_is_archive_file(path))
+      _load_archive_file(path)
+    else if (_is_non_component_archive_file(path))
+      Consequence.resourceInvalid(s"component archive must be a CAR file: ${path}")
     else {
       val descriptorPath =
         if (Files.isDirectory(path)) _resolve_canonical_descriptor_files(path).headOption
@@ -110,6 +117,38 @@ object ComponentDescriptorLoader {
       .map(path.resolve(_).normalize)
       .filter(Files.isRegularFile(_))
       .distinct
+
+  private def _is_archive_file(path: Path): Boolean = {
+    val name = path.getFileName.toString.toLowerCase
+    name.endsWith(".car")
+  }
+
+  private def _is_non_component_archive_file(path: Path): Boolean = {
+    val name = path.getFileName.toString.toLowerCase
+    name.endsWith(".sar") || name.endsWith(".zip")
+  }
+
+  private def _load_archive_file(path: Path): Consequence[ComponentDescriptor] = {
+    val uri = URI.create(s"jar:${path.toUri}")
+    Using.resource(FileSystems.newFileSystem(uri, Map.empty[String, String].asJava)) { fs =>
+      val root = fs.getPath("/")
+      _resolve_canonical_descriptor_files(root).headOption match {
+        case Some(file) =>
+          _load_file(file).flatMap(_.headOption.map(Consequence.success).getOrElse(Consequence.resourceInvalid(s"component archive descriptor is empty: ${path}")))
+        case None =>
+          ArchiveManifest.load(path, "car").map { m =>
+            ComponentDescriptor(
+              name = Some(m.name),
+              version = Some(m.version),
+              componentName = m.component,
+              subsystemName = m.subsystem,
+              extensions = m.extensions,
+              config = m.config
+            )
+          }
+      }
+    }
+  }
 
   private def _load_files(files: Vector[Path]): Consequence[Vector[ComponentDescriptor]] =
     files.foldLeft(Consequence.success(Vector.empty[ComponentDescriptor])) { (z, file) =>

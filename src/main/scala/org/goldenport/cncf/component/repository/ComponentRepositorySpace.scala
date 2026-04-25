@@ -16,7 +16,7 @@ import org.goldenport.cncf.subsystem.Subsystem
  * @since   Jan. 30, 2026
  *  version Feb.  5, 2026
  *  version Mar. 26, 2026
- * @version Apr. 23, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositorySpace(
@@ -81,6 +81,8 @@ object ComponentRepositorySpace {
     spec match {
       case _: ComponentRepository.ComponentDirRepository.Specification =>
         ComponentOrigin.Repository("component-dir")
+      case _: ComponentRepository.ComponentFileRepository.Specification =>
+        ComponentOrigin.Repository("component-file")
       case _: ComponentRepository.ScalaCliRepository.Specification =>
         ComponentOrigin.Repository("scala-cli")
     }
@@ -145,6 +147,8 @@ object ComponentRepositorySpace {
     spec match {
       case _: ComponentRepository.ComponentDirRepository.Specification =>
         ComponentOrigin.Repository("component-dir")
+      case _: ComponentRepository.ComponentFileRepository.Specification =>
+        ComponentOrigin.Repository("component-file")
       case _: ComponentRepository.ScalaCliRepository.Specification =>
         ComponentOrigin.Repository("scala-cli")
     }
@@ -178,11 +182,30 @@ object ComponentRepositorySpace {
       } else if (arg.startsWith("--component-dir=")) {
         active += s"component-dir:${arg.stripPrefix("--component-dir=")}"
         i += 1
+      } else if (arg.startsWith("--component-file=")) {
+        active += s"component-file:${arg.stripPrefix("--component-file=")}"
+        i += 1
+      } else if (arg.startsWith(s"--${RuntimeConfig.ComponentFileKey}=")) {
+        active += s"component-file:${arg.stripPrefix(s"--${RuntimeConfig.ComponentFileKey}=")}"
+        i += 1
+      } else if (arg.startsWith(s"--${RuntimeConfig.RuntimeComponentFileKey}=")) {
+        active += s"component-file:${arg.stripPrefix(s"--${RuntimeConfig.RuntimeComponentFileKey}=")}"
+        i += 1
       } else if (arg == "--component-dir") {
         if (i + 1 >= args.length) {
           return ExtractedArgs(Right(Vector.empty), Left("--component-dir requires a value"), args, noDefault)
         }
         active += s"component-dir:${args(i + 1)}"
+        i += 2
+      } else if (
+        arg == "--component-file" ||
+          arg == s"--${RuntimeConfig.ComponentFileKey}" ||
+          arg == s"--${RuntimeConfig.RuntimeComponentFileKey}"
+      ) {
+        if (i + 1 >= args.length) {
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+        }
+        active += s"component-file:${args(i + 1)}"
         i += 2
       } else {
         residual += arg
@@ -223,8 +246,8 @@ object ComponentRepositorySpace {
 
   private def _config_active_repository_specs(
     configuration: ResolvedConfiguration
-  ): Vector[String] =
-    configuration.get[String](RuntimeConfig.ComponentDirKey) match {
+  ): Vector[String] = {
+    val dirs = configuration.get[String](RuntimeConfig.ComponentDirKey) match {
       case Consequence.Success(Some(value)) =>
         value
           .split(",")
@@ -234,6 +257,21 @@ object ComponentRepositorySpace {
           .toVector
       case _ => Vector.empty
     }
+    val files = Vector(RuntimeConfig.ComponentFileKey, RuntimeConfig.RuntimeComponentFileKey)
+      .flatMap { key =>
+        configuration.get[String](key) match {
+          case Consequence.Success(Some(value)) =>
+            value
+              .split(",")
+              .map(_.trim)
+              .filter(_.nonEmpty)
+              .map(v => if (v.startsWith("component-file:")) v else s"component-file:${v}")
+              .toVector
+          case _ => Vector.empty
+        }
+      }.distinct
+    dirs ++ files
+  }
 
   def appendDefaultSearchRepositories(
     result: Either[String, Vector[ComponentRepository.Specification]],
@@ -265,7 +303,7 @@ object ComponentRepositorySpace {
       case left @ Left(_) => left
       case Right(specs) if noDefault => Right(specs)
       case Right(specs) =>
-        val defaults = Vector(_default_component_dir(cwd), _default_car_dir(cwd), _default_sar_dir(cwd)).flatten
+        val defaults = Vector(_default_component_dir(cwd), _default_car_dir(cwd), _default_component_target_dir(cwd), _default_sar_dir(cwd)).flatten
         Right(defaults.foldLeft(specs) { (z, dir) =>
           _append_spec_if_missing(z, ComponentRepository.ComponentDirRepository.Specification(dir))
         })
@@ -291,6 +329,11 @@ object ComponentRepositorySpace {
     if (Files.isDirectory(dir)) Some(dir) else None
   }
 
+  private def _default_component_target_dir(cwd: Path): Option[Path] = {
+    val dir = cwd.resolve("component").resolve("target").normalize
+    if (Files.isDirectory(dir)) Some(dir) else None
+  }
+
   private def _default_sar_dir(cwd: Path): Option[Path] = {
     val dir = cwd.resolve("sar.d").normalize
     if (Files.isDirectory(dir)) Some(dir) else None
@@ -313,6 +356,8 @@ object ComponentRepositorySpace {
     spec match {
       case ComponentRepository.ComponentDirRepository.Specification(base) =>
         if (_has_default_components_spec(specs, base)) specs else specs :+ spec
+      case ComponentRepository.ComponentFileRepository.Specification(file) =>
+        if (specs.contains(spec)) specs else specs :+ spec
       case _ =>
         if (specs.contains(spec)) specs else specs :+ spec
     }

@@ -30,7 +30,16 @@ It is also the descriptor representation of the wiring diagram.
 
 ## Placement And Override
 
-The primary operational placement is the top level of the SAR.
+The primary deployment placement is the top level of the SAR.
+
+A component CAR may also carry `assembly-descriptor.*` as component-local
+runtime defaults. This is for one-component application startup and for
+component-provided defaults reused by a SAR. In that placement, the descriptor
+declares required components and wiring defaults, but it must not embed provider
+component artifacts. Provider component CARs are still resolved from the standard
+component repository or `repository.d`. A component CAR with this metadata can
+therefore be selected by name, for example `cncf --textus.component=<component-name> server`,
+without embedding provider component CARs.
 
 The intended packaged layout is:
 
@@ -58,15 +67,39 @@ The CLI form should use the same key:
 
 This override is intended for debugging, experiments, and temporary cases where the operator needs to test a descriptor outside the packaged SAR.
 
-Resolution order should be:
+Effective assembly precedence is:
 
-1. configured `textus.assembly.descriptor`, including the `--textus.assembly.descriptor=<path>` CLI form
-2. `assembly-descriptor.*` at the top level of the selected SAR
-3. convention-based assembly from the subsystem descriptor
+1. component CAR `assembly-descriptor.*` defaults
+2. selected SAR `subsystem-descriptor.*`
+3. selected SAR `assembly-descriptor.*`
+4. configured `textus.assembly.descriptor`, including the `--textus.assembly.descriptor=<path>` CLI form
 
-The current implementation detects the configured or SAR-top assembly descriptor and uses its `wiring` as the primary resolved wiring input when present.
-The provenance block includes whether an assembly descriptor was present, the source kind such as `config` or `sar`, the selected path, and the descriptor identity fields.
-When no assembly descriptor wiring is present, the runtime falls back to convention or subsystem descriptor wiring.
+Later sources override earlier sources by the merge rules below. The effective
+assembly source keeps provenance for the selected descriptor while preserving
+merged defaults required for runtime wiring. When no assembly wiring is present,
+the runtime falls back to convention or subsystem descriptor wiring.
+
+
+## Component Defaults And Deployment Overrides
+
+When a component CAR is used as a deemed subsystem, its `assembly-descriptor.*`
+provides component-local defaults. When a SAR uses that component, those CAR
+defaults remain available and the SAR may override only the changed deployment
+items.
+
+Merge rules are field-oriented, not whole-document replacement:
+
+- `components` merge by component name.
+- `extensions` and `config` merge by key.
+- `security.authentication.providers` merge by provider name.
+- `security.message_delivery.providers` merge by provider name.
+- `operationAuthorization` merges by operation selector.
+- `wiring` merges by binding selector: `from.component`, `from.service`, `from.operation`, and optional `from.api`.
+
+A SAR that uses the same user-account provider as the component default does not
+need to repeat that provider binding. A SAR that changes the provider can define
+an entry with the same provider name, such as `user-account`, and only that
+provider binding is replaced.
 
 ## Current Shape
 

@@ -1758,7 +1758,21 @@ final class Http4sHttpServer(
   }
 
   private[http] def _web_resource_roots(): Vector[WebResourceRoot] =
-    _web_descriptor_config_root().toVector ++ _subsystem_descriptor_web_root().toVector
+    _web_descriptor_config_root().toVector ++
+      _component_web_roots() ++
+      _subsystem_descriptor_web_root().toVector
+
+  private[http] def _component_web_roots(): Vector[WebResourceRoot] =
+    engine.runtimeSubsystem.components
+      .flatMap(_.artifactMetadata.flatMap(_.archivePath))
+      .map(path => Paths.get(path).toAbsolutePath.normalize)
+      .distinct
+      .map { path =>
+        if (WebResourceRoot.isArchiveFile(path))
+          WebResourceRoot.archive(path)
+        else
+          WebResourceRoot.directory(path.resolve("web"))
+      }
 
   private[http] def _web_app_asset_content(
     webAppName: String,
