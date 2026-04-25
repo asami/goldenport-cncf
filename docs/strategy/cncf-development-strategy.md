@@ -320,6 +320,63 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - No async same-job same-transaction guarantee in this phase.
 - Artifact (work): `docs/phase/phase-13.md`.
 
+### Phase 14: Execution Layer Expansion
+- Goal: complete the lightweight workflow execution baseline on top of the
+  event/job foundation.
+- Scope:
+- Establish lightweight `WorkflowEngine` execution.
+- Add workflow inspection and projection surfaces.
+- Introduce submission-only `JCL`.
+- Integrate JCL-to-workflow entrypoints.
+- Harden retry/dead-letter behavior and explicit saga-id propagation.
+- Non-goals:
+- No full workflow product surface.
+- No external orchestration engine.
+- Artifact (work): `docs/phase/phase-14.md`.
+
+### Phase 15: Job Scheduling and Timer Boundary
+- Goal: finalize shared job scheduling and timer execution as a CNCF runtime
+  boundary.
+- Scope:
+- Shared bounded `JobEngine` scheduler for async execution.
+- Explicit queue priority and normalized workflow priority semantics.
+- Canonical built-in timer/scheduling boundary.
+- Bounded one-shot delayed root job start.
+- `Consequence[JobId]` job submission contract for ordinary submit-time
+  failures.
+- Non-goals:
+- No distributed scheduler finalization.
+- No cron-like product UI.
+- Artifact (work): `docs/phase/phase-15.md`.
+
+### Phase 16: Authentication Baseline With Cwitter
+- Goal: close the authentication/user-account baseline using Cwitter as the
+  concrete authenticated application driver.
+- Scope:
+- Complete the CNCF auth/session contract on the existing
+  `AuthenticationProvider` boundary.
+- Make browser Web session login/logout/current-session a real runtime path.
+- Adapt `textus-user-account` as the first auth provider.
+- Keep provider-owned account pages for signup/signin/password-reset/optional
+  2FA and keep Cwitter app code focused on timeline/post/mention/DM.
+- Add CNCF message-delivery provider SPI with stub-backed password reset and
+  optional 2FA.
+- Harden runtime surfaces discovered by Cwitter manual use:
+  structured errors, admin usability, production admin authorization,
+  working-set policy, debug trace-job metadata, shared Web theme,
+  provider-page light customization, locale-aware display formatting, and
+  lifecycle audit defaults.
+- Support both Cwitter component CAR deemed-subsystem startup and SAR deployment,
+  with provider component CARs resolved from the repository or local
+  `repository.d`.
+- Non-goals:
+- No OAuth/OIDC federation.
+- No SSO.
+- No mandatory/global MFA policy.
+- No real SMTP/SMS provider.
+- No separate Cwitter profile model.
+- Artifact (work): `docs/phase/phase-16.md`.
+
 ## 4. Relationship Between Phases
 - Later phases depend on earlier phases.
 - Phase 1.5 constrains Phase 2 and Phase 3.
@@ -334,11 +391,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: none (Phase 15 is closed; next phase selection is pending)
+- Current phase selection: none (Phase 16 is closed; next phase selection is pending)
 - Latest active phase dashboard: none
 - Latest active phase checklist: none
-- Latest closed phase dashboard: `docs/phase/phase-15.md`
-- Latest closed phase checklist: `docs/phase/phase-15-checklist.md`
+- Latest closed phase dashboard: `docs/phase/phase-16.md`
+- Latest closed phase checklist: `docs/phase/phase-16-checklist.md`
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
 ## 6. Explicit Non-Goals
@@ -361,6 +418,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 13: closed (`docs/phase/phase-13.md`)
 - Phase 14: closed (`docs/phase/phase-14.md`)
 - Phase 15: closed (`docs/phase/phase-15.md`)
+- Phase 16: closed (`docs/phase/phase-16.md`)
 
 ## 8. Development Item Status
 
@@ -416,9 +474,16 @@ Closed in Phase 13. This remains a reference area for Phase 14+ extensions and r
   - `docs/journal/2026/04/textus-sample-app-event-phase-13-closure-handoff-2026-04-22.md`
 
 ### 8.3 Security
-- Authentication
-- Authorization
-- Audit logging
+- Phase 16 closed the first auth/session and user-account baseline.
+- Future security work is extension-oriented:
+  - provider replacement and multiple-provider precedence beyond the first
+    provider baseline
+  - real email/SMS message-delivery providers after the stub-backed path
+  - external identity/federation
+  - audit logging expansion beyond current lifecycle and operation records
+- Source references:
+  - `docs/phase/phase-16.md`
+  - `docs/phase/phase-16-checklist.md`
 
 ### 8.4 Metrics and Observability
 - Metrics collection
@@ -529,3 +594,29 @@ Completed in Phase 15.
   - canonical built-in timer/scheduling boundary
   - bounded one-shot delayed root job start
   - `Consequence[JobId]` job submission contract for ordinary submit-time failures
+
+### 9.5 Authentication Baseline and Cwitter Runtime Hardening
+Completed in Phase 16.
+
+- Closed dashboard: `docs/phase/phase-16.md`
+- Closed checklist: `docs/phase/phase-16-checklist.md`
+- Completed scope:
+  - CNCF auth/session contract centered on `AuthenticationProvider`
+  - browser Web session login/logout/current-session runtime path
+  - `textus-user-account` as the first auth provider
+  - provider-owned signup/signin/password-reset/optional 2FA pages
+  - CNCF message-delivery provider SPI and built-in stub provider
+  - Cwitter auth-aware baseline with post, mention, and direct-message flows
+  - Cwitter minimal-code sample direction using provider pages directly
+  - structured Web/API error display based on `Conclusion` detail codes
+  - management console/manual/admin usability improvements
+  - production admin authorization using privilege ceiling plus role policy
+  - working-set policy and async startup fallback to direct store search
+  - debug trace-job metadata and job-specific calltree retention policy
+  - shared Web theme and provider common page light customization
+  - locale/time-zone aware display formatting
+  - lifecycle audit defaults for SimpleEntity create/update
+  - component CAR deemed-subsystem startup with repository-resolved provider
+    component CAR dependencies
+  - SAR override model that preserves component CAR defaults and overrides by
+    field

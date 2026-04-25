@@ -1,6 +1,6 @@
 # Phase 16 — Authentication Baseline With Cwitter
 
-status = open
+status = closed
 
 ## 1. Purpose of This Document
 
@@ -21,8 +21,10 @@ This document is a progress dashboard, not a design journal.
   CNCF-owned.
 - Let `textus-user-account` own account UI for signup, password reset, and
   optional 2FA flows.
-- Keep deployment as multi-CAR within one subsystem:
+- Support both minimal component-CAR startup and SAR deployment:
   - `Cwitter` component = `CAR`
+  - `Cwitter` component CAR may act as a deemed subsystem for local/simple
+    startup
   - `Cwitter` subsystem = `SAR`
   - `textus-user-account` = separate `CAR`
   - local development uses `repository.d/*.car` as a component search source
@@ -40,11 +42,16 @@ Current semantic direction:
 - Web session is the canonical Phase 16 auth mode.
 - `textus-user-account` account identity is the `Cwitter` user identity in this
   phase.
-- `Cwitter` owns app navigation and uses CNCF auth/session behavior.
+- `textus-user-account.loginName` is the provider canonical identity field.
+- `Cwitter` may project `handle = loginName`; `handle` is not a provider-core
+  field.
+- `Cwitter` owns app domain pages and uses CNCF auth/session behavior.
 - `textus-user-account` owns account UI for signup, reset, and optional 2FA
   while CNCF continues to own transport/runtime integration.
 - CNCF owns message-delivery provider SPI, subsystem wiring, and runtime
   invocation.
+- CNCF owns common Web composition surfaces for theme and provider-page light
+  customization.
 - no separate `Cwitter` profile entity is introduced in this phase.
 
 ## 3. Non-Goals
@@ -68,6 +75,9 @@ Current semantic direction:
 - D (DONE): CW-01 — Implement `Cwitter` auth-aware baseline.
 - E (DONE): CW-02 — Derive and implement the minimum user-management additions needed for mention/DM.
 - F (DONE): AU-04 — Add message-delivery SPI with stub-backed password reset and optional 2FA.
+- G (DONE): CW-03 — Run Cwitter manually and complete the provider-page reuse/minimal-code sample direction.
+- H (DONE): PH-16H — Harden the runtime surfaces discovered by Cwitter manual use.
+- I (DONE): PK-16 — Support repository-resolved component CAR startup beside SAR deployment.
 
 Current note:
 - Phase 15 is closed and remains the scheduler/timer baseline.
@@ -87,8 +97,18 @@ Current note:
   boundary for password reset and optional email-backed 2FA.
 - password reset tokens and 2FA challenge state remain provider-owned inside
   `textus-user-account`; CNCF only invokes message delivery.
-- `Cwitter` is already scaffolded as `component/ + subsystem/` and is the
-  concrete consumer for this phase.
+- CW-03 is complete: `Cwitter` uses provider-owned signup/signin/reset/2FA pages
+  directly, keeps application code focused on timeline/post/mention/DM, and
+  documents minimal CAR and SAR launch modes.
+- PH-16H is complete: structured Web/API errors, production admin guards,
+  admin navigation, working-set policy, debug trace-job metadata, locale-aware
+  display formatting, shared Web theme, provider-page light customization, and
+  lifecycle audit defaults are in place.
+- PK-16 is complete: component CARs can carry `web/*` and
+  `assembly-descriptor.*` defaults, dependencies are resolved from the component
+  repository or local `repository.d`, and SAR assembly overrides merge by field.
+- `Cwitter` is scaffolded as `component/ + subsystem/` and remains the concrete
+  consumer for this phase.
 - local `repository.d` staging is development-only; production remains
   repository-first.
 
@@ -100,15 +120,38 @@ Current note:
 - [x] CW-01: Implement `Cwitter` auth-aware baseline.
 - [x] CW-02: Derive and implement the minimum user-management additions needed for mention/DM.
 - [x] AU-04: Add message-delivery SPI with stub-backed password reset and optional 2FA.
+- [x] CW-03: Run Cwitter manually and complete the provider-page reuse/minimal-code sample direction.
+- [x] PH-16H: Harden runtime surfaces discovered by Cwitter manual use.
+- [x] PK-16: Support repository-resolved component CAR startup beside SAR deployment.
 
 ## 6. Next Candidates
 
-- CW-03: Run Cwitter manually, capture real-use UX/runtime issues, and fix them without adding a separate profile model.
 - NP-1601: Provider replacement and multiple-provider precedence beyond the first provider baseline.
 - NP-1602: Real email/SMS message-delivery providers after the stub-backed message-delivery path is stable.
 - NP-1603: External identity/federation after the built-in Web session baseline is complete.
 
-## 7. References
+## 7. Closure Verification
+
+Closed on Apr. 26, 2026 after the following checks:
+
+- CNCF `sbt --batch Test/compile`
+- CNCF focused executable specs:
+  - `org.goldenport.cncf.subsystem.GenericSubsystemDescriptorSpec`
+  - `org.goldenport.cncf.cli.CncfRuntimeConfigFileSpec`
+  - `org.goldenport.cncf.component.repository.ComponentRepositoryCarSpec`
+  - `org.goldenport.cncf.http.WebDescriptorSpec`
+- Cwitter `sbt --batch "component/cozyBuildCAR" "subsystem/cozyBuildSAR"`
+- Cwitter smoke server startup on port `19533`
+- Cwitter smoke Web entrypoints:
+  - `/web/cwitter`
+  - `/web/textus-user-account/signup?returnTo=/web/cwitter`
+  - `/web/textus-user-account/signin?returnTo=/web/cwitter`
+  - `/web/textus-user-account/password-reset?returnTo=/web/cwitter`
+
+The local smoke server required non-sandbox execution to bind/connect to the
+localhost port.
+
+## 8. References
 
 - `docs/phase/phase-15.md`
 - `docs/design/management-console.md`

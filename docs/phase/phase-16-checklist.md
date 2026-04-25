@@ -37,6 +37,10 @@ Phase 16 work proceeds in this order:
    mention/DM.
 6. AU-04 adds message-delivery SPI plus stub-backed password reset and optional
    2FA.
+7. CW-03 validates the minimal Cwitter sample manually and removes duplicated
+   app-owned account pages.
+8. PH-16H hardens runtime surfaces discovered through manual use.
+9. PK-16 adds repository-resolved component CAR startup beside SAR deployment.
 
 This order keeps the auth boundary CNCF-owned and avoids hard-wiring `Cwitter`
 directly to provider internals.
@@ -234,8 +238,9 @@ authentication without adding a second auth abstraction.
       `textus-user-account`.
 - [x] Implement optional email-backed 2FA enrollment and login challenge in
       `textus-user-account`.
-- [x] Update account Web UI wording to use `Handle`, `Handle or Email`, and
-      explicit field help.
+- [x] Keep provider-owned account Web UI generic: `Login name` and
+      `Login name or Email` are provider wording; `handle` remains a
+      Cwitter-side projection.
 - [x] Add executable coverage for message-delivery runtime wiring, password reset,
       and 2FA challenge behavior.
 
@@ -259,6 +264,124 @@ authentication without adding a second auth abstraction.
 
 ---
 
+## CW-03: Cwitter Manual Stabilization and Provider Page Reuse
+
+Status: DONE
+
+### Objective
+
+Validate the Cwitter sample through manual browser use while keeping the sample
+intentionally small and provider-page based.
+
+### Detailed Tasks
+
+- [x] Remove duplicated Cwitter-owned signup/signin/reset/2FA pages.
+- [x] Use provider routes directly for account flows.
+- [x] Keep Cwitter focused on timeline, post, mention, and direct-message
+      behavior.
+- [x] Keep `handle = loginName` as a Cwitter projection, not a provider field.
+- [x] Document minimal sample vs advanced sample positioning.
+- [x] Add scripts and docs for CAR-mode and SAR-mode manual startup.
+
+### Expected Outcome
+
+- Cwitter demonstrates how little app-specific code is needed when account UI,
+  auth/session restoration, message delivery, and runtime plumbing are shared.
+- Provider-owned common pages remain reusable as-is, with only light descriptor
+  customization where needed.
+
+### Guardrails
+
+- No Cwitter-specific account page copy.
+- No separate Cwitter profile model.
+- No provider-core `handle` or `nickname` field.
+
+---
+
+## PH-16H: Runtime Hardening From Manual Use
+
+Status: DONE
+
+### Objective
+
+Close runtime correctness and operability gaps discovered while exercising
+Cwitter through the shared CNCF runtime.
+
+### Detailed Tasks
+
+- [x] Add structured error display based on `Conclusion` detail codes.
+- [x] Improve admin/manual pages so raw records are secondary and human summary
+      is primary.
+- [x] Complete baseline admin navigation for entity/data/view/aggregate surfaces.
+- [x] Add production admin authorization with privilege ceiling and role policy.
+- [x] Add working-set policy support with CML/config/code resolution and
+      explicit working-set/store search behavior.
+- [x] Add async working-set startup fallback to direct store search while
+      initialization is in progress.
+- [x] Add debug trace-job metadata and job-specific calltree retention policy.
+- [x] Add shared Web theme support and provider common page light customization.
+- [x] Add locale/time-zone aware display formatting through runtime/session
+      context.
+- [x] Enforce runtime lifecycle audit defaults for `createdAt`, `updatedAt`,
+      `createdBy`, and `updatedBy`.
+
+### Expected Outcome
+
+- Cwitter-driven flows expose production-relevant runtime behavior without
+  requiring app-specific quick hacks.
+- Debug, admin, error, working-set, and Web composition surfaces are reusable
+  CNCF capabilities.
+
+### Guardrails
+
+- Keep app business logic free of provider SDKs and runtime debug plumbing.
+- Do not make production admin reachable by role alone; privilege remains the
+  final ceiling.
+- Keep CallTree/debug-job behavior opt-in or policy-based.
+
+---
+
+## PK-16: Repository-Resolved Component CAR Startup
+
+Status: DONE
+
+### Objective
+
+Allow a single application component CAR to run as a deemed subsystem while
+resolving standard provider component CARs from repository search sources, and
+keep SAR deployment as the deployment-level override surface.
+
+### Detailed Tasks
+
+- [x] Package component-local `web/*` resources into CAR.
+- [x] Package component-local `assembly-descriptor.*` defaults into CAR.
+- [x] Resolve application component CARs by `name + version` from the component
+      repository.
+- [x] Resolve provider component CAR dependencies from the standard repository
+      or local `repository.d`.
+- [x] Merge component CAR assembly defaults with SAR descriptors and SAR
+      assembly overrides by field.
+- [x] Keep provider component CARs separate; do not invent a composite CAR
+      artifact format.
+- [x] Document Cwitter CAR-mode and SAR-mode startup.
+
+### Expected Outcome
+
+- `cncf --textus.component=cwitter server` can run a repository-deployed
+  application component CAR as a deemed subsystem.
+- `cncf --textus.subsystem=cwitter server` can run the SAR and override only
+  deployment-specific assembly fields.
+- Local development can use `repository.d` staging until the standard component
+  repository is populated.
+
+### Guardrails
+
+- CAR remains a single component archive.
+- SAR remains the subsystem/deployment packaging unit.
+- Provider component CARs are resolved, not embedded.
+
+---
+
 ## Deferred / Out-of-Scope Notes
 
 - External identity federation.
@@ -267,3 +390,27 @@ authentication without adding a second auth abstraction.
 - Real email/SMS message-delivery providers.
 - Multiple-provider precedence beyond the first provider baseline.
 - Separate profile/domain expansion for `Cwitter`.
+
+---
+
+## Closure Verification
+
+Status: DONE
+
+Closed on Apr. 26, 2026 after:
+
+- [x] CNCF `sbt --batch Test/compile`
+- [x] CNCF focused executable specs:
+      `GenericSubsystemDescriptorSpec`,
+      `CncfRuntimeConfigFileSpec`,
+      `ComponentRepositoryCarSpec`, and
+      `WebDescriptorSpec`
+- [x] Cwitter `sbt --batch "component/cozyBuildCAR" "subsystem/cozyBuildSAR"`
+- [x] Cwitter smoke server startup on port `19533`
+- [x] Cwitter smoke Web entrypoints:
+      `/web/cwitter`,
+      `/web/textus-user-account/signup?returnTo=/web/cwitter`,
+      `/web/textus-user-account/signin?returnTo=/web/cwitter`, and
+      `/web/textus-user-account/password-reset?returnTo=/web/cwitter`
+
+Note: local HTTP bind/connect checks required non-sandbox execution.
