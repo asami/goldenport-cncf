@@ -110,6 +110,9 @@ Phase 17 implementation proceeds in this order:
 7. Implement SimpleEntity storage-shape rules in SS-05.
 8. Expose storage-shape decisions in manual/admin/projections in SS-06.
 
+The SS-05 target storage policy is defined in
+`docs/design/simpleentity-storage-shape-policy.md`.
+
 ## Compatibility
 
 Existing `toRecord` / `fromRecord` methods remain compatibility surfaces during
@@ -132,5 +135,6 @@ with optional field filtering.
 
 - `docs/phase/phase-17.md`
 - `docs/phase/phase-17-checklist.md`
+- `docs/design/simpleentity-storage-shape-policy.md`
 - `docs/journal/2026/04/simpleentity-db-storage-shape-note.md`
 - `src/main/scala/org/goldenport/cncf/entity/EntityPersistent.scala`

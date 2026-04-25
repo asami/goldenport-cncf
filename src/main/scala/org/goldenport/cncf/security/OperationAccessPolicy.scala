@@ -6,6 +6,7 @@ import org.goldenport.record.Record
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.entity.EntityPersistent
+import org.goldenport.cncf.entity.SimpleEntityStorageShapePolicy
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization
 import org.simplemodeling.model.datatype.EntityId
@@ -547,7 +548,7 @@ object OperationAccessPolicy {
     record: Record,
     preferred: Option[SecurityAttributes] = None
   ): Option[SecurityAttributes] =
-    preferred.orElse(SecurityAttributes.fromRecord(record))
+    preferred.orElse(SimpleEntityStorageShapePolicy.securityAttributesFromRecord(record))
 
   private def _subject(using ctx: ExecutionContext): SecuritySubject =
     SecuritySubject.current

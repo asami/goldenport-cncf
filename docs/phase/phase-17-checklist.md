@@ -38,9 +38,11 @@ Phase 17 work proceeds in this order:
    migration.
 6. SS-04 introduces typed SimpleEntity security/permission access so
    authorization stops depending on generic record-path lookup.
-7. SS-05 implements the storage-shape policy for management fields, permission,
-   and nested/repeated values.
-8. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
+7. SS-05A fixes the storage-shape policy in design/spec.
+8. SS-05B implements the storage-shape policy for management fields,
+   permission, and nested/repeated values.
+9. SS-05C adds executable coverage for the target storage shape.
+10. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
 
 This order avoids changing DB record shape before Record purpose, API boundary,
 and security access boundary are clear.
@@ -262,22 +264,23 @@ Stop making SimpleEntity authorization depend on generic `Record` path shape.
 
 ---
 
-## SS-05: SimpleEntity Storage-Shape Policy
+## SS-05A: SimpleEntity Storage-Shape Policy Spec
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
-Define and implement the default SimpleEntity DB storage rules.
+Define the default SimpleEntity DB storage-shape rules before implementation.
 
 ### Detailed Tasks
 
-- [ ] Define built-in management field expansion set.
-- [ ] Keep lifecycle, owner/group, state, and operational management fields queryable where required.
-- [ ] Store `permission` as a compact encoded field by default.
-- [ ] Encode semantically independent value objects by default.
-- [ ] Encode repeated value objects by default unless promoted by explicit model metadata.
-- [ ] Add specs for management expansion, permission compression, independent value encoding, and repeated value encoding.
+- [x] Add `docs/design/simpleentity-storage-shape-policy.md`.
+- [x] Define built-in management field expansion set.
+- [x] Keep lifecycle, owner/group, state, and operational management fields queryable where required.
+- [x] Store `permission` as compact JSON text by default.
+- [x] Encode semantically independent value objects as JSON text by default.
+- [x] Encode repeated value objects as JSON array text by default unless promoted by explicit model metadata.
+- [x] Record required SS-05B/SS-05C executable coverage.
 
 ### Expected Outcome
 
@@ -289,6 +292,76 @@ Define and implement the default SimpleEntity DB storage rules.
 
 - Do not make every value object queryable by physical flattening.
 - Do not implement Blob payload storage here.
+- Do not add runtime APIs or DB migration in SS-05A.
+
+---
+
+## SS-05B: SimpleEntity Storage-Shape Policy Implementation
+
+Status: DONE
+
+### Objective
+
+Implement the policy fixed in SS-05A.
+
+### Detailed Tasks
+
+- [x] Apply expanded management/security identity target names in runtime store records.
+- [x] Store permission rights as compact JSON text in `permission`.
+- [x] Keep typed authorization independent of expanded permission record paths.
+- [x] Keep legacy `securityAttributes` / `security_attributes.rights` as read compatibility input.
+- [x] Normalize runtime-created management/security fields to target snake_case names.
+- [x] Defer generated independent/repeated value encoding to SS-05C coverage and follow-up implementation if needed.
+
+### Implementation Notes
+
+- `SimpleEntityStorageShapePolicy` owns target field names, permission JSON
+  encoding/decoding, and compatibility security extraction.
+- `EntityCreateDefaultsPolicy` writes runtime create defaults using target
+  snake_case field names and compact `permission`.
+- `EntityStore` save/update/delete complement paths write runtime management
+  fields using target snake_case names.
+- `OperationAccessPolicy` resolves compact target permission through typed
+  security extraction rather than expanded permission record paths.
+
+### Expected Outcome
+
+- Runtime storage records follow the SS-05A target shape.
+- Existing compatibility inputs remain readable where required.
+
+### Guardrails
+
+- Do not silently coerce unsupported scalar types to `String`.
+- Do not remove compatibility bridges without a separate migration plan.
+- Do not treat SS-05B as generator-wide storage-shape migration.
+
+---
+
+## SS-05C: Storage-Shape Executable Coverage
+
+Status: PLANNED
+
+### Objective
+
+Lock the implemented SS-05B behavior with executable specs.
+
+### Detailed Tasks
+
+- [ ] Add specs proving management fields are expanded.
+- [ ] Add specs proving permission is compact JSON text.
+- [ ] Add specs proving typed authorization works from compact permission.
+- [ ] Add specs proving independent value objects are encoded.
+- [ ] Add specs proving repeated value objects are encoded.
+- [ ] Add specs proving promoted child/entity storage is not flattened into the parent.
+- [ ] Add generated-code specs for CML-derived storage shape.
+
+### Expected Outcome
+
+- The target storage shape is executable documentation, not only prose.
+
+### Guardrails
+
+- Specs must describe behavior, not generated-code incidental details.
 
 ---
 

@@ -10,8 +10,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Apr. 13, 2026
- *  version Apr. 20, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
@@ -28,7 +27,8 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
         EntityCreateOptions.default
       )
 
-      targetRecord.getString("shortid") shouldBe Some(entityId.parts.entropy)
+      targetRecord.getString("short_id") shouldBe Some(entityId.parts.entropy)
+      targetRecord.getString("shortid") shouldBe None
     }
 
     "complement lifecycle audit fields as Instant and non-optional updater fields" in {
@@ -45,8 +45,10 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
 
       _any(targetRecord, "createdAt", "created_at") shouldBe a[Instant]
       _any(targetRecord, "updatedAt", "updated_at") shouldBe a[Instant]
-      targetRecord.getString("createdBy").orElse(targetRecord.getString("created_by")) shouldBe Some("test_user_principal")
-      targetRecord.getString("updatedBy").orElse(targetRecord.getString("updated_by")) shouldBe Some("test_user_principal")
+      targetRecord.getString("created_by") shouldBe Some("test_user_principal")
+      targetRecord.getString("updated_by") shouldBe Some("test_user_principal")
+      targetRecord.getString("createdBy") shouldBe None
+      targetRecord.getString("updatedBy") shouldBe None
     }
 
     "preserve explicitly supplied shortid create value" in {
@@ -60,7 +62,8 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
         EntityCreateOptions.default
       )
 
-      targetRecord.getString("shortid") shouldBe Some("manual-shortid")
+      targetRecord.getString("short_id") shouldBe Some("manual-shortid")
+      targetRecord.getString("shortid") shouldBe None
     }
 
     "override create defaults by entity collection" in {
@@ -94,6 +97,9 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
       rights.flatMap(_.getRecord("owner")).flatMap(_.getBoolean("execute")) shouldBe Some(false)
       rights.flatMap(_.getRecord("other")).flatMap(_.getBoolean("read")) shouldBe Some(false)
       rights.flatMap(_.getRecord("other")).flatMap(_.getBoolean("execute")) shouldBe Some(false)
+      targetRecord.getRecord("rights") shouldBe None
+      targetRecord.getRecord("securityAttributes") shouldBe None
+      targetRecord.getRecord("security_attributes") shouldBe None
     }
 
     "support public-read create defaults for cms-like entities" in {
@@ -289,7 +295,10 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
   }
 
   private def _rights(record: Record): Option[Record] =
-    record.getRecord("rights")
+    record.getString("permission")
+      .flatMap(SimpleEntityStorageShapePolicy.permissionRightsFromJson)
+      .map(_.toRecord)
+      .orElse(record.getRecord("rights"))
       .orElse(record.getRecord("security_attributes").flatMap(_.getRecord("rights")))
       .orElse(record.getRecord("securityAttributes").flatMap(_.getRecord("rights")))
 

@@ -21,8 +21,7 @@ import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
  *  version Jan. 10, 2026
  *  version Feb. 26, 2026
  *  version Mar. 30, 2026
- *  version Apr. 24, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -595,23 +594,22 @@ class StandardEntityStore(
     val zonednow = java.time.ZonedDateTime.now(ctx.clock.withZone(ctx.timezone))
     val principalid = ctx.security.principal.id.value
     val principal = principalid
-    val propertyname = ctx.runtime.context.propertyName
     val defaults = Vector.newBuilder[(String, Any)]
     val existingmap = existing.map(_.asMap).getOrElse(Map.empty)
-    val knownkeys = record.keySet ++ existingmap.keySet
-
-    def key(canonical: String): String =
-      propertyname.preferredName(knownkeys, canonical)
 
     def add_if_missing(canonical: String, value: => Option[Any]): Unit =
-      if (!propertyname.aliases(canonical).exists(record.keySet.contains))
-        value.foreach(v => defaults += (key(canonical) -> v))
+      SimpleEntityStorageShapePolicy.value(record, canonical) match {
+        case Some(current) =>
+          defaults += (SimpleEntityStorageShapePolicy.targetName(canonical) -> current)
+        case None =>
+          value.foreach(v => defaults += (SimpleEntityStorageShapePolicy.targetName(canonical) -> v))
+      }
 
     def add_or_replace(canonical: String, value: => Option[Any]): Unit =
-      value.foreach(v => defaults += (key(canonical) -> v))
+      value.foreach(v => defaults += (SimpleEntityStorageShapePolicy.targetName(canonical) -> v))
 
     def existing_value(canonical: String): Option[Any] =
-      propertyname.aliases(canonical).collectFirst(Function.unlift(existingmap.get))
+      existing.flatMap(SimpleEntityStorageShapePolicy.value(_, canonical))
 
     if (includesCreationDefaults) {
       add_if_missing("id", existing_value("id").orElse(Some(id.print)))
@@ -631,13 +629,17 @@ class StandardEntityStore(
       add_if_missing("publishAt", existing_value("publishAt").orElse(Some(zonednow)))
       add_if_missing("publicAt", existing_value("publicAt").orElse(Some(zonednow)))
       add_if_missing("publishedBy", existing_value("publishedBy").orElse(Some(principal)))
-      add_if_missing("securityAttributes", existing_value("securityAttributes").orElse(Some(_public_security_attributes(principal))))
+      val security = org.simplemodeling.model.value.SecurityAttributes.publicOwnedBy(principal)
+      add_if_missing("ownerId", existing_value("ownerId").orElse(Some(security.ownerId.id.value)))
+      add_if_missing("groupId", existing_value("groupId").orElse(Some(security.groupId.id.value)))
+      add_if_missing("privilegeId", existing_value("privilegeId").orElse(Some(security.privilegeId.id.value)))
+      add_if_missing("permission", Some(SimpleEntityStorageShapePolicy.permissionJson(security.rights)))
     }
     add_if_missing("traceId", Some(ctx.observability.traceId.value))
     add_if_missing("correlationId", ctx.observability.correlationId.map(_.value))
 
     val complement = Record.dataAuto(defaults.result()*)
-    complement ++ record
+    complement ++ SimpleEntityStorageShapePolicy.withoutManagedFields(record)
   }
 
   private def _default_post_status(
@@ -648,36 +650,23 @@ class StandardEntityStore(
     else
       PostStatus.default
 
-  private def _public_security_attributes(
-    principal: String
-  ): Record =
-    org.simplemodeling.model.value.SecurityAttributes.publicOwnedBy(principal).toRecord
-
   private def _soft_delete_record(
     existing: Record
   )(using ctx: ExecutionContext): Record = {
     val now = java.time.Instant.now(ctx.clock)
     val principalid = ctx.security.principal.id.value
     val principal = principalid
-    val keyset = existing.keySet
-    val propertyname = ctx.runtime.context.propertyName
-
-    def key(canonical: String): String =
-      propertyname.preferredName(keyset, canonical)
-
     val base = Vector.newBuilder[(String, Any)]
-    base += key("postStatus") -> PostStatus.Archived
-    base += key("aliveness") -> Aliveness.Dead
-    base += key("updatedAt") -> now
-    base += key("updatedBy") -> principal
-    base += key("traceId") -> ctx.observability.traceId.value
+    base += SimpleEntityStorageShapePolicy.targetName("postStatus") -> PostStatus.Archived
+    base += SimpleEntityStorageShapePolicy.targetName("aliveness") -> Aliveness.Dead
+    base += SimpleEntityStorageShapePolicy.targetName("updatedAt") -> now
+    base += SimpleEntityStorageShapePolicy.targetName("updatedBy") -> principal
+    base += SimpleEntityStorageShapePolicy.targetName("traceId") -> ctx.observability.traceId.value
     ctx.observability.correlationId.foreach { x =>
-      base += key("correlationId") -> x.value
+      base += SimpleEntityStorageShapePolicy.targetName("correlationId") -> x.value
     }
-    if (propertyname.aliases("deletedAt").exists(keyset.contains))
-      base += key("deletedAt") -> now
-    if (propertyname.aliases("deletedBy").exists(keyset.contains))
-      base += key("deletedBy") -> principal
+    base += SimpleEntityStorageShapePolicy.targetName("deletedAt") -> now
+    base += SimpleEntityStorageShapePolicy.targetName("deletedBy") -> principal
     Record.dataAuto(base.result()*)
   }
 

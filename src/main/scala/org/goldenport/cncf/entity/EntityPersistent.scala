@@ -41,7 +41,7 @@ trait EntityPersistent[E] extends RecordCodex[E]
   }
 
   def securityAttributes(e: E): Option[SecurityAttributes] =
-    SecurityAttributes.fromRecord(toRecord(e))
+    SimpleEntityStorageShapePolicy.securityAttributesFromRecord(toStoreRecord(e))
 
   def authorizationRecord(e: E): Record = {
     val base = toRecord(e)
@@ -51,7 +51,12 @@ trait EntityPersistent[E] extends RecordCodex[E]
   def authorizationRecord(e: E, base: Record): Record =
     securityAttributes(e) match {
       case Some(attributes) =>
-        EntityPersistent.withoutSecurityAttributes(base) ++ Record.dataAuto("security_attributes" -> attributes.toRecord)
+        EntityPersistent.withoutSecurityAttributes(base) ++ Record.dataAuto(
+          "owner_id" -> attributes.ownerId.id.value,
+          "group_id" -> attributes.groupId.id.value,
+          "privilege_id" -> attributes.privilegeId.id.value,
+          "permission" -> SimpleEntityStorageShapePolicy.permissionJson(attributes.rights)
+        )
       case None =>
         base
     }
@@ -59,7 +64,7 @@ trait EntityPersistent[E] extends RecordCodex[E]
 
 object EntityPersistent {
   def withoutSecurityAttributes(record: Record): Record =
-    Record(record.fields.filterNot(field => _normalized_field_name(field.key) == "securityattributes"))
+    SimpleEntityStorageShapePolicy.withoutSecurityFields(record)
 
   def derived[E <: EntityPersistable](
     from: Record => Consequence[E]

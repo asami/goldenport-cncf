@@ -13,8 +13,7 @@ import org.goldenport.datatype.{Identifier, ObjectId}
  * This is CNCF runtime policy, not a simplemodeling-model concern.
  *
  * @since   Apr. 13, 2026
- *  version Apr. 20, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityCreateDefaultsPolicy {
@@ -164,29 +163,28 @@ object EntityCreateDefaultsPolicy {
       val groupid = groupIdSelector.groupId(defaultscontext, ownerid)
       val tenantid = tenantIdSelector.tenantId(defaultscontext)
       val organizationid = organizationIdSelector.organizationId(defaultscontext)
-      val propertyname = ctx.runtime.context.propertyName
       val defaults = Vector.newBuilder[(String, Any)]
-      val knownkeys = record.keySet
-
-      def key(canonical: String): String =
-        propertyname.preferredName(knownkeys, canonical)
 
       def add_if_missing(canonical: String, value: => Option[Any]): Unit =
-        if (!propertyname.aliases(canonical).exists(record.keySet.contains))
-          value.foreach(v => defaults += (key(canonical) -> v))
+        SimpleEntityStorageShapePolicy.value(record, canonical) match {
+          case Some(current) =>
+            defaults += (SimpleEntityStorageShapePolicy.targetName(canonical) -> current)
+          case None =>
+            value.foreach(v => defaults += (SimpleEntityStorageShapePolicy.targetName(canonical) -> v))
+        }
 
       def add_or_replace_generated_default(
         canonical: String,
         value: => Option[Any],
         isGeneratedDefault: Any => Boolean
       ): Unit = {
-        val current = propertyname.aliases(canonical).iterator.flatMap(record.getAny).map(_single_value).toVector.headOption
+        val current = SimpleEntityStorageShapePolicy.value(record, canonical)
         if (current.forall(isGeneratedDefault))
-          value.foreach(v => defaults += (key(canonical) -> v))
+          value.foreach(v => defaults += (SimpleEntityStorageShapePolicy.targetName(canonical) -> v))
       }
 
       def add_or_replace(canonical: String, value: => Option[Any]): Unit =
-        value.foreach(v => defaults += (key(canonical) -> v))
+        value.foreach(v => defaults += (SimpleEntityStorageShapePolicy.targetName(canonical) -> v))
 
       add_if_missing("id", Some(id.print))
       add_if_missing("shortid", Some(id.parts.entropy))
@@ -198,15 +196,18 @@ object EntityCreateDefaultsPolicy {
       add_or_replace("postStatus", Some(PostStatus.Published))
       add_if_missing("aliveness", Some(Aliveness.default))
       val security = _default_security_attributes(ownerid, groupid, options)
-      val generatedsecuritydefault = _has_generated_security_default(record, propertyname)
+      val generatedsecuritydefault = _has_generated_security_default(record)
+      val existingsecurity = SimpleEntityStorageShapePolicy.securityAttributesFromRecord(record)
       add_or_replace_generated_default("ownerId", Some(security.ownerId.id.value), _is_system_or_unknown)
       add_or_replace_generated_default("groupId", Some(security.groupId.id.value), _is_system_or_unknown)
       add_if_missing("tenantId", tenantid)
       add_if_missing("organizationId", organizationid)
-      if (generatedsecuritydefault)
-        add_or_replace("rights", Some(security.rights.toRecord))
-      else
-        add_if_missing("rights", Some(security.rights.toRecord))
+      val rights =
+        if (generatedsecuritydefault)
+          security.rights
+        else
+          existingsecurity.map(_.rights).getOrElse(security.rights)
+      add_or_replace("permission", Some(SimpleEntityStorageShapePolicy.permissionJson(rights)))
       add_or_replace_generated_default("privilegeId", Some(security.privilegeId.id.value), _is_system_or_unknown)
       options.defaultValues.fields.foreach { field =>
         add_if_missing(field.key, Some(field.value.single))
@@ -220,7 +221,8 @@ object EntityCreateDefaultsPolicy {
       add_if_missing("correlationId", ctx.observability.correlationId.map(_.value))
 
       val defaultvalues = defaults.result()
-      Record.dataAuto((record.asMap ++ defaultvalues.toMap).toSeq*)
+      val base = SimpleEntityStorageShapePolicy.withoutManagedFields(record)
+      Record.dataAuto((base.asMap ++ defaultvalues.toMap).toSeq*)
     }
 
     private def _default_security_attributes(
@@ -247,11 +249,10 @@ object EntityCreateDefaultsPolicy {
     }
 
     private def _has_generated_security_default(
-      record: Record,
-      propertyName: org.goldenport.cncf.context.RuntimeContext.PropertyNameContext
+      record: Record
     ): Boolean = {
       def first(canonical: String): Option[Any] =
-        propertyName.aliases(canonical).iterator.flatMap(record.getAny).map(_single_value).toVector.headOption
+        SimpleEntityStorageShapePolicy.value(record, canonical)
       first("ownerId").exists(_is_system_or_unknown) &&
         first("groupId").exists(_is_system_or_unknown) &&
         first("privilegeId").exists(_is_system_or_unknown)

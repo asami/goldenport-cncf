@@ -56,7 +56,9 @@ Current semantic direction:
 - C2 (DONE): SS-03B — Add and use the View Record boundary API for entity presentation.
 - C3 (DONE): SS-03C — Classify remaining Logic Record call sites for typed-access migration.
 - D (DONE): SS-04 — Add typed SimpleEntity security/permission access for authorization.
-- E (PLANNED): SS-05 — Define and implement SimpleEntity storage-shape policy for management fields, permission, and nested values.
+- E1 (DONE): SS-05A — Fix SimpleEntity storage-shape policy in design/spec.
+- E2 (DONE): SS-05B — Implement SimpleEntity storage-shape policy.
+- E3 (PLANNED): SS-05C — Add storage-shape executable coverage.
 - F (PLANNED): SS-06 — Expose storage-shape metadata in manual/admin/projection surfaces.
 
 Current note:
@@ -77,7 +79,9 @@ Current note:
 - [x] SS-03B: Add and use the View Record boundary API for entity presentation.
 - [x] SS-03C: Classify remaining Logic Record call sites for typed-access migration.
 - [x] SS-04: Add typed SimpleEntity security/permission access for authorization.
-- [ ] SS-05: Define and implement SimpleEntity storage-shape policy for management fields, permission, and nested values.
+- [x] SS-05A: Fix SimpleEntity storage-shape policy in design/spec.
+- [x] SS-05B: Implement SimpleEntity storage-shape policy.
+- [ ] SS-05C: Add storage-shape executable coverage.
 - [ ] SS-06: Expose storage-shape metadata in manual/admin/projection surfaces.
 
 ## 6. Next Phase Candidates
@@ -92,6 +96,7 @@ Current note:
 - `docs/journal/2026/04/simpleentity-default-authorization-model-note.md`
 - `docs/journal/2026/04/entity-authorization-implementation-2026-04-13.md`
 - `docs/design/record-purpose-taxonomy.md`
+- `docs/design/simpleentity-storage-shape-policy.md`
 - `src/main/scala/org/goldenport/cncf/entity/EntityPersistent.scala`
 - `src/main/scala/org/goldenport/cncf/entity/EntityStore.scala`
 - `src/main/scala/org/goldenport/cncf/security/OperationAccessPolicy.scala`
