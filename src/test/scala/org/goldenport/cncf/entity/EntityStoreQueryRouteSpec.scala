@@ -1,16 +1,18 @@
 package org.goldenport.cncf.entity
 
+import java.nio.file.Files
 import java.time.Instant
 import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, TraceId}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
+import org.goldenport.cncf.datastore.sql.SqlDataStore
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.directive.Query
 import org.simplemodeling.model.directive.{Condition, Update}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
-import org.goldenport.record.Record
+import org.goldenport.record.{Record, RecordPresentable}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -235,6 +237,35 @@ final class EntityStoreQueryRouteSpec
       Then("both paths use fromStoreRecord instead of the compatibility decoder")
       loaded.map(_.map(_.name)) shouldBe Consequence.success(Some("decoded-from-store"))
       result.map(_.data.map(_.name)) shouldBe Consequence.success(Vector("decoded-from-store"))
+    }
+
+    "preserve parent-owned value objects through toStoreRecord and fromStoreRecord" in {
+      Given("an entity whose store record contains owned single and repeated value objects")
+      val collectionid = EntityCollectionId("test", "a", "owned_value_entity")
+      val path = Files.createTempFile("cncf-owned-value-entity", ".db").toString
+      val datastorespace = new DataStoreSpace().addDataStore(SqlDataStore.sqlite(path))
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistent[OwnedValueEntity] = _owned_value_persistent
+
+      val id = EntityId("test", "owned_value_1", collectionid)
+      val entity = OwnedValueEntity(
+        id = id,
+        name = "owned-value",
+        address = OwnedAddress("Tokyo", "100-0001"),
+        lines = Vector(OwnedLine("sku-1", 2), OwnedLine("sku-2", 1))
+      )
+
+      When("saving and loading through the entity-store route")
+      val saved = entitystorespace.save(UnitOfWorkOp.EntityStoreSave(entity, summon[EntityPersistent[OwnedValueEntity]]))
+      val loaded = for {
+        _ <- saved
+        x <- entitystorespace.load(UnitOfWorkOp.EntityStoreLoad(id, summon[EntityPersistent[OwnedValueEntity]]))
+      } yield x
+
+      Then("the persistent adapter explicitly owns value object storage decoding")
+      saved shouldBe Consequence.unit
+      loaded shouldBe Consequence.success(Some(entity))
     }
 
     "return empty result when collection has not been created yet" in {
@@ -1093,6 +1124,89 @@ private def _store_decode_persistent: EntityPersistent[StoreDecodeEntity] =
         case "name" => "store_name"
         case other => other
       }
+  }
+
+private final case class OwnedAddress(
+  city: String,
+  postalCode: String
+) extends RecordPresentable {
+  def toRecord(): Record =
+    Record.dataAuto(
+      "city" -> city,
+      "postal_code" -> postalCode
+    )
+}
+
+private final case class OwnedLine(
+  sku: String,
+  quantity: Int
+) extends RecordPresentable {
+  def toRecord(): Record =
+    Record.dataAuto(
+      "sku" -> sku,
+      "quantity" -> quantity
+    )
+}
+
+private final case class OwnedValueEntity(
+  id: EntityId,
+  name: String,
+  address: OwnedAddress,
+  lines: Vector[OwnedLine]
+) extends EntityPersistable {
+  def toRecord(): Record =
+    Record.dataAuto(
+      "id" -> id,
+      "name" -> name,
+      "address" -> address,
+      "lines" -> lines
+    )
+}
+
+private def _owned_value_persistent: EntityPersistent[OwnedValueEntity] =
+  new EntityPersistent[OwnedValueEntity] {
+    def id(e: OwnedValueEntity): EntityId = e.id
+    def toRecord(e: OwnedValueEntity): Record = e.toRecord()
+    def fromRecord(r: Record): Consequence[OwnedValueEntity] =
+      Consequence.argumentInvalid("presentation record decoder must not be used for owned value storage")
+    override def toStoreRecord(e: OwnedValueEntity): Record =
+      Record.dataAuto(
+        "id" -> e.id,
+        "name" -> e.name,
+        "address" -> e.address,
+        "lines" -> e.lines
+      )
+    override def fromStoreRecord(r: Record): Consequence[OwnedValueEntity] = {
+      val decoded = for {
+        id <- r.getAs[EntityId]("id")
+        name <- r.getString("name")
+        address <- r.getRecord("address").flatMap(_owned_address)
+        lines <- r.getVector("lines").map(_.collect { case rec: Record => rec }).map(_.flatMap(_owned_line))
+      } yield OwnedValueEntity(id, name, address, lines)
+      decoded match {
+        case Some(entity) => Consequence.success(entity)
+        case None => Consequence.argumentInvalid("invalid owned value storage record")
+      }
+    }
+  }
+
+private def _owned_address(record: Record): Option[OwnedAddress] =
+  for {
+    city <- record.getString("city")
+    postalCode <- record.getString("postal_code")
+  } yield OwnedAddress(city, postalCode)
+
+private def _owned_line(record: Record): Option[OwnedLine] =
+  for {
+    sku <- record.getString("sku")
+    quantity <- _int_value(record, "quantity")
+  } yield OwnedLine(sku, quantity)
+
+private def _int_value(record: Record, key: String): Option[Int] =
+  record.getAny(key).flatMap {
+    case n: java.lang.Number => Some(n.intValue)
+    case s: String => scala.util.Try(s.toDouble.toInt).toOption
+    case other => scala.util.Try(other.toString.toDouble.toInt).toOption
   }
 
 private final case class SaveCandidate(

@@ -6,7 +6,7 @@ import org.goldenport.convert.ValueReader
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.{Query as EntityQuery}
 import org.goldenport.cncf.datastore.sql.SqlDataStore
-import org.goldenport.record.Record
+import org.goldenport.record.{Record, RecordPresentable}
 import org.goldenport.test.matchers.ConsequenceMatchers
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 12, 2026
  *  version Mar. 12, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqliteDataStoreSpec
@@ -79,6 +79,73 @@ class SqliteDataStoreSpec
         case Consequence.Success(Some(r)) =>
           r.getInt("state") shouldBe Some(2)
           r.getInt("priority") shouldBe Some(10)
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+    }
+
+    "encode parent-owned single value objects as JSON text" in {
+      val path = Files.createTempFile("cncf-sqlite-value-object", ".db").toString
+      val datastore = SqlDataStore.sqlite(path)
+      val collection = DataStore.CollectionId("value_object")
+      val ctx = ExecutionContext.create()
+      given ExecutionContext = ctx
+
+      Given("a record with scalar columns and an owned address value object")
+      val entryid = DataStore.StringEntryId("vo1")
+      val record = Record.data(
+        "id" -> "vo1",
+        "name" -> "alice",
+        "address" -> AddressValue("Tokyo", "100-0001")
+      )
+
+      When("creating and loading the record")
+      datastore.create(collection, entryid, record) should be_success
+      val loaded = datastore.load(collection, entryid)
+
+      Then("scalar fields remain columns and the value object is decoded as record-like data")
+      loaded should be_success
+      loaded match {
+        case Consequence.Success(Some(r)) =>
+          r.getString("name") shouldBe Some("alice")
+          val address = r.getRecord("address").getOrElse(fail("address should be decoded as Record"))
+          address.getString("city") shouldBe Some("Tokyo")
+          address.getString("postal_code") shouldBe Some("100-0001")
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+    }
+
+    "encode parent-owned repeated value objects as JSON array text" in {
+      val path = Files.createTempFile("cncf-sqlite-value-object-array", ".db").toString
+      val datastore = SqlDataStore.sqlite(path)
+      val collection = DataStore.CollectionId("value_object_array")
+      val ctx = ExecutionContext.create()
+      given ExecutionContext = ctx
+
+      Given("a record with scalar columns and repeated owned line values")
+      val entryid = DataStore.StringEntryId("order1")
+      val record = Record.data(
+        "id" -> "order1",
+        "name" -> "order-a",
+        "lines" -> Vector(
+          LineValue("sku-1", 2),
+          LineValue("sku-2", 1)
+        )
+      )
+
+      When("creating and loading the record")
+      datastore.create(collection, entryid, record) should be_success
+      val loaded = datastore.load(collection, entryid)
+
+      Then("scalar fields remain columns and repeated values are decoded as record-like sequence data")
+      loaded should be_success
+      loaded match {
+        case Consequence.Success(Some(r)) =>
+          r.getString("name") shouldBe Some("order-a")
+          val lines = r.getVector("lines").getOrElse(fail("lines should be decoded as Vector"))
+          lines.collect { case rec: Record => rec.getString("sku") } shouldBe Vector(Some("sku-1"), Some("sku-2"))
+          lines.collect { case rec: Record => _int_value(rec, "quantity") } shouldBe Vector(Some(2), Some(1))
         case other =>
           fail(s"unexpected result: $other")
       }
@@ -219,9 +286,38 @@ class SqliteDataStoreSpec
       }
     }
   }
+
+  private def _int_value(record: Record, key: String): Option[Int] =
+    record.getAny(key).flatMap {
+      case n: java.lang.Number => Some(n.intValue)
+      case s: String => scala.util.Try(s.toDouble.toInt).toOption
+      case other => scala.util.Try(other.toString.toDouble.toInt).toOption
+    }
 }
 
 object SqliteDataStoreSpec {
+  final case class AddressValue(
+    city: String,
+    postalCode: String
+  ) extends RecordPresentable {
+    def toRecord(): Record =
+      Record.data(
+        "city" -> city,
+        "postal_code" -> postalCode
+      )
+  }
+
+  final case class LineValue(
+    sku: String,
+    quantity: Int
+  ) extends RecordPresentable {
+    def toRecord(): Record =
+      Record.data(
+        "sku" -> sku,
+        "quantity" -> quantity
+      )
+  }
+
   sealed abstract class CountryCode(
     val value: String,
     val dbValueValue: Int

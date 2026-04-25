@@ -44,8 +44,9 @@ Phase 17 work proceeds in this order:
    security identity, and permission.
 10. SS-05C-A adds typed security override regression specs.
 11. SS-05C-B adds runtime storage-shape coverage.
-12. SS-05C adds executable coverage for the remaining target storage shape.
-13. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
+12. SS-05C-C adds value object storage encoding coverage.
+13. SS-05C adds executable coverage for the remaining target storage shape.
+14. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
 
 This order avoids changing DB record shape before Record purpose, API boundary,
 and security access boundary are clear.
@@ -385,6 +386,7 @@ Lock the implemented SS-05B behavior with executable specs.
 
 - [x] SS-05C-A: Typed security override regression specs.
 - [x] SS-05C-B: Runtime storage-shape coverage.
+- [x] SS-05C-C: Value object storage encoding coverage.
 
 ### Detailed Tasks
 
@@ -392,8 +394,8 @@ Lock the implemented SS-05B behavior with executable specs.
 - [x] Add specs proving permission is compact JSON text.
 - [x] Add specs proving typed authorization works from compact permission.
 - [x] Add specs proving scalar domain attributes remain ordinary columns.
-- [ ] Add specs proving independent value objects are encoded.
-- [ ] Add specs proving repeated value objects are encoded.
+- [x] Add specs proving independent value objects are encoded.
+- [x] Add specs proving repeated value objects are encoded.
 - [ ] Add specs proving promoted child/entity storage is not flattened into the parent.
 - [ ] Add generated-code specs for CML-derived storage shape.
 - [ ] Add specs proving unsupported typed scalar values do not fall back to `String`.
@@ -405,6 +407,29 @@ Lock the implemented SS-05B behavior with executable specs.
 ### Guardrails
 
 - Specs must describe behavior, not generated-code incidental details.
+
+---
+
+## SS-05C-C: Value Object Storage Encoding Coverage
+
+Status: DONE
+
+### Objective
+
+Lock the SS-05A rule that parent-owned value objects are encoded inside the
+parent storage record.
+
+### Completed Tasks
+
+- [x] Prove single parent-owned value objects are encoded as JSON text by the SQL datastore path.
+- [x] Prove repeated parent-owned value objects are encoded as JSON array text by the SQL datastore path.
+- [x] Prove scalar domain fields in the same record remain ordinary columns.
+- [x] Prove `EntityPersistent.toStoreRecord` / `fromStoreRecord` own explicit value object storage decoding.
+
+### Guardrails
+
+- JSON encoding is for complex owned value containers, not unsupported scalar fallback.
+- Promoted child/entity storage and generated CML-derived shape remain follow-up SS-05C work.
 
 ---
 
