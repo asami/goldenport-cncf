@@ -21,7 +21,8 @@ import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
  *  version Jan. 10, 2026
  *  version Feb. 26, 2026
  *  version Mar. 30, 2026
- * @version Apr. 24, 2026
+ *  version Apr. 24, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -590,7 +591,8 @@ class StandardEntityStore(
     includesStateDefaults: Boolean,
     createOptions: EntityCreateOptions
   )(using ctx: ExecutionContext): Record = {
-    val now = java.time.ZonedDateTime.now(ctx.clock.withZone(ctx.timezone))
+    val now = java.time.Instant.now(ctx.clock)
+    val zonednow = java.time.ZonedDateTime.now(ctx.clock.withZone(ctx.timezone))
     val principalid = ctx.security.principal.id.value
     val principal = principalid
     val propertyname = ctx.runtime.context.propertyName
@@ -605,6 +607,9 @@ class StandardEntityStore(
       if (!propertyname.aliases(canonical).exists(record.keySet.contains))
         value.foreach(v => defaults += (key(canonical) -> v))
 
+    def add_or_replace(canonical: String, value: => Option[Any]): Unit =
+      value.foreach(v => defaults += (key(canonical) -> v))
+
     def existing_value(canonical: String): Option[Any] =
       propertyname.aliases(canonical).collectFirst(Function.unlift(existingmap.get))
 
@@ -616,15 +621,15 @@ class StandardEntityStore(
       add_if_missing("createdBy", existing_value("createdBy").orElse(Some(principal)))
     }
 
-    add_if_missing("updatedAt", Some(now))
-    add_if_missing("updatedBy", Some(principal))
+    add_or_replace("updatedAt", Some(now))
+    add_or_replace("updatedBy", Some(principal))
     if (includesStateDefaults) {
       add_if_missing("postStatus", existing_value("postStatus").orElse(Some(_default_post_status(createOptions))))
       add_if_missing("aliveness", existing_value("aliveness").orElse(Some(Aliveness.default)))
     }
     if (includesCreationDefaults && createOptions.hasDefaultProfile("publication")) {
-      add_if_missing("publishAt", existing_value("publishAt").orElse(Some(now)))
-      add_if_missing("publicAt", existing_value("publicAt").orElse(Some(now)))
+      add_if_missing("publishAt", existing_value("publishAt").orElse(Some(zonednow)))
+      add_if_missing("publicAt", existing_value("publicAt").orElse(Some(zonednow)))
       add_if_missing("publishedBy", existing_value("publishedBy").orElse(Some(principal)))
       add_if_missing("securityAttributes", existing_value("securityAttributes").orElse(Some(_public_security_attributes(principal))))
     }
@@ -632,7 +637,7 @@ class StandardEntityStore(
     add_if_missing("correlationId", ctx.observability.correlationId.map(_.value))
 
     val complement = Record.dataAuto(defaults.result()*)
-    record ++ complement
+    complement ++ record
   }
 
   private def _default_post_status(
@@ -651,7 +656,7 @@ class StandardEntityStore(
   private def _soft_delete_record(
     existing: Record
   )(using ctx: ExecutionContext): Record = {
-    val now = java.time.ZonedDateTime.now(ctx.clock.withZone(ctx.timezone))
+    val now = java.time.Instant.now(ctx.clock)
     val principalid = ctx.security.principal.id.value
     val principal = principalid
     val keyset = existing.keySet

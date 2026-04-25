@@ -1,5 +1,6 @@
 package org.goldenport.cncf.entity
 
+import java.time.Instant
 import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, TraceId}
@@ -16,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -382,6 +383,8 @@ final class EntityStoreQueryRouteSpec
       loaded.map(_.flatMap(_.getString("id"))) shouldBe Consequence.success(Some(created.TAKE.id.print))
       loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(Some("test-principal"))
       loaded.map(_.flatMap(_.getString("created_by"))) shouldBe Consequence.success(Some("test_principal"))
+      loaded.map(_.flatMap(r => r.getAny("createdAt").orElse(r.getAny("created_at"))).exists(_.isInstanceOf[Instant])) shouldBe Consequence.success(true)
+      loaded.map(_.flatMap(r => r.getAny("updatedAt").orElse(r.getAny("updated_at"))).exists(_.isInstanceOf[Instant])) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("post_status")).exists(_.toLowerCase.contains("published"))) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("aliveness")).exists(_.toLowerCase.contains("alive"))) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("trace_id")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
@@ -437,6 +440,7 @@ final class EntityStoreQueryRouteSpec
       loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(Some("jiro"))
       loaded.map(_.flatMap(_.getString("createdBy"))) shouldBe Consequence.success(Some("owner-x"))
       loaded.map(_.flatMap(r => r.getString("updatedBy").orElse(r.getString("updated_by")))) shouldBe Consequence.success(Some("test-principal"))
+      loaded.map(_.flatMap(r => r.getAny("updatedAt").orElse(r.getAny("updated_at"))).exists(_.isInstanceOf[Instant])) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(r => r.getString("postStatus").orElse(r.getString("post_status"))).exists(_.toLowerCase.contains("draft"))) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("aliveness")).exists(_.toLowerCase.contains("alive"))) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(r => r.getString("traceId").orElse(r.getString("trace_id"))).exists(_.nonEmpty)) shouldBe Consequence.success(true)
@@ -493,8 +497,58 @@ final class EntityStoreQueryRouteSpec
       loaded.map(_.flatMap(_.getString("createdBy"))) shouldBe Consequence.success(Some("owner-y"))
       loaded.map(_.flatMap(_.getString("postStatus"))) shouldBe Consequence.success(Some("Published"))
       loaded.map(_.flatMap(r => r.getString("updatedBy").orElse(r.getString("updated_by")))) shouldBe Consequence.success(Some("test-principal"))
+      loaded.map(_.flatMap(r => r.getAny("updatedAt").orElse(r.getAny("updated_at"))).exists(_.isInstanceOf[Instant])) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(r => r.getString("traceId").orElse(r.getString("trace_id"))).exists(_.nonEmpty)) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(r => r.getString("correlationId").orElse(r.getString("correlation_id"))).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+    }
+
+    "overwrite caller-supplied update audit fields on entity-store route" in {
+      Given("an existing record and an update payload containing spoofed audit fields")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistent[AuditSpoofUpdateCandidate] = _audit_spoof_update_candidate_persistent
+
+      val collectionid = EntityCollectionId("test", "a", "audit_spoof_update_candidate")
+      val id = EntityId("test", "qa", collectionid)
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(collectionid),
+              Record.dataAuto(
+                "id" -> id.print,
+                "name" -> "audit-target",
+                "updatedBy" -> "original"
+              )
+            )
+          )
+        )
+      )
+
+      When("updating through EntityStoreSpace")
+      val updated = entitystorespace.update(
+        UnitOfWorkOp.EntityStoreUpdate(
+          entity = AuditSpoofUpdateCandidate(
+            id = id,
+            updatedAt = Instant.EPOCH,
+            updatedBy = "attacker"
+          ),
+          tc = summon[EntityPersistent[AuditSpoofUpdateCandidate]]
+        )
+      )
+      val loaded = for {
+        _ <- updated
+        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
+        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec <- ds.load(cid, dsid)
+      } yield rec
+
+      Then("runtime audit fields win over caller-supplied values")
+      updated shouldBe Consequence.unit
+      loaded.map(_.flatMap(r => r.getString("updatedBy").orElse(r.getString("updated_by")))) shouldBe Consequence.success(Some("test-principal"))
+      loaded.map(_.flatMap(r => r.getAny("updatedAt").orElse(r.getAny("updated_at")))) should not be Consequence.success(Some(Instant.EPOCH))
     }
 
     "perform soft delete on entity-store route and keep record with lifecycle updates" in {
@@ -800,6 +854,26 @@ private def _update_candidate_persistent: EntityPersistent[UpdateCandidate] =
     def id(e: UpdateCandidate): EntityId = e.id
     def toRecord(e: UpdateCandidate): Record = e.toRecord()
     def fromRecord(r: Record): Consequence[UpdateCandidate] =
+      Consequence.notImplemented("not used in this spec")
+  }
+
+private final case class AuditSpoofUpdateCandidate(
+  id: EntityId,
+  updatedAt: Instant,
+  updatedBy: String
+) extends EntityPersistable {
+  def toRecord(): Record =
+    Record.dataAuto(
+      "updatedAt" -> updatedAt,
+      "updatedBy" -> updatedBy
+    )
+}
+
+private def _audit_spoof_update_candidate_persistent: EntityPersistent[AuditSpoofUpdateCandidate] =
+  new EntityPersistent[AuditSpoofUpdateCandidate] {
+    def id(e: AuditSpoofUpdateCandidate): EntityId = e.id
+    def toRecord(e: AuditSpoofUpdateCandidate): Record = e.toRecord()
+    def fromRecord(r: Record): Consequence[AuditSpoofUpdateCandidate] =
       Consequence.notImplemented("not used in this spec")
   }
 

@@ -1,5 +1,6 @@
 package org.goldenport.cncf.entity
 
+import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.record.Record
@@ -9,7 +10,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Apr. 13, 2026
- * @version Apr. 20, 2026
+ *  version Apr. 20, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
@@ -27,6 +29,24 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
       )
 
       targetRecord.getString("shortid") shouldBe Some(entityId.parts.entropy)
+    }
+
+    "complement lifecycle audit fields as Instant and non-optional updater fields" in {
+      given ExecutionContext = ExecutionContext.test()
+      given EntityPersistentCreate[TestCreate] = _persistent_create
+      val target = EntityCollectionId("test", "a", "target_entity")
+      val entityId = EntityId("test", "target", target)
+
+      val targetRecord = EntityCreateDefaultsPolicy.default.complementCreateRecord(
+        Record.dataAuto("name" -> "target"),
+        entityId,
+        EntityCreateOptions.default
+      )
+
+      _any(targetRecord, "createdAt", "created_at") shouldBe a[Instant]
+      _any(targetRecord, "updatedAt", "updated_at") shouldBe a[Instant]
+      targetRecord.getString("createdBy").orElse(targetRecord.getString("created_by")) shouldBe Some("test_user_principal")
+      targetRecord.getString("updatedBy").orElse(targetRecord.getString("updated_by")) shouldBe Some("test_user_principal")
     }
 
     "preserve explicitly supplied shortid create value" in {
@@ -272,6 +292,9 @@ final class EntityCreateDefaultsPolicySpec extends AnyWordSpec with Matchers {
     record.getRecord("rights")
       .orElse(record.getRecord("security_attributes").flatMap(_.getRecord("rights")))
       .orElse(record.getRecord("securityAttributes").flatMap(_.getRecord("rights")))
+
+  private def _any(record: Record, primary: String, secondary: String): Any =
+    record.getAny(primary).orElse(record.getAny(secondary)).getOrElse(fail(s"missing $primary/$secondary"))
 
   private def _custom_policy: EntityCreateDefaultsPolicy =
     new EntityCreateDefaultsPolicy {

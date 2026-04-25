@@ -13,7 +13,8 @@ import org.goldenport.datatype.{Identifier, ObjectId}
  * This is CNCF runtime policy, not a simplemodeling-model concern.
  *
  * @since   Apr. 13, 2026
- * @version Apr. 20, 2026
+ *  version Apr. 20, 2026
+ * @version Apr. 25, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityCreateDefaultsPolicy {
@@ -154,7 +155,8 @@ object EntityCreateDefaultsPolicy {
       id: EntityId,
       options: EntityCreateOptions
     )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Record = {
-      val now = java.time.ZonedDateTime.now(ctx.clock.withZone(ctx.timezone))
+      val now = java.time.Instant.now(ctx.clock)
+      val zonednow = java.time.ZonedDateTime.now(ctx.clock.withZone(ctx.timezone))
       val principalid = ctx.security.principal.id.value
       val principal = _identifier_text(principalid)
       val defaultscontext = Context(record, id, options, principalid, principal)
@@ -210,8 +212,8 @@ object EntityCreateDefaultsPolicy {
         add_if_missing(field.key, Some(field.value.single))
       }
       if (options.hasDefaultProfile("publication")) {
-        add_if_missing("publishAt", Some(now))
-        add_if_missing("publicAt", Some(now))
+        add_if_missing("publishAt", Some(zonednow))
+        add_if_missing("publicAt", Some(zonednow))
         add_if_missing("publishedBy", Some(principal))
       }
       add_if_missing("traceId", Some(ctx.observability.traceId.value))
