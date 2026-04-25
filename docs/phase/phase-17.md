@@ -51,7 +51,7 @@ Current semantic direction:
 ## 4. Current Work Stack
 
 - A (DONE): SS-01 — Define Record Purpose Taxonomy and boundary rules.
-- B (PLANNED): SS-02 — Formalize `EntityPersistent.toStoreRecord/fromStoreRecord` as the storage API.
+- B (DONE): SS-02 — Formalize `EntityPersistent.toStoreRecord/fromStoreRecord` as the storage API.
 - C (PLANNED): SS-03 — Classify and migrate CNCF storage call sites to purpose-specific APIs.
 - D (PLANNED): SS-04 — Add typed SimpleEntity security/permission access for authorization.
 - E (PLANNED): SS-05 — Define and implement SimpleEntity storage-shape policy for management fields, permission, and nested values.
@@ -70,7 +70,7 @@ Current note:
 ## 5. Development Items
 
 - [x] SS-01: Define Record Purpose Taxonomy and boundary rules.
-- [ ] SS-02: Formalize `EntityPersistent.toStoreRecord/fromStoreRecord` as the storage API.
+- [x] SS-02: Formalize `EntityPersistent.toStoreRecord/fromStoreRecord` as the storage API.
 - [ ] SS-03: Classify and migrate CNCF storage call sites to purpose-specific APIs.
 - [ ] SS-04: Add typed SimpleEntity security/permission access for authorization.
 - [ ] SS-05: Define and implement SimpleEntity storage-shape policy for management fields, permission, and nested values.

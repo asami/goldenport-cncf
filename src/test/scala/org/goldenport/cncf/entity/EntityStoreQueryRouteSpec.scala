@@ -17,7 +17,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -26,6 +27,23 @@ final class EntityStoreQueryRouteSpec
   with GivenWhenThen {
 
   private val _cid = EntityCollectionId("test", "a", "person")
+
+  "EntityPersistent store record contract" should {
+    "delegate default store APIs to RecordCodex compatibility methods" in {
+      Given("an old-style EntityPersistent implementation with only toRecord/fromRecord")
+      val id = EntityId("test", "old_style", _cid)
+      val entity = PersonEntity(id, "taro", 20)
+      val persistent = _person_persistent
+
+      When("calling the formal store APIs")
+      val storeRecord = persistent.toStoreRecord(entity)
+      val decoded = persistent.fromStoreRecord(storeRecord)
+
+      Then("the compatibility bridge preserves existing behavior")
+      storeRecord shouldBe entity.toRecord()
+      decoded shouldBe Consequence.success(entity)
+    }
+  }
 
   "EntityStoreSpace.search" should {
     "apply Query where/sort/offset/limit on entity-store route" in {
@@ -127,6 +145,81 @@ final class EntityStoreQueryRouteSpec
       Then("the store-backed route uses the entity-owned physical field mapping")
       result.map(_.data.map(_.id)) shouldBe Consequence.success(Vector(p2.id))
       result.map(_.fetchedCount) shouldBe Consequence.success(1)
+    }
+
+    "persist create payloads through EntityPersistentCreate.toStoreRecord" in {
+      Given("a create model whose presentation record differs from its store record")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistentCreate[StoreCreateCandidate] = _store_create_candidate_persistent
+
+      When("creating through the entity-store route")
+      val created = entitystorespace.create(
+        UnitOfWorkOp.EntityStoreCreate(
+          entity = StoreCreateCandidate(None, "store-value"),
+          tc = summon[EntityPersistentCreate[StoreCreateCandidate]]
+        )
+      )
+      val loaded = for {
+        result <- created
+        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(result.id)
+        dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(result.id)
+        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec <- ds.load(cid, dsid)
+      } yield rec
+
+      Then("the stored DB record uses the store shape, not the presentation shape")
+      loaded.map(_.flatMap(_.getString("store_name"))) shouldBe Consequence.success(Some("store-value"))
+      loaded.map(_.flatMap(_.getString("presentationName"))) shouldBe Consequence.success(None)
+    }
+
+    "decode load and search results through EntityPersistent.fromStoreRecord" in {
+      Given("store records whose physical field names cannot be decoded by fromRecord")
+      val collectionid = EntityCollectionId("test", "a", "store_decode")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistent[StoreDecodeEntity] = _store_decode_persistent
+
+      val id = EntityId("test", "decode_1", collectionid)
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(collectionid),
+              Record.dataAuto(
+                "id" -> id,
+                "store_name" -> "decoded-from-store"
+              )
+            )
+          )
+        )
+      )
+
+      When("loading and searching through the entity-store route")
+      val loaded = entitystorespace.load(
+        UnitOfWorkOp.EntityStoreLoad(id, summon[EntityPersistent[StoreDecodeEntity]])
+      )
+      val result = entitystorespace.search(
+        UnitOfWorkOp.EntityStoreSearch(
+          query = EntityQuery(
+            collectionid,
+            Query(
+              StoreDecodeQuery(
+                id = Condition.any[EntityId],
+                name = Condition.any[String]
+              )
+            ),
+            EntitySearchScope.Store
+          ),
+          tc = summon[EntityPersistent[StoreDecodeEntity]]
+        )
+      )
+
+      Then("both paths use fromStoreRecord instead of the compatibility decoder")
+      loaded.map(_.map(_.name)) shouldBe Consequence.success(Some("decoded-from-store"))
+      result.map(_.data.map(_.name)) shouldBe Consequence.success(Vector("decoded-from-store"))
     }
 
     "return empty result when collection has not been created yet" in {
@@ -816,6 +909,74 @@ private def _create_candidate_persistent: EntityPersistentCreate[CreateCandidate
     def id(e: CreateCandidate): Option[EntityId] = e.id
     def toRecord(e: CreateCandidate): Record = e.toRecord()
     def collection(e: CreateCandidate): EntityCollectionId = _collectionid
+  }
+
+private final case class StoreCreateCandidate(
+  id: Option[EntityId],
+  name: String
+) extends EntityPersistableCreate {
+  def toRecord(): Record =
+    Record.dataAuto(
+      "id" -> id.map(_.print),
+      "presentationName" -> name
+    )
+}
+
+private def _store_create_candidate_persistent: EntityPersistentCreate[StoreCreateCandidate] =
+  new EntityPersistentCreate[StoreCreateCandidate] {
+    private val _collectionid = EntityCollectionId("test", "a", "store_create_candidate")
+
+    def id(e: StoreCreateCandidate): Option[EntityId] = e.id
+    def toRecord(e: StoreCreateCandidate): Record = e.toRecord()
+    override def toStoreRecord(e: StoreCreateCandidate): Record =
+      Record.dataAuto(
+        "id" -> e.id.map(_.print),
+        "store_name" -> e.name
+      )
+    def collection(e: StoreCreateCandidate): EntityCollectionId = _collectionid
+  }
+
+private final case class StoreDecodeEntity(
+  id: EntityId,
+  name: String
+) extends EntityPersistable {
+  def toRecord(): Record =
+    Record.dataAuto(
+      "id" -> id,
+      "presentationName" -> name
+    )
+}
+
+private final case class StoreDecodeQuery(
+  id: Condition[EntityId],
+  name: Condition[String]
+) extends Query.ConditionShape
+
+private def _store_decode_persistent: EntityPersistent[StoreDecodeEntity] =
+  new EntityPersistent[StoreDecodeEntity] {
+    def id(e: StoreDecodeEntity): EntityId = e.id
+    def toRecord(e: StoreDecodeEntity): Record = e.toRecord()
+    def fromRecord(r: Record): Consequence[StoreDecodeEntity] =
+      Consequence.argumentInvalid("presentation record decoder must not be used for store records")
+    override def toStoreRecord(e: StoreDecodeEntity): Record =
+      Record.dataAuto(
+        "id" -> e.id,
+        "store_name" -> e.name
+      )
+    override def fromStoreRecord(r: Record): Consequence[StoreDecodeEntity] = {
+      val m = r.asMap
+      (m.get("id"), m.get("store_name")) match {
+        case (Some(id: EntityId), Some(name: String)) =>
+          Consequence.success(StoreDecodeEntity(id, name))
+        case _ =>
+          Consequence.argumentInvalid("invalid store decode record")
+      }
+    }
+    override def storeFieldName(logicalName: String): String =
+      logicalName match {
+        case "name" => "store_name"
+        case other => other
+      }
   }
 
 private final case class SaveCandidate(

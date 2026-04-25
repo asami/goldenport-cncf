@@ -81,7 +81,7 @@ Phase 17 implementation proceeds in this order:
 
 1. Define this taxonomy and use it as the design contract.
 2. Formalize existing `EntityPersistent.toStoreRecord` / `fromStoreRecord` as
-   the storage API in SS-02.
+   the DB Record API in SS-02.
 3. Migrate CNCF storage call sites to purpose-specific storage APIs in SS-03.
 4. Replace SimpleEntity authorization record-path assumptions with typed
    security/permission access in SS-04.
@@ -94,8 +94,12 @@ Existing `toRecord` / `fromRecord` methods remain compatibility surfaces during
 migration. Their use is acceptable only when the purpose is known and documented
 by the surrounding API.
 
-`toStoreRecord` / `fromStoreRecord` remain the intended storage names for the
+`toStoreRecord` / `fromStoreRecord` are the formal DB Record API names for the
 `EntityPersistent` family. Phase 17 does not introduce `toStorageRecord`.
+
+`toRecord` / `fromRecord` may remain the compatibility bridge required by
+`RecordCodex` / `RecordEncoder`, but code crossing the datastore boundary should
+prefer the explicit store names.
 
 ## References
 

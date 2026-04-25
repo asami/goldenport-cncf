@@ -88,24 +88,26 @@ SS-01 must ensure:
 
 ## SS-02: Formalize EntityPersistent Store APIs
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
-Formalize existing `toStoreRecord` / `fromStoreRecord` as the storage API for the `EntityPersistent` family while preserving compatibility.
+Formalize existing `toStoreRecord` / `fromStoreRecord` as the DB Record API for the `EntityPersistent` family while preserving compatibility.
 
 ### Detailed Tasks
 
-- [ ] Document `toStoreRecord` / `fromStoreRecord` as the formal storage API.
-- [ ] Keep `toRecord` / `fromRecord` as compatibility bridges.
-- [ ] Add compatibility specs for old-style implementations.
-- [ ] Add behavior specs proving store paths use the store API when overridden.
-- [ ] Do not introduce `toStorageRecord` in this phase.
+- [x] Document `toStoreRecord` / `fromStoreRecord` as the formal DB Record API.
+- [x] Keep `toRecord` / `fromRecord` as compatibility bridges.
+- [x] Add compatibility specs for old-style implementations.
+- [x] Add behavior specs proving store paths use the store API when overridden.
+- [x] Do not introduce `toStorageRecord` in this phase.
 
 ### Expected Outcome
 
 - Entity persistence APIs have explicit storage names.
 - Existing generated/component implementations remain source-compatible.
+- `EntityStore` create/load/search paths are covered by executable specs for
+  store API override behavior.
 
 ### Guardrails
 
