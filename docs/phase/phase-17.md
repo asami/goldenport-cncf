@@ -57,7 +57,9 @@ Current semantic direction:
 - C3 (DONE): SS-03C — Classify remaining Logic Record call sites for typed-access migration.
 - D (DONE): SS-04 — Add typed SimpleEntity security/permission access for authorization.
 - E1 (DONE): SS-05A — Fix SimpleEntity storage-shape policy in design/spec.
+- E1a (DONE): SS-05A-A — Fix storage-shape classification order and rules.
 - E2 (DONE): SS-05B — Implement SimpleEntity storage-shape policy.
+- E3a (DONE): SS-05C-A — Add typed security override regression specs.
 - E3 (PLANNED): SS-05C — Add storage-shape executable coverage.
 - F (PLANNED): SS-06 — Expose storage-shape metadata in manual/admin/projection surfaces.
 
@@ -80,7 +82,9 @@ Current note:
 - [x] SS-03C: Classify remaining Logic Record call sites for typed-access migration.
 - [x] SS-04: Add typed SimpleEntity security/permission access for authorization.
 - [x] SS-05A: Fix SimpleEntity storage-shape policy in design/spec.
+- [x] SS-05A-A: Fix storage-shape classification order and rules.
 - [x] SS-05B: Implement SimpleEntity storage-shape policy.
+- [x] SS-05C-A: Add typed security override regression specs.
 - [ ] SS-05C: Add storage-shape executable coverage.
 - [ ] SS-06: Expose storage-shape metadata in manual/admin/projection surfaces.
 

@@ -8,7 +8,7 @@ import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext,
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.directive.{Query, SearchResult}
 import org.goldenport.cncf.entity.runtime.*
-import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore, EntityStoreSpace}
+import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore, EntityStoreSpace, SimpleEntityStorageShapePolicy}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.goldenport.cncf.component.ComponentDescriptor
@@ -26,7 +26,7 @@ import org.simplemodeling.model.directive.Condition
 
 /*
  * @since   Mar. 29, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ActionCallEntityAccessMetricsSpec
@@ -81,6 +81,68 @@ final class ActionCallEntityAccessMetricsSpec
         _metric_count("entity.load.try.entity-space", "entity-space") shouldBe 1L
         _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 1L
         _metric_count("entity.load.hit.data-store", "data-store") shouldBe 0L
+      }
+    }
+
+    "prefer typed resident security over stale datastore security when entity-space load hits" in {
+      EntityAccessMetricsRegistry.shared.synchronized {
+        Given("a resident entity has typed owner security and the datastore row still has stale security")
+        EntityAccessMetricsRegistry.shared.clear()
+        given EntityPersistent[TestPerson] = _typed_security_persistent("typed-owner")
+
+        val datastorespace = DataStoreSpace.default()
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        val ctx = _execution_context(datastorespace, entitystorespace, manager = false, principalId = "typed-owner")
+        given ExecutionContext = ctx
+        val cid = _cid("person_metrics_typed_security_cache_load")
+        val id = EntityId("test", "typed_security_cache_load", cid)
+        val resident = TestPerson.privateOwnedBy(id, "typed-resident", 33, "stale-store-owner")
+        val staleStore = TestPerson.privateOwnedBy(id, "typed-resident", 33, "stale-store-owner")
+        val _ = datastorespace.inject(
+          DataStoreSpace.Seed(
+            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), staleStore.toRecord()))
+          )
+        )
+        val component = TestComponentFactory.create("metrics_typed_security_cache_load", Protocol.empty)
+        component.entitySpace.registerEntity(cid.name, _resident_collection(cid, resident))
+
+        When("loading through the normal ActionCall entity API")
+        val result = _probe(component, ctx).load[TestPerson](id)
+
+        Then("typed entity security is used instead of stale datastore security")
+        result.map(_.map(_.id)) shouldBe Consequence.success(Some(id))
+        _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 1L
+      }
+    }
+
+    "reject stale datastore owner when typed resident security differs on entity-space load hit" in {
+      EntityAccessMetricsRegistry.shared.synchronized {
+        Given("a resident entity has typed owner security and the caller matches only stale datastore security")
+        EntityAccessMetricsRegistry.shared.clear()
+        given EntityPersistent[TestPerson] = _typed_security_persistent("typed-owner")
+
+        val datastorespace = DataStoreSpace.default()
+        val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+        val ctx = _execution_context(datastorespace, entitystorespace, manager = false, principalId = "stale-store-owner")
+        given ExecutionContext = ctx
+        val cid = _cid("person_metrics_typed_security_cache_load_denied")
+        val id = EntityId("test", "typed_security_cache_load_denied", cid)
+        val resident = TestPerson.privateOwnedBy(id, "typed-resident-denied", 34, "stale-store-owner")
+        val staleStore = TestPerson.privateOwnedBy(id, "typed-resident-denied", 34, "stale-store-owner")
+        val _ = datastorespace.inject(
+          DataStoreSpace.Seed(
+            Vector(DataStoreSpace.SeedEntry(DataStore.CollectionId.EntityStore(cid), staleStore.toRecord()))
+          )
+        )
+        val component = TestComponentFactory.create("metrics_typed_security_cache_load_denied", Protocol.empty)
+        component.entitySpace.registerEntity(cid.name, _resident_collection(cid, resident))
+
+        When("loading through the normal ActionCall entity API")
+        val result = _probe(component, ctx).load[TestPerson](id)
+
+        Then("stale datastore security is not allowed to override typed entity security")
+        result shouldBe a[Consequence.Failure[_]]
+        _metric_count("entity.load.hit.entity-space", "entity-space") shouldBe 1L
       }
     }
 
@@ -563,7 +625,8 @@ final class ActionCallEntityAccessMetricsSpec
   private def _execution_context(
     datastorespace: DataStoreSpace,
     entitystorespace: EntityStoreSpace,
-    manager: Boolean = true
+    manager: Boolean = true,
+    principalId: String = "test-principal"
   ): ExecutionContext = {
     val observability = ObservabilityContext(
       traceId = TraceId("test", "entity_access_metrics"),
@@ -603,7 +666,7 @@ final class ActionCallEntityAccessMetricsSpec
     context match {
       case i: ExecutionContext.Instance =>
         val principal = new Principal {
-          def id: PrincipalId = PrincipalId("test-principal")
+          def id: PrincipalId = PrincipalId(principalId)
           def attributes: Map[String, String] =
             if (manager) Map("role" -> "content_manager") else Map.empty
         }
@@ -763,12 +826,27 @@ final class ActionCallEntityAccessMetricsSpec
         val securityattributes = r.getRecord("securityAttributes")
           .orElse(r.getRecord("security_attributes"))
           .orElse(r.getRecord("rights").map(_ => r))
+          .orElse(_compact_security_record(r))
         for {
           id <- pid
           name <- pname
           age <- page
         } yield TestPerson(id, name, age, poststatus, aliveness, publishat, publicat, publishedby, securityattributes)
       }
+    }
+
+  private def _compact_security_record(record: Record): Option[Record] =
+    SimpleEntityStorageShapePolicy.securityAttributesFromRecord(record).map(_.toRecord)
+
+  private def _typed_security_persistent(ownerId: String): EntityPersistent[TestPerson] =
+    new EntityPersistent[TestPerson] {
+      private val base = _persistent
+
+      def id(e: TestPerson): EntityId = e.id
+      def toRecord(e: TestPerson): Record = e.toRecord()
+      def fromRecord(r: Record): Consequence[TestPerson] = base.fromRecord(r)
+      override def securityAttributes(e: TestPerson): Option[org.simplemodeling.model.value.SecurityAttributes] =
+        Some(org.simplemodeling.model.value.SecurityAttributes.ownedBy(ownerId))
     }
 
   private def _create_persistent: EntityPersistentCreate[TestPersonCreate] =

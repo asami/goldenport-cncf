@@ -29,6 +29,37 @@ A component may later choose explicit storage policy to promote an encoded value
 into an entity, collection, aggregate member, or child table. Without an explicit
 policy, nested domain values are encoded, not flattened.
 
+## Classification Rules
+
+Storage-shape classification is resolved in this order:
+
+1. CNCF management and security identity fields;
+2. permission rights;
+3. scalar domain attributes;
+4. independent single value objects;
+5. repeated value objects;
+6. independent lifecycle children or promoted children.
+
+Earlier categories win over later categories. For example, `ownerId` is a
+security identity column even though it is scalar-shaped, and permission rights
+are compact policy data rather than expanded scalar columns.
+
+The classification rules are:
+
+| Classification | Rule | Default storage |
+| --- | --- | --- |
+| CNCF management/security identity field | Required by DB filtering, lifecycle handling, admin, diagnostics, runtime policy, or authorization identity lookup | expanded column |
+| Permission rights | Owner/group/other read/write/execute policy bits | compact JSON text in `permission` |
+| Scalar domain attribute | Domain-owned scalar value without independent lifecycle | ordinary column |
+| Independent single value object | Domain value object owned by the parent and not independently queried/updated | encoded JSON text |
+| Repeated value object | Parent-owned list/sequence of value objects | encoded JSON array text |
+| Independent lifecycle child / promoted child | Value needs independent query, update, lifecycle, ownership, or aggregate membership | entity, collection, aggregate member, or explicit child storage |
+
+JSON text encoding is a complex-value container decision. It is not a fallback
+for unsupported scalar types. `Instant`, identifiers, date/time values, and
+other typed scalars must be supported as typed scalar storage or fail
+deterministically. They must not silently degrade to `String`.
+
 ## Built-In Expanded Fields
 
 The initial built-in management expansion set is:
@@ -100,19 +131,22 @@ nested values.
   explicitly before crossing into storage.
 - Existing records are compatibility data; migration is not part of SS-05A.
 
-## SS-05B Implementation Targets
+## SS-05C Coverage Targets
 
-SS-05B must add executable coverage for:
+SS-05C must add executable coverage for:
 
+- classification order is respected;
 - management fields are expanded into target storage names;
 - permission is stored as compact JSON text in `permission`;
 - typed authorization still works when permission is compact;
+- scalar domain attributes remain ordinary columns;
 - independent value object storage is encoded JSON text;
 - repeated value object storage is encoded JSON array text;
 - entity/collection/aggregate-member children are not flattened into the parent
-  storage record.
+  storage record;
+- unsupported typed scalar values do not fall back to `String`.
 
-SS-05B should keep the implementation source-compatible unless a later plan
+SS-05C should keep the implementation source-compatible unless a later plan
 explicitly authorizes a breaking generated-code migration.
 
 ## References

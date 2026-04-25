@@ -39,10 +39,12 @@ Phase 17 work proceeds in this order:
 6. SS-04 introduces typed SimpleEntity security/permission access so
    authorization stops depending on generic record-path lookup.
 7. SS-05A fixes the storage-shape policy in design/spec.
-8. SS-05B implements the storage-shape policy for management fields,
-   permission, and nested/repeated values.
-9. SS-05C adds executable coverage for the target storage shape.
-10. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
+8. SS-05A-A fixes storage-shape classification order and rules.
+9. SS-05B implements the runtime storage-shape policy for management fields,
+   security identity, and permission.
+10. SS-05C-A adds typed security override regression specs.
+11. SS-05C adds executable coverage for the target storage shape.
+12. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
 
 This order avoids changing DB record shape before Record purpose, API boundary,
 and security access boundary are clear.
@@ -296,6 +298,39 @@ Define the default SimpleEntity DB storage-shape rules before implementation.
 
 ---
 
+## SS-05A-A: Storage-Shape Classification Rules
+
+Status: DONE
+
+### Objective
+
+Make the SimpleEntity storage-shape classification order decision-complete
+before expanding runtime implementation or executable coverage.
+
+### Detailed Tasks
+
+- [x] Define classification order in `docs/design/simpleentity-storage-shape-policy.md`.
+- [x] Fix CNCF management/security identity fields as the first classification.
+- [x] Fix permission rights as compact policy data, not expanded scalar columns.
+- [x] Fix domain scalar attributes as ordinary columns.
+- [x] Fix independent single value objects as encoded JSON text.
+- [x] Fix repeated value objects as encoded JSON array text.
+- [x] Fix independent lifecycle children / promoted children as entity, collection, aggregate member, or explicit child storage.
+- [x] Strengthen the rule that JSON text is not an unsupported scalar fallback.
+- [x] Add SS-05C executable coverage expectations for classification order and unsupported typed scalar failure.
+
+### Expected Outcome
+
+- Implementers can classify a model value before deciding storage shape.
+- SS-05C can turn the classification rules into executable documentation.
+
+### Guardrails
+
+- Do not add runtime APIs, DB migration, generated code changes, or codec implementation in SS-05A-A.
+- Do not define the exact encoded JSON wire format beyond the classification rule.
+
+---
+
 ## SS-05B: SimpleEntity Storage-Shape Policy Implementation
 
 Status: DONE
@@ -345,15 +380,21 @@ Status: PLANNED
 
 Lock the implemented SS-05B behavior with executable specs.
 
+### Completed Sub-Slices
+
+- [x] SS-05C-A: Typed security override regression specs.
+
 ### Detailed Tasks
 
 - [ ] Add specs proving management fields are expanded.
 - [ ] Add specs proving permission is compact JSON text.
 - [ ] Add specs proving typed authorization works from compact permission.
+- [ ] Add specs proving scalar domain attributes remain ordinary columns.
 - [ ] Add specs proving independent value objects are encoded.
 - [ ] Add specs proving repeated value objects are encoded.
 - [ ] Add specs proving promoted child/entity storage is not flattened into the parent.
 - [ ] Add generated-code specs for CML-derived storage shape.
+- [ ] Add specs proving unsupported typed scalar values do not fall back to `String`.
 
 ### Expected Outcome
 
@@ -362,6 +403,35 @@ Lock the implemented SS-05B behavior with executable specs.
 ### Guardrails
 
 - Specs must describe behavior, not generated-code incidental details.
+
+---
+
+## SS-05C-A: Typed Security Override Regression Specs
+
+Status: DONE
+
+### Objective
+
+Lock the SS-04/SS-05 rule that typed security access is authoritative when
+authorization records are built from a mix of resident entities and raw store
+records.
+
+### Detailed Tasks
+
+- [x] Add specs proving stale target and legacy security fields are removed before typed security overlay.
+- [x] Add specs proving stale record owner cannot pass save/update authorization when typed owner differs.
+- [x] Add specs proving working-set resident read hit uses typed security over stale datastore security.
+- [x] Add specs proving stale datastore owner is denied when typed resident security differs.
+
+### Expected Outcome
+
+- Review findings around typed security precedence are locked by executable specs.
+- Compact permission storage and raw record compatibility cannot reintroduce stale-security precedence.
+
+### Guardrails
+
+- Do not broaden SS-05C-A into nested/repeated storage-shape implementation.
+- Keep raw store records available only as non-security ABAC/relation context once typed security exists.
 
 ---
 

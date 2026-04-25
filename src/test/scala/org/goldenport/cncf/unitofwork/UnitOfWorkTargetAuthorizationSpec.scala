@@ -5,7 +5,7 @@ import scala.collection.mutable.ListBuffer
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, TraceId}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
-import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate, EntityStore, EntityStoreSpace}
+import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentUpdate, EntityStore, EntityStoreSpace, SimpleEntityStorageShapePolicy}
 import org.goldenport.cncf.http.FakeHttpDriver
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 import org.goldenport.cncf.security.{AggregateAuthorization, EntityAbacCondition, EntityAccessMode, EntityAccessRelation, EntityApplicationDomain, EntityOperationKind, ServiceOperationModel}
@@ -194,6 +194,55 @@ final class UnitOfWorkTargetAuthorizationSpec
 
       result shouldBe Consequence.unit
       _load_name(id) shouldBe Consequence.success(Some("typed-after"))
+    }
+
+    "build authorization record with typed security overriding stale target and legacy security" in {
+      given EntityPersistent[TypedSecurityTargetEntity] = _typed_security_target_persistent
+      val id = EntityId("test", "save_typed_security_overlay", _cid)
+      val entity = TypedSecurityTargetEntity(id, "typed-overlay", "typed-owner", staleSecurity = true)
+
+      val record = summon[EntityPersistent[TypedSecurityTargetEntity]].authorizationRecord(entity)
+
+      record.getString("owner_id") shouldBe Some("typed_owner")
+      record.getString("ownerId") shouldBe None
+      record.getRecord("securityAttributes") shouldBe None
+      record.getRecord("security_attributes") shouldBe None
+      val rights = record.getString("permission")
+        .flatMap(SimpleEntityStorageShapePolicy.permissionRightsFromJson)
+        .getOrElse(fail("permission should be compact JSON"))
+      rights.other.read shouldBe false
+    }
+
+    "reject stale target owner when typed security access grants a different owner" in {
+      given ExecutionContext = _execution_context(
+        principalId = "stale-owner"
+      )
+      given EntityPersistent[TypedSecurityTargetEntity] = _typed_security_target_persistent
+
+      val id = EntityId("test", "save_typed_security_stale_owner_denied", _cid)
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Unit](
+            UnitOfWorkOp.EntityStoreSave(
+              entity = TypedSecurityTargetEntity(id, "typed-stale-denied", "typed-owner", staleSecurity = true),
+              tc = summon[EntityPersistent[TypedSecurityTargetEntity]],
+              authorization = Some(
+                UnitOfWorkAuthorization(
+                  resourceFamily = "domain",
+                  resourceType = Some("TypedSecurityTarget"),
+                  targetId = Some(id),
+                  accessKind = "update"
+                )
+              )
+            )
+          )
+        )
+      )
+
+      result shouldBe a[Consequence.Failure[_]]
+      _load_name(id) shouldBe Consequence.success(None)
     }
 
     "reject save from typed security access for a non-owner entity record without security attributes" in {
@@ -1194,14 +1243,25 @@ final class UnitOfWorkTargetAuthorizationSpec
   private final case class TypedSecurityTargetEntity(
     id: EntityId,
     name: String,
-    ownerId: String
+    ownerId: String,
+    staleSecurity: Boolean = false
   ) {
-    def toRecord(): Record =
-      Record.dataAuto(
+    def toRecord(): Record = {
+      val base = Record.dataAuto(
         "id" -> id,
-        "name" -> name,
-        "securityAttributes" -> _security_record("stale-owner")
+        "name" -> name
       )
+      if (staleSecurity)
+        base ++ Record.dataAuto(
+          "owner_id" -> "stale-owner",
+          "group_id" -> "stale-owner",
+          "privilege_id" -> "stale-owner",
+          "permission" -> SimpleEntityStorageShapePolicy.permissionJson(SecurityAttributes.publicOwnedBy("stale-owner").rights),
+          "securityAttributes" -> _security_record("stale-owner")
+        )
+      else
+        base
+    }
   }
 
   private val _typed_security_target_persistent: EntityPersistent[TypedSecurityTargetEntity] =
