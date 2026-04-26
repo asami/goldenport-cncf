@@ -63,6 +63,7 @@ Current semantic direction:
 - E3b (DONE): SS-05C-B — Add runtime storage-shape coverage.
 - E3c (DONE): SS-05C-C — Add value object storage encoding coverage.
 - E3d (DONE): SS-05C-D — Add promoted child storage boundary coverage.
+- E3e (DONE): SS-05C-E — Add generated CML-derived storage-shape coverage.
 - E3 (PLANNED): SS-05C — Add storage-shape executable coverage.
 - F (PLANNED): SS-06 — Expose storage-shape metadata in manual/admin/projection surfaces.
 
@@ -91,6 +92,7 @@ Current note:
 - [x] SS-05C-B: Add runtime storage-shape coverage.
 - [x] SS-05C-C: Add value object storage encoding coverage.
 - [x] SS-05C-D: Add promoted child storage boundary coverage.
+- [x] SS-05C-E: Add generated CML-derived storage-shape coverage.
 - [ ] SS-05C: Add storage-shape executable coverage.
 - [ ] SS-06: Expose storage-shape metadata in manual/admin/projection surfaces.
 

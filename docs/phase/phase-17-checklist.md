@@ -46,8 +46,9 @@ Phase 17 work proceeds in this order:
 11. SS-05C-B adds runtime storage-shape coverage.
 12. SS-05C-C adds value object storage encoding coverage.
 13. SS-05C-D adds promoted child storage boundary coverage.
-14. SS-05C adds executable coverage for the remaining target storage shape.
-15. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
+14. SS-05C-E adds generated CML-derived storage-shape coverage.
+15. SS-05C adds executable coverage for the remaining target storage shape.
+16. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
 
 This order avoids changing DB record shape before Record purpose, API boundary,
 and security access boundary are clear.
@@ -389,6 +390,7 @@ Lock the implemented SS-05B behavior with executable specs.
 - [x] SS-05C-B: Runtime storage-shape coverage.
 - [x] SS-05C-C: Value object storage encoding coverage.
 - [x] SS-05C-D: Promoted child storage boundary coverage.
+- [x] SS-05C-E: Generated CML-derived storage-shape coverage.
 
 ### Detailed Tasks
 
@@ -399,7 +401,7 @@ Lock the implemented SS-05B behavior with executable specs.
 - [x] Add specs proving independent value objects are encoded.
 - [x] Add specs proving repeated value objects are encoded.
 - [x] Add specs proving promoted child/entity storage is not flattened into the parent.
-- [ ] Add generated-code specs for CML-derived storage shape.
+- [x] Add generated-code specs for CML-derived storage shape.
 - [ ] Add specs proving unsupported typed scalar values do not fall back to `String`.
 
 ### Expected Outcome
@@ -432,7 +434,34 @@ flattened into the parent storage record.
 ### Guardrails
 
 - Parent-owned value object JSON encoding remains SS-05C-C behavior.
-- Generated CML-derived shape and unsupported scalar failure remain follow-up SS-05C work.
+- Unsupported scalar failure remains follow-up SS-05C work.
+
+---
+
+## SS-05C-E: Generated CML-Derived Storage-Shape Coverage
+
+Status: DONE
+
+### Objective
+
+Lock the rule that generated CML-derived entity persistence exposes explicit
+Store Record APIs and does not use View/Presentation record shape as the DB
+shape.
+
+### Completed Tasks
+
+- [x] Prove generated-style CNCF reflective `EntityPersistent` bridges prefer
+  explicit `toStoreRecord` / `fromStoreRecord` methods.
+- [x] Prove generated-style Store Records use target management/security names
+  and compact `permission`.
+- [x] Prove generated-style View Records remain separate from Store Records.
+- [x] Prove Cozy/simple-modeler generated SimpleEntity code emits explicit
+  `toStoreRecord` / `fromStoreRecord` and compact permission storage.
+
+### Guardrails
+
+- Unsupported typed scalar failure remains follow-up SS-05C work.
+- Runtime storage-shape behavior remains SS-05B/SS-05C-B behavior.
 
 ---
 

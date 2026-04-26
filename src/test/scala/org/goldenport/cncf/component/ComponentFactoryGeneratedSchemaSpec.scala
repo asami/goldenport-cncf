@@ -15,8 +15,6 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 16, 2026
- *  version Apr. 20, 2026
- *  version Apr. 24, 2026
  * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -105,6 +103,56 @@ final class ComponentFactoryGeneratedSchemaSpec extends AnyWordSpec with Matcher
       persistent.toStoreRecord(entity).getString("posted_at") shouldBe Some("2026-04-26T00:00:00Z")
       persistent.fromStoreRecord(persistent.toStoreRecord(entity)).map(_.asInstanceOf[_GeneratedStyleEntity].postedAt) shouldBe Consequence.success("2026-04-26T00:00:00Z")
     }
+
+    "preserve generated CML-derived storage shape separately from view records" in {
+      Given("a generated-style SimpleEntity module with target storage-shape methods")
+      val factory = new ComponentFactory()
+      val method = classOf[ComponentFactory].getDeclaredMethods
+        .find(_.getName == "_as_entity_persistent")
+        .getOrElse(fail("_as_entity_persistent is missing"))
+      method.setAccessible(true)
+      val entity = _GeneratedStyleAccount(
+        EntityId("test", "generated_store_shape", EntityCollectionId("test", "a", "account")),
+        "Alice",
+        "2026-04-26T01:02:03Z",
+        "2026-04-26T04:05:06Z",
+        "user-1",
+        """{"city":"Tokyo","postalCode":"100-0001"}""",
+        """[{"label":"primary"},{"label":"billing"}]"""
+      )
+
+      When("ComponentFactory wraps the generated module as EntityPersistent")
+      val persistent = method.invoke(factory, _GeneratedStyleStorageShapeModule, None)
+        .asInstanceOf[Option[EntityPersistent[Any]]]
+        .getOrElse(fail("persistent bridge was not created"))
+      val view = persistent.toRecord(entity)
+      val store = persistent.toStoreRecord(entity)
+
+      Then("the view record remains presentation-oriented")
+      view.getString("displayName") shouldBe Some("Alice")
+      view.getString("createdAt") shouldBe Some("2026-04-26T01:02:03Z")
+      view.getString("ownerId") shouldBe Some("user-1")
+      view.getString("permission") shouldBe None
+
+      And("the store record uses the target storage shape")
+      store.getString("display_name") shouldBe Some("Alice")
+      store.getString("created_at") shouldBe Some("2026-04-26T01:02:03Z")
+      store.getString("updated_at") shouldBe Some("2026-04-26T04:05:06Z")
+      store.getString("owner_id") shouldBe Some("user-1")
+      store.getString("group_id") shouldBe Some("user-1")
+      store.getString("privilege_id") shouldBe Some("user-1")
+      store.getString("permission") shouldBe Some("""{"owner":{"read":true,"write":true,"execute":false},"group":{"read":true,"write":false,"execute":false},"other":{"read":false,"write":false,"execute":false}}""")
+      store.getString("address") shouldBe Some("""{"city":"Tokyo","postalCode":"100-0001"}""")
+      store.getString("tags") shouldBe Some("""[{"label":"primary"},{"label":"billing"}]""")
+
+      And("legacy security containers are not part of the target store record")
+      store.getAny("securityAttributes") shouldBe None
+      store.getAny("security_attributes") shouldBe None
+      store.getAny("rights") shouldBe None
+
+      And("fromStoreRecord decodes the target storage shape")
+      persistent.fromStoreRecord(store).map(_.asInstanceOf[_GeneratedStyleAccount]) shouldBe Consequence.success(entity)
+    }
   }
 }
 
@@ -153,6 +201,62 @@ private object _GeneratedStyleStorePersistentModule {
         Consequence.success(_GeneratedStyleEntity(id, body, postedAt))
       case _ =>
         Consequence.argumentInvalid("invalid generated style store record")
+    }
+  }
+}
+
+private final case class _GeneratedStyleAccount(
+  id: EntityId,
+  displayName: String,
+  createdAt: String,
+  updatedAt: String,
+  ownerId: String,
+  addressJson: String,
+  tagsJson: String
+)
+
+private object _GeneratedStyleStorageShapeModule {
+  def id(e: _GeneratedStyleAccount): EntityId = e.id
+  def toRecord(e: _GeneratedStyleAccount): Record =
+    Record.dataAuto(
+      "id" -> e.id,
+      "displayName" -> e.displayName,
+      "createdAt" -> e.createdAt,
+      "updatedAt" -> e.updatedAt,
+      "ownerId" -> e.ownerId,
+      "address" -> e.addressJson,
+      "tags" -> e.tagsJson
+    )
+  def fromRecord(r: Record): Consequence[_GeneratedStyleAccount] =
+    Consequence.argumentInvalid("view record decoder must not be used for store records")
+  def toStoreRecord(e: _GeneratedStyleAccount): Record =
+    Record.dataAuto(
+      "id" -> e.id,
+      "display_name" -> e.displayName,
+      "created_at" -> e.createdAt,
+      "updated_at" -> e.updatedAt,
+      "owner_id" -> e.ownerId,
+      "group_id" -> e.ownerId,
+      "privilege_id" -> e.ownerId,
+      "permission" -> """{"owner":{"read":true,"write":true,"execute":false},"group":{"read":true,"write":false,"execute":false},"other":{"read":false,"write":false,"execute":false}}""",
+      "address" -> e.addressJson,
+      "tags" -> e.tagsJson
+    )
+  def fromStoreRecord(r: Record): Consequence[_GeneratedStyleAccount] = {
+    val m = r.asMap
+    (m.get("id"), m.get("display_name"), m.get("created_at"), m.get("updated_at"), m.get("owner_id"), m.get("address"), m.get("tags")) match {
+      case (
+        Some(id: EntityId),
+        Some(displayName: String),
+        Some(createdAt: String),
+        Some(updatedAt: String),
+        Some(ownerId: String),
+        Some(address: String),
+        Some(tags: String)
+      ) =>
+        Consequence.success(_GeneratedStyleAccount(id, displayName, createdAt, updatedAt, ownerId, address, tags))
+      case _ =>
+        Consequence.argumentInvalid("invalid generated style storage-shape record")
     }
   }
 }
