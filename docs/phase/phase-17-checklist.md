@@ -47,8 +47,9 @@ Phase 17 work proceeds in this order:
 12. SS-05C-C adds value object storage encoding coverage.
 13. SS-05C-D adds promoted child storage boundary coverage.
 14. SS-05C-E adds generated CML-derived storage-shape coverage.
-15. SS-05C adds executable coverage for the remaining target storage shape.
-16. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
+15. SS-05C-F adds unsupported typed scalar fallback coverage.
+16. SS-05C completes executable coverage for the target storage shape.
+17. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
 
 This order avoids changing DB record shape before Record purpose, API boundary,
 and security access boundary are clear.
@@ -378,7 +379,7 @@ Implement the policy fixed in SS-05A.
 
 ## SS-05C: Storage-Shape Executable Coverage
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -391,6 +392,7 @@ Lock the implemented SS-05B behavior with executable specs.
 - [x] SS-05C-C: Value object storage encoding coverage.
 - [x] SS-05C-D: Promoted child storage boundary coverage.
 - [x] SS-05C-E: Generated CML-derived storage-shape coverage.
+- [x] SS-05C-F: Unsupported typed scalar fallback coverage.
 
 ### Detailed Tasks
 
@@ -402,7 +404,7 @@ Lock the implemented SS-05B behavior with executable specs.
 - [x] Add specs proving repeated value objects are encoded.
 - [x] Add specs proving promoted child/entity storage is not flattened into the parent.
 - [x] Add generated-code specs for CML-derived storage shape.
-- [ ] Add specs proving unsupported typed scalar values do not fall back to `String`.
+- [x] Add specs proving unsupported typed scalar values do not fall back to `String`.
 
 ### Expected Outcome
 
@@ -411,6 +413,32 @@ Lock the implemented SS-05B behavior with executable specs.
 ### Guardrails
 
 - Specs must describe behavior, not generated-code incidental details.
+
+---
+
+## SS-05C-F: Unsupported Typed Scalar Fallback Coverage
+
+Status: DONE
+
+### Objective
+
+Lock the rule that unsupported typed scalar values fail deterministically and
+do not silently fall back to `String` in model/generator storage paths.
+
+### Completed Tasks
+
+- [x] Prove supported date-time scalar modeling maps to an explicit Java time
+  type instead of `String`.
+- [x] Prove unsupported scalar marshalling fails deterministically instead of
+  falling back to `String`.
+- [x] Prove Cozy rejects unsupported CML `date-time` syntax without generating
+  output.
+
+### Guardrails
+
+- JSON text storage is for complex value containers, not an unsupported scalar
+  escape hatch.
+- CML type aliases must be explicit; unknown spellings fail before generation.
 
 ---
 
@@ -434,7 +462,7 @@ flattened into the parent storage record.
 ### Guardrails
 
 - Parent-owned value object JSON encoding remains SS-05C-C behavior.
-- Unsupported scalar failure remains follow-up SS-05C work.
+- Unsupported scalar failure is covered by SS-05C-F.
 
 ---
 
@@ -460,7 +488,7 @@ shape.
 
 ### Guardrails
 
-- Unsupported typed scalar failure remains follow-up SS-05C work.
+- Unsupported typed scalar failure is covered by SS-05C-F.
 - Runtime storage-shape behavior remains SS-05B/SS-05C-B behavior.
 
 ---
@@ -484,7 +512,7 @@ parent storage record.
 ### Guardrails
 
 - JSON encoding is for complex owned value containers, not unsupported scalar fallback.
-- Promoted child/entity storage and generated CML-derived shape remain follow-up SS-05C work.
+- Promoted child/entity storage and generated CML-derived shape are covered by SS-05C-D and SS-05C-E.
 
 ---
 
@@ -513,8 +541,8 @@ Lock the SS-05B runtime storage-shape implementation with executable specs.
 
 - Compatibility input may still accept legacy security shapes, but runtime target
   output remains snake_case plus compact `permission`.
-- Nested/repeated value object encoding and generated-code storage shape remain
-  follow-up SS-05C work.
+- Nested/repeated value object encoding and generated-code storage shape are
+  covered by SS-05C-C and SS-05C-E.
 
 ---
 

@@ -64,7 +64,8 @@ Current semantic direction:
 - E3c (DONE): SS-05C-C — Add value object storage encoding coverage.
 - E3d (DONE): SS-05C-D — Add promoted child storage boundary coverage.
 - E3e (DONE): SS-05C-E — Add generated CML-derived storage-shape coverage.
-- E3 (PLANNED): SS-05C — Add storage-shape executable coverage.
+- E3f (DONE): SS-05C-F — Add unsupported typed scalar fallback coverage.
+- E3 (DONE): SS-05C — Add storage-shape executable coverage.
 - F (PLANNED): SS-06 — Expose storage-shape metadata in manual/admin/projection surfaces.
 
 Current note:
@@ -93,7 +94,8 @@ Current note:
 - [x] SS-05C-C: Add value object storage encoding coverage.
 - [x] SS-05C-D: Add promoted child storage boundary coverage.
 - [x] SS-05C-E: Add generated CML-derived storage-shape coverage.
-- [ ] SS-05C: Add storage-shape executable coverage.
+- [x] SS-05C-F: Add unsupported typed scalar fallback coverage.
+- [x] SS-05C: Add storage-shape executable coverage.
 - [ ] SS-06: Expose storage-shape metadata in manual/admin/projection surfaces.
 
 ## 6. Next Phase Candidates
