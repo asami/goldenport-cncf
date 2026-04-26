@@ -67,6 +67,7 @@ Current semantic direction:
 - E3f (DONE): SS-05C-F — Add unsupported typed scalar fallback coverage.
 - E3 (DONE): SS-05C — Add storage-shape executable coverage.
 - F1 (DONE): SS-06A — Expose storage-shape metadata in projection surfaces.
+- F2 (DONE): SS-06B — Render storage-shape metadata in component Web manual pages.
 - F (PLANNED): SS-06 — Expose storage-shape metadata in manual/admin/projection surfaces.
 
 Current note:
@@ -98,6 +99,7 @@ Current note:
 - [x] SS-05C-F: Add unsupported typed scalar fallback coverage.
 - [x] SS-05C: Add storage-shape executable coverage.
 - [x] SS-06A: Expose storage-shape metadata in projection surfaces.
+- [x] SS-06B: Render storage-shape metadata in component Web manual pages.
 - [ ] SS-06: Expose storage-shape metadata in manual/admin/projection surfaces.
 
 ## 6. Next Phase Candidates

@@ -49,6 +49,10 @@ Aggregate/View metadata exposure:
   effective SimpleEntity storage-shape metadata. The metadata is projection-only
   and includes management/security expansion, compact permission storage, scalar
   columns, and delegated aggregate/view collections where known.
+- Component Web manual pages render the same `entityCollections.storageShape`
+  metadata as a read-only summary table. Raw Describe/Schema projection data
+  remains secondary in JSON/YAML tabs; the manual does not expose permission bit
+  internals or add storage-policy mutation controls.
 - OpenAPI projection includes CNCF vendor extensions:
   - `x-cncf-aggregate-collections`
   - `x-cncf-view-collections`

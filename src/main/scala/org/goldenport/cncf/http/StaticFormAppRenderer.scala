@@ -23,7 +23,7 @@ import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -5534,6 +5534,11 @@ object StaticFormAppRenderer {
         _manual_componentlet_section(component)
       else
         ""
+    val storageShapeCard =
+      if (selector.exists(NamingConventions.equivalentByNormalized(component.name, _)))
+        _manual_storage_shape_section(describe)
+      else
+        ""
     val body =
       s"""${_manual_card("Reference navigation",
          s"""<p>This manual is read-only. Use it to inspect help, describe, schema, OpenAPI, and MCP entry points.</p>
@@ -5547,6 +5552,7 @@ object StaticFormAppRenderer {
             |</div>""".stripMargin)}
          |${_manual_card("Children", childLinks)}
          |${componentletCard}
+         |${storageShapeCard}
          |${_manual_projection_card("Help", currentPath, help, Some("help"))}
          |${_manual_projection_card("Describe", currentPath, describe, Some("describe"))}
          |${_manual_projection_card("Schema", currentPath, schema, Some("schema"))}""".stripMargin
@@ -5683,6 +5689,82 @@ object StaticFormAppRenderer {
        ))}
        |${_manual_badges("Services", services)}
        |${_manual_badges("Componentlets", componentlets)}""".stripMargin
+  }
+
+  private def _manual_storage_shape_section(
+    record: Record
+  ): String = {
+    val entities = _manual_record_seq(record.asMap.get("entityCollections"))
+    if (entities.isEmpty)
+      ""
+    else {
+      val summaryRows = entities.map(_manual_storage_shape_summary_row).mkString("\n")
+      val fieldTables = entities.map(_manual_storage_shape_field_table).mkString("\n")
+      _manual_card(
+        "Storage shape",
+        s"""<p class="mb-3">Effective SimpleEntity storage-shape metadata from the component projection.</p>
+           |<div class="table-responsive">
+           |  <table class="table table-sm table-hover align-middle manual-summary-table">
+           |    <thead><tr><th>Entity</th><th>Collection</th><th>Memory policy</th><th>Working-set policy</th><th>Storage policy</th></tr></thead>
+           |    <tbody>
+           |      ${summaryRows}
+           |    </tbody>
+           |  </table>
+           |</div>
+           |${fieldTables}""".stripMargin,
+        Some("storage-shape")
+      )
+    }
+  }
+
+  private def _manual_storage_shape_summary_row(
+    record: Record
+  ): String = {
+    val shape = _manual_record_values(record.asMap.get("storageShape"))
+    val policy = shape.get("policy").flatMap(_manual_scalar).getOrElse("")
+    s"""<tr>
+       |  <td><code>${_escape(record.getString("entityName").getOrElse(""))}</code></td>
+       |  <td><code>${_escape(record.getString("collectionId").getOrElse(""))}</code></td>
+       |  <td><code>${_escape(record.getString("memoryPolicy").getOrElse(""))}</code></td>
+       |  <td><code>${_escape(record.getString("workingSetPolicy").getOrElse("-"))}</code></td>
+       |  <td><code>${_escape(policy)}</code></td>
+       |</tr>""".stripMargin
+  }
+
+  private def _manual_storage_shape_field_table(
+    record: Record
+  ): String = {
+    val entityName = record.getString("entityName").getOrElse("")
+    val shape = _manual_record_values(record.asMap.get("storageShape"))
+    val fields = _manual_record_seq(shape.get("fields"))
+    if (fields.isEmpty)
+      s"""<section class="mt-3">
+         |  <h3 class="h6">${_escape(entityName)} fields</h3>
+         |  ${_web_empty_state("No storage-shape field metadata.")}
+         |</section>""".stripMargin
+    else {
+      val rows = fields.map { field =>
+        s"""<tr>
+           |  <td><code>${_escape(field.getString("logicalName").getOrElse(""))}</code></td>
+           |  <td><code>${_escape(field.getString("storageName").getOrElse(""))}</code></td>
+           |  <td>${_escape(field.getString("classification").getOrElse(""))}</td>
+           |  <td>${_escape(field.getString("storageKind").getOrElse(""))}</td>
+           |  <td>${_escape(field.getString("dataType").getOrElse(""))}</td>
+           |  <td>${_escape(field.getString("source").getOrElse(""))}</td>
+           |</tr>""".stripMargin
+      }.mkString("\n")
+      s"""<section class="mt-3">
+         |  <h3 class="h6">${_escape(entityName)} fields</h3>
+         |  <div class="table-responsive">
+         |    <table class="table table-sm table-hover align-middle manual-storage-shape-fields">
+         |      <thead><tr><th>Logical name</th><th>Storage name</th><th>Classification</th><th>Storage kind</th><th>Data type</th><th>Source</th></tr></thead>
+         |      <tbody>
+         |        ${rows}
+         |      </tbody>
+         |    </table>
+         |  </div>
+         |</section>""".stripMargin
+    }
   }
 
   private def _manual_service_summary(

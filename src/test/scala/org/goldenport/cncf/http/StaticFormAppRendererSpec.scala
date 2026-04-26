@@ -55,7 +55,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -516,14 +516,30 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
             factoryObject = Some("domain.impl.NoticeAdminComponent")
           )
         )
+        val entityDescriptors = Vector(
+          EntityRuntimeDescriptor(
+            entityName = "notice",
+            collectionId = EntityCollectionId("sys", "sys", "notice"),
+            memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+            partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+            maxPartitions = 4,
+            maxEntitiesPerPartition = 100,
+            schema = Some(Schema(Vector(
+              Column(BaseContent.simple("id"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+              Column(BaseContent.simple("body"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+              Column(BaseContent.simple("securityAttributes"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One))
+            )))
+          )
+        )
         component.withComponentDescriptors(
           if (component.componentDescriptors.nonEmpty)
-            component.componentDescriptors.map(_.copy(componentlets = componentlets))
+            component.componentDescriptors.map(_.copy(componentlets = componentlets, entityRuntimeDescriptors = entityDescriptors))
           else
             Vector(ComponentDescriptor(
               name = Some(component.name),
               componentName = Some(component.name),
-              componentlets = componentlets
+              componentlets = componentlets,
+              entityRuntimeDescriptors = entityDescriptors
             ))
         )
       }
@@ -545,6 +561,22 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       componentHtml should include ("Componentlets")
       componentHtml should include ("notice-admin")
       componentHtml should include ("car-bundled")
+      componentHtml should include ("Raw Describe")
+      componentHtml should include ("Raw Schema")
+      componentHtml should include ("Storage shape")
+      componentHtml should include ("simple_entity_default")
+      componentHtml should include ("short_id")
+      componentHtml should include ("created_at")
+      componentHtml should include ("updated_by")
+      componentHtml should include ("owner_id")
+      componentHtml should include ("group_id")
+      componentHtml should include ("privilege_id")
+      componentHtml should include ("permission")
+      componentHtml should include ("compact_json_text")
+      componentHtml should include ("body")
+      componentHtml should include ("scalar_attribute")
+      componentHtml should include ("delegated_collection")
+      componentHtml should not include ("<td><code>securityAttributes</code></td>")
       componentHtml should include ("/web/notice-board/manual/notice-aggregate")
       componentHtml should include ("manual-summary-table")
       serviceHtml should include ("Service reference")

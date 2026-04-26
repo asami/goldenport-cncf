@@ -598,6 +598,30 @@ Expose effective SimpleEntity storage-shape decisions as component projection me
 
 ---
 
+## SS-06B: Manual Storage-Shape Summary
+
+Status: DONE
+
+### Objective
+
+Render effective SimpleEntity storage-shape decisions in component Web manual pages from the canonical projection metadata.
+
+### Completed Tasks
+
+- [x] Add a component manual `Storage shape` card sourced from `entityCollections.storageShape`.
+- [x] Render entity-level summary rows for entity, collection, memory policy, working-set policy, and storage policy.
+- [x] Render field-level rows for logical name, storage name, classification, storage kind, data type, and source.
+- [x] Keep raw Describe/Schema details in the existing JSON/YAML tabs.
+- [x] Keep the manual read-only and hide permission bit internals.
+
+### Guardrails
+
+- Do not add storage-policy mutation controls.
+- Do not invent a separate manual-only storage-shape data source.
+- Do not show legacy SimpleEntity attribute containers as storage fields.
+
+---
+
 ## SS-06: Storage-Shape Visibility
 
 Status: PLANNED
@@ -609,9 +633,11 @@ Expose storage-shape decisions so operators and developers can inspect the effec
 ### Detailed Tasks
 
 - [x] Add storage-shape summary to projection where entity metadata is shown.
-- [ ] Add storage-shape summary to manual/admin where entity metadata is shown.
-- [ ] Show which fields are expanded, encoded, compact permission, or delegated to child/entity storage.
-- [ ] Keep raw technical metadata secondary and collapsible where rendered in Web manual/admin pages.
+- [x] Add storage-shape summary to manual where entity metadata is shown.
+- [ ] Add storage-shape summary to admin where entity metadata is shown.
+- [x] Show which fields are expanded, encoded, compact permission, or delegated to child/entity storage.
+- [x] Keep raw technical metadata secondary and collapsible where rendered in Web manual pages.
+- [ ] Keep raw technical metadata secondary and collapsible where rendered in admin pages.
 
 ### Expected Outcome
 
