@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the Phase 18 BL-02 BlobStore SPI baseline.
  *
  * @since   Apr. 26, 2026
- * @version Apr. 26, 2026
+ * @version Apr. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobStoreSpec

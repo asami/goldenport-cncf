@@ -15,7 +15,7 @@ import org.simplemodeling.model.datatype.EntityId
  * Initial BlobStore backends for development and executable specifications.
  *
  * @since   Apr. 26, 2026
- * @version Apr. 26, 2026
+ * @version Apr. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InMemoryBlobStore(
