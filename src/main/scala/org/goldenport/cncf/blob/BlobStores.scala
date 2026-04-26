@@ -9,6 +9,7 @@ import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.datatype.ContentType
+import org.simplemodeling.model.datatype.EntityId
 
 /*
  * Initial BlobStore backends for development and executable specifications.
@@ -23,7 +24,7 @@ final class InMemoryBlobStore(
   backendBaseUrl: Option[String] = None
 ) extends BlobStore {
   private final case class Stored(
-    blobId: BlobId,
+    id: EntityId,
     ref: BlobStorageRef,
     contentType: ContentType,
     bytes: Array[Byte],
@@ -38,13 +39,13 @@ final class InMemoryBlobStore(
       bytes <- BlobStoreSupport.readAllBytes(payload)
       now = Instant.now
       digest = BlobStoreSupport.sha256(bytes)
-      key = BlobStoreSupport.keyFor(request.blobId, request.filename)
+      key = BlobStoreSupport.keyFor(request.id, request.filename)
       ref = BlobStorageRef(name, container, key)
-      stored = Stored(request.blobId, ref, request.contentType, bytes, digest, now)
+      stored = Stored(request.id, ref, request.contentType, bytes, digest, now)
       _ = _entries.update(ref.print, stored)
       access <- accessUrl(ref)
     } yield BlobPutResult(
-      blobId = request.blobId,
+      id = request.id,
       storageRef = ref,
       contentType = request.contentType,
       byteSize = bytes.length.toLong,
@@ -54,28 +55,31 @@ final class InMemoryBlobStore(
     )
 
   def get(ref: BlobStorageRef): Consequence[BlobReadResult] =
-    _entries.get(ref.print) match {
-      case Some(stored) =>
-        accessUrl(ref).map { access =>
-          BlobReadResult(
-            blobId = stored.blobId,
-            storageRef = ref,
-            contentType = stored.contentType,
-            byteSize = stored.bytes.length.toLong,
-            digest = stored.digest,
-            payload = Bag.binary(stored.bytes.clone()),
-            accessUrl = access,
-            storedAt = stored.storedAt
-          )
-        }
-      case None =>
-        Consequence.operationNotFound(s"blob:${ref.print}")
+    _validate_ref(ref).flatMap { _ =>
+      _entries.get(ref.print) match {
+        case Some(stored) =>
+          accessUrl(ref).map { access =>
+            BlobReadResult(
+              id = stored.id,
+              storageRef = ref,
+              contentType = stored.contentType,
+              byteSize = stored.bytes.length.toLong,
+              digest = stored.digest,
+              payload = Bag.binary(stored.bytes.clone()),
+              accessUrl = access,
+              storedAt = stored.storedAt
+            )
+          }
+        case None =>
+          Consequence.operationNotFound(s"blob:${ref.print}")
+      }
     }
 
-  def delete(ref: BlobStorageRef): Consequence[Unit] = {
-    _entries.remove(ref.print)
-    Consequence.unit
-  }
+  def delete(ref: BlobStorageRef): Consequence[Unit] =
+    _validate_ref(ref).map { _ =>
+      _entries.remove(ref.print)
+      ()
+    }
 
   def accessUrl(ref: BlobStorageRef): Consequence[BlobAccessUrl] =
     _validate_ref(ref).map { _ =>
@@ -113,7 +117,7 @@ final class LocalBlobStore(
   backendBaseUrl: Option[String] = None
 ) extends BlobStore {
   private final case class StoredMetadata(
-    blobId: BlobId,
+    id: EntityId,
     contentType: ContentType,
     byteSize: Long,
     digest: String,
@@ -128,14 +132,14 @@ final class LocalBlobStore(
       _ <- _ensure_root()
       now = Instant.now
       digest = BlobStoreSupport.sha256(bytes)
-      key = BlobStoreSupport.keyFor(request.blobId, request.filename)
+      key = BlobStoreSupport.keyFor(request.id, request.filename)
       ref = BlobStorageRef(name, container, key)
       path <- _path(ref)
       _ <- _write(path, bytes)
-      _ = _metadata.update(ref.print, StoredMetadata(request.blobId, request.contentType, bytes.length.toLong, digest, now))
+      _ = _metadata.update(ref.print, StoredMetadata(request.id, request.contentType, bytes.length.toLong, digest, now))
       access <- accessUrl(ref)
     } yield BlobPutResult(
-      blobId = request.blobId,
+      id = request.id,
       storageRef = ref,
       contentType = request.contentType,
       byteSize = bytes.length.toLong,
@@ -160,7 +164,7 @@ final class LocalBlobStore(
             }
             access <- accessUrl(ref)
           } yield BlobReadResult(
-            blobId = metadata.blobId,
+            id = metadata.id,
             storageRef = ref,
             contentType = metadata.contentType,
             byteSize = metadata.byteSize,
@@ -240,9 +244,9 @@ object BlobStoreSupport {
     digest.map("%02x".format(_)).mkString
   }
 
-  def keyFor(blobId: BlobId, filename: Option[String]): String = {
+  def keyFor(id: EntityId, filename: Option[String]): String = {
     val safe = filename.map(safeFilename).filter(_.nonEmpty).getOrElse("payload.bin")
-    s"${safeSegment(blobId.value)}/$safe"
+    s"${safeSegment(id.value)}/$safe"
   }
 
   def validKey(key: String): Boolean = {

@@ -33,7 +33,7 @@ implementation starts.
 - [x] Mark Phase 18 as the current active phase in strategy.
 - [x] Keep Phase 17 as the latest closed phase.
 - [x] Record Blob source modes: `managed` and `external_url`.
-- [x] Record Blob-owned association as the Phase 18 default.
+- [x] Record Blob attachment as the first Association runtime use case.
 - [x] Record user-facing and admin-facing API directions.
 - [x] Record Web management page direction.
 - [x] Record Aggregate/View metadata+URL projection direction.
@@ -45,7 +45,12 @@ implementation starts.
   object storage as the production-oriented target.
 - Managed Blob payloads are expected to be URL-addressable after storage,
   either through CNCF Blob routes or backend-provided object URLs.
-- Blob component owns association records for Phase 18.
+- Blob metadata is represented as a SimpleEntity-backed model so common Entity
+  admin/list/detail surfaces can inspect it.
+- Association is a CNCF runtime/entity foundation. Blob attachment is its first
+  concrete use case.
+- Association storage is policy-resolved by domain; Phase 18 does not require a
+  single global physical table for every association use case.
 - Aggregate/View output contains Blob metadata and display/download URLs only.
 - `BinaryBag` is the in-process payload carrier for managed Blob payloads.
 - Detach removes an association only; delete Blob is a separate operation.
@@ -55,8 +60,9 @@ implementation starts.
 - Do not implement runtime code in BL-01.
 - Do not add real S3, signed URL, thumbnail, virus scan, or resumable upload
   requirements to the first implementation slice.
-- Do not turn Blob association into a generic arbitrary relation component in
-  this phase.
+- Do not add a generic public association component in this phase.
+- Keep generic association APIs internal to runtime/component implementation
+  until a public operational need is proven.
 
 ---
 
@@ -76,10 +82,10 @@ resources.
 
 ### Expected Runtime Types
 
-- [x] `BlobId`
+- [x] Blob identity uses `EntityId`
 - [x] `BlobKind`
 - [x] `BlobSourceMode`
-- [ ] `BlobMetadata`
+- [x] `BlobMetadata`
 - [x] `BlobStorageRef`
 - [x] `BlobAccessUrl`
 - [x] `BlobPutRequest`
@@ -88,8 +94,8 @@ resources.
 - [x] `BlobStoreStatus`
 - [x] `BlobStore`
 
-`BlobMetadata` remains for BL-03 because metadata Entity and user/admin
-operations are intentionally out of BL-02 scope.
+`BlobMetadata` remains an API/read projection. BL-03B adds the persistent
+`Blob` SimpleEntity model that owns metadata storage.
 
 ### Expected Coverage
 
@@ -125,26 +131,62 @@ Status: DONE
 BL-03A provides the first user-facing Blob component surface:
 
 - [x] builtin `blob` component is installed in the default subsystem.
-- [x] `BlobMetadata` records managed/external URL Blob metadata.
-- [x] in-memory Blob metadata repository supports local/test flows.
+- [x] `BlobMetadata` records managed/external URL Blob metadata as an API/read
+      projection.
+- [x] EntityStore-backed Blob repository supports local/test flows through
+      runtime DataStore configuration.
 - [x] `register_blob` registers managed payloads through `BlobStore`.
 - [x] `register_blob` registers `external_url` Blobs as metadata-only rows.
 - [x] `read_blob` returns managed Blob payload bytes as an HTTP binary response.
-- [x] `read_blob` returns external URL Blob metadata without payload bytes.
+- [x] `resolve_blob_url` returns external URL Blob access metadata without
+      payload bytes.
+- [x] `read_blob` rejects `external_url` Blobs because they have no managed
+      payload.
 - [x] `get_blob_metadata` returns Blob metadata records.
 - [x] invalid kind/source mode and missing Blob ids fail deterministically.
 
 BL-03A intentionally does not implement entity association operations. Those
-belong to BL-05 so Blob-owned association data can be modeled explicitly.
+belong to BL-05 so generic association data can be modeled explicitly.
+
+### BL-03B: Blob SimpleEntity Persistence
+
+Status: DONE
+
+BL-03B changes Blob metadata persistence from an in-memory metadata map to a
+SimpleEntity-backed `Blob` model:
+
+- [x] Add `Blob` entity and `BlobCreate` create model.
+- [x] Add EntityStore-backed `BlobRepository`.
+- [x] Keep `BlobMetadata` as an API/read projection.
+- [x] Expose Blob entity metadata through the builtin Blob component descriptor.
+- [x] Keep payload bytes in BlobStore only.
+- [x] Keep `register_blob`, `read_blob`, `resolve_blob_url`, and
+      `get_blob_metadata` public operation behavior stable.
+
+### BL-03C: Blob Attachment User Operations
+
+Status: DONE
+
+BL-03C adds Blob user-facing association operations on top of the generic
+Association runtime foundation:
+
+- [x] `attach_blob_to_entity`
+- [x] `detach_blob_from_entity`
+- [x] `list_entity_blobs`
+- [x] Use `associationDomain = blob_attachment`.
+- [x] Store the Blob id as association target with `targetKind = blob`.
+- [x] Detach removes association only and does not delete Blob metadata or
+      payload.
 
 ### Expected Operations
 
 - [x] `register_blob`
 - [x] `read_blob`
+- [x] `resolve_blob_url`
 - [x] `get_blob_metadata`
-- [ ] `attach_blob_to_entity` (BL-05)
-- [ ] `detach_blob_from_entity` (BL-05)
-- [ ] `list_entity_blobs` (BL-05)
+- [x] `attach_blob_to_entity`
+- [x] `detach_blob_from_entity`
+- [x] `list_entity_blobs`
 
 ---
 
@@ -168,14 +210,41 @@ Expose operator/admin Blob APIs for diagnostics and controlled management.
 
 ---
 
-## BL-05: Blob-Owned Entity Association Model
+## BL-05: Generic Association Runtime Foundation
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
-Implement Blob-owned association records linking arbitrary entity ids to Blob
-metadata with role and ordering support.
+Implement a generic Association runtime/entity foundation that Blob attachment
+can use without introducing a public association component.
+
+### Implemented Baseline
+
+- [x] Add `org.goldenport.cncf.association` runtime package.
+- [x] Add `Association` SimpleEntity-backed model.
+- [x] Add `AssociationRepository`.
+- [x] Add `AssociationStoragePolicy` with shared and domain-specific
+      collection support.
+- [x] Keep `AssociationRepository` store-backed; repository-level working set is
+      intentionally not part of the Association foundation.
+
+### Storage Policy
+
+- Default logical model is generic `Association`.
+- Physical collection is resolved by `AssociationStoragePolicy`.
+- Blob attachment uses `association_blob_attachment` as a domain-specific
+  collection.
+- A single global table is not required for high-volume domains such as likes.
+
+### Residency Policy
+
+- Store remains the source of truth for Association repository queries.
+- Entity/View/Aggregate working sets may carry related Association snapshots for
+  display or low-latency reads.
+- Blob display optimization belongs to BL-07 Aggregate/View projection support,
+  not to `AssociationRepository`.
+- Logically deleted associations are not returned by normal EntityStore search.
 
 ### Expected Roles
 
@@ -201,7 +270,7 @@ store status.
 
 - `/web/blob/admin`
 - `/web/blob/admin/blobs`
-- `/web/blob/admin/blobs/{blobId}`
+- `/web/blob/admin/blobs/{id}`
 - `/web/blob/admin/associations`
 - `/web/blob/admin/store`
 

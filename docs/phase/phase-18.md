@@ -22,8 +22,10 @@ This document is a progress dashboard, not a design journal.
   Blob routes or backend-provided object URLs.
 - Keep Blob payloads outside ordinary entity records and outside SimpleEntity
   storage-shape policy.
-- Provide Blob metadata and Blob-owned association records linking Blob objects
-  to arbitrary entity ids.
+- Provide Blob metadata as a SimpleEntity so common Entity admin/list/detail
+  surfaces can inspect it.
+- Provide Blob attach/list/detach through a generic Association runtime
+  foundation rather than a Blob-private association table.
 - Provide user-facing APIs for upload/register, read, metadata lookup,
   attach/detach, and listing entity Blobs.
 - Provide admin-facing APIs and Web management pages for Blob metadata,
@@ -33,14 +35,20 @@ This document is a progress dashboard, not a design journal.
 
 Current semantic direction:
 
-- Blob metadata is entity-like management data.
+- Blob metadata is a builtin SimpleEntity-backed management model.
 - Blob payload storage is owned by a BlobStore SPI and carried in process by
   `BinaryBag`.
 - BlobStore is backed by a dedicated payload DataStore, not by ordinary entity
   storage.
-- Managed Blob metadata records the storage reference; display/download URLs
-  are resolved from that reference when the Blob is read or projected.
-- Blob association is owned by the Blob component for Phase 18.
+- Managed Blob entity records the storage reference; display/download URLs are
+  resolved from that reference when the Blob is read or projected.
+- Association is a CNCF runtime/entity foundation, not a standalone public
+  component and not a Blob-private mechanism.
+- Blob attachment uses the generic Association foundation with
+  `associationDomain = blob_attachment`.
+- Association repository queries are store-backed. Entity/View/Aggregate
+  working sets may carry related Association snapshots when display/runtime
+  residency is needed.
 - Domain entity components can use associated Blob metadata without changing
   their own storage shape.
 - Detaching a Blob from an entity removes the association only; deleting the
@@ -55,21 +63,25 @@ Current semantic direction:
   tables used for domain entities.
 - No signed URL, thumbnail generation, virus scanning, or resumable upload in
   the first slices.
-- No generic arbitrary-entity association component in this phase.
+- No generic public association component in this phase.
+- No single mandatory global association table; association storage is
+  policy-resolved by domain.
 - No Blob payload treatment as SimpleEntity scalar/value-object storage.
 
 ## 4. Current Work Stack
 
 - A (DONE): BL-01 — Open Phase 18 docs and freeze Blob scope/API split.
 - B (DONE): BL-02 — Blob runtime model, source-mode model, BlobStore SPI, local/in-memory payload store.
-- C (ACTIVE): BL-03 — Builtin Blob component user-facing operations.
+- C (DONE): BL-03 — Builtin Blob component user-facing operations.
   - BL-03A (DONE): metadata and payload operations
-    (`register_blob`, `read_blob`, `get_blob_metadata`).
-  - Entity association operations remain in BL-05.
+    (`register_blob`, `read_blob`, `resolve_blob_url`, `get_blob_metadata`).
+  - BL-03B (DONE): Blob metadata now persists as a SimpleEntity-backed model.
+  - BL-03C (DONE): Blob attach/list/detach operations use the generic
+    Association runtime foundation.
 - D (PLANNED): BL-04 — Builtin Blob component admin-facing operations.
-- E (PLANNED): BL-05 — Blob-owned entity association model and attach/detach operations.
+- E (DONE): BL-05 — Generic Association runtime foundation and Blob attachment usage.
 - F (PLANNED): BL-06 — Web/admin management pages for Blob metadata, payload links, and associations.
-- G (PLANNED): BL-07 — Aggregate/View Blob metadata projection support.
+- G (PLANNED): BL-07 — Aggregate/View Blob metadata and Association snapshot projection support.
 - H (PLANNED): BL-08 — Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
 
 Current note:
@@ -83,10 +95,10 @@ Current note:
 
 - [x] BL-01: Open Phase 18 docs and freeze Blob scope/API split.
 - [x] BL-02: Blob runtime model, source-mode model, BlobStore SPI, local/in-memory payload store.
-- [ ] BL-03: Builtin Blob component user-facing operations.
+- [x] BL-03: Builtin Blob component user-facing operations.
   - [x] BL-03A: Blob metadata and payload operations.
 - [ ] BL-04: Builtin Blob component admin-facing operations.
-- [ ] BL-05: Blob-owned entity association model and attach/detach operations.
+- [x] BL-05: Generic Association runtime foundation and Blob attachment usage.
 - [ ] BL-06: Web/admin management pages for Blob metadata, payload links, and associations.
 - [ ] BL-07: Aggregate/View Blob metadata projection support.
 - [ ] BL-08: Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
@@ -95,7 +107,7 @@ Current note:
 
 Blob metadata fields:
 
-- `blobId`
+- `id` as the Blob EntityId
 - `kind`
 - `sourceMode`
 - `filename`
@@ -108,11 +120,13 @@ Blob metadata fields:
   `externalUrl`
 - lifecycle/audit fields
 
-Blob association fields:
+Association fields used by Blob attachment:
 
 - `associationId`
 - `sourceEntityId`
-- `blobId`
+- `targetEntityId` = Blob EntityId
+- `targetKind` = `blob`
+- `associationDomain` = `blob_attachment`
 - `role`
 - optional ordering for galleries/attachments
 - lifecycle/audit fields
@@ -121,6 +135,7 @@ User-facing Blob operations:
 
 - `register_blob`
 - `read_blob`
+- `resolve_blob_url`
 - `get_blob_metadata`
 - `attach_blob_to_entity`
 - `detach_blob_from_entity`
@@ -140,7 +155,7 @@ Web management pages:
 
 - `/web/blob/admin`
 - `/web/blob/admin/blobs`
-- `/web/blob/admin/blobs/{blobId}`
+- `/web/blob/admin/blobs/{id}`
 - `/web/blob/admin/associations`
 - `/web/blob/admin/store`
 

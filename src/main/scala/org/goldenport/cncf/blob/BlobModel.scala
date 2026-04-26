@@ -7,23 +7,15 @@ import org.goldenport.Consequence
 import org.goldenport.bag.BinaryBag
 import org.goldenport.datatype.ContentType
 import org.goldenport.record.Record
+import org.simplemodeling.model.datatype.EntityId
 
 /*
  * Runtime model for CNCF-managed Blob payload storage.
  *
  * @since   Apr. 26, 2026
- * @version Apr. 26, 2026
+ * @version Apr. 27, 2026
  * @author  ASAMI, Tomoharu
  */
-final case class BlobId(value: String) {
-  def print: String = value
-}
-
-object BlobId {
-  def apply(value: java.util.UUID): BlobId =
-    BlobId(value.toString)
-}
-
 enum BlobKind(val value: String) {
   case Image extends BlobKind("image")
   case Video extends BlobKind("video")
@@ -97,7 +89,7 @@ final case class BlobAccessUrl(
 )
 
 final case class BlobPutRequest(
-  blobId: BlobId,
+  id: EntityId,
   kind: BlobKind,
   filename: Option[String],
   contentType: ContentType,
@@ -105,7 +97,7 @@ final case class BlobPutRequest(
 )
 
 final case class BlobPutResult(
-  blobId: BlobId,
+  id: EntityId,
   storageRef: BlobStorageRef,
   contentType: ContentType,
   byteSize: Long,
@@ -115,7 +107,7 @@ final case class BlobPutResult(
 )
 
 final case class BlobReadResult(
-  blobId: BlobId,
+  id: EntityId,
   storageRef: BlobStorageRef,
   contentType: ContentType,
   byteSize: Long,
@@ -126,7 +118,7 @@ final case class BlobReadResult(
 )
 
 final case class BlobMetadata(
-  blobId: BlobId,
+  id: EntityId,
   kind: BlobKind,
   sourceMode: BlobSourceMode,
   filename: Option[String],
@@ -142,7 +134,7 @@ final case class BlobMetadata(
 ) {
   def toRecord: Record =
     Record.dataAuto(
-      "blobId" -> blobId.value,
+      "id" -> id.value,
       "kind" -> kind.print,
       "sourceMode" -> sourceMode.print,
       "filename" -> filename,
@@ -159,6 +151,53 @@ final case class BlobMetadata(
       "attributes" -> Record.data(attributes.toVector.sortBy(_._1)*)
     )
 }
+
+final case class Blob(
+  id: EntityId,
+  kind: BlobKind,
+  sourceMode: BlobSourceMode,
+  filename: Option[String],
+  contentType: Option[ContentType],
+  byteSize: Option[Long],
+  digest: Option[String],
+  storageRef: Option[BlobStorageRef],
+  externalUrl: Option[String],
+  accessUrl: BlobAccessUrl,
+  createdAt: Instant,
+  updatedAt: Instant,
+  attributes: Map[String, String] = Map.empty
+) {
+  def metadata: BlobMetadata =
+    BlobMetadata(
+      id = id,
+      kind = kind,
+      sourceMode = sourceMode,
+      filename = filename,
+      contentType = contentType,
+      byteSize = byteSize,
+      digest = digest,
+      storageRef = storageRef,
+      externalUrl = externalUrl,
+      accessUrl = accessUrl,
+      createdAt = createdAt,
+      updatedAt = updatedAt,
+      attributes = attributes
+    )
+}
+
+final case class BlobCreate(
+  id: EntityId,
+  kind: BlobKind,
+  sourceMode: BlobSourceMode,
+  filename: Option[String],
+  contentType: Option[ContentType],
+  byteSize: Option[Long],
+  digest: Option[String],
+  storageRef: Option[BlobStorageRef],
+  externalUrl: Option[String],
+  accessUrl: BlobAccessUrl,
+  attributes: Map[String, String] = Map.empty
+)
 
 final case class BlobStoreStatus(
   backend: String,

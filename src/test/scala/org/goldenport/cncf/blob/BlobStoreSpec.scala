@@ -5,6 +5,7 @@ import java.nio.file.Files
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
 import org.goldenport.datatype.ContentType
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -109,7 +110,7 @@ final class BlobStoreSpec
 
       Then("the store returns metadata and CNCF route access URLs")
       val putResult = _success(put)
-      putResult.blobId shouldBe request.blobId
+      putResult.id shouldBe request.id
       putResult.contentType shouldBe ContentType.TEXT_PLAIN
       putResult.byteSize shouldBe 10L
       putResult.digest shouldBe BlobStoreSupport.sha256("hello blob".getBytes(StandardCharsets.UTF_8))
@@ -143,6 +144,25 @@ final class BlobStoreSpec
       Then("the access URL is marked as backend-provided")
       result.accessUrl.urlSource shouldBe BlobAccessUrlSource.Backend
       result.accessUrl.displayUrl should startWith ("https://blob.example.test/assets/")
+    }
+
+    "reject storage refs from another store" in {
+      Given("an in-memory BlobStore and a reference issued by another store")
+      val store = InMemoryBlobStore(name = "memory-a")
+      val request = _request("blob-memory-mismatch", Some("payload.bin"), ContentType.APPLICATION_OCTET_STREAM)
+      val stored = _success(store.put(request, Bag.binary(Array[Byte](1, 2, 3))))
+      val foreignref = stored.storageRef.copy(store = "memory-b")
+
+      When("reading, deleting, or resolving URLs for the foreign reference")
+      val read = store.get(foreignref)
+      val delete = store.delete(foreignref)
+      val url = store.accessUrl(foreignref)
+
+      Then("each operation fails before touching local entries")
+      read shouldBe a[Consequence.Failure[_]]
+      delete shouldBe a[Consequence.Failure[_]]
+      url shouldBe a[Consequence.Failure[_]]
+      _success(store.get(stored.storageRef)).byteSize shouldBe 3L
     }
   }
 
@@ -276,7 +296,7 @@ final class BlobStoreSpec
         "日本語 file.png",
         "spaces and symbols !@#.pdf"
       )
-      val id = BlobId("Blob Key Spec")
+      val id = _id("Blob Key Spec")
 
       When("building storage keys")
       val keys = filenames.map(filename => BlobStoreSupport.keyFor(id, Some(filename)))
@@ -296,11 +316,27 @@ final class BlobStoreSpec
     contentType: ContentType
   ): BlobPutRequest =
     BlobPutRequest(
-      blobId = BlobId(id),
+      id = _id(id),
       kind = BlobKind.Binary,
       filename = filename,
       contentType = contentType
     )
+
+  private val _collection_id: EntityCollectionId =
+    EntityCollectionId("cncf", "builtin", "blob")
+
+  private def _id(value: String): EntityId =
+    EntityId("cncf", _label(value), _collection_id)
+
+  private def _label(value: String): String =
+    value.trim.toLowerCase(java.util.Locale.ROOT).map {
+      case c if c.isLetterOrDigit => c
+      case _ => '_'
+    }.mkString.replaceAll("_+", "_").stripPrefix("_").stripSuffix("_") match {
+      case "" => "blob"
+      case s if s.head.isLetter => s
+      case s => s"b_$s"
+    }
 
   private def _success[A](result: Consequence[A]): A =
     result match {

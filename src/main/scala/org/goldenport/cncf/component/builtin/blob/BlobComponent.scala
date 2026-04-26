@@ -1,14 +1,16 @@
 package org.goldenport.cncf.component.builtin.blob
 
 import java.nio.charset.StandardCharsets
-import java.time.Instant
 import java.util.UUID
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall, QueryAction}
+import org.goldenport.cncf.association.{AssociationCreate, AssociationDomain, AssociationFilter, AssociationRecordCodec, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.blob.*
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentId, ComponentInit, ComponentInstanceId}
+import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.datatype.{ContentType, MimeBody}
 import org.goldenport.http.{HttpResponse, HttpStatus}
 import org.goldenport.protocol.Protocol
@@ -17,27 +19,35 @@ import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
-import org.goldenport.schema.{DataType, Multiplicity, ValueDomain, XBlob, XString}
+import org.goldenport.schema.{Column, DataType, Multiplicity, Schema, ValueDomain, XBlob, XInt, XLong, XString}
 import org.goldenport.value.BaseContent
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * Builtin Blob user-facing component.
  *
  * @since   Apr. 26, 2026
- * @version Apr. 26, 2026
+ * @version Apr. 27, 2026
  * @author  ASAMI, Tomoharu
  */
-final class BlobComponent() extends Component
+final class BlobComponent() extends Component {
+  override protected def initialize_Component(params: ComponentInit): Unit =
+    withComponentDescriptors(componentDescriptors ++ BlobComponent.componentDescriptors)
+}
 
 object BlobComponent {
   trait BlobService {
-    def registerBlob(request: RegisterBlobRequest): Consequence[BlobMetadata]
-    def readBlob(blobId: BlobId): Consequence[BlobReadOutcome]
-    def getBlobMetadata(blobId: BlobId): Consequence[BlobMetadata]
+    def registerBlob(request: RegisterBlobRequest)(using ExecutionContext): Consequence[BlobMetadata]
+    def readBlob(id: EntityId)(using ExecutionContext): Consequence[BlobReadOutcome]
+    def resolveBlobUrl(id: EntityId)(using ExecutionContext): Consequence[Record]
+    def getBlobMetadata(id: EntityId)(using ExecutionContext): Consequence[BlobMetadata]
+    def attachBlobToEntity(request: AttachBlobRequest)(using ExecutionContext): Consequence[Record]
+    def detachBlobFromEntity(request: DetachBlobRequest)(using ExecutionContext): Consequence[Record]
+    def listEntityBlobs(request: ListEntityBlobsRequest)(using ExecutionContext): Consequence[Record]
   }
 
   final case class RegisterBlobRequest(
-    blobId: BlobId,
+    id: EntityId,
     kind: BlobKind,
     sourceMode: BlobSourceMode,
     filename: Option[String],
@@ -47,14 +57,50 @@ object BlobComponent {
     attributes: Map[String, String] = Map.empty
   )
 
+  final case class AttachBlobRequest(
+    sourceEntityId: String,
+    id: EntityId,
+    role: String,
+    sortOrder: Option[Int]
+  )
+
+  final case class DetachBlobRequest(
+    sourceEntityId: String,
+    id: EntityId,
+    role: Option[String]
+  )
+
+  final case class ListEntityBlobsRequest(
+    sourceEntityId: String,
+    role: Option[String]
+  )
+
   sealed trait BlobReadOutcome
   object BlobReadOutcome {
     final case class Managed(result: BlobReadResult) extends BlobReadOutcome
-    final case class External(metadata: BlobMetadata) extends BlobReadOutcome
   }
 
   val name: String = "blob"
   val componentId: ComponentId = ComponentId(name)
+  val BlobCollectionId: EntityCollectionId = BlobRepository.CollectionId
+
+  def componentDescriptors: Vector[ComponentDescriptor] =
+    Vector(ComponentDescriptor(
+      componentName = Some(name),
+      entityRuntimeDescriptors = Vector(
+        EntityRuntimeDescriptor(
+          entityName = "blob",
+          collectionId = BlobCollectionId,
+          memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+          partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+          maxPartitions = 4,
+          maxEntitiesPerPartition = 1000,
+          workingSetPolicy = Some(WorkingSetPolicy.Disabled),
+          workingSetPolicySource = Some(WorkingSetPolicySource.Code),
+          schema = Some(_blob_schema)
+        )
+      )
+    ))
 
   object Factory extends Component.SinglePrimaryBundleFactory {
     protected def create_Component(params: ComponentCreate): Component =
@@ -65,16 +111,25 @@ object BlobComponent {
       comp: Component
     ): Component.Core = {
       val request = _register_blob_request_definition
-      val idRequest = _blob_id_request
+      val idRequest = _id_request
+      val attachRequest = _attach_blob_request_definition
+      val detachRequest = _detach_blob_request_definition
+      val listRequest = _list_entity_blobs_request_definition
       val metadataResponse = spec.ResponseDefinition(result = List(DataType.Named("BlobMetadata")))
+      val urlResponse = spec.ResponseDefinition(result = List(DataType.Named("BlobAccessUrl")))
       val payloadResponse = spec.ResponseDefinition(result = List(XBlob))
+      val recordResponse = spec.ResponseDefinition(result = List(DataType.Named("Record")))
       val register = new RegisterBlobOperationDefinition(request, metadataResponse)
       val read = new ReadBlobOperationDefinition(idRequest, payloadResponse)
+      val resolve = new ResolveBlobUrlOperationDefinition(idRequest, urlResponse)
       val metadata = new GetBlobMetadataOperationDefinition(idRequest, metadataResponse)
+      val attach = new AttachBlobToEntityOperationDefinition(attachRequest, recordResponse)
+      val detach = new DetachBlobFromEntityOperationDefinition(detachRequest, recordResponse)
+      val list = new ListEntityBlobsOperationDefinition(listRequest, recordResponse)
       val service = spec.ServiceDefinition(
         name = "blob",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(register, read, metadata)
+          operations = NonEmptyVector.of(register, read, resolve, metadata, attach, detach, list)
         )
       )
       val protocol = Protocol(
@@ -85,7 +140,8 @@ object BlobComponent {
         Component.Port.of(
           new DefaultBlobService(
             InMemoryBlobStore(),
-            BlobMetadataRepository.inMemory()
+            BlobRepository.entityStore(),
+            AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
           )
         )
       )
@@ -93,9 +149,9 @@ object BlobComponent {
       Component.Core.create(name, componentId, instanceid, protocol)
     }
 
-    private def _blob_id_request: spec.RequestDefinition =
+    private def _id_request: spec.RequestDefinition =
       spec.RequestDefinition(
-        parameters = List(spec.ParameterDefinition(content = BaseContent.simple("blobId"), kind = spec.ParameterDefinition.Kind.Argument))
+        parameters = List(spec.ParameterDefinition(content = BaseContent.simple("id"), kind = spec.ParameterDefinition.Kind.Argument))
       )
 
     private def _register_blob_request_definition: spec.RequestDefinition =
@@ -103,11 +159,37 @@ object BlobComponent {
         parameters = List(
           _required_property("sourceMode"),
           _required_property("kind"),
-          _optional_property("blobId"),
           _optional_property("filename"),
           _optional_property("contentType"),
           _optional_argument("payload", XBlob),
           _optional_property("externalUrl")
+        )
+      )
+
+    private def _attach_blob_request_definition: spec.RequestDefinition =
+      spec.RequestDefinition(
+        parameters = List(
+          _required_property("sourceEntityId"),
+          _required_property("id"),
+          _required_property("role"),
+          _optional_property("sortOrder", XInt)
+        )
+      )
+
+    private def _detach_blob_request_definition: spec.RequestDefinition =
+      spec.RequestDefinition(
+        parameters = List(
+          _required_property("sourceEntityId"),
+          _required_property("id"),
+          _optional_property("role")
+        )
+      )
+
+    private def _list_entity_blobs_request_definition: spec.RequestDefinition =
+      spec.RequestDefinition(
+        parameters = List(
+          _required_property("sourceEntityId"),
+          _optional_property("role")
         )
       )
 
@@ -146,11 +228,12 @@ object BlobComponent {
       )
   }
 
-  private final class DefaultBlobService(
+  private[blob] final class DefaultBlobService(
     store: BlobStore,
-    repository: BlobMetadataRepository
+    repository: BlobRepository,
+    associations: AssociationRepository
   ) extends BlobService {
-    def registerBlob(request: RegisterBlobRequest): Consequence[BlobMetadata] =
+    def registerBlob(request: RegisterBlobRequest)(using ExecutionContext): Consequence[BlobMetadata] =
       request.sourceMode match {
         case BlobSourceMode.Managed =>
           _register_managed(request)
@@ -158,27 +241,89 @@ object BlobComponent {
           _register_external_url(request)
       }
 
-    def readBlob(blobId: BlobId): Consequence[BlobReadOutcome] =
-      repository.get(blobId).flatMap {
-        case metadata if metadata.sourceMode == BlobSourceMode.Managed =>
-          metadata.storageRef match {
+    def readBlob(id: EntityId)(using ExecutionContext): Consequence[BlobReadOutcome] =
+      repository.get(id).flatMap {
+        case blob if blob.sourceMode == BlobSourceMode.Managed =>
+          blob.storageRef match {
             case Some(ref) => store.get(ref).map(BlobReadOutcome.Managed.apply)
-            case None => Consequence.operationIllegal("blob.read_blob", s"managed blob has no storageRef: ${blobId.value}")
+            case None => Consequence.operationIllegal("blob.read_blob", s"managed blob has no storageRef: ${id.value}")
           }
-        case metadata =>
-          Consequence.success(BlobReadOutcome.External(metadata))
+        case blob =>
+          Consequence.operationIllegal("blob.read_blob", s"${blob.sourceMode.print} blob has no managed payload; use resolve_blob_url: ${id.value}")
       }
 
-    def getBlobMetadata(blobId: BlobId): Consequence[BlobMetadata] =
-      repository.get(blobId)
+    def resolveBlobUrl(id: EntityId)(using ExecutionContext): Consequence[Record] =
+      repository.get(id).map(blob => _blob_access_url_record(blob.metadata))
 
-    private def _register_managed(request: RegisterBlobRequest): Consequence[BlobMetadata] =
+    def getBlobMetadata(id: EntityId)(using ExecutionContext): Consequence[BlobMetadata] =
+      repository.get(id).map(_.metadata)
+
+    def attachBlobToEntity(request: AttachBlobRequest)(using ExecutionContext): Consequence[Record] =
+      repository.get(request.id).flatMap { blob =>
+        val filter = _blob_association_filter(request.sourceEntityId, Some(request.role), Some(blob.id))
+        associations.list(filter).flatMap {
+          case existing +: _ =>
+            Consequence.success(AssociationRecordCodec.toRecord(existing))
+          case _ =>
+            associations.create(
+              AssociationCreate(
+                id = None,
+                associationId = UUID.randomUUID().toString,
+                sourceEntityId = request.sourceEntityId,
+                targetEntityId = blob.id.value,
+                targetKind = Some("blob"),
+                role = request.role,
+                associationDomain = AssociationDomain.BlobAttachment,
+                sortOrder = request.sortOrder,
+                collectionId = AssociationStoragePolicy.BlobAttachmentCollection
+              )
+            ).map(AssociationRecordCodec.toRecord)
+        }
+      }
+
+    def detachBlobFromEntity(request: DetachBlobRequest)(using ExecutionContext): Consequence[Record] =
+      associations.list(_blob_association_filter(request.sourceEntityId, request.role, Some(request.id))).flatMap {
+        case Vector() => Consequence.operationNotFound(s"blob association:${request.sourceEntityId}:${request.id.value}")
+        case values =>
+          values.foldLeft(Consequence.success(0)) { (z, association) =>
+            z.flatMap(count => associations.delete(association).map(_ => count + 1))
+          }.map(count => Record.dataAuto("detachedCount" -> count))
+      }
+
+    def listEntityBlobs(request: ListEntityBlobsRequest)(using ExecutionContext): Consequence[Record] =
+      associations.list(_blob_association_filter(request.sourceEntityId, request.role, None)).flatMap { values =>
+        values.foldLeft(Consequence.success(Vector.empty[BlobMetadata])) { (z, association) =>
+          z.flatMap { acc =>
+            EntityId.parse(association.targetEntityId).flatMap(id => repository.get(id)).map(blob => acc :+ blob.metadata)
+          }
+        }.map { metadata =>
+          Record.dataAuto(
+            "data" -> metadata.map(_.toRecord),
+            "fetchedCount" -> metadata.size
+          )
+        }
+      }
+
+    private def _blob_association_filter(
+      sourceid: String,
+      role: Option[String],
+      id: Option[EntityId]
+    ): AssociationFilter =
+      AssociationFilter(
+        domain = AssociationDomain.BlobAttachment,
+        sourceEntityId = Some(sourceid),
+        targetEntityId = id.map(_.value),
+        targetKind = Some("blob"),
+        role = role
+      )
+
+    private def _register_managed(request: RegisterBlobRequest)(using ExecutionContext): Consequence[BlobMetadata] =
       request.payload match {
         case Some(payload) =>
           val contentType = request.contentType.getOrElse(ContentType.APPLICATION_OCTET_STREAM)
           store.put(
             BlobPutRequest(
-              blobId = request.blobId,
+              id = request.id,
               kind = request.kind,
               filename = request.filename,
               contentType = contentType,
@@ -186,10 +331,9 @@ object BlobComponent {
             ),
             payload
           ).flatMap { result =>
-            val now = result.storedAt
-            repository.save(
-              BlobMetadata(
-                blobId = result.blobId,
+            repository.create(
+              BlobCreate(
+                id = result.id,
                 kind = request.kind,
                 sourceMode = BlobSourceMode.Managed,
                 filename = request.filename,
@@ -199,24 +343,25 @@ object BlobComponent {
                 storageRef = Some(result.storageRef),
                 externalUrl = None,
                 accessUrl = result.accessUrl,
-                createdAt = now,
-                updatedAt = now,
                 attributes = request.attributes
               )
-            )
+            ).map(_.metadata).recoverWith { conclusion =>
+              store.delete(result.storageRef)
+                .recover(_ => ())
+                .flatMap(_ => Consequence.Failure[BlobMetadata](conclusion))
+            }
           }
         case None =>
           Consequence.argumentMissing("payload")
       }
 
-    private def _register_external_url(request: RegisterBlobRequest): Consequence[BlobMetadata] =
+    private def _register_external_url(request: RegisterBlobRequest)(using ExecutionContext): Consequence[BlobMetadata] =
       request.externalUrl match {
         case Some(url) if url.trim.nonEmpty =>
-          val now = Instant.now
-          repository.save(
-            BlobMetadata(
-              blobId = request.blobId,
-              kind = request.kind,
+          repository.create(
+              BlobCreate(
+                id = request.id,
+                kind = request.kind,
               sourceMode = BlobSourceMode.ExternalUrl,
               filename = request.filename,
               contentType = request.contentType,
@@ -229,11 +374,9 @@ object BlobComponent {
                 downloadUrl = url.trim,
                 urlSource = BlobAccessUrlSource.Backend
               ),
-              createdAt = now,
-              updatedAt = now,
               attributes = request.attributes
             )
-          )
+          ).map(_.metadata)
         case _ =>
           Consequence.argumentMissing("externalUrl")
       }
@@ -266,7 +409,22 @@ object BlobComponent {
       )
 
     def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      _blob_id(req).map(ReadBlobAction(req, _))
+      _id(req).map(ReadBlobAction(req, _))
+  }
+
+  private final class ResolveBlobUrlOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "resolve_blob_url",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _id(req).map(ResolveBlobUrlAction(req, _))
   }
 
   private final class GetBlobMetadataOperationDefinition(
@@ -281,7 +439,52 @@ object BlobComponent {
       )
 
     def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      _blob_id(req).map(GetBlobMetadataAction(req, _))
+      _id(req).map(GetBlobMetadataAction(req, _))
+  }
+
+  private final class AttachBlobToEntityOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "attach_blob_to_entity",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _attach_blob_request(req).map(AttachBlobToEntityAction(req, _))
+  }
+
+  private final class DetachBlobFromEntityOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "detach_blob_from_entity",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _detach_blob_request(req).map(DetachBlobFromEntityAction(req, _))
+  }
+
+  private final class ListEntityBlobsOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "list_entity_blobs",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _list_entity_blobs_request(req).map(ListEntityBlobsAction(req, _))
   }
 
   private final case class RegisterBlobAction(
@@ -297,18 +500,56 @@ object BlobComponent {
 
   private final case class ReadBlobAction(
     request: Request,
-    blobId: BlobId
+    id: EntityId
   ) extends QueryAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      ReadBlobActionCall(core, blobId)
+      ReadBlobActionCall(core, id)
+  }
+
+  private final case class ResolveBlobUrlAction(
+    request: Request,
+    id: EntityId
+  ) extends QueryAction {
+    def createCall(core: ActionCall.Core): ActionCall =
+      ResolveBlobUrlActionCall(core, id)
   }
 
   private final case class GetBlobMetadataAction(
     request: Request,
-    blobId: BlobId
+    id: EntityId
   ) extends QueryAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      GetBlobMetadataActionCall(core, blobId)
+      GetBlobMetadataActionCall(core, id)
+  }
+
+  private final case class AttachBlobToEntityAction(
+    request: Request,
+    attachRequest: AttachBlobRequest
+  ) extends CommandAction {
+    override def commandExecutionMode: CommandExecutionMode =
+      CommandExecutionMode.SyncDirectNoJob
+
+    def createCall(core: ActionCall.Core): ActionCall =
+      AttachBlobToEntityActionCall(core, attachRequest)
+  }
+
+  private final case class DetachBlobFromEntityAction(
+    request: Request,
+    detachRequest: DetachBlobRequest
+  ) extends CommandAction {
+    override def commandExecutionMode: CommandExecutionMode =
+      CommandExecutionMode.SyncDirectNoJob
+
+    def createCall(core: ActionCall.Core): ActionCall =
+      DetachBlobFromEntityActionCall(core, detachRequest)
+  }
+
+  private final case class ListEntityBlobsAction(
+    request: Request,
+    listRequest: ListEntityBlobsRequest
+  ) extends QueryAction {
+    def createCall(core: ActionCall.Core): ActionCall =
+      ListEntityBlobsActionCall(core, listRequest)
   }
 
   private final case class RegisterBlobActionCall(
@@ -316,17 +557,17 @@ object BlobComponent {
     registerRequest: RegisterBlobRequest
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _service(core).flatMap(_.registerBlob(registerRequest)).map { metadata =>
+      _service(core).flatMap(_.registerBlob(registerRequest)(using core.executionContext)).map { metadata =>
         OperationResponse.RecordResponse(metadata.toRecord)
       }
   }
 
   private final case class ReadBlobActionCall(
     core: ActionCall.Core,
-    blobId: BlobId
+    id: EntityId
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _service(core).flatMap(_.readBlob(blobId)).map {
+      _service(core).flatMap(_.readBlob(id)(using core.executionContext)).map {
         case BlobReadOutcome.Managed(result) =>
           OperationResponse.Http(
             HttpResponse.Binary(
@@ -335,25 +576,56 @@ object BlobComponent {
               result.payload
             )
           )
-        case BlobReadOutcome.External(metadata) =>
-          OperationResponse.Http(
-            HttpResponse.Text(
-              HttpStatus.SeeOther,
-              ContentType.TEXT_PLAIN,
-              Bag.text(metadata.accessUrl.displayUrl),
-              Record.data("Location" -> metadata.accessUrl.displayUrl)
-            )
-          )
+      }
+  }
+
+  private final case class ResolveBlobUrlActionCall(
+    core: ActionCall.Core,
+    id: EntityId
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _service(core).flatMap(_.resolveBlobUrl(id)(using core.executionContext)).map { record =>
+        OperationResponse.RecordResponse(record)
       }
   }
 
   private final case class GetBlobMetadataActionCall(
     core: ActionCall.Core,
-    blobId: BlobId
+    id: EntityId
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _service(core).flatMap(_.getBlobMetadata(blobId)).map { metadata =>
+      _service(core).flatMap(_.getBlobMetadata(id)(using core.executionContext)).map { metadata =>
         OperationResponse.RecordResponse(metadata.toRecord)
+      }
+  }
+
+  private final case class AttachBlobToEntityActionCall(
+    core: ActionCall.Core,
+    attachRequest: AttachBlobRequest
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _service(core).flatMap(_.attachBlobToEntity(attachRequest)(using core.executionContext)).map { record =>
+        OperationResponse.RecordResponse(record)
+      }
+  }
+
+  private final case class DetachBlobFromEntityActionCall(
+    core: ActionCall.Core,
+    detachRequest: DetachBlobRequest
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _service(core).flatMap(_.detachBlobFromEntity(detachRequest)(using core.executionContext)).map { record =>
+        OperationResponse.RecordResponse(record)
+      }
+  }
+
+  private final case class ListEntityBlobsActionCall(
+    core: ActionCall.Core,
+    listRequest: ListEntityBlobsRequest
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _service(core).flatMap(_.listEntityBlobs(listRequest)(using core.executionContext)).map { record =>
+        OperationResponse.RecordResponse(record)
       }
   }
 
@@ -367,13 +639,13 @@ object BlobComponent {
     for {
       sourceMode <- _string(req, "sourceMode", "source_mode").map(BlobSourceMode.parse).getOrElse(Consequence.argumentMissing("sourceMode"))
       kind <- _string(req, "kind").map(BlobKind.parse).getOrElse(Consequence.argumentMissing("kind"))
-      blobId = _string(req, "blobId", "blob_id", "id").map(BlobId.apply).getOrElse(BlobId(UUID.randomUUID()))
+      id = _new_blob_entity_id()
       filename = _string(req, "filename", "fileName")
       mimeBody = _any(req, "payload", "body", "file").collect { case m: MimeBody => m }
       contentType = mimeBody.map(_.contentType).orElse(_string(req, "contentType", "content_type").map(ContentType.parse))
       payload <- _payload(req, mimeBody)
     } yield RegisterBlobRequest(
-      blobId = blobId,
+      id = id,
       kind = kind,
       sourceMode = sourceMode,
       filename = filename,
@@ -400,14 +672,58 @@ object BlobComponent {
         }
     }
 
-  private def _blob_id(req: Request): Consequence[BlobId] =
-    _string(req, "blobId", "blob_id", "id") match {
-      case Some(value) => Consequence.success(BlobId(value))
-      case None => Consequence.argumentMissing("blobId")
-    }
+  private def _id(req: Request): Consequence[EntityId] =
+    _string(req, "id").map(EntityId.parse).getOrElse(Consequence.argumentMissing("id"))
+
+  private def _attach_blob_request(req: Request): Consequence[AttachBlobRequest] =
+    for {
+      source <- _string(req, "sourceEntityId", "source_entity_id", "entityId", "entity_id").map(Consequence.success).getOrElse(Consequence.argumentMissing("sourceEntityId"))
+      id <- _id(req)
+      role <- _string(req, "role").map(Consequence.success).getOrElse(Consequence.argumentMissing("role"))
+    } yield AttachBlobRequest(
+      sourceEntityId = source,
+      id = id,
+      role = role,
+      sortOrder = _int(req, "sortOrder", "sort_order")
+    )
+
+  private def _detach_blob_request(req: Request): Consequence[DetachBlobRequest] =
+    for {
+      source <- _string(req, "sourceEntityId", "source_entity_id", "entityId", "entity_id").map(Consequence.success).getOrElse(Consequence.argumentMissing("sourceEntityId"))
+      id <- _id(req)
+    } yield DetachBlobRequest(
+      sourceEntityId = source,
+      id = id,
+      role = _string(req, "role")
+    )
+
+  private def _list_entity_blobs_request(req: Request): Consequence[ListEntityBlobsRequest] =
+    _string(req, "sourceEntityId", "source_entity_id", "entityId", "entity_id").map { source =>
+      Consequence.success(ListEntityBlobsRequest(source, _string(req, "role")))
+    }.getOrElse(Consequence.argumentMissing("sourceEntityId"))
+
+  private def _new_blob_entity_id(): EntityId =
+    EntityId(BlobCollectionId.major, BlobCollectionId.minor, BlobCollectionId)
+
+  private def _blob_access_url_record(metadata: BlobMetadata): Record =
+    Record.dataAuto(
+      "id" -> metadata.id.value,
+      "sourceMode" -> metadata.sourceMode.print,
+      "displayUrl" -> metadata.accessUrl.displayUrl,
+      "downloadUrl" -> metadata.accessUrl.downloadUrl,
+      "urlSource" -> metadata.accessUrl.urlSource.print,
+      "expiresAt" -> metadata.accessUrl.expiresAt.map(_.toString)
+    )
 
   private def _string(req: Request, names: String*): Option[String] =
     _any(req, names*).map(_.toString).map(_.trim).filter(_.nonEmpty)
+
+  private def _int(req: Request, names: String*): Option[Int] =
+    _any(req, names*).flatMap {
+      case n: java.lang.Number => Some(n.intValue)
+      case s: String => scala.util.Try(s.trim.toInt).toOption
+      case other => scala.util.Try(other.toString.trim.toInt).toOption
+    }
 
   private def _any(req: Request, names: String*): Option[Any] = {
     val params = req.arguments ++ req.properties
@@ -417,4 +733,29 @@ object BlobComponent {
       }
     }.nextOption()
   }
+
+  private def _blob_schema: Schema =
+    Schema(Vector(
+      _column("id"),
+      _column("kind"),
+      _column("sourceMode"),
+      _column("filename", Multiplicity.ZeroOne),
+      _column("contentType", Multiplicity.ZeroOne),
+      _column("byteSize", Multiplicity.ZeroOne, XLong),
+      _column("digest", Multiplicity.ZeroOne),
+      _column("storageRef", Multiplicity.ZeroOne),
+      _column("externalUrl", Multiplicity.ZeroOne),
+      _column("displayUrl"),
+      _column("downloadUrl"),
+      _column("urlSource"),
+      _column("createdAt"),
+      _column("updatedAt")
+    ))
+
+  private def _column(
+    name: String,
+    multiplicity: Multiplicity = Multiplicity.One,
+    datatype: org.goldenport.schema.DataType = XString
+  ): Column =
+    Column(BaseContent.simple(name), ValueDomain(datatype = datatype, multiplicity = multiplicity))
 }
