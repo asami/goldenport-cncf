@@ -5,7 +5,7 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version Apr. 11, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 object SchemaProjection {
@@ -50,6 +50,7 @@ object SchemaProjection {
             "parameters" -> x.parameters
           )
         }
+        val entitycollections = entityCollectionRecords(component)
         Record.data(
           "type" -> "schema",
           "targetType" -> "component",
@@ -59,6 +60,7 @@ object SchemaProjection {
           "services" -> services.map { service =>
             project(base, Some(s"${component.name}.${service.name}"))
           },
+          "entityCollections" -> entitycollections,
           "aggregateCollections" -> aggregates,
           "viewCollections" -> views,
           "operationDefinitions" -> operationdefs

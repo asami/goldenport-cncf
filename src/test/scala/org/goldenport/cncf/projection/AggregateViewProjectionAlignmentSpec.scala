@@ -8,10 +8,12 @@ import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
 import org.goldenport.cncf.component._
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy}
-import org.goldenport.cncf.entity.aggregate.AggregateDefinition
+import org.goldenport.cncf.entity.aggregate.{AggregateDefinition, AggregateMemberDefinition}
 import org.goldenport.cncf.entity.view.{ViewDefinition, ViewQueryDefinition}
 import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField}
 import org.goldenport.cncf.testutil.TestComponentFactory
+import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, XString}
+import org.goldenport.value.BaseContent
 import org.simplemodeling.model.datatype.EntityCollectionId
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -21,7 +23,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 21, 2026
  *  version Mar. 23, 2026
  *  version Apr. 11, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 final class AggregateViewProjectionAlignmentSpec
@@ -69,6 +71,29 @@ final class AggregateViewProjectionAlignmentSpec
       _records(describe("operationDefinitions")).head.getString("outputType") shouldBe Some("GetPersonResult")
       _records(describe("operationDefinitions")).head.getString("inputValueKind") shouldBe Some("QUERY_VALUE")
       _records(_records(describe("operationDefinitions")).head.asMap("parameters")).map(_.getString("name").getOrElse("")) shouldBe Vector("id")
+      val describeEntity = _records(describe("entityCollections")).head
+      describeEntity.getString("entityName") shouldBe Some("Person")
+      describeEntity.getString("collectionId") shouldBe Some("sys-sys-Person")
+      describeEntity.getString("memoryPolicy") shouldBe Some("LoadToMemory")
+      val describeStorageShape = _record(describeEntity.asMap("storageShape"))
+      describeStorageShape.getString("policy") shouldBe Some("simple_entity_default")
+      val describeStorageFields = _records(describeStorageShape.asMap("fields"))
+      _storage_kind(describeStorageFields, "shortId") shouldBe Some("expanded_column")
+      _storage_name(describeStorageFields, "shortId") shouldBe Some("short_id")
+      _storage_kind(describeStorageFields, "ownerId") shouldBe Some("expanded_column")
+      _storage_name(describeStorageFields, "ownerId") shouldBe Some("owner_id")
+      _storage_kind(describeStorageFields, "permission") shouldBe Some("compact_json_text")
+      describeStorageFields.exists(_.getString("logicalName").contains("owner.read")) shouldBe false
+      _storage_kind(describeStorageFields, "body") shouldBe Some("column")
+      _storage_kind(describeStorageFields, "tenantId") shouldBe Some("expanded_column")
+      _storage_name(describeStorageFields, "tenantId") shouldBe Some("tenant_id")
+      _storage_kind(describeStorageFields, "traceId") shouldBe Some("expanded_column")
+      _storage_name(describeStorageFields, "traceId") shouldBe Some("trace_id")
+      _storage_kind(describeStorageFields, "lineItems") shouldBe Some("delegated_collection")
+      _storage_kind(describeStorageFields, "person_aggregate") shouldBe None
+      _storage_kind(describeStorageFields, "person_view") shouldBe None
+      _storage_kind(describeStorageFields, "securityAttributes") shouldBe None
+      _storage_kind(describeStorageFields, "lifecycleAttributes") shouldBe None
 
       _records(schema("aggregateCollections")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_aggregate", "profile_aggregate")
       _records(schema("viewCollections")).map(_.getString("name").getOrElse("")) shouldBe Vector("person_view", "summary_view")
@@ -79,6 +104,14 @@ final class AggregateViewProjectionAlignmentSpec
       _records(schema("operationDefinitions")).last.getString("inputType") shouldBe Some("SavePersonInput")
       _records(schema("operationDefinitions")).last.getString("outputType") shouldBe Some("SavePersonResult")
       _records(_records(schema("operationDefinitions")).last.asMap("parameters")).map(_.getString("name").getOrElse("")) shouldBe Vector("id", "name")
+      val schemaEntity = _records(schema("entityCollections")).head
+      schemaEntity.getString("entityName") shouldBe Some("Person")
+      val schemaStorageFields = _records(_record(schemaEntity.asMap("storageShape")).asMap("fields"))
+      _storage_name(schemaStorageFields, "createdAt") shouldBe Some("created_at")
+      _storage_name(schemaStorageFields, "updatedBy") shouldBe Some("updated_by")
+      _storage_name(schemaStorageFields, "groupId") shouldBe Some("group_id")
+      _storage_name(schemaStorageFields, "privilegeId") shouldBe Some("privilege_id")
+      _storage_kind(schemaStorageFields, "status") shouldBe Some("column")
 
       help shouldBe help2
       describe shouldBe describe2
@@ -130,7 +163,11 @@ final class AggregateViewProjectionAlignmentSpec
       override def aggregateDefinitions: Vector[AggregateDefinition] =
         Vector(
           AggregateDefinition(name = "profile_aggregate", entityName = "profile"),
-          AggregateDefinition(name = "person_aggregate", entityName = "person")
+          AggregateDefinition(
+            name = "person_aggregate",
+            entityName = "person",
+            members = Vector(AggregateMemberDefinition(name = "lineItems", entityName = "PersonLine"))
+          )
         )
 
       override def viewDefinitions: Vector[ViewDefinition] =
@@ -224,7 +261,28 @@ final class AggregateViewProjectionAlignmentSpec
               memoryPolicy = EntityMemoryPolicy.LoadToMemory,
               partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
               maxPartitions = 64,
-              maxEntitiesPerPartition = 10000
+              maxEntitiesPerPartition = 10000,
+              schema = Some(Schema(Vector(
+                Column(BaseContent.simple("id"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+                Column(BaseContent.simple("body"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+                Column(BaseContent.simple("status"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+                Column(BaseContent.simple("ownerId"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+                Column(BaseContent.simple("securityAttributes"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+                Column(BaseContent.simple("lifecycleAttributes"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One))
+              )))
+            ),
+            EntityRuntimeDescriptor(
+              entityName = "PersonLine",
+              collectionId = EntityCollectionId("sys", "sys", "PersonLine"),
+              memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+              partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+              maxPartitions = 64,
+              maxEntitiesPerPartition = 10000,
+              schema = Some(Schema(Vector(
+                Column(BaseContent.simple("id"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+                Column(BaseContent.simple("personId"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One)),
+                Column(BaseContent.simple("label"), ValueDomain(datatype = XString, multiplicity = Multiplicity.One))
+              )))
             )
           )
         )
@@ -253,6 +311,24 @@ final class AggregateViewProjectionAlignmentSpec
       case xs: Seq[?] => xs.toVector.map(_.toString)
       case _ => Vector.empty
     }
+
+  private def _storage_field(
+    fields: Vector[Record],
+    logicalName: String
+  ): Option[Record] =
+    fields.find(_.getString("logicalName").contains(logicalName))
+
+  private def _storage_kind(
+    fields: Vector[Record],
+    logicalName: String
+  ): Option[String] =
+    _storage_field(fields, logicalName).flatMap(_.getString("storageKind"))
+
+  private def _storage_name(
+    fields: Vector[Record],
+    logicalName: String
+  ): Option[String] =
+    _storage_field(fields, logicalName).flatMap(_.getString("storageName"))
 }
 
 private final case class _NoopOperation(

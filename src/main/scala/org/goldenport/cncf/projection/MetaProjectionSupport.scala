@@ -5,11 +5,13 @@ import org.goldenport.schema.DataType
 import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, ServiceDefinition}
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentOriginLabel
+import org.goldenport.cncf.entity.SimpleEntityStorageShapePolicy
+import org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor
 import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Mar.  5, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -201,6 +203,69 @@ private[projection] object MetaProjectionSupport {
         )
       }
 
+  def entityCollectionRecords(component: Component): Vector[Record] =
+    component.componentDescriptors
+      .flatMap(_.entityRuntimeDescriptors)
+      .groupBy(_.entityName)
+      .toVector
+      .map(_._2.head)
+      .sortBy(_.entityName)
+      .map(entity_collection_record(component, _))
+
+  def entity_collection_record(
+    component: Component,
+    descriptor: EntityRuntimeDescriptor
+  ): Record =
+    Record.data(
+      "entityName" -> descriptor.entityName,
+      "collectionId" -> _collection_id_string(descriptor),
+      "memoryPolicy" -> descriptor.memoryPolicy.toString,
+      "workingSetPolicy" -> descriptor.workingSetPolicy.map(_.label).getOrElse(""),
+      "workingSetPolicySource" -> descriptor.workingSetPolicySource.map(_.toString.toLowerCase).getOrElse(""),
+      "usageKind" -> descriptor.usageKind.toString,
+      "operationKind" -> descriptor.operationKind.toString,
+      "applicationDomain" -> descriptor.applicationDomain.toString,
+      "storageShape" -> storage_shape_record(component, descriptor)
+    )
+
+  def storage_shape_record(
+    component: Component,
+    descriptor: EntityRuntimeDescriptor
+  ): Record =
+    Record.data(
+      "policy" -> SimpleEntityStorageShapePolicy.PolicyName,
+      "fields" -> storage_shape_field_records(component, descriptor)
+    )
+
+  def storage_shape_field_records(
+    component: Component,
+    descriptor: EntityRuntimeDescriptor
+  ): Vector[Record] = {
+    val platform = _management_storage_fields ++ _security_storage_fields ++ Vector(_permission_storage_field)
+    val platformKeys = platform.map(_.getString("logicalName").getOrElse("")).map(_normalize).toSet
+    val domain =
+      descriptor.schema.toVector.flatMap(_.columns).flatMap { column =>
+        val logical = column.name.value
+        if (platformKeys.contains(_normalize(logical)) || _non_storage_schema_keys.contains(_normalize(logical)))
+          None
+        else
+          Some(_field_record(
+            logicalName = logical,
+            storageName = SimpleEntityStorageShapePolicy.targetName(logical),
+            classification = "scalar_attribute",
+            storageKind = "column",
+            dataType = Some(column.domain.datatype.name)
+          ))
+      }
+    val delegated = _delegated_collection_fields(component, descriptor)
+    (platform ++ domain ++ delegated).sortBy { r =>
+      (
+        _storage_sort_order(r.getString("classification").getOrElse("")),
+        r.getString("logicalName").getOrElse("")
+      )
+    }
+  }
+
   def component_runtime_name(component: Component): String =
     NamingConventions.toNormalizedSegment(component.name)
 
@@ -238,4 +303,108 @@ private[projection] object MetaProjectionSupport {
       case Vector(x) => x.name
       case vs => vs.map(_.name).mkString("[", ", ", "]")
     }
+
+  private def _management_storage_fields: Vector[Record] =
+    SimpleEntityStorageShapePolicy.ManagementLogicalFields.map { logical =>
+      _field_record(
+        logicalName = logical,
+        storageName = SimpleEntityStorageShapePolicy.targetName(logical),
+        classification = "management",
+        storageKind = "expanded_column"
+      )
+    }
+
+  private def _security_storage_fields: Vector[Record] =
+    SimpleEntityStorageShapePolicy.SecurityIdentityLogicalFields.map { logical =>
+      _field_record(
+        logicalName = logical,
+        storageName = SimpleEntityStorageShapePolicy.targetName(logical),
+        classification = "security_identity",
+        storageKind = "expanded_column"
+      )
+    }
+
+  private def _permission_storage_field: Record =
+    _field_record(
+      logicalName = "permission",
+      storageName = SimpleEntityStorageShapePolicy.PermissionField,
+      classification = "permission",
+      storageKind = "compact_json_text"
+    )
+
+  private def _delegated_collection_fields(
+    component: Component,
+    descriptor: EntityRuntimeDescriptor
+  ): Vector[Record] = {
+    val aggregatemembers = component.aggregateDefinitions
+      .filter(x => NamingConventions.equivalentByNormalized(x.entityName, descriptor.entityName))
+      .flatMap(_.members)
+      .map(_.name)
+    aggregatemembers.distinct.sorted.map(name =>
+      _field_record(
+        logicalName = name,
+        storageName = name,
+        classification = "delegated_collection",
+        storageKind = "delegated_collection",
+        source = Some("aggregate")
+      )
+    ).toVector
+  }
+
+  private def _field_record(
+    logicalName: String,
+    storageName: String,
+    classification: String,
+    storageKind: String,
+    dataType: Option[String] = None,
+    source: Option[String] = None
+  ): Record =
+    Record.data(
+      "logicalName" -> logicalName,
+      "storageName" -> storageName,
+      "classification" -> classification,
+      "storageKind" -> storageKind,
+      "dataType" -> dataType.getOrElse(""),
+      "source" -> source.getOrElse("")
+    )
+
+  private def _storage_sort_order(classification: String): Int =
+    classification match {
+      case "management" => 10
+      case "security_identity" => 20
+      case "permission" => 30
+      case "scalar_attribute" => 40
+      case "delegated_collection" => 50
+      case _ => 90
+    }
+
+  private def _collection_id_string(descriptor: EntityRuntimeDescriptor): String =
+    Vector(
+      descriptor.collectionId.major,
+      descriptor.collectionId.minor,
+      descriptor.collectionId.name
+    ).mkString("-")
+
+  private def _normalize(p: String): String =
+    p.replace("-", "").replace("_", "").trim.toLowerCase(java.util.Locale.ROOT)
+
+  private val _non_storage_schema_keys: Set[String] =
+    Set(
+      "lifecycleAttributes",
+      "publicationAttributes",
+      "securityAttributes",
+      "resourceAttributes",
+      "auditAttributes",
+      "nameAttributes",
+      "descriptiveAttributes",
+      "contextualAttribute",
+      "lifecycle_attributes",
+      "publication_attributes",
+      "security_attributes",
+      "resource_attributes",
+      "audit_attributes",
+      "name_attributes",
+      "descriptive_attributes",
+      "contextual_attribute"
+    ).map(_normalize)
 }

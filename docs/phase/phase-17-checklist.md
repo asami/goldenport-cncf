@@ -49,7 +49,8 @@ Phase 17 work proceeds in this order:
 14. SS-05C-E adds generated CML-derived storage-shape coverage.
 15. SS-05C-F adds unsupported typed scalar fallback coverage.
 16. SS-05C completes executable coverage for the target storage shape.
-17. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
+17. SS-06A exposes effective storage shape in projection metadata.
+18. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
 
 This order avoids changing DB record shape before Record purpose, API boundary,
 and security access boundary are clear.
@@ -575,6 +576,28 @@ records.
 
 ---
 
+## SS-06A: Storage-Shape Metadata Projection
+
+Status: DONE
+
+### Objective
+
+Expose effective SimpleEntity storage-shape decisions as component projection metadata before manual/admin rendering.
+
+### Completed Tasks
+
+- [x] Add entity collection storage-shape metadata to component describe projection.
+- [x] Add the same entity collection storage-shape metadata to component schema projection.
+- [x] Show management fields, security identity fields, compact permission, scalar fields, and delegated collection metadata.
+- [x] Keep permission bit internals hidden.
+
+### Guardrails
+
+- Do not add manual/admin rendering in SS-06A.
+- Do not inspect live records or mutate storage policy.
+
+---
+
 ## SS-06: Storage-Shape Visibility
 
 Status: PLANNED
@@ -585,7 +608,8 @@ Expose storage-shape decisions so operators and developers can inspect the effec
 
 ### Detailed Tasks
 
-- [ ] Add storage-shape summary to manual/admin/projection where entity metadata is shown.
+- [x] Add storage-shape summary to projection where entity metadata is shown.
+- [ ] Add storage-shape summary to manual/admin where entity metadata is shown.
 - [ ] Show which fields are expanded, encoded, compact permission, or delegated to child/entity storage.
 - [ ] Keep raw technical metadata secondary and collapsible where rendered in Web manual/admin pages.
 

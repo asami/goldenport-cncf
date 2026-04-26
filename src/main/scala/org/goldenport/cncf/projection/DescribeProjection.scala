@@ -5,7 +5,7 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version Apr. 11, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 object DescribeProjection {
@@ -61,6 +61,7 @@ object DescribeProjection {
             "parameters" -> x.parameters
           )
         }
+        val entitycollections = entityCollectionRecords(component)
         Record.data(
           "type" -> "component",
           "name" -> component.name,
@@ -71,6 +72,7 @@ object DescribeProjection {
           "services" -> services.map(service_record),
           "aggregates" -> aggregates,
           "views" -> views,
+          "entityCollections" -> entitycollections,
           "operationDefinitions" -> operationdefs
         )
       case Target.ServiceTarget(component, service) =>

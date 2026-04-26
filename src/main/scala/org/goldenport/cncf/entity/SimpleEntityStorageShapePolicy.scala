@@ -13,6 +13,29 @@ import org.simplemodeling.model.value.SecurityAttributes
  */
 object SimpleEntityStorageShapePolicy {
   final val PermissionField = "permission"
+  final val PolicyName = "simple_entity_default"
+  val ManagementLogicalFields: Vector[String] =
+    Vector(
+      "id",
+      "shortId",
+      "createdAt",
+      "updatedAt",
+      "createdBy",
+      "updatedBy",
+      "aliveness",
+      "postStatus",
+      "deletedAt",
+      "deletedBy",
+      "tenantId",
+      "organizationId",
+      "publishAt",
+      "publicAt",
+      "publishedBy",
+      "traceId",
+      "correlationId"
+    )
+  val SecurityIdentityLogicalFields: Vector[String] =
+    Vector("ownerId", "groupId", "privilegeId")
 
   private val _target_names: Map[String, String] = Map(
     "id" -> "id",
