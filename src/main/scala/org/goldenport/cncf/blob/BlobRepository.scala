@@ -20,6 +20,7 @@ trait BlobRepository {
   def create(blob: BlobCreate)(using ExecutionContext): Consequence[Blob]
   def get(id: EntityId)(using ExecutionContext): Consequence[Blob]
   def list(offset: Int = 0, limit: Option[Int] = None)(using ExecutionContext): Consequence[Vector[Blob]]
+  def delete(id: EntityId)(using ExecutionContext): Consequence[Unit]
 }
 
 object BlobRepository {
@@ -67,6 +68,9 @@ final class EntityStoreBlobRepository extends BlobRepository {
 
   def list(offset: Int = 0, limit: Option[Int] = None)(using ctx: ExecutionContext): Consequence[Vector[Blob]] =
     _search(Query.plan(Record.empty, limit = limit, offset = Some(offset)))
+
+  def delete(id: EntityId)(using ctx: ExecutionContext): Consequence[Unit] =
+    EntityStore.standard().delete(id)
 
   private def _search(
     query: Query[?]

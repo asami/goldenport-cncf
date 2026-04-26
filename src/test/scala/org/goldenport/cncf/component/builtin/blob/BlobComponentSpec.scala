@@ -13,7 +13,7 @@ import org.goldenport.http.HttpResponse
 import org.goldenport.protocol.{Argument, Property, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
-import org.goldenport.schema.{Multiplicity, XBlob}
+import org.goldenport.schema.{Multiplicity, XBlob, XBoolean}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -61,6 +61,9 @@ final class BlobComponentSpec
       val adminGet = operations.getOrElse("admin_get_blob", fail("missing admin_get_blob operation"))
       val adminAssociations = operations.getOrElse("admin_list_blob_associations", fail("missing admin_list_blob_associations operation"))
       val adminStatus = operations.getOrElse("admin_blob_store_status", fail("missing admin_blob_store_status operation"))
+      val adminDelete = operations.getOrElse("admin_delete_blob", fail("missing admin_delete_blob operation"))
+      val adminAttach = operations.getOrElse("admin_attach_blob_to_entity", fail("missing admin_attach_blob_to_entity operation"))
+      val adminDetach = operations.getOrElse("admin_detach_blob_from_entity", fail("missing admin_detach_blob_from_entity operation"))
 
       Then("register_blob exposes its accepted user-facing input fields")
       val registerParameters = register.request.parameters.map(p => p.name -> p).toMap
@@ -93,6 +96,13 @@ final class BlobComponentSpec
       adminAssociations.response.result.map(_.name) shouldBe List("Record")
       adminStatus.request.parameters shouldBe Nil
       adminStatus.response.result.map(_.name) shouldBe List("Record")
+      adminDelete.request.parameters.map(_.name) should contain allOf ("id", "force")
+      adminDelete.request.parameters.find(_.name == "force").map(_.datatype) shouldBe Some(XBoolean)
+      adminDelete.response.result.map(_.name) shouldBe List("Record")
+      adminAttach.request.parameters.map(_.name) should contain allOf ("sourceEntityId", "id", "role", "sortOrder")
+      adminAttach.response.result.map(_.name) shouldBe List("Record")
+      adminDetach.request.parameters.map(_.name) should contain allOf ("sourceEntityId", "id", "role")
+      adminDetach.response.result.map(_.name) shouldBe List("Record")
     }
 
     "publish Blob as a reusable SimpleEntity admin surface" in {
@@ -374,6 +384,115 @@ final class BlobComponentSpec
       store.deletedRefs shouldBe store.putRefs
     }
 
+    "reject admin Blob delete while attached unless forced" in {
+      Given("a default subsystem with an attached managed Blob")
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val registered = _record(_success(subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("delete attached".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "image", None),
+          Property("filename", "delete-attached.png", None),
+          Property("contentType", ContentType.IMAGE_PNG.header, None)
+        )
+      ))))
+      val id = registered.getString("id").getOrElse(fail("Blob id should be present"))
+      _success(subsystem.executeOperationResponse(_request(
+        "admin_attach_blob_to_entity",
+        Property("sourceEntityId", "admin-delete-product", None),
+        Property("id", id, None),
+        Property("role", "galleryImage", None)
+      )))
+
+      When("admin_delete_blob is executed without force")
+      val rejected = subsystem.executeOperationResponse(_blob_request("admin_delete_blob", id))
+
+      Then("the delete fails and the metadata and association remain")
+      rejected shouldBe a[Consequence.Failure[_]]
+      _record(_success(subsystem.executeOperationResponse(_blob_request("admin_get_blob", id)))).getString("id") shouldBe Some(id)
+      val associations = _record(_success(subsystem.executeOperationResponse(_request(
+        "admin_list_blob_associations",
+        Property("id", id, None)
+      ))))
+      associations.getInt("fetchedCount") shouldBe Some(1)
+    }
+
+    "force admin Blob delete cascades Blob associations and removes metadata" in {
+      Given("a default subsystem with an attached external URL Blob")
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val registered = _record(_success(subsystem.executeOperationResponse(_request(
+        "register_blob",
+        Property("sourceMode", "external_url", None),
+        Property("kind", "attachment", None),
+        Property("filename", "forced-delete.pdf", None),
+        Property("contentType", "application/pdf", None),
+        Property("externalUrl", "https://example.test/forced-delete.pdf", None)
+      ))))
+      val id = registered.getString("id").getOrElse(fail("Blob id should be present"))
+      _success(subsystem.executeOperationResponse(_request(
+        "admin_attach_blob_to_entity",
+        Property("sourceEntityId", "admin-force-product", None),
+        Property("id", id, None),
+        Property("role", "attachment", None)
+      )))
+
+      When("admin_delete_blob is executed with force")
+      val deleted = _record(_success(subsystem.executeOperationResponse(_request(
+        "admin_delete_blob",
+        Property("id", id, None),
+        Property("force", "true", None)
+      ))))
+
+      Then("the Blob metadata and referencing associations are removed")
+      deleted.getString("deletedBlobId") shouldBe Some(id)
+      deleted.getInt("deletedAssociationCount") shouldBe Some(1)
+      deleted.getString("payloadDeleted") shouldBe Some("false")
+      deleted.getString("sourceMode") shouldBe Some("external_url")
+      subsystem.executeOperationResponse(_blob_request("admin_get_blob", id)) shouldBe a[Consequence.Failure[_]]
+      val associations = _record(_success(subsystem.executeOperationResponse(_request(
+        "admin_list_blob_associations",
+        Property("id", id, None)
+      ))))
+      associations.getInt("fetchedCount") shouldBe Some(0)
+    }
+
+    "delete Blob metadata before managed payload cleanup" in {
+      Given("a Blob service with a BlobStore that fails delete")
+      given ExecutionContext = ExecutionContext.test()
+      val id = _blob_entity_id("delete_payload_failure")
+      val ref = BlobStorageRef("recording", BlobStorageRef.DefaultContainer, id.value)
+      val blob = Blob(
+        id = id,
+        kind = BlobKind.Image,
+        sourceMode = BlobSourceMode.Managed,
+        filename = Some("delete-failure.png"),
+        contentType = Some(ContentType.IMAGE_PNG),
+        byteSize = Some(14),
+        digest = Some("sha256:test"),
+        storageRef = Some(ref),
+        externalUrl = None,
+        accessUrl = BlobUrl.cncfRoute(ref),
+        createdAt = java.time.Instant.parse("2026-04-27T00:00:00Z"),
+        updatedAt = java.time.Instant.parse("2026-04-27T00:00:00Z")
+      )
+      val store = new RecordingBlobStore(failDelete = true)
+      val repository = new RecordingBlobRepository(blob)
+      val service = new BlobComponent.DefaultBlobService(
+        store,
+        repository,
+        AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
+      )
+
+      When("admin_delete_blob cannot delete the managed payload")
+      val result = service.adminDeleteBlob(BlobComponent.AdminDeleteBlobRequest(id, force = false))
+
+      Then("the delete reports failure without leaving visible Blob metadata")
+      result shouldBe a[Consequence.Failure[_]]
+      repository.deletedIds shouldBe Vector(id)
+      service.getBlobMetadata(id) shouldBe a[Consequence.Failure[_]]
+    }
+
     "fail deterministically for invalid registration metadata and missing Blob ids" in {
       Given("a default subsystem")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
@@ -431,7 +550,7 @@ final class BlobComponentSpec
   private def _blob_entity_id(minor: String): EntityId =
     EntityId("cncf", minor, EntityCollectionId("cncf", "builtin", "blob"))
 
-  private final class RecordingBlobStore extends BlobStore {
+  private final class RecordingBlobStore(failDelete: Boolean = false) extends BlobStore {
     var putRefs: Vector[BlobStorageRef] = Vector.empty
     var deletedRefs: Vector[BlobStorageRef] = Vector.empty
 
@@ -457,7 +576,10 @@ final class BlobComponentSpec
 
     def delete(ref: BlobStorageRef): Consequence[Unit] = {
       deletedRefs = deletedRefs :+ ref
-      Consequence.unit
+      if (failDelete)
+        Consequence.stateConflict(s"blob payload delete failed: ${ref.print}")
+      else
+        Consequence.unit
     }
 
     def accessUrl(ref: BlobStorageRef): Consequence[BlobAccessUrl] =
@@ -476,5 +598,28 @@ final class BlobComponentSpec
 
     def list(offset: Int = 0, limit: Option[Int] = None)(using ExecutionContext): Consequence[Vector[Blob]] =
       Consequence.success(Vector.empty)
+
+    def delete(id: EntityId)(using ExecutionContext): Consequence[Unit] =
+      Consequence.stateConflict(s"blob metadata delete failed: ${id.value}")
+  }
+
+  private final class RecordingBlobRepository(initial: Blob) extends BlobRepository {
+    private var values: Map[String, Blob] = Map(initial.id.value -> initial)
+    var deletedIds: Vector[EntityId] = Vector.empty
+
+    def create(blob: BlobCreate)(using ExecutionContext): Consequence[Blob] =
+      Consequence.stateConflict(s"blob metadata create not supported: ${blob.id.value}")
+
+    def get(id: EntityId)(using ExecutionContext): Consequence[Blob] =
+      values.get(id.value).map(Consequence.success).getOrElse(Consequence.operationNotFound(s"blob metadata:${id.value}"))
+
+    def list(offset: Int = 0, limit: Option[Int] = None)(using ExecutionContext): Consequence[Vector[Blob]] =
+      Consequence.success(values.values.toVector.drop(offset).take(limit.getOrElse(Int.MaxValue)))
+
+    def delete(id: EntityId)(using ExecutionContext): Consequence[Unit] = {
+      deletedIds = deletedIds :+ id
+      values = values - id.value
+      Consequence.unit
+    }
   }
 }

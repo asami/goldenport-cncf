@@ -21,7 +21,7 @@ import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
-import org.goldenport.schema.{Column, DataType, Multiplicity, Schema, ValueDomain, XBlob, XInt, XLong, XString}
+import org.goldenport.schema.{Column, DataType, Multiplicity, Schema, ValueDomain, XBlob, XBoolean, XInt, XLong, XString}
 import org.goldenport.value.BaseContent
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
@@ -50,6 +50,9 @@ object BlobComponent {
     def adminGetBlob(id: EntityId)(using ExecutionContext): Consequence[BlobMetadata]
     def adminListBlobAssociations(request: AdminListBlobAssociationsRequest)(using ExecutionContext): Consequence[Record]
     def adminBlobStoreStatus()(using ExecutionContext): Consequence[Record]
+    def adminDeleteBlob(request: AdminDeleteBlobRequest)(using ExecutionContext): Consequence[Record]
+    def adminAttachBlobToEntity(request: AttachBlobRequest)(using ExecutionContext): Consequence[Record]
+    def adminDetachBlobFromEntity(request: DetachBlobRequest)(using ExecutionContext): Consequence[Record]
   }
 
   final case class RegisterBlobRequest(
@@ -100,6 +103,11 @@ object BlobComponent {
     page: AdminPageRequest
   )
 
+  final case class AdminDeleteBlobRequest(
+    id: EntityId,
+    force: Boolean
+  )
+
   sealed trait BlobReadOutcome
   object BlobReadOutcome {
     final case class Managed(result: BlobReadResult) extends BlobReadOutcome
@@ -143,6 +151,7 @@ object BlobComponent {
       val listRequest = _list_entity_blobs_request_definition
       val adminListRequest = _admin_list_blobs_request_definition
       val adminAssociationRequest = _admin_list_blob_associations_request_definition
+      val adminDeleteRequest = _admin_delete_blob_request_definition
       val metadataResponse = spec.ResponseDefinition(result = List(DataType.Named("BlobMetadata")))
       val urlResponse = spec.ResponseDefinition(result = List(DataType.Named("BlobAccessUrl")))
       val payloadResponse = spec.ResponseDefinition(result = List(XBlob))
@@ -158,6 +167,9 @@ object BlobComponent {
       val adminGet = new AdminGetBlobOperationDefinition(idRequest, metadataResponse)
       val adminAssociations = new AdminListBlobAssociationsOperationDefinition(adminAssociationRequest, recordResponse)
       val adminStatus = new AdminBlobStoreStatusOperationDefinition(emptyRequest, recordResponse)
+      val adminDelete = new AdminDeleteBlobOperationDefinition(adminDeleteRequest, recordResponse)
+      val adminAttach = new AdminAttachBlobToEntityOperationDefinition(attachRequest, recordResponse)
+      val adminDetach = new AdminDetachBlobFromEntityOperationDefinition(detachRequest, recordResponse)
       val service = spec.ServiceDefinition(
         name = "blob",
         operations = spec.OperationDefinitionGroup(
@@ -172,7 +184,10 @@ object BlobComponent {
             adminList,
             adminGet,
             adminAssociations,
-            adminStatus
+            adminStatus,
+            adminDelete,
+            adminAttach,
+            adminDetach
           )
         )
       )
@@ -253,6 +268,14 @@ object BlobComponent {
           _optional_property("role"),
           _optional_property("offset", XInt),
           _optional_property("limit", XInt)
+        )
+      )
+
+    private def _admin_delete_blob_request_definition: spec.RequestDefinition =
+      spec.RequestDefinition(
+        parameters = List(
+          spec.ParameterDefinition(content = BaseContent.simple("id"), kind = spec.ParameterDefinition.Kind.Argument),
+          _optional_property("force", XBoolean)
         )
       )
 
@@ -403,6 +426,34 @@ object BlobComponent {
     def adminBlobStoreStatus()(using ExecutionContext): Consequence[Record] =
       store.status().map(_blob_store_status_record)
 
+    def adminDeleteBlob(
+      request: AdminDeleteBlobRequest
+    )(using ExecutionContext): Consequence[Record] =
+      for {
+        blob <- repository.get(request.id)
+        refs <- associations.list(_blob_target_association_filter(blob.id))
+        _ <- if (refs.nonEmpty && !request.force)
+          Consequence.stateConflict(s"blob is still attached: ${blob.id.value}; associationCount=${refs.size}")
+        else
+          Consequence.unit
+        _ <- repository.delete(blob.id)
+        deletedassociations <- refs.foldLeft(Consequence.success(0)) { (z, association) =>
+          z.flatMap(count => associations.delete(association).map(_ => count + 1))
+        }
+        payloaddeleted <- _delete_blob_payload(blob)
+      } yield Record.dataAuto(
+        "deletedBlobId" -> blob.id.value,
+        "deletedAssociationCount" -> deletedassociations,
+        "payloadDeleted" -> payloaddeleted,
+        "sourceMode" -> blob.sourceMode.print
+      )
+
+    def adminAttachBlobToEntity(request: AttachBlobRequest)(using ExecutionContext): Consequence[Record] =
+      attachBlobToEntity(request)
+
+    def adminDetachBlobFromEntity(request: DetachBlobRequest)(using ExecutionContext): Consequence[Record] =
+      detachBlobFromEntity(request)
+
     private def _blob_association_filter(
       sourceid: String,
       role: Option[String],
@@ -426,6 +477,24 @@ object BlobComponent {
         targetKind = Some("blob"),
         role = request.role
       )
+
+    private def _blob_target_association_filter(id: EntityId): AssociationFilter =
+      AssociationFilter(
+        domain = AssociationDomain.BlobAttachment,
+        targetEntityId = Some(id.value),
+        targetKind = Some("blob")
+      )
+
+    private def _delete_blob_payload(blob: Blob)(using ExecutionContext): Consequence[Boolean] =
+      blob.sourceMode match {
+        case BlobSourceMode.Managed =>
+          blob.storageRef match {
+            case Some(ref) => store.delete(ref).map(_ => true)
+            case None => Consequence.operationIllegal("admin_delete_blob", s"managed blob has no storageRef: ${blob.id.value}")
+          }
+        case BlobSourceMode.ExternalUrl =>
+          Consequence.success(false)
+      }
 
     private def _register_managed(request: RegisterBlobRequest)(using ExecutionContext): Consequence[BlobMetadata] =
       request.payload match {
@@ -664,6 +733,51 @@ object BlobComponent {
       Consequence.success(AdminBlobStoreStatusAction(req))
   }
 
+  private final class AdminDeleteBlobOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition with BlobAdminOperationAuthorization {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "admin_delete_blob",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _admin_delete_blob_request(req).map(AdminDeleteBlobAction(req, _))
+  }
+
+  private final class AdminAttachBlobToEntityOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition with BlobAdminOperationAuthorization {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "admin_attach_blob_to_entity",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _attach_blob_request(req).map(AdminAttachBlobToEntityAction(req, _))
+  }
+
+  private final class AdminDetachBlobFromEntityOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition with BlobAdminOperationAuthorization {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "admin_detach_blob_from_entity",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _detach_blob_request(req).map(AdminDetachBlobFromEntityAction(req, _))
+  }
+
   private final case class RegisterBlobAction(
     request: Request,
     registerRequest: RegisterBlobRequest
@@ -758,6 +872,39 @@ object BlobComponent {
   ) extends QueryAction {
     def createCall(core: ActionCall.Core): ActionCall =
       AdminBlobStoreStatusActionCall(core)
+  }
+
+  private final case class AdminDeleteBlobAction(
+    request: Request,
+    deleteRequest: AdminDeleteBlobRequest
+  ) extends CommandAction {
+    override def commandExecutionMode: CommandExecutionMode =
+      CommandExecutionMode.SyncDirectNoJob
+
+    def createCall(core: ActionCall.Core): ActionCall =
+      AdminDeleteBlobActionCall(core, deleteRequest)
+  }
+
+  private final case class AdminAttachBlobToEntityAction(
+    request: Request,
+    attachRequest: AttachBlobRequest
+  ) extends CommandAction {
+    override def commandExecutionMode: CommandExecutionMode =
+      CommandExecutionMode.SyncDirectNoJob
+
+    def createCall(core: ActionCall.Core): ActionCall =
+      AdminAttachBlobToEntityActionCall(core, attachRequest)
+  }
+
+  private final case class AdminDetachBlobFromEntityAction(
+    request: Request,
+    detachRequest: DetachBlobRequest
+  ) extends CommandAction {
+    override def commandExecutionMode: CommandExecutionMode =
+      CommandExecutionMode.SyncDirectNoJob
+
+    def createCall(core: ActionCall.Core): ActionCall =
+      AdminDetachBlobFromEntityActionCall(core, detachRequest)
   }
 
   private final case class RegisterBlobActionCall(
@@ -876,6 +1023,36 @@ object BlobComponent {
       }
   }
 
+  private final case class AdminDeleteBlobActionCall(
+    core: ActionCall.Core,
+    deleteRequest: AdminDeleteBlobRequest
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _service(core).flatMap(_.adminDeleteBlob(deleteRequest)(using core.executionContext)).map { record =>
+        OperationResponse.RecordResponse(record)
+      }
+  }
+
+  private final case class AdminAttachBlobToEntityActionCall(
+    core: ActionCall.Core,
+    attachRequest: AttachBlobRequest
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _service(core).flatMap(_.adminAttachBlobToEntity(attachRequest)(using core.executionContext)).map { record =>
+        OperationResponse.RecordResponse(record)
+      }
+  }
+
+  private final case class AdminDetachBlobFromEntityActionCall(
+    core: ActionCall.Core,
+    detachRequest: DetachBlobRequest
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _service(core).flatMap(_.adminDetachBlobFromEntity(detachRequest)(using core.executionContext)).map { record =>
+        OperationResponse.RecordResponse(record)
+      }
+  }
+
   private def _service(core: ActionCall.Core): Consequence[BlobService] =
     core.component.flatMap(_.port.get[BlobService]) match {
       case Some(service) => Consequence.success(service)
@@ -967,6 +1144,12 @@ object BlobComponent {
     )
   }
 
+  private def _admin_delete_blob_request(req: Request): Consequence[AdminDeleteBlobRequest] =
+    for {
+      id <- _id(req)
+      force <- _boolean(req, "force")
+    } yield AdminDeleteBlobRequest(id, force)
+
   private def _admin_page_request(req: Request): Consequence[AdminPageRequest] = {
     val offset = _int(req, "offset").getOrElse(0)
     val limit = _int(req, "limit").getOrElse(AdminPageRequest.DefaultLimit)
@@ -1010,6 +1193,27 @@ object BlobComponent {
       case n: java.lang.Number => Some(n.intValue)
       case s: String => scala.util.Try(s.trim.toInt).toOption
       case other => scala.util.Try(other.toString.trim.toInt).toOption
+    }
+
+  private def _boolean(req: Request, names: String*): Consequence[Boolean] =
+    _any(req, names*) match {
+      case Some(b: java.lang.Boolean) => Consequence.success(b.booleanValue)
+      case Some(s: String) =>
+        s.trim.toLowerCase(java.util.Locale.ROOT) match {
+          case "true" | "yes" | "y" | "1" | "on" => Consequence.success(true)
+          case "false" | "no" | "n" | "0" | "off" => Consequence.success(false)
+          case other => Consequence.argumentInvalid(s"invalid boolean ${names.headOption.getOrElse("value")}: $other")
+        }
+      case Some(n: java.lang.Number) =>
+        n.intValue match {
+          case 0 => Consequence.success(false)
+          case 1 => Consequence.success(true)
+          case other => Consequence.argumentInvalid(s"invalid boolean ${names.headOption.getOrElse("value")}: $other")
+        }
+      case Some(other) =>
+        Consequence.argumentInvalid(s"invalid boolean ${names.headOption.getOrElse("value")}: ${other}")
+      case None =>
+        Consequence.success(false)
     }
 
   private def _any(req: Request, names: String*): Option[Any] = {
