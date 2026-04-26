@@ -748,6 +748,19 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val detailByShortid = StaticFormAppRenderer.renderComponentAdminEntityDetail(subsystem, componentName, entityPath, recordShortid).map(_.body).getOrElse(fail("component entity detail admin by shortid is missing"))
       val edit = StaticFormAppRenderer.renderComponentAdminEntityEdit(subsystem, componentName, entityPath, recordId).map(_.body).getOrElse(fail("component entity edit admin is missing"))
 
+      list should include ("Storage shape")
+      list should include ("simple_entity_default")
+      list should include ("admin-storage-shape-fields")
+      list should include ("short_id")
+      list should include ("created_at")
+      list should include ("updated_by")
+      list should include ("owner_id")
+      list should include ("group_id")
+      list should include ("privilege_id")
+      list should include ("permission")
+      list should include ("compact_json_text")
+      list should include ("title")
+      list should include ("scalar_attribute")
       list should include ("notice_1")
       list should include ("<th>id</th><th>shortid</th><th>title</th><th>author</th><th>Actions</th>")
       list should include ("class=\"btn-group btn-group-sm\"")
@@ -771,6 +784,42 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       edit should include ("name=\"title\"")
       edit should include ("value=\"board update\"")
       edit should include (s"/form/${componentPath}/admin/entities/${entityPath}/${recordShortid}/update")
+    }
+
+    "render component admin storage shape from projection metadata without legacy containers" in {
+      val subsystem = _management_console_fixture_subsystem(schema = _schema("id", "title", "securityAttributes"))
+      val html = StaticFormAppRenderer.renderComponentAdminEntityType(subsystem, "notice_board", "notice").map(_.body).getOrElse(fail("component entity type admin is missing"))
+
+      html should include ("Storage shape")
+      html should include ("simple_entity_default")
+      html should include ("permission")
+      html should include ("compact_json_text")
+      html should not include ("<td><code>securityAttributes</code></td>")
+    }
+
+    "render delegated collection storage shape in component admin entity type page" in {
+      val subsystem = _aggregate_http_fixture_subsystem()
+      subsystem.components.find(_.name == "notice_board").foreach { component =>
+        component.withComponentDescriptors(Vector(ComponentDescriptor(
+          name = Some(component.name),
+          componentName = Some(component.name),
+          entityRuntimeDescriptors = Vector(EntityRuntimeDescriptor(
+            entityName = "notice",
+            collectionId = EntityCollectionId("sys", "sys", "notice"),
+            memoryPolicy = EntityMemoryPolicy.LoadToMemory,
+            partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+            maxPartitions = 4,
+            maxEntitiesPerPartition = 100,
+            schema = Some(_schema("id", "body"))
+          ))
+        )))
+      }
+
+      val html = StaticFormAppRenderer.renderComponentAdminEntityType(subsystem, "notice-board", "notice").map(_.body).getOrElse(fail("component entity type admin is missing"))
+
+      html should include ("Storage shape")
+      html should include ("delegated_collection")
+      html should include ("aggregate")
     }
 
     "preserve list paging and search context through entity detail and edit links" in {

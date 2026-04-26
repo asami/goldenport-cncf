@@ -380,6 +380,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 ### Phase 17: SimpleEntity Storage Shape
 - Goal: make the entity storage boundary explicit and define deterministic
   SimpleEntity DB storage-shape rules.
+- Status: closed.
 - Scope:
 - Treat `EntityPersistent` as the canonical entity storage boundary.
 - Separate storage records from request, presentation, descriptor, diagnostic,
@@ -396,6 +397,18 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - No Blob payload storage.
 - No permission model redesign beyond the access boundary required to stop
   using generic record-path lookup.
+- Result:
+- Record purpose taxonomy separates storage, presentation, logic, mutation,
+  query, request, descriptor, and diagnostic records.
+- `EntityPersistent.toStoreRecord/fromStoreRecord` is the storage boundary.
+- Entity presentation has an explicit View Record path.
+- SimpleEntity authorization uses typed security/permission access rather than
+  stale generic record security paths.
+- SimpleEntity storage-shape policy is defined, implemented, and covered by
+  executable specs, including generated-code and unsupported scalar fallback
+  coverage.
+- Effective storage-shape metadata is visible in projection, Web manual, and
+  component admin pages.
 - Artifact (work): `docs/phase/phase-17.md`.
 
 ## 4. Relationship Between Phases
@@ -412,11 +425,10 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: Phase 17 — SimpleEntity Storage Shape
-- Latest active phase dashboard: `docs/phase/phase-17.md`
-- Latest active phase checklist: `docs/phase/phase-17-checklist.md`
-- Latest closed phase dashboard: `docs/phase/phase-16.md`
-- Latest closed phase checklist: `docs/phase/phase-16-checklist.md`
+- Current phase selection: not selected.
+- Latest closed phase dashboard: `docs/phase/phase-17.md`
+- Latest closed phase checklist: `docs/phase/phase-17-checklist.md`
+- Candidate next phase areas: Builtin Blob management component; Search/index planning; DB migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
 ## 6. Explicit Non-Goals
@@ -440,7 +452,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 14: closed (`docs/phase/phase-14.md`)
 - Phase 15: closed (`docs/phase/phase-15.md`)
 - Phase 16: closed (`docs/phase/phase-16.md`)
-- Phase 17: open (`docs/phase/phase-17.md`)
+- Phase 17: closed (`docs/phase/phase-17.md`)
 
 ## 8. Development Item Status
 
@@ -528,14 +540,7 @@ Closed in Phase 13. This remains a reference area for Phase 14+ extensions and r
 - RDF-based data representation
 - External knowledge graph integration
 
-### 8.7 SimpleEntity Storage Shape
-Promoted to Phase 17.
-
-- Active dashboard: `docs/phase/phase-17.md`
-- Active checklist: `docs/phase/phase-17-checklist.md`
-- Source note: `docs/journal/2026/04/simpleentity-db-storage-shape-note.md`
-
-### 8.8 Builtin Blob Management Component
+### 8.7 Builtin Blob Management Component
 - Add builtin Blob management component independent of the SimpleEntity storage
   shape work.
 - Blob metadata is represented as an Entity.
@@ -642,3 +647,22 @@ Completed in Phase 16.
     component CAR dependencies
   - SAR override model that preserves component CAR defaults and overrides by
     field
+
+### 9.6 SimpleEntity Storage Shape
+Completed in Phase 17.
+
+- Closed dashboard: `docs/phase/phase-17.md`
+- Closed checklist: `docs/phase/phase-17-checklist.md`
+- Source note: `docs/journal/2026/04/simpleentity-db-storage-shape-note.md`
+- Completed scope:
+  - Record purpose taxonomy and boundary rules
+  - explicit `EntityPersistent.toStoreRecord/fromStoreRecord` storage boundary
+  - View Record boundary for entity presentation
+  - migration of DB Record boundary call sites to store APIs
+  - typed SimpleEntity security/permission access for authorization
+  - SimpleEntity storage-shape policy for management fields, security identity,
+    compact permission, scalar fields, value objects, and promoted children
+  - executable storage-shape coverage, including generated-code and unsupported
+    scalar fallback specs
+  - storage-shape metadata projection for component describe/schema
+  - storage-shape visibility in Web manual and component admin entity pages

@@ -622,9 +622,32 @@ Render effective SimpleEntity storage-shape decisions in component Web manual pa
 
 ---
 
+## SS-06C: Admin Storage-Shape Summary
+
+Status: DONE
+
+### Objective
+
+Render effective SimpleEntity storage-shape decisions in component admin entity pages from the canonical projection metadata.
+
+### Completed Tasks
+
+- [x] Add a component admin `Storage shape` card to entity list and entity type pages.
+- [x] Render entity-level summary rows for entity, collection, memory policy, working-set policy, storage policy, and field classification counts.
+- [x] Render entity-type field rows for logical name, storage name, classification, storage kind, data type, and source.
+- [x] Keep the admin view read-only and hide permission bit internals.
+
+### Guardrails
+
+- Do not add storage-policy mutation controls.
+- Do not invent a separate admin-only storage-shape data source.
+- Do not show legacy SimpleEntity attribute containers as storage fields.
+
+---
+
 ## SS-06: Storage-Shape Visibility
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -634,10 +657,10 @@ Expose storage-shape decisions so operators and developers can inspect the effec
 
 - [x] Add storage-shape summary to projection where entity metadata is shown.
 - [x] Add storage-shape summary to manual where entity metadata is shown.
-- [ ] Add storage-shape summary to admin where entity metadata is shown.
+- [x] Add storage-shape summary to admin where entity metadata is shown.
 - [x] Show which fields are expanded, encoded, compact permission, or delegated to child/entity storage.
 - [x] Keep raw technical metadata secondary and collapsible where rendered in Web manual pages.
-- [ ] Keep raw technical metadata secondary and collapsible where rendered in admin pages.
+- [x] Keep admin storage-shape rendering read-only and summary-first.
 
 ### Expected Outcome
 

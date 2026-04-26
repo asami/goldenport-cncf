@@ -1,11 +1,11 @@
 # Phase 17 — SimpleEntity Storage Shape
 
-status = open
+status = closed
 
 ## 1. Purpose of This Document
 
-This work document tracks the active stack of work items for Phase 17.
-It is authoritative for current progress, scope, and execution order.
+This work document records the completed stack of work items for Phase 17.
+It is authoritative for Phase 17 scope, execution order, and completion result.
 
 This document is a progress dashboard, not a design journal.
 
@@ -68,17 +68,17 @@ Current semantic direction:
 - E3 (DONE): SS-05C — Add storage-shape executable coverage.
 - F1 (DONE): SS-06A — Expose storage-shape metadata in projection surfaces.
 - F2 (DONE): SS-06B — Render storage-shape metadata in component Web manual pages.
-- F (PLANNED): SS-06 — Expose storage-shape metadata in manual/admin/projection surfaces.
+- F3 (DONE): SS-06C — Render storage-shape metadata in component admin entity pages.
+- F (DONE): SS-06 — Expose storage-shape metadata in manual/admin/projection surfaces.
 
 Current note:
 
 - Phase 16 is closed and remains the auth/session/Cwitter baseline.
-- Phase 17 starts from the record-purpose taxonomy before changing APIs or
-  physical storage shape.
+- Phase 17 is closed after completing Record purpose taxonomy, storage API
+  boundary cleanup, typed SimpleEntity security access, storage-shape policy,
+  executable storage-shape coverage, and projection/manual/admin visibility.
 - `docs/journal/2026/04/simpleentity-db-storage-shape-note.md` is the source
   exploration note for this phase.
-- SS-01 is complete when `docs/design/record-purpose-taxonomy.md` defines the
-  boundary and Phase 17 work order follows it.
 
 ## 5. Development Items
 
@@ -100,7 +100,8 @@ Current note:
 - [x] SS-05C: Add storage-shape executable coverage.
 - [x] SS-06A: Expose storage-shape metadata in projection surfaces.
 - [x] SS-06B: Render storage-shape metadata in component Web manual pages.
-- [ ] SS-06: Expose storage-shape metadata in manual/admin/projection surfaces.
+- [x] SS-06C: Render storage-shape metadata in component admin entity pages.
+- [x] SS-06: Expose storage-shape metadata in manual/admin/projection surfaces.
 
 ## 6. Next Phase Candidates
 

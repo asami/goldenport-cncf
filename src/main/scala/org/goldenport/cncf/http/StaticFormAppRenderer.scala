@@ -2214,7 +2214,8 @@ object StaticFormAppRenderer {
         subtitle = "Entity CRUD management baseline",
         body =
           s"""${nav}
-             |${_admin_card("Entity CRUD", body)}""".stripMargin
+             |${_admin_card("Entity CRUD", body)}
+             |${_admin_storage_shape_section(component, None, detailed = false)}""".stripMargin
       ))
     }
 
@@ -2271,6 +2272,7 @@ object StaticFormAppRenderer {
         subtitle = "Entity record list baseline",
         body =
           s"""${nav}
+             |${_admin_storage_shape_section(component, Some(entityPath), detailed = true)}
              |<article class="card admin-card">
              |  <div class="card-body">
              |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
@@ -2287,6 +2289,95 @@ object StaticFormAppRenderer {
              |</article>""".stripMargin
       ))
     }
+
+  private def _admin_storage_shape_section(
+    component: Component,
+    entityName: Option[String],
+    detailed: Boolean
+  ): String = {
+    val describe = DescribeProjection.project(component, Some(component.name))
+    val entities = _manual_record_seq(describe.asMap.get("entityCollections")).filter { record =>
+      entityName.forall(name => record.getString("entityName").exists(NamingConventions.equivalentByNormalized(_, name)))
+    }
+    if (entities.isEmpty)
+      entityName.map(_ => _admin_card("Storage shape", _admin_empty_state("No storage-shape metadata is registered for this entity."))).getOrElse("")
+    else {
+      val summaryRows = entities.map(_admin_storage_shape_summary_row).mkString("\n")
+      val detailHtml =
+        if (detailed)
+          entities.map(_admin_storage_shape_field_table).mkString("\n")
+        else
+          ""
+      _admin_card(
+        "Storage shape",
+        s"""<p class="text-body-secondary">Read-only effective SimpleEntity storage-shape metadata.</p>
+           |<div class="table-responsive">
+           |  <table class="table table-sm table-hover align-middle">
+           |    <thead><tr><th>Entity</th><th>Collection</th><th>Memory policy</th><th>Working-set policy</th><th>Storage policy</th><th>Fields</th></tr></thead>
+           |    <tbody>
+           |      ${summaryRows}
+           |    </tbody>
+           |  </table>
+           |</div>
+           |${detailHtml}""".stripMargin
+      )
+    }
+  }
+
+  private def _admin_storage_shape_summary_row(
+    record: Record
+  ): String = {
+    val shape = _manual_record_values(record.asMap.get("storageShape"))
+    val fields = _manual_record_seq(shape.get("fields"))
+    val fieldSummary =
+      if (fields.isEmpty)
+        "none"
+      else
+        fields.flatMap(_.getString("classification")).groupBy(identity).toVector.sortBy(_._1).map {
+          case (classification, rows) => s"$classification=${rows.size}"
+        }.mkString(", ")
+    s"""<tr>
+       |  <td><code>${_escape(record.getString("entityName").getOrElse(""))}</code></td>
+       |  <td><code>${_escape(record.getString("collectionId").getOrElse(""))}</code></td>
+       |  <td><code>${_escape(record.getString("memoryPolicy").getOrElse(""))}</code></td>
+       |  <td><code>${_escape(record.getString("workingSetPolicy").getOrElse("-"))}</code></td>
+       |  <td><code>${_escape(shape.get("policy").flatMap(_manual_scalar).getOrElse(""))}</code></td>
+       |  <td>${_escape(fieldSummary)}</td>
+       |</tr>""".stripMargin
+  }
+
+  private def _admin_storage_shape_field_table(
+    record: Record
+  ): String = {
+    val entityName = record.getString("entityName").getOrElse("")
+    val shape = _manual_record_values(record.asMap.get("storageShape"))
+    val fields = _manual_record_seq(shape.get("fields"))
+    if (fields.isEmpty)
+      _admin_empty_state("No storage-shape field metadata.")
+    else {
+      val rows = fields.map { field =>
+        s"""<tr>
+           |  <td><code>${_escape(field.getString("logicalName").getOrElse(""))}</code></td>
+           |  <td><code>${_escape(field.getString("storageName").getOrElse(""))}</code></td>
+           |  <td>${_escape(field.getString("classification").getOrElse(""))}</td>
+           |  <td>${_escape(field.getString("storageKind").getOrElse(""))}</td>
+           |  <td>${_escape(field.getString("dataType").getOrElse(""))}</td>
+           |  <td>${_escape(field.getString("source").getOrElse(""))}</td>
+           |</tr>""".stripMargin
+      }.mkString("\n")
+      s"""<section class="mt-3">
+         |  <h3 class="h6">${_escape(entityName)} storage fields</h3>
+         |  <div class="table-responsive">
+         |    <table class="table table-sm table-hover align-middle admin-storage-shape-fields">
+         |      <thead><tr><th>Logical name</th><th>Storage name</th><th>Classification</th><th>Storage kind</th><th>Data type</th><th>Source</th></tr></thead>
+         |      <tbody>
+         |        ${rows}
+         |      </tbody>
+         |    </table>
+         |  </div>
+         |</section>""".stripMargin
+    }
+  }
 
   def renderComponentAdminEntityDetail(
     subsystem: Subsystem,

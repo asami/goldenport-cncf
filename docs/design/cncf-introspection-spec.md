@@ -53,6 +53,9 @@ Aggregate/View metadata exposure:
   metadata as a read-only summary table. Raw Describe/Schema projection data
   remains secondary in JSON/YAML tabs; the manual does not expose permission bit
   internals or add storage-policy mutation controls.
+- Component admin entity pages render the same storage-shape metadata for
+  operator inspection. Admin rendering is read-only and does not add
+  storage-policy mutation controls.
 - OpenAPI projection includes CNCF vendor extensions:
   - `x-cncf-aggregate-collections`
   - `x-cncf-view-collections`
