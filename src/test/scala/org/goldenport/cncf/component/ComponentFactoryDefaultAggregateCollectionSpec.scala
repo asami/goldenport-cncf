@@ -1,7 +1,6 @@
 /*
  * @since   Mar. 30, 2026
- *  version Apr. 10, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 26, 2026
  */
 package org.goldenport.cncf.component
 
@@ -43,6 +42,27 @@ final class ComponentFactoryDefaultAggregateCollectionSpec extends AnyWordSpec w
       val aggregate = component.aggregateSpace.resolve_with_context[OrderAggregate](_order_id).TAKE
 
       aggregate.id shouldBe _order_id
+      aggregate.lines.map(_.id) shouldBe Vector(_line_id)
+      aggregate.customer.map(_.id) shouldBe Some(_customer_id)
+    }
+
+    "keep promoted aggregate members out of the parent entity storage record" in {
+      val component = _component_with_default_aggregate()
+      val factory = new ComponentFactory()
+      _invoke_bootstrap_aggregates(factory, component)
+
+      given ExecutionContext = _execution_context(_seed_records())
+      val orderRecord = _load_store_record(OrderEntity.collectionId, _order_id)
+      val lineRecord = _load_store_record(OrderLineEntity.collectionId, _line_id)
+      val customerRecord = _load_store_record(CustomerEntity.collectionId, _customer_id)
+      val aggregate = component.aggregateSpace.resolve_with_context[OrderAggregate](_order_id).TAKE
+
+      orderRecord.getString("name") shouldBe Some("Alpha")
+      orderRecord.getAny("lines") shouldBe None
+      orderRecord.getAny("customer") shouldBe None
+      orderRecord.getAny("order_line") shouldBe None
+      lineRecord.getString("orderId").orElse(lineRecord.getString("order_id")) shouldBe Some(_order_id.value)
+      customerRecord.getString("orderId").orElse(customerRecord.getString("order_id")) shouldBe Some(_order_id.value)
       aggregate.lines.map(_.id) shouldBe Vector(_line_id)
       aggregate.customer.map(_.id) shouldBe Some(_customer_id)
     }
@@ -209,6 +229,16 @@ final class ComponentFactoryDefaultAggregateCollectionSpec extends AnyWordSpec w
       )
     )
     context
+  }
+
+  private def _load_store_record(
+    cid: org.simplemodeling.model.datatype.EntityCollectionId,
+    id: EntityId
+  )(using ctx: ExecutionContext): Record = {
+    val collection = DataStore.CollectionId.EntityStore(cid)
+    val dsid = ctx.entityStoreSpace.dataStoreEntryId(id).TAKE
+    val ds = ctx.dataStoreSpace.dataStore(collection).TAKE
+    ds.load(collection, dsid).TAKE.getOrElse(fail(s"record not found: ${id.print}"))
   }
 
   private def _order_entity =

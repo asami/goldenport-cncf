@@ -45,8 +45,9 @@ Phase 17 work proceeds in this order:
 10. SS-05C-A adds typed security override regression specs.
 11. SS-05C-B adds runtime storage-shape coverage.
 12. SS-05C-C adds value object storage encoding coverage.
-13. SS-05C adds executable coverage for the remaining target storage shape.
-14. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
+13. SS-05C-D adds promoted child storage boundary coverage.
+14. SS-05C adds executable coverage for the remaining target storage shape.
+15. SS-06 exposes the effective storage shape in manual/admin/projection surfaces.
 
 This order avoids changing DB record shape before Record purpose, API boundary,
 and security access boundary are clear.
@@ -387,6 +388,7 @@ Lock the implemented SS-05B behavior with executable specs.
 - [x] SS-05C-A: Typed security override regression specs.
 - [x] SS-05C-B: Runtime storage-shape coverage.
 - [x] SS-05C-C: Value object storage encoding coverage.
+- [x] SS-05C-D: Promoted child storage boundary coverage.
 
 ### Detailed Tasks
 
@@ -396,7 +398,7 @@ Lock the implemented SS-05B behavior with executable specs.
 - [x] Add specs proving scalar domain attributes remain ordinary columns.
 - [x] Add specs proving independent value objects are encoded.
 - [x] Add specs proving repeated value objects are encoded.
-- [ ] Add specs proving promoted child/entity storage is not flattened into the parent.
+- [x] Add specs proving promoted child/entity storage is not flattened into the parent.
 - [ ] Add generated-code specs for CML-derived storage shape.
 - [ ] Add specs proving unsupported typed scalar values do not fall back to `String`.
 
@@ -407,6 +409,30 @@ Lock the implemented SS-05B behavior with executable specs.
 ### Guardrails
 
 - Specs must describe behavior, not generated-code incidental details.
+
+---
+
+## SS-05C-D: Promoted Child Storage Boundary Coverage
+
+Status: DONE
+
+### Objective
+
+Lock the SS-05A rule that promoted children are stored as independent
+entity/collection records and assembled by aggregate/view composition, not
+flattened into the parent storage record.
+
+### Completed Tasks
+
+- [x] Prove parent aggregate root storage does not contain promoted `lines` /
+  `customer` child fields.
+- [x] Prove promoted child records are present in their own entity collections.
+- [x] Prove default aggregate read composes child members from those collections.
+
+### Guardrails
+
+- Parent-owned value object JSON encoding remains SS-05C-C behavior.
+- Generated CML-derived shape and unsupported scalar failure remain follow-up SS-05C work.
 
 ---
 
