@@ -23,7 +23,7 @@ import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 26, 2026
+ * @version Apr. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -314,13 +314,14 @@ object StaticFormAppRenderer {
       val controls = _operation_form_controls(context.webSchema, effectiveValues, effectiveValidation)
       val hiddenContext = _hidden_form_context_inputs(effectiveValues)
       val errorPanel = _form_error_panel(effectiveValues) + _form_validation_panel(effectiveValidation)
+      val enctype = _operation_form_enctype(context.webSchema)
       Page(_simple_page(
         title = s"${_escape(context.component.name)}.${_escape(context.serviceName)}.${_escape(context.operationName)}",
         subtitle = "HTML form operation",
         body =
           s"""<article>
              |  ${errorPanel}
-             |  <form method="post" action="${_escape(action)}">
+             |  <form method="post" action="${_escape(action)}"${enctype}>
              |    ${controls}
              |    ${hiddenContext}
              |    <button type="submit" class="btn btn-primary">Run</button>
@@ -333,6 +334,14 @@ object StaticFormAppRenderer {
         )
       ))
     }
+
+  private def _operation_form_enctype(
+    webSchema: WebSchemaResolver.ResolvedWebSchema
+  ): String =
+    if (webSchema.fields.exists(field => _is_blob_datatype(field.dataType.getOrElse(""))))
+      """ enctype="multipart/form-data""""
+    else
+      ""
 
   def renderOperationFormDefinition(
     subsystem: Subsystem,
@@ -1452,8 +1461,10 @@ object StaticFormAppRenderer {
     parameter: org.goldenport.protocol.spec.ParameterDefinition
   ): String = {
     val name = parameter.name.toLowerCase
-    val datatype = Option(parameter.domain.datatype).map(_.toString.toLowerCase).getOrElse("")
-    if (datatype.contains("bool")) "checkbox"
+    val datatypeName = Option(parameter.domain.datatype).map(_.name).getOrElse("")
+    val datatype = datatypeName.toLowerCase(java.util.Locale.ROOT)
+    if (_is_blob_datatype(datatypeName)) "file"
+    else if (datatype.contains("bool")) "checkbox"
     else if (_operation_parameter_multiline(name, datatype)) "textarea"
     else if (name.contains("password") || name.contains("secret") || name.contains("token")) "password"
     else if (datatype.contains("int") || datatype.contains("long") || datatype.contains("decimal") || datatype.contains("number")) "number"
@@ -1533,6 +1544,14 @@ object StaticFormAppRenderer {
          |  ${feedback}
          |  <div class="form-text">${_escape(help)}</div>
          |</div>""".stripMargin
+    } else if (inputType == "file") {
+      val disabled = if (readonly) " disabled" else ""
+      s"""<div class="mb-3">
+         |  <label class="form-label" for="${_escape(id)}">${_escape(displayLabel)}</label>
+         |  <input class="form-control${invalidClass}" id="${_escape(id)}" name="${_escape(name)}" type="file"${required}${disabled}${validationAttr}>
+         |  ${feedback}
+         |  <div class="form-text">${_escape(help)}</div>
+         |</div>""".stripMargin
     } else {
       val readonlyAttr = if (readonly) " readonly" else ""
       val placeholderAttr = placeholder.map(x => s""" placeholder="${_escape(x)}"""").getOrElse("")
@@ -1566,10 +1585,13 @@ object StaticFormAppRenderer {
     parameter: org.goldenport.protocol.spec.ParameterDefinition
   ): String = {
     val kind = parameter.kind.toString
-    val datatype = Option(parameter.domain.datatype).map(_.toString).getOrElse("unknown")
+    val datatype = Option(parameter.domain.datatype).map(_.name).getOrElse("unknown")
     val multiplicity = Option(parameter.domain.multiplicity).map(_.toString).getOrElse("unknown")
     s"${kind}; ${datatype}; ${multiplicity}"
   }
+
+  private def _is_blob_datatype(datatype: String): Boolean =
+    datatype.trim.equalsIgnoreCase("blob")
 
   private def _operation_form_fields_textarea(
     values: Map[String, String],

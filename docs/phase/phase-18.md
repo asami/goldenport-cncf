@@ -86,6 +86,8 @@ Current semantic direction:
     (`admin_delete_blob`, `admin_attach_blob_to_entity`,
     `admin_detach_blob_from_entity`).
 - E (DONE): BL-05 — Generic Association runtime foundation and Blob attachment usage.
+- E2 (DONE): BL-05B — Application create/update Blob attachment workflow for
+  uploaded payloads and existing Blob ids.
 - F (PLANNED): BL-06 — Web/admin management pages for Blob metadata, payload links, and associations.
 - G (PLANNED): BL-07 — Aggregate/View Blob metadata and Association snapshot projection support.
 - H (PLANNED): BL-08 — Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
@@ -107,6 +109,7 @@ Current note:
   - [x] BL-04A: Read-only admin operations.
   - [x] BL-04B: Controlled admin mutation operations.
 - [x] BL-05: Generic Association runtime foundation and Blob attachment usage.
+- [x] BL-05B: Entity create/update Blob upload and existing Blob id attachment workflow.
 - [ ] BL-06: Web/admin management pages for Blob metadata, payload links, and associations.
 - [ ] BL-07: Aggregate/View Blob metadata projection support.
 - [ ] BL-08: Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
@@ -148,6 +151,15 @@ User-facing Blob operations:
 - `attach_blob_to_entity`
 - `detach_blob_from_entity`
 - `list_entity_blobs`
+
+Application create/update attachment convention:
+
+- Uploaded payloads: `blob.<role>` or `blob.<role>.<index>`
+- Existing Blob references: `blobId.<role>` or `blobId.<role>.<index>`
+- Optional metadata: `blob.<role>.kind`, `blob.<role>.filename`,
+  `blob.<role>.sortOrder`, `blobId.<role>.sortOrder`
+- CNCF provides a compensating workflow helper; application operations opt in
+  explicitly and keep Blob payload bytes outside entity records.
 
 Admin-facing Blob operations:
 

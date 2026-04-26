@@ -4,12 +4,13 @@ import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, ServiceDefinition}
 import org.goldenport.datatype.I18nString
+import org.goldenport.schema.XBlob
 import org.slf4j.LoggerFactory
 
 /*
  * @since   Jan.  8, 2026
  *  version Jan. 20, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 object OpenApiProjector {
@@ -26,6 +27,8 @@ object OpenApiProjector {
     httpMethod: String,
     parameters: Vector[String],
     hasRequestBody: Boolean,
+    hasMultipartBody: Boolean,
+    requestBodyFields: Vector[(String, Boolean)],
     responseSchemaKind: String,
     summary: String,
     description: String
@@ -55,12 +58,19 @@ object OpenApiProjector {
         val normalizedService = NamingConventions.toNormalizedSegment(service.name)
         val normalizedOperation = NamingConventions.toNormalizedSegment(op.name)
         val serviceTag = s"${normalizedComponent}.${normalizedService}"
-        val httpMethod = _infer_http_method(service.name, op.name).toUpperCase
+        val hasMultipartBody = _has_multipart_body(op)
+        val hasRequestBody = _has_request_body(op)
+        val inferredHttpMethod = _infer_http_method(service.name, op.name).toUpperCase
+        val httpMethod =
+          if (hasRequestBody && inferredHttpMethod == "GET") "POST"
+          else inferredHttpMethod
         val summary = _operation_summary(componentName, service, op)
         val description = _operation_description(componentName, service, op)
         log.trace(
           s"[openapi:trace] path=${RestBasePath}/${normalizedComponent}/${normalizedService}/${normalizedOperation} method=$httpMethod"
         )
+        val requestParameters = _query_parameters(op)
+        val requestBodyFields = _request_body_fields(op)
         PathSpec(
           path = s"${RestBasePath}${NamingConventions.toNormalizedPath(componentName, service.name, op.name)}",
           tag = s"experimental:${serviceTag}",
@@ -69,8 +79,10 @@ object OpenApiProjector {
           operation = op.name,
           operationId = NamingConventions.toOperationId(componentName, service.name, op.name),
           httpMethod = httpMethod,
-          parameters = Vector.empty,
-          hasRequestBody = _has_request_body(op),
+          parameters = requestParameters,
+          hasRequestBody = hasRequestBody,
+          hasMultipartBody = hasMultipartBody,
+          requestBodyFields = requestBodyFields,
           responseSchemaKind = "object",
           summary = summary,
           description = description
@@ -120,7 +132,27 @@ object OpenApiProjector {
   }
 
   private def _has_request_body(op: OperationDefinition): Boolean =
-    op.specification.request.parameters.exists(_.kind == ParameterDefinition.Kind.Property)
+    op.specification.request.parameters.exists(_.kind == ParameterDefinition.Kind.Property) ||
+      _has_multipart_body(op)
+
+  private def _has_multipart_body(op: OperationDefinition): Boolean =
+    op.specification.request.parameters.exists(_is_blob_parameter)
+
+  private def _is_blob_parameter(parameter: ParameterDefinition): Boolean =
+    parameter.datatype == XBlob ||
+      Option(parameter.datatype).map(_.name).exists(_.equalsIgnoreCase("blob"))
+
+  private def _query_parameters(op: OperationDefinition): Vector[String] =
+    op.specification.request.parameters.toVector
+      .filterNot(_.kind == ParameterDefinition.Kind.Property)
+      .filterNot(_is_blob_parameter)
+      .map(_.name)
+
+  private def _request_body_fields(op: OperationDefinition): Vector[(String, Boolean)] =
+    op.specification.request.parameters.toVector.collect {
+      case p if p.kind == ParameterDefinition.Kind.Property => p.name -> false
+      case p if _is_blob_parameter(p) => p.name -> true
+    }
 
   private def _openapi_json(paths: Vector[PathSpec]): String = {
     val pathsJson =
@@ -137,8 +169,10 @@ object OpenApiProjector {
         val method = path.httpMethod
         val parametersSection = _parameters_section(path.parameters)
         val requestBodySection =
-          if (path.hasRequestBody)
-            s""","requestBody":{"content":{"application/json":{"schema":{"type":"object"}}}}"""
+          if (path.hasMultipartBody)
+            s""","requestBody":{"content":{"multipart/form-data":{"schema":${_request_body_schema(path.requestBodyFields)}}}}"""
+          else if (path.hasRequestBody)
+            s""","requestBody":{"content":{"application/json":{"schema":${_request_body_schema(path.requestBodyFields)}}}}"""
           else
             ""
         val responsesSection =
@@ -155,7 +189,20 @@ object OpenApiProjector {
       val entries = parameters.map { param =>
         s"""{"name":"${_escape(param)}","in":"query","schema":{"type":"string"}}"""
       }.mkString(",")
-      s"""parameters":[${entries}]"""
+      s""""parameters":[${entries}]"""
+    }
+
+  private def _request_body_schema(fields: Vector[(String, Boolean)]): String =
+    if (fields.isEmpty) {
+      """{"type":"object"}"""
+    } else {
+      val properties = fields.map {
+        case (name, true) =>
+          s""""${_escape(name)}":{"type":"string","format":"binary"}"""
+        case (name, false) =>
+          s""""${_escape(name)}":{"type":"string"}"""
+      }.mkString(",")
+      s"""{"type":"object","properties":{${properties}}}"""
     }
 
   private def _escape(s: String): String =

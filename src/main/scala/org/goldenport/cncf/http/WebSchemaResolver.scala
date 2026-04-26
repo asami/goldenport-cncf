@@ -12,7 +12,7 @@ import scala.util.Try
  *
  * @since   Apr. 16, 2026
  *  version Apr. 17, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 object WebSchemaResolver {
@@ -352,7 +352,7 @@ object WebSchemaResolver {
     ResolvedWebField(
       name = parameter.name,
       label = parameter.label.map(_.displayMessage),
-      dataType = Option(parameter.domain.datatype).map(_.toString),
+      dataType = Option(parameter.domain.datatype).map(_.name),
       multiplicity = Option(parameter.domain.multiplicity).map(_.toString),
       control = WebDescriptor.FormControl(
         controlType = parameter.web.controlType,

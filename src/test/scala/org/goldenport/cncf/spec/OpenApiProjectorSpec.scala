@@ -8,7 +8,7 @@ import io.circe.parser.parse
 
 /*
  * @since   Jan. 20, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OpenApiProjectorSpec extends AnyWordSpec with Matchers {
@@ -44,9 +44,30 @@ final class OpenApiProjectorSpec extends AnyWordSpec with Matchers {
             .downField("application/json")
             .downField("schema")
             .get[String]("type") shouldBe Right("object")
-          methodCursor.focus.flatMap(_.asObject).flatMap(_.apply("requestBody")) shouldBe None
         }
       }
+
+      val registerBlobPath = pathsObject.keys.find(_.endsWith("/blob/blob/register-blob"))
+        .getOrElse(fail("register_blob path missing"))
+      val registerBlob = pathsCursor.downField(registerBlobPath).downField("POST")
+      registerBlob
+        .downField("requestBody")
+        .downField("content")
+        .downField("multipart/form-data")
+        .downField("schema")
+        .get[String]("type") shouldBe Right("object")
+      registerBlob
+        .downField("requestBody")
+        .downField("content")
+        .downField("multipart/form-data")
+        .downField("schema")
+        .downField("properties")
+        .downField("payload")
+        .get[String]("format") shouldBe Right("binary")
+      val registerParameters = registerBlob.downField("parameters").focus
+        .flatMap(_.asArray)
+        .getOrElse(fail("register_blob parameters are missing"))
+      registerParameters.flatMap(_.hcursor.get[String]("name").toOption) should not contain "payload"
 
       val clientPostMethods = pathsCursor.downField("/rest/v1/client/http/post")
         .focus

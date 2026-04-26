@@ -283,6 +283,50 @@ can use without introducing a public association component.
 
 ---
 
+## BL-05B: Entity Create/Update Blob Attachment Workflow
+
+Status: DONE
+
+### Objective
+
+Allow application create/update operations to attach media in the same request,
+without embedding payload bytes in entity records.
+
+### Implemented Baseline
+
+- [x] Add `BlobAttachmentWorkflow`.
+- [x] Support uploaded payload fields:
+      `blob.<role>` and `blob.<role>.<index>`.
+- [x] Support existing Blob references:
+      `blobId.<role>` and `blobId.<role>.<index>`.
+- [x] Register uploaded payloads as managed Blobs in `BlobStore`.
+- [x] Validate existing Blob ids through Blob metadata lookup.
+- [x] Attach uploaded and existing Blobs through the generic Association
+      foundation.
+- [x] Compensate newly uploaded Blobs and newly created associations when the
+      workflow fails.
+- [x] Keep existing Blob ids out of compensation deletion.
+- [x] Render `XBlob` operation fields as file inputs in generated Web forms.
+- [x] Project `XBlob` operations as `multipart/form-data` in OpenAPI.
+
+### Request Convention
+
+- Upload: `blob.<role>` / `blob.<role>.<index>`
+- Existing reference: `blobId.<role>` / `blobId.<role>.<index>`
+- Metadata: `blob.<role>.kind`, `blob.<role>.filename`, `*.sortOrder`
+
+### Compensation Policy
+
+- Newly uploaded Blob metadata and payload are removed if later attachment
+  fails.
+- Associations created in the same request are removed if a later attachment
+  fails.
+- Existing Blob metadata and payload are never deleted by this workflow.
+- Domain entity rollback is caller-supplied for create flows and not automatic
+  for update flows.
+
+---
+
 ## BL-06: Blob Web/Admin Management Pages
 
 Status: PLANNED
