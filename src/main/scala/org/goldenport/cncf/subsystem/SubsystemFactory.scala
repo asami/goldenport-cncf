@@ -5,6 +5,7 @@ import org.goldenport.cncf.config.{ClientConfig, RuntimeConfig}
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.builtin.admin.AdminComponent
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
+import org.goldenport.cncf.component.builtin.blob.BlobComponent
 import org.goldenport.cncf.component.builtin.client.ClientComponent
 import org.goldenport.cncf.component.builtin.debug.DebugComponent
 import org.goldenport.cncf.component.builtin.event.EventComponent
@@ -30,7 +31,7 @@ import org.goldenport.protocol.spec as spec
  *  version Jan. 30, 2026
  *  version Feb. 15, 2026
  *  version Mar. 29, 2026
- * @version Apr. 23, 2026
+ * @version Apr. 26, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {
@@ -49,6 +50,7 @@ object DefaultSubsystemFactory {
       _admin,
       AuthComponent.Factory,
       _client,
+      BlobComponent.Factory,
       DebugComponent.Factory,
       EventComponent.Factory,
       JobControlComponent.Factory,

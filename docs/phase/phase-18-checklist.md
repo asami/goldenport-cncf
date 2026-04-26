@@ -118,14 +118,33 @@ Status: ACTIVE
 Expose application/user-facing Blob operations for managed and external URL
 Blob flows.
 
+### BL-03A: Metadata and Payload Operations
+
+Status: DONE
+
+BL-03A provides the first user-facing Blob component surface:
+
+- [x] builtin `blob` component is installed in the default subsystem.
+- [x] `BlobMetadata` records managed/external URL Blob metadata.
+- [x] in-memory Blob metadata repository supports local/test flows.
+- [x] `register_blob` registers managed payloads through `BlobStore`.
+- [x] `register_blob` registers `external_url` Blobs as metadata-only rows.
+- [x] `read_blob` returns managed Blob payload bytes as an HTTP binary response.
+- [x] `read_blob` returns external URL Blob metadata without payload bytes.
+- [x] `get_blob_metadata` returns Blob metadata records.
+- [x] invalid kind/source mode and missing Blob ids fail deterministically.
+
+BL-03A intentionally does not implement entity association operations. Those
+belong to BL-05 so Blob-owned association data can be modeled explicitly.
+
 ### Expected Operations
 
-- `register_blob`
-- `read_blob`
-- `get_blob_metadata`
-- `attach_blob_to_entity`
-- `detach_blob_from_entity`
-- `list_entity_blobs`
+- [x] `register_blob`
+- [x] `read_blob`
+- [x] `get_blob_metadata`
+- [ ] `attach_blob_to_entity` (BL-05)
+- [ ] `detach_blob_from_entity` (BL-05)
+- [ ] `list_entity_blobs` (BL-05)
 
 ---
 

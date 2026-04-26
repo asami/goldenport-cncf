@@ -6,6 +6,7 @@ import java.util.Locale
 import org.goldenport.Consequence
 import org.goldenport.bag.BinaryBag
 import org.goldenport.datatype.ContentType
+import org.goldenport.record.Record
 
 /*
  * Runtime model for CNCF-managed Blob payload storage.
@@ -123,6 +124,41 @@ final case class BlobReadResult(
   accessUrl: BlobAccessUrl,
   storedAt: Instant
 )
+
+final case class BlobMetadata(
+  blobId: BlobId,
+  kind: BlobKind,
+  sourceMode: BlobSourceMode,
+  filename: Option[String],
+  contentType: Option[ContentType],
+  byteSize: Option[Long],
+  digest: Option[String],
+  storageRef: Option[BlobStorageRef],
+  externalUrl: Option[String],
+  accessUrl: BlobAccessUrl,
+  createdAt: Instant,
+  updatedAt: Instant,
+  attributes: Map[String, String] = Map.empty
+) {
+  def toRecord: Record =
+    Record.dataAuto(
+      "blobId" -> blobId.value,
+      "kind" -> kind.print,
+      "sourceMode" -> sourceMode.print,
+      "filename" -> filename,
+      "contentType" -> contentType.map(_.header),
+      "byteSize" -> byteSize,
+      "digest" -> digest,
+      "storageRef" -> storageRef.map(_.print),
+      "externalUrl" -> externalUrl,
+      "displayUrl" -> accessUrl.displayUrl,
+      "downloadUrl" -> accessUrl.downloadUrl,
+      "urlSource" -> accessUrl.urlSource.print,
+      "createdAt" -> createdAt.toString,
+      "updatedAt" -> updatedAt.toString,
+      "attributes" -> Record.data(attributes.toVector.sortBy(_._1)*)
+    )
+}
 
 final case class BlobStoreStatus(
   backend: String,

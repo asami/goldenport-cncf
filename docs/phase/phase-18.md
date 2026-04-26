@@ -63,6 +63,9 @@ Current semantic direction:
 - A (DONE): BL-01 — Open Phase 18 docs and freeze Blob scope/API split.
 - B (DONE): BL-02 — Blob runtime model, source-mode model, BlobStore SPI, local/in-memory payload store.
 - C (ACTIVE): BL-03 — Builtin Blob component user-facing operations.
+  - BL-03A (DONE): metadata and payload operations
+    (`register_blob`, `read_blob`, `get_blob_metadata`).
+  - Entity association operations remain in BL-05.
 - D (PLANNED): BL-04 — Builtin Blob component admin-facing operations.
 - E (PLANNED): BL-05 — Blob-owned entity association model and attach/detach operations.
 - F (PLANNED): BL-06 — Web/admin management pages for Blob metadata, payload links, and associations.
@@ -81,6 +84,7 @@ Current note:
 - [x] BL-01: Open Phase 18 docs and freeze Blob scope/API split.
 - [x] BL-02: Blob runtime model, source-mode model, BlobStore SPI, local/in-memory payload store.
 - [ ] BL-03: Builtin Blob component user-facing operations.
+  - [x] BL-03A: Blob metadata and payload operations.
 - [ ] BL-04: Builtin Blob component admin-facing operations.
 - [ ] BL-05: Blob-owned entity association model and attach/detach operations.
 - [ ] BL-06: Web/admin management pages for Blob metadata, payload links, and associations.
