@@ -61,8 +61,8 @@ Current semantic direction:
 ## 4. Current Work Stack
 
 - A (DONE): BL-01 — Open Phase 18 docs and freeze Blob scope/API split.
-- B (ACTIVE): BL-02 — Blob runtime model, source-mode model, BlobStore SPI, local/in-memory payload store.
-- C (PLANNED): BL-03 — Builtin Blob component user-facing operations.
+- B (DONE): BL-02 — Blob runtime model, source-mode model, BlobStore SPI, local/in-memory payload store.
+- C (ACTIVE): BL-03 — Builtin Blob component user-facing operations.
 - D (PLANNED): BL-04 — Builtin Blob component admin-facing operations.
 - E (PLANNED): BL-05 — Blob-owned entity association model and attach/detach operations.
 - F (PLANNED): BL-06 — Web/admin management pages for Blob metadata, payload links, and associations.
@@ -79,7 +79,7 @@ Current note:
 ## 5. Development Items
 
 - [x] BL-01: Open Phase 18 docs and freeze Blob scope/API split.
-- [ ] BL-02: Blob runtime model, source-mode model, BlobStore SPI, local/in-memory payload store.
+- [x] BL-02: Blob runtime model, source-mode model, BlobStore SPI, local/in-memory payload store.
 - [ ] BL-03: Builtin Blob component user-facing operations.
 - [ ] BL-04: Builtin Blob component admin-facing operations.
 - [ ] BL-05: Blob-owned entity association model and attach/detach operations.

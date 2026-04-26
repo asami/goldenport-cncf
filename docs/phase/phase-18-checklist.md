@@ -62,7 +62,7 @@ implementation starts.
 
 ## BL-02: Blob Runtime Model and BlobStore SPI
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -76,31 +76,42 @@ resources.
 
 ### Expected Runtime Types
 
-- `BlobId`
-- `BlobKind`
-- `BlobSourceMode`
-- `BlobMetadata`
-- `BlobStorageRef`
-- `BlobAccessUrl`
-- `BlobPutRequest`
-- `BlobPutResult`
-- `BlobStore`
+- [x] `BlobId`
+- [x] `BlobKind`
+- [x] `BlobSourceMode`
+- [ ] `BlobMetadata`
+- [x] `BlobStorageRef`
+- [x] `BlobAccessUrl`
+- [x] `BlobPutRequest`
+- [x] `BlobPutResult`
+- [x] `BlobReadResult`
+- [x] `BlobStoreStatus`
+- [x] `BlobStore`
+
+`BlobMetadata` remains for BL-03 because metadata Entity and user/admin
+operations are intentionally out of BL-02 scope.
 
 ### Expected Coverage
 
-- Managed Blob payload can be stored and retrieved with `BinaryBag`.
-- Managed Blob payload storage returns a deterministic `BlobStorageRef`.
-- Managed Blob payload can resolve display/download URL metadata without
+- [x] Managed Blob payload can be stored and retrieved with `BinaryBag`.
+- [x] Managed Blob payload storage returns a deterministic `BlobStorageRef`.
+- [x] Managed Blob payload can resolve display/download URL metadata without
   embedding bytes in Entity, Aggregate, or View records.
-- External URL Blob metadata can be registered without payload storage.
-- Missing Blob payload returns deterministic not-found behavior.
-- Local store writes payload outside entity records.
+- [ ] External URL Blob metadata can be registered without payload storage.
+- [x] Missing Blob payload by `BlobStorageRef` returns deterministic failure
+  because the reference represents an already-registered stored payload.
+- [x] I/O failures while resolving an existing storage path are preserved as
+  `Consequence.Failure`.
+- [x] Local store writes payload outside entity records.
+
+External URL registration remains for BL-03 because BL-02 only defines source
+mode and BlobStore runtime semantics.
 
 ---
 
 ## BL-03: User-Facing Blob Operations
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 
