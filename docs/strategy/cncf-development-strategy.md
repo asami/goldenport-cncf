@@ -425,10 +425,12 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: not selected.
+- Current phase selection: Phase 18 — Builtin Blob Management Component
+- Latest active phase dashboard: `docs/phase/phase-18.md`
+- Latest active phase checklist: `docs/phase/phase-18-checklist.md`
 - Latest closed phase dashboard: `docs/phase/phase-17.md`
 - Latest closed phase checklist: `docs/phase/phase-17-checklist.md`
-- Candidate next phase areas: Builtin Blob management component; Search/index planning; DB migration tooling.
+- Candidate next phase areas after Phase 18: Search/index planning; DB migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
 ## 6. Explicit Non-Goals
@@ -453,6 +455,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 15: closed (`docs/phase/phase-15.md`)
 - Phase 16: closed (`docs/phase/phase-16.md`)
 - Phase 17: closed (`docs/phase/phase-17.md`)
+- Phase 18: open (`docs/phase/phase-18.md`)
 
 ## 8. Development Item Status
 
@@ -541,20 +544,35 @@ Closed in Phase 13. This remains a reference area for Phase 14+ extensions and r
 - External knowledge graph integration
 
 ### 8.7 Builtin Blob Management Component
+Current active phase: Phase 18.
+
 - Add builtin Blob management component independent of the SimpleEntity storage
   shape work.
 - Blob metadata is represented as an Entity.
-- Blob payload is stored in an S3-like storage backend abstraction.
+- Blob entries support two source modes:
+  - internally managed payload stored by CNCF BlobStore;
+  - externally hosted URL managed outside CNCF.
+- Blob metadata carries `sourceMode` to distinguish managed payloads from
+  external URL entries.
+- Managed Blob payload is stored through a BlobStore abstraction backed by a
+  dedicated Blob DataStore.
+- Production-oriented BlobStore design assumes S3-like object storage, while
+  local/in-memory stores are development and executable-spec backends.
+- Stored managed Blob payloads are expected to become URL-addressable through
+  CNCF Blob routes or backend-provided object URLs.
 - Image, Video, and Attachment use cases are supported through Blob-managed
   assets.
 - Product-like and other domain entities can associate with Blob entities.
+- Blob component owns Blob-Entity association records for Phase 18.
+- User-facing and admin-facing Blob APIs are both in scope.
+- Blob Web management pages are in scope for metadata, payload links,
+  associations, and store status.
 - Aggregate/View projections can gather associated media without embedding
   payloads in parent entity storage records.
-- Open design item: define the association management model between Blob
-  objects and arbitrary entities.
-- Open design item: decide whether Blob-object association records are owned by
-  the Blob component, the domain entity component, or a generic association
-  component.
+- Aggregate/View output includes Blob metadata plus display/download URLs, not
+  inline payload bytes.
+- Active dashboard: `docs/phase/phase-18.md`
+- Active checklist: `docs/phase/phase-18-checklist.md`
 - Source note: `docs/journal/2026/04/blob-management-component-specification-note.md`.
 
 ## 9. Completed Development Item History
