@@ -44,7 +44,7 @@ import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -144,6 +144,16 @@ final class Http4sHttpServer(
         if (_is_web_authorized("system", "admin.jobs", "index", Some(req))) _system_admin_jobs() else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "admin" / "jobs" / jobId =>
         if (_is_web_authorized("system", "admin.jobs", jobId, Some(req))) _system_admin_job(req, jobId) else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some(jobId))
+      case req @ GET -> Root / "web" / "blob" / "admin" =>
+        if (_is_web_authorized("blob", "admin", "index", Some(req))) _blob_admin() else _forbidden_web(req, Some("blob"), Some("admin"), Some("index"))
+      case req @ GET -> Root / "web" / "blob" / "admin" / "blobs" =>
+        if (_is_web_authorized("blob", "admin.blobs", "index", Some(req))) _blob_admin_blobs(req) else _forbidden_web(req, Some("blob"), Some("admin.blobs"), Some("index"))
+      case req @ GET -> Root / "web" / "blob" / "admin" / "blobs" / id =>
+        if (_is_web_authorized("blob", "admin.blobs", id, Some(req))) _blob_admin_blob(req, id) else _forbidden_web(req, Some("blob"), Some("admin.blobs"), Some(id))
+      case req @ GET -> Root / "web" / "blob" / "admin" / "associations" =>
+        if (_is_web_authorized("blob", "admin.associations", "index", Some(req))) _blob_admin_associations(req) else _forbidden_web(req, Some("blob"), Some("admin.associations"), Some("index"))
+      case req @ GET -> Root / "web" / "blob" / "admin" / "store" =>
+        if (_is_web_authorized("blob", "admin.store", "index", Some(req))) _blob_admin_store(req) else _forbidden_web(req, Some("blob"), Some("admin.store"), Some("index"))
       case GET -> Root / "web" / app / "dashboard" / "state" =>
         _dashboard_state(Some(app))
       case req @ GET -> Root / "web" / app / "admin" =>
@@ -372,6 +382,70 @@ final class Http4sHttpServer(
       case None =>
         _html_status(StaticFormAppRenderer.renderSystemJobResult(jobId, HttpResponse.notFound(s"job not found: $jobId")), HStatus.NotFound)
     }
+
+  private def _blob_admin(): IO[HResponse[IO]] =
+    _html(StaticFormAppRenderer.renderBlobAdmin(), Some("blob"))
+
+  private def _blob_admin_blobs(req: HRequest[IO]): IO[HResponse[IO]] =
+    _blob_admin_page(
+      req,
+      StaticFormAppRenderer.renderBlobAdminBlobs(engine.runtimeSubsystem, req.uri.query.params.toMap, _blob_admin_request_properties(req)),
+      Some("admin.blobs"),
+      Some("index")
+    )
+
+  private def _blob_admin_blob(req: HRequest[IO], id: String): IO[HResponse[IO]] =
+    _blob_admin_page(
+      req,
+      StaticFormAppRenderer.renderBlobAdminBlobDetail(engine.runtimeSubsystem, id, _blob_admin_request_properties(req)),
+      Some("admin.blobs"),
+      Some(id)
+    )
+
+  private def _blob_admin_associations(req: HRequest[IO]): IO[HResponse[IO]] =
+    _blob_admin_page(
+      req,
+      StaticFormAppRenderer.renderBlobAdminAssociations(engine.runtimeSubsystem, req.uri.query.params.toMap, _blob_admin_request_properties(req)),
+      Some("admin.associations"),
+      Some("index")
+    )
+
+  private def _blob_admin_store(req: HRequest[IO]): IO[HResponse[IO]] =
+    _blob_admin_page(
+      req,
+      StaticFormAppRenderer.renderBlobAdminStore(engine.runtimeSubsystem, _blob_admin_request_properties(req)),
+      Some("admin.store"),
+      Some("index")
+    )
+
+  private def _blob_admin_page(
+    req: HRequest[IO],
+    page: org.goldenport.Consequence[StaticFormAppRenderer.Page],
+    service: Option[String],
+    operation: Option[String]
+  ): IO[HResponse[IO]] =
+    page match {
+      case org.goldenport.Consequence.Success(p) =>
+        _html(p, Some("blob"))
+      case org.goldenport.Consequence.Failure(conclusion) =>
+        val status = HStatus.fromInt(conclusion.status.webCode.code).getOrElse(HStatus.InternalServerError)
+        val error = StructuredHttpError.fromConclusion(
+          conclusion,
+          status.code,
+          req.uri.path.renderString,
+          req.method.name,
+          _operation_mode,
+          component = Some("blob"),
+          service = service,
+          operation = operation
+        )
+        _web_error_response(Some("blob"), status, error)
+    }
+
+  private def _blob_admin_request_properties(
+    req: HRequest[IO]
+  ): Vector[(String, String)] =
+    _session_id_(req).map("x-textus-session" -> _).toVector
 
   private def _system_manual(): IO[HResponse[IO]] =
     _html(StaticFormAppRenderer.renderSystemManual(engine.runtimeSubsystem))
@@ -2368,6 +2442,10 @@ final class Http4sHttpServer(
         Some(if (operation == "index") "admin.data.list" else "admin.data.read")
       case "admin.views" => Some("admin.view.read")
       case "admin.aggregates" => Some("admin.aggregate.read")
+      case "admin.blobs" =>
+        Some(if (operation == "index") "admin.entity.list" else "admin.entity.read")
+      case "admin.associations" => Some("admin.entity.read")
+      case "admin.store" => Some("admin.entity.read")
       case _ => None
     }
 

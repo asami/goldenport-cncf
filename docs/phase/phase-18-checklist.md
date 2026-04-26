@@ -329,12 +329,30 @@ without embedding payload bytes in entity records.
 
 ## BL-06: Blob Web/Admin Management Pages
 
-Status: PLANNED
+Status: IN PROGRESS
 
 ### Objective
 
 Add Web management pages for Blob metadata, payload links, associations, and
 store status.
+
+### BL-06A: Read-Only Admin Pages
+
+Status: DONE
+
+BL-06A adds the first browser management surface for existing Blob admin
+operations.
+
+- [x] `/web/blob/admin`
+- [x] `/web/blob/admin/blobs`
+- [x] `/web/blob/admin/blobs/{id}`
+- [x] `/web/blob/admin/associations`
+- [x] `/web/blob/admin/store`
+- [x] Pages use existing Blob admin operations as the data source.
+- [x] Blob list/detail pages show metadata and access URLs only.
+- [x] Association page supports source/blob/role filters.
+- [x] Store page shows BlobStore backend status.
+- [x] Mutation pages remain deferred to BL-06B.
 
 ### Expected Pages
 
@@ -343,6 +361,12 @@ store status.
 - `/web/blob/admin/blobs/{id}`
 - `/web/blob/admin/associations`
 - `/web/blob/admin/store`
+
+### BL-06B: Mutation Admin Pages
+
+Status: PLANNED
+
+Add Web flows for controlled admin delete, attach, and detach operations.
 
 ---
 

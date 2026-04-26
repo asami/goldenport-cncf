@@ -21,7 +21,7 @@ import org.goldenport.http.HttpStatus
 import org.goldenport.bag.Bag
 import org.goldenport.datatype.{ContentType, MimeType}
 import org.goldenport.value.BaseContent
-import org.goldenport.protocol.{Argument, Protocol, Request as GRequest}
+import org.goldenport.protocol.{Argument, Property, Protocol, Request as GRequest}
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.handler.egress.{EgressCollection, RestEgress}
 import org.goldenport.protocol.handler.ingress.{IngressCollection, RestIngress}
@@ -55,7 +55,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 26, 2026
+ * @version Apr. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -195,6 +195,124 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       detail should include ("Calltree")
       detail should include ("Timeline")
       detail should include ("debug-query")
+    }
+
+    "render Blob admin read-only pages" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
+        "register_blob",
+        Property("sourceMode", "external_url", None),
+        Property("kind", "image", None),
+        Property("filename", "cover.png", None),
+        Property("contentType", ContentType.IMAGE_PNG.header, None),
+        Property("externalUrl", "https://example.test/cover.png", None)
+      ))))
+      val id = blob.getString("id").getOrElse(fail("Blob id is missing"))
+      _success(subsystem.executeOperationResponse(_blob_request(
+        "attach_blob_to_entity",
+        Property("sourceEntityId", "article-1", None),
+        Property("id", id, None),
+        Property("role", "mainImage", None)
+      )))
+
+      val home = StaticFormAppRenderer.renderBlobAdmin().body
+      val list = _success(StaticFormAppRenderer.renderBlobAdminBlobs(subsystem)).body
+      val detail = _success(StaticFormAppRenderer.renderBlobAdminBlobDetail(subsystem, id)).body
+      val associations = _success(StaticFormAppRenderer.renderBlobAdminAssociations(subsystem, Map("sourceEntityId" -> "article-1"))).body
+      val store = _success(StaticFormAppRenderer.renderBlobAdminStore(subsystem)).body
+
+      home should include ("Blob Admin")
+      home should include ("/web/blob/admin/blobs")
+      list should include ("Blob Admin Blobs")
+      list should include (id)
+      list should include ("/web/blob/admin/blobs/")
+      detail should include ("Blob metadata detail")
+      detail should include ("https://example.test/cover.png")
+      detail should include ("Raw Blob metadata")
+      associations should include ("Blob Admin Associations")
+      associations should include ("article-1")
+      associations should include ("mainImage")
+      store should include ("Blob Admin Store")
+      store should include ("Store Status")
+    }
+
+    "render unsafe external Blob URLs as text on admin pages" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
+        "register_blob",
+        Property("sourceMode", "external_url", None),
+        Property("kind", "image", None),
+        Property("filename", "unsafe.png", None),
+        Property("contentType", ContentType.IMAGE_PNG.header, None),
+        Property("externalUrl", "javascript:alert(1)", None)
+      ))))
+      val id = blob.getString("id").getOrElse(fail("Blob id is missing"))
+
+      val list = _success(StaticFormAppRenderer.renderBlobAdminBlobs(subsystem)).body
+
+      list should include (id)
+      list should include ("javascript:alert(1)")
+      list should not include ("href=\"javascript:alert(1)\"")
+    }
+
+    "serve Blob admin read-only pages from Web routes" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
+        "register_blob",
+        Property("sourceMode", "external_url", None),
+        Property("kind", "attachment", None),
+        Property("filename", "manual.pdf", None),
+        Property("contentType", "application/pdf", None),
+        Property("externalUrl", "https://example.test/manual.pdf", None)
+      ))))
+      val id = blob.getString("id").getOrElse(fail("Blob id is missing"))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val home = server.routes(null).orNotFound.run(_get_request("/web/blob/admin")).unsafeRunSync()
+      val list = server.routes(null).orNotFound.run(_get_request("/web/blob/admin/blobs")).unsafeRunSync()
+      val detail = server.routes(null).orNotFound.run(_get_request(s"/web/blob/admin/blobs/${java.net.URLEncoder.encode(id, StandardCharsets.UTF_8)}")).unsafeRunSync()
+      val associations = server.routes(null).orNotFound.run(_get_request("/web/blob/admin/associations")).unsafeRunSync()
+      val store = server.routes(null).orNotFound.run(_get_request("/web/blob/admin/store")).unsafeRunSync()
+
+      home.status.code shouldBe 200
+      list.status.code shouldBe 200
+      detail.status.code shouldBe 200
+      associations.status.code shouldBe 200
+      store.status.code shouldBe 200
+      list.as[String].unsafeRunSync() should include (id)
+      detail.as[String].unsafeRunSync() should include ("https://example.test/manual.pdf")
+      store.as[String].unsafeRunSync() should include ("BlobStore backend status")
+    }
+
+    "serve structured Blob admin errors instead of missing-page fallbacks" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(_get_request("/web/blob/admin/blobs/missing-blob")).unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 400
+      body should include ("Error code")
+      body should include ("missing-blob")
+      body should not include ("System job result")
+    }
+
+    "deny anonymous Blob admin subroutes in production operation mode" in {
+      val subsystem = DefaultSubsystemFactory.default(
+        Some("server"),
+        ResolvedConfiguration(
+          Configuration(Map(RuntimeConfig.OperationModeKey -> ConfigurationValue.StringValue("production"))),
+          ConfigurationTrace.empty
+        )
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(_get_request("/web/blob/admin/blobs")).unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 403
+      body should include ("Request failed")
+      body should include ("Error code:")
     }
 
     "render resolved runtime configuration with masking rules on system admin page" in {
@@ -7853,6 +7971,29 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     } yield record
     loaded.toOption.flatten.getOrElse(fail(s"notice store record is missing: ${id.print}"))
   }
+
+  private def _blob_request(
+    operation: String,
+    properties: Property*
+  ): GRequest =
+    GRequest.of(
+      component = "blob",
+      service = "blob",
+      operation = operation,
+      properties = properties.toList
+    )
+
+  private def _blob_record(response: OperationResponse): Record =
+    response match {
+      case OperationResponse.RecordResponse(record) => record
+      case other => fail(s"expected Blob record response but got $other")
+    }
+
+  private def _success[A](value: Consequence[A]): A =
+    value match {
+      case Consequence.Success(v) => v
+      case Consequence.Failure(c) => fail(s"unexpected failure: $c")
+    }
 }
 
 private final case class _RendererJobAction(

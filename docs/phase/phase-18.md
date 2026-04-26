@@ -88,7 +88,10 @@ Current semantic direction:
 - E (DONE): BL-05 — Generic Association runtime foundation and Blob attachment usage.
 - E2 (DONE): BL-05B — Application create/update Blob attachment workflow for
   uploaded payloads and existing Blob ids.
-- F (PLANNED): BL-06 — Web/admin management pages for Blob metadata, payload links, and associations.
+- F (IN PROGRESS): BL-06 — Web/admin management pages for Blob metadata, payload links, and associations.
+  - BL-06A (DONE): read-only Blob admin pages for metadata, associations,
+    and store status.
+  - BL-06B (PLANNED): mutation admin pages for delete, attach, and detach.
 - G (PLANNED): BL-07 — Aggregate/View Blob metadata and Association snapshot projection support.
 - H (PLANNED): BL-08 — Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
 
@@ -111,6 +114,8 @@ Current note:
 - [x] BL-05: Generic Association runtime foundation and Blob attachment usage.
 - [x] BL-05B: Entity create/update Blob upload and existing Blob id attachment workflow.
 - [ ] BL-06: Web/admin management pages for Blob metadata, payload links, and associations.
+  - [x] BL-06A: Read-only Blob admin pages.
+  - [ ] BL-06B: Mutation Blob admin pages.
 - [ ] BL-07: Aggregate/View Blob metadata projection support.
 - [ ] BL-08: Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
 

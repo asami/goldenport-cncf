@@ -2,6 +2,7 @@ package org.goldenport.cncf.http
 
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import org.goldenport.Consequence
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentOrigin
@@ -11,7 +12,7 @@ import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.projection.{DescribeProjection, HelpProjection, SchemaProjection}
 import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
-import org.goldenport.protocol.{Argument, Request as ProtocolRequest}
+import org.goldenport.protocol.{Argument, Property, Request as ProtocolRequest}
 import org.goldenport.protocol.spec.ParameterDefinition
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
@@ -2008,6 +2009,325 @@ object StaticFormAppRenderer {
            |</article>""".stripMargin
     ))
   }
+
+  def renderBlobAdmin(): Page =
+    Page(_simple_page(
+      title = "Blob Admin",
+      subtitle = "Blob metadata, associations, and store diagnostics",
+      body =
+        s"""<article>
+           |  <h2>Management</h2>
+           |  <p>Use these read-only pages to inspect Blob metadata, entity associations, and BlobStore status.</p>
+           |  ${_admin_entry_cards(Vector(
+             _admin_entry_card("Blobs", "List Blob metadata rows and open detail pages.", "/web/blob/admin/blobs"),
+             _admin_entry_card("Associations", "Inspect Blob-to-entity association records.", "/web/blob/admin/associations"),
+             _admin_entry_card("Store Status", "Inspect the active BlobStore backend status.", "/web/blob/admin/store"),
+             _admin_entry_card("Mutations", "Delete and attach/detach Web flows are deferred to BL-06B.", "/web/blob/admin")
+           ))}
+           |</article>""".stripMargin
+    ))
+
+  def renderBlobAdminBlobs(
+    subsystem: Subsystem,
+    params: Map[String, String] = Map.empty,
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    _blob_admin_record(subsystem, "admin_list_blobs", _blob_admin_page_args(params), requestProperties).map { record =>
+      val rows = _record_seq(record.asMap.get("data"))
+      val table =
+        if (rows.isEmpty)
+          s"""<tbody>${_admin_empty_table_cell(9, "No Blob metadata rows are available.")}</tbody>"""
+        else
+          s"""<tbody>${rows.map(_blob_admin_blob_row).mkString("\n")}</tbody>"""
+      val nav = _admin_nav_card(Vector(
+        "Blob admin" -> "/web/blob/admin",
+        "Associations" -> "/web/blob/admin/associations",
+        "Store" -> "/web/blob/admin/store"
+      ))
+      val paging = _blob_admin_paging("/web/blob/admin/blobs", params, record)
+      Page(_simple_page(
+        title = "Blob Admin Blobs",
+        subtitle = "Read-only Blob metadata inventory",
+        body =
+          s"""${nav}
+             |<article>
+             |  <h2>Blobs</h2>
+             |  <p>Showing metadata rows only. Payload bytes remain in BlobStore.</p>
+             |  <div class="table-responsive mt-3">
+             |    <table class="table table-sm align-middle">
+             |      <thead><tr><th>ID</th><th>Kind</th><th>Source</th><th>Filename</th><th>Content Type</th><th>Bytes</th><th>Digest</th><th>Display URL</th><th>Actions</th></tr></thead>
+             |      ${table}
+             |    </table>
+             |  </div>
+             |  ${paging}
+             |</article>
+             |${_manual_raw_details("Raw Blob list", record)}""".stripMargin
+      ))
+    }
+
+  def renderBlobAdminBlobDetail(
+    subsystem: Subsystem,
+    id: String,
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    _blob_admin_record(subsystem, "admin_get_blob", Vector("id" -> id), requestProperties).map { record =>
+      val nav = _admin_nav_card(Vector(
+        "Blobs" -> "/web/blob/admin/blobs",
+        "Associations" -> s"/web/blob/admin/associations?id=${_escape_query(id)}",
+        "Blob admin" -> "/web/blob/admin"
+      ))
+      Page(_simple_page(
+        title = s"Blob ${_escape(id)}",
+        subtitle = "Blob metadata detail",
+        body =
+          s"""${nav}
+             |${_admin_card("Metadata", _field_table(_blob_admin_blob_fields(record)))}
+             |${_admin_card("Access URLs", _field_table(_blob_admin_url_fields(record)))}
+             |${_manual_raw_details("Raw Blob metadata", record)}""".stripMargin
+      ))
+    }
+
+  def renderBlobAdminAssociations(
+    subsystem: Subsystem,
+    params: Map[String, String] = Map.empty,
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    _blob_admin_record(subsystem, "admin_list_blob_associations", _blob_admin_association_args(params), requestProperties).map { record =>
+      val rows = _record_seq(record.asMap.get("data"))
+      val table =
+        if (rows.isEmpty)
+          s"""<tbody>${_admin_empty_table_cell(8, "No Blob association rows are available for this filter.")}</tbody>"""
+        else
+          s"""<tbody>${rows.map(_blob_admin_association_row).mkString("\n")}</tbody>"""
+      val nav = _admin_nav_card(Vector(
+        "Blob admin" -> "/web/blob/admin",
+        "Blobs" -> "/web/blob/admin/blobs",
+        "Store" -> "/web/blob/admin/store"
+      ))
+      val filters = _blob_admin_association_filter_form(params)
+      val paging = _blob_admin_paging("/web/blob/admin/associations", params, record)
+      Page(_simple_page(
+        title = "Blob Admin Associations",
+        subtitle = "Read-only Blob-to-entity association inventory",
+        body =
+          s"""${nav}
+             |<article>
+             |  <h2>Filters</h2>
+             |  ${filters}
+             |</article>
+             |<article>
+             |  <h2>Associations</h2>
+             |  <div class="table-responsive mt-3">
+             |    <table class="table table-sm align-middle">
+             |      <thead><tr><th>Association</th><th>Source Entity</th><th>Blob</th><th>Role</th><th>Sort</th><th>Domain</th><th>Collection</th><th>Actions</th></tr></thead>
+             |      ${table}
+             |    </table>
+             |  </div>
+             |  ${paging}
+             |</article>
+             |${_manual_raw_details("Raw association list", record)}""".stripMargin
+      ))
+    }
+
+  def renderBlobAdminStore(
+    subsystem: Subsystem,
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    _blob_admin_record(subsystem, "admin_blob_store_status", Vector.empty, requestProperties).map { record =>
+      val nav = _admin_nav_card(Vector(
+        "Blob admin" -> "/web/blob/admin",
+        "Blobs" -> "/web/blob/admin/blobs",
+        "Associations" -> "/web/blob/admin/associations"
+      ))
+      Page(_simple_page(
+        title = "Blob Admin Store",
+        subtitle = "BlobStore backend status",
+        body =
+          s"""${nav}
+             |${_admin_card("Store Status", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
+             |${_manual_raw_details("Raw BlobStore status", record)}""".stripMargin
+      ))
+    }
+
+  private def _blob_admin_record(
+    subsystem: Subsystem,
+    operation: String,
+    args: Vector[(String, String)],
+    requestProperties: Vector[(String, String)]
+  ): Consequence[Record] =
+    subsystem.executeOperationResponse(_blob_admin_request(operation, args, requestProperties)).flatMap {
+      case OperationResponse.RecordResponse(record) =>
+        Consequence.success(record)
+      case other =>
+        Consequence.operationInvalid(s"Blob admin operation did not return a record: ${operation} (${other.getClass.getSimpleName})")
+    }
+
+  private def _blob_admin_request(
+    operation: String,
+    args: Vector[(String, String)],
+    requestProperties: Vector[(String, String)]
+  ): ProtocolRequest =
+    ProtocolRequest.of(
+      component = "blob",
+      service = "blob",
+      operation = operation,
+      properties = (requestProperties ++ args).map { case (key, value) => Property(key, value, None) }.toList
+    )
+
+  private def _blob_admin_page_args(
+    params: Map[String, String]
+  ): Vector[(String, String)] = {
+    val limit = params.get("limit").orElse(params.get("pageSize")).flatMap(_.toIntOption).filter(_ > 0).getOrElse(100)
+    val offset = params.get("offset").flatMap(_.toIntOption).filter(_ >= 0).getOrElse {
+      params.get("page").flatMap(_.toIntOption).filter(_ > 0).map(page => (page - 1) * limit).getOrElse(0)
+    }
+    Vector("offset" -> offset.toString, "limit" -> limit.toString)
+  }
+
+  private def _blob_admin_association_args(
+    params: Map[String, String]
+  ): Vector[(String, String)] =
+    _blob_admin_page_args(params) ++
+      Vector("sourceEntityId", "id", "role").flatMap(key => params.get(key).filter(_.nonEmpty).map(key -> _))
+
+  private def _blob_admin_blob_row(
+    record: Record
+  ): String = {
+    val id = record.getString("id").getOrElse("")
+    val displayurl = record.getString("displayUrl").getOrElse("")
+    val displaylink =
+      if (displayurl.isEmpty) ""
+      else
+        _blob_admin_safe_display_url(displayurl) match {
+          case Some(url) => s"""<a href="${_escape(url)}">display</a>"""
+          case None => s"""<code>${_escape(displayurl)}</code>"""
+        }
+    s"""<tr>
+       |  <td><code>${_escape(id)}</code></td>
+       |  <td>${_escape(record.getString("kind").getOrElse(""))}</td>
+       |  <td>${_escape(record.getString("sourceMode").getOrElse(""))}</td>
+       |  <td>${_escape(record.getString("filename").getOrElse(""))}</td>
+       |  <td><code>${_escape(record.getString("contentType").getOrElse(""))}</code></td>
+       |  <td>${_escape(record.getString("byteSize").getOrElse(""))}</td>
+       |  <td><code>${_escape(record.getString("digest").getOrElse(""))}</code></td>
+       |  <td>${displaylink}</td>
+       |  <td><a href="/web/blob/admin/blobs/${_escape_path_segment(id)}">Open</a></td>
+       |</tr>""".stripMargin
+  }
+
+  private def _blob_admin_safe_display_url(
+    url: String
+  ): Option[String] = {
+    val trimmed = url.trim
+    if (
+      trimmed.startsWith("https://") ||
+        trimmed.startsWith("http://") ||
+        trimmed.startsWith("/web/blob/") ||
+        trimmed.startsWith("/rest/v1/blob/")
+    )
+      Some(trimmed)
+    else
+      None
+  }
+
+  private def _blob_admin_association_row(
+    record: Record
+  ): String = {
+    val blobid = record.getString("targetEntityId").getOrElse("")
+    s"""<tr>
+       |  <td><code>${_escape(record.getString("associationId").getOrElse(""))}</code></td>
+       |  <td><code>${_escape(record.getString("sourceEntityId").getOrElse(""))}</code></td>
+       |  <td><code>${_escape(blobid)}</code></td>
+       |  <td>${_escape(record.getString("role").getOrElse(""))}</td>
+       |  <td>${_escape(record.getString("sortOrder").getOrElse(""))}</td>
+       |  <td>${_escape(record.getString("associationDomain").getOrElse(""))}</td>
+       |  <td><code>${_escape(record.getString("id").getOrElse(""))}</code></td>
+       |  <td><a href="/web/blob/admin/blobs/${_escape_path_segment(blobid)}">Blob</a></td>
+       |</tr>""".stripMargin
+  }
+
+  private def _blob_admin_blob_fields(
+    record: Record
+  ): Vector[(String, String)] =
+    Vector(
+      "id",
+      "kind",
+      "sourceMode",
+      "filename",
+      "contentType",
+      "byteSize",
+      "digest",
+      "storageRef",
+      "externalUrl",
+      "urlSource",
+      "createdAt",
+      "updatedAt"
+    ).flatMap(key => record.getString(key).map(key -> _))
+
+  private def _blob_admin_url_fields(
+    record: Record
+  ): Vector[(String, String)] =
+    Vector("displayUrl", "downloadUrl").flatMap(key => record.getString(key).map(key -> _))
+
+  private def _blob_admin_association_filter_form(
+    params: Map[String, String]
+  ): String = {
+    def value(key: String): String =
+      _escape(params.getOrElse(key, ""))
+    s"""<form method="get" action="/web/blob/admin/associations" class="row g-2 align-items-end">
+       |  <div class="col-md-4"><label class="form-label" for="blobAdminSourceEntityId">Source entity</label><input class="form-control" id="blobAdminSourceEntityId" name="sourceEntityId" value="${value("sourceEntityId")}"></div>
+       |  <div class="col-md-4"><label class="form-label" for="blobAdminId">Blob id</label><input class="form-control" id="blobAdminId" name="id" value="${value("id")}"></div>
+       |  <div class="col-md-2"><label class="form-label" for="blobAdminRole">Role</label><input class="form-control" id="blobAdminRole" name="role" value="${value("role")}"></div>
+       |  <div class="col-md-2"><label class="form-label" for="blobAdminLimit">Limit</label><input class="form-control" id="blobAdminLimit" name="limit" value="${_escape(params.getOrElse("limit", "100"))}"></div>
+       |  <div class="col-12"><button class="btn btn-primary" type="submit">Filter</button> <a class="btn btn-outline-secondary" href="/web/blob/admin/associations">Clear</a></div>
+       |</form>""".stripMargin
+  }
+
+  private def _blob_admin_paging(
+    basePath: String,
+    params: Map[String, String],
+    record: Record
+  ): String = {
+    val offset = record.getInt("offset").getOrElse(0)
+    val limit = record.getInt("limit").getOrElse(100)
+    val hasmore = record.getBoolean("hasMore").getOrElse(false)
+    val cleanparams = params -- Set("offset", "page", "pageSize")
+    val querybase = cleanparams.toVector.sortBy(_._1).map { case (k, v) => s"${_escape_query(k)}=${_escape_query(v)}" }
+    val prev =
+      if (offset <= 0) ""
+      else {
+        val prevquery = (querybase :+ s"offset=${math.max(0, offset - limit)}").mkString("&")
+        s"""<a class="btn btn-outline-secondary btn-sm" href="${basePath}?${prevquery}">Previous</a>"""
+      }
+    val next =
+      if (!hasmore) ""
+      else {
+        val nextquery = (querybase :+ s"offset=${offset + limit}").mkString("&")
+        s"""<a class="btn btn-outline-secondary btn-sm" href="${basePath}?${nextquery}">Next</a>"""
+      }
+    s"""<div class="d-flex flex-wrap gap-2 align-items-center"><span class="text-secondary">offset ${offset}, limit ${limit}</span>${prev}${next}</div>"""
+  }
+
+  private def _record_seq(
+    value: Option[Any]
+  ): Vector[Record] =
+    value.toVector.flatMap {
+      case r: Record => Vector(r)
+      case xs: Vector[?] => xs.collect { case r: Record => r }
+      case xs: Seq[?] => xs.toVector.collect { case r: Record => r }
+      case xs: Array[?] => xs.toVector.collect { case r: Record => r }
+      case _ => Vector.empty
+    }
+
+  private def _display_value(value: Any): String =
+    value match {
+      case null => ""
+      case Some(x) => _display_value(x)
+      case None => ""
+      case r: Record => r.show
+      case xs: Seq[?] => xs.map(_display_value).mkString(", ")
+      case x => x.toString
+    }
 
   private def _system_admin_job_row(
     model: JobQueryReadModel
