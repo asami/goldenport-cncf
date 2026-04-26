@@ -117,7 +117,7 @@ mode and BlobStore runtime semantics.
 
 ## BL-03: User-Facing Blob Operations
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -192,21 +192,40 @@ Association runtime foundation:
 
 ## BL-04: Admin-Facing Blob Operations
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 
 Expose operator/admin Blob APIs for diagnostics and controlled management.
 
-### Expected Operations
+### BL-04A: Read-Only Admin Operations
 
-- `admin_list_blobs`
-- `admin_get_blob`
+Status: DONE
+
+BL-04A provides the read-only operator surface needed before Web/admin pages:
+
+- [x] `admin_list_blobs`
+- [x] `admin_get_blob`
+- [x] `admin_list_blob_associations`
+- [x] `admin_blob_store_status`
+
+The operations are diagnostic/read-only. They must not delete payloads, mutate
+Blob metadata, or change associations.
+List operations use bounded `offset`/`limit` paging so Web/admin pages do not
+materialize the full Blob or Blob association inventory in one response.
+
+### BL-04B: Controlled Admin Mutation Operations
+
+Status: NEXT
+
+BL-04B adds controlled mutation after the read-only surface is stable:
+
 - `admin_delete_blob`
-- `admin_list_blob_associations`
 - `admin_attach_blob_to_entity`
 - `admin_detach_blob_from_entity`
-- `admin_blob_store_status`
+
+Delete semantics, detach semantics, and payload retention policy are decided in
+BL-04B/BL-08, not in BL-04A.
 
 ---
 

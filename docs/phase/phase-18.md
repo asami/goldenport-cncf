@@ -78,7 +78,11 @@ Current semantic direction:
   - BL-03B (DONE): Blob metadata now persists as a SimpleEntity-backed model.
   - BL-03C (DONE): Blob attach/list/detach operations use the generic
     Association runtime foundation.
-- D (PLANNED): BL-04 — Builtin Blob component admin-facing operations.
+- D (ACTIVE): BL-04 — Builtin Blob component admin-facing operations.
+  - BL-04A (DONE): read-only admin operations
+    (`admin_list_blobs`, `admin_get_blob`, `admin_list_blob_associations`,
+    `admin_blob_store_status`).
+  - BL-04B (NEXT): controlled admin mutation operations.
 - E (DONE): BL-05 — Generic Association runtime foundation and Blob attachment usage.
 - F (PLANNED): BL-06 — Web/admin management pages for Blob metadata, payload links, and associations.
 - G (PLANNED): BL-07 — Aggregate/View Blob metadata and Association snapshot projection support.
@@ -98,6 +102,8 @@ Current note:
 - [x] BL-03: Builtin Blob component user-facing operations.
   - [x] BL-03A: Blob metadata and payload operations.
 - [ ] BL-04: Builtin Blob component admin-facing operations.
+  - [x] BL-04A: Read-only admin operations.
+  - [ ] BL-04B: Controlled admin mutation operations.
 - [x] BL-05: Generic Association runtime foundation and Blob attachment usage.
 - [ ] BL-06: Web/admin management pages for Blob metadata, payload links, and associations.
 - [ ] BL-07: Aggregate/View Blob metadata projection support.

@@ -19,7 +19,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 trait BlobRepository {
   def create(blob: BlobCreate)(using ExecutionContext): Consequence[Blob]
   def get(id: EntityId)(using ExecutionContext): Consequence[Blob]
-  def list()(using ExecutionContext): Consequence[Vector[Blob]]
+  def list(offset: Int = 0, limit: Option[Int] = None)(using ExecutionContext): Consequence[Vector[Blob]]
 }
 
 object BlobRepository {
@@ -65,8 +65,8 @@ final class EntityStoreBlobRepository extends BlobRepository {
       case None => Consequence.operationNotFound(s"blob metadata:${id.value}")
     }
 
-  def list()(using ctx: ExecutionContext): Consequence[Vector[Blob]] =
-    _search(Query.plan(Record.empty))
+  def list(offset: Int = 0, limit: Option[Int] = None)(using ctx: ExecutionContext): Consequence[Vector[Blob]] =
+    _search(Query.plan(Record.empty, limit = limit, offset = Some(offset)))
 
   private def _search(
     query: Query[?]

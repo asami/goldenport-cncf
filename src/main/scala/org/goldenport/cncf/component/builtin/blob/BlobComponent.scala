@@ -8,9 +8,11 @@ import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.cncf.action.{ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall, QueryAction}
 import org.goldenport.cncf.association.{AssociationCreate, AssociationDomain, AssociationFilter, AssociationRecordCodec, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.blob.*
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentId, ComponentInit, ComponentInstanceId}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
+import org.goldenport.cncf.security.{AdminAuthorizationPolicy, OperationAuthorizationProvider, OperationAuthorizationRule}
 import org.goldenport.datatype.{ContentType, MimeBody}
 import org.goldenport.http.{HttpResponse, HttpStatus}
 import org.goldenport.protocol.Protocol
@@ -44,6 +46,10 @@ object BlobComponent {
     def attachBlobToEntity(request: AttachBlobRequest)(using ExecutionContext): Consequence[Record]
     def detachBlobFromEntity(request: DetachBlobRequest)(using ExecutionContext): Consequence[Record]
     def listEntityBlobs(request: ListEntityBlobsRequest)(using ExecutionContext): Consequence[Record]
+    def adminListBlobs(page: AdminPageRequest)(using ExecutionContext): Consequence[Record]
+    def adminGetBlob(id: EntityId)(using ExecutionContext): Consequence[BlobMetadata]
+    def adminListBlobAssociations(request: AdminListBlobAssociationsRequest)(using ExecutionContext): Consequence[Record]
+    def adminBlobStoreStatus()(using ExecutionContext): Consequence[Record]
   }
 
   final case class RegisterBlobRequest(
@@ -73,6 +79,25 @@ object BlobComponent {
   final case class ListEntityBlobsRequest(
     sourceEntityId: String,
     role: Option[String]
+  )
+
+  final case class AdminPageRequest(
+    offset: Int,
+    limit: Int
+  ) {
+    def fetchLimit: Int = limit + 1
+  }
+
+  object AdminPageRequest {
+    val DefaultLimit: Int = 100
+    val MaxLimit: Int = 500
+  }
+
+  final case class AdminListBlobAssociationsRequest(
+    sourceEntityId: Option[String],
+    id: Option[EntityId],
+    role: Option[String],
+    page: AdminPageRequest
   )
 
   sealed trait BlobReadOutcome
@@ -111,10 +136,13 @@ object BlobComponent {
       comp: Component
     ): Component.Core = {
       val request = _register_blob_request_definition
+      val emptyRequest = spec.RequestDefinition()
       val idRequest = _id_request
       val attachRequest = _attach_blob_request_definition
       val detachRequest = _detach_blob_request_definition
       val listRequest = _list_entity_blobs_request_definition
+      val adminListRequest = _admin_list_blobs_request_definition
+      val adminAssociationRequest = _admin_list_blob_associations_request_definition
       val metadataResponse = spec.ResponseDefinition(result = List(DataType.Named("BlobMetadata")))
       val urlResponse = spec.ResponseDefinition(result = List(DataType.Named("BlobAccessUrl")))
       val payloadResponse = spec.ResponseDefinition(result = List(XBlob))
@@ -126,10 +154,26 @@ object BlobComponent {
       val attach = new AttachBlobToEntityOperationDefinition(attachRequest, recordResponse)
       val detach = new DetachBlobFromEntityOperationDefinition(detachRequest, recordResponse)
       val list = new ListEntityBlobsOperationDefinition(listRequest, recordResponse)
+      val adminList = new AdminListBlobsOperationDefinition(adminListRequest, recordResponse)
+      val adminGet = new AdminGetBlobOperationDefinition(idRequest, metadataResponse)
+      val adminAssociations = new AdminListBlobAssociationsOperationDefinition(adminAssociationRequest, recordResponse)
+      val adminStatus = new AdminBlobStoreStatusOperationDefinition(emptyRequest, recordResponse)
       val service = spec.ServiceDefinition(
         name = "blob",
         operations = spec.OperationDefinitionGroup(
-          operations = NonEmptyVector.of(register, read, resolve, metadata, attach, detach, list)
+          operations = NonEmptyVector.of(
+            register,
+            read,
+            resolve,
+            metadata,
+            attach,
+            detach,
+            list,
+            adminList,
+            adminGet,
+            adminAssociations,
+            adminStatus
+          )
         )
       )
       val protocol = Protocol(
@@ -190,6 +234,25 @@ object BlobComponent {
         parameters = List(
           _required_property("sourceEntityId"),
           _optional_property("role")
+        )
+      )
+
+    private def _admin_list_blobs_request_definition: spec.RequestDefinition =
+      spec.RequestDefinition(
+        parameters = List(
+          _optional_property("offset", XInt),
+          _optional_property("limit", XInt)
+        )
+      )
+
+    private def _admin_list_blob_associations_request_definition: spec.RequestDefinition =
+      spec.RequestDefinition(
+        parameters = List(
+          _optional_property("sourceEntityId"),
+          _optional_property("id"),
+          _optional_property("role"),
+          _optional_property("offset", XInt),
+          _optional_property("limit", XInt)
         )
       )
 
@@ -304,6 +367,42 @@ object BlobComponent {
         }
       }
 
+    def adminListBlobs(page: AdminPageRequest)(using ExecutionContext): Consequence[Record] =
+      repository.list(page.offset, Some(page.fetchLimit)).map { values =>
+        val rows = values.take(page.limit)
+        Record.dataAuto(
+          "data" -> rows.map(_.metadata.toRecord),
+          "offset" -> page.offset,
+          "limit" -> page.limit,
+          "fetchedCount" -> rows.size,
+          "hasMore" -> (values.size > page.limit)
+        )
+      }
+
+    def adminGetBlob(id: EntityId)(using ExecutionContext): Consequence[BlobMetadata] =
+      repository.get(id).map(_.metadata)
+
+    def adminListBlobAssociations(
+      request: AdminListBlobAssociationsRequest
+    )(using ExecutionContext): Consequence[Record] =
+      associations.list(
+        _blob_admin_association_filter(request),
+        request.page.offset,
+        Some(request.page.fetchLimit)
+      ).map { values =>
+        val rows = values.take(request.page.limit)
+        Record.dataAuto(
+          "data" -> rows.map(AssociationRecordCodec.toRecord),
+          "offset" -> request.page.offset,
+          "limit" -> request.page.limit,
+          "fetchedCount" -> rows.size,
+          "hasMore" -> (values.size > request.page.limit)
+        )
+      }
+
+    def adminBlobStoreStatus()(using ExecutionContext): Consequence[Record] =
+      store.status().map(_blob_store_status_record)
+
     private def _blob_association_filter(
       sourceid: String,
       role: Option[String],
@@ -315,6 +414,17 @@ object BlobComponent {
         targetEntityId = id.map(_.value),
         targetKind = Some("blob"),
         role = role
+      )
+
+    private def _blob_admin_association_filter(
+      request: AdminListBlobAssociationsRequest
+    ): AssociationFilter =
+      AssociationFilter(
+        domain = AssociationDomain.BlobAttachment,
+        sourceEntityId = request.sourceEntityId,
+        targetEntityId = request.id.map(_.value),
+        targetKind = Some("blob"),
+        role = request.role
       )
 
     private def _register_managed(request: RegisterBlobRequest)(using ExecutionContext): Consequence[BlobMetadata] =
@@ -487,6 +597,73 @@ object BlobComponent {
       _list_entity_blobs_request(req).map(ListEntityBlobsAction(req, _))
   }
 
+  private trait BlobAdminOperationAuthorization extends OperationAuthorizationProvider {
+    def operationAuthorization(
+      runtimeConfig: RuntimeConfig
+    ): OperationAuthorizationRule =
+      AdminAuthorizationPolicy.operationRule("admin.entity.blob", runtimeConfig)
+  }
+
+  private final class AdminListBlobsOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition with BlobAdminOperationAuthorization {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "admin_list_blobs",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _admin_page_request(req).map(AdminListBlobsAction(req, _))
+  }
+
+  private final class AdminGetBlobOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition with BlobAdminOperationAuthorization {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "admin_get_blob",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _id(req).map(AdminGetBlobAction(req, _))
+  }
+
+  private final class AdminListBlobAssociationsOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition with BlobAdminOperationAuthorization {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "admin_list_blob_associations",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      _admin_list_blob_associations_request(req).map(AdminListBlobAssociationsAction(req, _))
+  }
+
+  private final class AdminBlobStoreStatusOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition
+  ) extends spec.OperationDefinition with BlobAdminOperationAuthorization {
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(
+        name = "admin_blob_store_status",
+        request = request,
+        response = response
+      )
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(AdminBlobStoreStatusAction(req))
+  }
+
   private final case class RegisterBlobAction(
     request: Request,
     registerRequest: RegisterBlobRequest
@@ -550,6 +727,37 @@ object BlobComponent {
   ) extends QueryAction {
     def createCall(core: ActionCall.Core): ActionCall =
       ListEntityBlobsActionCall(core, listRequest)
+  }
+
+  private final case class AdminListBlobsAction(
+    request: Request,
+    page: AdminPageRequest
+  ) extends QueryAction {
+    def createCall(core: ActionCall.Core): ActionCall =
+      AdminListBlobsActionCall(core, page)
+  }
+
+  private final case class AdminGetBlobAction(
+    request: Request,
+    id: EntityId
+  ) extends QueryAction {
+    def createCall(core: ActionCall.Core): ActionCall =
+      AdminGetBlobActionCall(core, id)
+  }
+
+  private final case class AdminListBlobAssociationsAction(
+    request: Request,
+    listRequest: AdminListBlobAssociationsRequest
+  ) extends QueryAction {
+    def createCall(core: ActionCall.Core): ActionCall =
+      AdminListBlobAssociationsActionCall(core, listRequest)
+  }
+
+  private final case class AdminBlobStoreStatusAction(
+    request: Request
+  ) extends QueryAction {
+    def createCall(core: ActionCall.Core): ActionCall =
+      AdminBlobStoreStatusActionCall(core)
   }
 
   private final case class RegisterBlobActionCall(
@@ -629,6 +837,45 @@ object BlobComponent {
       }
   }
 
+  private final case class AdminListBlobsActionCall(
+    core: ActionCall.Core,
+    page: AdminPageRequest
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _service(core).flatMap(_.adminListBlobs(page)(using core.executionContext)).map { record =>
+        OperationResponse.RecordResponse(record)
+      }
+  }
+
+  private final case class AdminGetBlobActionCall(
+    core: ActionCall.Core,
+    id: EntityId
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _service(core).flatMap(_.adminGetBlob(id)(using core.executionContext)).map { metadata =>
+        OperationResponse.RecordResponse(metadata.toRecord)
+      }
+  }
+
+  private final case class AdminListBlobAssociationsActionCall(
+    core: ActionCall.Core,
+    listRequest: AdminListBlobAssociationsRequest
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _service(core).flatMap(_.adminListBlobAssociations(listRequest)(using core.executionContext)).map { record =>
+        OperationResponse.RecordResponse(record)
+      }
+  }
+
+  private final case class AdminBlobStoreStatusActionCall(
+    core: ActionCall.Core
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _service(core).flatMap(_.adminBlobStoreStatus()(using core.executionContext)).map { record =>
+        OperationResponse.RecordResponse(record)
+      }
+  }
+
   private def _service(core: ActionCall.Core): Consequence[BlobService] =
     core.component.flatMap(_.port.get[BlobService]) match {
       case Some(service) => Consequence.success(service)
@@ -702,6 +949,37 @@ object BlobComponent {
       Consequence.success(ListEntityBlobsRequest(source, _string(req, "role")))
     }.getOrElse(Consequence.argumentMissing("sourceEntityId"))
 
+  private def _admin_list_blob_associations_request(
+    req: Request
+  ): Consequence[AdminListBlobAssociationsRequest] = {
+    val id = _string(req, "id") match {
+      case Some(value) => EntityId.parse(value).map(Some(_))
+      case None => Consequence.success(None)
+    }
+    for {
+      id <- id
+      page <- _admin_page_request(req)
+    } yield AdminListBlobAssociationsRequest(
+      sourceEntityId = _string(req, "sourceEntityId", "source_entity_id", "entityId", "entity_id"),
+      id = id,
+      role = _string(req, "role"),
+      page = page
+    )
+  }
+
+  private def _admin_page_request(req: Request): Consequence[AdminPageRequest] = {
+    val offset = _int(req, "offset").getOrElse(0)
+    val limit = _int(req, "limit").getOrElse(AdminPageRequest.DefaultLimit)
+    if (offset < 0)
+      Consequence.argumentInvalid("offset must be zero or greater")
+    else if (limit < 1)
+      Consequence.argumentInvalid("limit must be one or greater")
+    else if (limit > AdminPageRequest.MaxLimit)
+      Consequence.argumentInvalid(s"limit must be ${AdminPageRequest.MaxLimit} or less")
+    else
+      Consequence.success(AdminPageRequest(offset, limit))
+  }
+
   private def _new_blob_entity_id(): EntityId =
     EntityId(BlobCollectionId.major, BlobCollectionId.minor, BlobCollectionId)
 
@@ -713,6 +991,15 @@ object BlobComponent {
       "downloadUrl" -> metadata.accessUrl.downloadUrl,
       "urlSource" -> metadata.accessUrl.urlSource.print,
       "expiresAt" -> metadata.accessUrl.expiresAt.map(_.toString)
+    )
+
+  private def _blob_store_status_record(status: BlobStoreStatus): Record =
+    Record.dataAuto(
+      "backend" -> status.backend,
+      "available" -> status.available,
+      "container" -> status.container,
+      "location" -> status.location,
+      "message" -> status.message
     )
 
   private def _string(req: Request, names: String*): Option[String] =

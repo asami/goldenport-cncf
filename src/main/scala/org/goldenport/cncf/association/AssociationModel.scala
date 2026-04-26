@@ -86,7 +86,7 @@ final case class AssociationFilter(
 trait AssociationRepository {
   def create(association: AssociationCreate)(using ExecutionContext): Consequence[Association]
   def delete(association: Association)(using ExecutionContext): Consequence[Unit]
-  def list(filter: AssociationFilter)(using ExecutionContext): Consequence[Vector[Association]]
+  def list(filter: AssociationFilter, offset: Int = 0, limit: Option[Int] = None)(using ExecutionContext): Consequence[Vector[Association]]
 }
 
 object AssociationRepository {
@@ -129,16 +129,21 @@ final class EntityStoreAssociationRepository(
   def delete(association: Association)(using ctx: ExecutionContext): Consequence[Unit] =
     EntityStore.standard().delete(association.id)
 
-  def list(filter: AssociationFilter)(using ctx: ExecutionContext): Consequence[Vector[Association]] =
-    _store_search(filter)
+  def list(filter: AssociationFilter, offset: Int = 0, limit: Option[Int] = None)(using ctx: ExecutionContext): Consequence[Vector[Association]] =
+    _store_search(filter, offset, limit)
 
   private def _store_search(
-    filter: AssociationFilter
+    filter: AssociationFilter,
+    offset: Int,
+    limit: Option[Int]
   )(using ctx: ExecutionContext): Consequence[Vector[Association]] = {
     val collection = storagepolicy.collection(filter.domain)
     EntityStore.standard()
       .search[Association](EntityQuery(collection, _query(filter), EntitySearchScope.Store))
-      .map(_.data.sortBy(x => (x.sortOrder.getOrElse(Int.MaxValue), x.createdAt.toString, x.associationId)))
+      .map { values =>
+        val sorted = values.data.sortBy(x => (x.sortOrder.getOrElse(Int.MaxValue), x.createdAt.toString, x.associationId))
+        Query.sliceValues(sorted, Some(offset), limit)
+      }
   }
 
   private def _query(filter: AssociationFilter): Query[?] =

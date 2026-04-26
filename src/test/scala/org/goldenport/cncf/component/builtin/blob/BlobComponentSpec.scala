@@ -57,6 +57,10 @@ final class BlobComponentSpec
       val attach = operations.getOrElse("attach_blob_to_entity", fail("missing attach_blob_to_entity operation"))
       val detach = operations.getOrElse("detach_blob_from_entity", fail("missing detach_blob_from_entity operation"))
       val list = operations.getOrElse("list_entity_blobs", fail("missing list_entity_blobs operation"))
+      val adminList = operations.getOrElse("admin_list_blobs", fail("missing admin_list_blobs operation"))
+      val adminGet = operations.getOrElse("admin_get_blob", fail("missing admin_get_blob operation"))
+      val adminAssociations = operations.getOrElse("admin_list_blob_associations", fail("missing admin_list_blob_associations operation"))
+      val adminStatus = operations.getOrElse("admin_blob_store_status", fail("missing admin_blob_store_status operation"))
 
       Then("register_blob exposes its accepted user-facing input fields")
       val registerParameters = register.request.parameters.map(p => p.name -> p).toMap
@@ -81,6 +85,14 @@ final class BlobComponentSpec
       attach.request.parameters.map(_.name) should contain allOf ("sourceEntityId", "id", "role", "sortOrder")
       detach.request.parameters.map(_.name) should contain allOf ("sourceEntityId", "id", "role")
       list.request.parameters.map(_.name) should contain allOf ("sourceEntityId", "role")
+      adminList.request.parameters.map(_.name) should contain allOf ("offset", "limit")
+      adminList.request.parameters.map(_.name) should not contain ("sourceMode")
+      adminList.response.result.map(_.name) shouldBe List("Record")
+      adminGet.response.result.map(_.name) shouldBe List("BlobMetadata")
+      adminAssociations.request.parameters.map(_.name) should contain allOf ("sourceEntityId", "id", "role", "offset", "limit")
+      adminAssociations.response.result.map(_.name) shouldBe List("Record")
+      adminStatus.request.parameters shouldBe Nil
+      adminStatus.response.result.map(_.name) shouldBe List("Record")
     }
 
     "publish Blob as a reusable SimpleEntity admin surface" in {
@@ -267,6 +279,73 @@ final class BlobComponentSpec
       read shouldBe a[Consequence.Failure[_]]
     }
 
+    "expose read-only admin Blob diagnostics" in {
+      Given("a default subsystem with Blob metadata and associations")
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val blob1 = _record(_success(subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("admin one".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "image", None),
+          Property("filename", "admin-one.png", None),
+          Property("contentType", ContentType.IMAGE_PNG.header, None)
+        )
+      ))))
+      val blob2 = _record(_success(subsystem.executeOperationResponse(_request(
+        "register_blob",
+        Property("sourceMode", "external_url", None),
+        Property("kind", "attachment", None),
+        Property("filename", "admin-two.pdf", None),
+        Property("contentType", "application/pdf", None),
+        Property("externalUrl", "https://example.test/admin-two.pdf", None)
+      ))))
+      val blob1Id = blob1.getString("id").getOrElse(fail("first Blob id should be present"))
+      val blob2Id = blob2.getString("id").getOrElse(fail("second Blob id should be present"))
+      _success(subsystem.executeOperationResponse(_request(
+        "attach_blob_to_entity",
+        Property("sourceEntityId", "admin-product-42", None),
+        Property("id", blob1Id, None),
+        Property("role", "galleryImage", None)
+      )))
+      _success(subsystem.executeOperationResponse(_request(
+        "attach_blob_to_entity",
+        Property("sourceEntityId", "admin-product-42", None),
+        Property("id", blob2Id, None),
+        Property("role", "attachment", None)
+      )))
+
+      When("read-only admin Blob operations are executed")
+      val listed = _record(_success(subsystem.executeOperationResponse(_request(
+        "admin_list_blobs",
+        Property("limit", "1", None)
+      ))))
+      val loaded = _record(_success(subsystem.executeOperationResponse(_blob_request("admin_get_blob", blob1Id))))
+      val associations = _record(_success(subsystem.executeOperationResponse(_request(
+        "admin_list_blob_associations",
+        Property("sourceEntityId", "admin-product-42", None),
+        Property("limit", "1", None)
+      ))))
+      val status = _record(_success(subsystem.executeOperationResponse(_request("admin_blob_store_status"))))
+
+      Then("Blob metadata, associations, and store status are returned without mutation")
+      listed.getInt("offset") shouldBe Some(0)
+      listed.getInt("limit") shouldBe Some(1)
+      listed.getInt("fetchedCount") shouldBe Some(1)
+      listed.getString("hasMore") shouldBe Some("true")
+      val rows = listed.getVector("data").getOrElse(Vector.empty).collect { case r: Record => r }
+      rows.flatMap(_.getString("id")) should have size 1
+      loaded.getString("id") shouldBe Some(blob1Id)
+      associations.getInt("offset") shouldBe Some(0)
+      associations.getInt("limit") shouldBe Some(1)
+      associations.getInt("fetchedCount") shouldBe Some(1)
+      associations.getString("hasMore") shouldBe Some("true")
+      val associationRows = associations.getVector("data").getOrElse(Vector.empty).collect { case r: Record => r }
+      associationRows.flatMap(_.getString("targetEntityId")) should have size 1
+      status.getString("backend") shouldBe Some("in_memory")
+      status.getString("available") shouldBe Some("true")
+    }
+
     "delete a managed payload when metadata persistence fails" in {
       Given("a Blob service with a working BlobStore and failing metadata repository")
       given ExecutionContext = ExecutionContext.test()
@@ -395,7 +474,7 @@ final class BlobComponentSpec
     def get(id: EntityId)(using ExecutionContext): Consequence[Blob] =
       Consequence.operationNotFound(s"blob metadata:${id.value}")
 
-    def list()(using ExecutionContext): Consequence[Vector[Blob]] =
+    def list(offset: Int = 0, limit: Option[Int] = None)(using ExecutionContext): Consequence[Vector[Blob]] =
       Consequence.success(Vector.empty)
   }
 }
