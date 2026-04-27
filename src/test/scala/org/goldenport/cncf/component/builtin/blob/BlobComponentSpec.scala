@@ -1,6 +1,7 @@
 package org.goldenport.cncf.component.builtin.blob
 
 import java.nio.charset.StandardCharsets
+import java.security.MessageDigest
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
 import org.goldenport.bag.BinaryBag
@@ -13,7 +14,7 @@ import org.goldenport.http.HttpResponse
 import org.goldenport.protocol.{Argument, Property, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
-import org.goldenport.schema.{Multiplicity, XBlob, XBoolean}
+import org.goldenport.schema.{Multiplicity, XBlob, XBoolean, XLong}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -73,12 +74,15 @@ final class BlobComponentSpec
         "filename",
         "contentType",
         "payload",
-        "externalUrl"
+        "externalUrl",
+        "expectedByteSize",
+        "expectedDigest"
       )
       registerParameters("sourceMode").multiplicity shouldBe Multiplicity.One
       registerParameters("kind").multiplicity shouldBe Multiplicity.One
       registerParameters("payload").datatype shouldBe XBlob
       registerParameters("payload").kind shouldBe org.goldenport.protocol.spec.ParameterDefinition.Kind.Argument
+      registerParameters("expectedByteSize").datatype shouldBe XLong
 
       Then("read_blob is declared as a Blob payload operation")
       read.response.result shouldBe List(XBlob)
@@ -289,6 +293,148 @@ final class BlobComponentSpec
       read shouldBe a[Consequence.Failure[_]]
     }
 
+    "validate managed Blob expected size and digest metadata" in {
+      Given("a default subsystem and explicit expected metadata")
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val bytes = "validated payload".getBytes(StandardCharsets.UTF_8)
+      val expectedDigest = _sha256(bytes)
+
+      When("register_blob receives matching expectedByteSize and expectedDigest")
+      val registered = _record(_success(subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary(bytes))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "attachment", None),
+          Property("filename", "validated.bin", None),
+          Property("contentType", "application/octet-stream", None),
+          Property("expectedByteSize", bytes.length.toString, None),
+          Property("expectedDigest", expectedDigest.toUpperCase(java.util.Locale.ROOT), None)
+        )
+      ))))
+
+      Then("the Blob is persisted with the actual measured metadata")
+      registered.getString("byteSize") shouldBe Some(bytes.length.toString)
+      registered.getString("digest") shouldBe Some(expectedDigest)
+      registered.getString("contentType") shouldBe Some(ContentType.APPLICATION_OCTET_STREAM.header)
+    }
+
+    "default managed Blob content type when not provided" in {
+      Given("a default subsystem and a managed payload without contentType")
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+
+      When("register_blob is executed")
+      val registered = _record(_success(subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("default type".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "binary", None),
+          Property("filename", "default.bin", None)
+        )
+      ))))
+
+      Then("the existing octet-stream default remains")
+      registered.getString("contentType") shouldBe Some(ContentType.APPLICATION_OCTET_STREAM.header)
+    }
+
+    "reject invalid Blob content type metadata" in {
+      Given("a default subsystem")
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+
+      When("register_blob receives a non-MIME content type")
+      val result = subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("invalid type".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "binary", None),
+          Property("filename", "invalid.bin", None),
+          Property("contentType", "not-a-mime", None)
+        )
+      ))
+
+      Then("registration fails before the payload is stored")
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
+    "reject managed Blob expected metadata mismatches and compensate payloads" in {
+      Given("a Blob service with a recording BlobStore")
+      given ExecutionContext = ExecutionContext.test()
+      val store = new RecordingBlobStore
+      val repository = new RecordingCreateBlobRepository
+      val service = new BlobComponent.DefaultBlobService(
+        store,
+        repository,
+        AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
+      )
+
+      When("expectedByteSize does not match the stored payload")
+      val sizeMismatch = service.registerBlob(BlobComponent.RegisterBlobRequest(
+        id = _blob_entity_id("size_mismatch"),
+        kind = BlobKind.Attachment,
+        sourceMode = BlobSourceMode.Managed,
+        filename = Some("size.bin"),
+        contentType = Some(ContentType.APPLICATION_OCTET_STREAM),
+        payload = Some(Bag.binary("size".getBytes(StandardCharsets.UTF_8))),
+        externalUrl = None,
+        expectedByteSize = Some(999L)
+      ))
+
+      Then("registration fails, payload is deleted, and metadata is not created")
+      sizeMismatch shouldBe a[Consequence.Failure[_]]
+      store.deletedRefs shouldBe store.putRefs
+      repository.created shouldBe Vector.empty
+
+      val putCountBeforeInvalidDigest = store.putRefs.size
+
+      When("expectedDigest has an invalid format")
+      val invalidDigest = service.registerBlob(BlobComponent.RegisterBlobRequest(
+        id = _blob_entity_id("invalid_digest"),
+        kind = BlobKind.Attachment,
+        sourceMode = BlobSourceMode.Managed,
+        filename = Some("digest.bin"),
+        contentType = Some(ContentType.APPLICATION_OCTET_STREAM),
+        payload = Some(Bag.binary("digest".getBytes(StandardCharsets.UTF_8))),
+        externalUrl = None,
+        expectedDigest = Some("sha256:test")
+      ))
+
+      Then("registration fails and the second stored payload is also deleted")
+      invalidDigest shouldBe a[Consequence.Failure[_]]
+      store.deletedRefs shouldBe store.putRefs
+      store.putRefs.size shouldBe putCountBeforeInvalidDigest
+      repository.created shouldBe Vector.empty
+
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+
+      When("expectedByteSize is fractional or negative")
+      val fractionalSize = subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("fractional".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "attachment", None),
+          Property("filename", "fractional.bin", None),
+          Property("expectedByteSize", "1.9", None)
+        )
+      ))
+      val negativeSize = subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("negative".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "attachment", None),
+          Property("filename", "negative.bin", None),
+          Property("expectedByteSize", "-1", None)
+        )
+      ))
+
+      Then("both byte-size contracts are rejected without numeric truncation")
+      fractionalSize shouldBe a[Consequence.Failure[_]]
+      negativeSize shouldBe a[Consequence.Failure[_]]
+    }
+
     "reject unsafe external URL Blob registrations" in {
       Given("a default subsystem")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
@@ -322,6 +468,35 @@ final class BlobComponentSpec
         case (_, result) =>
           result shouldBe a[Consequence.Failure[_]]
       }
+    }
+
+    "reject external URL Blob payload validation fields" in {
+      Given("a default subsystem and an external URL Blob request with payload validation fields")
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+
+      When("register_blob receives expectedByteSize or expectedDigest for external_url")
+      val withSize = subsystem.executeOperationResponse(_request(
+        "register_blob",
+        Property("sourceMode", "external_url", None),
+        Property("kind", "attachment", None),
+        Property("filename", "external.pdf", None),
+        Property("contentType", "application/pdf", None),
+        Property("externalUrl", "https://example.test/external.pdf", None),
+        Property("expectedByteSize", "10", None)
+      ))
+      val withDigest = subsystem.executeOperationResponse(_request(
+        "register_blob",
+        Property("sourceMode", "external_url", None),
+        Property("kind", "attachment", None),
+        Property("filename", "external.pdf", None),
+        Property("contentType", "application/pdf", None),
+        Property("externalUrl", "https://example.test/external.pdf", None),
+        Property("expectedDigest", _sha256("external".getBytes(StandardCharsets.UTF_8)), None)
+      ))
+
+      Then("both requests fail because CNCF does not own an external payload")
+      withSize shouldBe a[Consequence.Failure[_]]
+      withDigest shouldBe a[Consequence.Failure[_]]
     }
 
     "expose read-only admin Blob diagnostics" in {
@@ -585,6 +760,9 @@ final class BlobComponentSpec
   private def _blob_entity_id(minor: String): EntityId =
     EntityId("cncf", minor, EntityCollectionId("cncf", "builtin", "blob"))
 
+  private def _sha256(bytes: Array[Byte]): String =
+    MessageDigest.getInstance("SHA-256").digest(bytes).map("%02x".format(_)).mkString
+
   private final class RecordingBlobStore(failDelete: Boolean = false) extends BlobStore {
     var putRefs: Vector[BlobStorageRef] = Vector.empty
     var deletedRefs: Vector[BlobStorageRef] = Vector.empty
@@ -636,6 +814,38 @@ final class BlobComponentSpec
 
     def delete(id: EntityId)(using ExecutionContext): Consequence[Unit] =
       Consequence.stateConflict(s"blob metadata delete failed: ${id.value}")
+  }
+
+  private final class RecordingCreateBlobRepository extends BlobRepository {
+    var created: Vector[BlobCreate] = Vector.empty
+
+    def create(blob: BlobCreate)(using ExecutionContext): Consequence[Blob] = {
+      created = created :+ blob
+      Consequence.success(Blob(
+        id = blob.id,
+        kind = blob.kind,
+        sourceMode = blob.sourceMode,
+        filename = blob.filename,
+        contentType = blob.contentType,
+        byteSize = blob.byteSize,
+        digest = blob.digest,
+        storageRef = blob.storageRef,
+        externalUrl = blob.externalUrl,
+        accessUrl = blob.accessUrl,
+        createdAt = java.time.Instant.parse("2026-04-27T00:00:00Z"),
+        updatedAt = java.time.Instant.parse("2026-04-27T00:00:00Z"),
+        attributes = blob.attributes
+      ))
+    }
+
+    def get(id: EntityId)(using ExecutionContext): Consequence[Blob] =
+      Consequence.operationNotFound(s"blob metadata:${id.value}")
+
+    def list(offset: Int = 0, limit: Option[Int] = None)(using ExecutionContext): Consequence[Vector[Blob]] =
+      Consequence.success(Vector.empty)
+
+    def delete(id: EntityId)(using ExecutionContext): Consequence[Unit] =
+      Consequence.unit
   }
 
   private final class RecordingBlobRepository(initial: Blob) extends BlobRepository {

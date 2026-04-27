@@ -581,10 +581,13 @@ Current active phase: Phase 18.
 - BL-07B is committed as `cca7e38 Close blob projection contract`.
 - BL-08 is in progress. BL-08A formalizes external URL safety for registration,
   URL resolution, and Web/admin rendering.
-- BL-08A is committed as `2599fe8 Harden external blob URLs`.
-- Remaining BL-08 hardening includes access control, content-type/size/checksum
-  validation, deletion/retention policy, signed URLs, and production BlobStore
-  backends.
+- BL-08A is committed as `8f87196 Harden external blob URLs`.
+- BL-08B is completed in this change; it
+  adds metadata-only validation for content type syntax, expected byte size,
+  and digest.
+- Remaining BL-08 hardening includes access control, deletion/retention policy,
+  signed URLs, production BlobStore backends, MIME-kind policy, payload size
+  limits, thumbnail generation, virus scanning, and resumable upload.
 - Active dashboard: `docs/phase/phase-18.md`
 - Active checklist: `docs/phase/phase-18-checklist.md`
 - Source note: `docs/journal/2026/04/blob-management-component-specification-note.md`.

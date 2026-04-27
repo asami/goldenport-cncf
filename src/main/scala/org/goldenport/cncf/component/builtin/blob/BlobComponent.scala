@@ -64,6 +64,8 @@ object BlobComponent {
     contentType: Option[ContentType],
     payload: Option[BinaryBag],
     externalUrl: Option[String],
+    expectedByteSize: Option[Long] = None,
+    expectedDigest: Option[String] = None,
     attributes: Map[String, String] = Map.empty
   )
 
@@ -222,7 +224,9 @@ object BlobComponent {
           _optional_property("filename"),
           _optional_property("contentType"),
           _optional_argument("payload", XBlob),
-          _optional_property("externalUrl")
+          _optional_property("externalUrl"),
+          _optional_property("expectedByteSize", XLong),
+          _optional_property("expectedDigest")
         )
       )
 
@@ -504,31 +508,35 @@ object BlobComponent {
       request.payload match {
         case Some(payload) =>
           val contentType = request.contentType.getOrElse(ContentType.APPLICATION_OCTET_STREAM)
-          store.put(
-            BlobPutRequest(
-              id = request.id,
-              kind = request.kind,
-              filename = request.filename,
-              contentType = contentType,
-              attributes = request.attributes
-            ),
-            payload
-          ).flatMap { result =>
-            repository.create(
-              BlobCreate(
-                id = result.id,
+          _validate_managed_request(request).flatMap { _ =>
+            store.put(
+              BlobPutRequest(
+                id = request.id,
                 kind = request.kind,
-                sourceMode = BlobSourceMode.Managed,
                 filename = request.filename,
-                contentType = Some(result.contentType),
-                byteSize = Some(result.byteSize),
-                digest = Some(result.digest),
-                storageRef = Some(result.storageRef),
-                externalUrl = None,
-                accessUrl = result.accessUrl,
+                contentType = contentType,
                 attributes = request.attributes
-              )
-            ).map(_.metadata).recoverWith { conclusion =>
+              ),
+              payload
+            )
+          }.flatMap { result =>
+            _validate_managed_result(request, result).flatMap { _ =>
+              repository.create(
+                BlobCreate(
+                  id = result.id,
+                  kind = request.kind,
+                  sourceMode = BlobSourceMode.Managed,
+                  filename = request.filename,
+                  contentType = Some(result.contentType),
+                  byteSize = Some(result.byteSize),
+                  digest = Some(result.digest),
+                  storageRef = Some(result.storageRef),
+                  externalUrl = None,
+                  accessUrl = result.accessUrl,
+                  attributes = request.attributes
+                )
+              ).map(_.metadata)
+            }.recoverWith { conclusion =>
               store.delete(result.storageRef)
                 .recover(_ => ())
                 .flatMap(_ => Consequence.Failure[BlobMetadata](conclusion))
@@ -541,7 +549,9 @@ object BlobComponent {
     private def _register_external_url(request: RegisterBlobRequest)(using ExecutionContext): Consequence[BlobMetadata] =
       request.externalUrl match {
         case Some(url) if url.trim.nonEmpty =>
-          BlobExternalUrlPolicy.normalize(url).flatMap { normalized =>
+          _validate_external_request(request).flatMap { _ =>
+            BlobExternalUrlPolicy.normalize(url)
+          }.flatMap { normalized =>
             repository.create(
               BlobCreate(
                 id = request.id,
@@ -565,6 +575,66 @@ object BlobComponent {
         case _ =>
           Consequence.argumentMissing("externalUrl")
       }
+
+    private def _validate_managed_request(
+      request: RegisterBlobRequest
+    ): Consequence[Unit] =
+      for {
+        _ <- request.expectedByteSize match {
+          case Some(value) if value < 0 =>
+            Consequence.argumentInvalid("expectedByteSize must be zero or greater")
+          case _ =>
+            Consequence.unit
+        }
+        _ <- request.expectedDigest match {
+          case Some(value) => _normalize_expected_digest(value).map(_ => ())
+          case None => Consequence.unit
+        }
+      } yield ()
+
+    private def _validate_managed_result(
+      request: RegisterBlobRequest,
+      result: BlobPutResult
+    ): Consequence[Unit] =
+      for {
+        _ <- request.expectedByteSize match {
+          case Some(expected) if expected != result.byteSize =>
+            Consequence.argumentInvalid(s"expectedByteSize mismatch: expected=${expected}, actual=${result.byteSize}")
+          case _ =>
+            Consequence.unit
+        }
+        _ <- request.expectedDigest match {
+          case Some(expected) =>
+            _normalize_expected_digest(expected).flatMap { normalized =>
+              if (normalized == result.digest.toLowerCase(java.util.Locale.ROOT))
+                Consequence.unit
+              else
+                Consequence.argumentInvalid(s"expectedDigest mismatch: expected=${normalized}, actual=${result.digest}")
+            }
+          case None =>
+            Consequence.unit
+        }
+      } yield ()
+
+    private def _validate_external_request(
+      request: RegisterBlobRequest
+    ): Consequence[Unit] =
+      if (request.expectedByteSize.nonEmpty)
+        Consequence.argumentInvalid("expectedByteSize is only supported for managed Blob payloads")
+      else if (request.expectedDigest.nonEmpty)
+        Consequence.argumentInvalid("expectedDigest is only supported for managed Blob payloads")
+      else
+        Consequence.unit
+
+    private def _normalize_expected_digest(
+      value: String
+    ): Consequence[String] = {
+      val trimmed = value.trim.toLowerCase(java.util.Locale.ROOT)
+      if (trimmed.matches("[0-9a-f]{64}"))
+        Consequence.success(trimmed)
+      else
+        Consequence.argumentInvalid("expectedDigest must be a 64 character SHA-256 hex digest")
+    }
   }
 
   private final class RegisterBlobOperationDefinition(
@@ -1072,7 +1142,12 @@ object BlobComponent {
       id = _new_blob_entity_id()
       filename = _string(req, "filename", "fileName")
       mimeBody = _any(req, "payload", "body", "file").collect { case m: MimeBody => m }
-      contentType = mimeBody.map(_.contentType).orElse(_string(req, "contentType", "content_type").map(ContentType.parse))
+      contentType <- mimeBody match {
+        case Some(m) => Consequence.success(Some(m.contentType))
+        case None => _optional_content_type(req)
+      }
+      expectedByteSize <- _optional_long(req, "expectedByteSize", "expected_byte_size")
+      expectedDigest = _string(req, "expectedDigest", "expected_digest")
       payload <- _payload(req, mimeBody)
     } yield RegisterBlobRequest(
       id = id,
@@ -1082,8 +1157,27 @@ object BlobComponent {
       contentType = contentType,
       payload = payload,
       externalUrl = _string(req, "externalUrl", "external_url", "url"),
+      expectedByteSize = expectedByteSize,
+      expectedDigest = expectedDigest,
       attributes = Map.empty
     )
+
+  private val ContentTypePattern =
+    """^[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+(?:\s*;\s*[A-Za-z0-9!#$&^_.+-]+=(?:"[^"]*"|[A-Za-z0-9!#$&^_.+-]+))*$""".r
+
+  private def _optional_content_type(req: Request): Consequence[Option[ContentType]] =
+    _string(req, "contentType", "content_type") match {
+      case Some(s) => _parse_content_type(s).map(Some(_))
+      case None => Consequence.success(None)
+    }
+
+  private def _parse_content_type(value: String): Consequence[ContentType] = {
+    val trimmed = value.trim
+    if (ContentTypePattern.pattern.matcher(trimmed).matches())
+      Consequence.success(ContentType.parse(trimmed))
+    else
+      Consequence.argumentInvalid(s"invalid contentType: ${value}")
+  }
 
   private def _payload(
     req: Request,
@@ -1212,6 +1306,49 @@ object BlobComponent {
       case s: String => scala.util.Try(s.trim.toInt).toOption
       case other => scala.util.Try(other.toString.trim.toInt).toOption
     }
+
+  private def _optional_long(req: Request, names: String*): Consequence[Option[Long]] =
+    _any(req, names*) match {
+      case Some(n: java.lang.Byte) => _non_negative_long(n.longValue, names)
+      case Some(n: java.lang.Short) => _non_negative_long(n.longValue, names)
+      case Some(n: java.lang.Integer) => _non_negative_long(n.longValue, names)
+      case Some(n: java.lang.Long) => _non_negative_long(n.longValue, names)
+      case Some(n: java.math.BigInteger) =>
+        scala.util.Try(n.longValueExact()).toOption match {
+          case Some(value) => _non_negative_long(value, names)
+          case None => Consequence.argumentInvalid(s"invalid long ${names.headOption.getOrElse("value")}: ${n}")
+        }
+      case Some(n: java.math.BigDecimal) =>
+        scala.util.Try(n.toBigIntegerExact.longValueExact()).toOption match {
+          case Some(value) => _non_negative_long(value, names)
+          case None => Consequence.argumentInvalid(s"invalid long ${names.headOption.getOrElse("value")}: ${n}")
+        }
+      case Some(_: java.lang.Float) =>
+        Consequence.argumentInvalid(s"invalid long ${names.headOption.getOrElse("value")}: fractional number")
+      case Some(_: java.lang.Double) =>
+        Consequence.argumentInvalid(s"invalid long ${names.headOption.getOrElse("value")}: fractional number")
+      case Some(s: String) => _parse_non_negative_long(s, names)
+      case Some(other) => _parse_non_negative_long(other.toString, names)
+      case None =>
+        Consequence.success(None)
+    }
+
+  private def _parse_non_negative_long(value: String, names: Seq[String]): Consequence[Option[Long]] = {
+    val trimmed = value.trim
+    if (trimmed.matches("[0-9]+"))
+      scala.util.Try(trimmed.toLong).toOption match {
+        case Some(n) => _non_negative_long(n, names)
+        case None => Consequence.argumentInvalid(s"invalid long ${names.headOption.getOrElse("value")}: ${value}")
+      }
+    else
+      Consequence.argumentInvalid(s"invalid long ${names.headOption.getOrElse("value")}: ${value}")
+  }
+
+  private def _non_negative_long(value: Long, names: Seq[String]): Consequence[Option[Long]] =
+    if (value >= 0)
+      Consequence.success(Some(value))
+    else
+      Consequence.argumentInvalid(s"${names.headOption.getOrElse("value")} must be zero or greater")
 
   private def _boolean(req: Request, names: String*): Consequence[Boolean] =
     _any(req, names*) match {

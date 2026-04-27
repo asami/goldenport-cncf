@@ -507,16 +507,52 @@ resolution, and Web/admin link rendering.
 
 ### Verification Snapshot
 
-- [x] Commit: `2599fe8 Harden external blob URLs`.
+- [x] Commit: `8f87196 Harden external blob URLs`.
 - [x] `BlobComponentSpec -- -z Blob` passed.
 - [x] `StaticFormAppRendererSpec -- -z Blob` passed.
+- [x] `Test/compile` passed.
+- [x] `git diff --check` passed.
+
+### BL-08B: Blob Metadata Validation
+
+Status: DONE
+
+### Objective
+
+Validate Blob registration metadata without changing BlobStore SPI or sniffing
+payload bytes.
+
+### Implementation Decisions
+
+- [x] Add optional `expectedByteSize` / `expectedDigest` to `register_blob`.
+- [x] Reject invalid `contentType` syntax while keeping typed `MimeBody` content types.
+- [x] Keep existing managed `contentType` default of `application/octet-stream`.
+- [x] Validate `expectedDigest` as raw 64-character SHA-256 hex.
+- [x] Compare expected byte size and digest against BlobStore-measured results.
+- [x] Compensate stored payloads when managed validation fails.
+- [x] Reject `expectedByteSize` / `expectedDigest` for `external_url` Blobs.
+- [x] Do not add MIME kind policy, maximum size policy, or MIME sniffing in this slice.
+
+### Acceptance Checks
+
+- [x] Managed Blob with matching expected byte size and digest succeeds.
+- [x] Invalid content type metadata fails.
+- [x] Managed Blob mismatch fails and does not create metadata.
+- [x] Managed Blob mismatch deletes the stored payload.
+- [x] Invalid expected digest format fails.
+- [x] External URL Blob with expected payload metadata fails.
+- [x] Register operation metadata exposes the new validation parameters.
+
+### Verification Snapshot
+
+- [x] Commit: current BL-08B change.
+- [x] `BlobComponentSpec -- -z Blob` passed.
 - [x] `Test/compile` passed.
 - [x] `git diff --check` passed.
 
 ### Deferred Hardening Items
 
 - access control details
-- checksum/content-type/size validation
 - deletion and retention semantics
 - signed URL support
 - real S3-compatible backend
