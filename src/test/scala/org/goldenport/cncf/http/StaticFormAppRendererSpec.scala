@@ -2916,31 +2916,60 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       secondViewPage.getString("fields") shouldBe Some("notice next")
       secondViewPage.getBoolean("hasNext") shouldBe Some(false)
       val viewBlobId = _register_external_blob(viewSubsystem, "view-image.png", "https://example.test/view-image.png")
+      val viewNoBlobRecord = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "id" -> "notice_2")
+      viewNoBlobRecord.getAny("blobs") shouldBe None
       _success(viewSubsystem.executeOperationResponse(_blob_request(
         "attach_blob_to_entity",
-        Property("sourceEntityId", "notice_1", None),
+        Property("sourceEntityId", "notice_2", None),
         Property("id", viewBlobId, None),
         Property("role", "mainImage", None),
         Property("sortOrder", "1", None)
       )))
-      val viewInstanceRecord = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "id" -> "notice_1")
+      val viewInstanceRecord = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "id" -> "notice_2")
       viewInstanceRecord.getString("kind") shouldBe Some("view.read")
-      viewInstanceRecord.getString("id") shouldBe Some("notice_1")
-      viewInstanceRecord.getString("label").getOrElse("") should include ("notice detail notice_1")
-      viewInstanceRecord.getAny("item").map(_.toString).getOrElse("") should include ("notice_1")
-      viewInstanceRecord.getString("fields").getOrElse("") should include ("notice detail notice_1")
+      viewInstanceRecord.getString("id") shouldBe Some("notice_2")
+      viewInstanceRecord.getString("label").getOrElse("") should include ("notice detail notice_2")
+      viewInstanceRecord.getAny("item").map(_.toString).getOrElse("") should include ("notice_2")
+      viewInstanceRecord.getString("fields").getOrElse("") should include ("notice detail notice_2")
       viewInstanceRecord.getAny("blobs").map(_.toString).getOrElse("") should include (viewBlobId)
       viewInstanceRecord.getAny("blobs").map(_.toString).getOrElse("") should include ("mainImage")
+      _blob_records(viewInstanceRecord).map(_.getString("id").getOrElse("")) shouldBe Vector(viewBlobId)
+      _blob_records(viewInstanceRecord).foreach { blob =>
+        blob.getAny("payload") shouldBe None
+      }
 
       val aggregateSubsystem = _aggregate_fixture_subsystem()
       val aggregateEngine = new HttpExecutionEngine(aggregateSubsystem)
       val aggregateBlobId = _register_external_blob(aggregateSubsystem, "aggregate-image.png", "https://example.test/aggregate-image.png")
+      val earlyAggregateBlobId = _register_external_blob(aggregateSubsystem, "aggregate-early.png", "https://example.test/aggregate-early.png")
+      val lateAggregateBlobId = _register_external_blob(aggregateSubsystem, "aggregate-late.png", "https://example.test/aggregate-late.png")
+      val unorderedAggregateBlobId = _register_external_blob(aggregateSubsystem, "aggregate-unordered.png", "https://example.test/aggregate-unordered.png")
+      _success(aggregateSubsystem.executeOperationResponse(_blob_request(
+        "attach_blob_to_entity",
+        Property("sourceEntityId", "notice_1", None),
+        Property("id", lateAggregateBlobId, None),
+        Property("role", "lateImage", None),
+        Property("sortOrder", "20", None)
+      )))
       _success(aggregateSubsystem.executeOperationResponse(_blob_request(
         "attach_blob_to_entity",
         Property("sourceEntityId", "notice_1", None),
         Property("id", aggregateBlobId, None),
         Property("role", "heroImage", None),
         Property("sortOrder", "2", None)
+      )))
+      _success(aggregateSubsystem.executeOperationResponse(_blob_request(
+        "attach_blob_to_entity",
+        Property("sourceEntityId", "notice_1", None),
+        Property("id", unorderedAggregateBlobId, None),
+        Property("role", "unorderedImage", None)
+      )))
+      _success(aggregateSubsystem.executeOperationResponse(_blob_request(
+        "attach_blob_to_entity",
+        Property("sourceEntityId", "notice_1", None),
+        Property("id", earlyAggregateBlobId, None),
+        Property("role", "earlyImage", None),
+        Property("sortOrder", "1", None)
       )))
       val aggregateRead = aggregateEngine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/aggregate/read", form = Record.data("component" -> "notice-board", "aggregate" -> "notice-aggregate")))
 
@@ -2986,6 +3015,22 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       aggregateInstanceRecord.getAny("record").map(_.toString).getOrElse("") should not include ("blobs")
       aggregateInstanceRecord.getAny("blobs").map(_.toString).getOrElse("") should include (aggregateBlobId)
       aggregateInstanceRecord.getAny("blobs").map(_.toString).getOrElse("") should include ("heroImage")
+      val aggregateBlobs = _blob_records(aggregateInstanceRecord)
+      aggregateBlobs.map(_.getString("id").getOrElse("")) shouldBe Vector(
+        earlyAggregateBlobId,
+        aggregateBlobId,
+        lateAggregateBlobId,
+        unorderedAggregateBlobId
+      )
+      aggregateBlobs.map(_.getString("role").getOrElse("")) shouldBe Vector(
+        "earlyImage",
+        "heroImage",
+        "lateImage",
+        "unorderedImage"
+      )
+      aggregateBlobs.foreach { blob =>
+        blob.getAny("payload") shouldBe None
+      }
     }
 
     "submit aggregate create/update actions through the discovered operation form route" in {
@@ -8133,6 +8178,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     ))))
     blob.getString("id").getOrElse(fail("Blob id is missing"))
   }
+
+  private def _blob_records(
+    record: Record
+  ): Vector[Record] =
+    record.getAny("blobs").collect {
+      case xs: Seq[?] => xs.collect { case r: Record => r }.toVector
+    }.getOrElse(Vector.empty)
 
   private def _success[A](value: Consequence[A]): A =
     value match {

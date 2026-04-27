@@ -571,6 +571,17 @@ Current active phase: Phase 18.
   payloads in parent entity storage records.
 - Aggregate/View output includes Blob metadata plus display/download URLs, not
   inline payload bytes.
+- BL-07 is complete at projection level: Aggregate/View admin read responses
+  expose a flat additive `blobs` field with Blob metadata,
+  display/download URLs, `associationId`, `role`, and `sortOrder`.
+- Blob projection omits `blobs` when empty, orders rows by `sortOrder` then
+  `associationId`, and never embeds payload bytes.
+- Entity-local Association snapshots are deferred as a future optimization;
+  the Association repository remains store-backed and authoritative.
+- BL-07B follow-up is currently uncommitted and is the latest implementation
+  state reflected in the Phase 18 checklist.
+- BL-08 is the next planned work item for hardening, including external URL safety,
+  content-type/size/checksum validation, and deletion/retention policy.
 - Active dashboard: `docs/phase/phase-18.md`
 - Active checklist: `docs/phase/phase-18-checklist.md`
 - Source note: `docs/journal/2026/04/blob-management-component-specification-note.md`.

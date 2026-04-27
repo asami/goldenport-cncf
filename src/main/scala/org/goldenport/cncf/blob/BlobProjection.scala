@@ -31,7 +31,8 @@ object BlobProjection {
         targetKind = Some("blob")
       )
     ).flatMap { rows =>
-      rows.foldLeft(Consequence.success(Vector.empty[BlobProjectionRow])) { (z, association) =>
+      val ordered = rows.sortBy(x => (x.sortOrder.getOrElse(Int.MaxValue), x.associationId))
+      ordered.foldLeft(Consequence.success(Vector.empty[BlobProjectionRow])) { (z, association) =>
         z.flatMap { acc =>
           EntityId.parse(association.targetEntityId)
             .flatMap(blobs.get)

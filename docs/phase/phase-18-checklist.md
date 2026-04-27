@@ -381,7 +381,7 @@ Add Web flows for controlled admin delete, attach, and detach operations.
 
 ## BL-07: Aggregate/View Blob Metadata Projection
 
-Status: IN PROGRESS
+Status: DONE
 
 ### BL-07A: Flat Blob Metadata Projection
 
@@ -407,6 +407,65 @@ projection without embedding payload bytes.
 - [x] Aggregate list item response includes associated Blob metadata.
 - [x] View detail response includes associated Blob metadata.
 - [x] Blob projection preserves display/download URL metadata only.
+
+### Verification Snapshot
+
+- [x] Commit: `992d1d6 Add blob metadata projection to admin views`.
+- [x] `StaticFormAppRendererSpec -- -z "execute admin read"` passed.
+- [x] `BlobComponentSpec -- -z Blob` passed.
+- [x] `Test/compile` passed.
+- [x] `git diff --check` passed.
+
+### Review Findings Resolved
+
+- [x] Blob admin subroutes map to admin authorization selectors.
+- [x] Blob admin operation failures remain structured errors instead of
+      missing-page fallbacks.
+- [x] Unsafe external Blob URLs are rendered as text unless explicitly safe.
+- [x] Attached Blob delete without `force` is asserted as deterministic `400`.
+- [x] Record-valued Aggregate/View detail responses expose Blob metadata at the
+      top-level `blobs` field.
+
+### BL-07B: Projection Contract Closure
+
+Status: DONE
+
+### Objective
+
+Close the Aggregate/View Blob projection contract before hardening work. This
+slice does not add role-grouped output or Entity-local Association snapshots.
+
+### Contract Decisions
+
+- [x] `blobs` remains a flat additive field.
+- [x] `blobs` is omitted when an Aggregate/View item has no associated Blobs.
+- [x] Blob rows are ordered by `sortOrder` ascending, then `associationId`.
+- [x] Blobs without `sortOrder` are placed after ordered rows.
+- [x] Detail responses expose `blobs` at the top level, not inside nested
+      `record`.
+- [x] List item responses expose `blobs` per item when associations exist.
+- [x] Projection rows expose Blob metadata, URL metadata, `associationId`,
+      `role`, and `sortOrder`.
+- [x] Projection rows never embed Blob payload bytes.
+- [x] Entity-local Association snapshots remain deferred to future optimization;
+      the repository store remains the source of truth.
+
+### Acceptance Checks
+
+- [x] View detail with no associated Blobs has no `blobs` field.
+- [x] View detail with associated Blob exposes a one-row flat `blobs` field.
+- [x] Aggregate detail Blob rows are deterministically ordered.
+- [x] Aggregate detail Blob rows omit payload fields.
+- [x] Aggregate record-valued detail keeps nested `record` payload free of
+      `blobs`.
+
+### Verification Snapshot
+
+- [x] BL-07B follow-up is currently uncommitted.
+- [x] `StaticFormAppRendererSpec -- -z "execute admin read"` passed.
+- [x] `BlobComponentSpec -- -z Blob` passed.
+- [x] `Test/compile` passed.
+- [x] `git diff --check` passed.
 
 ---
 

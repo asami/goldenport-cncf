@@ -92,14 +92,22 @@ Current semantic direction:
   - BL-06A (DONE): read-only Blob admin pages for metadata, associations,
     and store status.
   - BL-06B (DONE): mutation admin pages for delete, attach, and detach.
-- G (IN PROGRESS): BL-07 — Aggregate/View Blob metadata and Association snapshot projection support.
+- G (DONE): BL-07 — Aggregate/View Blob metadata projection support.
   - BL-07A (DONE): flat Blob metadata projection on Aggregate/View read responses.
+  - BL-07B (DONE): projection contract closure for ordering, empty behavior,
+    top-level placement, and payload exclusion.
 - H (PLANNED): BL-08 — Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
 
 Current note:
 
 - Phase 17 is closed and remains the SimpleEntity storage-shape baseline.
 - Phase 18 starts Blob management as a separate component concern.
+- Latest implementation snapshot:
+  - `992d1d6 Add blob metadata projection to admin views`
+  - BL-07B uncommitted follow-up closes the projection contract:
+    Aggregate/View output uses a flat, additive `blobs` field, omits it when
+    empty, orders rows by `sortOrder`, and never embeds payload bytes.
+  - Next planned work item is BL-08 hardening.
 - `docs/journal/2026/04/blob-management-component-specification-note.md` is the
   source exploration note for this phase.
 
@@ -117,8 +125,9 @@ Current note:
 - [x] BL-06: Web/admin management pages for Blob metadata, payload links, and associations.
   - [x] BL-06A: Read-only Blob admin pages.
   - [x] BL-06B: Mutation Blob admin pages.
-- [ ] BL-07: Aggregate/View Blob metadata projection support.
+- [x] BL-07: Aggregate/View Blob metadata projection support.
   - [x] BL-07A: Flat Blob metadata projection.
+  - [x] BL-07B: Projection contract closure.
 - [ ] BL-08: Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
 
 ## 6. Public Interface Direction
