@@ -5,20 +5,28 @@ Date: 2026-04-13
 
 ## Purpose
 
-This document records the implemented CNCF entity authorization model.
+This document records how the common CNCF authorization concepts are applied to
+Entity and UnitOfWork access.
+
+Common vocabulary such as subject, privilege, role, scope, capability,
+permission, access kind, access mapping policy, resource family, association
+authorization, and admin authorization is defined in
+`authorization-concepts.md`. This document is the Entity-specific application of
+that model.
 
 The model separates:
 
 - entity object permissions;
 - service/internal execution authority;
 - business relation based authorization;
+- contextual ABAC guards;
 - coarse-grained entity and service classifications.
 
-Architecturally, the model is ABAC-centered. RBAC-style role checks,
-ReBAC-style relation checks, and DAC-style owner/group/other permission checks
-are treated as specialized evaluation patterns connected through subject,
-entity, operation, application, and environment attributes. They are not
-separate peer authorization layers beside ABAC.
+Architecturally, the model is capability-oriented with explicit guards.
+RBAC-style role checks, ReBAC-style relation checks, and DAC-style
+owner/group/other permission checks feed effective capabilities. ABAC-style
+conditions are contextual guards that can deny or filter access when natural
+conditions do not match.
 
 The model is implemented at the `UnitOfWork` / internal DSL boundary. Operation
 and descriptor metadata are inputs to that boundary, but application logic should
@@ -54,6 +62,9 @@ The supported entity access kinds are:
 Search/list also performs result visibility filtering for user-permission access.
 
 ## Subject Model
+
+The common subject, principal, `SecurityContext`, and `SecuritySubject`
+definitions are in `authorization-concepts.md`.
 
 The internal subject model is `SecuritySubject`. It is the normalized CNCF view
 over `SecurityContext`.
@@ -118,6 +129,24 @@ for compatibility.
 
 ## Object-Side Permissions
 
+The relationship between subject-side capability and object-side permission is
+defined in `authorization-concepts.md`. In this Entity model, object-side
+permission is the compact entity-local capability grant table.
+
+Entity authorization follows the common capability comparison model:
+
+```text
+guards are satisfied
+AND
+effective capabilities satisfy required capabilities
+```
+
+For entity access, guards include privilege/mode constraints when applicable and
+ABAC natural conditions. Effective capabilities may come from subject grants,
+role expansion, object-side permission, and relation rules. Required
+capabilities are derived from the target collection/resource, target entity,
+access kind, and applicable access mapping policy.
+
 Object-side permissions are represented by
 `org.simplemodeling.model.value.SecurityAttributes`.
 
@@ -165,6 +194,34 @@ other.execute = false
 
 For CMS/public-content entities, `other.read` can be enabled through a profile or
 application policy.
+
+## Access Mapping Policy
+
+Entity `accessKind` values are mapped to compact permission bits by CNCF
+authorization policy.
+
+The default mapping is:
+
+```text
+read        -> read
+search/list -> read
+update      -> write
+write       -> write
+delete      -> write or execute
+execute     -> execute
+```
+
+`create` is not an entity-instance permission because the entity does not exist
+yet. It is a collection-level authorization decision.
+
+Collections or resource classes may override the default mapping. For example, a
+collection may require `execute` for delete while still using `write` for
+update. This keeps `read/write/execute` compact while allowing stricter
+operation semantics where needed.
+
+`SecurityAttributes` remains the compact object-side value type. Mapping
+`accessKind` to required permission bits is CNCF authorization policy, not a
+simplemodeling-model responsibility.
 
 Owner, group, tenant, and organization id selection are create-default variation
 points. The built-in default uses the current principal as owner id, uses that
@@ -322,10 +379,11 @@ they are positive grants only. A relation that does not include the requested
 access kind is ignored for that request, and the decision falls through to the
 owner/group/other permission checks.
 
-## ABAC Evaluation Perspective
+## ABAC Guard Perspective
 
-The implemented baseline uses ABAC attributes primarily for profile derivation
-and for connecting specialized authorization patterns.
+The implemented baseline uses ABAC attributes primarily for contextual guard
+evaluation and profile derivation. ABAC is not a capability grant source in the
+common model.
 
 Current specialized patterns are:
 
@@ -375,9 +433,9 @@ After natural ABAC guard evaluation, grants compose as follows:
 4. DAC-style owner/group/other permissions are evaluated as the fallback grant
    path.
 
-This keeps ABAC as the organizing model: RBAC-style roles, ReBAC-style
-relations, and DAC-style permissions are all attribute-based grant patterns, but
-natural ABAC conditions remain guard conditions that constrain those grants.
+This keeps the authorization context unified without treating ABAC as a grant
+source: RBAC-style roles, ReBAC-style relations, and DAC-style permissions grant
+capabilities, while natural ABAC conditions constrain those grants as guards.
 
 Further extensions should preserve the same UnitOfWork/internal DSL boundary.
 

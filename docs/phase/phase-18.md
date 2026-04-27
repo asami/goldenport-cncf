@@ -13,6 +13,9 @@ This document is a progress dashboard, not a design journal.
 
 - Provide a builtin Blob management component for image, video, attachment, and
   generic binary assets.
+- Develop the authorization capabilities required to make Blob management safe
+  and operable. Blob remains the main product goal; authorization work is
+  included when it is required by Blob flows.
 - Support two Blob source modes:
   - `managed`: CNCF stores payload through BlobStore.
   - `external_url`: CNCF stores metadata and URL only.
@@ -32,6 +35,15 @@ This document is a progress dashboard, not a design journal.
   associations, store status, and controlled delete/detach actions.
 - Expose associated Blob metadata and display/download URLs through
   Aggregate/View projections without embedding payload bytes.
+- Establish the practical authorization support needed by Blob flows:
+  - operation/admin admission;
+  - UnitOfWork/resource chokepoints;
+  - subject-side role/scope/capability inputs;
+  - object-side Entity permission and relation grants;
+  - guard predicates such as privilege ceiling and ABAC;
+  - create/list/read/update/delete authorization for EntityCollection-like
+    resources;
+  - generic Association-domain authorization for attach/detach-style flows.
 
 Current semantic direction:
 
@@ -53,6 +65,9 @@ Current semantic direction:
   their own storage shape.
 - Detaching a Blob from an entity removes the association only; deleting the
   Blob is a separate operation.
+- Authorization decisions are capability-oriented with explicit guards:
+  `privilege` and ABAC are guard predicates, while role, permission, relation,
+  and future ACL are capability grant sources.
 
 ## 3. Non-Goals
 
@@ -67,6 +82,12 @@ Current semantic direction:
 - No single mandatory global association table; association storage is
   policy-resolved by domain.
 - No Blob payload treatment as SimpleEntity scalar/value-object storage.
+- No first-class arbitrary ACL list in this phase. ACL remains a lower-priority
+  Security work item under strategy section 8.3 unless Blob later proves an
+  immediate need.
+- No full organization-grade subject grant administration UI in this phase.
+  Phase 18 may add only the minimal runtime/config surfaces required by Blob
+  authorization. Broader identity/role administration remains 8.3 Security work.
 
 ## 4. Current Work Stack
 
@@ -101,11 +122,24 @@ Current semantic direction:
   - BL-08B (DONE): metadata validation for content type, byte size, and digest.
   - BL-08C (DONE): Blob FunctionalActionCall Entity access chokepoint boundary.
   - BL-08D (DONE): ProcedureActionCall DSL foundation.
+  - BL-08E (DONE): Blob authorization policy and preflight.
+- I (IN PROGRESS): BL-09 — Blob-required authorization support.
+  - BL-09A (IN PROGRESS): guard/capability authorization concept refinement.
+  - BL-09B (PLANNED): minimal subject-side grant/config surface for roles,
+    scopes, capabilities, and create/use grants needed by Blob.
+  - BL-09C (PLANNED): object/resource-side access policy surface for
+    Blob EntityCollection, Blob attachment Association domain, and BlobStore
+    resources.
+  - BL-09D (PLANNED): Blob operation integration on the generic authorization
+    policy surface.
+  - BL-09E (PLANNED): introspection/manual/admin visibility for effective
+    Blob authorization policy.
 
 Current note:
 
 - Phase 17 is closed and remains the SimpleEntity storage-shape baseline.
-- Phase 18 starts Blob management as a separate component concern.
+- Phase 18 starts Blob management as a separate component concern. Authorization
+  work in this phase is driven by Blob's concrete requirements.
 - Latest implementation snapshot:
   - `992d1d6 Add blob metadata projection to admin views`
   - `cca7e38 Close blob projection contract`
@@ -134,6 +168,14 @@ Current note:
   - BL-08D adds a protected ProcedureActionCall helper for explicit UoW program
     execution. It keeps procedural style optional and does not move Blob away
     from FunctionalActionCall.
+  - BL-08E adds an explicit UoW authorization preflight operation and applies
+    it to Blob registration and source-entity Blob association flows. Managed
+    Blob payload storage now happens after metadata-create authorization, and
+    user-facing attach/detach/list requires a canonical source EntityId.
+  - BL-09 begins Blob-required authorization support. The model separates guard
+    predicates (`privilege`, ABAC, operation/runtime mode) from capability
+    grants (role, permission, relation, future ACL) and applies that model only
+    as far as Blob create/read/attach/detach/delete/store-status flows need.
   - UoW-backed application create/update Blob attachment workflow adapters are
     split out as follow-up hardening work.
 - `docs/journal/2026/04/blob-management-component-specification-note.md` is the
@@ -161,6 +203,13 @@ Current note:
   - [x] BL-08B: Blob metadata validation.
   - [x] BL-08C: Blob FunctionalActionCall Entity access chokepoint boundary.
   - [x] BL-08D: ProcedureActionCall DSL foundation.
+  - [x] BL-08E: Blob authorization policy and preflight.
+- [ ] BL-09: Blob-required authorization support.
+  - [ ] BL-09A: Guard/capability authorization concept refinement.
+  - [ ] BL-09B: Minimal subject-side grant/config surface.
+  - [ ] BL-09C: Object/resource-side access policy surface.
+  - [ ] BL-09D: Blob integration on generic authorization policies.
+  - [ ] BL-09E: Authorization policy introspection/admin visibility.
 
 ## 6. Public Interface Direction
 

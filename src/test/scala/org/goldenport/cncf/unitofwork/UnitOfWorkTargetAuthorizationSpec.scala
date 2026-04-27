@@ -59,6 +59,62 @@ final class UnitOfWorkTargetAuthorizationSpec
       result shouldBe a[Consequence.Success[_]]
     }
 
+    "run explicit authorization preflight through the UnitOfWork interpreter" in {
+      given ExecutionContext = _execution_context(
+        principalId = "preflight-owner"
+      )
+
+      val id = EntityId("test", "preflight_authorize", _cid)
+      _seed(PersonEntity(id, "preflight", "preflight-owner"))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Unit](
+            UnitOfWorkOp.Authorize(
+              UnitOfWorkAuthorization(
+                resourceFamily = "domain",
+                resourceType = Some("Person"),
+                collectionName = Some(_cid.name),
+                targetId = Some(id),
+                accessKind = "update"
+              )
+            )
+          )
+        )
+      )
+
+      result shouldBe Consequence.unit
+    }
+
+    "reject explicit authorization preflight before a side effect can run" in {
+      given ExecutionContext = _execution_context(
+        principalId = "preflight-non-owner"
+      )
+
+      val id = EntityId("test", "preflight_authorize_denied", _cid)
+      _seed(PersonEntity(id, "preflight-denied", "preflight-owner"))
+      val uow = new UnitOfWork(summon[ExecutionContext])
+
+      val result = new UnitOfWorkInterpreter(uow).run(
+        org.goldenport.ConsequenceT.liftF(
+          cats.free.Free.liftF[UnitOfWorkOp, Unit](
+            UnitOfWorkOp.Authorize(
+              UnitOfWorkAuthorization(
+                resourceFamily = "domain",
+                resourceType = Some("Person"),
+                collectionName = Some(_cid.name),
+                targetId = Some(id),
+                accessKind = "update"
+              )
+            )
+          )
+        )
+      )
+
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
     "allow aggregate type create command authorization before an instance exists" in {
       given ExecutionContext = _execution_context(
         principalId = "aggregate-creator"

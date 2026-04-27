@@ -5,6 +5,11 @@
 Operation authorization is the selector-level authorization model for
 Component / Service / Operation dispatch.
 
+Common CNCF authorization vocabulary such as subject, privilege, role, scope,
+capability, permission, access kind, and resource families is defined in
+`authorization-concepts.md`. This document applies those concepts to operation
+selector admission.
+
 It is independent of Web. Command, server, client, REST, Web HTML, Form API,
 and plain HTML FORM entry roots must all converge on the same Operation
 authorization checkpoint before Operation logic starts.
@@ -71,9 +76,20 @@ admin authorization policy. In `develop` and `test`, this preserves the
 admin operations are denied by default; when explicitly enabled, access still
 requires both a sufficient privilege ceiling and the configured admin roles.
 
-`privilege` is not a replacement for roles. It is the CNCF runtime/system
-capability ceiling and should remain coarse-grained. Role, scope, and
-capability carry the operational policy.
+`privilege` is not a replacement for roles. It is the CNCF runtime/system guard
+and should remain coarse-grained. Role, scope, and capability carry the
+operational policy.
+
+Operation `capabilities` are subject-side grants. They are not Entity-local
+owner/group/other permissions. Entity-local permissions are evaluated later at
+the UnitOfWork/resource boundary, as described in
+`entity-authorization-model.md`.
+
+In the common authorization model, operation policy contributes selector-level
+guards and resource/action requirements: it derives the privilege ceiling,
+runtime-mode predicates, and subject-side roles/scopes/capabilities required to
+invoke the selector. It does not derive Entity-local capabilities for target
+objects.
 
 ## Relation To WebDescriptor
 

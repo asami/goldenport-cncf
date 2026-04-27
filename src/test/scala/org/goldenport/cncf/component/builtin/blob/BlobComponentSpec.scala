@@ -196,21 +196,21 @@ final class BlobComponentSpec
       When("attaching both Blobs to an entity")
       val attach1 = _record(_success(subsystem.executeOperationResponse(_request(
         "attach_blob_to_entity",
-        Property("sourceEntityId", "product-42", None),
+        Property("sourceEntityId", blob1Id, None),
         Property("id", blob1Id, None),
         Property("role", "galleryImage", None),
         Property("sortOrder", "2", None)
       ))))
       val attach2 = _record(_success(subsystem.executeOperationResponse(_request(
         "attach_blob_to_entity",
-        Property("sourceEntityId", "product-42", None),
+        Property("sourceEntityId", blob1Id, None),
         Property("id", blob2Id, None),
         Property("role", "galleryImage", None),
         Property("sortOrder", "1", None)
       ))))
       val attach1Again = _record(_success(subsystem.executeOperationResponse(_request(
         "attach_blob_to_entity",
-        Property("sourceEntityId", "product-42", None),
+        Property("sourceEntityId", blob1Id, None),
         Property("id", blob1Id, None),
         Property("role", "galleryImage", None),
         Property("sortOrder", "2", None)
@@ -224,7 +224,7 @@ final class BlobComponentSpec
       When("listing associated Blobs")
       val listed = _record(_success(subsystem.executeOperationResponse(_request(
         "list_entity_blobs",
-        Property("sourceEntityId", "product-42", None),
+        Property("sourceEntityId", blob1Id, None),
         Property("role", "galleryImage", None)
       ))))
 
@@ -236,7 +236,7 @@ final class BlobComponentSpec
       When("detaching one Blob")
       val detached = _record(_success(subsystem.executeOperationResponse(_request(
         "detach_blob_from_entity",
-        Property("sourceEntityId", "product-42", None),
+        Property("sourceEntityId", blob1Id, None),
         Property("id", blob1Id, None),
         Property("role", "galleryImage", None)
       ))))
@@ -245,11 +245,38 @@ final class BlobComponentSpec
       detached.getInt("detachedCount") shouldBe Some(1)
       val remaining = _record(_success(subsystem.executeOperationResponse(_request(
         "list_entity_blobs",
-        Property("sourceEntityId", "product-42", None),
+        Property("sourceEntityId", blob1Id, None),
         Property("role", "galleryImage", None)
       ))))
       val remainingRows = remaining.getVector("data").getOrElse(Vector.empty).collect { case r: Record => r }
       remainingRows.flatMap(_.getString("id")) shouldBe Vector(blob2Id)
+    }
+
+    "reject user-facing Blob attachment when sourceEntityId is not an EntityId" in {
+      Given("a default subsystem and a registered Blob")
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val blob = _record(_success(subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("image".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "image", None),
+          Property("filename", "invalid-source.png", None),
+          Property("contentType", ContentType.IMAGE_PNG.header, None)
+        )
+      ))))
+      val blobId = blob.getString("id").getOrElse(fail("Blob id should be present"))
+
+      When("attach_blob_to_entity receives a non-EntityId source")
+      val result = subsystem.executeOperationResponse(_request(
+        "attach_blob_to_entity",
+        Property("sourceEntityId", "product-42", None),
+        Property("id", blobId, None),
+        Property("role", "galleryImage", None)
+      ))
+
+      Then("the operation fails before creating an association")
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "register external URL Blob metadata without payload storage" in {
@@ -514,13 +541,13 @@ final class BlobComponentSpec
       val blob2Id = blob2.getString("id").getOrElse(fail("second Blob id should be present"))
       _success(subsystem.executeOperationResponse(_request(
         "attach_blob_to_entity",
-        Property("sourceEntityId", "admin-product-42", None),
+        Property("sourceEntityId", blob1Id, None),
         Property("id", blob1Id, None),
         Property("role", "galleryImage", None)
       )))
       _success(subsystem.executeOperationResponse(_request(
         "attach_blob_to_entity",
-        Property("sourceEntityId", "admin-product-42", None),
+        Property("sourceEntityId", blob1Id, None),
         Property("id", blob2Id, None),
         Property("role", "attachment", None)
       )))
@@ -533,7 +560,7 @@ final class BlobComponentSpec
       val loaded = _record(_success(subsystem.executeOperationResponse(_blob_request("admin_get_blob", blob1Id))))
       val associations = _record(_success(subsystem.executeOperationResponse(_request(
         "admin_list_blob_associations",
-        Property("sourceEntityId", "admin-product-42", None),
+        Property("sourceEntityId", blob1Id, None),
         Property("limit", "1", None)
       ))))
       val status = _record(_success(subsystem.executeOperationResponse(_request("admin_blob_store_status"))))

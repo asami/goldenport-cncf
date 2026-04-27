@@ -526,6 +526,10 @@ Closed in Phase 13. This remains a reference area for Phase 14+ extensions and r
   - real email/SMS message-delivery providers after the stub-backed path
   - external identity/federation
   - audit logging expansion beyond current lifecycle and operation records
+  - first-class arbitrary ACL lists
+  - general subject grant administration UI
+  - full role-definition lifecycle and role-to-capability registry
+  - organization-grade policy management beyond the Blob-required surfaces
 - Source references:
   - `docs/phase/phase-16.md`
   - `docs/phase/phase-16-checklist.md`
@@ -548,6 +552,8 @@ Current active phase: Phase 18.
 
 - Add builtin Blob management component independent of the SimpleEntity storage
   shape work.
+- Blob remains the main Phase 18 product goal. Authorization work in this phase
+  is included only where Blob management flows need it.
 - Blob metadata is represented as an Entity.
 - Blob entries support two source modes:
   - internally managed payload stored by CNCF BlobStore;
@@ -599,9 +605,19 @@ Current active phase: Phase 18.
   DSL foundation for procedural implementations that explicitly run `ExecUowM`
   through the runtime `UnitOfWorkInterpreter`. FunctionalActionCall remains the
   recommended CNCF/CozyTextus implementation style.
-- Remaining BL-08 hardening includes deeper access-control policy tuning,
-  UoW-backed application create/update Blob attachment workflow adapters,
-  deletion/retention policy,
+- BL-08E is completed in this change; it adds an explicit UoW authorization
+  preflight operation and applies Blob metadata create/source-entity
+  authorization before Blob payload writes and Blob association flows.
+- BL-09 is active as Blob-required authorization support. It refines the
+  guard/capability model for Blob flows: `privilege` and ABAC are guards, while
+  role, permission, and relation are capability grant sources. ACL is deferred
+  to 8.3 Security unless Blob later proves an immediate need.
+- BL-09 remaining work is limited to Blob-required surfaces: minimal
+  subject-side grant/config input, Blob EntityCollection policy, Blob attachment
+  Association-domain policy, BlobStore status policy, operation integration, and
+  enough introspection/admin visibility to operate those policies.
+- Remaining Blob hardening outside BL-09 includes UoW-backed application
+  create/update Blob attachment workflow adapters, deletion/retention policy,
   signed URLs, production BlobStore backends, MIME-kind policy, payload size
   limits, thumbnail generation, virus scanning, and resumable upload.
 - Active dashboard: `docs/phase/phase-18.md`

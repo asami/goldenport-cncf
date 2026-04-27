@@ -660,9 +660,52 @@ need it. CNCF/CozyTextus feature code should prefer `FunctionalActionCall`.
 - [x] `Test/compile` passed.
 - [x] `ActionCallSpec` passed.
 
+---
+
+### BL-08E: Blob Authorization Policy and Preflight
+
+Status: DONE
+
+### Objective
+
+Define the concrete Blob authorization chokepoints after BL-08C moved Blob
+metadata and association access onto `FunctionalActionCall` / UoW.
+
+### Implementation Decisions
+
+- [x] `UnitOfWorkOp.Authorize` provides an explicit authorization preflight
+      operation through the same `OperationAccessPolicy` path as EntityStore
+      operations.
+- [x] Managed `register_blob` validates request metadata and runs Blob metadata
+      create authorization before writing payload bytes to `BlobStore`.
+- [x] External URL `register_blob` also runs Blob metadata create preflight
+      before metadata persistence.
+- [x] User-facing `attach_blob_to_entity` requires source entity update
+      preflight, Blob read authorization, and Association create authorization.
+- [x] User-facing `detach_blob_from_entity` requires source entity update
+      preflight and Association delete authorization.
+- [x] User-facing `list_entity_blobs` requires source entity read preflight,
+      Association search authorization, and Blob read authorization.
+- [x] Admin Blob operations continue to use existing admin operation policy plus
+      UoW `System` access mode for metadata and association access.
+
+### Boundaries
+
+- `sourceEntityId` for user-facing attach/detach/list is now a canonical
+  `EntityId` string, so generic entity authorization can inspect the source
+  entity record.
+- Blob-specific code does not interpret application entity models; it only
+  passes source entity ids through the generic UoW authorization path.
+- BL-08E does not add signed URLs, MIME-kind policy, retention policy, or
+  production BlobStore backend support.
+
+### Verification Snapshot
+
+- [x] `BlobComponentSpec -- -z Blob` passed.
+- [x] `UnitOfWorkTargetAuthorizationSpec -- -z explicit` passed.
+
 ### Deferred Hardening Items
 
-- deeper access-control policy tuning beyond UoW chokepoint routing
 - UoW-backed application create/update Blob attachment workflow adapter
 - deletion and retention semantics
 - signed URL support
@@ -670,6 +713,100 @@ need it. CNCF/CozyTextus feature code should prefer `FunctionalActionCall`.
 - thumbnail generation
 - virus scanning
 - resumable upload
+
+---
+
+## BL-09: Blob-Required Authorization Support
+
+Status: IN PROGRESS
+
+### Objective
+
+Develop only the authorization support required by Blob management flows.
+
+Blob remains the main Phase 18 product goal. Authorization work in this phase is
+not a general security-program replacement; it exists to make Blob metadata,
+payload, association, admin, and projection flows safe and operable through the
+normal CNCF authorization chokepoints.
+
+### BL-09A: Guard/Capability Concept Refinement
+
+Status: IN PROGRESS
+
+Refine the common authorization vocabulary so Blob policy work has a stable
+model:
+
+- [x] Separate guard predicates from capability grants.
+- [x] Treat `privilege` as a coarse system/runtime guard.
+- [x] Treat ABAC natural conditions as contextual guards/filters.
+- [x] Treat role, permission, and relation as capability grant sources.
+- [x] Keep ACL as a future optional grant source, not a Phase 18 requirement.
+- [x] Reflect the model in authorization design documents.
+
+### BL-09B: Minimal Subject-Side Grant/Config Surface
+
+Status: PLANNED
+
+Add the minimal subject-side configuration needed to test and operate Blob
+authorization:
+
+- [ ] roles/scopes/capabilities usable by Blob user/admin flows.
+- [ ] create grant for Blob EntityCollection registration/upload.
+- [ ] use/read grant for Blob metadata/payload access when object permission
+      alone is insufficient.
+- [ ] association-domain create/delete grant for Blob attachment and detach.
+- [ ] store-status read grant for BlobStore diagnostics.
+
+Broader subject grant administration, role-definition lifecycle, and identity
+provider administration belong to strategy section 8.3 Security.
+
+### BL-09C: Blob Object/Resource Policy Surface
+
+Status: PLANNED
+
+Add object/resource-side policy only where Blob needs it:
+
+- [ ] Blob EntityCollection create/read/update/delete access mapping.
+- [ ] Blob attachment Association domain create/delete policy.
+- [ ] BlobStore status/read diagnostics policy.
+- [ ] delete override policy for cases where `write` is allowed but `delete`
+      must require a stronger capability.
+
+### BL-09D: Blob Operation Integration
+
+Status: PLANNED
+
+Apply the BL-09B/BL-09C policy surfaces to existing Blob operations without
+introducing Blob-private authorization logic:
+
+- [ ] `register_blob`
+- [ ] `read_blob`
+- [ ] `resolve_blob_url`
+- [ ] `get_blob_metadata`
+- [ ] `attach_blob_to_entity`
+- [ ] `detach_blob_from_entity`
+- [ ] `list_entity_blobs`
+- [ ] Blob admin operations
+
+### BL-09E: Blob Authorization Visibility
+
+Status: PLANNED
+
+Expose enough policy metadata for operators and developers to understand Blob
+authorization decisions:
+
+- [ ] manual/help projection for Blob operation authorization requirements.
+- [ ] admin visibility for Blob collection, association-domain, and store
+      policy.
+- [ ] diagnostics include guard failure vs capability failure distinction.
+
+### Deferred To 8.3 Security
+
+- first-class arbitrary ACL lists.
+- general subject grant administration UI.
+- full role-definition lifecycle and role-to-capability registry.
+- organization-grade policy management beyond Blob-required surfaces.
+- external identity/federation policy administration.
 
 ---
 

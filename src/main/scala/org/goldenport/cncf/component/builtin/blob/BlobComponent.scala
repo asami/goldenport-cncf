@@ -851,6 +851,7 @@ object BlobComponent {
           val contentType = request.contentType.getOrElse(ContentType.APPLICATION_OCTET_STREAM)
           for {
             _ <- exec_from(_validate_managed_request(request))
+            _ <- _authorize_blob_create(request.id.collection, system = false)
             store <- exec_from(_blob_store)
             result <- exec_from(store.put(
               BlobPutRequest(
@@ -895,6 +896,7 @@ object BlobComponent {
         case Some(url) if url.trim.nonEmpty =>
           for {
             _ <- exec_from(_validate_external_request(request))
+            _ <- _authorize_blob_create(request.id.collection, system = false)
             normalized <- exec_from(BlobExternalUrlPolicy.normalize(url))
             blob <- _blob_create(BlobCreate(
               id = request.id,
@@ -1022,26 +1024,28 @@ object BlobComponent {
       request: AttachBlobRequest,
       system: Boolean = false
     ): ExecUowM[Record] =
-      _blob_load(request.id, system).flatMap { blob =>
-        val filter = _blob_association_filter(request.sourceEntityId, Some(request.role), Some(blob.id))
-        _association_search(filter, 0, None, system).flatMap {
-          case existing +: _ =>
-            exec_pure(AssociationRecordCodec.toRecord(existing))
-          case _ =>
-            _association_create(
-              AssociationCreate(
-                id = None,
-                associationId = UUID.randomUUID().toString,
-                sourceEntityId = request.sourceEntityId,
-                targetEntityId = blob.id.value,
-                targetKind = Some("blob"),
-                role = request.role,
-                associationDomain = AssociationDomain.BlobAttachment,
-                sortOrder = request.sortOrder,
-                collectionId = AssociationStoragePolicy.BlobAttachmentCollection
-              ),
-              system
-            ).map(AssociationRecordCodec.toRecord)
+      _authorize_source_entity(request.sourceEntityId, "update", system).flatMap { _ =>
+        _blob_load(request.id, system).flatMap { blob =>
+          val filter = _blob_association_filter(request.sourceEntityId, Some(request.role), Some(blob.id))
+          _association_search(filter, 0, None, system).flatMap {
+            case existing +: _ =>
+              exec_pure(AssociationRecordCodec.toRecord(existing))
+            case _ =>
+              _association_create(
+                AssociationCreate(
+                  id = None,
+                  associationId = UUID.randomUUID().toString,
+                  sourceEntityId = request.sourceEntityId,
+                  targetEntityId = blob.id.value,
+                  targetKind = Some("blob"),
+                  role = request.role,
+                  associationDomain = AssociationDomain.BlobAttachment,
+                  sortOrder = request.sortOrder,
+                  collectionId = AssociationStoragePolicy.BlobAttachmentCollection
+                ),
+                system
+              ).map(AssociationRecordCodec.toRecord)
+          }
         }
       }
 
@@ -1049,28 +1053,35 @@ object BlobComponent {
       request: DetachBlobRequest,
       system: Boolean = false
     ): ExecUowM[Record] =
-      _association_search(_blob_association_filter(request.sourceEntityId, request.role, Some(request.id)), 0, None, system).flatMap {
-        case Vector() => exec_from(Consequence.operationNotFound(s"blob association:${request.sourceEntityId}:${request.id.value}"))
-        case values =>
-          values.foldLeft(exec_pure(0)) { (z, association) =>
-            z.flatMap(count => _association_delete(association, system).map(_ => count + 1))
-          }.map(count => Record.dataAuto("detachedCount" -> count))
+      _authorize_source_entity(request.sourceEntityId, "update", system).flatMap { _ =>
+        _association_search(_blob_association_filter(request.sourceEntityId, request.role, Some(request.id)), 0, None, system).flatMap {
+          case Vector() => exec_from(Consequence.operationNotFound(s"blob association:${request.sourceEntityId}:${request.id.value}"))
+          case values =>
+            values.foldLeft(exec_pure(0)) { (z, association) =>
+              z.flatMap(count => _association_delete(association, system).map(_ => count + 1))
+            }.map(count => Record.dataAuto("detachedCount" -> count))
+        }
       }
 
     protected final def _list_entity_blobs(
       request: ListEntityBlobsRequest,
       system: Boolean = false
     ): ExecUowM[Record] =
-      _association_search(_blob_association_filter(request.sourceEntityId, request.role, None), 0, None, system).flatMap { values =>
-        values.foldLeft(exec_pure(Vector.empty[BlobMetadata])) { (z, association) =>
-          z.flatMap { acc =>
-            exec_from(EntityId.parse(association.targetEntityId)).flatMap(id => _blob_load(id, system)).map(blob => acc :+ blob.metadata)
+      _authorize_source_entity(request.sourceEntityId, "read", system).flatMap { _ =>
+        _association_search(_blob_association_filter(request.sourceEntityId, request.role, None), 0, None, system).flatMap { values =>
+          values.foldLeft(exec_pure(Vector.empty[BlobMetadata])) { (z, association) =>
+            z.flatMap { acc =>
+              exec_from(EntityId.parse(association.targetEntityId)).flatMap(id => _blob_metadata_if_visible(id, system)).map {
+                case Some(metadata) => acc :+ metadata
+                case None => acc
+              }
+            }
+          }.map { metadata =>
+            Record.dataAuto(
+              "data" -> metadata.map(_.toRecord),
+              "fetchedCount" -> metadata.size
+            )
           }
-        }.map { metadata =>
-          Record.dataAuto(
-            "data" -> metadata.map(_.toRecord),
-            "fetchedCount" -> metadata.size
-          )
         }
       }
 
@@ -1127,6 +1138,19 @@ object BlobComponent {
       _exec_uow(op).flatMap(x => exec_from(Consequence.successOrEntityNotFound(x)(id)))
     }
 
+    private def _blob_metadata_if_visible(
+      id: EntityId,
+      system: Boolean
+    ): ExecUowM[Option[BlobMetadata]] =
+      ConsequenceT(_blob_load(id, system).value.map {
+        case Consequence.Success(blob) =>
+          Consequence.success(Some(blob.metadata))
+        case Consequence.Failure(conclusion) if _is_permission_denied(conclusion) =>
+          Consequence.success(None)
+        case Consequence.Failure(conclusion) =>
+          Consequence.Failure(conclusion)
+      })
+
     protected final def _association_search(
       filter: AssociationFilter,
       offset: Int,
@@ -1158,6 +1182,24 @@ object BlobComponent {
       ))
     }
 
+    private def _authorize_blob_create(
+      collection: EntityCollectionId,
+      system: Boolean
+    ): ExecUowM[Unit] =
+      _exec_uow(UnitOfWorkOp.Authorize(_authorization(collection, None, "create", system)))
+
+    private def _authorize_source_entity(
+      sourceEntityId: String,
+      accessKind: String,
+      system: Boolean
+    ): ExecUowM[Unit] =
+      if (system)
+        exec_pure(())
+      else
+        exec_from(EntityId.parse(sourceEntityId)).flatMap { id =>
+          _exec_uow(UnitOfWorkOp.Authorize(_authorization(id.collection, Some(id), accessKind, system = false)))
+        }
+
     private def _exec_uow[A](op: UnitOfWorkOp[A]): ExecUowM[A] =
       ConsequenceT.liftF(Free.liftF(op))
 
@@ -1178,6 +1220,11 @@ object BlobComponent {
         case Consequence.Success(_) => Consequence.unit
         case Consequence.Failure(_) => Consequence.unit
       })
+
+    private def _is_permission_denied(
+      conclusion: Conclusion
+    ): Boolean =
+      conclusion.observation.taxonomy.symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.PermissionDenied
 
     private def _delete_blob_payload(blob: Blob): ExecUowM[Boolean] =
       blob.sourceMode match {

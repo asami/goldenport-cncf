@@ -28,6 +28,13 @@ sealed trait UnitOfWorkOp[A]
 object UnitOfWorkOp {
 
   // ------------------------------------------------------------
+  // Authorization operations
+  // ------------------------------------------------------------
+  final case class Authorize(
+    authorization: UnitOfWorkAuthorization
+  ) extends UnitOfWorkOp[Unit]
+
+  // ------------------------------------------------------------
   // HTTP operations
   // ------------------------------------------------------------
 

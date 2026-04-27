@@ -75,6 +75,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     _execute(op)
 
   private def _execute[A](op: UnitOfWorkOp[A]): Consequence[A] = op match {
+    case UnitOfWorkOp.Authorize(authorization) =>
+      withCallTree("uow:authorize") {
+        _authorize(Some(authorization))
+      }
+
     case UnitOfWorkOp.HttpGet(path) =>
       withCallTree("uow:http:get") {
         Consequence(_http_driver.get(path))
