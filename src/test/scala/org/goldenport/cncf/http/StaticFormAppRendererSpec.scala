@@ -218,6 +218,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val home = StaticFormAppRenderer.renderBlobAdmin().body
       val list = _success(StaticFormAppRenderer.renderBlobAdminBlobs(subsystem)).body
       val detail = _success(StaticFormAppRenderer.renderBlobAdminBlobDetail(subsystem, id)).body
+      val delete = _success(StaticFormAppRenderer.renderBlobAdminBlobDelete(subsystem, id)).body
       val associations = _success(StaticFormAppRenderer.renderBlobAdminAssociations(subsystem, Map("sourceEntityId" -> "article-1"))).body
       val store = _success(StaticFormAppRenderer.renderBlobAdminStore(subsystem)).body
 
@@ -228,8 +229,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       list should include ("/web/blob/admin/blobs/")
       detail should include ("Blob metadata detail")
       detail should include ("https://example.test/cover.png")
+      detail should include (s"/web/blob/admin/blobs/${id}/delete")
       detail should include ("Raw Blob metadata")
+      delete should include ("Delete Blob")
+      delete should include ("name=\"force\"")
       associations should include ("Blob Admin Associations")
+      associations should include ("action=\"/web/blob/admin/associations/attach\"")
+      associations should include ("action=\"/web/blob/admin/associations/detach\"")
       associations should include ("article-1")
       associations should include ("mainImage")
       store should include ("Blob Admin Store")
@@ -271,17 +277,115 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val home = server.routes(null).orNotFound.run(_get_request("/web/blob/admin")).unsafeRunSync()
       val list = server.routes(null).orNotFound.run(_get_request("/web/blob/admin/blobs")).unsafeRunSync()
       val detail = server.routes(null).orNotFound.run(_get_request(s"/web/blob/admin/blobs/${java.net.URLEncoder.encode(id, StandardCharsets.UTF_8)}")).unsafeRunSync()
+      val delete = server.routes(null).orNotFound.run(_get_request(s"/web/blob/admin/blobs/${java.net.URLEncoder.encode(id, StandardCharsets.UTF_8)}/delete")).unsafeRunSync()
       val associations = server.routes(null).orNotFound.run(_get_request("/web/blob/admin/associations")).unsafeRunSync()
       val store = server.routes(null).orNotFound.run(_get_request("/web/blob/admin/store")).unsafeRunSync()
 
       home.status.code shouldBe 200
       list.status.code shouldBe 200
       detail.status.code shouldBe 200
+      delete.status.code shouldBe 200
       associations.status.code shouldBe 200
       store.status.code shouldBe 200
       list.as[String].unsafeRunSync() should include (id)
       detail.as[String].unsafeRunSync() should include ("https://example.test/manual.pdf")
+      delete.as[String].unsafeRunSync() should include ("Confirm controlled Blob deletion")
       store.as[String].unsafeRunSync() should include ("BlobStore backend status")
+    }
+
+    "serve Blob admin mutation routes" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val first = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
+        "register_blob",
+        Property("sourceMode", "external_url", None),
+        Property("kind", "image", None),
+        Property("filename", "delete-me.png", None),
+        Property("contentType", ContentType.IMAGE_PNG.header, None),
+        Property("externalUrl", "https://example.test/delete-me.png", None)
+      ))))
+      val firstId = first.getString("id").getOrElse(fail("Blob id is missing"))
+      val second = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
+        "register_blob",
+        Property("sourceMode", "external_url", None),
+        Property("kind", "attachment", None),
+        Property("filename", "attach-me.pdf", None),
+        Property("contentType", "application/pdf", None),
+        Property("externalUrl", "https://example.test/attach-me.pdf", None)
+      ))))
+      val secondId = second.getString("id").getOrElse(fail("Blob id is missing"))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val attach = server.routes(null).orNotFound.run(_post_form_request(
+        "/web/blob/admin/associations/attach",
+        s"sourceEntityId=product-1&id=${java.net.URLEncoder.encode(secondId, StandardCharsets.UTF_8)}&role=manual&sortOrder=7"
+      )).unsafeRunSync()
+      val attached = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
+        "admin_list_blob_associations",
+        Property("sourceEntityId", "product-1", None),
+        Property("id", secondId, None)
+      ))))
+
+      attach.status.code shouldBe 200
+      attach.as[String].unsafeRunSync() should include ("Blob Association Attached")
+      attached.getInt("fetchedCount") shouldBe Some(1)
+
+      val detach = server.routes(null).orNotFound.run(_post_form_request(
+        "/web/blob/admin/associations/detach",
+        s"sourceEntityId=product-1&id=${java.net.URLEncoder.encode(secondId, StandardCharsets.UTF_8)}&role=manual"
+      )).unsafeRunSync()
+      val detached = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
+        "admin_list_blob_associations",
+        Property("sourceEntityId", "product-1", None),
+        Property("id", secondId, None)
+      ))))
+
+      detach.status.code shouldBe 200
+      detach.as[String].unsafeRunSync() should include ("Blob Association Detached")
+      detached.getInt("fetchedCount") shouldBe Some(0)
+
+      val delete = server.routes(null).orNotFound.run(_post_form_request(
+        s"/web/blob/admin/blobs/${java.net.URLEncoder.encode(firstId, StandardCharsets.UTF_8)}/delete",
+        "force=false"
+      )).unsafeRunSync()
+
+      delete.status.code shouldBe 200
+      delete.as[String].unsafeRunSync() should include ("Blob Deleted")
+      subsystem.executeOperationResponse(_blob_request("admin_get_blob", Property("id", firstId, None))) shouldBe a[Consequence.Failure[_]]
+    }
+
+    "render structured Blob admin delete failure and allow forced delete" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
+        "register_blob",
+        Property("sourceMode", "external_url", None),
+        Property("kind", "image", None),
+        Property("filename", "attached.png", None),
+        Property("contentType", ContentType.IMAGE_PNG.header, None),
+        Property("externalUrl", "https://example.test/attached.png", None)
+      ))))
+      val id = blob.getString("id").getOrElse(fail("Blob id is missing"))
+      _success(subsystem.executeOperationResponse(_blob_request(
+        "admin_attach_blob_to_entity",
+        Property("sourceEntityId", "product-2", None),
+        Property("id", id, None),
+        Property("role", "mainImage", None)
+      )))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val rejected = server.routes(null).orNotFound.run(_post_form_request(
+        s"/web/blob/admin/blobs/${java.net.URLEncoder.encode(id, StandardCharsets.UTF_8)}/delete",
+        "force=false"
+      )).unsafeRunSync()
+      val forced = server.routes(null).orNotFound.run(_post_form_request(
+        s"/web/blob/admin/blobs/${java.net.URLEncoder.encode(id, StandardCharsets.UTF_8)}/delete",
+        "force=true"
+      )).unsafeRunSync()
+
+      rejected.status.code shouldBe 400
+      rejected.as[String].unsafeRunSync() should include ("Error code")
+      forced.status.code shouldBe 200
+      forced.as[String].unsafeRunSync() should include ("Blob Deleted")
+      subsystem.executeOperationResponse(_blob_request("admin_get_blob", Property("id", id, None))) shouldBe a[Consequence.Failure[_]]
     }
 
     "serve structured Blob admin errors instead of missing-page fallbacks" in {
@@ -308,9 +412,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
 
       val response = server.routes(null).orNotFound.run(_get_request("/web/blob/admin/blobs")).unsafeRunSync()
+      val mutation = server.routes(null).orNotFound.run(_post_form_request("/web/blob/admin/associations/attach", "sourceEntityId=x&id=y&role=z")).unsafeRunSync()
       val body = response.as[String].unsafeRunSync()
 
       response.status.code shouldBe 403
+      mutation.status.code shouldBe 403
       body should include ("Request failed")
       body should include ("Error code:")
     }

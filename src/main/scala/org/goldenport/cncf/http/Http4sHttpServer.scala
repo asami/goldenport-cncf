@@ -150,8 +150,16 @@ final class Http4sHttpServer(
         if (_is_web_authorized("blob", "admin.blobs", "index", Some(req))) _blob_admin_blobs(req) else _forbidden_web(req, Some("blob"), Some("admin.blobs"), Some("index"))
       case req @ GET -> Root / "web" / "blob" / "admin" / "blobs" / id =>
         if (_is_web_authorized("blob", "admin.blobs", id, Some(req))) _blob_admin_blob(req, id) else _forbidden_web(req, Some("blob"), Some("admin.blobs"), Some(id))
+      case req @ GET -> Root / "web" / "blob" / "admin" / "blobs" / id / "delete" =>
+        if (_is_web_authorized("blob", "admin.blobs", "delete", Some(req), Some("admin.entity.update"))) _blob_admin_blob_delete(req, id) else _forbidden_web(req, Some("blob"), Some("admin.blobs"), Some("delete"))
+      case req @ POST -> Root / "web" / "blob" / "admin" / "blobs" / id / "delete" =>
+        if (_is_web_authorized("blob", "admin.blobs", "delete", Some(req), Some("admin.entity.update"))) _blob_admin_blob_delete_submit(req, id) else _forbidden_web(req, Some("blob"), Some("admin.blobs"), Some("delete"))
       case req @ GET -> Root / "web" / "blob" / "admin" / "associations" =>
         if (_is_web_authorized("blob", "admin.associations", "index", Some(req))) _blob_admin_associations(req) else _forbidden_web(req, Some("blob"), Some("admin.associations"), Some("index"))
+      case req @ POST -> Root / "web" / "blob" / "admin" / "associations" / "attach" =>
+        if (_is_web_authorized("blob", "admin.associations", "attach", Some(req), Some("admin.entity.update"))) _blob_admin_association_attach(req) else _forbidden_web(req, Some("blob"), Some("admin.associations"), Some("attach"))
+      case req @ POST -> Root / "web" / "blob" / "admin" / "associations" / "detach" =>
+        if (_is_web_authorized("blob", "admin.associations", "detach", Some(req), Some("admin.entity.update"))) _blob_admin_association_detach(req) else _forbidden_web(req, Some("blob"), Some("admin.associations"), Some("detach"))
       case req @ GET -> Root / "web" / "blob" / "admin" / "store" =>
         if (_is_web_authorized("blob", "admin.store", "index", Some(req))) _blob_admin_store(req) else _forbidden_web(req, Some("blob"), Some("admin.store"), Some("index"))
       case GET -> Root / "web" / app / "dashboard" / "state" =>
@@ -402,6 +410,25 @@ final class Http4sHttpServer(
       Some(id)
     )
 
+  private def _blob_admin_blob_delete(req: HRequest[IO], id: String): IO[HResponse[IO]] =
+    _blob_admin_page(
+      req,
+      StaticFormAppRenderer.renderBlobAdminBlobDelete(engine.runtimeSubsystem, id, _blob_admin_request_properties(req)),
+      Some("admin.blobs"),
+      Some("delete")
+    )
+
+  private def _blob_admin_blob_delete_submit(req: HRequest[IO], id: String): IO[HResponse[IO]] =
+    for {
+      form <- _to_plain_form_record(req)
+      response <- _blob_admin_page(
+        req,
+        StaticFormAppRenderer.renderBlobAdminBlobDeleteResult(engine.runtimeSubsystem, id, form.asMap.map { case (k, v) => k -> v.toString }, _blob_admin_request_properties(req)),
+        Some("admin.blobs"),
+        Some("delete")
+      )
+    } yield response
+
   private def _blob_admin_associations(req: HRequest[IO]): IO[HResponse[IO]] =
     _blob_admin_page(
       req,
@@ -409,6 +436,28 @@ final class Http4sHttpServer(
       Some("admin.associations"),
       Some("index")
     )
+
+  private def _blob_admin_association_attach(req: HRequest[IO]): IO[HResponse[IO]] =
+    for {
+      form <- _to_plain_form_record(req)
+      response <- _blob_admin_page(
+        req,
+        StaticFormAppRenderer.renderBlobAdminAssociationAttachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _blob_admin_request_properties(req)),
+        Some("admin.associations"),
+        Some("attach")
+      )
+    } yield response
+
+  private def _blob_admin_association_detach(req: HRequest[IO]): IO[HResponse[IO]] =
+    for {
+      form <- _to_plain_form_record(req)
+      response <- _blob_admin_page(
+        req,
+        StaticFormAppRenderer.renderBlobAdminAssociationDetachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _blob_admin_request_properties(req)),
+        Some("admin.associations"),
+        Some("detach")
+      )
+    } yield response
 
   private def _blob_admin_store(req: HRequest[IO]): IO[HResponse[IO]] =
     _blob_admin_page(

@@ -329,7 +329,7 @@ without embedding payload bytes in entity records.
 
 ## BL-06: Blob Web/Admin Management Pages
 
-Status: IN PROGRESS
+Status: DONE
 
 ### Objective
 
@@ -364,9 +364,18 @@ operations.
 
 ### BL-06B: Mutation Admin Pages
 
-Status: PLANNED
+Status: DONE
 
 Add Web flows for controlled admin delete, attach, and detach operations.
+
+- [x] Blob detail page links to delete confirmation.
+- [x] Delete confirmation page shows Blob metadata and explicit `force`.
+- [x] Delete submit uses `admin_delete_blob`.
+- [x] Association page includes attach form.
+- [x] Association rows include detach actions.
+- [x] Attach/detach submits use existing Blob admin operations.
+- [x] Mutation failures render structured Web errors.
+- [x] Production anonymous access to mutation routes is denied.
 
 ---
 

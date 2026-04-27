@@ -2017,12 +2017,12 @@ object StaticFormAppRenderer {
       body =
         s"""<article>
            |  <h2>Management</h2>
-           |  <p>Use these read-only pages to inspect Blob metadata, entity associations, and BlobStore status.</p>
+           |  <p>Use these pages to inspect Blob metadata, manage entity associations, and run controlled Blob admin actions.</p>
            |  ${_admin_entry_cards(Vector(
              _admin_entry_card("Blobs", "List Blob metadata rows and open detail pages.", "/web/blob/admin/blobs"),
-             _admin_entry_card("Associations", "Inspect Blob-to-entity association records.", "/web/blob/admin/associations"),
+             _admin_entry_card("Associations", "Inspect, attach, and detach Blob-to-entity association records.", "/web/blob/admin/associations"),
              _admin_entry_card("Store Status", "Inspect the active BlobStore backend status.", "/web/blob/admin/store"),
-             _admin_entry_card("Mutations", "Delete and attach/detach Web flows are deferred to BL-06B.", "/web/blob/admin")
+             _admin_entry_card("Delete", "Open a Blob detail page to run controlled delete with optional force.", "/web/blob/admin/blobs")
            ))}
            |</article>""".stripMargin
     ))
@@ -2083,9 +2083,68 @@ object StaticFormAppRenderer {
           s"""${nav}
              |${_admin_card("Metadata", _field_table(_blob_admin_blob_fields(record)))}
              |${_admin_card("Access URLs", _field_table(_blob_admin_url_fields(record)))}
+             |${_admin_card("Actions", s"""<p><a class="btn btn-outline-danger" href="/web/blob/admin/blobs/${_escape_path_segment(id)}/delete">Delete Blob</a></p>""")}
              |${_manual_raw_details("Raw Blob metadata", record)}""".stripMargin
       ))
     }
+
+  def renderBlobAdminBlobDelete(
+    subsystem: Subsystem,
+    id: String,
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    for {
+      blob <- _blob_admin_record(subsystem, "admin_get_blob", Vector("id" -> id), requestProperties)
+      associations <- _blob_admin_record(subsystem, "admin_list_blob_associations", Vector("id" -> id, "offset" -> "0", "limit" -> "100"), requestProperties)
+    } yield {
+      val count = associations.getInt("fetchedCount").getOrElse(_record_seq(associations.asMap.get("data")).size)
+      val warning =
+        if (count > 0)
+          s"""<div class="alert alert-warning">This Blob has ${count} association(s). Default delete will fail unless <code>force</code> is enabled.</div>"""
+        else
+          """<div class="alert alert-info">This Blob has no visible associations. Default delete is expected to remove metadata and managed payload if present.</div>"""
+      val form =
+        s"""<form method="post" action="/web/blob/admin/blobs/${_escape_path_segment(id)}/delete" class="border rounded p-3">
+           |  <input type="hidden" name="id" value="${_escape(id)}">
+           |  <div class="form-check mb-3">
+           |    <input class="form-check-input" type="checkbox" id="blobAdminForceDelete" name="force" value="true">
+           |    <label class="form-check-label" for="blobAdminForceDelete">Force delete and remove referencing Blob associations</label>
+           |  </div>
+           |  <button class="btn btn-danger" type="submit">Delete Blob</button>
+           |  <a class="btn btn-outline-secondary" href="/web/blob/admin/blobs/${_escape_path_segment(id)}">Cancel</a>
+           |</form>""".stripMargin
+      Page(_simple_page(
+        title = s"Delete Blob ${_escape(id)}",
+        subtitle = "Confirm controlled Blob deletion",
+        body =
+          s"""${_admin_nav_card(Vector("Blob detail" -> s"/web/blob/admin/blobs/${_escape_path_segment(id)}", "Blobs" -> "/web/blob/admin/blobs", "Associations" -> s"/web/blob/admin/associations?id=${_escape_query(id)}"))}
+             |${warning}
+             |${_admin_card("Blob metadata", _field_table(_blob_admin_blob_fields(blob)))}
+             |${_admin_card("Delete confirmation", form)}
+             |${_manual_raw_details("Raw Blob metadata", blob)}
+             |${_manual_raw_details("Raw Blob associations", associations)}""".stripMargin
+      ))
+    }
+
+  def renderBlobAdminBlobDeleteResult(
+    subsystem: Subsystem,
+    id: String,
+    form: Map[String, String],
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] = {
+    val force = form.get("force").exists(_blob_admin_is_truthy)
+    _blob_admin_record(subsystem, "admin_delete_blob", Vector("id" -> id, "force" -> force.toString), requestProperties).map { record =>
+      Page(_simple_page(
+        title = "Blob Deleted",
+        subtitle = s"Deleted Blob ${_escape(id)}",
+        body =
+          s"""${_admin_nav_card(Vector("Blobs" -> "/web/blob/admin/blobs", "Associations" -> "/web/blob/admin/associations", "Blob admin" -> "/web/blob/admin"))}
+             |${_admin_card("Delete result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
+             |<p><a class="btn btn-primary" href="/web/blob/admin/blobs">Back to Blobs</a> <a class="btn btn-outline-secondary" href="/web/blob/admin/associations">Associations</a></p>
+             |${_manual_raw_details("Raw delete result", record)}""".stripMargin
+      ))
+    }
+  }
 
   def renderBlobAdminAssociations(
     subsystem: Subsystem,
@@ -2105,12 +2164,17 @@ object StaticFormAppRenderer {
         "Store" -> "/web/blob/admin/store"
       ))
       val filters = _blob_admin_association_filter_form(params)
+      val attach = _blob_admin_association_attach_form(params)
       val paging = _blob_admin_paging("/web/blob/admin/associations", params, record)
       Page(_simple_page(
         title = "Blob Admin Associations",
         subtitle = "Read-only Blob-to-entity association inventory",
         body =
           s"""${nav}
+             |<article>
+             |  <h2>Attach Blob</h2>
+             |  ${attach}
+             |</article>
              |<article>
              |  <h2>Filters</h2>
              |  ${filters}
@@ -2126,6 +2190,40 @@ object StaticFormAppRenderer {
              |  ${paging}
              |</article>
              |${_manual_raw_details("Raw association list", record)}""".stripMargin
+      ))
+    }
+
+  def renderBlobAdminAssociationAttachResult(
+    subsystem: Subsystem,
+    form: Map[String, String],
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    _blob_admin_record(subsystem, "admin_attach_blob_to_entity", _blob_admin_association_mutation_args(form, includeSortOrder = true), requestProperties).map { record =>
+      Page(_simple_page(
+        title = "Blob Association Attached",
+        subtitle = "Blob association was created or already existed",
+        body =
+          s"""${_admin_nav_card(Vector("Associations" -> "/web/blob/admin/associations", "Blob admin" -> "/web/blob/admin"))}
+             |${_admin_card("Attach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
+             |<p><a class="btn btn-primary" href="/web/blob/admin/associations?sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}">Back to Associations</a> <a class="btn btn-outline-secondary" href="/web/blob/admin/blobs/${_escape_path_segment(form.getOrElse("id", ""))}">Blob detail</a></p>
+             |${_manual_raw_details("Raw attach result", record)}""".stripMargin
+      ))
+    }
+
+  def renderBlobAdminAssociationDetachResult(
+    subsystem: Subsystem,
+    form: Map[String, String],
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    _blob_admin_record(subsystem, "admin_detach_blob_from_entity", _blob_admin_association_mutation_args(form, includeSortOrder = false), requestProperties).map { record =>
+      Page(_simple_page(
+        title = "Blob Association Detached",
+        subtitle = "Blob association was removed",
+        body =
+          s"""${_admin_nav_card(Vector("Associations" -> "/web/blob/admin/associations", "Blob admin" -> "/web/blob/admin"))}
+             |${_admin_card("Detach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
+             |<p><a class="btn btn-primary" href="/web/blob/admin/associations?sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}">Back to Associations</a> <a class="btn btn-outline-secondary" href="/web/blob/admin/blobs/${_escape_path_segment(form.getOrElse("id", ""))}">Blob detail</a></p>
+             |${_manual_raw_details("Raw detach result", record)}""".stripMargin
       ))
     }
 
@@ -2190,6 +2288,22 @@ object StaticFormAppRenderer {
     _blob_admin_page_args(params) ++
       Vector("sourceEntityId", "id", "role").flatMap(key => params.get(key).filter(_.nonEmpty).map(key -> _))
 
+  private def _blob_admin_association_mutation_args(
+    values: Map[String, String],
+    includeSortOrder: Boolean
+  ): Vector[(String, String)] = {
+    val base = Vector("sourceEntityId", "id", "role").flatMap(key => values.get(key).filter(_.nonEmpty).map(key -> _))
+    if (includeSortOrder)
+      base ++ values.get("sortOrder").filter(_.nonEmpty).map("sortOrder" -> _).toVector
+    else
+      base
+  }
+
+  private def _blob_admin_is_truthy(
+    value: String
+  ): Boolean =
+    Set("true", "1", "yes", "on").contains(value.trim.toLowerCase(java.util.Locale.ROOT))
+
   private def _blob_admin_blob_row(
     record: Record
   ): String = {
@@ -2242,8 +2356,22 @@ object StaticFormAppRenderer {
        |  <td>${_escape(record.getString("sortOrder").getOrElse(""))}</td>
        |  <td>${_escape(record.getString("associationDomain").getOrElse(""))}</td>
        |  <td><code>${_escape(record.getString("id").getOrElse(""))}</code></td>
-       |  <td><a href="/web/blob/admin/blobs/${_escape_path_segment(blobid)}">Blob</a></td>
+       |  <td><a href="/web/blob/admin/blobs/${_escape_path_segment(blobid)}">Blob</a>${_blob_admin_detach_form(record)}</td>
        |</tr>""".stripMargin
+  }
+
+  private def _blob_admin_detach_form(
+    record: Record
+  ): String = {
+    val source = record.getString("sourceEntityId").getOrElse("")
+    val blobid = record.getString("targetEntityId").getOrElse("")
+    val role = record.getString("role").getOrElse("")
+    s"""<form method="post" action="/web/blob/admin/associations/detach" class="d-inline ms-2">
+       |  <input type="hidden" name="sourceEntityId" value="${_escape(source)}">
+       |  <input type="hidden" name="id" value="${_escape(blobid)}">
+       |  <input type="hidden" name="role" value="${_escape(role)}">
+       |  <button class="btn btn-outline-danger btn-sm" type="submit">Detach</button>
+       |</form>""".stripMargin
   }
 
   private def _blob_admin_blob_fields(
@@ -2280,6 +2408,20 @@ object StaticFormAppRenderer {
        |  <div class="col-md-2"><label class="form-label" for="blobAdminRole">Role</label><input class="form-control" id="blobAdminRole" name="role" value="${value("role")}"></div>
        |  <div class="col-md-2"><label class="form-label" for="blobAdminLimit">Limit</label><input class="form-control" id="blobAdminLimit" name="limit" value="${_escape(params.getOrElse("limit", "100"))}"></div>
        |  <div class="col-12"><button class="btn btn-primary" type="submit">Filter</button> <a class="btn btn-outline-secondary" href="/web/blob/admin/associations">Clear</a></div>
+       |</form>""".stripMargin
+  }
+
+  private def _blob_admin_association_attach_form(
+    params: Map[String, String]
+  ): String = {
+    def value(key: String): String =
+      _escape(params.getOrElse(key, ""))
+    s"""<form method="post" action="/web/blob/admin/associations/attach" class="row g-2 align-items-end">
+       |  <div class="col-md-4"><label class="form-label" for="blobAdminAttachSourceEntityId">Source entity</label><input class="form-control" id="blobAdminAttachSourceEntityId" name="sourceEntityId" value="${value("sourceEntityId")}" required></div>
+       |  <div class="col-md-4"><label class="form-label" for="blobAdminAttachId">Blob id</label><input class="form-control" id="blobAdminAttachId" name="id" value="${value("id")}" required></div>
+       |  <div class="col-md-2"><label class="form-label" for="blobAdminAttachRole">Role</label><input class="form-control" id="blobAdminAttachRole" name="role" value="${value("role")}" required></div>
+       |  <div class="col-md-2"><label class="form-label" for="blobAdminAttachSortOrder">Sort</label><input class="form-control" id="blobAdminAttachSortOrder" name="sortOrder"></div>
+       |  <div class="col-12"><button class="btn btn-primary" type="submit">Attach Blob</button></div>
        |</form>""".stripMargin
   }
 

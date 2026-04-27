@@ -22,6 +22,7 @@ import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
 import org.goldenport.schema.{Column, DataType, Multiplicity, Schema, ValueDomain, XBlob, XBoolean, XInt, XLong, XString}
+import org.goldenport.observation.Descriptor
 import org.goldenport.value.BaseContent
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
@@ -433,7 +434,10 @@ object BlobComponent {
         blob <- repository.get(request.id)
         refs <- associations.list(_blob_target_association_filter(blob.id))
         _ <- if (refs.nonEmpty && !request.force)
-          Consequence.stateConflict(s"blob is still attached: ${blob.id.value}; associationCount=${refs.size}")
+          Consequence.operationConflict(
+            "admin_delete_blob",
+            Seq(Descriptor.Facet.Message(s"blob is still attached: ${blob.id.value}; associationCount=${refs.size}"))
+          )
         else
           Consequence.unit
         _ <- repository.delete(blob.id)
