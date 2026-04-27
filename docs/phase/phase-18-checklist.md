@@ -594,11 +594,18 @@ bypasses authorization, metrics, and observability.
   access repositories directly.
 - The `BlobService` component port exposes BlobStore capability only; it no
   longer advertises repository-backed user/admin metadata operations.
+- `DefaultBlobService` is also limited to BlobStore capability and does not
+  retain direct repository-backed metadata/association operation methods.
 - Aggregate/View projection may read Blob metadata only through loaders supplied
   by the executing ActionCall.
 - Application create/update simultaneous Blob attachment workflows are not
   finalized by BL-08C. They require a follow-up slice to provide UoW-backed
   workflow adapters before they are treated as production operation paths.
+- Managed registration compensation preserves consistency between metadata and
+  payload storage: if payload validation or metadata create fails before a Blob
+  row exists, the stored payload is deleted; if a Blob row was created but
+  cleanup of that row fails, the payload is left in place and the failure is
+  surfaced.
 
 ### Acceptance Checks
 
@@ -610,6 +617,10 @@ bypasses authorization, metrics, and observability.
       ActionCall bodies.
 - [x] Managed Blob registration does not depend on a post-create metadata load
       after EntityStore create succeeds.
+- [x] Direct repository-backed BlobService methods are absent from production
+      code.
+- [x] Metadata cleanup failure does not leave Blob metadata pointing at a
+      deleted managed payload.
 
 ### Verification Snapshot
 

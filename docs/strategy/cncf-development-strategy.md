@@ -589,9 +589,12 @@ Current active phase: Phase 18.
   Entity access chokepoint boundary. Blob metadata and Blob association
   operation paths now go through FunctionalActionCall / UnitOfWork chokepoints
   so authorization and observability apply to the SimpleEntity-backed Blob
-  model. Direct repositories remain low-level adapters/test fixtures, not
-  public operation boundaries. The Blob component port exposes BlobStore
-  capability only, not repository-backed metadata mutation/read APIs.
+  model. Direct repositories remain low-level adapters, not public operation
+  boundaries. The Blob component port and default service expose BlobStore
+  capability only, not repository-backed metadata mutation/read APIs. Managed
+  registration compensation keeps metadata and payload consistent: payloads are
+  deleted when no Blob metadata row exists, but preserved if a created metadata
+  row cannot be cleaned up.
 - BL-08D is completed in this change; it adds the optional ProcedureActionCall
   DSL foundation for procedural implementations that explicitly run `ExecUowM`
   through the runtime `UnitOfWorkInterpreter`. FunctionalActionCall remains the

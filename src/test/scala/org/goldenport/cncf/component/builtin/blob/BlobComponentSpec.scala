@@ -5,9 +5,7 @@ import java.security.MessageDigest
 import org.goldenport.Consequence
 import org.goldenport.bag.Bag
 import org.goldenport.bag.BinaryBag
-import org.goldenport.cncf.association.{AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.blob.*
-import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.datatype.ContentType
 import org.goldenport.http.HttpResponse
@@ -24,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for BL-03A Blob user-facing metadata and payload operations.
  *
  * @since   Apr. 26, 2026
- * @version Apr. 27, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponentSpec
@@ -359,54 +357,46 @@ final class BlobComponentSpec
     }
 
     "reject managed Blob expected metadata mismatches and compensate payloads" in {
-      Given("a Blob service with a recording BlobStore")
-      given ExecutionContext = ExecutionContext.test()
+      Given("a default subsystem with a recording BlobStore")
       val store = new RecordingBlobStore
-      val repository = new RecordingCreateBlobRepository
-      val service = new BlobComponent.DefaultBlobService(
-        store,
-        repository,
-        AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
-      )
+      val subsystem = _subsystem_with_blob_store(store)
 
       When("expectedByteSize does not match the stored payload")
-      val sizeMismatch = service.registerBlob(BlobComponent.RegisterBlobRequest(
-        id = _blob_entity_id("size_mismatch"),
-        kind = BlobKind.Attachment,
-        sourceMode = BlobSourceMode.Managed,
-        filename = Some("size.bin"),
-        contentType = Some(ContentType.APPLICATION_OCTET_STREAM),
-        payload = Some(Bag.binary("size".getBytes(StandardCharsets.UTF_8))),
-        externalUrl = None,
-        expectedByteSize = Some(999L)
+      val sizeMismatch = subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("size".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "attachment", None),
+          Property("filename", "size.bin", None),
+          Property("contentType", ContentType.APPLICATION_OCTET_STREAM.header, None),
+          Property("expectedByteSize", "999", None)
+        )
       ))
 
-      Then("registration fails, payload is deleted, and metadata is not created")
+      Then("registration fails and the payload is deleted through the ActionCall path")
       sizeMismatch shouldBe a[Consequence.Failure[_]]
       store.deletedRefs shouldBe store.putRefs
-      repository.created shouldBe Vector.empty
 
       val putCountBeforeInvalidDigest = store.putRefs.size
 
       When("expectedDigest has an invalid format")
-      val invalidDigest = service.registerBlob(BlobComponent.RegisterBlobRequest(
-        id = _blob_entity_id("invalid_digest"),
-        kind = BlobKind.Attachment,
-        sourceMode = BlobSourceMode.Managed,
-        filename = Some("digest.bin"),
-        contentType = Some(ContentType.APPLICATION_OCTET_STREAM),
-        payload = Some(Bag.binary("digest".getBytes(StandardCharsets.UTF_8))),
-        externalUrl = None,
-        expectedDigest = Some("sha256:test")
+      val invalidDigest = subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("digest".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "attachment", None),
+          Property("filename", "digest.bin", None),
+          Property("contentType", ContentType.APPLICATION_OCTET_STREAM.header, None),
+          Property("expectedDigest", "sha256:test", None)
+        )
       ))
 
-      Then("registration fails and the second stored payload is also deleted")
+      Then("registration fails before a second payload is stored")
       invalidDigest shouldBe a[Consequence.Failure[_]]
       store.deletedRefs shouldBe store.putRefs
       store.putRefs.size shouldBe putCountBeforeInvalidDigest
-      repository.created shouldBe Vector.empty
-
-      val subsystem = DefaultSubsystemFactory.default(Some("command"))
 
       When("expectedByteSize is fractional or negative")
       val fractionalSize = subsystem.executeOperationResponse(_request(
@@ -566,34 +556,6 @@ final class BlobComponentSpec
       status.getString("available") shouldBe Some("true")
     }
 
-    "delete a managed payload when metadata persistence fails" in {
-      Given("a Blob service with a working BlobStore and failing metadata repository")
-      given ExecutionContext = ExecutionContext.test()
-      val store = new RecordingBlobStore
-      val service = new BlobComponent.DefaultBlobService(
-        store,
-        new FailingBlobRepository,
-        AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
-      )
-      val request = BlobComponent.RegisterBlobRequest(
-        id = _blob_entity_id("orphan_check"),
-        kind = BlobKind.Image,
-        sourceMode = BlobSourceMode.Managed,
-        filename = Some("orphan.png"),
-        contentType = Some(ContentType.IMAGE_PNG),
-        payload = Some(Bag.binary("orphan".getBytes(StandardCharsets.UTF_8))),
-        externalUrl = None
-      )
-
-      When("managed registration stores payload but cannot persist metadata")
-      val result = service.registerBlob(request)
-
-      Then("the registration fails and the stored payload is compensated")
-      result shouldBe a[Consequence.Failure[_]]
-      store.putRefs should have size 1
-      store.deletedRefs shouldBe store.putRefs
-    }
-
     "reject admin Blob delete while attached unless forced" in {
       Given("a default subsystem with an attached managed Blob")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
@@ -668,39 +630,32 @@ final class BlobComponentSpec
     }
 
     "delete Blob metadata before managed payload cleanup" in {
-      Given("a Blob service with a BlobStore that fails delete")
-      given ExecutionContext = ExecutionContext.test()
-      val id = _blob_entity_id("delete_payload_failure")
-      val ref = BlobStorageRef("recording", BlobStorageRef.DefaultContainer, id.value)
-      val blob = Blob(
-        id = id,
-        kind = BlobKind.Image,
-        sourceMode = BlobSourceMode.Managed,
-        filename = Some("delete-failure.png"),
-        contentType = Some(ContentType.IMAGE_PNG),
-        byteSize = Some(14),
-        digest = Some("sha256:test"),
-        storageRef = Some(ref),
-        externalUrl = None,
-        accessUrl = BlobUrl.cncfRoute(ref),
-        createdAt = java.time.Instant.parse("2026-04-27T00:00:00Z"),
-        updatedAt = java.time.Instant.parse("2026-04-27T00:00:00Z")
-      )
+      Given("a default subsystem with a BlobStore that fails delete")
       val store = new RecordingBlobStore(failDelete = true)
-      val repository = new RecordingBlobRepository(blob)
-      val service = new BlobComponent.DefaultBlobService(
-        store,
-        repository,
-        AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
-      )
+      val subsystem = _subsystem_with_blob_store(store)
+      val registered = _record(_success(subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("delete payload failure".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "image", None),
+          Property("filename", "delete-failure.png", None),
+          Property("contentType", ContentType.IMAGE_PNG.header, None)
+        )
+      ))))
+      val id = registered.getString("id").getOrElse(fail("Blob id should be present"))
 
       When("admin_delete_blob cannot delete the managed payload")
-      val result = service.adminDeleteBlob(BlobComponent.AdminDeleteBlobRequest(id, force = false))
+      val result = subsystem.executeOperationResponse(_request(
+        "admin_delete_blob",
+        Property("id", id, None),
+        Property("force", "true", None)
+      ))
 
       Then("the delete reports failure without leaving visible Blob metadata")
       result shouldBe a[Consequence.Failure[_]]
-      repository.deletedIds shouldBe Vector(id)
-      service.getBlobMetadata(id) shouldBe a[Consequence.Failure[_]]
+      store.deletedRefs shouldBe store.putRefs
+      subsystem.executeOperationResponse(_blob_request("admin_get_blob", id)) shouldBe a[Consequence.Failure[_]]
     }
 
     "fail deterministically for invalid registration metadata and missing Blob ids" in {
@@ -760,6 +715,13 @@ final class BlobComponentSpec
   private def _blob_entity_id(minor: String): EntityId =
     EntityId("cncf", minor, EntityCollectionId("cncf", "builtin", "blob"))
 
+  private def _subsystem_with_blob_store(store: BlobStore) = {
+    val subsystem = DefaultSubsystemFactory.default(Some("command"))
+    val component = subsystem.findComponent("blob").getOrElse(fail("missing Blob component"))
+    component.withPort(org.goldenport.cncf.component.Component.Port.of(new BlobComponent.DefaultBlobService(store)))
+    subsystem
+  }
+
   private def _sha256(bytes: Array[Byte]): String =
     MessageDigest.getInstance("SHA-256").digest(bytes).map("%02x".format(_)).mkString
 
@@ -802,69 +764,5 @@ final class BlobComponentSpec
       Consequence.success(BlobStoreStatus("recording", available = true))
   }
 
-  private final class FailingBlobRepository extends BlobRepository {
-    def create(blob: BlobCreate)(using ExecutionContext): Consequence[Blob] =
-      Consequence.stateConflict(s"blob metadata create failed: ${blob.id.value}")
 
-    def get(id: EntityId)(using ExecutionContext): Consequence[Blob] =
-      Consequence.operationNotFound(s"blob metadata:${id.value}")
-
-    def list(offset: Int = 0, limit: Option[Int] = None)(using ExecutionContext): Consequence[Vector[Blob]] =
-      Consequence.success(Vector.empty)
-
-    def delete(id: EntityId)(using ExecutionContext): Consequence[Unit] =
-      Consequence.stateConflict(s"blob metadata delete failed: ${id.value}")
-  }
-
-  private final class RecordingCreateBlobRepository extends BlobRepository {
-    var created: Vector[BlobCreate] = Vector.empty
-
-    def create(blob: BlobCreate)(using ExecutionContext): Consequence[Blob] = {
-      created = created :+ blob
-      Consequence.success(Blob(
-        id = blob.id,
-        kind = blob.kind,
-        sourceMode = blob.sourceMode,
-        filename = blob.filename,
-        contentType = blob.contentType,
-        byteSize = blob.byteSize,
-        digest = blob.digest,
-        storageRef = blob.storageRef,
-        externalUrl = blob.externalUrl,
-        accessUrl = blob.accessUrl,
-        createdAt = java.time.Instant.parse("2026-04-27T00:00:00Z"),
-        updatedAt = java.time.Instant.parse("2026-04-27T00:00:00Z"),
-        attributes = blob.attributes
-      ))
-    }
-
-    def get(id: EntityId)(using ExecutionContext): Consequence[Blob] =
-      Consequence.operationNotFound(s"blob metadata:${id.value}")
-
-    def list(offset: Int = 0, limit: Option[Int] = None)(using ExecutionContext): Consequence[Vector[Blob]] =
-      Consequence.success(Vector.empty)
-
-    def delete(id: EntityId)(using ExecutionContext): Consequence[Unit] =
-      Consequence.unit
-  }
-
-  private final class RecordingBlobRepository(initial: Blob) extends BlobRepository {
-    private var values: Map[String, Blob] = Map(initial.id.value -> initial)
-    var deletedIds: Vector[EntityId] = Vector.empty
-
-    def create(blob: BlobCreate)(using ExecutionContext): Consequence[Blob] =
-      Consequence.stateConflict(s"blob metadata create not supported: ${blob.id.value}")
-
-    def get(id: EntityId)(using ExecutionContext): Consequence[Blob] =
-      values.get(id.value).map(Consequence.success).getOrElse(Consequence.operationNotFound(s"blob metadata:${id.value}"))
-
-    def list(offset: Int = 0, limit: Option[Int] = None)(using ExecutionContext): Consequence[Vector[Blob]] =
-      Consequence.success(values.values.toVector.drop(offset).take(limit.getOrElse(Int.MaxValue)))
-
-    def delete(id: EntityId)(using ExecutionContext): Consequence[Unit] = {
-      deletedIds = deletedIds :+ id
-      values = values - id.value
-      Consequence.unit
-    }
-  }
 }

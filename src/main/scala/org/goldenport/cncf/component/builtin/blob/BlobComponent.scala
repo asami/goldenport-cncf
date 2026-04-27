@@ -192,11 +192,7 @@ object BlobComponent {
       )
       comp.withPort(
         Component.Port.of(
-          new DefaultBlobService(
-            InMemoryBlobStore(),
-            BlobRepository.entityStore(),
-            AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
-          )
+          new DefaultBlobService(InMemoryBlobStore())
         )
       )
       val instanceid = ComponentInstanceId.default(componentId)
@@ -312,323 +308,9 @@ object BlobComponent {
   }
 
   private[blob] final class DefaultBlobService(
-    store: BlobStore,
-    repository: BlobRepository,
-    associations: AssociationRepository
+    store: BlobStore
   ) extends BlobService {
     def blobStore: BlobStore = store
-
-    def registerBlob(request: RegisterBlobRequest)(using ExecutionContext): Consequence[BlobMetadata] =
-      request.sourceMode match {
-        case BlobSourceMode.Managed =>
-          _register_managed(request)
-        case BlobSourceMode.ExternalUrl =>
-          _register_external_url(request)
-      }
-
-    def readBlob(id: EntityId)(using ExecutionContext): Consequence[BlobReadOutcome] =
-      repository.get(id).flatMap {
-        case blob if blob.sourceMode == BlobSourceMode.Managed =>
-          blob.storageRef match {
-            case Some(ref) => store.get(ref).map(BlobReadOutcome.Managed.apply)
-            case None => Consequence.operationIllegal("blob.read_blob", s"managed blob has no storageRef: ${id.value}")
-          }
-        case blob =>
-          Consequence.operationIllegal("blob.read_blob", s"${blob.sourceMode.print} blob has no managed payload; use resolve_blob_url: ${id.value}")
-      }
-
-    def resolveBlobUrl(id: EntityId)(using ExecutionContext): Consequence[Record] =
-      repository.get(id).flatMap(blob => _blob_access_url_record(blob.metadata))
-
-    def getBlobMetadata(id: EntityId)(using ExecutionContext): Consequence[BlobMetadata] =
-      repository.get(id).map(_.metadata)
-
-    def attachBlobToEntity(request: AttachBlobRequest)(using ExecutionContext): Consequence[Record] =
-      repository.get(request.id).flatMap { blob =>
-        val filter = _blob_association_filter(request.sourceEntityId, Some(request.role), Some(blob.id))
-        associations.list(filter).flatMap {
-          case existing +: _ =>
-            Consequence.success(AssociationRecordCodec.toRecord(existing))
-          case _ =>
-            associations.create(
-              AssociationCreate(
-                id = None,
-                associationId = UUID.randomUUID().toString,
-                sourceEntityId = request.sourceEntityId,
-                targetEntityId = blob.id.value,
-                targetKind = Some("blob"),
-                role = request.role,
-                associationDomain = AssociationDomain.BlobAttachment,
-                sortOrder = request.sortOrder,
-                collectionId = AssociationStoragePolicy.BlobAttachmentCollection
-              )
-            ).map(AssociationRecordCodec.toRecord)
-        }
-      }
-
-    def detachBlobFromEntity(request: DetachBlobRequest)(using ExecutionContext): Consequence[Record] =
-      associations.list(_blob_association_filter(request.sourceEntityId, request.role, Some(request.id))).flatMap {
-        case Vector() => Consequence.operationNotFound(s"blob association:${request.sourceEntityId}:${request.id.value}")
-        case values =>
-          values.foldLeft(Consequence.success(0)) { (z, association) =>
-            z.flatMap(count => associations.delete(association).map(_ => count + 1))
-          }.map(count => Record.dataAuto("detachedCount" -> count))
-      }
-
-    def listEntityBlobs(request: ListEntityBlobsRequest)(using ExecutionContext): Consequence[Record] =
-      associations.list(_blob_association_filter(request.sourceEntityId, request.role, None)).flatMap { values =>
-        values.foldLeft(Consequence.success(Vector.empty[BlobMetadata])) { (z, association) =>
-          z.flatMap { acc =>
-            EntityId.parse(association.targetEntityId).flatMap(id => repository.get(id)).map(blob => acc :+ blob.metadata)
-          }
-        }.map { metadata =>
-          Record.dataAuto(
-            "data" -> metadata.map(_.toRecord),
-            "fetchedCount" -> metadata.size
-          )
-        }
-      }
-
-    def adminListBlobs(page: AdminPageRequest)(using ExecutionContext): Consequence[Record] =
-      repository.list(page.offset, Some(page.fetchLimit)).map { values =>
-        val rows = values.take(page.limit)
-        Record.dataAuto(
-          "data" -> rows.map(_.metadata.toRecord),
-          "offset" -> page.offset,
-          "limit" -> page.limit,
-          "fetchedCount" -> rows.size,
-          "hasMore" -> (values.size > page.limit)
-        )
-      }
-
-    def adminGetBlob(id: EntityId)(using ExecutionContext): Consequence[BlobMetadata] =
-      repository.get(id).map(_.metadata)
-
-    def adminListBlobAssociations(
-      request: AdminListBlobAssociationsRequest
-    )(using ExecutionContext): Consequence[Record] =
-      associations.list(
-        _blob_admin_association_filter(request),
-        request.page.offset,
-        Some(request.page.fetchLimit)
-      ).map { values =>
-        val rows = values.take(request.page.limit)
-        Record.dataAuto(
-          "data" -> rows.map(AssociationRecordCodec.toRecord),
-          "offset" -> request.page.offset,
-          "limit" -> request.page.limit,
-          "fetchedCount" -> rows.size,
-          "hasMore" -> (values.size > request.page.limit)
-        )
-      }
-
-    def adminBlobStoreStatus()(using ExecutionContext): Consequence[Record] =
-      store.status().map(_blob_store_status_record)
-
-    def adminDeleteBlob(
-      request: AdminDeleteBlobRequest
-    )(using ExecutionContext): Consequence[Record] =
-      for {
-        blob <- repository.get(request.id)
-        refs <- associations.list(_blob_target_association_filter(blob.id))
-        _ <- if (refs.nonEmpty && !request.force)
-          Consequence.operationConflict(
-            "admin_delete_blob",
-            Seq(Descriptor.Facet.Message(s"blob is still attached: ${blob.id.value}; associationCount=${refs.size}"))
-          )
-        else
-          Consequence.unit
-        _ <- repository.delete(blob.id)
-        deletedassociations <- refs.foldLeft(Consequence.success(0)) { (z, association) =>
-          z.flatMap(count => associations.delete(association).map(_ => count + 1))
-        }
-        payloaddeleted <- _delete_blob_payload(blob)
-      } yield Record.dataAuto(
-        "deletedBlobId" -> blob.id.value,
-        "deletedAssociationCount" -> deletedassociations,
-        "payloadDeleted" -> payloaddeleted,
-        "sourceMode" -> blob.sourceMode.print
-      )
-
-    def adminAttachBlobToEntity(request: AttachBlobRequest)(using ExecutionContext): Consequence[Record] =
-      attachBlobToEntity(request)
-
-    def adminDetachBlobFromEntity(request: DetachBlobRequest)(using ExecutionContext): Consequence[Record] =
-      detachBlobFromEntity(request)
-
-    private def _blob_association_filter(
-      sourceid: String,
-      role: Option[String],
-      id: Option[EntityId]
-    ): AssociationFilter =
-      AssociationFilter(
-        domain = AssociationDomain.BlobAttachment,
-        sourceEntityId = Some(sourceid),
-        targetEntityId = id.map(_.value),
-        targetKind = Some("blob"),
-        role = role
-      )
-
-    private def _blob_admin_association_filter(
-      request: AdminListBlobAssociationsRequest
-    ): AssociationFilter =
-      AssociationFilter(
-        domain = AssociationDomain.BlobAttachment,
-        sourceEntityId = request.sourceEntityId,
-        targetEntityId = request.id.map(_.value),
-        targetKind = Some("blob"),
-        role = request.role
-      )
-
-    private def _blob_target_association_filter(id: EntityId): AssociationFilter =
-      AssociationFilter(
-        domain = AssociationDomain.BlobAttachment,
-        targetEntityId = Some(id.value),
-        targetKind = Some("blob")
-      )
-
-    private def _delete_blob_payload(blob: Blob)(using ExecutionContext): Consequence[Boolean] =
-      blob.sourceMode match {
-        case BlobSourceMode.Managed =>
-          blob.storageRef match {
-            case Some(ref) => store.delete(ref).map(_ => true)
-            case None => Consequence.operationIllegal("admin_delete_blob", s"managed blob has no storageRef: ${blob.id.value}")
-          }
-        case BlobSourceMode.ExternalUrl =>
-          Consequence.success(false)
-      }
-
-    private def _register_managed(request: RegisterBlobRequest)(using ExecutionContext): Consequence[BlobMetadata] =
-      request.payload match {
-        case Some(payload) =>
-          val contentType = request.contentType.getOrElse(ContentType.APPLICATION_OCTET_STREAM)
-          _validate_managed_request(request).flatMap { _ =>
-            store.put(
-              BlobPutRequest(
-                id = request.id,
-                kind = request.kind,
-                filename = request.filename,
-                contentType = contentType,
-                attributes = request.attributes
-              ),
-              payload
-            )
-          }.flatMap { result =>
-            _validate_managed_result(request, result).flatMap { _ =>
-              repository.create(
-                BlobCreate(
-                  id = result.id,
-                  kind = request.kind,
-                  sourceMode = BlobSourceMode.Managed,
-                  filename = request.filename,
-                  contentType = Some(result.contentType),
-                  byteSize = Some(result.byteSize),
-                  digest = Some(result.digest),
-                  storageRef = Some(result.storageRef),
-                  externalUrl = None,
-                  accessUrl = result.accessUrl,
-                  attributes = request.attributes
-                )
-              ).map(_.metadata)
-            }.recoverWith { conclusion =>
-              store.delete(result.storageRef)
-                .recover(_ => ())
-                .flatMap(_ => Consequence.Failure[BlobMetadata](conclusion))
-            }
-          }
-        case None =>
-          Consequence.argumentMissing("payload")
-      }
-
-    private def _register_external_url(request: RegisterBlobRequest)(using ExecutionContext): Consequence[BlobMetadata] =
-      request.externalUrl match {
-        case Some(url) if url.trim.nonEmpty =>
-          _validate_external_request(request).flatMap { _ =>
-            BlobExternalUrlPolicy.normalize(url)
-          }.flatMap { normalized =>
-            repository.create(
-              BlobCreate(
-                id = request.id,
-                kind = request.kind,
-                sourceMode = BlobSourceMode.ExternalUrl,
-                filename = request.filename,
-                contentType = request.contentType,
-                byteSize = None,
-                digest = None,
-                storageRef = None,
-                externalUrl = Some(normalized),
-                accessUrl = BlobAccessUrl(
-                  displayUrl = normalized,
-                  downloadUrl = normalized,
-                  urlSource = BlobAccessUrlSource.Backend
-                ),
-                attributes = request.attributes
-              )
-            ).map(_.metadata)
-          }
-        case _ =>
-          Consequence.argumentMissing("externalUrl")
-      }
-
-    private def _validate_managed_request(
-      request: RegisterBlobRequest
-    ): Consequence[Unit] =
-      for {
-        _ <- request.expectedByteSize match {
-          case Some(value) if value < 0 =>
-            Consequence.argumentInvalid("expectedByteSize must be zero or greater")
-          case _ =>
-            Consequence.unit
-        }
-        _ <- request.expectedDigest match {
-          case Some(value) => _normalize_expected_digest(value).map(_ => ())
-          case None => Consequence.unit
-        }
-      } yield ()
-
-    private def _validate_managed_result(
-      request: RegisterBlobRequest,
-      result: BlobPutResult
-    ): Consequence[Unit] =
-      for {
-        _ <- request.expectedByteSize match {
-          case Some(expected) if expected != result.byteSize =>
-            Consequence.argumentInvalid(s"expectedByteSize mismatch: expected=${expected}, actual=${result.byteSize}")
-          case _ =>
-            Consequence.unit
-        }
-        _ <- request.expectedDigest match {
-          case Some(expected) =>
-            _normalize_expected_digest(expected).flatMap { normalized =>
-              if (normalized == result.digest.toLowerCase(java.util.Locale.ROOT))
-                Consequence.unit
-              else
-                Consequence.argumentInvalid(s"expectedDigest mismatch: expected=${normalized}, actual=${result.digest}")
-            }
-          case None =>
-            Consequence.unit
-        }
-      } yield ()
-
-    private def _validate_external_request(
-      request: RegisterBlobRequest
-    ): Consequence[Unit] =
-      if (request.expectedByteSize.nonEmpty)
-        Consequence.argumentInvalid("expectedByteSize is only supported for managed Blob payloads")
-      else if (request.expectedDigest.nonEmpty)
-        Consequence.argumentInvalid("expectedDigest is only supported for managed Blob payloads")
-      else
-        Consequence.unit
-
-    private def _normalize_expected_digest(
-      value: String
-    ): Consequence[String] = {
-      val trimmed = value.trim.toLowerCase(java.util.Locale.ROOT)
-      if (trimmed.matches("[0-9a-f]{64}"))
-        Consequence.success(trimmed)
-      else
-        Consequence.argumentInvalid("expectedDigest must be a 64 character SHA-256 hex digest")
-    }
   }
 
   private final class RegisterBlobOperationDefinition(
@@ -1180,30 +862,27 @@ object BlobComponent {
               ),
               payload
             ))
-            metadata <- _recover_with(
-              for {
-                _ <- exec_from(_validate_managed_result(request, result))
-                blob <- _blob_create(BlobCreate(
-                  id = result.id,
-                  kind = request.kind,
-                  sourceMode = BlobSourceMode.Managed,
-                  filename = request.filename,
-                  contentType = Some(result.contentType),
-                  byteSize = Some(result.byteSize),
-                  digest = Some(result.digest),
-                  storageRef = Some(result.storageRef),
-                  externalUrl = None,
-                  accessUrl = result.accessUrl,
-                  attributes = request.attributes
-                ))
-              } yield blob.metadata
-            ) { conclusion =>
-              exec_from(
-                store.delete(result.storageRef)
-                  .recover(_ => ())
-                  .flatMap(_ => Consequence.Failure[BlobMetadata](conclusion))
-              )
+            _ <- _recover_with(exec_from(_validate_managed_result(request, result))) { conclusion =>
+              _delete_payload_then_fail(store, result.storageRef, conclusion)
             }
+            blob <- _blob_create_managed(
+              BlobCreate(
+                id = result.id,
+                kind = request.kind,
+                sourceMode = BlobSourceMode.Managed,
+                filename = request.filename,
+                contentType = Some(result.contentType),
+                byteSize = Some(result.byteSize),
+                digest = Some(result.digest),
+                storageRef = Some(result.storageRef),
+                externalUrl = None,
+                accessUrl = result.accessUrl,
+                attributes = request.attributes
+              ),
+              store,
+              result.storageRef
+            )
+            metadata = blob.metadata
           } yield metadata
         case None =>
           exec_from(Consequence.argumentMissing("payload"))
@@ -1257,11 +936,29 @@ object BlobComponent {
         EntityCreateOptions.default,
         Some(_authorization(create.id.collection, None, "create", system))
       )
-      _exec_uow(op).flatMap(_blob_from_create_result)
+      _exec_uow(op).flatMap(result => _blob_from_create_result(result))
+    }
+
+    private def _blob_create_managed(
+      create: BlobCreate,
+      store: BlobStore,
+      storageRef: BlobStorageRef
+    ): ExecUowM[Blob] = {
+      import BlobRepository.given
+      val op = UnitOfWorkOp.EntityStoreCreate(
+        create,
+        summon[EntityPersistentCreate[BlobCreate]],
+        EntityCreateOptions.default,
+        Some(_authorization(create.id.collection, None, "create", system = false))
+      )
+      _recover_with(_exec_uow(op)) { conclusion =>
+        _delete_payload_then_fail(store, storageRef, conclusion)
+      }.flatMap(result => _blob_from_create_result(result, Some((store, storageRef))))
     }
 
     private def _blob_from_create_result(
-      result: org.goldenport.cncf.entity.CreateResult[BlobCreate]
+      result: org.goldenport.cncf.entity.CreateResult[BlobCreate],
+      managedPayload: Option[(BlobStore, BlobStorageRef)] = None
     ): ExecUowM[Blob] = {
       import BlobRepository.given
       result.record match {
@@ -1269,16 +966,42 @@ object BlobComponent {
           _recover_with(
             exec_from(summon[EntityPersistent[Blob]].fromStoreRecord(record))
           ) { conclusion =>
-            _ignore_failure(_blob_delete(result.id, system = true)).flatMap { _ =>
-              exec_from(Consequence.Failure[Blob](conclusion))
-            }
+            _cleanup_created_blob_after_decode_failure(result.id, managedPayload, conclusion)
           }
         case None =>
-          _ignore_failure(_blob_delete(result.id, system = true)).flatMap { _ =>
-            exec_from(Consequence.operationIllegal("blob.register_blob", s"Blob metadata create returned no storage record: ${result.id.value}"))
-          }
+          _cleanup_created_blob_after_decode_failure(
+            result.id,
+            managedPayload,
+            Consequence.operationIllegal[Blob](
+              "blob.register_blob",
+              s"Blob metadata create returned no storage record: ${result.id.value}"
+            ).conclusion
+          )
       }
     }
+
+    private def _cleanup_created_blob_after_decode_failure[A](
+      id: EntityId,
+      managedPayload: Option[(BlobStore, BlobStorageRef)],
+      conclusion: Conclusion
+    ): ExecUowM[A] =
+      managedPayload match {
+        case Some((store, ref)) =>
+          _blob_delete(id, system = true).flatMap { _ =>
+            _delete_payload_then_fail(store, ref, conclusion)
+          }
+        case None =>
+          _ignore_failure(_blob_delete(id, system = true)).flatMap { _ =>
+            exec_from(Consequence.Failure[A](conclusion))
+          }
+      }
+
+    private def _delete_payload_then_fail[A](
+      store: BlobStore,
+      ref: BlobStorageRef,
+      conclusion: Conclusion
+    ): ExecUowM[A] =
+      exec_from(store.delete(ref).flatMap(_ => Consequence.Failure[A](conclusion)))
 
     protected final def _blob_search(page: AdminPageRequest, system: Boolean): ExecUowM[Vector[Blob]] = {
       import BlobRepository.given

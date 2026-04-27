@@ -110,9 +110,12 @@ Current note:
   - `992d1d6 Add blob metadata projection to admin views`
   - `cca7e38 Close blob projection contract`
   - `8f87196 Harden external blob URLs`
+  - `2d00f58 Harden blob action chokepoints`
   - Current change: define and enforce the Blob FunctionalActionCall Entity
     access chokepoint boundary for Blob component operations and Aggregate/View
-    Blob projection, and add the optional ProcedureActionCall DSL foundation.
+    Blob projection, remove production direct BlobService metadata/association
+    operations, tighten managed-registration compensation, and add the optional
+    ProcedureActionCall DSL foundation.
   - BL-07B closes the projection contract:
     Aggregate/View output uses a flat, additive `blobs` field, omits it when
     empty, orders rows by `sortOrder`, and never embeds payload bytes.
@@ -122,9 +125,12 @@ Current note:
   - BL-08C fixes the production operation boundary: Blob metadata and
     Association-backed attachment access use `FunctionalActionCall` / UoW
     EntityStore operations for authorization and observability. Direct
-    repositories remain low-level adapters/test fixtures, not public operation
-    boundaries. The Blob component port exposes BlobStore capability only, not
-    repository-backed user/admin metadata operations.
+    repositories remain low-level adapters, not public operation boundaries.
+    The Blob component port and default service expose BlobStore capability
+    only, not repository-backed user/admin metadata operations. Managed
+    registration deletes payloads only when metadata creation definitely failed
+    or metadata cleanup has succeeded; if cleanup of created metadata fails,
+    the payload is preserved so metadata is not left pointing at missing bytes.
   - BL-08D adds a protected ProcedureActionCall helper for explicit UoW program
     execution. It keeps procedural style optional and does not move Blob away
     from FunctionalActionCall.
