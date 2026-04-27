@@ -289,6 +289,41 @@ final class BlobComponentSpec
       read shouldBe a[Consequence.Failure[_]]
     }
 
+    "reject unsafe external URL Blob registrations" in {
+      Given("a default subsystem")
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val unsafeUrls = Vector(
+        "javascript:alert(1)",
+        "data:text/html,<script>alert(1)</script>",
+        "file:///tmp/payload.png",
+        "/relative/path.png",
+        "//example.test/path.png",
+        "https://user:pass@example.test/path.png",
+        "http://localhost/path.png",
+        "http://127.0.0.1/path.png",
+        "http://[::1]/path.png",
+        "https://example.test/has space.png"
+      )
+
+      When("register_blob receives unsafe external URLs")
+      val results = unsafeUrls.map { url =>
+        url -> subsystem.executeOperationResponse(_request(
+          "register_blob",
+          Property("sourceMode", "external_url", None),
+          Property("kind", "attachment", None),
+          Property("filename", "unsafe.pdf", None),
+          Property("contentType", "application/pdf", None),
+          Property("externalUrl", url, None)
+        ))
+      }
+
+      Then("each registration fails deterministically before metadata is persisted")
+      results.foreach {
+        case (_, result) =>
+          result shouldBe a[Consequence.Failure[_]]
+      }
+    }
+
     "expose read-only admin Blob diagnostics" in {
       Given("a default subsystem with Blob metadata and associations")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))

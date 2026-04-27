@@ -96,7 +96,8 @@ Current semantic direction:
   - BL-07A (DONE): flat Blob metadata projection on Aggregate/View read responses.
   - BL-07B (DONE): projection contract closure for ordering, empty behavior,
     top-level placement, and payload exclusion.
-- H (PLANNED): BL-08 — Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
+- H (IN PROGRESS): BL-08 — Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
+  - BL-08A (DONE): external URL safety policy.
 
 Current note:
 
@@ -104,10 +105,12 @@ Current note:
 - Phase 18 starts Blob management as a separate component concern.
 - Latest implementation snapshot:
   - `992d1d6 Add blob metadata projection to admin views`
-  - BL-07B uncommitted follow-up closes the projection contract:
+  - `cca7e38 Close blob projection contract`
+  - `2599fe8 Harden external blob URLs`
+  - BL-07B closes the projection contract:
     Aggregate/View output uses a flat, additive `blobs` field, omits it when
     empty, orders rows by `sortOrder`, and never embeds payload bytes.
-  - Next planned work item is BL-08 hardening.
+  - BL-08A starts hardening with external URL safety policy.
 - `docs/journal/2026/04/blob-management-component-specification-note.md` is the
   source exploration note for this phase.
 
@@ -129,6 +132,7 @@ Current note:
   - [x] BL-07A: Flat Blob metadata projection.
   - [x] BL-07B: Projection contract closure.
 - [ ] BL-08: Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
+  - [x] BL-08A: External URL safety policy.
 
 ## 6. Public Interface Direction
 

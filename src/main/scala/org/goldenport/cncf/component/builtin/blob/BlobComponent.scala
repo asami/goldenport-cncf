@@ -340,7 +340,7 @@ object BlobComponent {
       }
 
     def resolveBlobUrl(id: EntityId)(using ExecutionContext): Consequence[Record] =
-      repository.get(id).map(blob => _blob_access_url_record(blob.metadata))
+      repository.get(id).flatMap(blob => _blob_access_url_record(blob.metadata))
 
     def getBlobMetadata(id: EntityId)(using ExecutionContext): Consequence[BlobMetadata] =
       repository.get(id).map(_.metadata)
@@ -541,25 +541,27 @@ object BlobComponent {
     private def _register_external_url(request: RegisterBlobRequest)(using ExecutionContext): Consequence[BlobMetadata] =
       request.externalUrl match {
         case Some(url) if url.trim.nonEmpty =>
-          repository.create(
+          BlobExternalUrlPolicy.normalize(url).flatMap { normalized =>
+            repository.create(
               BlobCreate(
                 id = request.id,
                 kind = request.kind,
-              sourceMode = BlobSourceMode.ExternalUrl,
-              filename = request.filename,
-              contentType = request.contentType,
-              byteSize = None,
-              digest = None,
-              storageRef = None,
-              externalUrl = Some(url.trim),
-              accessUrl = BlobAccessUrl(
-                displayUrl = url.trim,
-                downloadUrl = url.trim,
-                urlSource = BlobAccessUrlSource.Backend
-              ),
-              attributes = request.attributes
-            )
-          ).map(_.metadata)
+                sourceMode = BlobSourceMode.ExternalUrl,
+                filename = request.filename,
+                contentType = request.contentType,
+                byteSize = None,
+                digest = None,
+                storageRef = None,
+                externalUrl = Some(normalized),
+                accessUrl = BlobAccessUrl(
+                  displayUrl = normalized,
+                  downloadUrl = normalized,
+                  urlSource = BlobAccessUrlSource.Backend
+                ),
+                attributes = request.attributes
+              )
+            ).map(_.metadata)
+          }
         case _ =>
           Consequence.argumentMissing("externalUrl")
       }
@@ -1170,15 +1172,27 @@ object BlobComponent {
   private def _new_blob_entity_id(): EntityId =
     EntityId(BlobCollectionId.major, BlobCollectionId.minor, BlobCollectionId)
 
-  private def _blob_access_url_record(metadata: BlobMetadata): Record =
-    Record.dataAuto(
-      "id" -> metadata.id.value,
-      "sourceMode" -> metadata.sourceMode.print,
-      "displayUrl" -> metadata.accessUrl.displayUrl,
-      "downloadUrl" -> metadata.accessUrl.downloadUrl,
-      "urlSource" -> metadata.accessUrl.urlSource.print,
-      "expiresAt" -> metadata.accessUrl.expiresAt.map(_.toString)
-    )
+  private def _blob_access_url_record(metadata: BlobMetadata): Consequence[Record] =
+    if (metadata.sourceMode == BlobSourceMode.ExternalUrl)
+      BlobExternalUrlPolicy.normalize(metadata.externalUrl.getOrElse(metadata.accessUrl.displayUrl)).map { safe =>
+        Record.dataAuto(
+          "id" -> metadata.id.value,
+          "sourceMode" -> metadata.sourceMode.print,
+          "displayUrl" -> safe,
+          "downloadUrl" -> safe,
+          "urlSource" -> metadata.accessUrl.urlSource.print,
+          "expiresAt" -> metadata.accessUrl.expiresAt.map(_.toString)
+        )
+      }
+    else
+      Consequence.success(Record.dataAuto(
+        "id" -> metadata.id.value,
+        "sourceMode" -> metadata.sourceMode.print,
+        "displayUrl" -> metadata.accessUrl.displayUrl,
+        "downloadUrl" -> metadata.accessUrl.downloadUrl,
+        "urlSource" -> metadata.accessUrl.urlSource.print,
+        "expiresAt" -> metadata.accessUrl.expiresAt.map(_.toString)
+      ))
 
   private def _blob_store_status_record(status: BlobStoreStatus): Record =
     Record.dataAuto(

@@ -2333,15 +2333,10 @@ object StaticFormAppRenderer {
     url: String
   ): Option[String] = {
     val trimmed = url.trim
-    if (
-      trimmed.startsWith("https://") ||
-        trimmed.startsWith("http://") ||
-        trimmed.startsWith("/web/blob/") ||
-        trimmed.startsWith("/rest/v1/blob/")
-    )
+    if (trimmed.startsWith("/web/blob/") || trimmed.startsWith("/rest/v1/blob/"))
       Some(trimmed)
     else
-      None
+      org.goldenport.cncf.blob.BlobExternalUrlPolicy.normalize(trimmed).toOption
   }
 
   private def _blob_admin_association_row(

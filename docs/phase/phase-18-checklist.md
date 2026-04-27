@@ -461,7 +461,7 @@ slice does not add role-grouped output or Entity-local Association snapshots.
 
 ### Verification Snapshot
 
-- [x] BL-07B follow-up is currently uncommitted.
+- [x] Commit: `cca7e38 Close blob projection contract`.
 - [x] `StaticFormAppRendererSpec -- -z "execute admin read"` passed.
 - [x] `BlobComponentSpec -- -z Blob` passed.
 - [x] `Test/compile` passed.
@@ -471,18 +471,53 @@ slice does not add role-grouped output or Entity-local Association snapshots.
 
 ## BL-08: Blob Hardening
 
-Status: PLANNED
+Status: IN PROGRESS
 
 ### Objective
 
 Harden Blob management after the basic runtime and Web/API flows exist.
+
+### BL-08A: External URL Safety Policy
+
+Status: DONE
+
+### Objective
+
+Apply a single safety policy to `external_url` Blob registration, URL
+resolution, and Web/admin link rendering.
+
+### Implementation Decisions
+
+- [x] Accept only absolute `http` and `https` external URLs.
+- [x] Reject empty URLs, relative URLs, protocol-relative URLs, userinfo URLs,
+      local/loopback hosts, whitespace/control characters, and non-web schemes.
+- [x] Normalize accepted external URLs before storing `externalUrl`,
+      `displayUrl`, and `downloadUrl`.
+- [x] Reject unsafe external URL registration before Blob metadata persistence.
+- [x] Treat unsafe legacy external URL metadata as unsafe at `resolve_blob_url`.
+- [x] Keep unsafe legacy Web/admin display text-only.
+- [x] Keep CNCF-owned managed Blob routes linkable in Web/admin pages.
+
+### Acceptance Checks
+
+- [x] Safe `https` and `http` external URLs register successfully.
+- [x] Unsafe external URLs fail deterministically.
+- [x] Unsafe legacy external URLs are not rendered as active links.
+- [x] Unsafe legacy external URLs do not resolve through `resolve_blob_url`.
+
+### Verification Snapshot
+
+- [x] Commit: `2599fe8 Harden external blob URLs`.
+- [x] `BlobComponentSpec -- -z Blob` passed.
+- [x] `StaticFormAppRendererSpec -- -z Blob` passed.
+- [x] `Test/compile` passed.
+- [x] `git diff --check` passed.
 
 ### Deferred Hardening Items
 
 - access control details
 - checksum/content-type/size validation
 - deletion and retention semantics
-- external URL safety policy
 - signed URL support
 - real S3-compatible backend
 - thumbnail generation

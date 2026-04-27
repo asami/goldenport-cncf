@@ -1,6 +1,6 @@
 package org.goldenport.cncf.blob
 
-import java.net.URLEncoder
+import java.net.{URI, URLEncoder}
 import java.time.Instant
 import java.util.Locale
 import org.goldenport.Consequence
@@ -232,4 +232,56 @@ object BlobUrl {
   private def _encode(value: String): String =
     URLEncoder.encode(value, java.nio.charset.StandardCharsets.UTF_8)
       .replace("+", "%20")
+}
+
+object BlobExternalUrlPolicy {
+  def normalize(value: String): Consequence[String] = {
+    val trimmed = Option(value).map(_.trim).getOrElse("")
+    if (trimmed.isEmpty)
+      Consequence.argumentInvalid("externalUrl must not be empty")
+    else if (trimmed.exists(ch => Character.isISOControl(ch) || Character.isWhitespace(ch)))
+      Consequence.argumentInvalid("externalUrl must not contain whitespace or control characters")
+    else if (trimmed.startsWith("//"))
+      Consequence.argumentInvalid("externalUrl must include an explicit http or https scheme")
+    else
+      _normalize_uri(trimmed)
+  }
+
+  def isSafe(value: String): Boolean =
+    normalize(value).isSuccess
+
+  private def _normalize_uri(
+    value: String
+  ): Consequence[String] =
+    try {
+      val uri = new URI(value).normalize()
+      val scheme = Option(uri.getScheme).map(_.toLowerCase(Locale.ROOT))
+      val host = Option(uri.getHost).map(_.toLowerCase(Locale.ROOT))
+      if (!scheme.exists(Set("https", "http").contains))
+        Consequence.argumentInvalid("externalUrl scheme must be http or https")
+      else if (host.isEmpty)
+        Consequence.argumentInvalid("externalUrl host is required")
+      else if (Option(uri.getRawUserInfo).exists(_.nonEmpty))
+        Consequence.argumentInvalid("externalUrl userinfo is not allowed")
+      else if (host.exists(_is_local_host))
+        Consequence.argumentInvalid("externalUrl host must not be local or loopback")
+      else
+        Consequence.success(uri.toASCIIString)
+    } catch {
+      case _: IllegalArgumentException =>
+        Consequence.argumentInvalid("externalUrl is not a valid URI")
+      case _: java.net.URISyntaxException =>
+        Consequence.argumentInvalid("externalUrl is not a valid URI")
+    }
+
+  private def _is_local_host(
+    host: String
+  ): Boolean =
+    host == "localhost" ||
+      host == "localhost.localdomain" ||
+      host == "::1" ||
+      host == "[::1]" ||
+      host == "0:0:0:0:0:0:0:1" ||
+      host == "0.0.0.0" ||
+      host.startsWith("127.")
 }

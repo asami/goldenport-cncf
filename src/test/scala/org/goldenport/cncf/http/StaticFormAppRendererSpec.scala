@@ -32,6 +32,7 @@ import org.goldenport.record.Record
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, WebValidationHints, XBoolean, XDateTime, XInt, XString}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, ProcedureActionCall, QueryAction}
+import org.goldenport.cncf.blob.*
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentFactory, ComponentletDescriptor}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
@@ -244,21 +245,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
     "render unsafe external Blob URLs as text on admin pages" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
-      val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
-        "register_blob",
-        Property("sourceMode", "external_url", None),
-        Property("kind", "image", None),
-        Property("filename", "unsafe.png", None),
-        Property("contentType", ContentType.IMAGE_PNG.header, None),
-        Property("externalUrl", "javascript:alert(1)", None)
-      ))))
-      val id = blob.getString("id").getOrElse(fail("Blob id is missing"))
+      val id = _create_legacy_external_blob(subsystem, "unsafe.png", "javascript:alert(1)")
 
       val list = _success(StaticFormAppRenderer.renderBlobAdminBlobs(subsystem)).body
 
       list should include (id)
       list should include ("javascript:alert(1)")
       list should not include ("href=\"javascript:alert(1)\"")
+      subsystem.executeOperationResponse(_blob_request("resolve_blob_url", Property("id", id, None))) shouldBe a[Consequence.Failure[_]]
     }
 
     "serve Blob admin read-only pages from Web routes" in {
@@ -8177,6 +8171,35 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       Property("externalUrl", url, None)
     ))))
     blob.getString("id").getOrElse(fail("Blob id is missing"))
+  }
+
+  private def _create_legacy_external_blob(
+    subsystem: Subsystem,
+    filename: String,
+    url: String
+  ): String = {
+    val component = subsystem.findComponent("blob").getOrElse(fail("Blob component is missing"))
+    given ExecutionContext = component.logic.executionContext()
+    val id = EntityId(BlobRepository.CollectionId.major, BlobRepository.CollectionId.minor, BlobRepository.CollectionId)
+    val created = _success(BlobRepository.entityStore().create(
+      BlobCreate(
+        id = id,
+        kind = BlobKind.Image,
+        sourceMode = BlobSourceMode.ExternalUrl,
+        filename = Some(filename),
+        contentType = Some(ContentType.IMAGE_PNG),
+        byteSize = None,
+        digest = None,
+        storageRef = None,
+        externalUrl = Some(url),
+        accessUrl = BlobAccessUrl(
+          displayUrl = url,
+          downloadUrl = url,
+          urlSource = BlobAccessUrlSource.Backend
+        )
+      )
+    ))
+    created.id.value
   }
 
   private def _blob_records(

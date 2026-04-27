@@ -578,10 +578,13 @@ Current active phase: Phase 18.
   `associationId`, and never embeds payload bytes.
 - Entity-local Association snapshots are deferred as a future optimization;
   the Association repository remains store-backed and authoritative.
-- BL-07B follow-up is currently uncommitted and is the latest implementation
-  state reflected in the Phase 18 checklist.
-- BL-08 is the next planned work item for hardening, including external URL safety,
-  content-type/size/checksum validation, and deletion/retention policy.
+- BL-07B is committed as `cca7e38 Close blob projection contract`.
+- BL-08 is in progress. BL-08A formalizes external URL safety for registration,
+  URL resolution, and Web/admin rendering.
+- BL-08A is committed as `2599fe8 Harden external blob URLs`.
+- Remaining BL-08 hardening includes access control, content-type/size/checksum
+  validation, deletion/retention policy, signed URLs, and production BlobStore
+  backends.
 - Active dashboard: `docs/phase/phase-18.md`
 - Active checklist: `docs/phase/phase-18-checklist.md`
 - Source note: `docs/journal/2026/04/blob-management-component-specification-note.md`.
