@@ -23,8 +23,7 @@ import org.goldenport.cncf.security.SecuritySubject
  *  version Jan.  2, 2026
  *  version Jan. 22, 2026
  *  version Feb. 21, 2026
- *  version Apr.  7, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ActionCall()
@@ -138,6 +137,9 @@ abstract class FunctionalActionCall extends ActionCall {
 
 abstract class ProcedureActionCall extends ActionCall {
   override def execute(): Consequence[OperationResponse]
+
+  protected final def executeProgram[A](program: ExecUowM[A]): Consequence[A] =
+    program.value.foldMap(executionContext.runtime.unitOfWorkInterpreter).flatMap(identity)
 }
 
 object ActionCall {

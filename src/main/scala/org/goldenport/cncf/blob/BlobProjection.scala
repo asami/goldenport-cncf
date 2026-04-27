@@ -1,8 +1,7 @@
 package org.goldenport.cncf.blob
 
 import org.goldenport.Consequence
-import org.goldenport.cncf.association.{Association, AssociationDomain, AssociationFilter, AssociationRepository, AssociationStoragePolicy}
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.association.{Association, AssociationDomain, AssociationFilter}
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.EntityId
 
@@ -10,21 +9,23 @@ import org.simplemodeling.model.datatype.EntityId
  * Projection helper for adding Blob metadata to entity-oriented records.
  *
  * @since   Apr. 27, 2026
- * @version Apr. 27, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 object BlobProjection {
   def entityBlobRecords(
     sourceEntityId: String
-  )(using ExecutionContext): Consequence[Vector[Record]] =
-    entityBlobRows(sourceEntityId).map(_.map(_.toRecord))
+  )(
+    loaders: BlobProjection.Loaders
+  ): Consequence[Vector[Record]] =
+    entityBlobRows(sourceEntityId)(loaders).map(_.map(_.toRecord))
 
   def entityBlobRows(
     sourceEntityId: String
-  )(using ExecutionContext): Consequence[Vector[BlobProjectionRow]] = {
-    val associations = AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
-    val blobs = BlobRepository.entityStore()
-    associations.list(
+  )(
+    loaders: BlobProjection.Loaders
+  ): Consequence[Vector[BlobProjectionRow]] =
+    loaders.listAssociations(
       AssociationFilter(
         domain = AssociationDomain.BlobAttachment,
         sourceEntityId = Some(sourceEntityId),
@@ -35,12 +36,16 @@ object BlobProjection {
       ordered.foldLeft(Consequence.success(Vector.empty[BlobProjectionRow])) { (z, association) =>
         z.flatMap { acc =>
           EntityId.parse(association.targetEntityId)
-            .flatMap(blobs.get)
+            .flatMap(loaders.loadBlob)
             .map(blob => acc :+ BlobProjectionRow(blob.metadata, association))
         }
       }
     }
-  }
+
+  final case class Loaders(
+    listAssociations: AssociationFilter => Consequence[Vector[Association]],
+    loadBlob: EntityId => Consequence[Blob]
+  )
 }
 
 final case class BlobProjectionRow(

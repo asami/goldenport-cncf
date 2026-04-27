@@ -585,7 +585,20 @@ Current active phase: Phase 18.
 - BL-08B is completed in this change; it
   adds metadata-only validation for content type syntax, expected byte size,
   and digest.
-- Remaining BL-08 hardening includes access control, deletion/retention policy,
+- BL-08C is completed in this change; it defines the Blob FunctionalActionCall
+  Entity access chokepoint boundary. Blob metadata and Blob association
+  operation paths now go through FunctionalActionCall / UnitOfWork chokepoints
+  so authorization and observability apply to the SimpleEntity-backed Blob
+  model. Direct repositories remain low-level adapters/test fixtures, not
+  public operation boundaries. The Blob component port exposes BlobStore
+  capability only, not repository-backed metadata mutation/read APIs.
+- BL-08D is completed in this change; it adds the optional ProcedureActionCall
+  DSL foundation for procedural implementations that explicitly run `ExecUowM`
+  through the runtime `UnitOfWorkInterpreter`. FunctionalActionCall remains the
+  recommended CNCF/CozyTextus implementation style.
+- Remaining BL-08 hardening includes deeper access-control policy tuning,
+  UoW-backed application create/update Blob attachment workflow adapters,
+  deletion/retention policy,
   signed URLs, production BlobStore backends, MIME-kind policy, payload size
   limits, thumbnail generation, virus scanning, and resumable upload.
 - Active dashboard: `docs/phase/phase-18.md`

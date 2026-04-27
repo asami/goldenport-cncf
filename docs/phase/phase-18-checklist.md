@@ -550,9 +550,109 @@ payload bytes.
 - [x] `Test/compile` passed.
 - [x] `git diff --check` passed.
 
+### BL-08C: Blob Functional ActionCall Entity Chokepoint Boundary
+
+Status: DONE
+
+### Objective
+
+Fix the runtime boundary for Blob metadata and Blob association access.
+
+Blob metadata is a SimpleEntity-backed model and Blob attachment is backed by
+Association entities. Production operation paths must therefore use
+`FunctionalActionCall` and access those records through ActionCall / UnitOfWork
+chokepoints. Direct repository access is allowed only as a low-level
+adapter/test fixture and must not be the public operation path, because it
+bypasses authorization, metrics, and observability.
+
+### Implementation Decisions
+
+- [x] User-facing Blob operations use `FunctionalActionCall` and `UnitOfWorkOp`
+      for Blob metadata create/load/search/delete.
+- [x] User-facing Blob operations do not use `ProcedureActionCall` as their
+      primary implementation style.
+- [x] User-facing Blob attach/list/detach operations use `UnitOfWorkOp` for
+      Association create/search/delete.
+- [x] Admin-facing Blob operations use `UnitOfWorkOp` for Blob metadata and
+      Association access.
+- [x] Aggregate/View Blob projection uses ActionCall-provided UoW loaders
+      instead of constructing repositories directly.
+- [x] Default runtime config includes the standard EntityStore in
+      `EntityStoreSpace`, making UoW EntityStore paths usable by builtin
+      components.
+- [x] Store-only / placeholder entity collections no longer fail durable UoW
+      create/load/search flows because cache admission is skipped when the
+      collection cannot materialize the typed entity.
+- [x] Association list pagination is applied after typed query matching so
+      earlier unrelated association rows do not hide matching Blob rows.
+
+### Explicit Boundaries
+
+- `BlobRepository` and `AssociationRepository` remain low-level store adapters.
+  They are not the application operation boundary.
+- Blob Web/admin pages continue to call Blob component operations; they do not
+  access repositories directly.
+- The `BlobService` component port exposes BlobStore capability only; it no
+  longer advertises repository-backed user/admin metadata operations.
+- Aggregate/View projection may read Blob metadata only through loaders supplied
+  by the executing ActionCall.
+- Application create/update simultaneous Blob attachment workflows are not
+  finalized by BL-08C. They require a follow-up slice to provide UoW-backed
+  workflow adapters before they are treated as production operation paths.
+
+### Acceptance Checks
+
+- [x] Blob registration succeeds through the ActionCall/UoW path.
+- [x] Blob attach/list/detach succeeds through the ActionCall/UoW path.
+- [x] Admin Blob list/get/association/delete operations remain functional.
+- [x] Blob projection remains additive on Aggregate/View output.
+- [x] Repository construction no longer appears in production Blob operation
+      ActionCall bodies.
+- [x] Managed Blob registration does not depend on a post-create metadata load
+      after EntityStore create succeeds.
+
+### Verification Snapshot
+
+- [x] `BlobComponentSpec -- -z Blob` passed.
+- [x] `BlobAttachmentWorkflowSpec -- -z Blob` passed.
+- [x] `Test/compile` passed.
+- [x] `git diff --check` passed.
+
+### BL-08D: ProcedureActionCall DSL Foundation
+
+Status: DONE
+
+### Objective
+
+Keep `ProcedureActionCall` as an optional procedural implementation style, while
+making the intended internal DSL chokepoint explicit for the cases that still
+need it. CNCF/CozyTextus feature code should prefer `FunctionalActionCall`.
+
+### Implementation Decisions
+
+- [x] `ProcedureActionCall` exposes a protected `executeProgram` helper for
+      running an `ExecUowM` program through the runtime `UnitOfWorkInterpreter`.
+- [x] The helper does not make procedural code the default path.
+- [x] Blob operations do not use this helper; they are implemented as
+      `FunctionalActionCall`.
+- [x] Full migration of legacy procedural components is deferred.
+
+### Boundaries
+
+- `FunctionalActionCall` remains the recommended CNCF implementation style.
+- `ProcedureActionCall` is for procedural implementations that explicitly opt
+  into the same UoW DSL chokepoint.
+- BL-08D does not migrate admin/job/workflow legacy procedural components.
+
+### Verification Snapshot
+
+- [x] `Test/compile` passed.
+- [x] `ActionCallSpec` passed.
+
 ### Deferred Hardening Items
 
-- access control details
+- deeper access-control policy tuning beyond UoW chokepoint routing
+- UoW-backed application create/update Blob attachment workflow adapter
 - deletion and retention semantics
 - signed URL support
 - real S3-compatible backend

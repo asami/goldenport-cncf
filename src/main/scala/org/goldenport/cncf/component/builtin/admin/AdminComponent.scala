@@ -9,7 +9,8 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall, QueryAction, ResourceAccess}
-import org.goldenport.cncf.blob.BlobProjection
+import org.goldenport.cncf.association.{Association, AssociationFilter, AssociationStoragePolicy}
+import org.goldenport.cncf.blob.{Blob, BlobProjection, BlobRepository}
 import org.goldenport.cncf.component.{Component, ComponentInit, ComponentOrigin}
 import org.goldenport.cncf.component.ComponentOriginLabel
 import org.goldenport.cncf.component.ComponentCreate
@@ -25,13 +26,14 @@ import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.datastore.{DataStore, Query as DataStoreQuery, QueryDirective, QueryLimit, TotalCountCapability}
 import org.goldenport.cncf.directive.{Query as EntityQuery}
-import org.goldenport.cncf.entity.EntityPersistable
+import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityQuery as StoreEntityQuery, EntitySearchScope}
 import org.goldenport.cncf.entity.runtime.EntityCollection
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.observability.ObservabilityEngine
 import org.goldenport.cncf.projection.{SecurityDeploymentMarkdownProjection, SecurityDeploymentProjection}
-import org.goldenport.cncf.security.{AdminAuthorizationPolicy, OperationAuthorizationProvider, OperationAuthorizationRule}
+import org.goldenport.cncf.security.{AdminAuthorizationPolicy, EntityAccessMode, OperationAuthorizationProvider, OperationAuthorizationRule}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAssemblyDescriptorSource, Subsystem}
+import org.goldenport.cncf.unitofwork.{UnitOfWorkAuthorization, UnitOfWorkOp}
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -49,8 +51,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
- *  version Apr. 22, 2026
- * @version Apr. 27, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -1890,6 +1891,7 @@ object AdminComponent {
         case Some((idText, id)) =>
           browser.find_with_context(id)(using core.executionContext).flatMap { value =>
             _read_value_response_record_with_blobs(
+              core,
               "view",
               componentName,
               viewName,
@@ -1919,7 +1921,7 @@ object AdminComponent {
         browser.count_with_context(EntityQuery.plan(Record.empty))(using core.executionContext).map(Some(_))
       else
         Consequence.success(None)
-      items <- _read_items_with_blobs(values)(using core.executionContext)
+      items <- _read_items_with_blobs(core, values)(using core.executionContext)
     } yield OperationResponse.RecordResponse(
       _read_values_response_record(
         "view",
@@ -1952,6 +1954,7 @@ object AdminComponent {
           }.flatMap { value =>
             val displayValue = _admin_aggregate_display_value(component, aggregateName, idText, value)
             _read_value_response_record_with_blobs(
+              core,
               "aggregate",
               componentName,
               aggregateName,
@@ -1992,7 +1995,7 @@ object AdminComponent {
         collection.count_with_context(EntityQuery.plan(Record.empty))(using core.executionContext).map(Some(_))
       else
         Consequence.success(None)
-      items <- _read_items_with_blobs(values)(using core.executionContext)
+      items <- _read_items_with_blobs(core, values)(using core.executionContext)
     } yield OperationResponse.RecordResponse(
       _read_values_response_record(
         "aggregate",
@@ -2474,13 +2477,14 @@ object AdminComponent {
   }
 
   private def _read_value_response_record_with_blobs(
+    core: ActionCall.Core,
     kind: String,
     componentName: String,
     collectionName: String,
     id: String,
     value: Any
   )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
-    _blob_projection_records(id).map { blobs =>
+    _blob_projection_records(core, id).map { blobs =>
       _with_blob_projection(
         _read_value_response_record(kind, componentName, collectionName, id, value),
         blobs
@@ -2488,9 +2492,83 @@ object AdminComponent {
     }
 
   private def _blob_projection_records(
+    core: ActionCall.Core,
     sourceEntityId: String
   )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Vector[Record]] =
-    BlobProjection.entityBlobRecords(sourceEntityId)
+    BlobProjection.entityBlobRecords(sourceEntityId)(_blob_projection_loaders(core))
+
+  private def _blob_projection_loaders(core: ActionCall.Core): BlobProjection.Loaders =
+    BlobProjection.Loaders(
+      listAssociations = filter => _blob_projection_association_search(core, filter),
+      loadBlob = id => _blob_projection_blob_load(core, id)
+    )
+
+  private def _blob_projection_association_search(
+    core: ActionCall.Core,
+    filter: AssociationFilter
+  ): Consequence[Vector[Association]] = {
+    given org.goldenport.cncf.context.ExecutionContext = core.executionContext
+    import org.goldenport.cncf.association.AssociationRepository.given
+    val collection = AssociationStoragePolicy.blobAttachmentDefault.collection(filter.domain)
+    val query = org.goldenport.cncf.directive.Query.plan(
+      Record.dataAuto(
+        "associationDomain" -> filter.domain.value,
+        "sourceEntityId" -> filter.sourceEntityId,
+        "targetEntityId" -> filter.targetEntityId,
+        "targetKind" -> filter.targetKind,
+        "role" -> filter.role
+      )
+    )
+    _exec_uow(core,
+      UnitOfWorkOp.EntityStoreSearch[Association](
+        StoreEntityQuery(collection, query, EntitySearchScope.Store),
+        summon[EntityPersistent[Association]],
+        Some(_blob_projection_authorization(core, collection, None))
+      )
+    ).map(_.data.sortBy(x => (x.sortOrder.getOrElse(Int.MaxValue), x.associationId)))
+  }
+
+  private def _blob_projection_blob_load(
+    core: ActionCall.Core,
+    id: EntityId
+  ): Consequence[Blob] = {
+    given org.goldenport.cncf.context.ExecutionContext = core.executionContext
+    import BlobRepository.given
+    _exec_uow(core,
+      UnitOfWorkOp.EntityStoreLoad[Blob](
+        id,
+        summon[EntityPersistent[Blob]],
+        Some(_blob_projection_authorization(core, BlobRepository.CollectionId, Some(id)))
+      )
+    ).flatMap {
+      case Some(value) => Consequence.success(value)
+      case None => Consequence.operationNotFound(s"blob metadata:${id.value}")
+    }
+  }
+
+  private def _blob_projection_authorization(
+    core: ActionCall.Core,
+    collection: EntityCollectionId,
+    targetId: Option[EntityId]
+  ): UnitOfWorkAuthorization =
+    UnitOfWorkAuthorization(
+      resourceFamily = "domain",
+      resourceType = Some(collection.name),
+      collectionName = Some(collection.name),
+      targetId = targetId,
+      accessKind = "read",
+      sourceComponentName = core.component.map(_.name),
+      targetComponentName = Some("blob"),
+      accessMode = EntityAccessMode.System
+    )
+
+  private def _exec_uow[A](
+    core: ActionCall.Core,
+    op: UnitOfWorkOp[A]
+  ): Consequence[A] =
+    cats.free.Free
+      .liftF[UnitOfWorkOp, A](op)
+      .foldMap(core.executionContext.runtime.unitOfWorkInterpreter)
 
   private def _with_blob_projection(
     record: Record,
@@ -2526,11 +2604,12 @@ object AdminComponent {
     values.zipWithIndex.map { case (value, index) => _read_item(value, index) }
 
   private def _read_items_with_blobs(
+    core: ActionCall.Core,
     values: Vector[Any]
   )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Vector[_AdminReadItem]] =
     _read_items(values).foldLeft(Consequence.success(Vector.empty[_AdminReadItem])) { (z, item) =>
       z.flatMap { acc =>
-        _blob_projection_records(item.id).map(blobs => acc :+ item.copy(blobs = blobs))
+        _blob_projection_records(core, item.id).map(blobs => acc :+ item.copy(blobs = blobs))
       }
     }
 

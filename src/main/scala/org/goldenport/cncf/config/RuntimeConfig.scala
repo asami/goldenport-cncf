@@ -7,7 +7,7 @@ import org.goldenport.cncf.log.LogBackend
 import org.goldenport.cncf.observability.LogLevel
 import org.goldenport.cncf.http.{HttpDriver, FakeHttpDriver, HttpDriverFactory}
 import org.goldenport.cncf.datastore.DataStoreSpace
-import org.goldenport.cncf.entity.EntityStoreSpace
+import org.goldenport.cncf.entity.{EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.config.RuntimeDefaults
 import org.goldenport.cncf.action.CommandExecutionMode
@@ -18,7 +18,7 @@ import org.goldenport.cncf.observability.ObservabilityEngine
  *  version Jan. 30, 2026
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -129,7 +129,7 @@ object RuntimeConfig {
       serverEmulatorBaseUrl = DefaultServerEmulatorBaseUrl,
       httpDriver = HttpDriverFactory.default,
       dataStoreSpace = DataStoreSpace.default(),
-      entityStoreSpace = new EntityStoreSpace(),
+      entityStoreSpace = new EntityStoreSpace().addEntityStore(EntityStore.standard()),
       mode = RunMode.Command,
       operationMode = DefaultOperationMode,
       webOperationDispatcher = DefaultWebOperationDispatcher,

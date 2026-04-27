@@ -99,6 +99,8 @@ Current semantic direction:
 - H (IN PROGRESS): BL-08 — Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
   - BL-08A (DONE): external URL safety policy.
   - BL-08B (DONE): metadata validation for content type, byte size, and digest.
+  - BL-08C (DONE): Blob FunctionalActionCall Entity access chokepoint boundary.
+  - BL-08D (DONE): ProcedureActionCall DSL foundation.
 
 Current note:
 
@@ -108,13 +110,26 @@ Current note:
   - `992d1d6 Add blob metadata projection to admin views`
   - `cca7e38 Close blob projection contract`
   - `8f87196 Harden external blob URLs`
-  - Current change: validate Blob registration metadata.
+  - Current change: define and enforce the Blob FunctionalActionCall Entity
+    access chokepoint boundary for Blob component operations and Aggregate/View
+    Blob projection, and add the optional ProcedureActionCall DSL foundation.
   - BL-07B closes the projection contract:
     Aggregate/View output uses a flat, additive `blobs` field, omits it when
     empty, orders rows by `sortOrder`, and never embeds payload bytes.
   - BL-08A starts hardening with external URL safety policy.
   - BL-08B adds metadata-only validation for managed payload size/digest and
     content-type parsing without introducing MIME-kind policy.
+  - BL-08C fixes the production operation boundary: Blob metadata and
+    Association-backed attachment access use `FunctionalActionCall` / UoW
+    EntityStore operations for authorization and observability. Direct
+    repositories remain low-level adapters/test fixtures, not public operation
+    boundaries. The Blob component port exposes BlobStore capability only, not
+    repository-backed user/admin metadata operations.
+  - BL-08D adds a protected ProcedureActionCall helper for explicit UoW program
+    execution. It keeps procedural style optional and does not move Blob away
+    from FunctionalActionCall.
+  - UoW-backed application create/update Blob attachment workflow adapters are
+    split out as follow-up hardening work.
 - `docs/journal/2026/04/blob-management-component-specification-note.md` is the
   source exploration note for this phase.
 
@@ -138,6 +153,8 @@ Current note:
 - [ ] BL-08: Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
   - [x] BL-08A: External URL safety policy.
   - [x] BL-08B: Blob metadata validation.
+  - [x] BL-08C: Blob FunctionalActionCall Entity access chokepoint boundary.
+  - [x] BL-08D: ProcedureActionCall DSL foundation.
 
 ## 6. Public Interface Direction
 
