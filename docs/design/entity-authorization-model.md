@@ -219,6 +219,12 @@ collection may require `execute` for delete while still using `write` for
 update. This keeps `read/write/execute` compact while allowing stricter
 operation semantics where needed.
 
+Subsystem resource policy is declared under
+`security.authorization.resources`. CNCF resolves collection policies for
+`resourceFamily=domain|aggregate`, association-domain policies for
+`resourceFamily=association`, and store policies for `resourceFamily=store` at
+the UnitOfWork authorization boundary.
+
 `SecurityAttributes` remains the compact object-side value type. Mapping
 `accessKind` to required permission bits is CNCF authorization policy, not a
 simplemodeling-model responsibility.

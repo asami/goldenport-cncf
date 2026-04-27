@@ -127,7 +127,7 @@ Current semantic direction:
   - BL-09A (DONE): guard/capability authorization concept refinement.
   - BL-09B (DONE): minimal subject-side grant/config surface for roles,
     scopes, capabilities, and create/use grants needed by Blob.
-  - BL-09C (PLANNED): object/resource-side access policy surface for
+  - BL-09C (DONE): object/resource-side access policy surface for
     Blob EntityCollection, Blob attachment Association domain, and BlobStore
     resources.
   - BL-09D (PLANNED): Blob operation integration on the generic authorization
@@ -179,6 +179,11 @@ Current note:
   - BL-09B adds descriptor-backed role-to-capability expansion and verifies that
     raw request `capability` remains a required capability, not a forged subject
     grant.
+  - BL-09C adds descriptor-backed object/resource policy. Subsystem descriptors
+    can define collection, association-domain, and store policy requirements
+    under `security.authorization.resources`; `OperationAccessPolicy` evaluates
+    required capabilities and permission-bit overrides at the UnitOfWork
+    boundary.
   - UoW-backed application create/update Blob attachment workflow adapters are
     split out as follow-up hardening work.
 - `docs/journal/2026/04/blob-management-component-specification-note.md` is the
@@ -210,7 +215,7 @@ Current note:
 - [ ] BL-09: Blob-required authorization support.
   - [x] BL-09A: Guard/capability authorization concept refinement.
   - [x] BL-09B: Minimal subject-side grant/config surface.
-  - [ ] BL-09C: Object/resource-side access policy surface.
+  - [x] BL-09C: Object/resource-side access policy surface.
   - [ ] BL-09D: Blob integration on generic authorization policies.
   - [ ] BL-09E: Authorization policy introspection/admin visibility.
 

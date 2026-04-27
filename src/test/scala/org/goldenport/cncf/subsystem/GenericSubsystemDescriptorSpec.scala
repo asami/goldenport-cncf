@@ -155,6 +155,89 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
       roles("blob_operator").capabilities should contain allOf ("association:blob_attachment:delete", "store:blobstore:status")
     }
 
+    "load security authorization resource policies from the formal YAML schema" in {
+      val path = Files.createTempFile("generic-subsystem-security-resource-policy", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: textus-blob
+          |version: 0.1.0-SNAPSHOT
+          |components:
+          |  - name: blob
+          |    version: 0.1.0-SNAPSHOT
+          |security:
+          |  authorization:
+          |    resources:
+          |      collections:
+          |        blob:
+          |          create:
+          |            capability: collection:blob:create
+          |          delete:
+          |            permission: execute
+          |      associations:
+          |        blob_attachment:
+          |          create:
+          |            capability: association:blob_attachment:create
+          |      stores:
+          |        blobstore:
+          |          status:
+          |            capability: store:blobstore:status
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = GenericSubsystemDescriptor.load(path).toOption.get
+      val resources = descriptor.security.flatMap(_.authorization).map(_.resources).get
+
+      resources.collection(Some("blob"), "create").get.capabilities shouldBe Vector("collection:blob:create")
+      resources.collection(Some("blob"), "delete").get.permission shouldBe Some("execute")
+      resources.association(Some("blob_attachment"), "create").get.capabilities shouldBe Vector("association:blob_attachment:create")
+      resources.store(Some("blobstore"), "status").get.capabilities shouldBe Vector("store:blobstore:status")
+    }
+
+    "reject invalid security authorization resource policies" in {
+      val path = Files.createTempFile("generic-subsystem-security-resource-policy-invalid", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: textus-blob
+          |version: 0.1.0-SNAPSHOT
+          |components:
+          |  - name: blob
+          |    version: 0.1.0-SNAPSHOT
+          |security:
+          |  authorization:
+          |    resources:
+          |      collections:
+          |        blob: invalid-scalar-resource-policy
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      GenericSubsystemDescriptor.load(path) shouldBe a[Consequence.Failure[_]]
+    }
+
+    "reject invalid security authorization resource permission values" in {
+      val path = Files.createTempFile("generic-subsystem-security-resource-permission-invalid", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: textus-blob
+          |version: 0.1.0-SNAPSHOT
+          |components:
+          |  - name: blob
+          |    version: 0.1.0-SNAPSHOT
+          |security:
+          |  authorization:
+          |    resources:
+          |      collections:
+          |        blob:
+          |          delete:
+          |            permission: exectue
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      GenericSubsystemDescriptor.load(path) shouldBe a[Consequence.Failure[_]]
+    }
+
     "reject invalid security authorization role definitions" in {
       val path = Files.createTempFile("generic-subsystem-security-authorization-invalid", ".yaml")
       Files.writeString(
@@ -187,6 +270,15 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
                 name = "blob_user",
                 capabilities = Vector("collection:blob:read")
               )
+            ),
+            resources = org.goldenport.cncf.security.AuthorizationResourcePolicies(
+              collections = Map(
+                "blob" -> Map(
+                  "create" -> org.goldenport.cncf.security.AuthorizationResourcePolicy(
+                    capabilities = Vector("collection:blob:read")
+                  )
+                )
+              )
             )
           ))
         ))
@@ -202,6 +294,15 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
                 name = "blob-user",
                 capabilities = Vector("collection:blob:create")
               )
+            ),
+            resources = org.goldenport.cncf.security.AuthorizationResourcePolicies(
+              collections = Map(
+                "blob" -> Map(
+                  "create" -> org.goldenport.cncf.security.AuthorizationResourcePolicy(
+                    capabilities = Vector("collection:blob:create")
+                  )
+                )
+              )
             )
           ))
         ))
@@ -212,6 +313,8 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
 
       roles.values.map(_.name).toSet shouldBe Set("blob-user")
       roles.values.flatMap(_.capabilities).toSet shouldBe Set("collection:blob:create")
+      effective.security.flatMap(_.authorization).flatMap(_.resources.collection(Some("blob"), "create"))
+        .map(_.capabilities) shouldBe Some(Vector("collection:blob:create"))
     }
 
     "keep legacy coordinate parsing for backward compatibility" in {

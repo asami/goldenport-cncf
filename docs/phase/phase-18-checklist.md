@@ -781,15 +781,33 @@ provider administration belong to strategy section 8.3 Security.
 
 ### BL-09C: Blob Object/Resource Policy Surface
 
-Status: PLANNED
+Status: DONE
 
 Add object/resource-side policy only where Blob needs it:
 
-- [ ] Blob EntityCollection create/read/update/delete access mapping.
-- [ ] Blob attachment Association domain create/delete policy.
-- [ ] BlobStore status/read diagnostics policy.
-- [ ] delete override policy for cases where `write` is allowed but `delete`
+- [x] Blob EntityCollection create/read/update/delete access mapping.
+- [x] Blob attachment Association domain create/delete policy.
+- [x] BlobStore status/read diagnostics policy.
+- [x] delete override policy for cases where `write` is allowed but `delete`
       must require a stronger capability.
+
+Implementation notes:
+
+- Subsystem descriptors now accept `security.authorization.resources`.
+- Resource policies cover collection, association-domain, and store resource
+  families.
+- Policy rules can require subject capabilities and can override the entity
+  permission bit used for a specific access kind.
+- BL-09C adds the generic policy evaluator. Full Blob operation wiring remains
+  BL-09D.
+
+Verification snapshot:
+
+- [x] `GenericSubsystemDescriptorSpec` covers resource policy parsing, invalid
+      policy rejection, and inherited override behavior.
+- [x] `OperationAccessPolicyResourceSpec` covers Blob collection create,
+      delete permission override, association domain grants, store grants, and
+      no-policy compatibility behavior.
 
 ### BL-09D: Blob Operation Integration
 

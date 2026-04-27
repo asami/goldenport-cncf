@@ -618,10 +618,13 @@ Current active phase: Phase 18.
   store grant helpers provide the subject-side vocabulary needed by Blob
   registration, attachment, detach, and BlobStore status flows. Raw request
   `capability` remains a required capability, not a forged subject grant.
-- BL-09 remaining work is limited to Blob-required object/resource surfaces:
-  Blob EntityCollection policy, Blob attachment Association-domain policy,
-  BlobStore status policy, operation integration, and enough
-  introspection/admin visibility to operate those policies.
+- BL-09C is completed in this change. Subsystem descriptors can define
+  `security.authorization.resources` for collection, association-domain, and
+  store resource policy. `OperationAccessPolicy` now resolves those policies at
+  the UnitOfWork boundary and enforces required capabilities plus permission-bit
+  overrides such as Blob delete requiring `execute`.
+- BL-09 remaining work is limited to operation integration and enough
+  introspection/admin visibility to operate Blob authorization policies.
 - Remaining Blob hardening outside BL-09 includes UoW-backed application
   create/update Blob attachment workflow adapters, deletion/retention policy,
   signed URLs, production BlobStore backends, MIME-kind policy, payload size

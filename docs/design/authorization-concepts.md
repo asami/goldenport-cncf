@@ -337,13 +337,25 @@ collections or resource classes.
 Example intent:
 
 ```yaml
-authorization:
-  accessMappings:
-    default:
-      delete: [write, execute]
-    collections:
-      cncf.builtin.blob:
-        delete: [execute]
+security:
+  authorization:
+    resources:
+      collections:
+        blob:
+          create:
+            capability: collection:blob:create
+          delete:
+            permission: execute
+      associations:
+        blob_attachment:
+          create:
+            capability: association:blob_attachment:create
+          delete:
+            capability: association:blob_attachment:delete
+      stores:
+        blobstore:
+          status:
+            capability: store:blobstore:status
 ```
 
 The default `delete -> write or execute` keeps ordinary CRUD simple. A stricter

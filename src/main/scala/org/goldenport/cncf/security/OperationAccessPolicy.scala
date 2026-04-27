@@ -3,18 +3,20 @@ package org.goldenport.cncf.security
 import org.goldenport.Consequence
 import org.goldenport.observation.Descriptor
 import org.goldenport.record.Record
+import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.SimpleEntityStorageShapePolicy
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
+import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.value.SecurityAttributes
 
 /*
  * @since   Apr.  6, 2026
- * @version Apr. 26, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationAccessPolicy {
@@ -192,9 +194,10 @@ object OperationAccessPolicy {
       case "domain" | "aggregate" =>
         authorization.accessKind match
           case "create" =>
-            _authorize_domain_create_default(authorization)
+            _authorize_policy_capability(authorization).flatMap(_ => _authorize_domain_create_default(authorization))
           case kind if Set("read", "update", "delete").contains(_permission_access_kind(kind)) =>
-            authorization.targetId match
+            _authorize_policy_capability(authorization).flatMap { _ =>
+              authorization.targetId match
               case Some(id) =>
                 loadRecord(id).flatMap {
                   case Some(record) =>
@@ -206,13 +209,18 @@ object OperationAccessPolicy {
                       case None if _matches_relation(record, authorization) =>
                         Consequence.unit
                       case None =>
-                        authorizeSimpleEntity(record, _permission_access_kind(authorization.accessKind))
+                        authorizeSimpleEntity(record, _policy_permission_access_kind(authorization))
                   case None => authorizeSimpleEntityOwnerOrManager(id, loadRecord)
                 }
               case None =>
                 Consequence.unit
+            }
           case _ =>
             Consequence.unit
+      case "association" =>
+        _authorize_policy_capability(authorization)
+      case "store" =>
+        _authorize_policy_capability(authorization)
       case _ =>
         Consequence.unit
 
@@ -237,6 +245,72 @@ object OperationAccessPolicy {
       Consequence.unit
     else
       Consequence.unit
+
+  private def _authorize_policy_capability(
+    authorization: UnitOfWorkAuthorization
+  )(using ctx: ExecutionContext): Consequence[Unit] =
+    _resource_policy(authorization).filter(_.capabilities.nonEmpty) match {
+      case Some(policy) if policy.normalizedCapabilities.exists(_subject.capabilities.contains) =>
+        Consequence.unit
+      case Some(policy) =>
+        _permission_denied(
+          s"Required capability is missing: ${policy.capabilities.mkString("|")}.",
+          "required-capability",
+          authorization.accessKind
+        )
+      case None =>
+        Consequence.unit
+    }
+
+  private def _policy_permission_access_kind(
+    authorization: UnitOfWorkAuthorization
+  )(using ctx: ExecutionContext): String =
+    _resource_policy(authorization).flatMap(_.permission).map(_.trim.toLowerCase(java.util.Locale.ROOT))
+      .filter(_.nonEmpty)
+      .getOrElse(_permission_access_kind(authorization.accessKind))
+
+  private def _resource_policy(
+    authorization: UnitOfWorkAuthorization
+  )(using ctx: ExecutionContext): Option[AuthorizationResourcePolicy] = {
+    val action = authorization.accessKind
+    _resource_policies.flatMap { policies =>
+      authorization.resourceFamily.trim.toLowerCase(java.util.Locale.ROOT) match
+        case "domain" | "aggregate" =>
+          val name = authorization.collectionName.orElse(authorization.resourceType)
+          policies.collection(name, action)
+        case "association" =>
+          val name = authorization.resourceType.orElse(authorization.collectionName)
+          policies.association(name, action)
+        case "store" =>
+          val name = authorization.resourceType.orElse(authorization.collectionName)
+          policies.store(name, action)
+        case _ =>
+          None
+    }
+  }
+
+  private def _resource_policies(
+    using ctx: ExecutionContext
+  ): Option[AuthorizationResourcePolicies] =
+    _subsystem_from_scope(ctx.cncfCore.scope)
+      .flatMap(_.descriptor)
+      .flatMap(_.security)
+      .flatMap(_.authorization)
+      .map(_.resources)
+
+  @annotation.tailrec
+  private def _subsystem_from_scope(
+    scope: org.goldenport.cncf.context.ScopeContext
+  ): Option[Subsystem] =
+    scope match {
+      case cc: Component.Context =>
+        cc.component.subsystem
+      case other =>
+        other.parent match {
+          case Some(parent) => _subsystem_from_scope(parent)
+          case None => None
+        }
+    }
 
   private def _is_visible_simple_entity[T](
     entity: T,

@@ -10,7 +10,7 @@ import org.goldenport.record.RecordDecoder
 import org.goldenport.cncf.component.ComponentDescriptor
 import org.goldenport.cncf.component.ComponentDescriptorLoader
 import org.goldenport.cncf.component.DescriptorRecordLoader
-import org.goldenport.cncf.security.{OperationAuthorizationRule, SecurityRoleDefinition}
+import org.goldenport.cncf.security.{AuthorizationResourcePolicies, AuthorizationResourcePolicy, OperationAuthorizationRule, SecurityRoleDefinition, SecuritySubject}
 
 /*
  * @since   Apr.  7, 2026
@@ -47,7 +47,8 @@ final case class GenericSubsystemMessageDeliveryBinding(
 )
 
 final case class GenericSubsystemAuthorizationBinding(
-  roles: Map[String, SecurityRoleDefinition] = Map.empty
+  roles: Map[String, SecurityRoleDefinition] = Map.empty,
+  resources: AuthorizationResourcePolicies = AuthorizationResourcePolicies.empty
 )
 
 final case class GenericSubsystemSecurityBinding(
@@ -375,7 +376,10 @@ object GenericSubsystemDescriptor {
       case (Some(a), Some(b)) =>
         val overrideKeys = b.roles.keys.map(_comparison_key).toSet
         val inherited = a.roles.filterNot { case (name, _) => overrideKeys.contains(_comparison_key(name)) }
-        Some(GenericSubsystemAuthorizationBinding(roles = inherited ++ b.roles))
+        Some(GenericSubsystemAuthorizationBinding(
+          roles = inherited ++ b.roles,
+          resources = a.resources.mergeOverride(b.resources)
+        ))
     }
 
   private def _merge_authentication(
@@ -1194,7 +1198,80 @@ object GenericSubsystemDescriptor {
               Consequence.argumentInvalid(s"authorization role must be a mapping: ${name}")
           }).map(_.toMap)
         }.getOrElse(Consequence.success(Map.empty[String, SecurityRoleDefinition]))
-      roles.map(x => GenericSubsystemAuthorizationBinding(roles = x))
+      val resources = _resource_policies(rec)
+      for {
+        r <- roles
+        p <- resources
+      } yield GenericSubsystemAuthorizationBinding(roles = r, resources = p)
+    }
+
+  private def _resource_policies(
+    rec: Record
+  ): Consequence[AuthorizationResourcePolicies] =
+    _record_value(rec, List("resources", "resource", "accessMappings", "access_mappings")) match {
+      case Some(r) =>
+        for {
+          collections <- _resource_family_policies(r, "collections", "collection")
+          associations <- _resource_family_policies(r, "associations", "association")
+          stores <- _resource_family_policies(r, "stores", "store")
+        } yield AuthorizationResourcePolicies(collections, associations, stores)
+      case None =>
+        Consequence.success(AuthorizationResourcePolicies.empty)
+    }
+
+  private def _resource_family_policies(
+    rec: Record,
+    keys: String*
+  ): Consequence[Map[String, Map[String, AuthorizationResourcePolicy]]] =
+    _record_value(rec, keys.toList) match {
+      case Some(family) =>
+        _sequence(family.asMap.toVector.map {
+          case (name, r: Record) => _resource_action_policies(name, r)
+          case (name, m: Map[?, ?]) => _resource_action_policies(name, _map_to_record(m))
+          case (name, m: java.util.Map[?, ?]) => _resource_action_policies(name, _map_to_record(m.asScala.toMap))
+          case (name, _) => Consequence.argumentInvalid(s"authorization resource policy must be a mapping: ${name}")
+        }).map(_.toMap)
+      case None =>
+        Consequence.success(Map.empty)
+    }
+
+  private def _resource_action_policies(
+    name: String,
+    rec: Record
+  ): Consequence[(String, Map[String, AuthorizationResourcePolicy])] =
+    _sequence(rec.asMap.toVector.map {
+      case (action, r: Record) => _resource_policy(action, r)
+      case (action, m: Map[?, ?]) => _resource_policy(action, _map_to_record(m))
+      case (action, m: java.util.Map[?, ?]) => _resource_policy(action, _map_to_record(m.asScala.toMap))
+      case (action, s: String) => _resource_policy(action, Record.dataAuto("capability" -> s))
+      case (action, _) => Consequence.argumentInvalid(s"authorization resource action policy must be a mapping: ${name}.${action}")
+    }).map(xs => SecuritySubject.normalize(name) -> xs.toMap)
+
+  private def _resource_policy(
+    action: String,
+    rec: Record
+  ): Consequence[(String, AuthorizationResourcePolicy)] =
+    _resource_permission(rec, action).map { permission =>
+      SecuritySubject.normalize(action) ->
+        AuthorizationResourcePolicy(
+          capabilities = _string_vector(rec, List("capabilities", "capability")),
+          permission = permission
+        )
+    }
+
+  private def _resource_permission(
+    rec: Record,
+    action: String
+  ): Consequence[Option[String]] =
+    _string(rec, "permission") match {
+      case Some(value) =>
+        val normalized = value.trim.toLowerCase(java.util.Locale.ROOT)
+        if (Set("read", "write", "execute").contains(normalized))
+          Consequence.success(Some(normalized))
+        else
+          Consequence.argumentInvalid(s"authorization resource permission must be read/write/execute: ${action}.${value}")
+      case None =>
+        Consequence.success(None)
     }
 
   private def _sequence[A](
