@@ -1,10 +1,12 @@
 package org.goldenport.cncf.security
 
+import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
+import org.goldenport.cncf.subsystem.Subsystem
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class SecuritySubject(
@@ -49,13 +51,28 @@ final case class SecuritySubject(
     resourceType: Option[String],
     collectionName: Option[String]
   ): Boolean = {
-    val targets = SecuritySubject.createGrantTargets(resourceType, collectionName)
-    targets.exists { target =>
-      privileges.contains(target) ||
-      capabilities.contains(target) ||
-      roles.contains(target)
-    }
+    val legacyTargets = SecuritySubject.legacyCreateGrantTargets(resourceType, collectionName)
+    val collectionTargets = collectionName.toSet.flatMap(SecuritySubject.collectionCreateGrantTargets)
+    _has_any(legacyTargets) || _has_capability(collectionTargets)
   }
+
+  def hasCollectionGrant(
+    collectionName: String,
+    action: String
+  ): Boolean =
+    _has_capability(SecuritySubject.collectionGrantTargets(collectionName, action))
+
+  def hasAssociationGrant(
+    domain: String,
+    action: String
+  ): Boolean =
+    _has_capability(SecuritySubject.associationGrantTargets(domain, action))
+
+  def hasStoreGrant(
+    storeName: String,
+    action: String
+  ): Boolean =
+    _has_capability(SecuritySubject.storeGrantTargets(storeName, action))
 
   def hasUsageCapability(
     targetKind: String,
@@ -91,6 +108,63 @@ final case class SecuritySubject(
 
   def normalizedAttributeValues(name: String): Set[String] =
     attributeValues(name).map(SecuritySubject.normalize)
+
+  def withRoleDefinitions(
+    definitions: Iterable[SecurityRoleDefinition]
+  ): SecuritySubject =
+    copy(capabilities = capabilities ++ SecurityRoleDefinition.expandCapabilities(roles, definitions))
+
+  private def _has_any(targets: Set[String]): Boolean =
+    targets.exists { target =>
+      capabilities.contains(target) ||
+      privileges.contains(target) ||
+      roles.contains(target)
+    }
+
+  private def _has_capability(targets: Set[String]): Boolean =
+    targets.exists(capabilities.contains)
+}
+
+final case class SecurityRoleDefinition(
+  name: String,
+  includes: Vector[String] = Vector.empty,
+  capabilities: Vector[String] = Vector.empty
+)
+
+object SecurityRoleDefinition {
+  def expandCapabilities(
+    roles: Set[String],
+    definitions: Iterable[SecurityRoleDefinition]
+  ): Set[String] = {
+    val index = definitions.map(d => SecuritySubject.normalize(d.name) -> d).toMap
+    roles.flatMap(role => _expand_role(SecuritySubject.normalize(role), index, Set.empty))
+  }
+
+  def normalizedIndex(
+    definitions: Iterable[SecurityRoleDefinition]
+  ): Map[String, SecurityRoleDefinition] =
+    definitions.map(d => SecuritySubject.normalize(d.name) -> d).toMap
+
+  private def _expand_role(
+    role: String,
+    index: Map[String, SecurityRoleDefinition],
+    visited: Set[String]
+  ): Set[String] =
+    if (visited.contains(role))
+      Set.empty
+    else
+      index.get(role) match
+        case Some(definition) =>
+          val direct = definition.capabilities.flatMap(_capability_tokens).toSet
+          val nested = definition.includes.flatMap { include =>
+            _expand_role(SecuritySubject.normalize(include), index, visited + role)
+          }.toSet
+          direct ++ nested
+        case None =>
+          Set.empty
+
+  private def _capability_tokens(value: String): Set[String] =
+    SecuritySubject.splitTokens(value).map(SecuritySubject.normalize) + SecuritySubject.normalize(value)
 }
 
 object SecuritySubject {
@@ -102,7 +176,7 @@ object SecuritySubject {
   }
 
   def current(using ctx: ExecutionContext): SecuritySubject =
-    from(ctx.security)
+    from(ctx.security, _role_definitions(ctx))
 
   def from(security: SecurityContext): SecuritySubject = {
     val attributes = security.principal.attributes
@@ -141,6 +215,12 @@ object SecuritySubject {
     )
   }
 
+  def from(
+    security: SecurityContext,
+    roleDefinitions: Iterable[SecurityRoleDefinition]
+  ): SecuritySubject =
+    from(security).withRoleDefinitions(roleDefinitions)
+
   def splitTokens(value: String): Set[String] =
     Option(value).toSet.flatMap(_.split("[,\\s|]+")).map(_.trim).filter(_.nonEmpty)
 
@@ -162,6 +242,14 @@ object SecuritySubject {
     resourceType: Option[String],
     collectionName: Option[String]
   ): Set[String] = {
+    legacyCreateGrantTargets(resourceType, collectionName) ++
+      collectionName.toSet.flatMap(collectionCreateGrantTargets)
+  }
+
+  def legacyCreateGrantTargets(
+    resourceType: Option[String],
+    collectionName: Option[String]
+  ): Set[String] = {
     def mk(name: String): Set[String] = {
       val n = normalize(name)
       Set(
@@ -173,7 +261,59 @@ object SecuritySubject {
         normalize(s"${n}_create")
       )
     }
-    resourceType.toSet.flatMap(mk) ++ collectionName.toSet.flatMap(mk)
+    resourceType.toSet.flatMap(mk) ++
+      collectionName.toSet.flatMap(mk)
+  }
+
+  def collectionCreateGrantTargets(collectionName: String): Set[String] =
+    collectionGrantTargets(collectionName, "create").filter(_.startsWith(normalize("collection")))
+
+  def collectionGrantTargets(
+    collectionName: String,
+    action: String
+  ): Set[String] = {
+    val name = normalize(collectionName)
+    val act = normalize(action)
+    Set(
+      normalize(s"collection:$name:$act"),
+      normalize(s"collection.$name.$act"),
+      normalize(s"collection_${name}_$act"),
+      normalize(s"$name:$act"),
+      normalize(s"$name.$act"),
+      normalize(s"${name}_$act")
+    )
+  }
+
+  def associationGrantTargets(
+    domain: String,
+    action: String
+  ): Set[String] = {
+    val d = normalize(domain)
+    val act = normalize(action)
+    Set(
+      normalize(s"association:$d:$act"),
+      normalize(s"association.$d.$act"),
+      normalize(s"association_${d}_$act"),
+      normalize(s"$d:$act"),
+      normalize(s"$d.$act"),
+      normalize(s"${d}_$act")
+    )
+  }
+
+  def storeGrantTargets(
+    storeName: String,
+    action: String
+  ): Set[String] = {
+    val name = normalize(storeName)
+    val act = normalize(action)
+    Set(
+      normalize(s"store:$name:$act"),
+      normalize(s"store.$name.$act"),
+      normalize(s"store_${name}_$act"),
+      normalize(s"$name:$act"),
+      normalize(s"$name.$act"),
+      normalize(s"${name}_$act")
+    )
   }
 
   def usageCapabilityTargets(
@@ -261,5 +401,29 @@ object SecuritySubject {
     p.map(_.trim.toLowerCase).collect {
       case "true" | "yes" | "on" | "1" => true
       case "false" | "no" | "off" | "0" => false
+    }
+
+  private def _role_definitions(
+    ctx: ExecutionContext
+  ): Iterable[SecurityRoleDefinition] =
+    _subsystem_from_scope(ctx.cncfCore.scope)
+      .flatMap(_.descriptor)
+      .flatMap(_.security)
+      .flatMap(_.authorization)
+      .map(_.roles.values)
+      .getOrElse(Vector.empty)
+
+  @annotation.tailrec
+  private def _subsystem_from_scope(
+    scope: org.goldenport.cncf.context.ScopeContext
+  ): Option[Subsystem] =
+    scope match {
+      case cc: Component.Context =>
+        cc.component.subsystem
+      case other =>
+        other.parent match {
+          case Some(parent) => _subsystem_from_scope(parent)
+          case None => None
+        }
     }
 }

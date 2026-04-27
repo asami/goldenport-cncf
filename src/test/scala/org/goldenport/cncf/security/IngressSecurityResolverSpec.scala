@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 20, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
@@ -59,6 +59,21 @@ final class IngressSecurityResolverSpec extends AnyWordSpec with Matchers {
         )
 
       val result = IngressSecurityResolver.resolve(request)
+      result shouldBe a[Consequence.Failure[_]]
+    }
+
+    "treat raw request capability as a requirement, not a subject grant" in {
+      val request = Request
+        .of(component = "domain", service = "entity", operation = "loadPerson")
+        .copy(
+          properties = List(
+            Property("privilege", "user", None),
+            Property("capability", "collection:blob:create", None)
+          )
+        )
+
+      val result = IngressSecurityResolver.resolve(request)
+
       result shouldBe a[Consequence.Failure[_]]
     }
 

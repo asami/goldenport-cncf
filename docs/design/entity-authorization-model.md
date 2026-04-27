@@ -425,6 +425,10 @@ owner/group/other permission checks. `NotApplicable` has no effect. Until a full
 policy language defines explicit error handling, `Indeterminate` is fail-closed
 for user-permission access.
 
+This avoids creating many state-specific capabilities such as
+`post.read.when_published` or `blob.read.when_tenant_matches`. The capability
+remains a positive grant; ABAC carries the negative or conditional constraint.
+
 After natural ABAC guard evaluation, grants compose as follows:
 
 1. RBAC-style manager privileges can grant broad management access.

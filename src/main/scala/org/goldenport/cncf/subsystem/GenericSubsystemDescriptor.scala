@@ -10,12 +10,11 @@ import org.goldenport.record.RecordDecoder
 import org.goldenport.cncf.component.ComponentDescriptor
 import org.goldenport.cncf.component.ComponentDescriptorLoader
 import org.goldenport.cncf.component.DescriptorRecordLoader
-import org.goldenport.cncf.security.OperationAuthorizationRule
+import org.goldenport.cncf.security.{OperationAuthorizationRule, SecurityRoleDefinition}
 
 /*
  * @since   Apr.  7, 2026
- *  version Apr. 23, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -47,9 +46,14 @@ final case class GenericSubsystemMessageDeliveryBinding(
   providers: Vector[GenericSubsystemMessageDeliveryProviderBinding] = Vector.empty
 )
 
+final case class GenericSubsystemAuthorizationBinding(
+  roles: Map[String, SecurityRoleDefinition] = Map.empty
+)
+
 final case class GenericSubsystemSecurityBinding(
   authentication: Option[GenericSubsystemAuthenticationBinding] = None,
-  messageDelivery: Option[GenericSubsystemMessageDeliveryBinding] = None
+  messageDelivery: Option[GenericSubsystemMessageDeliveryBinding] = None,
+  authorization: Option[GenericSubsystemAuthorizationBinding] = None
 )
 
 final case class GenericSubsystemBuiltinBinding(
@@ -355,8 +359,23 @@ object GenericSubsystemDescriptor {
       case (Some(a), Some(b)) =>
         Some(GenericSubsystemSecurityBinding(
           authentication = _merge_authentication(a.authentication, b.authentication),
-          messageDelivery = _merge_message_delivery(a.messageDelivery, b.messageDelivery)
+          messageDelivery = _merge_message_delivery(a.messageDelivery, b.messageDelivery),
+          authorization = _merge_authorization(a.authorization, b.authorization)
         ))
+    }
+
+  private def _merge_authorization(
+    defaults: Option[GenericSubsystemAuthorizationBinding],
+    overrides: Option[GenericSubsystemAuthorizationBinding]
+  ): Option[GenericSubsystemAuthorizationBinding] =
+    (defaults, overrides) match {
+      case (None, None) => None
+      case (Some(x), None) => Some(x)
+      case (None, Some(x)) => Some(x)
+      case (Some(a), Some(b)) =>
+        val overrideKeys = b.roles.keys.map(_comparison_key).toSet
+        val inherited = a.roles.filterNot { case (name, _) => overrideKeys.contains(_comparison_key(name)) }
+        Some(GenericSubsystemAuthorizationBinding(roles = inherited ++ b.roles))
     }
 
   private def _merge_authentication(
@@ -791,6 +810,12 @@ object GenericSubsystemDescriptor {
       case Some(m: java.util.Map[?, ?]) => _map_to_record(m.asScala.toMap)
     }
 
+  private def _role_record(name: String, rec: Record): Record =
+    if (rec.getString("name").exists(_.trim.nonEmpty))
+      rec
+    else
+      Record.create(rec.asMap.toVector :+ ("name" -> name))
+
   private def _string_map_value(rec: Record, keys: List[String]): Map[String, String] =
     _record_value(rec, keys).map(_.asMap.collect { case (k, v: String) => k -> v }).getOrElse(Map.empty)
 
@@ -1131,13 +1156,68 @@ object GenericSubsystemDescriptor {
       )
     }
 
+  given RecordDecoder[SecurityRoleDefinition] with
+    def fromRecord(rec: Record): Consequence[SecurityRoleDefinition] = {
+      val name = _string(rec, "name")
+      name match {
+        case Some(n) =>
+          Consequence.success(
+            SecurityRoleDefinition(
+              name = n,
+              includes = _string_vector(rec, List("includes", "include", "roles")),
+              capabilities = _string_vector(rec, List("capabilities", "capability"))
+            )
+          )
+        case None =>
+          Consequence.argumentMissing("authorization role name")
+      }
+    }
+
+  given RecordDecoder[GenericSubsystemAuthorizationBinding] with
+    def fromRecord(rec: Record): Consequence[GenericSubsystemAuthorizationBinding] = {
+      val roles =
+        _record_value(rec, List("roles", "role")).map { roleRecords =>
+          _sequence(roleRecords.asMap.toVector.map {
+            case (name, r: Record) =>
+              summon[RecordDecoder[SecurityRoleDefinition]]
+                .fromRecord(_role_record(name, r))
+                .map(x => x.name -> x)
+            case (name, m: Map[?, ?]) =>
+              summon[RecordDecoder[SecurityRoleDefinition]]
+                .fromRecord(_role_record(name, _map_to_record(m)))
+                .map(x => x.name -> x)
+            case (name, m: java.util.Map[?, ?]) =>
+              summon[RecordDecoder[SecurityRoleDefinition]]
+                .fromRecord(_role_record(name, _map_to_record(m.asScala.toMap)))
+                .map(x => x.name -> x)
+            case (name, _) =>
+              Consequence.argumentInvalid(s"authorization role must be a mapping: ${name}")
+          }).map(_.toMap)
+        }.getOrElse(Consequence.success(Map.empty[String, SecurityRoleDefinition]))
+      roles.map(x => GenericSubsystemAuthorizationBinding(roles = x))
+    }
+
+  private def _sequence[A](
+    xs: Vector[Consequence[A]]
+  ): Consequence[Vector[A]] =
+    xs.foldLeft(Consequence.success(Vector.empty[A])) { (z, x) =>
+      z.flatMap(xs => x.map(v => xs :+ v))
+    }
+
   given RecordDecoder[GenericSubsystemSecurityBinding] with
     def fromRecord(rec: Record): Consequence[GenericSubsystemSecurityBinding] = {
       val auth = _record_value(rec, List("authentication"))
         .flatMap(r => summon[RecordDecoder[GenericSubsystemAuthenticationBinding]].fromRecord(r).toOption)
       val messageDelivery = _record_value(rec, List("message_delivery", "messageDelivery", "notification"))
         .flatMap(r => summon[RecordDecoder[GenericSubsystemMessageDeliveryBinding]].fromRecord(r).toOption)
-      Consequence.success(GenericSubsystemSecurityBinding(auth, messageDelivery))
+      val authorization =
+        _record_value(rec, List("authorization")) match {
+          case Some(r) =>
+            summon[RecordDecoder[GenericSubsystemAuthorizationBinding]].fromRecord(r).map(Some(_))
+          case None =>
+            Consequence.success(None)
+        }
+      authorization.map(a => GenericSubsystemSecurityBinding(auth, messageDelivery, a))
     }
 
   given RecordDecoder[GenericSubsystemBuiltinBinding] with
@@ -1157,7 +1237,7 @@ object GenericSubsystemDescriptor {
           if (bindings.isEmpty)
             Consequence.argumentMissing("component bindings")
           else
-            Consequence.success(
+            _security_value(rec).map { security =>
               Shape(
                 subsystemName = name,
                 version = _string(rec, "version"),
@@ -1165,13 +1245,23 @@ object GenericSubsystemDescriptor {
                 extensions = _string_map_value(rec, List("extension", "extensions")),
                 config = _string_map_value(rec, List("config")),
                 wiring = _wiring_value(rec),
-                security = _record_value(rec, List("security")).flatMap(r => summon[RecordDecoder[GenericSubsystemSecurityBinding]].fromRecord(r).toOption),
+                security = security,
                 builtin = _record_value(rec, List("builtin", "builtins")).flatMap(r => summon[RecordDecoder[GenericSubsystemBuiltinBinding]].fromRecord(r).toOption),
                 operationAuthorization = _operation_authorization_value(rec)
               )
-            )
+            }
         case None =>
           Consequence.argumentMissing("subsystem/subsystemName/name")
       }
+    }
+
+  private def _security_value(
+    rec: Record
+  ): Consequence[Option[GenericSubsystemSecurityBinding]] =
+    _record_value(rec, List("security")) match {
+      case Some(r) =>
+        summon[RecordDecoder[GenericSubsystemSecurityBinding]].fromRecord(r).map(Some(_))
+      case None =>
+        Consequence.success(None)
     }
 }

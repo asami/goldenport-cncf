@@ -124,8 +124,8 @@ Current semantic direction:
   - BL-08D (DONE): ProcedureActionCall DSL foundation.
   - BL-08E (DONE): Blob authorization policy and preflight.
 - I (IN PROGRESS): BL-09 — Blob-required authorization support.
-  - BL-09A (IN PROGRESS): guard/capability authorization concept refinement.
-  - BL-09B (PLANNED): minimal subject-side grant/config surface for roles,
+  - BL-09A (DONE): guard/capability authorization concept refinement.
+  - BL-09B (DONE): minimal subject-side grant/config surface for roles,
     scopes, capabilities, and create/use grants needed by Blob.
   - BL-09C (PLANNED): object/resource-side access policy surface for
     Blob EntityCollection, Blob attachment Association domain, and BlobStore
@@ -145,11 +145,11 @@ Current note:
   - `cca7e38 Close blob projection contract`
   - `8f87196 Harden external blob URLs`
   - `2d00f58 Harden blob action chokepoints`
-  - Current change: define and enforce the Blob FunctionalActionCall Entity
-    access chokepoint boundary for Blob component operations and Aggregate/View
-    Blob projection, remove production direct BlobService metadata/association
-    operations, tighten managed-registration compensation, and add the optional
-    ProcedureActionCall DSL foundation.
+  - Current change: add the minimal BL-09B subject-side grant surface. Subsystem
+    descriptors can define `security.authorization.roles`, role definitions
+    expand transitively into `SecuritySubject` capabilities, and canonical
+    collection/association/store grant helpers are available for Blob policy
+    integration.
   - BL-07B closes the projection contract:
     Aggregate/View output uses a flat, additive `blobs` field, omits it when
     empty, orders rows by `sortOrder`, and never embeds payload bytes.
@@ -176,6 +176,9 @@ Current note:
     predicates (`privilege`, ABAC, operation/runtime mode) from capability
     grants (role, permission, relation, future ACL) and applies that model only
     as far as Blob create/read/attach/detach/delete/store-status flows need.
+  - BL-09B adds descriptor-backed role-to-capability expansion and verifies that
+    raw request `capability` remains a required capability, not a forged subject
+    grant.
   - UoW-backed application create/update Blob attachment workflow adapters are
     split out as follow-up hardening work.
 - `docs/journal/2026/04/blob-management-component-specification-note.md` is the
@@ -205,8 +208,8 @@ Current note:
   - [x] BL-08D: ProcedureActionCall DSL foundation.
   - [x] BL-08E: Blob authorization policy and preflight.
 - [ ] BL-09: Blob-required authorization support.
-  - [ ] BL-09A: Guard/capability authorization concept refinement.
-  - [ ] BL-09B: Minimal subject-side grant/config surface.
+  - [x] BL-09A: Guard/capability authorization concept refinement.
+  - [x] BL-09B: Minimal subject-side grant/config surface.
   - [ ] BL-09C: Object/resource-side access policy surface.
   - [ ] BL-09D: Blob integration on generic authorization policies.
   - [ ] BL-09E: Authorization policy introspection/admin visibility.

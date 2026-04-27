@@ -94,6 +94,33 @@ Examples:
 Roles and scopes are subject-side policy inputs. They are used mainly for
 operation/admin admission and coarse operational policy.
 
+Role definitions may expand a role into one or more capabilities. This is the
+minimal subject-side grant configuration surface used before a full
+organization-grade role registry exists.
+
+Example:
+
+```yaml
+security:
+  authorization:
+    roles:
+      blob_user:
+        capabilities:
+          - collection:blob:create
+          - association:blob_attachment:create
+          - association:blob_attachment:delete
+      blob_operator:
+        includes:
+          - blob_user
+        capabilities:
+          - store:blobstore:status
+```
+
+At runtime, `SecuritySubject` expands role definitions into effective subject
+capabilities. `includes` are transitive and cycle-safe. This descriptor surface
+is intentionally small; role lifecycle administration and identity-provider
+role management remain Security work outside Phase 18.
+
 ## Capability
 
 A capability is the normalized authorization currency used to compare what the
@@ -110,6 +137,11 @@ Subject-side capabilities are appropriate for coarse or shared function grants
 such as service grants, collection creation, association-domain mutation, store
 status, import/export, or admin diagnostics.
 
+Capabilities are positive grants. They should describe what is allowed, not
+every condition under which it is denied. Modeling denial or contextual
+exceptions as separate negative capabilities causes configuration growth and
+ambiguous precedence. Use guards for those constraints.
+
 Capabilities should not be physically enumerated for every entity-instance
 read/write permission. Doing so makes subject metadata grow with entity count
 and defeats the purpose of compact object-side permissions. Entity-local
@@ -120,6 +152,9 @@ object's permission, relation, or ACL context.
 
 A guard is a condition that must be satisfied before or alongside capability
 comparison. Guards do not grant capabilities by themselves.
+
+Guards provide the "not unless" side of the model. They keep negative,
+conditional, and state-dependent rules out of the capability namespace.
 
 Initial guard families:
 
@@ -137,6 +172,16 @@ Is this subject/context allowed to use this class of capability here and now?
 
 `privilege` is a coarse system-level guard. `ABAC` is a contextual resource
 guard. Both are intentionally separate from capability grants.
+
+Example:
+
+```text
+capability: collection:blob:read
+guard:      blob is active, tenant matches, and publish window is open
+```
+
+The capability grants the positive ability to read Blob metadata. The guards
+decide whether that ability is usable for the current object and context.
 
 ## Permission
 

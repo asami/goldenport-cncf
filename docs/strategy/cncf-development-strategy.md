@@ -608,14 +608,20 @@ Current active phase: Phase 18.
 - BL-08E is completed in this change; it adds an explicit UoW authorization
   preflight operation and applies Blob metadata create/source-entity
   authorization before Blob payload writes and Blob association flows.
-- BL-09 is active as Blob-required authorization support. It refines the
-  guard/capability model for Blob flows: `privilege` and ABAC are guards, while
-  role, permission, and relation are capability grant sources. ACL is deferred
-  to 8.3 Security unless Blob later proves an immediate need.
-- BL-09 remaining work is limited to Blob-required surfaces: minimal
-  subject-side grant/config input, Blob EntityCollection policy, Blob attachment
-  Association-domain policy, BlobStore status policy, operation integration, and
-  enough introspection/admin visibility to operate those policies.
+- BL-09 is active as Blob-required authorization support. BL-09A completed the
+  guard/capability vocabulary for Blob flows: `privilege` and ABAC are guards,
+  while role, permission, and relation are capability grant sources. ACL is
+  deferred to 8.3 Security unless Blob later proves an immediate need.
+- BL-09B is completed in this change. Subsystem descriptors can define
+  `security.authorization.roles`; role definitions expand transitively into
+  effective `SecuritySubject` capabilities; collection, association-domain, and
+  store grant helpers provide the subject-side vocabulary needed by Blob
+  registration, attachment, detach, and BlobStore status flows. Raw request
+  `capability` remains a required capability, not a forged subject grant.
+- BL-09 remaining work is limited to Blob-required object/resource surfaces:
+  Blob EntityCollection policy, Blob attachment Association-domain policy,
+  BlobStore status policy, operation integration, and enough
+  introspection/admin visibility to operate those policies.
 - Remaining Blob hardening outside BL-09 includes UoW-backed application
   create/update Blob attachment workflow adapters, deletion/retention policy,
   signed URLs, production BlobStore backends, MIME-kind policy, payload size

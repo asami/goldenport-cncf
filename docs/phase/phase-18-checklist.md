@@ -731,7 +731,7 @@ normal CNCF authorization chokepoints.
 
 ### BL-09A: Guard/Capability Concept Refinement
 
-Status: IN PROGRESS
+Status: DONE
 
 Refine the common authorization vocabulary so Blob policy work has a stable
 model:
@@ -745,17 +745,36 @@ model:
 
 ### BL-09B: Minimal Subject-Side Grant/Config Surface
 
-Status: PLANNED
+Status: DONE
 
 Add the minimal subject-side configuration needed to test and operate Blob
 authorization:
 
-- [ ] roles/scopes/capabilities usable by Blob user/admin flows.
-- [ ] create grant for Blob EntityCollection registration/upload.
-- [ ] use/read grant for Blob metadata/payload access when object permission
+- [x] roles/scopes/capabilities usable by Blob user/admin flows.
+- [x] create grant for Blob EntityCollection registration/upload.
+- [x] use/read grant for Blob metadata/payload access when object permission
       alone is insufficient.
-- [ ] association-domain create/delete grant for Blob attachment and detach.
-- [ ] store-status read grant for BlobStore diagnostics.
+- [x] association-domain create/delete grant for Blob attachment and detach.
+- [x] store-status read grant for BlobStore diagnostics.
+
+Implementation notes:
+
+- Subsystem descriptors now accept `security.authorization.roles`.
+- Role definitions expand to effective `SecuritySubject.capabilities`.
+- Role includes are transitive and cycle-safe.
+- Canonical subject grant helpers cover collection, association-domain, and
+  store resources.
+- Raw request `capability` remains a required capability, not a subject-side
+  grant source.
+
+Verification snapshot:
+
+- [x] `SecuritySubjectSpec` covers collection/association/store grants and role
+      expansion.
+- [x] `GenericSubsystemDescriptorSpec` covers descriptor role parsing and SAR
+      role override behavior.
+- [x] `IngressSecurityResolverSpec` covers raw request `capability` as
+      requirement-only input.
 
 Broader subject grant administration, role-definition lifecycle, and identity
 provider administration belong to strategy section 8.3 Security.

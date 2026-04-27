@@ -6,7 +6,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 23, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class SecuritySubjectSpec
@@ -50,6 +50,59 @@ final class SecuritySubjectSpec
         resourceType = None,
         collectionName = Some("textus-user-account")
       ) shouldBe true
+    }
+
+    "recognize canonical collection grants" in {
+      val subject = SecuritySubject(
+        subjectId = "u1",
+        authenticationState = SecuritySubject.AuthenticationState.Unspecified,
+        accessTokenPresent = false,
+        primaryGroup = None,
+        groups = Set.empty,
+        roles = Set.empty,
+        privileges = Set.empty,
+        capabilities = Set("collectionblobcreate"),
+        securityLevel = Set.empty
+      )
+
+      subject.hasCollectionGrant("blob", "create") shouldBe true
+      subject.hasCreateGrant(None, Some("blob")) shouldBe true
+    }
+
+    "recognize association and store grants" in {
+      val subject = SecuritySubject(
+        subjectId = "u1",
+        authenticationState = SecuritySubject.AuthenticationState.Unspecified,
+        accessTokenPresent = false,
+        primaryGroup = None,
+        groups = Set.empty,
+        roles = Set.empty,
+        privileges = Set.empty,
+        capabilities = Set("associationblobattachmentdelete", "storeblobstorestatus"),
+        securityLevel = Set.empty
+      )
+
+      subject.hasAssociationGrant("blob_attachment", "delete") shouldBe true
+      subject.hasStoreGrant("blobstore", "status") shouldBe true
+    }
+
+    "not treat raw roles or privileges as canonical collection association or store grants" in {
+      val subject = SecuritySubject(
+        subjectId = "u1",
+        authenticationState = SecuritySubject.AuthenticationState.Unspecified,
+        accessTokenPresent = false,
+        primaryGroup = None,
+        groups = Set.empty,
+        roles = Set("collectionblobcreate", "associationblobattachmentdelete"),
+        privileges = Set("storeblobstorestatus"),
+        capabilities = Set.empty,
+        securityLevel = Set.empty
+      )
+
+      subject.hasCollectionGrant("blob", "create") shouldBe false
+      subject.hasCreateGrant(None, Some("blob")) shouldBe false
+      subject.hasAssociationGrant("blob_attachment", "delete") shouldBe false
+      subject.hasStoreGrant("blobstore", "status") shouldBe false
     }
 
     "return false when no create grant matches" in {
@@ -109,6 +162,59 @@ final class SecuritySubjectSpec
         targetName = "UserAccount",
         action = "use"
       ) shouldBe true
+    }
+
+    "expand role definitions into subject capabilities" in {
+      val principal = new Principal {
+        def id: PrincipalId = PrincipalId("u1")
+        def attributes: Map[String, String] = Map("roles" -> "blob_user")
+      }
+      val subject = SecuritySubject.from(
+        SecurityContext(
+          principal = principal,
+          capabilities = Set(Capability("collection:blob:read")),
+          level = SecurityLevel("user")
+        ),
+        Vector(
+          SecurityRoleDefinition(
+            name = "blob_user",
+            capabilities = Vector("collection:blob:create", "association:blob_attachment:create")
+          )
+        )
+      )
+
+      subject.hasCapability("collection:blob:read") shouldBe true
+      subject.hasCollectionGrant("blob", "create") shouldBe true
+      subject.hasAssociationGrant("blob_attachment", "create") shouldBe true
+    }
+
+    "expand nested role definitions and terminate include cycles" in {
+      val principal = new Principal {
+        def id: PrincipalId = PrincipalId("u1")
+        def attributes: Map[String, String] = Map("roles" -> "blob_operator")
+      }
+      val subject = SecuritySubject.from(
+        SecurityContext(
+          principal = principal,
+          capabilities = Set.empty,
+          level = SecurityLevel("user")
+        ),
+        Vector(
+          SecurityRoleDefinition(
+            name = "blob_user",
+            includes = Vector("blob_operator"),
+            capabilities = Vector("collection:blob:read")
+          ),
+          SecurityRoleDefinition(
+            name = "blob_operator",
+            includes = Vector("blob_user"),
+            capabilities = Vector("store:blobstore:status")
+          )
+        )
+      )
+
+      subject.hasCollectionGrant("blob", "read") shouldBe true
+      subject.hasStoreGrant("blobstore", "status") shouldBe true
     }
 
     "derive authenticated subject from access token" in {

@@ -11,8 +11,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr.  8, 2026
- *  version Apr.  9, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
@@ -120,6 +119,99 @@ final class GenericSubsystemDescriptorSpec extends AnyWordSpec with Matchers {
       post.allowAnonymous shouldBe true
       post.anonymousOperationModes.map(_.name) shouldBe Vector("develop", "test")
       admin.operationModes.map(_.name) shouldBe Vector("production")
+    }
+
+    "load security authorization role definitions from the formal YAML schema" in {
+      val path = Files.createTempFile("generic-subsystem-security-authorization", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: textus-blob
+          |version: 0.1.0-SNAPSHOT
+          |components:
+          |  - name: blob
+          |    version: 0.1.0-SNAPSHOT
+          |security:
+          |  authorization:
+          |    roles:
+          |      blob_user:
+          |        capabilities:
+          |          - collection:blob:create
+          |          - collection:blob:read
+          |      blob_operator:
+          |        includes:
+          |          - blob_user
+          |        capabilities:
+          |          - association:blob_attachment:delete
+          |          - store:blobstore:status
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = GenericSubsystemDescriptor.load(path).toOption.get
+      val roles = descriptor.security.flatMap(_.authorization).map(_.roles).get
+
+      roles("blob_user").capabilities should contain allOf ("collection:blob:create", "collection:blob:read")
+      roles("blob_operator").includes shouldBe Vector("blob_user")
+      roles("blob_operator").capabilities should contain allOf ("association:blob_attachment:delete", "store:blobstore:status")
+    }
+
+    "reject invalid security authorization role definitions" in {
+      val path = Files.createTempFile("generic-subsystem-security-authorization-invalid", ".yaml")
+      Files.writeString(
+        path,
+        """subsystem: textus-blob
+          |version: 0.1.0-SNAPSHOT
+          |components:
+          |  - name: blob
+          |    version: 0.1.0-SNAPSHOT
+          |security:
+          |  authorization:
+          |    roles:
+          |      blob_user: invalid-scalar-role-definition
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      GenericSubsystemDescriptor.load(path) shouldBe a[Consequence.Failure[_]]
+    }
+
+    "let SAR security role definitions override inherited CAR role definitions by role name" in {
+      val car = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("<car>"),
+        subsystemName = "blob-car",
+        componentBindings = Vector(GenericSubsystemComponentBinding("blob")),
+        security = Some(GenericSubsystemSecurityBinding(
+          authorization = Some(GenericSubsystemAuthorizationBinding(
+            roles = Map(
+              "blob_user" -> org.goldenport.cncf.security.SecurityRoleDefinition(
+                name = "blob_user",
+                capabilities = Vector("collection:blob:read")
+              )
+            )
+          ))
+        ))
+      )
+      val sar = GenericSubsystemDescriptor(
+        path = java.nio.file.Path.of("<sar>"),
+        subsystemName = "blob-sar",
+        componentBindings = Vector(GenericSubsystemComponentBinding("blob")),
+        security = Some(GenericSubsystemSecurityBinding(
+          authorization = Some(GenericSubsystemAuthorizationBinding(
+            roles = Map(
+              "blob-user" -> org.goldenport.cncf.security.SecurityRoleDefinition(
+                name = "blob-user",
+                capabilities = Vector("collection:blob:create")
+              )
+            )
+          ))
+        ))
+      )
+
+      val effective = GenericSubsystemDescriptor.mergeComponentDefaults(car, sar)
+      val roles = effective.security.flatMap(_.authorization).map(_.roles).get
+
+      roles.values.map(_.name).toSet shouldBe Set("blob-user")
+      roles.values.flatMap(_.capabilities).toSet shouldBe Set("collection:blob:create")
     }
 
     "keep legacy coordinate parsing for backward compatibility" in {
