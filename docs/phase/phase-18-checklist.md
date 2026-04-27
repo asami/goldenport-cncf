@@ -381,12 +381,32 @@ Add Web flows for controlled admin delete, attach, and detach operations.
 
 ## BL-07: Aggregate/View Blob Metadata Projection
 
-Status: PLANNED
+Status: IN PROGRESS
+
+### BL-07A: Flat Blob Metadata Projection
+
+Status: DONE
 
 ### Objective
 
 Expose associated Blob metadata and display/download URLs through Aggregate/View
 projection without embedding payload bytes.
+
+### Implementation Decisions
+
+- [x] Use a flat additive `blobs` field in Aggregate/View response records.
+- [x] Resolve rows from Blob-owned `blob_attachment` associations.
+- [x] Include Blob metadata plus `associationId`, `role`, and `sortOrder`.
+- [x] Do not embed managed payload bytes.
+- [x] Do not reintroduce Association repository working sets.
+- [x] Do not change generated Aggregate/View model construction.
+
+### Acceptance Checks
+
+- [x] Aggregate detail response includes associated Blob metadata.
+- [x] Aggregate list item response includes associated Blob metadata.
+- [x] View detail response includes associated Blob metadata.
+- [x] Blob projection preserves display/download URL metadata only.
 
 ---
 

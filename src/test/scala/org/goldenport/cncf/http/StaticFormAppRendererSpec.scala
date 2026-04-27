@@ -2915,15 +2915,33 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val secondViewPage = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "page" -> "2", "pageSize" -> "1")
       secondViewPage.getString("fields") shouldBe Some("notice next")
       secondViewPage.getBoolean("hasNext") shouldBe Some(false)
+      val viewBlobId = _register_external_blob(viewSubsystem, "view-image.png", "https://example.test/view-image.png")
+      _success(viewSubsystem.executeOperationResponse(_blob_request(
+        "attach_blob_to_entity",
+        Property("sourceEntityId", "notice_1", None),
+        Property("id", viewBlobId, None),
+        Property("role", "mainImage", None),
+        Property("sortOrder", "1", None)
+      )))
       val viewInstanceRecord = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "id" -> "notice_1")
       viewInstanceRecord.getString("kind") shouldBe Some("view.read")
       viewInstanceRecord.getString("id") shouldBe Some("notice_1")
       viewInstanceRecord.getString("label").getOrElse("") should include ("notice detail notice_1")
       viewInstanceRecord.getAny("item").map(_.toString).getOrElse("") should include ("notice_1")
       viewInstanceRecord.getString("fields").getOrElse("") should include ("notice detail notice_1")
+      viewInstanceRecord.getAny("blobs").map(_.toString).getOrElse("") should include (viewBlobId)
+      viewInstanceRecord.getAny("blobs").map(_.toString).getOrElse("") should include ("mainImage")
 
       val aggregateSubsystem = _aggregate_fixture_subsystem()
       val aggregateEngine = new HttpExecutionEngine(aggregateSubsystem)
+      val aggregateBlobId = _register_external_blob(aggregateSubsystem, "aggregate-image.png", "https://example.test/aggregate-image.png")
+      _success(aggregateSubsystem.executeOperationResponse(_blob_request(
+        "attach_blob_to_entity",
+        Property("sourceEntityId", "notice_1", None),
+        Property("id", aggregateBlobId, None),
+        Property("role", "heroImage", None),
+        Property("sortOrder", "2", None)
+      )))
       val aggregateRead = aggregateEngine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/aggregate/read", form = Record.data("component" -> "notice-board", "aggregate" -> "notice-aggregate")))
 
       aggregateRead.code shouldBe 200
@@ -2934,6 +2952,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       aggregateReadRecord.getAny("values").map(_.toString).getOrElse("") should include ("notice aggregate")
       aggregateReadRecord.getAny("items").map(_.toString).getOrElse("") should include ("notice_1")
       aggregateReadRecord.getAny("items").map(_.toString).getOrElse("") should include ("notice aggregate")
+      aggregateReadRecord.getAny("items").map(_.toString).getOrElse("") should include (aggregateBlobId)
+      aggregateReadRecord.getAny("items").map(_.toString).getOrElse("") should include ("heroImage")
       aggregateReadRecord.getInt("total") shouldBe None
       val totalAggregateReadRecord = _admin_record_response(aggregateSubsystem, "aggregate", "read", "component" -> "notice-board", "aggregate" -> "notice-aggregate", "includeTotal" -> "true", "totalCountPolicy" -> "optional")
       totalAggregateReadRecord.getInt("total") shouldBe None
@@ -2963,6 +2983,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       aggregateInstanceRecord.getString("label") shouldBe Some("notice aggregate")
       aggregateInstanceRecord.getAny("item").map(_.toString).getOrElse("") should include ("notice_1")
       aggregateInstanceRecord.getString("fields").getOrElse("") should include ("notice aggregate")
+      aggregateInstanceRecord.getAny("record").map(_.toString).getOrElse("") should not include ("blobs")
+      aggregateInstanceRecord.getAny("blobs").map(_.toString).getOrElse("") should include (aggregateBlobId)
+      aggregateInstanceRecord.getAny("blobs").map(_.toString).getOrElse("") should include ("heroImage")
     }
 
     "submit aggregate create/update actions through the discovered operation form route" in {
@@ -8094,6 +8117,22 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       case OperationResponse.RecordResponse(record) => record
       case other => fail(s"expected Blob record response but got $other")
     }
+
+  private def _register_external_blob(
+    subsystem: Subsystem,
+    filename: String,
+    url: String
+  ): String = {
+    val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
+      "register_blob",
+      Property("sourceMode", "external_url", None),
+      Property("kind", "image", None),
+      Property("filename", filename, None),
+      Property("contentType", ContentType.IMAGE_PNG.header, None),
+      Property("externalUrl", url, None)
+    ))))
+    blob.getString("id").getOrElse(fail("Blob id is missing"))
+  }
 
   private def _success[A](value: Consequence[A]): A =
     value match {

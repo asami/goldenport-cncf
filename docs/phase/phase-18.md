@@ -92,7 +92,8 @@ Current semantic direction:
   - BL-06A (DONE): read-only Blob admin pages for metadata, associations,
     and store status.
   - BL-06B (DONE): mutation admin pages for delete, attach, and detach.
-- G (PLANNED): BL-07 — Aggregate/View Blob metadata and Association snapshot projection support.
+- G (IN PROGRESS): BL-07 — Aggregate/View Blob metadata and Association snapshot projection support.
+  - BL-07A (DONE): flat Blob metadata projection on Aggregate/View read responses.
 - H (PLANNED): BL-08 — Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
 
 Current note:
@@ -117,6 +118,7 @@ Current note:
   - [x] BL-06A: Read-only Blob admin pages.
   - [x] BL-06B: Mutation Blob admin pages.
 - [ ] BL-07: Aggregate/View Blob metadata projection support.
+  - [x] BL-07A: Flat Blob metadata projection.
 - [ ] BL-08: Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
 
 ## 6. Public Interface Direction

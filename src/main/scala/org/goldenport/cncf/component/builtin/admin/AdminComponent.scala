@@ -9,6 +9,7 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall, QueryAction, ResourceAccess}
+import org.goldenport.cncf.blob.BlobProjection
 import org.goldenport.cncf.component.{Component, ComponentInit, ComponentOrigin}
 import org.goldenport.cncf.component.ComponentOriginLabel
 import org.goldenport.cncf.component.ComponentCreate
@@ -49,7 +50,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
  *  version Apr. 22, 2026
- * @version Apr. 26, 2026
+ * @version Apr. 27, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -1887,16 +1888,14 @@ object AdminComponent {
       idOption <- _optional_entity_id(args, "id", componentName, "view", viewName)
       response <- idOption match {
         case Some((idText, id)) =>
-          browser.find_with_context(id)(using core.executionContext).map { value =>
-            OperationResponse.RecordResponse(
-              _read_value_response_record(
-                "view",
-                componentName,
-                viewName,
-                idText,
-                value
-              )
-            )
+          browser.find_with_context(id)(using core.executionContext).flatMap { value =>
+            _read_value_response_record_with_blobs(
+              "view",
+              componentName,
+              viewName,
+              idText,
+              value
+            )(using core.executionContext).map(OperationResponse.RecordResponse(_))
           }
         case None =>
           _admin_view_page_response(core, componentName, viewName, browser, paging)
@@ -1920,7 +1919,7 @@ object AdminComponent {
         browser.count_with_context(EntityQuery.plan(Record.empty))(using core.executionContext).map(Some(_))
       else
         Consequence.success(None)
-      items = _read_items(values)
+      items <- _read_items_with_blobs(values)(using core.executionContext)
     } yield OperationResponse.RecordResponse(
       _read_values_response_record(
         "view",
@@ -1950,17 +1949,15 @@ object AdminComponent {
               _admin_aggregate_entity_read(component, aggregateName, idText)
             case c =>
               Consequence.Failure(c)
-          }.map { value =>
+          }.flatMap { value =>
             val displayValue = _admin_aggregate_display_value(component, aggregateName, idText, value)
-            OperationResponse.RecordResponse(
-              _read_value_response_record(
-                "aggregate",
-                componentName,
-                aggregateName,
-                idText,
-                displayValue
-              )
-            )
+            _read_value_response_record_with_blobs(
+              "aggregate",
+              componentName,
+              aggregateName,
+              idText,
+              displayValue
+            )(using core.executionContext).map(OperationResponse.RecordResponse(_))
           }
         case None =>
           _admin_aggregate_page_response(core, component, componentName, aggregateName, collection, paging)
@@ -1995,7 +1992,7 @@ object AdminComponent {
         collection.count_with_context(EntityQuery.plan(Record.empty))(using core.executionContext).map(Some(_))
       else
         Consequence.success(None)
-      items = _read_items(values)
+      items <- _read_items_with_blobs(values)(using core.executionContext)
     } yield OperationResponse.RecordResponse(
       _read_values_response_record(
         "aggregate",
@@ -2476,11 +2473,42 @@ object AdminComponent {
     )
   }
 
+  private def _read_value_response_record_with_blobs(
+    kind: String,
+    componentName: String,
+    collectionName: String,
+    id: String,
+    value: Any
+  )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
+    _blob_projection_records(id).map { blobs =>
+      _with_blob_projection(
+        _read_value_response_record(kind, componentName, collectionName, id, value),
+        blobs
+      )
+    }
+
+  private def _blob_projection_records(
+    sourceEntityId: String
+  )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Vector[Record]] =
+    BlobProjection.entityBlobRecords(sourceEntityId)
+
+  private def _with_blob_projection(
+    record: Record,
+    blobs: Vector[Record]
+  ): Record =
+    if (blobs.isEmpty)
+      record
+    else
+      Record.dataAuto(
+        (record.asMap.toVector.filterNot { case (key, _) => key.equalsIgnoreCase("blobs") } :+ ("blobs" -> blobs))*
+      )
+
   private final case class _AdminReadItem(
     id: String,
     label: String,
     value: String,
-    shortid: Option[String] = None
+    shortid: Option[String] = None,
+    blobs: Vector[Record] = Vector.empty
   ) {
     def toRecord: Record =
       Record.dataAuto(
@@ -2488,12 +2516,23 @@ object AdminComponent {
           "id" -> id,
           "label" -> label,
           "value" -> value
-        ) ++ shortid.map("shortid" -> _).toVector)*
+        ) ++
+          shortid.map("shortid" -> _).toVector ++
+          (if (blobs.isEmpty) Vector.empty else Vector("blobs" -> blobs)))*
       )
   }
 
   private def _read_items(values: Vector[Any]): Vector[_AdminReadItem] =
     values.zipWithIndex.map { case (value, index) => _read_item(value, index) }
+
+  private def _read_items_with_blobs(
+    values: Vector[Any]
+  )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Vector[_AdminReadItem]] =
+    _read_items(values).foldLeft(Consequence.success(Vector.empty[_AdminReadItem])) { (z, item) =>
+      z.flatMap { acc =>
+        _blob_projection_records(item.id).map(blobs => acc :+ item.copy(blobs = blobs))
+      }
+    }
 
   private def _read_item(value: Any, index: Int): _AdminReadItem = {
     val text = _read_text(value)
