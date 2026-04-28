@@ -481,12 +481,10 @@ final class Http4sHttpServer(
       case Consequence.Success(result) =>
         result.response match {
           case org.goldenport.protocol.operation.OperationResponse.Http(response) =>
-            _to_http_response_with_metadata(response, Some(req), Some("blob"), Some("blob"), Some("read_blob"), result.metadata).map { out =>
-              if (req.uri.query.params.get("download").exists(_.equalsIgnoreCase("true")))
-                out.putHeaders(Header.Raw(CIString("Content-Disposition"), "attachment"))
-              else
-                out.putHeaders(Header.Raw(CIString("Content-Disposition"), "inline"))
-            }
+            if (_blob_if_none_match(req, response))
+              IO.pure(_blob_not_modified_response(response, result.metadata))
+            else
+              _blob_content_response(req, response, result.metadata)
           case other =>
             _web_error_response(Some("blob"), HStatus.InternalServerError, s"Blob content operation returned ${other.show}", req.uri.path.renderString)
         }
@@ -494,6 +492,77 @@ final class Http4sHttpServer(
         val status = HStatus.fromInt(conclusion.status.webCode.code).getOrElse(HStatus.InternalServerError)
         _web_error_response(Some("blob"), status, conclusion, req.uri.path.renderString, req.method.name)
     }
+  }
+
+  private def _blob_if_none_match(
+    req: HRequest[IO],
+    response: HttpResponse
+  ): Boolean =
+    response.headerValue("ETag").exists { etag =>
+      req.headers.get(CIString("If-None-Match")).exists(_.exists(h => _blob_etag_matches(h.value, etag)))
+    }
+
+  private def _blob_etag_matches(
+    requestValue: String,
+    etag: String
+  ): Boolean =
+    requestValue.split(",").iterator.map(_.trim).exists(x => x == "*" || x == etag)
+
+  private def _blob_not_modified_response(
+    response: HttpResponse,
+    metadata: RuntimeContext.ExecutionMetadata
+  ): HResponse[IO] =
+    _blob_cache_headers(
+      _with_job_id_header(HResponse[IO](HStatus.NotModified), metadata),
+      response,
+      Vector("ETag", "Last-Modified", "Cache-Control", "X-Content-Type-Options")
+    )
+
+  private def _blob_content_response(
+    req: HRequest[IO],
+    response: HttpResponse,
+    metadata: RuntimeContext.ExecutionMetadata
+  ): IO[HResponse[IO]] =
+    response.getBinary match {
+      case Some(binary) if response.code < 400 =>
+        val mime = MediaType.parse(response.mime.value).fold(_ => MediaType.application.`octet-stream`, identity)
+        val charset: Option[org.http4s.Charset] =
+          response.charset.map(c => org.http4s.Charset.fromNioCharset(c))
+        val base = _with_job_id_header(HResponse[IO](HStatus.Ok), metadata)
+          .withBodyStream(fs2.io.readInputStream(IO(binary.openInputStream()), 8192, closeAfterUse = true))
+          .withContentType(`Content-Type`(mime, charset))
+        IO.pure(
+          _blob_cache_headers(
+            base,
+            response,
+            Vector("ETag", "Last-Modified", "Content-Length", "Cache-Control", "X-Content-Type-Options")
+          )
+            .putHeaders(Header.Raw(CIString("Content-Disposition"), _blob_content_disposition(req, response)))
+        )
+      case _ =>
+        _to_http_response_with_metadata(response, Some(req), Some("blob"), Some("blob"), Some("read_blob"), metadata)
+    }
+
+  private def _blob_cache_headers(
+    out: HResponse[IO],
+    response: HttpResponse,
+    names: Vector[String]
+  ): HResponse[IO] =
+    names.
+      flatMap(name => response.headerValue(name).map(value => Header.Raw(CIString(name), value))).
+      foldLeft(out)((z, h) => z.putHeaders(h))
+
+  private def _blob_content_disposition(
+    req: HRequest[IO],
+    response: HttpResponse
+  ): String = {
+    val base = response.headerValue("Content-Disposition").getOrElse("inline")
+    val disposition =
+      if (req.uri.query.params.get("download").exists(_.equalsIgnoreCase("true")))
+        "attachment"
+      else
+        "inline"
+    base.replaceFirst("(?i)^(inline|attachment)", disposition)
   }
 
   private def _blob_admin_page(

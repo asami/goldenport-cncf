@@ -942,6 +942,37 @@ Verification snapshot:
 - [x] `StaticFormAppRendererSpec -- -z Blob` covers the authorized CNCF content
       route and download header behavior.
 
+### BL-10B: Blob Content Route HTTP Metadata Hardening
+
+Status: DONE
+
+Harden `/web/blob/content/{id}` for real image and attachment display without
+changing Blob storage shape or adding backend-specific dependencies:
+
+- [x] Managed Blob content responses include deterministic `ETag`,
+      `Last-Modified`, `Content-Length`, `Cache-Control: private, max-age=60`,
+      and `X-Content-Type-Options: nosniff`.
+- [x] Content responses include filename-aware `Content-Disposition`.
+- [x] `download=true` switches disposition from inline to attachment while
+      preserving the same payload.
+- [x] Unsafe filename characters are sanitized before entering response
+      headers.
+- [x] `If-None-Match` matching the current ETag returns `304 Not Modified`
+      only after the authorized Blob read path succeeds.
+
+Implementation notes:
+
+- Range requests, signed URLs, S3/S3-compatible backend behavior, and
+  config-driven cache policy remain out of scope.
+- The initial cache policy is fixed to `private, max-age=60`.
+
+Verification snapshot:
+
+- [x] `StaticFormAppRendererSpec -- -z Blob` covers content headers,
+      disposition behavior, filename sanitization, and conditional GET.
+- [x] `BlobComponentSpec -- -z Blob` remains green.
+- [x] `sbt --batch Test/compile` passed.
+
 ### Deferred To 8.3 Security
 
 - first-class arbitrary ACL lists.

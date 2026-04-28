@@ -139,6 +139,7 @@ Current semantic direction:
     Blob authorization policy.
 - J (DONE): BL-10 — Configurable BlobStore backend wiring and CNCF Blob
   content URLs.
+  - BL-10B (DONE): Blob content route HTTP metadata hardening.
 
 Current note:
 
@@ -151,6 +152,10 @@ Current note:
     plugin/provider SPI, make LocalBlobStore restart-safe with sidecar metadata,
     store Blob public access paths as relative CNCF routes, and serve managed
     payloads through an authorized `/web/blob/content/{id}` route.
+  - BL-10B hardens the CNCF Blob content route with deterministic HTTP
+    metadata: `ETag`, `Last-Modified`, `Content-Length`, conservative private
+    caching, `nosniff`, filename-aware `Content-Disposition`, and authorized
+    conditional GET returning `304 Not Modified`.
   - BL-07B closes the projection contract:
     Aggregate/View output uses a flat, additive `blobs` field, omits it when
     empty, orders rows by `sortOrder`, and never embeds payload bytes.

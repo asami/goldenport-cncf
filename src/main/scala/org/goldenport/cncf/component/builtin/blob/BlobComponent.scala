@@ -1,6 +1,9 @@
 package org.goldenport.cncf.component.builtin.blob
 
+import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.util.UUID
 import cats.free.Free
 import cats.data.NonEmptyVector
@@ -702,7 +705,8 @@ object BlobComponent {
         HttpResponse.Binary(
           HttpStatus.Ok,
           result.contentType,
-          result.payload
+          result.payload,
+          _blob_content_header(blob.metadata, result)
         )
       )
   }
@@ -943,6 +947,51 @@ object BlobComponent {
         result.accessUrl
       else
         BlobUrl.cncfRoute(result.id)
+
+    protected final def _blob_content_header(
+      metadata: BlobMetadata,
+      result: BlobReadResult
+    ): Record =
+      Record.dataAuto(
+        "ETag" -> _http_etag(result.digest),
+        "Last-Modified" -> _http_date(result.storedAt),
+        "Content-Length" -> result.byteSize.toString,
+        "Cache-Control" -> "private, max-age=60",
+        "X-Content-Type-Options" -> "nosniff",
+        "Content-Disposition" -> _content_disposition_value(metadata)
+      )
+
+    protected final def _http_etag(digest: String): String =
+      s""""${digest.replace("\"", "")}""""
+
+    protected final def _http_date(instant: java.time.Instant): String =
+      DateTimeFormatter.RFC_1123_DATE_TIME.format(instant.atOffset(ZoneOffset.UTC))
+
+    protected final def _content_disposition_value(metadata: BlobMetadata): String = {
+      val raw = metadata.filename.getOrElse(metadata.id.value)
+      val fallback = _safe_ascii_content_disposition_filename(raw)
+      val encoded = _rfc5987_filename(raw)
+      if (encoded == fallback)
+        s"""inline; filename="${fallback}""""
+      else
+        s"""inline; filename="${fallback}"; filename*=UTF-8''${encoded}"""
+    }
+
+    protected final def _safe_ascii_content_disposition_filename(filename: String): String = {
+      val sanitized = filename.map {
+        case c if c <= 0x1f.toChar || c == 0x7f.toChar => '_'
+        case '"' | '\\' | ';' | '/' => '_'
+        case c if c >= 0x80.toChar => '_'
+        case c => c
+      }.mkString.trim
+      if (sanitized.isEmpty)
+        "blob"
+      else
+        sanitized.take(160)
+    }
+
+    protected final def _rfc5987_filename(filename: String): String =
+      URLEncoder.encode(filename, StandardCharsets.UTF_8).replace("+", "%20")
 
     protected final def _blob_load(id: EntityId, system: Boolean = false): ExecUowM[Blob] = {
       import BlobRepository.given

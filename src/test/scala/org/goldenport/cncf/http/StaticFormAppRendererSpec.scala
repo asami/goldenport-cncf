@@ -310,13 +310,57 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       val inline = server.routes(null).orNotFound.run(_get_request(displayUrl)).unsafeRunSync()
       val download = server.routes(null).orNotFound.run(_get_request(s"$displayUrl?download=true")).unsafeRunSync()
+      def header(response: org.http4s.Response[IO], name: String): Option[String] =
+        response.headers.get(org.typelevel.ci.CIString(name)).map(_.head.value)
 
       inline.status.code shouldBe 200
-      inline.headers.get(org.typelevel.ci.CIString("Content-Disposition")).map(_.head.value) shouldBe Some("inline")
+      header(inline, "Content-Disposition") shouldBe Some("""inline; filename="route.png"""")
+      header(inline, "ETag").getOrElse(fail("ETag is missing")) should startWith ("\"")
+      header(inline, "Last-Modified").getOrElse(fail("Last-Modified is missing")) should include ("GMT")
+      header(inline, "Content-Length") shouldBe Some(bytes.length.toString)
+      header(inline, "Cache-Control") shouldBe Some("private, max-age=60")
+      header(inline, "X-Content-Type-Options") shouldBe Some("nosniff")
       inline.body.compile.to(Array).unsafeRunSync().toVector shouldBe bytes.toVector
       download.status.code shouldBe 200
-      download.headers.get(org.typelevel.ci.CIString("Content-Disposition")).map(_.head.value) shouldBe Some("attachment")
+      header(download, "Content-Disposition") shouldBe Some("""attachment; filename="route.png"""")
       download.body.compile.to(Array).unsafeRunSync().toVector shouldBe bytes.toVector
+
+      val notModified = server.routes(null).orNotFound.run(
+        _get_request(displayUrl).putHeaders(
+          org.http4s.Header.Raw(org.typelevel.ci.CIString("If-None-Match"), header(inline, "ETag").get)
+        )
+      ).unsafeRunSync()
+      notModified.status.code shouldBe 304
+      header(notModified, "ETag") shouldBe header(inline, "ETag")
+      notModified.body.compile.to(Array).unsafeRunSync().toVector shouldBe Vector.empty
+
+      _success(subsystem.executeOperationResponse(_blob_request(
+        "admin_delete_blob",
+        arguments = Nil,
+        properties = List(Property("id", blob.getString("id").getOrElse(fail("id is missing")), None))
+      )))
+      val missing = server.routes(null).orNotFound.run(
+        _get_request(displayUrl).putHeaders(
+          org.http4s.Header.Raw(org.typelevel.ci.CIString("If-None-Match"), header(inline, "ETag").get)
+        )
+      ).unsafeRunSync()
+      missing.status.code shouldBe 404
+
+      val unsafeBlob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("unsafe".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "image", None),
+          Property("filename", "bad\";\r\n/name-画像.png", None),
+          Property("contentType", ContentType.IMAGE_PNG.header, None)
+        )
+      ))))
+      val unsafeInline = server.routes(null).orNotFound.run(
+        _get_request(unsafeBlob.getString("displayPath").getOrElse(fail("displayPath is missing")))
+      ).unsafeRunSync()
+      header(unsafeInline, "Content-Disposition") shouldBe
+        Some("""inline; filename="bad_____name-__.png"; filename*=UTF-8''bad%22%3B%0D%0A%2Fname-%E7%94%BB%E5%83%8F.png""")
     }
 
     "serve Blob admin mutation routes" in {

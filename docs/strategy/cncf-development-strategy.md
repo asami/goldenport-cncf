@@ -643,6 +643,10 @@ Current active phase: Phase 18.
   relative CNCF routes, BlobStores no longer expose storageRef-based CNCF
   routes, and `/web/blob/content/{id}` serves payloads through Blob Entity read
   authorization.
+- BL-10B is completed in this change. The CNCF Blob content route now emits
+  deterministic HTTP metadata for real image/attachment display: `ETag`,
+  `Last-Modified`, `Content-Length`, conservative private caching, `nosniff`,
+  filename-aware `Content-Disposition`, and authorized conditional GET.
 - Remaining Blob hardening includes deletion/retention policy, signed URL
   integration points, MIME-kind policy, payload size limits, thumbnail
   generation, virus scanning, and resumable upload. Concrete AWS/S3 backend
