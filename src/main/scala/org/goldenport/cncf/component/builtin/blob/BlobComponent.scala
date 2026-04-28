@@ -111,6 +111,7 @@ object BlobComponent {
   val name: String = "blob"
   val componentId: ComponentId = ComponentId(name)
   val BlobCollectionId: EntityCollectionId = BlobRepository.CollectionId
+  private val BlobStoreResourceName: String = "blobstore"
 
   def componentDescriptors: Vector[ComponentDescriptor] =
     Vector(ComponentDescriptor(
@@ -753,7 +754,9 @@ object BlobComponent {
     page: AdminPageRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _blob_search(page, system = true).map { values =>
+      _authorize_blob_collection_access("search/list").flatMap { _ =>
+        _blob_search(page, system = true)
+      }.map { values =>
         val rows = values.take(page.limit)
         OperationResponse.RecordResponse(Record.dataAuto(
           "data" -> rows.map(_.metadata.toRecord),
@@ -770,7 +773,9 @@ object BlobComponent {
     id: EntityId
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _blob_load(id, system = true).map { blob =>
+      _authorize_blob_collection_access("read").flatMap { _ =>
+        _blob_load(id, system = true)
+      }.map { blob =>
         OperationResponse.RecordResponse(blob.metadata.toRecord)
       }
   }
@@ -780,7 +785,9 @@ object BlobComponent {
     listRequest: AdminListBlobAssociationsRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _association_search(_blob_admin_association_filter(listRequest), listRequest.page.offset, Some(listRequest.page.fetchLimit), system = true).map { values =>
+      _authorize_blob_attachment_access("search/list").flatMap { _ =>
+        _association_search(_blob_admin_association_filter(listRequest), listRequest.page.offset, Some(listRequest.page.fetchLimit), system = true)
+      }.map { values =>
         val rows = values.take(listRequest.page.limit)
         OperationResponse.RecordResponse(Record.dataAuto(
           "data" -> rows.map(AssociationRecordCodec.toRecord),
@@ -797,6 +804,7 @@ object BlobComponent {
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
       for {
+        _ <- _authorize_blob_store_access("status")
         store <- exec_from(_blob_store)
         record <- exec_from(store.status().map(_blob_store_status_record))
       } yield {
@@ -1026,25 +1034,27 @@ object BlobComponent {
     ): ExecUowM[Record] =
       _authorize_source_entity(request.sourceEntityId, "update", system).flatMap { _ =>
         _blob_load(request.id, system).flatMap { blob =>
-          val filter = _blob_association_filter(request.sourceEntityId, Some(request.role), Some(blob.id))
-          _association_search(filter, 0, None, system).flatMap {
-            case existing +: _ =>
-              exec_pure(AssociationRecordCodec.toRecord(existing))
-            case _ =>
-              _association_create(
-                AssociationCreate(
-                  id = None,
-                  associationId = UUID.randomUUID().toString,
-                  sourceEntityId = request.sourceEntityId,
-                  targetEntityId = blob.id.value,
-                  targetKind = Some("blob"),
-                  role = request.role,
-                  associationDomain = AssociationDomain.BlobAttachment,
-                  sortOrder = request.sortOrder,
-                  collectionId = AssociationStoragePolicy.BlobAttachmentCollection
-                ),
-                system
-              ).map(AssociationRecordCodec.toRecord)
+          _authorize_blob_attachment_access("create").flatMap { _ =>
+            val filter = _blob_association_filter(request.sourceEntityId, Some(request.role), Some(blob.id))
+            _association_search(filter, 0, None, system = true).flatMap {
+              case existing +: _ =>
+                exec_pure(AssociationRecordCodec.toRecord(existing))
+              case _ =>
+                _association_create(
+                  AssociationCreate(
+                    id = None,
+                    associationId = UUID.randomUUID().toString,
+                    sourceEntityId = request.sourceEntityId,
+                    targetEntityId = blob.id.value,
+                    targetKind = Some("blob"),
+                    role = request.role,
+                    associationDomain = AssociationDomain.BlobAttachment,
+                    sortOrder = request.sortOrder,
+                    collectionId = AssociationStoragePolicy.BlobAttachmentCollection
+                  ),
+                  system = true
+                ).map(AssociationRecordCodec.toRecord)
+            }
           }
         }
       }
@@ -1054,12 +1064,14 @@ object BlobComponent {
       system: Boolean = false
     ): ExecUowM[Record] =
       _authorize_source_entity(request.sourceEntityId, "update", system).flatMap { _ =>
-        _association_search(_blob_association_filter(request.sourceEntityId, request.role, Some(request.id)), 0, None, system).flatMap {
-          case Vector() => exec_from(Consequence.operationNotFound(s"blob association:${request.sourceEntityId}:${request.id.value}"))
-          case values =>
-            values.foldLeft(exec_pure(0)) { (z, association) =>
-              z.flatMap(count => _association_delete(association, system).map(_ => count + 1))
-            }.map(count => Record.dataAuto("detachedCount" -> count))
+        _authorize_blob_attachment_access("delete").flatMap { _ =>
+          _association_search(_blob_association_filter(request.sourceEntityId, request.role, Some(request.id)), 0, None, system = true).flatMap {
+            case Vector() => exec_from(Consequence.operationNotFound(s"blob association:${request.sourceEntityId}:${request.id.value}"))
+            case values =>
+              values.foldLeft(exec_pure(0)) { (z, association) =>
+                z.flatMap(count => _association_delete(association, system = true).map(_ => count + 1))
+              }.map(count => Record.dataAuto("detachedCount" -> count))
+          }
         }
       }
 
@@ -1068,19 +1080,21 @@ object BlobComponent {
       system: Boolean = false
     ): ExecUowM[Record] =
       _authorize_source_entity(request.sourceEntityId, "read", system).flatMap { _ =>
-        _association_search(_blob_association_filter(request.sourceEntityId, request.role, None), 0, None, system).flatMap { values =>
-          values.foldLeft(exec_pure(Vector.empty[BlobMetadata])) { (z, association) =>
-            z.flatMap { acc =>
-              exec_from(EntityId.parse(association.targetEntityId)).flatMap(id => _blob_metadata_if_visible(id, system)).map {
-                case Some(metadata) => acc :+ metadata
-                case None => acc
+        _authorize_blob_attachment_access("search/list").flatMap { _ =>
+          _association_search(_blob_association_filter(request.sourceEntityId, request.role, None), 0, None, system = true).flatMap { values =>
+            values.foldLeft(exec_pure(Vector.empty[BlobMetadata])) { (z, association) =>
+              z.flatMap { acc =>
+                exec_from(EntityId.parse(association.targetEntityId)).flatMap(id => _blob_metadata_if_visible(id, system)).map {
+                  case Some(metadata) => acc :+ metadata
+                  case None => acc
+                }
               }
+            }.map { metadata =>
+              Record.dataAuto(
+                "data" -> metadata.map(_.toRecord),
+                "fetchedCount" -> metadata.size
+              )
             }
-          }.map { metadata =>
-            Record.dataAuto(
-              "data" -> metadata.map(_.toRecord),
-              "fetchedCount" -> metadata.size
-            )
           }
         }
       }
@@ -1089,6 +1103,7 @@ object BlobComponent {
       request: AdminDeleteBlobRequest
     ): ExecUowM[Record] =
       for {
+        _ <- _authorize_blob_collection_access("delete")
         blob <- _blob_load(request.id, system = true)
         refs <- _association_search(_blob_target_association_filter(blob.id), 0, None, system = true)
         _ <- if (refs.nonEmpty && !request.force)
@@ -1123,7 +1138,7 @@ object BlobComponent {
         create,
         summon[EntityPersistentCreate[AssociationCreate]],
         EntityCreateOptions.default,
-        Some(_authorization(create.collectionId, None, "create", system))
+        Some(_association_authorization(create.associationDomain, create.collectionId, None, "create", system))
       )
       _exec_uow(op).flatMap(result => _association_load(result.id, system))
     }
@@ -1133,7 +1148,7 @@ object BlobComponent {
       val op = UnitOfWorkOp.EntityStoreLoad(
         id,
         summon[EntityPersistent[Association]],
-        Some(_authorization(id.collection, Some(id), "read", system))
+        Some(_association_authorization(AssociationDomain.BlobAttachment, id.collection, Some(id), "read", system))
       )
       _exec_uow(op).flatMap(x => exec_from(Consequence.successOrEntityNotFound(x)(id)))
     }
@@ -1167,7 +1182,7 @@ object BlobComponent {
       val op = UnitOfWorkOp.EntityStoreSearch(
         query,
         summon[EntityPersistent[Association]],
-        Some(_authorization(collection, None, "search/list", system))
+        Some(_association_authorization(filter.domain, collection, None, "search/list", system))
       )
       _exec_uow(op).map { result =>
         val sorted = result.data.sortBy(x => (x.sortOrder.getOrElse(Int.MaxValue), x.createdAt.toString, x.associationId))
@@ -1178,7 +1193,7 @@ object BlobComponent {
     private def _association_delete(association: Association, system: Boolean): ExecUowM[Unit] = {
       _exec_uow(UnitOfWorkOp.EntityStoreDelete(
         association.id,
-        Some(_authorization(association.id.collection, Some(association.id), "delete", system))
+        Some(_association_authorization(association.associationDomain, association.id.collection, Some(association.id), "delete", system))
       ))
     }
 
@@ -1187,6 +1202,27 @@ object BlobComponent {
       system: Boolean
     ): ExecUowM[Unit] =
       _exec_uow(UnitOfWorkOp.Authorize(_authorization(collection, None, "create", system)))
+
+    protected final def _authorize_blob_collection_access(
+      accessKind: String
+    ): ExecUowM[Unit] =
+      _exec_uow(UnitOfWorkOp.Authorize(_authorization(BlobCollectionId, None, accessKind, system = false)))
+
+    protected final def _authorize_blob_attachment_access(
+      accessKind: String
+    ): ExecUowM[Unit] =
+      _exec_uow(UnitOfWorkOp.Authorize(_association_authorization(
+        AssociationDomain.BlobAttachment,
+        AssociationStoragePolicy.BlobAttachmentCollection,
+        None,
+        accessKind,
+        system = false
+      )))
+
+    protected final def _authorize_blob_store_access(
+      accessKind: String
+    ): ExecUowM[Unit] =
+      _exec_uow(UnitOfWorkOp.Authorize(_store_authorization(BlobStoreResourceName, accessKind, system = false)))
 
     private def _authorize_source_entity(
       sourceEntityId: String,
@@ -1255,6 +1291,40 @@ object BlobComponent {
         resourceType = Some(collection.name),
         collectionName = Some(collection.name),
         targetId = targetId,
+        accessKind = accessKind,
+        sourceComponentName = core.component.map(_.name),
+        targetComponentName = core.component.map(_.name),
+        accessMode = if (system) EntityAccessMode.System else EntityAccessMode.UserPermission
+      )
+
+    private def _association_authorization(
+      domain: AssociationDomain,
+      collection: EntityCollectionId,
+      targetId: Option[EntityId],
+      accessKind: String,
+      system: Boolean
+    ): UnitOfWorkAuthorization =
+      UnitOfWorkAuthorization(
+        resourceFamily = "association",
+        resourceType = Some(domain.value),
+        collectionName = Some(collection.name),
+        targetId = targetId,
+        accessKind = accessKind,
+        sourceComponentName = core.component.map(_.name),
+        targetComponentName = core.component.map(_.name),
+        accessMode = if (system) EntityAccessMode.System else EntityAccessMode.UserPermission
+      )
+
+    private def _store_authorization(
+      storeName: String,
+      accessKind: String,
+      system: Boolean
+    ): UnitOfWorkAuthorization =
+      UnitOfWorkAuthorization(
+        resourceFamily = "store",
+        resourceType = Some(storeName),
+        collectionName = None,
+        targetId = None,
         accessKind = accessKind,
         sourceComponentName = core.component.map(_.name),
         targetComponentName = core.component.map(_.name),

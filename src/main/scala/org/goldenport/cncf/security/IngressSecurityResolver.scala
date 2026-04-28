@@ -21,7 +21,7 @@ import org.goldenport.protocol.Request
  * - Reception ingress
  *
  * @since   Mar. 20, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedIngressSecurity(
@@ -135,7 +135,8 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       val privilege = _resolve_privilege_from_security(security)
       val ctx0 = ExecutionContext.withSecurityContext(base, security)
       val ctx1 = _production_runtime_context_from_base(ctx0)
-      val ctx2 = _restore_formatting_context(security, ctx1)
+      val ctx1a = _rebind_runtime_unit_of_work(ctx1, "ingress-security")
+      val ctx2 = _restore_formatting_context(security, ctx1a)
       val ctx = _bind_context(attributes, ctx2)
       if (caps.isEmpty || ctx.security.hasAnyCapability(caps))
         Consequence.success(ResolvedIngressSecurity(ctx, privilege, caps))
@@ -479,6 +480,17 @@ private final class DefaultIngressSecurityResolver extends IngressSecurityResolv
       case None =>
         ctx
     }
+
+  private def _rebind_runtime_unit_of_work(
+    ctx: ExecutionContext,
+    token: String
+  ): ExecutionContext = {
+    lazy val context: ExecutionContext =
+      ExecutionContext.withRuntimeContext(ctx, runtime)
+    lazy val runtime: RuntimeContext =
+      ctx.runtime.withUnitOfWorkContext(context, token)
+    context
+  }
 
   @annotation.tailrec
   private def _global_runtime_context(

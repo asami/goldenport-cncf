@@ -130,7 +130,7 @@ Current semantic direction:
   - BL-09C (DONE): object/resource-side access policy surface for
     Blob EntityCollection, Blob attachment Association domain, and BlobStore
     resources.
-  - BL-09D (PLANNED): Blob operation integration on the generic authorization
+  - BL-09D (DONE): Blob operation integration on the generic authorization
     policy surface.
   - BL-09E (PLANNED): introspection/manual/admin visibility for effective
     Blob authorization policy.
@@ -145,11 +145,12 @@ Current note:
   - `cca7e38 Close blob projection contract`
   - `8f87196 Harden external blob URLs`
   - `2d00f58 Harden blob action chokepoints`
-  - Current change: add the minimal BL-09B subject-side grant surface. Subsystem
-    descriptors can define `security.authorization.roles`, role definitions
-    expand transitively into `SecuritySubject` capabilities, and canonical
-    collection/association/store grant helpers are available for Blob policy
-    integration.
+  - Current change: apply BL-09 resource policies to Blob operations.
+    `register_blob`, Blob attachment/list/detach flows, admin Blob delete, and
+    BlobStore status now pass through generic `OperationAccessPolicy` checks.
+    Ingress execution now rebinds UoW interpretation to the authenticated
+    request context while preserving the existing runtime UoW lifecycle, so
+    ActionCall/UoW authorization sees the current subject.
   - BL-07B closes the projection contract:
     Aggregate/View output uses a flat, additive `blobs` field, omits it when
     empty, orders rows by `sortOrder`, and never embeds payload bytes.
@@ -184,6 +185,11 @@ Current note:
     under `security.authorization.resources`; `OperationAccessPolicy` evaluates
     required capabilities and permission-bit overrides at the UnitOfWork
     boundary.
+  - BL-09D connects those policies to Blob operations. User-facing attach,
+    detach, and list operations perform explicit association-domain checks while
+    keeping internal idempotency lookups system-internal. Admin Blob operations
+    keep their admin operation gate and add explicit resource policy checks for
+    collection, association, and store access.
   - UoW-backed application create/update Blob attachment workflow adapters are
     split out as follow-up hardening work.
 - `docs/journal/2026/04/blob-management-component-specification-note.md` is the
@@ -216,7 +222,7 @@ Current note:
   - [x] BL-09A: Guard/capability authorization concept refinement.
   - [x] BL-09B: Minimal subject-side grant/config surface.
   - [x] BL-09C: Object/resource-side access policy surface.
-  - [ ] BL-09D: Blob integration on generic authorization policies.
+  - [x] BL-09D: Blob integration on generic authorization policies.
   - [ ] BL-09E: Authorization policy introspection/admin visibility.
 
 ## 6. Public Interface Direction

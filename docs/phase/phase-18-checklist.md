@@ -811,19 +811,40 @@ Verification snapshot:
 
 ### BL-09D: Blob Operation Integration
 
-Status: PLANNED
+Status: DONE
 
 Apply the BL-09B/BL-09C policy surfaces to existing Blob operations without
 introducing Blob-private authorization logic:
 
-- [ ] `register_blob`
-- [ ] `read_blob`
-- [ ] `resolve_blob_url`
-- [ ] `get_blob_metadata`
-- [ ] `attach_blob_to_entity`
-- [ ] `detach_blob_from_entity`
-- [ ] `list_entity_blobs`
-- [ ] Blob admin operations
+- [x] `register_blob`
+- [x] `read_blob`
+- [x] `resolve_blob_url`
+- [x] `get_blob_metadata`
+- [x] `attach_blob_to_entity`
+- [x] `detach_blob_from_entity`
+- [x] `list_entity_blobs`
+- [x] Blob admin operations
+
+Implementation notes:
+
+- Blob metadata create/read/search/delete stays on Blob collection policies.
+- Blob attach/detach/list uses association-domain policies for
+  `blob_attachment`, while internal idempotency lookups run system-internal
+  after the explicit policy check.
+- Blob admin operations keep the existing admin operation gate and add generic
+  resource policy checks for Blob collection, Blob attachment, and BlobStore
+  status access.
+- Ingress request execution rebinds UoW interpretation to the resolved request
+  security context while preserving runtime UoW lifecycle actions, so
+  ActionCall/UoW authorization observes the active subject.
+
+Verification snapshot:
+
+- [x] `BlobComponentSpec` covers deny/allow behavior for Blob create,
+      association create/search/delete, admin BlobStore status, and admin Blob
+      delete.
+- [x] `ActionCallSpec` confirms ProcedureActionCall still honors explicitly
+      supplied runtime interpreters.
 
 ### BL-09E: Blob Authorization Visibility
 

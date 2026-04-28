@@ -6,7 +6,9 @@ import org.goldenport.Consequence
 import org.goldenport.bag.Bag
 import org.goldenport.bag.BinaryBag
 import org.goldenport.cncf.blob.*
+import org.goldenport.cncf.security.{AuthorizationResourcePolicies, AuthorizationResourcePolicy}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.cncf.subsystem.{GenericSubsystemAuthorizationBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemSecurityBinding}
 import org.goldenport.datatype.ContentType
 import org.goldenport.http.HttpResponse
 import org.goldenport.protocol.{Argument, Property, Request}
@@ -250,6 +252,119 @@ final class BlobComponentSpec
       ))))
       val remainingRows = remaining.getVector("data").getOrElse(Vector.empty).collect { case r: Record => r }
       remainingRows.flatMap(_.getString("id")) shouldBe Vector(blob2Id)
+    }
+
+    "apply resource policies to Blob user operations" in {
+      Given("a subsystem with Blob collection and association resource policies")
+      val subsystem = _subsystem_with_blob_authorization()
+      val payload = Bag.binary("policy image".getBytes(StandardCharsets.UTF_8))
+
+      When("register_blob is executed without the configured collection capability")
+      val deniedRegister = subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", payload)),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "image", None),
+          Property("filename", "policy.png", None),
+          Property("contentType", ContentType.IMAGE_PNG.header, None)
+        )
+      ))
+
+      Then("Blob creation is denied before metadata is created")
+      deniedRegister shouldBe a[Consequence.Failure[_]]
+
+      When("register_blob is executed by a subject with the collection create capability")
+      val registered = _record(_success(subsystem.executeOperationResponse(_with_privilege(
+        _request(
+          "register_blob",
+          arguments = List(Argument("payload", Bag.binary("policy image".getBytes(StandardCharsets.UTF_8)))),
+          properties = List(
+            Property("sourceMode", "managed", None),
+            Property("kind", "image", None),
+            Property("filename", "policy.png", None),
+            Property("contentType", ContentType.IMAGE_PNG.header, None)
+          )
+        ),
+        "application_content_manager"
+      ))))
+      val id = registered.getString("id").getOrElse(fail("Blob id should be present"))
+
+      Then("Blob creation succeeds")
+      registered.getString("sourceMode") shouldBe Some("managed")
+
+      When("attach_blob_to_entity is executed without the association create capability")
+      val deniedAttach = subsystem.executeOperationResponse(_request(
+        "attach_blob_to_entity",
+        Property("sourceEntityId", id, None),
+        Property("id", id, None),
+        Property("role", "galleryImage", None)
+      ))
+
+      Then("the association create policy denies it")
+      deniedAttach shouldBe a[Consequence.Failure[_]]
+
+      When("attach_blob_to_entity is executed with the association create capability")
+      val attached = _record(_success(subsystem.executeOperationResponse(_with_privilege(
+        _request(
+          "attach_blob_to_entity",
+          Property("sourceEntityId", id, None),
+          Property("id", id, None),
+          Property("role", "galleryImage", None)
+        ),
+        "application_content_manager"
+      ))))
+
+      Then("the Blob attachment is created")
+      attached.getString("associationDomain") shouldBe Some("blob_attachment")
+
+      When("list_entity_blobs is executed without the association list capability")
+      val deniedList = subsystem.executeOperationResponse(_request(
+        "list_entity_blobs",
+        Property("sourceEntityId", id, None),
+        Property("role", "galleryImage", None)
+      ))
+
+      Then("association-domain search/list policy denies it")
+      deniedList shouldBe a[Consequence.Failure[_]]
+
+      When("list_entity_blobs is executed with the association list capability")
+      val listed = _record(_success(subsystem.executeOperationResponse(_with_privilege(
+        _request(
+          "list_entity_blobs",
+          Property("sourceEntityId", id, None),
+          Property("role", "galleryImage", None)
+        ),
+        "application_content_manager"
+      ))))
+
+      Then("associated Blob metadata remains visible through target Blob read filtering")
+      listed.getInt("fetchedCount") shouldBe Some(1)
+
+      When("detach_blob_from_entity is executed without the association delete capability")
+      val deniedDetach = subsystem.executeOperationResponse(_request(
+        "detach_blob_from_entity",
+        Property("sourceEntityId", id, None),
+        Property("id", id, None),
+        Property("role", "galleryImage", None)
+      ))
+
+      Then("association-domain delete policy denies it")
+      deniedDetach shouldBe a[Consequence.Failure[_]]
+
+      When("detach_blob_from_entity is executed with the association delete capability")
+      val detached = _record(_success(subsystem.executeOperationResponse(_with_privilege(
+        _request(
+          "detach_blob_from_entity",
+          Property("sourceEntityId", id, None),
+          Property("id", id, None),
+          Property("role", "galleryImage", None)
+        ),
+        "application_content_manager"
+      ))))
+
+      Then("the Blob attachment is removed")
+      detached.getInt("detachedCount") shouldBe Some(1)
     }
 
     "reject user-facing Blob attachment when sourceEntityId is not an EntityId" in {
@@ -583,6 +698,60 @@ final class BlobComponentSpec
       status.getString("available") shouldBe Some("true")
     }
 
+    "apply resource policies to Blob admin operations after the admin gate" in {
+      Given("a subsystem with Blob admin resource policies")
+      val subsystem = _subsystem_with_blob_authorization()
+      val registered = _record(_success(subsystem.executeOperationResponse(_with_privilege(
+        _request(
+          "register_blob",
+          arguments = List(Argument("payload", Bag.binary("admin policy".getBytes(StandardCharsets.UTF_8)))),
+          properties = List(
+            Property("sourceMode", "managed", None),
+            Property("kind", "image", None),
+            Property("filename", "admin-policy.png", None),
+            Property("contentType", ContentType.IMAGE_PNG.header, None)
+          )
+        ),
+        "application_content_manager"
+      ))))
+      val id = registered.getString("id").getOrElse(fail("Blob id should be present"))
+
+      When("admin_blob_store_status is executed without the store status capability")
+      val deniedStatus = subsystem.executeOperationResponse(_request("admin_blob_store_status"))
+
+      Then("the store resource policy denies it")
+      deniedStatus shouldBe a[Consequence.Failure[_]]
+
+      When("admin_blob_store_status is executed with the store status capability")
+      val status = _record(_success(subsystem.executeOperationResponse(_with_privilege(
+        _request("admin_blob_store_status"),
+        "application_content_manager"
+      ))))
+
+      Then("BlobStore diagnostics are returned")
+      status.getString("backend") shouldBe Some("in_memory")
+
+      When("admin_delete_blob is executed without the collection delete capability")
+      val deniedDelete = subsystem.executeOperationResponse(_blob_request("admin_delete_blob", id))
+
+      Then("the Blob collection delete policy denies it")
+      deniedDelete shouldBe a[Consequence.Failure[_]]
+
+      When("admin_delete_blob is executed with the collection delete capability")
+      val deleted = _record(_success(subsystem.executeOperationResponse(_with_privilege(
+        _request(
+          "admin_delete_blob",
+          Property("id", id, None),
+          Property("force", "true", None)
+        ),
+        "application_content_manager"
+      ))))
+
+      Then("the admin delete proceeds through the existing system mutation path")
+      deleted.getString("deletedBlobId") shouldBe Some(id)
+      subsystem.executeOperationResponse(_blob_request("admin_get_blob", id)) shouldBe a[Consequence.Failure[_]]
+    }
+
     "reject admin Blob delete while attached unless forced" in {
       Given("a default subsystem with an attached managed Blob")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
@@ -727,6 +896,9 @@ final class BlobComponentSpec
   private def _blob_request(operation: String, id: String): Request =
     _request(operation, Property("id", id, None))
 
+  private def _with_privilege(request: Request, privilege: String): Request =
+    request.copy(properties = Property("cncf.security.privilege", privilege, None) :: request.properties)
+
   private def _record(response: OperationResponse): Record =
     response match {
       case OperationResponse.RecordResponse(record) => record
@@ -746,6 +918,40 @@ final class BlobComponentSpec
     val subsystem = DefaultSubsystemFactory.default(Some("command"))
     val component = subsystem.findComponent("blob").getOrElse(fail("missing Blob component"))
     component.withPort(org.goldenport.cncf.component.Component.Port.of(new BlobComponent.DefaultBlobService(store)))
+    subsystem
+  }
+
+  private def _subsystem_with_blob_authorization() = {
+    val subsystem = DefaultSubsystemFactory.default(Some("command"))
+    subsystem.withDescriptor(GenericSubsystemDescriptor(
+      path = java.nio.file.Path.of("<blob-authz>"),
+      subsystemName = "blob-authz",
+      componentBindings = Vector(GenericSubsystemComponentBinding("blob")),
+      security = Some(GenericSubsystemSecurityBinding(
+        authorization = Some(GenericSubsystemAuthorizationBinding(
+          resources = AuthorizationResourcePolicies(
+            collections = Map(
+              "blob" -> Map(
+                "create" -> AuthorizationResourcePolicy(capabilities = Vector("content_manager")),
+                "delete" -> AuthorizationResourcePolicy(capabilities = Vector("content_manager"))
+              )
+            ),
+            associations = Map(
+              "blobattachment" -> Map(
+                "create" -> AuthorizationResourcePolicy(capabilities = Vector("content_manager")),
+                "delete" -> AuthorizationResourcePolicy(capabilities = Vector("content_manager")),
+                "search/list" -> AuthorizationResourcePolicy(capabilities = Vector("content_manager"))
+              )
+            ),
+            stores = Map(
+              "blobstore" -> Map(
+                "status" -> AuthorizationResourcePolicy(capabilities = Vector("content_manager"))
+              )
+            )
+          )
+        ))
+      ))
+    ))
     subsystem
   }
 

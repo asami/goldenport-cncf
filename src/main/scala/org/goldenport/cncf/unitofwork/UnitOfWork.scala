@@ -30,7 +30,7 @@ import org.goldenport.cncf.http.HttpDriver
  *  version Jan. 18, 2026
  *  version Feb. 27, 2026
  *  version Mar. 24, 2026
- * @version Apr. 22, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 class UnitOfWork(
@@ -46,6 +46,9 @@ class UnitOfWork(
   private var _post_commit_callbacks: Vector[() => Unit] = Vector.empty
 
   def transactionContext = context.transactionContext
+
+  def withContext(ctx: ExecutionContext): UnitOfWork =
+    new UnitOfWork(ctx, eventengine, recorder)
 
   def markDirty(entity: Entity): Unit =
     _dirty_entities.update(entity.id, entity)

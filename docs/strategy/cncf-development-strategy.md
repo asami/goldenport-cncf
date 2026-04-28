@@ -623,8 +623,15 @@ Current active phase: Phase 18.
   store resource policy. `OperationAccessPolicy` now resolves those policies at
   the UnitOfWork boundary and enforces required capabilities plus permission-bit
   overrides such as Blob delete requiring `execute`.
-- BL-09 remaining work is limited to operation integration and enough
-  introspection/admin visibility to operate Blob authorization policies.
+- BL-09D is completed in this change. Blob operations now apply the generic
+  resource policy surface: registration checks Blob collection create,
+  attachment flows check `blob_attachment` association create/delete/search,
+  admin delete checks Blob collection delete, and BlobStore status checks store
+  status. Ingress execution rebinds UoW interpretation to the resolved request
+  security context while preserving runtime UoW lifecycle actions, so
+  ActionCall/UoW authorization observes the active subject.
+- BL-09 remaining work is limited to enough introspection/admin visibility to
+  operate Blob authorization policies.
 - Remaining Blob hardening outside BL-09 includes UoW-backed application
   create/update Blob attachment workflow adapters, deletion/retention policy,
   signed URLs, production BlobStore backends, MIME-kind policy, payload size

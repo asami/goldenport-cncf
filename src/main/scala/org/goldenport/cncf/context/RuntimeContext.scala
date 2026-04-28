@@ -9,7 +9,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.config.{OperationMode, ResolvedParameters, RuntimeConfig}
 import org.goldenport.cncf.entity.EntityCreateDefaultsPolicy
-import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
+import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkInterpreter, UnitOfWorkOp}
 import org.goldenport.cncf.statemachine.TransitionValidationHook
 import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, EntityStoreContext}
 import org.goldenport.datatype.{I18nBrief, I18nDescription, I18nLabel, I18nString, I18nSummary, I18nText, I18nTitle}
@@ -20,7 +20,7 @@ import org.goldenport.util.StringUtils
  * @since   Dec. 21, 2025
  *  version Jan. 18, 2026
  *  version Mar. 31, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeContext(
@@ -66,6 +66,34 @@ final class RuntimeContext(
       transitionValidationHook = transitionValidationHook,
       entityCreateDefaultsPolicy = entityCreateDefaultsPolicy
     )
+
+  def withUnitOfWorkContext(
+    executionContext: => ExecutionContext,
+    newToken: String = toToken
+  ): RuntimeContext = {
+    lazy val reboundUnitOfWork: UnitOfWork =
+      unitOfWork.withContext(executionContext)
+    val interpreter = new (UnitOfWorkOp ~> Consequence) {
+      def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
+        new UnitOfWorkInterpreter(reboundUnitOfWork).interpret(fa)
+    }
+    val runtime = new RuntimeContext(
+      core = core,
+      unitOfWorkSupplier = () => reboundUnitOfWork,
+      unitOfWorkInterpreterFn = interpreter,
+      commitAction = commitAction,
+      abortAction = abortAction,
+      disposeAction = disposeAction,
+      token = newToken,
+      context = context,
+      operationMode = operationMode,
+      transitionValidationHook = transitionValidationHook,
+      entityCreateDefaultsPolicy = entityCreateDefaultsPolicy
+    )
+    _resolved_parameters.foreach(runtime.setResolvedParameters)
+    runtime._execution_metadata = _execution_metadata
+    runtime
+  }
 
   def resolvedParameters: ResolvedParameters =
     _resolved_parameters.getOrElse(
