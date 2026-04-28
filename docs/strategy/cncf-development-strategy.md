@@ -411,6 +411,35 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   component admin pages.
 - Artifact (work): `docs/phase/phase-17.md`.
 
+### Phase 19: BlogComponent Entity Image Usage
+- Goal: use `textus-blog` `BlogComponent` as the concrete development driver
+  for ordinary Entity-to-image binding usage.
+- Status: open.
+- Scope:
+- Establish the recommended way for application components to bind images to
+  Entity instances using the Phase 18 Blob and Association foundation.
+- Treat Blog creation as a user-account owned authoring workflow with draft,
+  published, and inactive lifecycle state.
+- Keep Blog read/search public for published active posts while protected
+  author/admin operations handle draft, publish, deactivate, and image sync
+  flows.
+- Validate primary/cover image, inline image, thumbnail, and ordered supporting
+  image use cases against `BlogComponent`.
+- Validate article body `img` tag handling, including source URL discovery,
+  managed image resolution, alt/title metadata, ordering, and inline binding
+  synchronization.
+- Define how create/update/read/search operations, Aggregate/View projections,
+  Web forms, admin pages, and manual/help metadata expose associated images.
+- Implement CNCF runtime/Web/projection gaps discovered by the BlogComponent
+  driver.
+- Non-goals:
+- No new Blob payload storage backend in CNCF core.
+- No S3/S3-compatible BlobStore provider implementation in this phase.
+- No thumbnail generation, image transformation, virus scanning, or resumable
+  upload implementation.
+- No payload embedding in ordinary Entity records.
+- Artifact (work): `docs/phase/phase-19.md`.
+
 ## 4. Relationship Between Phases
 - Later phases depend on earlier phases.
 - Phase 1.5 constrains Phase 2 and Phase 3.
@@ -425,9 +454,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: none. Phase 18 is closed; the next numbered phase is not yet opened.
-- Latest active phase dashboard: none
-- Latest active phase checklist: none
+- Current phase selection: Phase 19 — BlogComponent Entity Image Usage.
+- Latest active phase dashboard: `docs/phase/phase-19.md`
+- Latest active phase checklist: `docs/phase/phase-19-checklist.md`
 - Latest closed phase dashboard: `docs/phase/phase-18.md`
 - Latest closed phase checklist: `docs/phase/phase-18-checklist.md`
 - Candidate next phase areas: AwsComponent/S3 BlobStore provider; Error Model / Consequence-Conclusion Realignment; Search/index planning; DB migration tooling.
@@ -456,6 +485,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 16: closed (`docs/phase/phase-16.md`)
 - Phase 17: closed (`docs/phase/phase-17.md`)
 - Phase 18: closed (`docs/phase/phase-18.md`)
+- Phase 19: open (`docs/phase/phase-19.md`)
 
 ## 8. Development Item Status
 
@@ -573,7 +603,34 @@ Future component development item.
 - AwsComponent remains optional. Local and in-memory BlobStores continue to
   serve development and executable-spec use cases.
 
-### 8.9 Error Model / Consequence-Conclusion Realignment
+### 8.9 BlogComponent Entity Image Usage
+Active in Phase 19.
+
+- Active dashboard: `docs/phase/phase-19.md`
+- Active checklist: `docs/phase/phase-19-checklist.md`
+- Development driver: `textus-blog` `BlogComponent`
+- Purpose:
+  - make the ordinary Entity-to-image binding usage concrete after Phase 18;
+  - model Blog authoring as a user-account owned flow with draft/published and
+    active/inactive state;
+  - keep public Blog references limited to published active posts while
+    protected author/admin operations own draft, publish, deactivate, and image
+    synchronization flows;
+  - validate primary, inline, thumbnail, and ordered supporting image roles;
+  - handle article body `img` tags as image occurrences that can be reconciled
+    with managed image assets and inline image bindings;
+  - decide how much should be direct Entity reference versus Blob/Association
+    attachment usage;
+  - expose and fix CNCF runtime/Web/projection/generator gaps using a real
+    component driver.
+- Scope boundary:
+  - Blob payload storage, Blob metadata, authorization, and content routes
+    remain owned by the Phase 18 Blob foundation;
+  - S3/S3-compatible provider work remains under AwsComponent;
+  - `BlogComponent` owns blog semantics, while CNCF owns reusable image binding
+    runtime/Web/projection behavior.
+
+### 8.10 Error Model / Consequence-Conclusion Realignment
 Future platform development item.
 
 - Revisit the core `Consequence` / `Conclusion` / `Observation` model before

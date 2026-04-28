@@ -1,0 +1,179 @@
+# Phase 19 — BlogComponent Entity Image Usage Checklist
+
+This document contains detailed task tracking and decisions for Phase 19.
+It complements the summary-level phase document (`phase-19.md`) and may be
+updated while the phase is open.
+
+---
+
+## Checklist Usage Rules
+
+- This document holds detailed status and task breakdowns.
+- The phase document (`phase-19.md`) holds summary only.
+- A development item marked DONE here must also be marked `[x]` in the phase
+  document.
+- Reasoning, experiments, and deep dives should be recorded in journal entries
+  when necessary.
+
+---
+
+## BI-01: Open Phase 19 and BlogComponent Image Scope
+
+Status: DONE
+
+### Objective
+
+Open Phase 19 and freeze the application-driver scope around `textus-blog`
+`BlogComponent`.
+
+### Detailed Tasks
+
+- [x] Create `docs/phase/phase-19.md`.
+- [x] Create `docs/phase/phase-19-checklist.md`.
+- [x] Mark Phase 19 as the current active phase in strategy.
+- [x] Keep Phase 18 as the latest closed phase.
+- [x] Confirm the `textus-blog` `BlogComponent` model is the active development
+      driver for this phase.
+- [x] Record the first expected Entity image binding use cases from
+      `BlogComponent`.
+
+### Decisions
+
+- `BlogComponent` is the development driver.
+- Blog creation is tied to a user account through the author account reference.
+- Blog posts have draft/published and active/inactive lifecycle state; public
+  read/search exposes published active posts, while draft and inactive posts
+  remain author/admin surfaces.
+- Article body `img` tags are part of the image usage scope and should be
+  synchronized with managed image records and inline image bindings.
+- The phase is about the CNCF usage pattern for image binding, not about adding
+  a new Blob payload backend.
+- Blob metadata/payload ownership remains with the Phase 18 Blob foundation.
+- Role-based or repeated Entity image links should use Association/Blob
+  attachment semantics unless a domain-specific single reference is justified.
+
+### Guardrails
+
+- Do not embed payload bytes in ordinary Entity records.
+- Do not implement S3/S3-compatible BlobStore provider work in this phase.
+- Do not turn `BlogComponent` into a generic media-management product.
+
+---
+
+## BI-02: Validate BlogComponent Image Binding Model
+
+Status: ACTIVE
+
+### Objective
+
+Use `BlogComponent` to validate the minimal model for binding images to Entity
+instances.
+
+### Detailed Tasks
+
+- [ ] Confirm the `BlogPost` primary image path.
+- [ ] Confirm the `BlogPost` author account ownership path for draft creation.
+- [ ] Confirm public read/search filtering for published active posts.
+- [ ] Confirm draft, publish, and deactivate lifecycle operations.
+- [ ] Confirm repeated/role-based image binding model for cover, inline,
+      thumbnail, and gallery roles.
+- [ ] Confirm article body `img` tag extraction and synchronization into inline
+      image records.
+- [ ] Verify whether Blob attachment Association rows already satisfy the model.
+- [ ] Identify whether component-local image binding records are still needed
+      or should collapse into Blob/Association usage.
+- [ ] Record every missing runtime capability as a Phase 19 gap.
+
+### Expected Output
+
+- A short usage contract for domain entities that need images.
+- A decision on when a component should store a direct image reference versus
+  relying on Association-backed image bindings.
+
+---
+
+## BI-03: Entity Image Binding Usage Contract
+
+Status: SUSPENDED
+
+### Objective
+
+Define the concrete CNCF usage contract for image binding across component
+operations and projection surfaces.
+
+### Detailed Tasks
+
+- [ ] Define create/update workflow for image uploads and existing image ids.
+- [ ] Define protected author/admin workflow for create draft, publish, and
+      deactivate operations.
+- [ ] Define public read/search contract for published active blog posts.
+- [ ] Define article body `img` tag handling contract, including unmanaged
+      source URLs, managed image ids, alt/title text, ordering, and binding sync.
+- [ ] Define detach/delete semantics for entity images.
+- [ ] Define list/search behavior for entity images.
+- [ ] Define Aggregate/View projection shape for associated images.
+- [ ] Define Web form and admin page expectations.
+- [ ] Define manual/help metadata expectations for image-capable operations.
+
+### Decisions To Make
+
+- Whether image role names are free strings, constrained by descriptor metadata,
+  or backed by a small CNCF vocabulary.
+- Whether primary image is a special association role, a direct field, or both
+  depending on component needs.
+- How ordered images should be represented in projections.
+
+---
+
+## BI-04: Runtime/Web/Projection Gap Implementation
+
+Status: SUSPENDED
+
+### Objective
+
+Implement CNCF gaps discovered by the `BlogComponent` driver.
+
+### Candidate Work Areas
+
+- [ ] Operation adapters for upload/register-and-attach flows.
+- [ ] Entity create/update support for Blob attachment requests.
+- [ ] Projection helpers for image metadata and access URLs.
+- [ ] Web/admin affordances for associated images on Entity pages.
+- [ ] Descriptor/manual visibility for image-capable Entity operations.
+- [ ] Regression coverage for Blob/Association image usage.
+
+### Guardrails
+
+- Keep reusable behavior in CNCF runtime/Web/projection layers.
+- Keep blog-specific semantics in `textus-blog`.
+- Preserve Phase 18 Blob authorization and payload-storage boundaries.
+
+---
+
+## BI-05: Verification and Closure
+
+Status: SUSPENDED
+
+### Objective
+
+Close Phase 19 only after the BlogComponent driver demonstrates the intended
+Entity image binding usage and the reusable CNCF behavior is verified.
+
+### Detailed Tasks
+
+- [ ] Verify `textus-blog` `BlogComponent` compile/generation path.
+- [ ] Verify live or executable-spec image binding flows.
+- [ ] Verify projection output for associated images.
+- [ ] Verify Web/admin/manual behavior.
+- [ ] Update strategy history and close phase documents.
+
+---
+
+## Completion Check
+
+Phase 19 is complete when:
+
+- All BI items are marked DONE in this checklist.
+- Corresponding checkboxes in `phase-19.md` are marked `[x]`.
+- No item remains ACTIVE or SUSPENDED.
+- Any remaining work is explicitly deferred to future strategy items.
