@@ -2,7 +2,7 @@
 
 This document contains detailed task tracking and decisions for Phase 18.
 It complements the summary-level phase document (`phase-18.md`) and may be
-updated freely while the phase is open.
+retained as the closed Phase 18 detailed completion record.
 
 ---
 
@@ -103,7 +103,7 @@ resources.
 - [x] Managed Blob payload storage returns a deterministic `BlobStorageRef`.
 - [x] Managed Blob payload can resolve display/download URL metadata without
   embedding bytes in Entity, Aggregate, or View records.
-- [ ] External URL Blob metadata can be registered without payload storage.
+- [x] External URL Blob metadata can be registered without payload storage.
 - [x] Missing Blob payload by `BlobStorageRef` returns deterministic failure
   because the reference represents an already-registered stored payload.
 - [x] I/O failures while resolving an existing storage path are preserved as
@@ -718,7 +718,7 @@ metadata and association access onto `FunctionalActionCall` / UoW.
 
 ## BL-09: Blob-Required Authorization Support
 
-Status: IN PROGRESS
+Status: DONE
 
 ### Objective
 
@@ -1113,9 +1113,9 @@ Verification snapshot:
 
 ## Completion Check
 
-Phase 18 is complete when:
+Phase 18 completion status:
 
-- all BL items are marked DONE or explicitly deferred,
-- corresponding checkboxes in `phase-18.md` are updated,
-- Blob metadata, payload, association, Web/admin, and Aggregate/View visibility
-  requirements have executable coverage or documented deferral.
+- [x] all BL items are marked DONE or explicitly deferred,
+- [x] corresponding checkboxes in `phase-18.md` are updated,
+- [x] Blob metadata, payload, association, Web/admin, and Aggregate/View
+      visibility requirements have executable coverage or documented deferral.

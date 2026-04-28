@@ -1,13 +1,13 @@
 # Phase 18 — Builtin Blob Management Component
 
-status = open
+status = closed
 
 ## 1. Purpose of This Document
 
-This work document tracks the active stack of work items for Phase 18.
-It is authoritative for current progress, scope, and execution order.
+This work document records the closed stack of work items for Phase 18.
+It is authoritative for completed scope, explicit deferrals, and closure status.
 
-This document is a progress dashboard, not a design journal.
+This document is a closure dashboard, not a design journal.
 
 ## 2. Phase Scope
 
@@ -148,14 +148,16 @@ Current semantic direction:
 Current note:
 
 - Phase 17 is closed and remains the SimpleEntity storage-shape baseline.
-- Phase 18 starts Blob management as a separate component concern. Authorization
-  work in this phase is driven by Blob's concrete requirements.
-- Latest implementation snapshot:
-  - `7857c9c Expose blob authorization policy visibility`
-  - Current change: configure BlobStore backend selection, add BlobStore
-    plugin/provider SPI, make LocalBlobStore restart-safe with sidecar metadata,
-    store Blob public access paths as relative CNCF routes, and serve managed
-    payloads through an authorized `/web/blob/content/{id}` route.
+- Phase 18 is closed. Blob management is now available as a builtin component
+  foundation with metadata, payload storage, association, Web/admin, projection,
+  authorization, and diagnostics coverage.
+- Final implementation snapshot:
+  - CNCF: `22f0f32 Add structured Blob validation diagnostics`
+  - goldenport core/simplemodeling-lib: `3725ce6 Add structured validation diagnostics`
+  - BL-10 configures BlobStore backend selection, adds BlobStore plugin/provider
+    SPI, makes LocalBlobStore restart-safe with sidecar metadata, stores Blob
+    public access paths as relative CNCF routes, and serves managed payloads
+    through an authorized `/web/blob/content/{id}` route.
   - BL-10B hardens the CNCF Blob content route with deterministic HTTP
     metadata: `ETag`, `Last-Modified`, `Content-Length`, conservative private
     caching, `nosniff`, filename-aware `Content-Disposition`, and authorized
@@ -241,7 +243,7 @@ Current note:
 - [x] BL-07: Aggregate/View Blob metadata projection support.
   - [x] BL-07A: Flat Blob metadata projection.
   - [x] BL-07B: Projection contract closure.
-- [ ] BL-08: Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
+- [x] BL-08: Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
   - [x] BL-08A: External URL safety policy.
   - [x] BL-08B: Blob metadata validation.
   - [x] BL-08C: Blob FunctionalActionCall Entity access chokepoint boundary.
@@ -253,6 +255,11 @@ Current note:
   - [x] BL-09C: Object/resource-side access policy surface.
   - [x] BL-09D: Blob integration on generic authorization policies.
   - [x] BL-09E: Authorization policy introspection/admin visibility.
+- [x] BL-10: Configurable BlobStore backend wiring and CNCF Blob content URLs.
+  - [x] BL-10B: Blob content route HTTP metadata hardening.
+  - [x] BL-10C: Blob upload acceptance policy.
+  - [x] BL-10D: Blob operational diagnostics and metrics.
+  - [x] BL-10E: Common structured validation errors and Blob metrics recovery.
 
 ## 6. Public Interface Direction
 

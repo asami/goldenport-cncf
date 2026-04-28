@@ -425,12 +425,12 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: Phase 18 — Builtin Blob Management Component
-- Latest active phase dashboard: `docs/phase/phase-18.md`
-- Latest active phase checklist: `docs/phase/phase-18-checklist.md`
-- Latest closed phase dashboard: `docs/phase/phase-17.md`
-- Latest closed phase checklist: `docs/phase/phase-17-checklist.md`
-- Candidate next phase areas after Phase 18: Search/index planning; DB migration tooling.
+- Current phase selection: none. Phase 18 is closed; the next numbered phase is not yet opened.
+- Latest active phase dashboard: none
+- Latest active phase checklist: none
+- Latest closed phase dashboard: `docs/phase/phase-18.md`
+- Latest closed phase checklist: `docs/phase/phase-18-checklist.md`
+- Candidate next phase areas: AwsComponent/S3 BlobStore provider; Error Model / Consequence-Conclusion Realignment; Search/index planning; DB migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
 ## 6. Explicit Non-Goals
@@ -455,7 +455,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 15: closed (`docs/phase/phase-15.md`)
 - Phase 16: closed (`docs/phase/phase-16.md`)
 - Phase 17: closed (`docs/phase/phase-17.md`)
-- Phase 18: open (`docs/phase/phase-18.md`)
+- Phase 18: closed (`docs/phase/phase-18.md`)
 
 ## 8. Development Item Status
 
@@ -548,130 +548,12 @@ Closed in Phase 13. This remains a reference area for Phase 14+ extensions and r
 - External knowledge graph integration
 
 ### 8.7 Builtin Blob Management Component
-Current active phase: Phase 18.
+Completed in Phase 18.
 
-- Add builtin Blob management component independent of the SimpleEntity storage
-  shape work.
-- Blob remains the main Phase 18 product goal. Authorization work in this phase
-  is included only where Blob management flows need it.
-- Blob metadata is represented as an Entity.
-- Blob entries support two source modes:
-  - internally managed payload stored by CNCF BlobStore;
-  - externally hosted URL managed outside CNCF.
-- Blob metadata carries `sourceMode` to distinguish managed payloads from
-  external URL entries.
-- Managed Blob payload is stored through a BlobStore abstraction backed by a
-  dedicated Blob DataStore.
-- Production-oriented BlobStore design assumes S3-like object storage, while
-  local/in-memory stores are development and executable-spec backends.
-- CNCF core does not take a direct AWS dependency. S3/S3-compatible BlobStore
-  integration is provided by a separate AwsComponent through the BlobStore
-  provider/plugin SPI.
-- Stored managed Blob payloads are expected to become URL-addressable through
-  CNCF Blob routes or backend-provided object URLs.
-- Image, Video, and Attachment use cases are supported through Blob-managed
-  assets.
-- Product-like and other domain entities can associate with Blob entities.
-- Blob component owns Blob-Entity association records for Phase 18.
-- User-facing and admin-facing Blob APIs are both in scope.
-- Blob Web management pages are in scope for metadata, payload links,
-  associations, and store status.
-- Aggregate/View projections can gather associated media without embedding
-  payloads in parent entity storage records.
-- Aggregate/View output includes Blob metadata plus display/download URLs, not
-  inline payload bytes.
-- BL-07 is complete at projection level: Aggregate/View admin read responses
-  expose a flat additive `blobs` field with Blob metadata,
-  display/download URLs, `associationId`, `role`, and `sortOrder`.
-- Blob projection omits `blobs` when empty, orders rows by `sortOrder` then
-  `associationId`, and never embeds payload bytes.
-- Entity-local Association snapshots are deferred as a future optimization;
-  the Association repository remains store-backed and authoritative.
-- BL-07B is committed as `cca7e38 Close blob projection contract`.
-- BL-08 is in progress. BL-08A formalizes external URL safety for registration,
-  URL resolution, and Web/admin rendering.
-- BL-08A is committed as `8f87196 Harden external blob URLs`.
-- BL-08B is completed in this change; it
-  adds metadata-only validation for content type syntax, expected byte size,
-  and digest.
-- BL-08C is completed in this change; it defines the Blob FunctionalActionCall
-  Entity access chokepoint boundary. Blob metadata and Blob association
-  operation paths now go through FunctionalActionCall / UnitOfWork chokepoints
-  so authorization and observability apply to the SimpleEntity-backed Blob
-  model. Direct repositories remain low-level adapters, not public operation
-  boundaries. The Blob component port and default service expose BlobStore
-  capability only, not repository-backed metadata mutation/read APIs. Managed
-  registration compensation keeps metadata and payload consistent: payloads are
-  deleted when no Blob metadata row exists, but preserved if a created metadata
-  row cannot be cleaned up.
-- BL-08D is completed in this change; it adds the optional ProcedureActionCall
-  DSL foundation for procedural implementations that explicitly run `ExecUowM`
-  through the runtime `UnitOfWorkInterpreter`. FunctionalActionCall remains the
-  recommended CNCF/CozyTextus implementation style.
-- BL-08E is completed in this change; it adds an explicit UoW authorization
-  preflight operation and applies Blob metadata create/source-entity
-  authorization before Blob payload writes and Blob association flows.
-- BL-09 is active as Blob-required authorization support. BL-09A completed the
-  guard/capability vocabulary for Blob flows: `privilege` and ABAC are guards,
-  while role, permission, and relation are capability grant sources. ACL is
-  deferred to 8.3 Security unless Blob later proves an immediate need.
-- BL-09B is completed in this change. Subsystem descriptors can define
-  `security.authorization.roles`; role definitions expand transitively into
-  effective `SecuritySubject` capabilities; collection, association-domain, and
-  store grant helpers provide the subject-side vocabulary needed by Blob
-  registration, attachment, detach, and BlobStore status flows. Raw request
-  `capability` remains a required capability, not a forged subject grant.
-- BL-09C is completed in this change. Subsystem descriptors can define
-  `security.authorization.resources` for collection, association-domain, and
-  store resource policy. `OperationAccessPolicy` now resolves those policies at
-  the UnitOfWork boundary and enforces required capabilities plus permission-bit
-  overrides such as Blob delete requiring `execute`.
-- BL-09D is completed in this change. Blob operations now apply the generic
-  resource policy surface: registration checks Blob collection create,
-  attachment flows check `blob_attachment` association create/delete/search,
-  admin delete checks Blob collection delete, and BlobStore status checks store
-  status. Ingress execution rebinds UoW interpretation to the resolved request
-  security context while preserving runtime UoW lifecycle actions, so
-  ActionCall/UoW authorization observes the active subject.
-- BL-09 is complete for Phase 18. Broader ACL administration, subject grant UI,
-  role lifecycle UI, and organization-grade policy management remain under
-  strategy section 8.3 Security.
-- BL-10 is completed in this change. BlobStore backend selection is configurable,
-  BlobStore provider/plugin SPI is available for non-builtin stores,
-  BlobComponent uses RuntimeConfig-derived store wiring, LocalBlobStore is
-  restart-safe with sidecar metadata, managed Blob public paths are stored as
-  relative CNCF routes, BlobStores no longer expose storageRef-based CNCF
-  routes, and `/web/blob/content/{id}` serves payloads through Blob Entity read
-  authorization.
-- BL-10B is completed in this change. The CNCF Blob content route now emits
-  deterministic HTTP metadata for real image/attachment display: `ETag`,
-  `Last-Modified`, `Content-Length`, conservative private caching, `nosniff`,
-  filename-aware `Content-Disposition`, and authorized conditional GET.
-- BL-10C is completed in this change. Managed Blob registration now enforces
-  CNCF core upload acceptance policy: configurable maximum payload size with a
-  50MB default and MIME-kind compatibility for image/video Blobs.
-- BL-10D is completed in this change. Blob operations now publish dedicated
-  runtime metrics and structured observability records for registration,
-  content reads, BlobStore failures, and admin store diagnostics using the
-  existing CNCF dashboard/observability mechanisms.
-- BL-10E is completed in this change. Core structured validation facets and
-  reusable `Consequence` validation helpers are used by Blob validation paths.
-  Core `Cause.Kind` now includes validation-oriented `format` and `policy`
-  causes, allowing Blob metrics to use `Cause.Kind` as the first discriminator
-  and facets as the detail discriminator without `Status.detailCodes` or
-  message parsing. CNCF also records component-neutral validation metrics;
-  for example, `FieldPath(payload.byteSize)` plus `Cause.Kind.Limit` is
-  classified as the generic `payload_size` failure kind. Blob uses that same
-  label. `contentType` policy violations with policy `mime-kind` are likewise
-  classified as generic `mime_kind`; Blob-local labels remain only for
-  genuinely Blob-specific policies such as external URL safety.
-- Remaining Blob hardening includes deletion/retention policy, signed URL
-  integration points, configurable MIME allowlists, thumbnail generation,
-  virus scanning, and resumable upload. Concrete AWS/S3 backend implementation
-  is tracked under AwsComponent, not CNCF core.
-- Active dashboard: `docs/phase/phase-18.md`
-- Active checklist: `docs/phase/phase-18-checklist.md`
-- Source note: `docs/journal/2026/04/blob-management-component-specification-note.md`.
+- Closed dashboard: `docs/phase/phase-18.md`
+- Closed checklist: `docs/phase/phase-18-checklist.md`
+- Source note: `docs/journal/2026/04/blob-management-component-specification-note.md`
+- Completed scope is recorded in Completed Development Item History section 9.7.
 
 ### 8.8 AwsComponent
 Future component development item.
@@ -838,3 +720,46 @@ Completed in Phase 17.
     scalar fallback specs
   - storage-shape metadata projection for component describe/schema
   - storage-shape visibility in Web manual and component admin entity pages
+
+### 9.7 Builtin Blob Management Component
+Completed in Phase 18.
+
+- Closed dashboard: `docs/phase/phase-18.md`
+- Closed checklist: `docs/phase/phase-18-checklist.md`
+- Source note: `docs/journal/2026/04/blob-management-component-specification-note.md`
+- Final implementation snapshot:
+  - CNCF: `22f0f32 Add structured Blob validation diagnostics`
+  - goldenport core/simplemodeling-lib: `3725ce6 Add structured validation diagnostics`
+- Completed scope:
+  - builtin Blob metadata model as a SimpleEntity-backed management entity
+  - managed and external-url Blob source modes
+  - BlobStore SPI with in-memory/local backends, configurable backend selection,
+    provider/plugin extension points, and restart-safe local sidecar metadata
+  - authorized CNCF content route `/web/blob/content/{id}` with cache/content
+    headers and conditional GET
+  - user-facing Blob register/read/metadata/attach/detach/list operations
+  - admin-facing Blob list/get/delete/association/store-status operations
+  - Web/admin Blob metadata, association, store, delete, attach, and detach pages
+  - generic Association runtime foundation used by Blob attachment
+  - application create/update Blob attachment workflow for uploads and existing
+    Blob ids
+  - Aggregate/View Blob metadata projection with flat additive `blobs` rows,
+    display/download URLs, ordering, and no inline payload bytes
+  - Blob-required authorization support: role-to-capability expansion,
+    resource policies for collections/associations/stores, operation integration,
+    and read-only authorization visibility
+  - upload hardening: external URL safety, content type syntax, byte-size/digest
+    validation, max upload size, and MIME-kind policy
+  - Blob operational metrics and structured observability using common
+    `Consequence` / `Conclusion` validation facets instead of component-local
+    error codes or message parsing
+- Deferred scope:
+  - S3/S3-compatible BlobStore implementation is tracked under AwsComponent,
+    not CNCF core.
+  - Broader ACL administration, subject grant UI, role lifecycle UI, and
+    organization-grade policy management remain under 8.3 Security.
+  - `Status.detailCode` / `Status.detailCodes` / `strategies` redesign and
+    broader Observation semantics remain under 8.9.
+  - Retention policy, signed URLs, configurable MIME allowlists, thumbnail
+    generation, virus scanning, and resumable upload remain future Blob/AWS
+    hardening work.
