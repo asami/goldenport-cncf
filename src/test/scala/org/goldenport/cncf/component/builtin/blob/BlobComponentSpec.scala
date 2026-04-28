@@ -1,9 +1,11 @@
 package org.goldenport.cncf.component.builtin.blob
 
+import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import org.goldenport.{Consequence, ConsequenceException}
 import org.goldenport.bag.Bag
+import org.goldenport.bag.BagMetadata
 import org.goldenport.bag.BinaryBag
 import org.goldenport.cncf.blob.*
 import org.goldenport.cncf.config.RuntimeConfig
@@ -479,6 +481,31 @@ final class BlobComponentSpec
 
       Then("the payload operation fails because external URL Blobs have no managed payload")
       read shouldBe a[Consequence.Failure[_]]
+
+      Given("a subsystem with zero managed Blob byte allowance")
+      val zeroLimitSubsystem = DefaultSubsystemFactory.default(
+        Some("command"),
+        ResolvedConfiguration(
+          Configuration(Map(RuntimeConfig.BlobMaxByteSizeKey -> ConfigurationValue.StringValue("0"))),
+          ConfigurationTrace.empty
+        )
+      )
+
+      When("an external URL Blob is registered")
+      val zeroLimitExternal = zeroLimitSubsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = Nil,
+        properties = List(
+          Property("sourceMode", "external_url", None),
+          Property("kind", "attachment", None),
+          Property("filename", "external.pdf", None),
+          Property("contentType", "application/pdf", None),
+          Property("externalUrl", "https://example.test/external.pdf", None)
+        )
+      ))
+
+      Then("the managed payload size policy does not apply")
+      zeroLimitExternal shouldBe a[Consequence.Success[_]]
     }
 
     "validate managed Blob expected size and digest metadata" in {
@@ -613,6 +640,102 @@ final class BlobComponentSpec
       Then("both byte-size contracts are rejected without numeric truncation")
       fractionalSize shouldBe a[Consequence.Failure[_]]
       negativeSize shouldBe a[Consequence.Failure[_]]
+    }
+
+    "apply managed Blob size and MIME-kind policy" in {
+      Given("a subsystem with a small managed Blob size limit")
+      val preStore = new RecordingBlobStore
+      val preSubsystem = _subsystem_with_blob_store(preStore, maxByteSize = 4)
+
+      When("a known oversized payload is registered")
+      val knownOversize = preSubsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("oversize".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "attachment", None),
+          Property("filename", "oversize.bin", None),
+          Property("contentType", "application/octet-stream", None)
+        )
+      ))
+
+      Then("registration fails before BlobStore put")
+      knownOversize shouldBe a[Consequence.Failure[_]]
+      preStore.putRefs shouldBe Vector.empty
+
+      Given("a store whose measured size exceeds the configured policy")
+      val postStore = new RecordingBlobStore(reportedByteSize = Some(8L))
+      val postSubsystem = _subsystem_with_blob_store(postStore, maxByteSize = 4)
+
+      When("the payload size is only known after BlobStore put")
+      val postOversize = postSubsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", UnknownSizeBinaryBag("tiny".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "attachment", None),
+          Property("filename", "post.bin", None),
+          Property("contentType", "application/octet-stream", None)
+        )
+      ))
+
+      Then("registration fails and compensates the stored payload")
+      postOversize shouldBe a[Consequence.Failure[_]]
+      postStore.deletedRefs shouldBe postStore.putRefs
+
+      Given("a default subsystem")
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+
+      When("image and video Blob registrations use compatible MIME types")
+      val image = subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("image".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "image", None),
+          Property("filename", "image.png", None),
+          Property("contentType", "image/png", None)
+        )
+      ))
+      val video = subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("video".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "video", None),
+          Property("filename", "video.mp4", None),
+          Property("contentType", "video/mp4", None)
+        )
+      ))
+
+      Then("both registrations succeed")
+      image shouldBe a[Consequence.Success[_]]
+      video shouldBe a[Consequence.Success[_]]
+
+      When("image and video Blob registrations use incompatible or default MIME types")
+      val badImage = subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("bad-image".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "image", None),
+          Property("filename", "bad-image.bin", None),
+          Property("contentType", "application/octet-stream", None)
+        )
+      ))
+      val defaultVideo = subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("default-video".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "video", None),
+          Property("filename", "default-video.bin", None)
+        )
+      ))
+
+      Then("both registrations fail deterministically")
+      badImage shouldBe a[Consequence.Failure[_]]
+      defaultVideo shouldBe a[Consequence.Failure[_]]
     }
 
     "reject unsafe external URL Blob registrations" in {
@@ -962,10 +1085,13 @@ final class BlobComponentSpec
   private def _blob_entity_id(minor: String): EntityId =
     EntityId("cncf", minor, EntityCollectionId("cncf", "builtin", "blob"))
 
-  private def _subsystem_with_blob_store(store: BlobStore) = {
+  private def _subsystem_with_blob_store(
+    store: BlobStore,
+    maxByteSize: Long = BlobStoreConfig.DefaultMaxByteSize
+  ) = {
     val subsystem = DefaultSubsystemFactory.default(Some("command"))
     val component = subsystem.findComponent("blob").getOrElse(fail("missing Blob component"))
-    component.withPort(org.goldenport.cncf.component.Component.Port.of(new BlobComponent.DefaultBlobService(store)))
+    component.withPort(org.goldenport.cncf.component.Component.Port.of(new BlobComponent.DefaultBlobService(store, maxByteSize)))
     subsystem
   }
 
@@ -1006,7 +1132,10 @@ final class BlobComponentSpec
   private def _sha256(bytes: Array[Byte]): String =
     MessageDigest.getInstance("SHA-256").digest(bytes).map("%02x".format(_)).mkString
 
-  private final class RecordingBlobStore(failDelete: Boolean = false) extends BlobStore {
+  private final class RecordingBlobStore(
+    failDelete: Boolean = false,
+    reportedByteSize: Option[Long] = None
+  ) extends BlobStore {
     var putRefs: Vector[BlobStorageRef] = Vector.empty
     var deletedRefs: Vector[BlobStorageRef] = Vector.empty
 
@@ -1020,7 +1149,7 @@ final class BlobComponentSpec
         id = request.id,
         storageRef = ref,
         contentType = request.contentType,
-        byteSize = bytes.length.toLong,
+        byteSize = reportedByteSize.getOrElse(bytes.length.toLong),
         digest = "sha256:test",
         accessUrl = BlobAccessUrl.unresolved,
         storedAt = java.time.Instant.parse("2026-04-27T00:00:00Z")
@@ -1043,6 +1172,16 @@ final class BlobComponentSpec
 
     def status(): Consequence[BlobStoreStatus] =
       Consequence.success(BlobStoreStatus("recording", available = true))
+  }
+
+  private final case class UnknownSizeBinaryBag(bytes: Array[Byte]) extends BinaryBag {
+    val bag: Bag = Bag.binary(bytes).bag
+
+    override def metadata: BagMetadata =
+      BagMetadata()
+
+    override def openInputStream(): java.io.InputStream =
+      new ByteArrayInputStream(bytes)
   }
 
 

@@ -647,10 +647,13 @@ Current active phase: Phase 18.
   deterministic HTTP metadata for real image/attachment display: `ETag`,
   `Last-Modified`, `Content-Length`, conservative private caching, `nosniff`,
   filename-aware `Content-Disposition`, and authorized conditional GET.
+- BL-10C is completed in this change. Managed Blob registration now enforces
+  CNCF core upload acceptance policy: configurable maximum payload size with a
+  50MB default and MIME-kind compatibility for image/video Blobs.
 - Remaining Blob hardening includes deletion/retention policy, signed URL
-  integration points, MIME-kind policy, payload size limits, thumbnail
-  generation, virus scanning, and resumable upload. Concrete AWS/S3 backend
-  implementation is tracked under AwsComponent, not CNCF core.
+  integration points, configurable MIME allowlists, thumbnail generation,
+  virus scanning, and resumable upload. Concrete AWS/S3 backend implementation
+  is tracked under AwsComponent, not CNCF core.
 - Active dashboard: `docs/phase/phase-18.md`
 - Active checklist: `docs/phase/phase-18-checklist.md`
 - Source note: `docs/journal/2026/04/blob-management-component-specification-note.md`.

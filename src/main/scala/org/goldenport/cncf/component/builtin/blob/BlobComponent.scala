@@ -49,6 +49,7 @@ final class BlobComponent() extends Component {
 object BlobComponent {
   trait BlobService {
     def blobStore: BlobStore
+    def maxByteSize: Long
   }
 
   final case class RegisterBlobRequest(
@@ -194,17 +195,18 @@ object BlobComponent {
         services = spec.ServiceDefinitionGroup(services = Vector(service)),
         handler = ProtocolHandler.default
       )
+      val config = RuntimeConfig.from(params.subsystem.configuration).blobStoreConfig
       comp.withPort(
         Component.Port.of(
-          new DefaultBlobService(_blob_store(params))
+          new DefaultBlobService(_blob_store(config), config.maxByteSize)
         )
       )
       val instanceid = ComponentInstanceId.default(componentId)
       Component.Core.create(name, componentId, instanceid, protocol)
     }
 
-    private def _blob_store(params: ComponentCreate): BlobStore =
-      BlobStoreFactory.create(RuntimeConfig.from(params.subsystem.configuration).blobStoreConfig) match {
+    private def _blob_store(config: BlobStoreConfig): BlobStore =
+      BlobStoreFactory.create(config) match {
         case Consequence.Success(store) =>
           store
         case failure @ Consequence.Failure(_) =>
@@ -320,9 +322,11 @@ object BlobComponent {
   }
 
   private[blob] final class DefaultBlobService(
-    store: BlobStore
+    store: BlobStore,
+    maxsize: Long = BlobStoreConfig.DefaultMaxByteSize
   ) extends BlobService {
     def blobStore: BlobStore = store
+    def maxByteSize: Long = maxsize
   }
 
   private final class RegisterBlobOperationDefinition(
@@ -870,7 +874,8 @@ object BlobComponent {
         case Some(payload) =>
           val contentType = request.contentType.getOrElse(ContentType.APPLICATION_OCTET_STREAM)
           for {
-            _ <- exec_from(_validate_managed_request(request))
+            maxByteSize <- exec_from(_blob_max_byte_size)
+            _ <- exec_from(_validate_managed_request(request, payload, contentType, maxByteSize))
             _ <- _authorize_blob_create(request.id.collection, system = false)
             store <- exec_from(_blob_store)
             result <- exec_from(store.put(
@@ -883,7 +888,7 @@ object BlobComponent {
               ),
               payload
             ))
-            _ <- _recover_with(exec_from(_validate_managed_result(request, result))) { conclusion =>
+            _ <- _recover_with(exec_from(_validate_managed_result(request, result, maxByteSize))) { conclusion =>
               _delete_payload_then_fail(store, result.storageRef, conclusion)
             }
             blob <- _blob_create_managed(
@@ -1345,6 +1350,9 @@ object BlobComponent {
     protected final def _blob_store: Consequence[BlobStore] =
       _service(core).map(_.blobStore)
 
+    protected final def _blob_max_byte_size: Consequence[Long] =
+      _service(core).map(_.maxByteSize)
+
     private def _authorization(
       collection: EntityCollectionId,
       targetId: Option[EntityId],
@@ -1444,7 +1452,10 @@ object BlobComponent {
     )
 
   private def _validate_managed_request(
-    request: RegisterBlobRequest
+    request: RegisterBlobRequest,
+    payload: BinaryBag,
+    contentType: ContentType,
+    maxByteSize: Long
   ): Consequence[Unit] =
     for {
       _ <- request.expectedByteSize match {
@@ -1457,11 +1468,19 @@ object BlobComponent {
         case Some(value) => _normalize_expected_digest(value).map(_ => ())
         case None => Consequence.unit
       }
+      _ <- payload.metadata.size match {
+        case Some(size) if size > maxByteSize =>
+          Consequence.argumentInvalid(s"Blob payload exceeds maximum byte size: actual=${size}, max=${maxByteSize}")
+        case _ =>
+          Consequence.unit
+      }
+      _ <- _validate_mime_kind(request.kind, contentType)
     } yield ()
 
   private def _validate_managed_result(
     request: RegisterBlobRequest,
-    result: BlobPutResult
+    result: BlobPutResult,
+    maxByteSize: Long
   ): Consequence[Unit] =
     for {
       _ <- request.expectedByteSize match {
@@ -1481,7 +1500,28 @@ object BlobComponent {
         case None =>
           Consequence.unit
       }
+      _ <-
+        if (result.byteSize > maxByteSize)
+          Consequence.argumentInvalid(s"Blob payload exceeds maximum byte size: actual=${result.byteSize}, max=${maxByteSize}")
+        else
+          Consequence.unit
+      _ <- _validate_mime_kind(request.kind, result.contentType)
     } yield ()
+
+  private def _validate_mime_kind(
+    kind: BlobKind,
+    contentType: ContentType
+  ): Consequence[Unit] = {
+    val mime = contentType.mimeType.value.toLowerCase(java.util.Locale.ROOT)
+    kind match {
+      case BlobKind.Image if !mime.startsWith("image/") =>
+        Consequence.argumentInvalid(s"image Blob requires image/* contentType: ${contentType.header}")
+      case BlobKind.Video if !mime.startsWith("video/") =>
+        Consequence.argumentInvalid(s"video Blob requires video/* contentType: ${contentType.header}")
+      case _ =>
+        Consequence.unit
+    }
+  }
 
   private def _validate_external_request(
     request: RegisterBlobRequest

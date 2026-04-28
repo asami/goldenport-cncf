@@ -85,7 +85,8 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
           RuntimeConfig.RuntimeBlobStoreContainerKey -> ConfigurationValue.StringValue("media"),
           RuntimeConfig.RuntimeBlobStoreLocalRootKey -> ConfigurationValue.StringValue(root.toString),
           RuntimeConfig.RuntimeBlobStorePublicBasePathKey -> ConfigurationValue.StringValue("/assets/blob"),
-          RuntimeConfig.RuntimeBlobStoreProviderClassKey -> ConfigurationValue.StringValue("example.BlobProvider")
+          RuntimeConfig.RuntimeBlobStoreProviderClassKey -> ConfigurationValue.StringValue("example.BlobProvider"),
+          RuntimeConfig.RuntimeBlobMaxByteSizeKey -> ConfigurationValue.StringValue("12345")
         )),
         ConfigurationTrace.empty
       )
@@ -98,12 +99,41 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
       config.blobStoreConfig.localRoot shouldBe Some(root)
       config.blobStoreConfig.publicBasePath shouldBe Some("/assets/blob")
       config.blobStoreConfig.providerClass shouldBe Some("example.BlobProvider")
+      config.blobStoreConfig.maxByteSize shouldBe 12345L
     }
 
     "reject invalid BlobStore runtime configuration deterministically at factory boundary" in {
       BlobStoreFactory.create(BlobStoreConfig(backend = "s3")) shouldBe a[org.goldenport.Consequence.Failure[_]]
       BlobStoreFactory.create(BlobStoreConfig(backend = BlobStoreConfig.BackendLocal)) shouldBe a[org.goldenport.Consequence.Failure[_]]
       BlobStoreFactory.create(BlobStoreConfig(publicBasePath = Some("https://cdn.example.test/blob"))) shouldBe a[org.goldenport.Consequence.Failure[_]]
+      BlobStoreFactory.create(BlobStoreConfig(maxByteSize = -1)) shouldBe a[org.goldenport.Consequence.Failure[_]]
+      BlobStoreFactory.create(BlobStoreConfig(maxByteSizeParseError = Some("bad max size"))) shouldBe a[org.goldenport.Consequence.Failure[_]]
+
+      val invalid = RuntimeConfig.from(ResolvedConfiguration(
+        Configuration(Map(RuntimeConfig.BlobMaxByteSizeKey -> ConfigurationValue.StringValue("1.9"))),
+        ConfigurationTrace.empty
+      ))
+      BlobStoreFactory.create(invalid.blobStoreConfig) shouldBe a[org.goldenport.Consequence.Failure[_]]
+      val negative = RuntimeConfig.from(ResolvedConfiguration(
+        Configuration(Map(RuntimeConfig.BlobMaxByteSizeKey -> ConfigurationValue.StringValue("-1"))),
+        ConfigurationTrace.empty
+      ))
+      BlobStoreFactory.create(negative.blobStoreConfig) shouldBe a[org.goldenport.Consequence.Failure[_]]
+    }
+
+    "use the default Blob max byte size" in {
+      val config = RuntimeConfig.from(ResolvedConfiguration(Configuration.empty, ConfigurationTrace.empty))
+
+      config.blobStoreConfig.maxByteSize shouldBe BlobStoreConfig.DefaultMaxByteSize
+    }
+
+    "parse CNCF Blob max byte size alias" in {
+      val config = RuntimeConfig.from(ResolvedConfiguration(
+        Configuration(Map("cncf.blob.max-byte-size" -> ConfigurationValue.StringValue("2048"))),
+        ConfigurationTrace.empty
+      ))
+
+      config.blobStoreConfig.maxByteSize shouldBe 2048L
     }
 
     "honor operation mode aliases and runtime config aliases" in {

@@ -140,6 +140,7 @@ Current semantic direction:
 - J (DONE): BL-10 — Configurable BlobStore backend wiring and CNCF Blob
   content URLs.
   - BL-10B (DONE): Blob content route HTTP metadata hardening.
+  - BL-10C (DONE): Blob upload acceptance policy.
 
 Current note:
 
@@ -156,6 +157,9 @@ Current note:
     metadata: `ETag`, `Last-Modified`, `Content-Length`, conservative private
     caching, `nosniff`, filename-aware `Content-Disposition`, and authorized
     conditional GET returning `304 Not Modified`.
+  - BL-10C adds the CNCF core managed-upload acceptance policy: configurable
+    max byte size with a 50MB default and MIME-kind checks for image/video
+    Blob registrations.
   - BL-07B closes the projection contract:
     Aggregate/View output uses a flat, additive `blobs` field, omits it when
     empty, orders rows by `sortOrder`, and never embeds payload bytes.

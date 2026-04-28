@@ -123,6 +123,8 @@ object RuntimeConfig {
   val RuntimeBlobStorePublicBasePathKey = "textus.runtime.blob.store.public-base-path"
   val BlobStoreProviderClassKey = "textus.blob.store.provider-class"
   val RuntimeBlobStoreProviderClassKey = "textus.runtime.blob.store.provider-class"
+  val BlobMaxByteSizeKey = "textus.blob.max-byte-size"
+  val RuntimeBlobMaxByteSizeKey = "textus.runtime.blob.max-byte-size"
 
   val DefaultServerEmulatorBaseUrl = "http://localhost/"
   val DefaultHttpDriverName = "real"
@@ -409,6 +411,7 @@ object RuntimeConfig {
         case BlobStoreLocalRootKey => Vector(RuntimeBlobStoreLocalRootKey)
         case BlobStorePublicBasePathKey => Vector(RuntimeBlobStorePublicBasePathKey)
         case BlobStoreProviderClassKey => Vector(RuntimeBlobStoreProviderClassKey)
+        case BlobMaxByteSizeKey => Vector(RuntimeBlobMaxByteSizeKey)
         case _ => Vector.empty
       }
     val cncfAliases =

@@ -3,6 +3,7 @@ package org.goldenport.cncf.blob
 import java.nio.file.Path
 import java.util.Locale
 import scala.collection.concurrent.TrieMap
+import scala.util.Try
 import scala.util.control.NonFatal
 import org.goldenport.Consequence
 import org.goldenport.configuration.ResolvedConfiguration
@@ -21,7 +22,9 @@ final case class BlobStoreConfig(
   container: String = BlobStorageRef.DefaultContainer,
   localRoot: Option[Path] = None,
   publicBasePath: Option[String] = None,
-  providerClass: Option[String] = None
+  providerClass: Option[String] = None,
+  maxByteSize: Long = BlobStoreConfig.DefaultMaxByteSize,
+  maxByteSizeParseError: Option[String] = None
 ) {
   def normalizedBackend: String =
     backend.trim.toLowerCase(Locale.ROOT).replace('-', '_')
@@ -38,6 +41,7 @@ object BlobStoreConfig {
   val BackendInMemory: String = "in_memory"
   val BackendLocal: String = "local"
   val DefaultBackend: String = BackendInMemory
+  val DefaultMaxByteSize: Long = 52428800L
 
   def fromConfiguration(
     configuration: ResolvedConfiguration
@@ -59,7 +63,10 @@ object BlobStoreConfig {
         .filter(_.nonEmpty),
       providerClass = RuntimeConfig.getString(configuration, RuntimeConfig.BlobStoreProviderClassKey)
         .map(_.trim)
-        .filter(_.nonEmpty)
+        .filter(_.nonEmpty),
+      maxByteSize = parseMaxByteSize(RuntimeConfig.getString(configuration, RuntimeConfig.BlobMaxByteSizeKey))
+        .getOrElse(DefaultMaxByteSize),
+      maxByteSizeParseError = parseMaxByteSizeError(RuntimeConfig.getString(configuration, RuntimeConfig.BlobMaxByteSizeKey))
     )
 
   def normalizePublicBasePath(value: String): String = {
@@ -72,6 +79,24 @@ object BlobStoreConfig {
 
   def hasUriScheme(value: String): Boolean =
     value.matches("^[A-Za-z][A-Za-z0-9+.-]*:.*")
+
+  def parseMaxByteSize(value: Option[String]): Option[Long] =
+    value.flatMap { v =>
+      val trimmed = v.trim
+      if (trimmed.matches("[0-9]+"))
+        Try(trimmed.toLong).toOption
+      else
+        None
+    }
+
+  def parseMaxByteSizeError(value: Option[String]): Option[String] =
+    value.flatMap { v =>
+      val trimmed = v.trim
+      if (trimmed.matches("[0-9]+") && Try(trimmed.toLong).isSuccess)
+        None
+      else
+        Some(s"textus.blob.max-byte-size must be a non-negative integer byte count: $v")
+    }
 }
 
 trait BlobStoreProvider {
@@ -106,12 +131,23 @@ object BlobStoreFactory {
     create(BlobStoreConfig.fromConfiguration(configuration))
 
   private def _validate_config(config: BlobStoreConfig): Consequence[Unit] =
-    config.publicBasePath match {
-      case Some(value) if BlobStoreConfig.hasUriScheme(value) || value.startsWith("//") =>
-        Consequence.configurationInvalid("textus.blob.store.public-base-path must be a relative path, not an absolute URL")
-      case _ =>
-        Consequence.unit
-    }
+    for {
+      _ <- config.maxByteSizeParseError match {
+        case Some(message) => Consequence.configurationInvalid(message)
+        case None => Consequence.unit
+      }
+      _ <-
+        if (config.maxByteSize < 0)
+          Consequence.configurationInvalid("textus.blob.max-byte-size must be a non-negative integer byte count")
+        else
+          Consequence.unit
+      _ <- config.publicBasePath match {
+        case Some(value) if BlobStoreConfig.hasUriScheme(value) || value.startsWith("//") =>
+          Consequence.configurationInvalid("textus.blob.store.public-base-path must be a relative path, not an absolute URL")
+        case _ =>
+          Consequence.unit
+      }
+    } yield ()
 
   private def _create_named(config: BlobStoreConfig): Consequence[BlobStore] =
     config.normalizedBackend match {

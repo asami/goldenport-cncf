@@ -973,6 +973,40 @@ Verification snapshot:
 - [x] `BlobComponentSpec -- -z Blob` remains green.
 - [x] `sbt --batch Test/compile` passed.
 
+### BL-10C: Blob Upload Acceptance Policy
+
+Status: DONE
+
+Add CNCF core acceptance policy for managed Blob uploads before external
+BlobStore providers such as AwsComponent/S3:
+
+- [x] Runtime configuration supports `textus.blob.max-byte-size` with
+      `textus.runtime.*` and `cncf.*` aliases.
+- [x] Default managed payload limit is `52428800` bytes.
+- [x] Invalid, fractional, negative, or overflow max-size configuration fails
+      deterministically at BlobStore/component factory boundary.
+- [x] Known oversized managed payloads fail before `BlobStore.put`.
+- [x] Post-put measured oversize fails and compensates the stored payload.
+- [x] `image` Blobs require `image/*` content type.
+- [x] `video` Blobs require `video/*` content type.
+- [x] `attachment` and `binary` Blobs continue to accept any syntactically
+      valid MIME type.
+- [x] External URL Blobs are not subject to managed payload byte-size policy.
+
+Implementation notes:
+
+- BL-10C does not add MIME sniffing, thumbnail generation, virus scanning,
+  signed URLs, range requests, or S3/AWS backend support.
+- Config-based MIME allowlists are deferred until a real deployment needs
+  them.
+
+Verification snapshot:
+
+- [x] `RuntimeConfigSpec` covers max-size defaults, aliases, and invalid
+      configuration.
+- [x] `BlobComponentSpec -- -z Blob` covers max-size and MIME-kind policy.
+- [x] `sbt --batch Test/compile` passed.
+
 ### Deferred To 8.3 Security
 
 - first-class arbitrary ACL lists.
