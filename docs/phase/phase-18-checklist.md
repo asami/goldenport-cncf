@@ -471,7 +471,7 @@ slice does not add role-grouped output or Entity-local Association snapshots.
 
 ## BL-08: Blob Hardening
 
-Status: IN PROGRESS
+Status: DONE
 
 ### Objective
 
@@ -848,15 +848,42 @@ Verification snapshot:
 
 ### BL-09E: Blob Authorization Visibility
 
-Status: PLANNED
+Status: DONE
 
 Expose enough policy metadata for operators and developers to understand Blob
 authorization decisions:
 
-- [ ] manual/help projection for Blob operation authorization requirements.
-- [ ] admin visibility for Blob collection, association-domain, and store
+- [x] Describe/Schema projection exposes effective role/resource policy
+      metadata as `authorizationPolicies`.
+- [x] Security deployment Markdown renders Authorization Resource Policies and
+      Role Definitions tables.
+- [x] Manual pages render an Authorization policies card when policy metadata
+      or Blob operation requirements exist.
+- [x] Blob admin home renders read-only Authorization requirements guidance.
+- [x] Admin visibility covers Blob collection, association-domain, and store
       policy.
-- [ ] diagnostics include guard failure vs capability failure distinction.
+- [x] Diagnostics include coarse `failureKind` on `authorization.decision`.
+- [x] Runtime dashboard metrics expose authorization failure counts by kind.
+
+Implementation notes:
+
+- Projection rows use runtime-normalized resource/action keys so displayed keys
+  match `OperationAccessPolicy` lookup behavior.
+- Blob operation requirement rows are read-only metadata. Enforcement remains
+  generic through UnitOfWork authorization and resource policies.
+- Failure kind is diagnostic only; structured `Conclusion` detail codes remain
+  the operational error-code source.
+
+Verification snapshot:
+
+- [x] `AuthorizationPolicyProjectionSpec` covers deterministic role/resource
+      rows and Blob operation requirements.
+- [x] `SecurityDeploymentMarkdownProjectionSpec` covers resource policy and
+      role tables.
+- [x] `OperationAccessPolicyResourceSpec` covers `failureKind=capability`,
+      `failureKind=permission`, and `failureKind=abac`.
+- [x] `StaticFormAppRendererSpec -- -z Authorization` covers dashboard JSON
+      compatibility for authorization metadata.
 
 ### Deferred To 8.3 Security
 

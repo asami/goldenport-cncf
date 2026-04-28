@@ -10,7 +10,7 @@ import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.job.JobQueryReadModel
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.projection.{DescribeProjection, HelpProjection, SchemaProjection}
+import org.goldenport.cncf.projection.{AuthorizationPolicyProjection, DescribeProjection, HelpProjection, SchemaProjection}
 import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.protocol.{Argument, Property, Request as ProtocolRequest}
 import org.goldenport.protocol.spec.ParameterDefinition
@@ -24,7 +24,7 @@ import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 27, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -2024,7 +2024,16 @@ object StaticFormAppRenderer {
              _admin_entry_card("Store Status", "Inspect the active BlobStore backend status.", "/web/blob/admin/store"),
              _admin_entry_card("Delete", "Open a Blob detail page to run controlled delete with optional force.", "/web/blob/admin/blobs")
            ))}
-           |</article>""".stripMargin
+           |</article>
+           |${_admin_card("Authorization requirements",
+             """<p>Blob admin actions use the existing admin operation gate plus generic resource policies.</p>
+               |<ul>
+               |  <li><code>collection:blob:delete</code> controls Blob metadata delete.</li>
+               |  <li><code>association:blob_attachment:create/delete/search/list</code> controls Blob attachment operations.</li>
+               |  <li><code>store:blobstore:status</code> controls BlobStore status diagnostics.</li>
+               |</ul>
+               |<p class="mb-0"><a href="/web/system/manual#authorization-policies">View effective authorization policies</a></p>""".stripMargin
+           )}""".stripMargin
     ))
 
   def renderBlobAdminBlobs(
@@ -6034,6 +6043,7 @@ object StaticFormAppRenderer {
     val htmlRequests = RuntimeDashboardMetrics.htmlSnapshot
     val actionCalls = RuntimeDashboardMetrics.actionCallSnapshot
     val authorizationDecisions = RuntimeDashboardMetrics.authorizationDecisionSnapshot
+    val authorizationFailureKinds = RuntimeDashboardMetrics.authorizationFailureKindCounts
     val dslChokepoints = RuntimeDashboardMetrics.dslChokepointSnapshot
     val jobs = _job_metrics(subsystem)
     _simple_page(
@@ -6072,6 +6082,8 @@ object StaticFormAppRenderer {
            |<article>
            |  <h2>Authorization</h2>
            |  ${_summary_table(authorizationDecisions.summary)}
+           |  <h3 class="h6 mt-3">Failure kind</h3>
+           |  ${_authorization_failure_kind_table(authorizationFailureKinds)}
            |</article>
            |<article>
            |  <h2>DSL Chokepoints</h2>
@@ -6109,6 +6121,11 @@ object StaticFormAppRenderer {
         _manual_storage_shape_section(describe)
       else
         ""
+    val authorizationPolicyCard =
+      if (selector.exists(NamingConventions.equivalentByNormalized(component.name, _)))
+        _manual_authorization_policy_section(describe)
+      else
+        ""
     val body =
       s"""${_manual_card("Reference navigation",
          s"""<p>This manual is read-only. Use it to inspect help, describe, schema, OpenAPI, and MCP entry points.</p>
@@ -6123,6 +6140,7 @@ object StaticFormAppRenderer {
          |${_manual_card("Children", childLinks)}
          |${componentletCard}
          |${storageShapeCard}
+         |${authorizationPolicyCard}
          |${_manual_projection_card("Help", currentPath, help, Some("help"))}
          |${_manual_projection_card("Describe", currentPath, describe, Some("describe"))}
          |${_manual_projection_card("Schema", currentPath, schema, Some("schema"))}""".stripMargin
@@ -6150,6 +6168,7 @@ object StaticFormAppRenderer {
             |</div>""".stripMargin)}
          |${_manual_card("Components", componentLinks)}
          |${_manual_card("Console handoff", """<p class="mb-0">Use <a href="/web/console">System Console</a> for controlled operation entry. Manual pages remain read-only and do not inline operation actions.</p>""")}
+         |${_manual_authorization_policy_section(describe)}
          |${_manual_projection_card("Help", "/web/system/manual", help, Some("help"))}
          |${_manual_projection_card("Describe", "/web/system/manual", describe, Some("describe"))}
          |${_manual_projection_card("Schema", "/web/system/manual", schema, Some("schema"))}""".stripMargin
@@ -6286,6 +6305,95 @@ object StaticFormAppRenderer {
       )
     }
   }
+
+  private def _manual_authorization_policy_section(
+    record: Record
+  ): String = {
+    val policy = record.getAny("authorizationPolicies").collect { case r: Record => r }
+    policy match {
+      case Some(p) if AuthorizationPolicyProjection.hasVisiblePolicy(p) =>
+        val roles = _manual_record_seq(p.asMap.get("roleDefinitions"))
+        val resources = _manual_record_seq(p.asMap.get("resourcePolicies"))
+        val blobRequirements = _manual_record_seq(p.asMap.get("blobOperationRequirements"))
+        val roleTable =
+          if (roles.isEmpty)
+            _web_empty_state("No role definitions are configured.")
+          else
+            s"""<div class="table-responsive">
+               |  <table class="table table-sm table-hover align-middle manual-authorization-roles">
+               |    <thead><tr><th>Role</th><th>Includes</th><th>Capabilities</th><th>Source</th></tr></thead>
+               |    <tbody>${roles.map(_manual_authorization_role_row).mkString("\n")}</tbody>
+               |  </table>
+               |</div>""".stripMargin
+        val resourceTable =
+          if (resources.isEmpty)
+            _web_empty_state("No resource policies are configured.")
+          else
+            s"""<div class="table-responsive">
+               |  <table class="table table-sm table-hover align-middle manual-authorization-resources">
+               |    <thead><tr><th>Family</th><th>Resource</th><th>Action</th><th>Capabilities</th><th>Permission</th><th>Source</th></tr></thead>
+               |    <tbody>${resources.map(_manual_authorization_resource_row).mkString("\n")}</tbody>
+               |  </table>
+               |</div>""".stripMargin
+        val blobRequirementTable =
+          if (blobRequirements.isEmpty)
+            ""
+          else
+            s"""<h3 class="h6 mt-3">Blob operation requirements</h3>
+               |<div class="table-responsive">
+               |  <table class="table table-sm table-hover align-middle manual-authorization-blob-requirements">
+               |    <thead><tr><th>Operation</th><th>Family</th><th>Resource</th><th>Action</th><th>Requirement</th></tr></thead>
+               |    <tbody>${blobRequirements.map(_manual_authorization_blob_requirement_row).mkString("\n")}</tbody>
+               |  </table>
+               |</div>""".stripMargin
+        _manual_card(
+          "Authorization policies",
+          s"""<p class="mb-3">Read-only view of descriptor-backed authorization policy and Blob operation requirements.</p>
+             |<h3 class="h6">Resource policies</h3>
+             |${resourceTable}
+             |<h3 class="h6 mt-3">Role definitions</h3>
+             |${roleTable}
+             |${blobRequirementTable}
+             |${_manual_raw_details("Authorization policies", p)}""".stripMargin,
+          Some("authorization-policies")
+        )
+      case _ =>
+        ""
+    }
+  }
+
+  private def _manual_authorization_role_row(
+    record: Record
+  ): String =
+    s"""<tr>
+       |  <td><code>${_escape(record.getString("name").getOrElse(""))}</code></td>
+       |  <td>${_escape(_manual_seq_values(record.asMap.get("includes")).mkString(", "))}</td>
+       |  <td>${_escape(_manual_seq_values(record.asMap.get("capabilities")).mkString(", "))}</td>
+       |  <td>${_escape(record.getString("source").getOrElse(""))}</td>
+       |</tr>""".stripMargin
+
+  private def _manual_authorization_resource_row(
+    record: Record
+  ): String =
+    s"""<tr>
+       |  <td>${_escape(record.getString("family").getOrElse(""))}</td>
+       |  <td><code>${_escape(record.getString("resource").getOrElse(""))}</code></td>
+       |  <td><code>${_escape(record.getString("action").getOrElse(""))}</code></td>
+       |  <td>${_escape(_manual_seq_values(record.asMap.get("requiredCapabilities")).mkString(", "))}</td>
+       |  <td>${_escape(record.getString("permissionOverride").filter(_.nonEmpty).getOrElse("-"))}</td>
+       |  <td>${_escape(record.getString("source").getOrElse(""))}</td>
+       |</tr>""".stripMargin
+
+  private def _manual_authorization_blob_requirement_row(
+    record: Record
+  ): String =
+    s"""<tr>
+       |  <td><code>${_escape(record.getString("operation").getOrElse(""))}</code></td>
+       |  <td>${_escape(record.getString("family").getOrElse(""))}</td>
+       |  <td><code>${_escape(record.getString("resource").getOrElse(""))}</code></td>
+       |  <td><code>${_escape(record.getString("action").getOrElse(""))}</code></td>
+       |  <td>${_escape(record.getString("requirement").getOrElse(""))}</td>
+       |</tr>""".stripMargin
 
   private def _manual_storage_shape_summary_row(
     record: Record
@@ -7872,6 +7980,7 @@ object StaticFormAppRenderer {
     val htmlRequests = RuntimeDashboardMetrics.htmlSnapshot
     val actionCalls = RuntimeDashboardMetrics.actionCallSnapshot
     val authorizationDecisions = RuntimeDashboardMetrics.authorizationDecisionSnapshot
+    val authorizationFailureKinds = RuntimeDashboardMetrics.authorizationFailureKindCounts
     val dslChokepoints = RuntimeDashboardMetrics.dslChokepointSnapshot
     val avgMillis =
       if (htmlRequests.recent.isEmpty) 0L
@@ -7882,7 +7991,7 @@ object StaticFormAppRenderer {
     val manualPath =
       if (scope == "component") s"/web/${NamingConventions.toNormalizedSegment(name)}/manual"
       else "/web/system/manual"
-    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"dsl":{"chokepoints":${_snapshot_json(dslChokepoints, includeRecent = false)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance","manual":"${_json(manualPath)}","console":"/web/console","assemblyWarnings":"/form/admin/assembly/warnings"},"components":${componentJson}}"""
+    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"dsl":{"chokepoints":${_snapshot_json(dslChokepoints, includeRecent = false)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)},"failureKinds":${_string_long_map_json(authorizationFailureKinds)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance","manual":"${_json(manualPath)}","console":"/web/console","assemblyWarnings":"/form/admin/assembly/warnings"},"components":${componentJson}}"""
   }
 
   private def _snapshot_json(
@@ -7911,6 +8020,12 @@ object StaticFormAppRenderer {
 
   private def _buckets_json(buckets: Vector[RuntimeDashboardMetrics.RequestBucket]): String =
     buckets.map(x => s"""{"period":${x.period},"count":${x.count},"errors":${x.errors}}""").mkString("[", ",", "]")
+
+  private def _string_long_map_json(values: Map[String, Long]): String =
+    values.toVector
+      .sortBy(_._1)
+      .map { case (k, v) => s""""${_json(k)}":${v}""" }
+      .mkString("{", ",", "}")
 
   private def _jobs_json(
     running: Int,
@@ -7944,6 +8059,22 @@ object StaticFormAppRenderer {
     window: RuntimeDashboardMetrics.CountWindow
   ): String =
     s"<tr><td>${_escape(label)}</td><td>${window.total}</td><td>${window.errors}</td></tr>"
+
+  private def _authorization_failure_kind_table(
+    counts: Map[String, Long]
+  ): String =
+    if (counts.isEmpty)
+      """<p class="text-secondary">No authorization failures by kind have been recorded.</p>"""
+    else {
+      val rows = counts.toVector.sortBy(_._1).map {
+        case (kind, count) =>
+          s"<tr><td><code>${_escape(kind)}</code></td><td>${count}</td></tr>"
+      }.mkString("\n")
+      s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
+         |  <thead><tr><th>Failure kind</th><th>Count</th></tr></thead>
+         |  <tbody>${rows}</tbody>
+         |</table></div>""".stripMargin
+    }
 
   private def _jobs_table(jobs: (Int, Int, Int, Int)): String = {
     val (running, queued, completed, failed) = jobs

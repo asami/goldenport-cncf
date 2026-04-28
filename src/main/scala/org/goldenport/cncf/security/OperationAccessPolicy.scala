@@ -1,6 +1,6 @@
 package org.goldenport.cncf.security
 
-import org.goldenport.Consequence
+import org.goldenport.{Consequence, Conclusion}
 import org.goldenport.observation.Descriptor
 import org.goldenport.record.Record
 import org.goldenport.cncf.component.Component
@@ -418,13 +418,16 @@ object OperationAccessPolicy {
     val outcome = result match
       case Consequence.Success(_) => "allow"
       case Consequence.Failure(_) => "deny"
-    RuntimeDashboardMetrics.recordAuthorizationDecision(outcome == "deny")
+    val failureKind = _failure_kind(result)
+    RuntimeDashboardMetrics.recordAuthorizationDecision(outcome == "deny", failureKind)
     val _ = ctx.observability.emitInfo(
       ctx.cncfCore.scope,
       "authorization.decision",
       Record.dataAuto(
         "surface" -> surface,
         "outcome" -> outcome,
+        "failureKind" -> failureKind.getOrElse(""),
+        "failure-kind" -> failureKind.getOrElse(""),
         "access-mode" -> _label(authorization.accessMode),
         "resource-family" -> authorization.resourceFamily,
         "resource-type" -> authorization.resourceType,
@@ -441,6 +444,31 @@ object OperationAccessPolicy {
         "subject-security-level" -> subject.securityLevel.toVector.sorted.mkString(",")
       )
     )
+  }
+
+  private def _failure_kind[A](
+    result: Consequence[A]
+  ): Option[String] =
+    result match {
+      case Consequence.Failure(conclusion) => Some(_failure_kind(conclusion))
+      case _ => None
+    }
+
+  private def _failure_kind(
+    conclusion: Conclusion
+  ): String = {
+    val reason = conclusion.observation.cause.descriptor.facets.collectFirst {
+      case Descriptor.Facet.Name(name) => name.trim.toLowerCase(java.util.Locale.ROOT)
+    }.getOrElse("")
+    reason match {
+      case "required-capability" => "capability"
+      case "abac-condition" => "abac"
+      case "cross-component-service-grant" => "cross_component"
+      case "manager-only" | "owner-or-manager" => "guard"
+      case "relation" => "relation"
+      case "owner" | "group" | "other" | "security-attributes-missing" | "owner-missing" => "permission"
+      case _ => "unknown"
+    }
   }
 
   private def _is_public_policy(

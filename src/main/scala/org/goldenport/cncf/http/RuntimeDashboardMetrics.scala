@@ -2,7 +2,7 @@ package org.goldenport.cncf.http
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 object RuntimeDashboardMetrics {
@@ -42,7 +42,8 @@ object RuntimeDashboardMetrics {
 
   private final case class Event(
     observedAt: Long,
-    error: Boolean
+    error: Boolean,
+    failureKind: Option[String] = None
   )
 
   private var _htmlEvents = Vector.empty[Event]
@@ -67,7 +68,15 @@ object RuntimeDashboardMetrics {
   }
 
   def recordAuthorizationDecision(denied: Boolean): Unit = synchronized {
-    _authorizationEvents = (_authorizationEvents :+ Event(java.time.Instant.now.toEpochMilli, denied)).takeRight(10000)
+    recordAuthorizationDecision(denied, None)
+  }
+
+  def recordAuthorizationDecision(
+    denied: Boolean,
+    failureKind: Option[String]
+  ): Unit = synchronized {
+    val kind = if (denied) failureKind.filter(_.nonEmpty) else None
+    _authorizationEvents = (_authorizationEvents :+ Event(java.time.Instant.now.toEpochMilli, denied, kind)).takeRight(10000)
   }
 
   def recordDslChokepoint(error: Boolean): Unit = synchronized {
@@ -84,6 +93,15 @@ object RuntimeDashboardMetrics {
 
   def authorizationDecisionSnapshot: Snapshot = synchronized {
     _snapshot(_authorizationEvents, Vector.empty)
+  }
+
+  def authorizationFailureKindCounts: Map[String, Long] = synchronized {
+    _authorizationEvents
+      .filter(_.error)
+      .groupBy(_.failureKind.getOrElse("unknown"))
+      .view
+      .mapValues(_.size.toLong)
+      .toMap
   }
 
   def dslChokepointSnapshot: Snapshot = synchronized {

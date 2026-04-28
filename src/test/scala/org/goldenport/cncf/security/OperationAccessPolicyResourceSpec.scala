@@ -5,6 +5,7 @@ import org.goldenport.cncf.component.{Component, ComponentId, ComponentInstanceI
 import org.goldenport.cncf.context.{Capability, ExecutionContext, Principal, PrincipalId, ScopeContext, ScopeKind, SecurityContext}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAuthorizationBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemSecurityBinding, Subsystem}
 import org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.protocol.Protocol
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -140,6 +141,61 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
           )
         ) shouldBe Consequence.unit
       }
+    }
+
+    "record missing capability as an authorization failure kind" in {
+      val before = RuntimeDashboardMetrics.authorizationFailureKindCounts.getOrElse("capability", 0L)
+      given ExecutionContext = _context(capabilities = Set.empty)
+
+      OperationAccessPolicy.authorizeUnitOfWorkDefault(
+        UnitOfWorkAuthorization(
+          resourceFamily = "store",
+          resourceType = Some("blobstore"),
+          collectionName = Some("blob-payload-store"),
+          accessKind = "status"
+        )
+      ) shouldBe a[Consequence.Failure[_]]
+
+      RuntimeDashboardMetrics.authorizationFailureKindCounts.getOrElse("capability", 0L) should be > before
+    }
+
+    "record permission override denial as a permission failure kind" in {
+      val before = RuntimeDashboardMetrics.authorizationFailureKindCounts.getOrElse("permission", 0L)
+      given ExecutionContext = _context(capabilities = Set.empty, principalId = "owner")
+      val record = _record(SecurityAttributes.ownedBy("owner"))
+
+      OperationAccessPolicy.authorizeUnitOfWorkDefault(
+        UnitOfWorkAuthorization(
+          resourceFamily = "domain",
+          resourceType = Some("blob"),
+          collectionName = Some("blob"),
+          targetId = Some(_blobId),
+          accessKind = "delete"
+        ),
+        _ => Consequence.success(Some(record))
+      ) shouldBe a[Consequence.Failure[_]]
+
+      RuntimeDashboardMetrics.authorizationFailureKindCounts.getOrElse("permission", 0L) should be > before
+    }
+
+    "record natural-condition denial as an ABAC failure kind" in {
+      val before = RuntimeDashboardMetrics.authorizationFailureKindCounts.getOrElse("abac", 0L)
+      given ExecutionContext = _context(capabilities = Set.empty, principalId = "owner")
+      val record = Record.create(_record(SecurityAttributes.ownedBy("owner")).asMap.toVector :+ ("tenantId" -> "tenant-b"))
+
+      OperationAccessPolicy.authorizeUnitOfWorkDefault(
+        UnitOfWorkAuthorization(
+          resourceFamily = "domain",
+          resourceType = Some("blob"),
+          collectionName = Some("blob"),
+          targetId = Some(_blobId),
+          accessKind = "read",
+          naturalConditions = EntityAbacCondition.parse("tenantId=subject.tenantId:read").toVector
+        ),
+        _ => Consequence.success(Some(record))
+      ) shouldBe a[Consequence.Failure[_]]
+
+      RuntimeDashboardMetrics.authorizationFailureKindCounts.getOrElse("abac", 0L) should be > before
     }
 
     "preserve existing behavior when no resource policy is configured" in {

@@ -630,8 +630,15 @@ Current active phase: Phase 18.
   status. Ingress execution rebinds UoW interpretation to the resolved request
   security context while preserving runtime UoW lifecycle actions, so
   ActionCall/UoW authorization observes the active subject.
-- BL-09 remaining work is limited to enough introspection/admin visibility to
-  operate Blob authorization policies.
+- BL-09E is completed in this change. Describe/Schema projection exposes
+  `authorizationPolicies`, security deployment Markdown renders role/resource
+  tables, manual pages and Blob admin home show read-only Blob authorization
+  requirements, and authorization decision diagnostics include coarse
+  `failureKind` counts for capability, permission, guard, ABAC, relation,
+  cross-component, and unknown failures.
+- BL-09 is now complete for Phase 18. Broader ACL administration, subject grant
+  UI, role lifecycle UI, and organization-grade policy management remain under
+  strategy section 8.3 Security.
 - Remaining Blob hardening outside BL-09 includes UoW-backed application
   create/update Blob attachment workflow adapters, deletion/retention policy,
   signed URLs, production BlobStore backends, MIME-kind policy, payload size

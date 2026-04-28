@@ -123,7 +123,7 @@ Current semantic direction:
   - BL-08C (DONE): Blob FunctionalActionCall Entity access chokepoint boundary.
   - BL-08D (DONE): ProcedureActionCall DSL foundation.
   - BL-08E (DONE): Blob authorization policy and preflight.
-- I (IN PROGRESS): BL-09 — Blob-required authorization support.
+- I (DONE): BL-09 — Blob-required authorization support.
   - BL-09A (DONE): guard/capability authorization concept refinement.
   - BL-09B (DONE): minimal subject-side grant/config surface for roles,
     scopes, capabilities, and create/use grants needed by Blob.
@@ -132,7 +132,7 @@ Current semantic direction:
     resources.
   - BL-09D (DONE): Blob operation integration on the generic authorization
     policy surface.
-  - BL-09E (PLANNED): introspection/manual/admin visibility for effective
+  - BL-09E (DONE): introspection/manual/admin visibility for effective
     Blob authorization policy.
 
 Current note:
@@ -145,12 +145,9 @@ Current note:
   - `cca7e38 Close blob projection contract`
   - `8f87196 Harden external blob URLs`
   - `2d00f58 Harden blob action chokepoints`
-  - Current change: apply BL-09 resource policies to Blob operations.
-    `register_blob`, Blob attachment/list/detach flows, admin Blob delete, and
-    BlobStore status now pass through generic `OperationAccessPolicy` checks.
-    Ingress execution now rebinds UoW interpretation to the authenticated
-    request context while preserving the existing runtime UoW lifecycle, so
-    ActionCall/UoW authorization sees the current subject.
+  - Current change: expose BL-09 resource policies and Blob operation
+    requirements through Describe/Schema/manual/security-deployment projection,
+    Blob admin read-only guidance, and authorization decision diagnostics.
   - BL-07B closes the projection contract:
     Aggregate/View output uses a flat, additive `blobs` field, omits it when
     empty, orders rows by `sortOrder`, and never embeds payload bytes.
@@ -190,6 +187,11 @@ Current note:
     keeping internal idempotency lookups system-internal. Admin Blob operations
     keep their admin operation gate and add explicit resource policy checks for
     collection, association, and store access.
+  - BL-09E makes those policies visible. Describe/Schema projection exposes
+    `authorizationPolicies`; security deployment Markdown adds role/resource
+    tables; manual pages and Blob admin home show read-only authorization
+    requirements; authorization decision observability records include coarse
+    `failureKind`.
   - UoW-backed application create/update Blob attachment workflow adapters are
     split out as follow-up hardening work.
 - `docs/journal/2026/04/blob-management-component-specification-note.md` is the
@@ -218,12 +220,12 @@ Current note:
   - [x] BL-08C: Blob FunctionalActionCall Entity access chokepoint boundary.
   - [x] BL-08D: ProcedureActionCall DSL foundation.
   - [x] BL-08E: Blob authorization policy and preflight.
-- [ ] BL-09: Blob-required authorization support.
+- [x] BL-09: Blob-required authorization support.
   - [x] BL-09A: Guard/capability authorization concept refinement.
   - [x] BL-09B: Minimal subject-side grant/config surface.
   - [x] BL-09C: Object/resource-side access policy surface.
   - [x] BL-09D: Blob integration on generic authorization policies.
-  - [ ] BL-09E: Authorization policy introspection/admin visibility.
+  - [x] BL-09E: Authorization policy introspection/admin visibility.
 
 ## 6. Public Interface Direction
 

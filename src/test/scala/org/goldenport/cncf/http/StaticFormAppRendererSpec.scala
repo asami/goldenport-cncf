@@ -56,7 +56,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 27, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -85,6 +85,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       c.downField("authorization").downField("decisions").downField("summary").downField("cumulative").get[Long]("count").isRight shouldBe true
       c.downField("authorization").downField("decisions").downField("summary").downField("cumulative").get[Long]("errors").isRight shouldBe true
       c.downField("authorization").downField("decisions").downField("series").downField("hour").focus.flatMap(_.asArray).exists(_.nonEmpty) shouldBe true
+      c.downField("authorization").downField("failureKinds").focus.exists(_.isObject) shouldBe true
       c.downField("dsl").downField("chokepoints").downField("summary").downField("cumulative").get[Long]("count").isRight shouldBe true
       c.downField("dsl").downField("chokepoints").downField("summary").downField("cumulative").get[Long]("errors").isRight shouldBe true
       c.downField("dsl").downField("chokepoints").downField("series").downField("hour").focus.flatMap(_.asArray).exists(_.nonEmpty) shouldBe true
@@ -210,7 +211,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       ))))
       val id = blob.getString("id").getOrElse(fail("Blob id is missing"))
       _success(subsystem.executeOperationResponse(_blob_request(
-        "attach_blob_to_entity",
+        "admin_attach_blob_to_entity",
         Property("sourceEntityId", "article-1", None),
         Property("id", id, None),
         Property("role", "mainImage", None)
@@ -225,6 +226,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       home should include ("Blob Admin")
       home should include ("/web/blob/admin/blobs")
+      home should include ("Authorization requirements")
+      home should include ("collection:blob:delete")
+      home should include ("association:blob_attachment:create/delete/search/list")
+      home should include ("store:blobstore:status")
       list should include ("Blob Admin Blobs")
       list should include (id)
       list should include ("/web/blob/admin/blobs/")
@@ -2913,7 +2918,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val viewNoBlobRecord = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "id" -> "notice_2")
       viewNoBlobRecord.getAny("blobs") shouldBe None
       _success(viewSubsystem.executeOperationResponse(_blob_request(
-        "attach_blob_to_entity",
+        "admin_attach_blob_to_entity",
         Property("sourceEntityId", "notice_2", None),
         Property("id", viewBlobId, None),
         Property("role", "mainImage", None),
@@ -2939,27 +2944,27 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val lateAggregateBlobId = _register_external_blob(aggregateSubsystem, "aggregate-late.png", "https://example.test/aggregate-late.png")
       val unorderedAggregateBlobId = _register_external_blob(aggregateSubsystem, "aggregate-unordered.png", "https://example.test/aggregate-unordered.png")
       _success(aggregateSubsystem.executeOperationResponse(_blob_request(
-        "attach_blob_to_entity",
+        "admin_attach_blob_to_entity",
         Property("sourceEntityId", "notice_1", None),
         Property("id", lateAggregateBlobId, None),
         Property("role", "lateImage", None),
         Property("sortOrder", "20", None)
       )))
       _success(aggregateSubsystem.executeOperationResponse(_blob_request(
-        "attach_blob_to_entity",
+        "admin_attach_blob_to_entity",
         Property("sourceEntityId", "notice_1", None),
         Property("id", aggregateBlobId, None),
         Property("role", "heroImage", None),
         Property("sortOrder", "2", None)
       )))
       _success(aggregateSubsystem.executeOperationResponse(_blob_request(
-        "attach_blob_to_entity",
+        "admin_attach_blob_to_entity",
         Property("sourceEntityId", "notice_1", None),
         Property("id", unorderedAggregateBlobId, None),
         Property("role", "unorderedImage", None)
       )))
       _success(aggregateSubsystem.executeOperationResponse(_blob_request(
-        "attach_blob_to_entity",
+        "admin_attach_blob_to_entity",
         Property("sourceEntityId", "notice_1", None),
         Property("id", earlyAggregateBlobId, None),
         Property("role", "earlyImage", None),
@@ -3576,7 +3581,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       RuntimeDashboardMetrics.recordHtmlRequest("GET", "/web/system/dashboard", 200, 12L)
       RuntimeDashboardMetrics.recordHtmlRequest("GET", "/missing", 404, 34L)
-      RuntimeDashboardMetrics.recordAuthorizationDecision(denied = true)
+      RuntimeDashboardMetrics.recordAuthorizationDecision(denied = true, Some("capability"))
 
       val html = StaticFormAppRenderer.renderSystemPerformance(subsystem).body
 
@@ -3590,6 +3595,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("ActionCall")
       html should include ("DSL Chokepoints")
       html should include ("Authorization")
+      html should include ("Failure kind")
+      html should include ("capability")
       html should include ("Jobs")
       html should include ("Assembly warnings")
       html should include ("/form/admin/assembly/warnings")

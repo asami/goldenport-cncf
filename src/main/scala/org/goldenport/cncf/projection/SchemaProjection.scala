@@ -5,7 +5,7 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version Apr. 26, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 object SchemaProjection {
@@ -17,6 +17,7 @@ object SchemaProjection {
         Record.data(
           "type" -> "schema",
           "name" -> name,
+          "authorizationPolicies" -> AuthorizationPolicyProjection.project(components, name),
           "components" -> components.map { component =>
             project(base, Some(component.name))
           }
@@ -63,6 +64,7 @@ object SchemaProjection {
           "entityCollections" -> entitycollections,
           "aggregateCollections" -> aggregates,
           "viewCollections" -> views,
+          "authorizationPolicies" -> AuthorizationPolicyProjection.project(Vector(component), component.subsystem.map(_.name).getOrElse(component.name)),
           "operationDefinitions" -> operationdefs
         )
       case Target.ServiceTarget(component, service) =>
