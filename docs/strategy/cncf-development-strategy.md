@@ -564,6 +564,9 @@ Current active phase: Phase 18.
   dedicated Blob DataStore.
 - Production-oriented BlobStore design assumes S3-like object storage, while
   local/in-memory stores are development and executable-spec backends.
+- CNCF core does not take a direct AWS dependency. S3/S3-compatible BlobStore
+  integration is provided by a separate AwsComponent through the BlobStore
+  provider/plugin SPI.
 - Stored managed Blob payloads are expected to become URL-addressable through
   CNCF Blob routes or backend-provided object URLs.
 - Image, Video, and Attachment use cases are supported through Blob-managed
@@ -640,12 +643,31 @@ Current active phase: Phase 18.
   relative CNCF routes, BlobStores no longer expose storageRef-based CNCF
   routes, and `/web/blob/content/{id}` serves payloads through Blob Entity read
   authorization.
-- Remaining Blob hardening includes deletion/retention policy, signed URLs,
-  real S3/S3-compatible BlobStore backends, MIME-kind policy, payload size
-  limits, thumbnail generation, virus scanning, and resumable upload.
+- Remaining Blob hardening includes deletion/retention policy, signed URL
+  integration points, MIME-kind policy, payload size limits, thumbnail
+  generation, virus scanning, and resumable upload. Concrete AWS/S3 backend
+  implementation is tracked under AwsComponent, not CNCF core.
 - Active dashboard: `docs/phase/phase-18.md`
 - Active checklist: `docs/phase/phase-18-checklist.md`
 - Source note: `docs/journal/2026/04/blob-management-component-specification-note.md`.
+
+### 8.8 AwsComponent
+Future component development item.
+
+- Provide AWS-facing integrations outside CNCF core so CNCF itself does not
+  depend on AWS SDKs or AWS deployment assumptions.
+- Initial scope includes S3/S3-compatible BlobStore provider support for the
+  BlobStore SPI introduced in Phase 18.
+- AwsComponent may provide:
+  - BlobStore provider implementation for S3/S3-compatible object storage;
+  - deployment-specific public base URL or signed URL integration;
+  - AWS credential/configuration handling owned by the component, not by CNCF
+    core;
+  - future AWS service adapters when they are useful as CNCF components.
+- CNCF core remains responsible for the generic BlobStore SPI, Blob metadata,
+  Blob content route fallback, authorization, and projection contracts.
+- AwsComponent remains optional. Local and in-memory BlobStores continue to
+  serve development and executable-spec use cases.
 
 ## 9. Completed Development Item History
 
