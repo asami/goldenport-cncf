@@ -173,6 +173,11 @@ Result / Event
 - Actions are realized as OperationCalls at the execution boundary.
 - OperationDefinition.createOperationRequest(Request) is the sole conversion
   point from Request to OperationRequest.
+- OperationDefinition request parsing is also the standard parameter
+  validation boundary. CNCF observes construction failures at the Subsystem
+  boundary, and reusable components may attach component-specific diagnostics
+  by implementing `OperationRequestValidationObserver` without bypassing the
+  common Action generation flow.
 - ComponentActionEntry and Engine MUST invoke OperationDefinition before
   constructing an OperationCall.
 - ExecutionContext and identifiers are passed through unchanged

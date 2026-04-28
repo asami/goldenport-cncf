@@ -24,7 +24,8 @@ import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 28, 2026
+ *  version Apr. 28, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -6045,6 +6046,12 @@ object StaticFormAppRenderer {
     val authorizationDecisions = RuntimeDashboardMetrics.authorizationDecisionSnapshot
     val authorizationFailureKinds = RuntimeDashboardMetrics.authorizationFailureKindCounts
     val dslChokepoints = RuntimeDashboardMetrics.dslChokepointSnapshot
+    val validation = RuntimeDashboardMetrics.validationSnapshot
+    val validationFailureKinds = RuntimeDashboardMetrics.validationFailureKindCounts
+    val operationRequestValidation = RuntimeDashboardMetrics.operationRequestValidationSnapshot
+    val operationRequestValidationFailureKinds = RuntimeDashboardMetrics.operationRequestValidationFailureKindCounts
+    val blobOperations = RuntimeDashboardMetrics.blobOperationSnapshot
+    val blobFailureKinds = RuntimeDashboardMetrics.blobFailureKindCounts
     val jobs = _job_metrics(subsystem)
     _simple_page(
       title = "System Performance",
@@ -6088,6 +6095,24 @@ object StaticFormAppRenderer {
            |<article>
            |  <h2>DSL Chokepoints</h2>
            |  ${_summary_table(dslChokepoints.summary)}
+           |</article>
+           |<article>
+           |  <h2>Validation</h2>
+           |  ${_summary_table(validation.summary)}
+           |  <h3 class="h6 mt-3">Failure kind</h3>
+           |  ${_authorization_failure_kind_table(validationFailureKinds)}
+           |</article>
+           |<article>
+           |  <h2>Operation Request Validation</h2>
+           |  ${_summary_table(operationRequestValidation.summary)}
+           |  <h3 class="h6 mt-3">Failure kind</h3>
+           |  ${_authorization_failure_kind_table(operationRequestValidationFailureKinds)}
+           |</article>
+           |<article>
+           |  <h2>Blob operations</h2>
+           |  ${_summary_table(blobOperations.summary)}
+           |  <h3 class="h6 mt-3">Failure kind</h3>
+           |  ${_authorization_failure_kind_table(blobFailureKinds)}
            |</article>
            |<article>
            |  <h2>Jobs</h2>
@@ -7982,6 +8007,12 @@ object StaticFormAppRenderer {
     val authorizationDecisions = RuntimeDashboardMetrics.authorizationDecisionSnapshot
     val authorizationFailureKinds = RuntimeDashboardMetrics.authorizationFailureKindCounts
     val dslChokepoints = RuntimeDashboardMetrics.dslChokepointSnapshot
+    val validation = RuntimeDashboardMetrics.validationSnapshot
+    val validationFailureKinds = RuntimeDashboardMetrics.validationFailureKindCounts
+    val operationRequestValidation = RuntimeDashboardMetrics.operationRequestValidationSnapshot
+    val operationRequestValidationFailureKinds = RuntimeDashboardMetrics.operationRequestValidationFailureKindCounts
+    val blobOperations = RuntimeDashboardMetrics.blobOperationSnapshot
+    val blobFailureKinds = RuntimeDashboardMetrics.blobFailureKindCounts
     val avgMillis =
       if (htmlRequests.recent.isEmpty) 0L
       else htmlRequests.recent.map(_.elapsedMillis).sum / htmlRequests.recent.size
@@ -7991,7 +8022,7 @@ object StaticFormAppRenderer {
     val manualPath =
       if (scope == "component") s"/web/${NamingConventions.toNormalizedSegment(name)}/manual"
       else "/web/system/manual"
-    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"dsl":{"chokepoints":${_snapshot_json(dslChokepoints, includeRecent = false)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)},"failureKinds":${_string_long_map_json(authorizationFailureKinds)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance","manual":"${_json(manualPath)}","console":"/web/console","assemblyWarnings":"/form/admin/assembly/warnings"},"components":${componentJson}}"""
+    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"dsl":{"chokepoints":${_snapshot_json(dslChokepoints, includeRecent = false)},"validation":${_snapshot_json(validation, includeRecent = false)},"validationFailureKinds":${_string_long_map_json(validationFailureKinds)},"operationRequestValidation":${_snapshot_json(operationRequestValidation, includeRecent = false)},"operationRequestValidationFailureKinds":${_string_long_map_json(operationRequestValidationFailureKinds)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)},"failureKinds":${_string_long_map_json(authorizationFailureKinds)}},"blob":{"operations":${_snapshot_json(blobOperations, includeRecent = false)},"failureKinds":${_string_long_map_json(blobFailureKinds)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance","manual":"${_json(manualPath)}","console":"/web/console","assemblyWarnings":"/form/admin/assembly/warnings"},"components":${componentJson}}"""
   }
 
   private def _snapshot_json(

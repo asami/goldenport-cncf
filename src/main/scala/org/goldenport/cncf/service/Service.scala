@@ -14,6 +14,7 @@ import org.goldenport.cncf.context.{CorrelationId, ExecutionContext, ScopeKind}
 import org.goldenport.cncf.context.GlobalRuntimeContext
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.protocol.OperationResponseFormatter
+import org.goldenport.cncf.protocol.OperationRequestValidationObserver
 
 /*
  * @since   Apr. 11, 2025
@@ -22,7 +23,7 @@ import org.goldenport.cncf.protocol.OperationResponseFormatter
  *  version Jan. 21, 2026
  *  version Feb. 19, 2026
  *  version Mar. 28, 2026
- * @version Apr. 14, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Service extends ProtocolService with Service.CCore.Holder {
@@ -32,8 +33,17 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
     executionContext: ExecutionContext,
     correlationId: Option[CorrelationId]
   ): Consequence[OperationResponse] = {
-    val _ = name
-    logic.makeOperationRequest(request).flatMap {
+    val oprequest = logic.makeOperationRequest(request)
+    OperationRequestValidationObserver.observeFailure(
+      componentName = logic.component.name,
+      serviceName = serviceDefinition.name,
+      operationName = name,
+      operation = _operation_definition(name),
+      request = request,
+      result = oprequest,
+      context = executionContext
+    )
+    oprequest.flatMap {
       case action: CommandAction =>
         logic.executeAction(action, executionContext)
       case action: QueryAction =>
@@ -44,6 +54,9 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
         Consequence.operationInvalid("OperationRequest must be Action")
     }
   }
+
+  private def _operation_definition(name: String) =
+    serviceDefinition.operations.operations.toVector.find(_.name == name)
 
   def invokeCli(args: Array[String]): Consequence[String] =
     for {

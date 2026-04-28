@@ -244,6 +244,15 @@ OperationRequest construction
 -----------------------------
 - `ComponentLogic.makeOperationRequest` converts DSL/protocol requests into
   `OperationRequest` (`Action`) instances.
+- Request parameter parsing and validation belong at this construction
+  boundary. Components should keep applicative parameter parsing in
+  `OperationDefinition.createOperationRequest` instead of moving the same
+  validation into `ActionCall` execution.
+- When construction fails, `Subsystem` emits the common
+  `operation.request_validation` observability event. Components that need
+  domain-specific metrics or diagnostics may additionally implement the
+  optional `OperationRequestValidationObserver` extension point on their
+  `OperationDefinition`.
 - Protocol obligations end at `OperationRequest` creation; subsequent logic
   operates on semantic builders and does not consult raw DSL fragments.
 

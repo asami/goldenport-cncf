@@ -9,12 +9,15 @@ import org.goldenport.bag.BagMetadata
 import org.goldenport.bag.BinaryBag
 import org.goldenport.cncf.blob.*
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.security.{AuthorizationResourcePolicies, AuthorizationResourcePolicy}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.subsystem.{GenericSubsystemAuthorizationBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemSecurityBinding}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.datatype.ContentType
 import org.goldenport.http.HttpResponse
+import org.goldenport.observation.Descriptor
+import org.goldenport.provisional.observation.Cause
 import org.goldenport.protocol.{Argument, Property, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.record.Record
@@ -28,7 +31,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for BL-03A Blob user-facing metadata and payload operations.
  *
  * @since   Apr. 26, 2026
- * @version Apr. 28, 2026
+ *  version Apr. 28, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponentSpec
@@ -556,6 +560,9 @@ final class BlobComponentSpec
     "reject invalid Blob content type metadata" in {
       Given("a default subsystem")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val failuresBefore = RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("content_type", 0L)
+      val requestValidationBefore = RuntimeDashboardMetrics.operationRequestValidationFailureKindCounts.getOrElse("format", 0L)
+      val validationBefore = RuntimeDashboardMetrics.validationFailureKindCounts.getOrElse("format", 0L)
 
       When("register_blob receives a non-MIME content type")
       val result = subsystem.executeOperationResponse(_request(
@@ -571,6 +578,11 @@ final class BlobComponentSpec
 
       Then("registration fails before the payload is stored")
       result shouldBe a[Consequence.Failure[_]]
+      _failure_cause_kind(result) shouldBe Some(Cause.Kind.Format)
+      _failure_facets(result) should contain (Descriptor.Facet.Parameter.argument("contentType"))
+      RuntimeDashboardMetrics.operationRequestValidationFailureKindCounts.getOrElse("format", 0L) should be > requestValidationBefore
+      RuntimeDashboardMetrics.validationFailureKindCounts.getOrElse("format", 0L) should be > validationBefore
+      RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("content_type", 0L) should be > failuresBefore
     }
 
     "reject managed Blob expected metadata mismatches and compensate payloads" in {
@@ -579,6 +591,7 @@ final class BlobComponentSpec
       val subsystem = _subsystem_with_blob_store(store)
 
       When("expectedByteSize does not match the stored payload")
+      val expectedSizeFailuresBefore = RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("expected_size", 0L)
       val sizeMismatch = subsystem.executeOperationResponse(_request(
         "register_blob",
         arguments = List(Argument("payload", Bag.binary("size".getBytes(StandardCharsets.UTF_8)))),
@@ -594,10 +607,12 @@ final class BlobComponentSpec
       Then("registration fails and the payload is deleted through the ActionCall path")
       sizeMismatch shouldBe a[Consequence.Failure[_]]
       store.deletedRefs shouldBe store.putRefs
+      RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("expected_size", 0L) should be > expectedSizeFailuresBefore
 
       val putCountBeforeInvalidDigest = store.putRefs.size
 
       When("expectedDigest has an invalid format")
+      val digestFailuresBefore = RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("digest", 0L)
       val invalidDigest = subsystem.executeOperationResponse(_request(
         "register_blob",
         arguments = List(Argument("payload", Bag.binary("digest".getBytes(StandardCharsets.UTF_8)))),
@@ -614,6 +629,9 @@ final class BlobComponentSpec
       invalidDigest shouldBe a[Consequence.Failure[_]]
       store.deletedRefs shouldBe store.putRefs
       store.putRefs.size shouldBe putCountBeforeInvalidDigest
+      RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("digest", 0L) should be > digestFailuresBefore
+
+      val expectedSizeFailuresBeforeInvalid = RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("expected_size", 0L)
 
       When("expectedByteSize is fractional or negative")
       val fractionalSize = subsystem.executeOperationResponse(_request(
@@ -640,12 +658,16 @@ final class BlobComponentSpec
       Then("both byte-size contracts are rejected without numeric truncation")
       fractionalSize shouldBe a[Consequence.Failure[_]]
       negativeSize shouldBe a[Consequence.Failure[_]]
+      RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("expected_size", 0L) should be > expectedSizeFailuresBeforeInvalid
     }
 
     "apply managed Blob size and MIME-kind policy" in {
       Given("a subsystem with a small managed Blob size limit")
       val preStore = new RecordingBlobStore
       val preSubsystem = _subsystem_with_blob_store(preStore, maxByteSize = 4)
+      val payloadSizeFailuresBefore = RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("payload_size", 0L)
+      val genericLimitFailuresBefore = RuntimeDashboardMetrics.operationRequestValidationFailureKindCounts.getOrElse("limit", 0L)
+      val validationPayloadSizeFailuresBefore = RuntimeDashboardMetrics.validationFailureKindCounts.getOrElse("payload_size", 0L)
 
       When("a known oversized payload is registered")
       val knownOversize = preSubsystem.executeOperationResponse(_request(
@@ -661,7 +683,12 @@ final class BlobComponentSpec
 
       Then("registration fails before BlobStore put")
       knownOversize shouldBe a[Consequence.Failure[_]]
+      _failure_cause_kind(knownOversize) shouldBe Some(Cause.Kind.Limit)
+      _failure_facets(knownOversize) should contain (Descriptor.Facet.Policy("blob.upload.max-byte-size"))
       preStore.putRefs shouldBe Vector.empty
+      RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("payload_size", 0L) should be > payloadSizeFailuresBefore
+      RuntimeDashboardMetrics.operationRequestValidationFailureKindCounts.getOrElse("limit", 0L) shouldBe genericLimitFailuresBefore
+      RuntimeDashboardMetrics.validationFailureKindCounts.getOrElse("payload_size", 0L) should be > validationPayloadSizeFailuresBefore
 
       Given("a store whose measured size exceeds the configured policy")
       val postStore = new RecordingBlobStore(reportedByteSize = Some(8L))
@@ -685,6 +712,7 @@ final class BlobComponentSpec
 
       Given("a default subsystem")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val successfulBlobOperationsBefore = RuntimeDashboardMetrics.blobOperationSnapshot.summary.cumulative.total
 
       When("image and video Blob registrations use compatible MIME types")
       val image = subsystem.executeOperationResponse(_request(
@@ -711,7 +739,10 @@ final class BlobComponentSpec
       Then("both registrations succeed")
       image shouldBe a[Consequence.Success[_]]
       video shouldBe a[Consequence.Success[_]]
+      RuntimeDashboardMetrics.blobOperationSnapshot.summary.cumulative.total should be > successfulBlobOperationsBefore
 
+      val mimeFailuresBefore = RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("mime_kind", 0L)
+      val genericMimeFailuresBefore = RuntimeDashboardMetrics.validationFailureKindCounts.getOrElse("mime_kind", 0L)
       When("image and video Blob registrations use incompatible or default MIME types")
       val badImage = subsystem.executeOperationResponse(_request(
         "register_blob",
@@ -736,11 +767,39 @@ final class BlobComponentSpec
       Then("both registrations fail deterministically")
       badImage shouldBe a[Consequence.Failure[_]]
       defaultVideo shouldBe a[Consequence.Failure[_]]
+      _failure_cause_kind(badImage) shouldBe Some(Cause.Kind.Policy)
+      _failure_facets(badImage) should contain (Descriptor.Facet.Policy("mime-kind"))
+      RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("mime_kind", 0L) should be > mimeFailuresBefore
+      RuntimeDashboardMetrics.validationFailureKindCounts.getOrElse("mime_kind", 0L) should be > genericMimeFailuresBefore
+    }
+
+    "record BlobStore failures as Blob operational diagnostics" in {
+      Given("a subsystem with a failing BlobStore")
+      val store = new RecordingBlobStore(failPut = true)
+      val subsystem = _subsystem_with_blob_store(store)
+      val blobErrorsBefore = RuntimeDashboardMetrics.blobOperationSnapshot.summary.cumulative.errors
+
+      When("managed Blob registration reaches BlobStore put")
+      val result = subsystem.executeOperationResponse(_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("store failure".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "attachment", None),
+          Property("filename", "store-failure.bin", None),
+          Property("contentType", "application/octet-stream", None)
+        )
+      ))
+
+      Then("the operation fails and Blob diagnostics record the error")
+      result shouldBe a[Consequence.Failure[_]]
+      RuntimeDashboardMetrics.blobOperationSnapshot.summary.cumulative.errors should be > blobErrorsBefore
     }
 
     "reject unsafe external URL Blob registrations" in {
       Given("a default subsystem")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val externalUrlFailuresBefore = RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("external_url", 0L)
       val unsafeUrls = Vector(
         "javascript:alert(1)",
         "data:text/html,<script>alert(1)</script>",
@@ -771,6 +830,7 @@ final class BlobComponentSpec
         case (_, result) =>
           result shouldBe a[Consequence.Failure[_]]
       }
+      RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("external_url", 0L) should be > externalUrlFailuresBefore
     }
 
     "reject external URL Blob payload validation fields" in {
@@ -867,6 +927,12 @@ final class BlobComponentSpec
       associationRows.flatMap(_.getString("targetEntityId")) should have size 1
       status.getString("backend") shouldBe Some("in_memory")
       status.getString("available") shouldBe Some("true")
+      status.getString("maxByteSize") shouldBe Some(BlobStoreConfig.DefaultMaxByteSize.toString)
+      status.getString("contentRouteCachePolicy") shouldBe Some("private, max-age=60")
+      status.getRecord("mimeKindPolicy").flatMap(_.getString("image")) shouldBe Some("image/*")
+      status.getRecord("mimeKindPolicy").flatMap(_.getString("video")) shouldBe Some("video/*")
+      status.getRecord("blobMetrics").flatMap(_.getRecord("summary")).flatMap(_.getRecord("cumulative")).flatMap(_.getString("count")) should not be empty
+      status.getRecord("blobFailureKinds") should not be empty
     }
 
     "apply resource policies to Blob admin operations after the admin gate" in {
@@ -1082,6 +1148,18 @@ final class BlobComponentSpec
       case Consequence.Failure(c) => fail(s"unexpected failure: $c")
     }
 
+  private def _failure_facets[A](value: Consequence[A]): Vector[Descriptor.Facet] =
+    value match {
+      case Consequence.Failure(c) => c.observation.cause.descriptor.facets
+      case Consequence.Success(_) => fail("expected failure")
+    }
+
+  private def _failure_cause_kind[A](value: Consequence[A]): Option[Cause.Kind] =
+    value match {
+      case Consequence.Failure(c) => c.observation.cause.kind
+      case Consequence.Success(_) => fail("expected failure")
+    }
+
   private def _blob_entity_id(minor: String): EntityId =
     EntityId("cncf", minor, EntityCollectionId("cncf", "builtin", "blob"))
 
@@ -1133,6 +1211,7 @@ final class BlobComponentSpec
     MessageDigest.getInstance("SHA-256").digest(bytes).map("%02x".format(_)).mkString
 
   private final class RecordingBlobStore(
+    failPut: Boolean = false,
     failDelete: Boolean = false,
     reportedByteSize: Option[Long] = None
   ) extends BlobStore {
@@ -1145,15 +1224,18 @@ final class BlobComponentSpec
       val ref = BlobStorageRef(name, BlobStorageRef.DefaultContainer, request.id.value)
       val bytes = payload.openInputStream().readAllBytes()
       putRefs = putRefs :+ ref
-      Consequence.success(BlobPutResult(
-        id = request.id,
-        storageRef = ref,
-        contentType = request.contentType,
-        byteSize = reportedByteSize.getOrElse(bytes.length.toLong),
-        digest = "sha256:test",
-        accessUrl = BlobAccessUrl.unresolved,
-        storedAt = java.time.Instant.parse("2026-04-27T00:00:00Z")
-      ))
+      if (failPut)
+        Consequence.stateConflict(s"blob payload put failed: ${ref.print}")
+      else
+        Consequence.success(BlobPutResult(
+          id = request.id,
+          storageRef = ref,
+          contentType = request.contentType,
+          byteSize = reportedByteSize.getOrElse(bytes.length.toLong),
+          digest = "sha256:test",
+          accessUrl = BlobAccessUrl.unresolved,
+          storedAt = java.time.Instant.parse("2026-04-27T00:00:00Z")
+        ))
     }
 
     def get(ref: BlobStorageRef): Consequence[BlobReadResult] =

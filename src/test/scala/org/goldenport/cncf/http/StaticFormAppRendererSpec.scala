@@ -56,7 +56,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 28, 2026
+ *  version Apr. 28, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -307,6 +308,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       ))))
       val displayUrl = blob.getString("displayPath").getOrElse(fail("displayPath is missing"))
       val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+      val contentEventsBefore = RuntimeDashboardMetrics.blobOperationSnapshot.summary.cumulative.total
 
       val inline = server.routes(null).orNotFound.run(_get_request(displayUrl)).unsafeRunSync()
       val download = server.routes(null).orNotFound.run(_get_request(s"$displayUrl?download=true")).unsafeRunSync()
@@ -321,6 +323,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       header(inline, "Cache-Control") shouldBe Some("private, max-age=60")
       header(inline, "X-Content-Type-Options") shouldBe Some("nosniff")
       inline.body.compile.to(Array).unsafeRunSync().toVector shouldBe bytes.toVector
+      RuntimeDashboardMetrics.blobOperationSnapshot.summary.cumulative.total should be > contentEventsBefore
       download.status.code shouldBe 200
       header(download, "Content-Disposition") shouldBe Some("""attachment; filename="route.png"""")
       download.body.compile.to(Array).unsafeRunSync().toVector shouldBe bytes.toVector
@@ -345,6 +348,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       ).unsafeRunSync()
       missing.status.code shouldBe 404
+      RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("not_found", 0L) should be >= 1L
 
       val unsafeBlob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "register_blob",

@@ -33,6 +33,7 @@ import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.protocol.OperationResponseFormatter
+import org.goldenport.cncf.protocol.OperationRequestValidationObserver
 import org.goldenport.cncf.security.{AdminAuthorizationPolicy, IngressSecurityResolver, OperationAuthorization, OperationAuthorizationProvider}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
@@ -41,8 +42,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
- *  version Apr. 22, 2026
- * @version Apr. 22, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -268,16 +268,21 @@ final class Subsystem(
         IngressSecurityResolver.resolve(component.logic.executionContext(), request).flatMap { security =>
           given ExecutionContext = security.executionContext
           _authorize_operation(route, security.executionContext).flatMap { _ =>
-          component.logic.makeOperationRequest(domainRequest).flatMap { r =>
-          r match {
-            case action: Action =>
-              component.logic.executeAction(action, security.executionContext).map { response =>
-                ExecutionResult(response, security.executionContext.runtime.executionMetadata)
+            val oprequest = component.logic.makeOperationRequest(domainRequest)
+            _observe_operation_request_validation_failure(
+              route,
+              domainRequest,
+              oprequest,
+              security.executionContext
+            )
+            oprequest.flatMap {
+              case action: Action =>
+                component.logic.executeAction(action, security.executionContext).map { response =>
+                  ExecutionResult(response, security.executionContext.runtime.executionMetadata)
+                }
+              case _ =>
+                Consequence.argumentInvalid("OperationRequest must be Action")
               }
-            case _ =>
-              Consequence.argumentInvalid("OperationRequest must be Action")
-          }
-        }
           }
         }
       }
@@ -301,6 +306,25 @@ final class Subsystem(
         )
       case _ =>
         ()
+    }
+
+  private def _observe_operation_request_validation_failure[A](
+    route: (Component, ServiceDefinition, OperationDefinition),
+    request: Request,
+    result: Consequence[A],
+    context: ExecutionContext
+  ): Unit =
+    {
+      val (component, service, operation) = route
+      OperationRequestValidationObserver.observeFailure(
+        componentName = component.name,
+        serviceName = service.name,
+        operationName = operation.name,
+        operation = Some(operation),
+        request = request,
+        result = result,
+        context = context
+      )
     }
 
   def executeWired(

@@ -141,6 +141,9 @@ Current semantic direction:
   content URLs.
   - BL-10B (DONE): Blob content route HTTP metadata hardening.
   - BL-10C (DONE): Blob upload acceptance policy.
+  - BL-10D (DONE): Blob operational diagnostics and metrics.
+  - BL-10E (DONE): common structured validation errors and Blob metrics
+    recovery.
 
 Current note:
 
@@ -160,6 +163,18 @@ Current note:
   - BL-10C adds the CNCF core managed-upload acceptance policy: configurable
     max byte size with a 50MB default and MIME-kind checks for image/video
     Blob registrations.
+  - BL-10D adds Blob-specific runtime metrics and structured observability
+    records for registration, content reads, BlobStore failures, and admin
+    store diagnostics without introducing a new metrics backend.
+  - BL-10E adds shared `Consequence` validation helpers and structured
+    `Descriptor.Facet` validation details. It also extends `Cause.Kind` for
+    validation-oriented `format` and `policy` causes, then uses `Cause.Kind` as
+    the first metrics discriminator and facets as the detailed discriminator to
+    recover validation metrics without using application-owned
+    `Status.detailCodes` or message parsing. Payload byte-size failures are
+    classified as generic `payload_size`, content-type/kind policy failures as
+    generic `mime_kind`, and Blob keeps Blob-local labels only for
+    Blob-specific policies such as external URL safety.
   - BL-07B closes the projection contract:
     Aggregate/View output uses a flat, additive `blobs` field, omits it when
     empty, orders rows by `sortOrder`, and never embeds payload bytes.

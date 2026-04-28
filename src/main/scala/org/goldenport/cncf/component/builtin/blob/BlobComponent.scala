@@ -19,6 +19,8 @@ import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.{EntityCreateOptions, EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope}
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
+import org.goldenport.cncf.http.RuntimeDashboardMetrics
+import org.goldenport.cncf.observability.ValidationDiagnostics
 import org.goldenport.cncf.security.{AdminAuthorizationPolicy, EntityAccessMode, OperationAuthorizationProvider, OperationAuthorizationRule}
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkAuthorization, UnitOfWorkOp}
 import org.goldenport.datatype.{ContentType, MimeBody}
@@ -29,8 +31,10 @@ import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
+import org.goldenport.cncf.protocol.OperationRequestValidationObserver
 import org.goldenport.schema.{Column, DataType, Multiplicity, Schema, ValueDomain, XBlob, XBoolean, XInt, XLong, XString}
 import org.goldenport.observation.Descriptor
+import org.goldenport.provisional.observation.Cause
 import org.goldenport.value.BaseContent
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
@@ -38,7 +42,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Builtin Blob user-facing component.
  *
  * @since   Apr. 26, 2026
- * @version Apr. 28, 2026
+ *  version Apr. 28, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponent() extends Component {
@@ -332,7 +337,7 @@ object BlobComponent {
   private final class RegisterBlobOperationDefinition(
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with OperationRequestValidationObserver {
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "register_blob",
@@ -342,6 +347,22 @@ object BlobComponent {
 
     def createOperationRequest(req: Request): Consequence[OperationRequest] =
       _register_blob_request(req).map(RegisterBlobAction(req, _))
+
+    def observeOperationRequestValidationFailure(
+      req: Request,
+      conclusion: Conclusion,
+      context: ExecutionContext
+    ): Unit =
+      _record_blob_observation(
+        context = context,
+        operation = "register_blob",
+        success = false,
+        conclusion = Some(conclusion),
+        kind = _string(req, "kind"),
+        sourceMode = _string(req, "sourceMode", "source_mode"),
+        backend = None,
+        recordGenericValidation = false
+      )
   }
 
   private final class ReadBlobOperationDefinition(
@@ -680,7 +701,9 @@ object BlobComponent {
     registerRequest: RegisterBlobRequest
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _register_blob(registerRequest).map { metadata =>
+      _observe_blob("register_blob", Some(registerRequest.kind), Some(registerRequest.sourceMode)) {
+        _register_blob(registerRequest)
+      }.map { metadata =>
         OperationResponse.RecordResponse(metadata.toRecord)
       }
   }
@@ -690,29 +713,33 @@ object BlobComponent {
     id: EntityId
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      for {
-        blob <- _blob_load(id)
-        result <- blob.sourceMode match {
-          case BlobSourceMode.Managed =>
-            blob.storageRef match {
-              case Some(ref) =>
-                for {
-                  store <- exec_from(_blob_store)
-                  result <- exec_from(store.get(ref))
-                } yield result
-              case None => exec_from(Consequence.operationIllegal("blob.read_blob", s"managed blob has no storageRef: ${id.value}"))
-            }
-          case _ =>
-            exec_from(Consequence.operationIllegal("blob.read_blob", s"${blob.sourceMode.print} blob has no managed payload; use resolve_blob_url: ${id.value}"))
-        }
-      } yield OperationResponse.Http(
-        HttpResponse.Binary(
-          HttpStatus.Ok,
-          result.contentType,
-          result.payload,
-          _blob_content_header(blob.metadata, result)
+      _observe_blob("read_blob") {
+        for {
+          blob <- _blob_load(id)
+          result <- blob.sourceMode match {
+            case BlobSourceMode.Managed =>
+              blob.storageRef match {
+                case Some(ref) =>
+                  for {
+                    store <- exec_from(_blob_store)
+                    result <- _observe_blob_store("blob_store_get", store) {
+                      exec_from(store.get(ref))
+                    }
+                  } yield result
+                case None => exec_from(Consequence.operationIllegal("blob.read_blob", s"managed blob has no storageRef: ${id.value}"))
+              }
+            case _ =>
+              exec_from(Consequence.operationIllegal("blob.read_blob", s"${blob.sourceMode.print} blob has no managed payload; use resolve_blob_url: ${id.value}"))
+          }
+        } yield OperationResponse.Http(
+          HttpResponse.Binary(
+            HttpStatus.Ok,
+            result.contentType,
+            result.payload,
+            _blob_content_header(blob.metadata, result)
+          )
         )
-      )
+      }
   }
 
   private final case class ResolveBlobUrlActionCall(
@@ -822,7 +849,12 @@ object BlobComponent {
       for {
         _ <- _authorize_blob_store_access("status")
         store <- exec_from(_blob_store)
-        record <- exec_from(store.status().map(_blob_store_status_record))
+        maxByteSize <- exec_from(_blob_max_byte_size)
+        record <- _observe_blob("admin_blob_store_status", backend = Some(store.name)) {
+          _observe_blob_store("blob_store_status", store) {
+            exec_from(store.status().map(status => _blob_store_status_record(status, maxByteSize)))
+          }
+        }
       } yield {
         OperationResponse.RecordResponse(record)
       }
@@ -859,6 +891,68 @@ object BlobComponent {
   }
 
   private trait BlobActionCallSupport extends ActionCallFeaturePart { self: FunctionalActionCall & ActionCall.Core.Holder =>
+    protected final def _observe_blob[A](
+      operation: String,
+      kind: Option[BlobKind] = None,
+      sourceMode: Option[BlobSourceMode] = None,
+      backend: Option[String] = None,
+      recordFailures: Boolean = true
+    )(
+      program: ExecUowM[A]
+    ): ExecUowM[A] =
+      ConsequenceT(program.value.map {
+        case success @ Consequence.Success(_) =>
+          _record_blob_observation(operation, success = true, None, kind, sourceMode, backend)
+          success
+        case failure @ Consequence.Failure(conclusion) =>
+          if (recordFailures)
+            _record_blob_observation(operation, success = false, Some(conclusion), kind, sourceMode, backend)
+          failure
+      })
+
+    protected final def _observe_blob_store[A](
+      operation: String,
+      store: BlobStore
+    )(
+      program: ExecUowM[A]
+    ): ExecUowM[A] =
+      _observe_blob(operation, backend = Some(store.name))(program)
+
+    private def _record_blob_observation(
+      operation: String,
+      success: Boolean,
+      conclusion: Option[Conclusion],
+      kind: Option[BlobKind],
+      sourceMode: Option[BlobSourceMode],
+      backend: Option[String]
+    ): Unit =
+      _record_blob_observation_strings(
+        operation = operation,
+        success = success,
+        conclusion = conclusion,
+        kind = kind.map(_.print),
+        sourceMode = sourceMode.map(_.print),
+        backend = backend
+      )
+
+    private def _record_blob_observation_strings(
+      operation: String,
+      success: Boolean,
+      conclusion: Option[Conclusion],
+      kind: Option[String],
+      sourceMode: Option[String],
+      backend: Option[String]
+    ): Unit =
+      BlobComponent._record_blob_observation(
+        context = execution_context,
+        operation = operation,
+        success = success,
+        conclusion = conclusion,
+        kind = kind,
+        sourceMode = sourceMode,
+        backend = backend
+      )
+
     protected final def _register_blob(
       request: RegisterBlobRequest
     ): ExecUowM[BlobMetadata] =
@@ -878,16 +972,18 @@ object BlobComponent {
             _ <- exec_from(_validate_managed_request(request, payload, contentType, maxByteSize))
             _ <- _authorize_blob_create(request.id.collection, system = false)
             store <- exec_from(_blob_store)
-            result <- exec_from(store.put(
-              BlobPutRequest(
-                id = request.id,
-                kind = request.kind,
-                filename = request.filename,
-                contentType = contentType,
-                attributes = request.attributes
-              ),
-              payload
-            ))
+            result <- _observe_blob_store("blob_store_put", store) {
+              exec_from(store.put(
+                BlobPutRequest(
+                  id = request.id,
+                  kind = request.kind,
+                  filename = request.filename,
+                  contentType = contentType,
+                  attributes = request.attributes
+                ),
+                payload
+              ))
+            }
             _ <- _recover_with(exec_from(_validate_managed_result(request, result, maxByteSize))) { conclusion =>
               _delete_payload_then_fail(store, result.storageRef, conclusion)
             }
@@ -923,23 +1019,25 @@ object BlobComponent {
             _ <- exec_from(_validate_external_request(request))
             _ <- _authorize_blob_create(request.id.collection, system = false)
             normalized <- exec_from(BlobExternalUrlPolicy.normalize(url))
-            blob <- _blob_create(BlobCreate(
-              id = request.id,
-              kind = request.kind,
-              sourceMode = BlobSourceMode.ExternalUrl,
-              filename = request.filename,
-              contentType = request.contentType,
-              byteSize = None,
-              digest = None,
-              storageRef = None,
-              externalUrl = Some(normalized),
-              accessUrl = BlobAccessUrl(
-                displayUrl = normalized,
-                downloadUrl = normalized,
-                urlSource = BlobAccessUrlSource.Backend
-              ),
-              attributes = request.attributes
-            ))
+            blob <- _blob_create(
+              BlobCreate(
+                id = request.id,
+                kind = request.kind,
+                sourceMode = BlobSourceMode.ExternalUrl,
+                filename = request.filename,
+                contentType = request.contentType,
+                byteSize = None,
+                digest = None,
+                storageRef = None,
+                externalUrl = Some(normalized),
+                accessUrl = BlobAccessUrl(
+                  displayUrl = normalized,
+                  downloadUrl = normalized,
+                  urlSource = BlobAccessUrlSource.Backend
+                ),
+                attributes = request.attributes
+              )
+            )
           } yield blob.metadata
         case _ =>
           exec_from(Consequence.argumentMissing("externalUrl"))
@@ -1081,7 +1179,9 @@ object BlobComponent {
       ref: BlobStorageRef,
       conclusion: Conclusion
     ): ExecUowM[A] =
-      exec_from(store.delete(ref).flatMap(_ => Consequence.Failure[A](conclusion)))
+      _observe_blob_store("blob_store_delete", store) {
+        exec_from(store.delete(ref))
+      }.flatMap(_ => exec_from(Consequence.Failure[A](conclusion)))
 
     protected final def _blob_search(page: AdminPageRequest, system: Boolean): ExecUowM[Vector[Blob]] = {
       import BlobRepository.given
@@ -1339,7 +1439,9 @@ object BlobComponent {
             case Some(ref) =>
               for {
                 store <- exec_from(_blob_store)
-                _ <- exec_from(store.delete(ref))
+                _ <- _observe_blob_store("blob_store_delete", store) {
+                  exec_from(store.delete(ref))
+                }
               } yield true
             case None => exec_from(Consequence.operationIllegal("admin_delete_blob", s"managed blob has no storageRef: ${blob.id.value}"))
           }
@@ -1460,7 +1562,7 @@ object BlobComponent {
     for {
       _ <- request.expectedByteSize match {
         case Some(value) if value < 0 =>
-          Consequence.argumentInvalid("expectedByteSize must be zero or greater")
+          Consequence.argumentLimitExceeded("expectedByteSize", 0L, value, "blob.expected-byte-size")
         case _ =>
           Consequence.unit
       }
@@ -1470,7 +1572,7 @@ object BlobComponent {
       }
       _ <- payload.metadata.size match {
         case Some(size) if size > maxByteSize =>
-          Consequence.argumentInvalid(s"Blob payload exceeds maximum byte size: actual=${size}, max=${maxByteSize}")
+          Consequence.argumentFieldLimitExceeded("payload.byteSize", maxByteSize, size, "blob.upload.max-byte-size")
         case _ =>
           Consequence.unit
       }
@@ -1485,7 +1587,7 @@ object BlobComponent {
     for {
       _ <- request.expectedByteSize match {
         case Some(expected) if expected != result.byteSize =>
-          Consequence.argumentInvalid(s"expectedByteSize mismatch: expected=${expected}, actual=${result.byteSize}")
+          Consequence.argumentExpectedActualMismatch("expectedByteSize", expected, result.byteSize)
         case _ =>
           Consequence.unit
       }
@@ -1495,14 +1597,14 @@ object BlobComponent {
             if (normalized == result.digest.toLowerCase(java.util.Locale.ROOT))
               Consequence.unit
             else
-              Consequence.argumentInvalid(s"expectedDigest mismatch: expected=${normalized}, actual=${result.digest}")
+              Consequence.argumentIntegrityMismatch("expectedDigest", "sha-256", normalized, result.digest)
           }
         case None =>
           Consequence.unit
       }
       _ <-
         if (result.byteSize > maxByteSize)
-          Consequence.argumentInvalid(s"Blob payload exceeds maximum byte size: actual=${result.byteSize}, max=${maxByteSize}")
+          Consequence.argumentFieldLimitExceeded("payload.byteSize", maxByteSize, result.byteSize, "blob.upload.max-byte-size")
         else
           Consequence.unit
       _ <- _validate_mime_kind(request.kind, result.contentType)
@@ -1512,12 +1614,11 @@ object BlobComponent {
     kind: BlobKind,
     contentType: ContentType
   ): Consequence[Unit] = {
-    val mime = contentType.mimeType.value.toLowerCase(java.util.Locale.ROOT)
     kind match {
-      case BlobKind.Image if !mime.startsWith("image/") =>
-        Consequence.argumentInvalid(s"image Blob requires image/* contentType: ${contentType.header}")
-      case BlobKind.Video if !mime.startsWith("video/") =>
-        Consequence.argumentInvalid(s"video Blob requires video/* contentType: ${contentType.header}")
+      case BlobKind.Image if !_is_mime_kind_compatible(kind, contentType) =>
+        Consequence.argumentPolicyViolation("contentType", "mime-kind", "image/*", contentType.header)
+      case BlobKind.Video if !_is_mime_kind_compatible(kind, contentType) =>
+        Consequence.argumentPolicyViolation("contentType", "mime-kind", "video/*", contentType.header)
       case _ =>
         Consequence.unit
     }
@@ -1527,9 +1628,9 @@ object BlobComponent {
     request: RegisterBlobRequest
   ): Consequence[Unit] =
     if (request.expectedByteSize.nonEmpty)
-      Consequence.argumentInvalid("expectedByteSize is only supported for managed Blob payloads")
+      Consequence.argumentPolicyViolation("expectedByteSize", "blob.external-url-safety", "absent for external_url", request.expectedByteSize.map(_.toString).getOrElse(""))
     else if (request.expectedDigest.nonEmpty)
-      Consequence.argumentInvalid("expectedDigest is only supported for managed Blob payloads")
+      Consequence.argumentPolicyViolation("expectedDigest", "blob.external-url-safety", "absent for external_url", request.expectedDigest.getOrElse(""))
     else
       Consequence.unit
 
@@ -1537,10 +1638,10 @@ object BlobComponent {
     value: String
   ): Consequence[String] = {
     val trimmed = value.trim.toLowerCase(java.util.Locale.ROOT)
-    if (trimmed.matches("[0-9a-f]{64}"))
+    if (_is_valid_sha256_digest(trimmed))
       Consequence.success(trimmed)
     else
-      Consequence.argumentInvalid("expectedDigest must be a 64 character SHA-256 hex digest")
+      Consequence.argumentFormatError("expectedDigest", "64 character SHA-256 hex digest", value)
   }
 
   private def _register_blob_request(req: Request): Consequence[RegisterBlobRequest] =
@@ -1581,10 +1682,28 @@ object BlobComponent {
 
   private def _parse_content_type(value: String): Consequence[ContentType] = {
     val trimmed = value.trim
-    if (ContentTypePattern.pattern.matcher(trimmed).matches())
+    if (_is_valid_content_type(trimmed))
       Consequence.success(ContentType.parse(trimmed))
     else
-      Consequence.argumentInvalid(s"invalid contentType: ${value}")
+      Consequence.argumentFormatError("contentType", "MIME type", value)
+  }
+
+  private def _is_valid_content_type(value: String): Boolean =
+    ContentTypePattern.pattern.matcher(value.trim).matches()
+
+  private def _is_valid_sha256_digest(value: String): Boolean =
+    value.trim.toLowerCase(java.util.Locale.ROOT).matches("[0-9a-f]{64}")
+
+  private def _is_mime_kind_compatible(
+    kind: BlobKind,
+    contentType: ContentType
+  ): Boolean = {
+    val mime = contentType.mimeType.value.toLowerCase(java.util.Locale.ROOT)
+    kind match {
+      case BlobKind.Image => mime.startsWith("image/")
+      case BlobKind.Video => mime.startsWith("video/")
+      case _ => true
+    }
   }
 
   private def _payload(
@@ -1599,7 +1718,7 @@ object BlobComponent {
           case Some(m: Bag) => Consequence.success(Some(m.promoteToBinary()))
           case Some(bytes: Array[Byte]) => Consequence.success(Some(Bag.binary(bytes)))
           case Some(text: String) => Consequence.success(Some(Bag.binary(text.getBytes(StandardCharsets.UTF_8))))
-          case Some(other) => Consequence.argumentInvalid(s"unsupported blob payload type: ${other.getClass.getName}")
+          case Some(other) => Consequence.argumentInvalid("payload", "BinaryBag, Bag, Array[Byte], or String", other.getClass.getName)
           case None => Consequence.success(None)
         }
     }
@@ -1698,14 +1817,135 @@ object BlobComponent {
         "expiresAt" -> metadata.accessUrl.expiresAt.map(_.toString)
       ))
 
-  private def _blob_store_status_record(status: BlobStoreStatus): Record =
+  private def _blob_store_status_record(status: BlobStoreStatus, maxByteSize: Long): Record =
     Record.dataAuto(
       "backend" -> status.backend,
       "available" -> status.available,
       "container" -> status.container,
       "location" -> status.location,
-      "message" -> status.message
+      "message" -> status.message,
+      "maxByteSize" -> maxByteSize,
+      "mimeKindPolicy" -> _blob_mime_kind_policy_record,
+      "contentRouteCachePolicy" -> "private, max-age=60",
+      "blobMetrics" -> _blob_metrics_record,
+      "blobFailureKinds" -> Record.data(RuntimeDashboardMetrics.blobFailureKindCounts.toVector.sortBy(_._1)*)
     )
+
+  private def _record_blob_observation(
+    context: ExecutionContext,
+    operation: String,
+    success: Boolean,
+    conclusion: Option[Conclusion],
+    kind: Option[String],
+    sourceMode: Option[String],
+    backend: Option[String],
+    recordGenericValidation: Boolean = true
+  ): Unit = {
+    val failurekind = conclusion.map(_blob_failure_kind)
+    conclusion.filter(c => recordGenericValidation && ValidationDiagnostics.isValidation(c)).foreach { c =>
+      val classification = ValidationDiagnostics.classify(c)
+      RuntimeDashboardMetrics.recordValidation(
+        operation = operation,
+        failureKind = Some(classification.failureKind)
+      )
+    }
+    RuntimeDashboardMetrics.recordBlobOperation(
+      operation = operation,
+      error = !success,
+      failureKind = failurekind,
+      kind = kind,
+      sourceMode = sourceMode,
+      backend = backend
+    )
+    val _ = context.observability.emitInfo(
+      context.cncfCore.scope,
+      s"blob.${operation}",
+      Record.dataAuto(
+        "blob.operation" -> operation,
+        "blob.outcome" -> (if (success) "success" else "failure"),
+        "failureKind" -> failurekind,
+        "blob.kind" -> kind,
+        "blob.sourceMode" -> sourceMode,
+        "blob.backend" -> backend
+      )
+    )
+  }
+
+  private def _blob_mime_kind_policy_record: Record =
+    Record.data(
+      "image" -> "image/*",
+      "video" -> "video/*",
+      "attachment" -> "any syntactically valid MIME type",
+      "binary" -> "any syntactically valid MIME type"
+    )
+
+  private def _blob_metrics_record: Record =
+    _snapshot_record(RuntimeDashboardMetrics.blobOperationSnapshot)
+
+  private def _snapshot_record(snapshot: RuntimeDashboardMetrics.Snapshot): Record =
+    Record.data(
+      "summary" -> _summary_record(snapshot.summary)
+    )
+
+  private def _summary_record(summary: RuntimeDashboardMetrics.CountSummary): Record =
+    Record.data(
+      "cumulative" -> _window_record(summary.cumulative),
+      "day" -> _window_record(summary.day),
+      "hour" -> _window_record(summary.hour),
+      "minute" -> _window_record(summary.minute)
+    )
+
+  private def _window_record(window: RuntimeDashboardMetrics.CountWindow): Record =
+    Record.data(
+      "count" -> window.total,
+      "errors" -> window.errors
+    )
+
+  private def _blob_failure_kind(conclusion: Conclusion): String =
+    _blob_validation_failure_kind(conclusion).getOrElse {
+      val taxonomy = conclusion.observation.taxonomy
+      val category = taxonomy.category
+      val symptom = taxonomy.symptom
+      val status = conclusion.status.webCode.code
+      if (symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.PermissionDenied || status == 403)
+        "authorization"
+      else if (symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.NotFound || status == 404)
+        "not_found"
+      else if (symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.Conflict || status == 409)
+        "conflict"
+      else if (category == org.goldenport.provisional.observation.Taxonomy.Category.Argument || status == 400)
+        "argument"
+      else
+        "unknown"
+    }
+
+  private def _blob_validation_failure_kind(conclusion: Conclusion): Option[String] = {
+    val classification = ValidationDiagnostics.classify(conclusion)
+    val kind = conclusion.observation.cause.kind
+    val facets = conclusion.observation.cause.descriptor.facets
+    val policies = facets.collect { case Descriptor.Facet.Policy(name) => name }.toSet
+    val parameters = facets.collect { case Descriptor.Facet.Parameter(_, name) => name }.toSet
+    val fieldPaths = facets.collect { case Descriptor.Facet.FieldPath(path) => path }.toSet
+    val algorithms = facets.collect { case Descriptor.Facet.Algorithm(name) => name.toLowerCase(java.util.Locale.ROOT) }.toSet
+    if (classification.failureKind == "payload_size" && policies.contains("blob.upload.max-byte-size"))
+      Some("payload_size")
+    else if (classification.failureKind == "mime_kind")
+      Some("mime_kind")
+    else if (kind.contains(Cause.Kind.Policy) && policies.contains("blob.external-url-safety"))
+      Some("external_url")
+    else if (kind.contains(Cause.Kind.Inconsistency) && algorithms.contains("sha-256"))
+      Some("digest")
+    else if ((kind.contains(Cause.Kind.Inconsistency) || kind.contains(Cause.Kind.Format) || kind.contains(Cause.Kind.Limit)) && parameters.contains("expectedByteSize"))
+      Some("expected_size")
+    else if (kind.contains(Cause.Kind.Format) && parameters.contains("expectedDigest"))
+      Some("digest")
+    else if (kind.contains(Cause.Kind.Format) && parameters.contains("contentType"))
+      Some("content_type")
+    else if (kind.contains(Cause.Kind.Limit) && fieldPaths.contains("payload.byteSize"))
+      Some("payload_size")
+    else
+      None
+  }
 
   private def _string(req: Request, names: String*): Option[String] =
     _any(req, names*).map(_.toString).map(_.trim).filter(_.nonEmpty)
@@ -1726,17 +1966,17 @@ object BlobComponent {
       case Some(n: java.math.BigInteger) =>
         scala.util.Try(n.longValueExact()).toOption match {
           case Some(value) => _non_negative_long(value, names)
-          case None => Consequence.argumentInvalid(s"invalid long ${names.headOption.getOrElse("value")}: ${n}")
+          case None => Consequence.argumentFormatError(names.headOption.getOrElse("value"), "non-negative integer", n)
         }
       case Some(n: java.math.BigDecimal) =>
         scala.util.Try(n.toBigIntegerExact.longValueExact()).toOption match {
           case Some(value) => _non_negative_long(value, names)
-          case None => Consequence.argumentInvalid(s"invalid long ${names.headOption.getOrElse("value")}: ${n}")
+          case None => Consequence.argumentFormatError(names.headOption.getOrElse("value"), "non-negative integer", n)
         }
       case Some(_: java.lang.Float) =>
-        Consequence.argumentInvalid(s"invalid long ${names.headOption.getOrElse("value")}: fractional number")
+        Consequence.argumentFormatError(names.headOption.getOrElse("value"), "non-negative integer", "fractional number")
       case Some(_: java.lang.Double) =>
-        Consequence.argumentInvalid(s"invalid long ${names.headOption.getOrElse("value")}: fractional number")
+        Consequence.argumentFormatError(names.headOption.getOrElse("value"), "non-negative integer", "fractional number")
       case Some(s: String) => _parse_non_negative_long(s, names)
       case Some(other) => _parse_non_negative_long(other.toString, names)
       case None =>
@@ -1748,17 +1988,17 @@ object BlobComponent {
     if (trimmed.matches("[0-9]+"))
       scala.util.Try(trimmed.toLong).toOption match {
         case Some(n) => _non_negative_long(n, names)
-        case None => Consequence.argumentInvalid(s"invalid long ${names.headOption.getOrElse("value")}: ${value}")
+        case None => Consequence.argumentFormatError(names.headOption.getOrElse("value"), "non-negative integer", value)
       }
     else
-      Consequence.argumentInvalid(s"invalid long ${names.headOption.getOrElse("value")}: ${value}")
+      Consequence.argumentFormatError(names.headOption.getOrElse("value"), "non-negative integer", value)
   }
 
   private def _non_negative_long(value: Long, names: Seq[String]): Consequence[Option[Long]] =
     if (value >= 0)
       Consequence.success(Some(value))
     else
-      Consequence.argumentInvalid(s"${names.headOption.getOrElse("value")} must be zero or greater")
+      Consequence.argumentLimitExceeded(names.headOption.getOrElse("value"), 0L, value, "non-negative-number")
 
   private def _boolean(req: Request, names: String*): Consequence[Boolean] =
     _any(req, names*) match {

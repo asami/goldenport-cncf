@@ -650,6 +650,21 @@ Current active phase: Phase 18.
 - BL-10C is completed in this change. Managed Blob registration now enforces
   CNCF core upload acceptance policy: configurable maximum payload size with a
   50MB default and MIME-kind compatibility for image/video Blobs.
+- BL-10D is completed in this change. Blob operations now publish dedicated
+  runtime metrics and structured observability records for registration,
+  content reads, BlobStore failures, and admin store diagnostics using the
+  existing CNCF dashboard/observability mechanisms.
+- BL-10E is completed in this change. Core structured validation facets and
+  reusable `Consequence` validation helpers are used by Blob validation paths.
+  Core `Cause.Kind` now includes validation-oriented `format` and `policy`
+  causes, allowing Blob metrics to use `Cause.Kind` as the first discriminator
+  and facets as the detail discriminator without `Status.detailCodes` or
+  message parsing. CNCF also records component-neutral validation metrics;
+  for example, `FieldPath(payload.byteSize)` plus `Cause.Kind.Limit` is
+  classified as the generic `payload_size` failure kind. Blob uses that same
+  label. `contentType` policy violations with policy `mime-kind` are likewise
+  classified as generic `mime_kind`; Blob-local labels remain only for
+  genuinely Blob-specific policies such as external URL safety.
 - Remaining Blob hardening includes deletion/retention policy, signed URL
   integration points, configurable MIME allowlists, thumbnail generation,
   virus scanning, and resumable upload. Concrete AWS/S3 backend implementation
@@ -675,6 +690,44 @@ Future component development item.
   Blob content route fallback, authorization, and projection contracts.
 - AwsComponent remains optional. Local and in-memory BlobStores continue to
   serve development and executable-spec use cases.
+
+### 8.9 Error Model / Consequence-Conclusion Realignment
+Future platform development item.
+
+- Revisit the core `Consequence` / `Conclusion` / `Observation` model before
+  adding more component-local error classification surfaces.
+- Clarify `Status` structure and semantics:
+  - `Status.detailCodes` are application-owned semantic error codes.
+    Reusable framework or builtin components must not write component-specific
+    detail codes into this field.
+  - `Status.detailCode` / `Status.detailCodes` and `strategies` do not yet have
+    the intended shape and need a core-level redesign.
+  - External projections such as CLI, HTTP, Web, metrics, and dashboards must
+    derive their behavior from the corrected structured `Conclusion` model, not
+    from component-local message parsing or private diagnostic taxonomies.
+- Clarify the boundary between logic-bearing failure semantics and descriptive
+  observability:
+  - `Conclusion` remains the execution/control-flow failure value.
+  - `Observation` remains descriptive and projection-oriented.
+  - Operational diagnostics may project coarse failure groups from
+    `Conclusion.status` and `Observation.taxonomy`, but must not create a
+    parallel application-specific error structure inside reusable components.
+- Promote or rewrite the existing draft notes into a normative design/spec once
+  the core model is corrected:
+  - `docs/notes/error-semantics.md`
+  - `docs/notes/conclusion-observation-design.md`
+  - `docs/notes/observation-descriptor-error-notification-guideline.md`
+- Blob follows the `Consequence` / `Conclusion` error model. BL-10E added the
+  immediate shared validation support needed by Blob: `Cause.Kind` provides
+  coarse mechanism classification and `Descriptor.Facet` provides
+  machine-readable detail. Reusable validation distinctions such as payload
+  byte-size, MIME-kind, digest, expected-size, content-type, and external URL policy are
+  projected from structured `Conclusion` data instead of component-local
+  `Status.detailCodes` or message parsing.
+- Remaining work in this item is broader platform cleanup: the intended
+  `Status.detailCode` / `detailCodes` / `strategies` shape, possible
+  `Cause.Kind` refinements beyond ordinary validation, and cross-component
+  Observation semantics that are not required to complete Blob.
 
 ## 9. Completed Development Item History
 

@@ -1007,6 +1007,100 @@ Verification snapshot:
 - [x] `BlobComponentSpec -- -z Blob` covers max-size and MIME-kind policy.
 - [x] `sbt --batch Test/compile` passed.
 
+### BL-10D: Blob Operational Diagnostics and Metrics
+
+Status: DONE
+
+Add diagnostic-only visibility for Blob operation health without changing Blob
+storage, public operation shape, or BlobStore backend SPI:
+
+- [x] `RuntimeDashboardMetrics` tracks Blob operation events separately from
+      HTML/action/authorization/DSL metrics.
+- [x] Blob metrics record operation, outcome, failure kind, optional kind,
+      source mode, and backend when available.
+- [x] Blob failure kinds are projected from `Conclusion` status/taxonomy and
+      structured validation facets, not from `Status.detailCodes` or message
+      text.
+- [x] Detailed Blob metrics are restored for payload byte-size, MIME-kind,
+      digest, expected-size, content-type, and external URL policy through
+      shared `Consequence` / `Conclusion` validation details.
+- [x] `register_blob` records success and validation/store/authorization
+      failures.
+- [x] `read_blob` and `/web/blob/content/{id}` record managed payload reads,
+      authorized `304 Not Modified`, missing Blob, and authorization failures.
+- [x] `admin_blob_store_status` includes max byte size, MIME-kind policy,
+      content-route cache policy, Blob metrics summary, and Blob failure-kind
+      counts.
+- [x] Runtime dashboard status JSON exposes additive Blob metric summaries.
+
+Implementation notes:
+
+- Observability records are best-effort diagnostics and do not change Blob
+  operation outcomes.
+- BL-10D does not introduce OpenTelemetry/exporter integration, S3/AWS metrics,
+  storage schema changes, or new Blob operations.
+
+Verification snapshot:
+
+- [x] `BlobComponentSpec -- -z Blob` covers admin diagnostics and Blob failure
+      metrics.
+- [x] `StaticFormAppRendererSpec -- -z Blob` covers content-route metrics.
+- [x] `sbt --batch Test/compile` passed.
+
+---
+
+### BL-10E: Common Structured Validation Errors and Blob Metrics
+
+Status: DONE
+
+Add a reusable structured validation surface and use it to restore detailed Blob
+validation metrics without creating Blob-local error semantics:
+
+- [x] goldenport core exposes validation-oriented `Descriptor.Facet` values:
+      `FieldPath`, `Expected`, `Actual`, `Limit`, `Policy`, and `Algorithm`.
+- [x] goldenport core exposes component-friendly `Consequence` helpers for
+      parameter and field-path validation failures.
+- [x] goldenport core extends `Cause.Kind` with validation-oriented `format`
+      and `policy` cause kinds.
+- [x] Validation helpers return ordinary `Consequence.Failure(Conclusion)`,
+      use existing argument taxonomy, set the appropriate coarse `Cause.Kind`,
+      attach machine-readable facets to the Observation cause descriptor, and
+      do not write `Status.detailCodes`.
+- [x] Blob request/payload validations use the common helpers for content type,
+      expected byte size, expected digest, payload size, MIME-kind policy, and
+      external URL safety.
+- [x] CNCF keeps applicative parameter parsing in
+      `OperationDefinition.createOperationRequest` and observes construction
+      failures through the generic `operation.request_validation` Subsystem
+      boundary. Blob adds metrics through `OperationRequestValidationObserver`
+      rather than moving request parsing into `ActionCall`.
+- [x] CNCF records common validation metrics independent of Blob. Generic
+      validation classification uses `Cause.Kind` and facets; payload byte-size
+      limit failures are recorded as `payload_size`; Blob uses the same label
+      instead of introducing a parallel Blob-local size label.
+- [x] MIME kind compatibility is also common validation: `contentType` policy
+      violations with policy `mime-kind` are recorded as generic `mime_kind`,
+      and Blob uses the same label.
+- [x] Blob metrics classify validation failures by `Cause.Kind` first and
+      facets second, producing detailed labels: `payload_size`, `mime_kind`,
+      `content_type`, `expected_size`, `digest`, and `external_url`.
+- [x] Coarse Blob metric fallbacks remain for authorization, not-found,
+      conflict, argument, and unknown failures.
+
+Deferred:
+
+- `Status.detailCode` / `Status.detailCodes` / `strategies` redesign remains in
+  strategy item 8.9.
+- Broader `Cause.Kind` refinements outside ordinary validation and broader
+  Observation semantics beyond validation facets remain in strategy item 8.9.
+
+Verification snapshot:
+
+- [x] Core validation facet specs cover serialization and helper behavior.
+- [x] Blob specs cover structured validation facets and detailed metric labels.
+- [x] `BlobComponentSpec -- -z Blob`, `StaticFormAppRendererSpec -- -z Blob`,
+      and `sbt --batch Test/compile` passed.
+
 ### Deferred To 8.3 Security
 
 - first-class arbitrary ACL lists.

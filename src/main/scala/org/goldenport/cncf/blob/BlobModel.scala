@@ -13,7 +13,8 @@ import org.simplemodeling.model.datatype.EntityId
  * Runtime model for CNCF-managed Blob payload storage.
  *
  * @since   Apr. 26, 2026
- * @version Apr. 28, 2026
+ *  version Apr. 28, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 enum BlobKind(val value: String) {
@@ -258,11 +259,11 @@ object BlobExternalUrlPolicy {
   def normalize(value: String): Consequence[String] = {
     val trimmed = Option(value).map(_.trim).getOrElse("")
     if (trimmed.isEmpty)
-      Consequence.argumentInvalid("externalUrl must not be empty")
+      Consequence.argumentPolicyViolation("externalUrl", "blob.external-url-safety", "non-empty http/https URL", trimmed)
     else if (trimmed.exists(ch => Character.isISOControl(ch) || Character.isWhitespace(ch)))
-      Consequence.argumentInvalid("externalUrl must not contain whitespace or control characters")
+      Consequence.argumentPolicyViolation("externalUrl", "blob.external-url-safety", "URL without whitespace or control characters", trimmed)
     else if (trimmed.startsWith("//"))
-      Consequence.argumentInvalid("externalUrl must include an explicit http or https scheme")
+      Consequence.argumentPolicyViolation("externalUrl", "blob.external-url-safety", "explicit http or https scheme", trimmed)
     else
       _normalize_uri(trimmed)
   }
@@ -278,20 +279,20 @@ object BlobExternalUrlPolicy {
       val scheme = Option(uri.getScheme).map(_.toLowerCase(Locale.ROOT))
       val host = Option(uri.getHost).map(_.toLowerCase(Locale.ROOT))
       if (!scheme.exists(Set("https", "http").contains))
-        Consequence.argumentInvalid("externalUrl scheme must be http or https")
+        Consequence.argumentPolicyViolation("externalUrl", "blob.external-url-safety", "http or https scheme", scheme.getOrElse(""))
       else if (host.isEmpty)
-        Consequence.argumentInvalid("externalUrl host is required")
+        Consequence.argumentPolicyViolation("externalUrl", "blob.external-url-safety", "host", value)
       else if (Option(uri.getRawUserInfo).exists(_.nonEmpty))
-        Consequence.argumentInvalid("externalUrl userinfo is not allowed")
+        Consequence.argumentPolicyViolation("externalUrl", "blob.external-url-safety", "no userinfo", Option(uri.getRawUserInfo).getOrElse(""))
       else if (host.exists(_is_local_host))
-        Consequence.argumentInvalid("externalUrl host must not be local or loopback")
+        Consequence.argumentPolicyViolation("externalUrl", "blob.external-url-safety", "non-local host", host.getOrElse(""))
       else
         Consequence.success(uri.toASCIIString)
     } catch {
       case _: IllegalArgumentException =>
-        Consequence.argumentInvalid("externalUrl is not a valid URI")
+        Consequence.argumentPolicyViolation("externalUrl", "blob.external-url-safety", "valid URI", value)
       case _: java.net.URISyntaxException =>
-        Consequence.argumentInvalid("externalUrl is not a valid URI")
+        Consequence.argumentPolicyViolation("externalUrl", "blob.external-url-safety", "valid URI", value)
     }
 
   private def _is_local_host(

@@ -2,7 +2,7 @@ package org.goldenport.cncf.http
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 28, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 object RuntimeDashboardMetrics {
@@ -43,13 +43,20 @@ object RuntimeDashboardMetrics {
   private final case class Event(
     observedAt: Long,
     error: Boolean,
-    failureKind: Option[String] = None
+    failureKind: Option[String] = None,
+    operation: Option[String] = None,
+    kind: Option[String] = None,
+    sourceMode: Option[String] = None,
+    backend: Option[String] = None
   )
 
   private var _htmlEvents = Vector.empty[Event]
   private var _actionEvents = Vector.empty[Event]
   private var _authorizationEvents = Vector.empty[Event]
   private var _dslEvents = Vector.empty[Event]
+  private var _validationEvents = Vector.empty[Event]
+  private var _operationRequestValidationEvents = Vector.empty[Event]
+  private var _blobEvents = Vector.empty[Event]
   private var _recent = Vector.empty[RequestEntry]
 
   def recordHtmlRequest(
@@ -83,6 +90,49 @@ object RuntimeDashboardMetrics {
     _dslEvents = (_dslEvents :+ Event(java.time.Instant.now.toEpochMilli, error)).takeRight(10000)
   }
 
+  def recordValidation(
+    operation: String,
+    failureKind: Option[String]
+  ): Unit = synchronized {
+    _validationEvents = (_validationEvents :+ Event(
+      observedAt = java.time.Instant.now.toEpochMilli,
+      error = true,
+      failureKind = failureKind.filter(_.nonEmpty),
+      operation = Some(operation).filter(_.nonEmpty)
+    )).takeRight(10000)
+  }
+
+  def recordOperationRequestValidation(
+    operation: String,
+    failureKind: Option[String]
+  ): Unit = synchronized {
+    _operationRequestValidationEvents = (_operationRequestValidationEvents :+ Event(
+      observedAt = java.time.Instant.now.toEpochMilli,
+      error = true,
+      failureKind = failureKind.filter(_.nonEmpty),
+      operation = Some(operation).filter(_.nonEmpty)
+    )).takeRight(10000)
+  }
+
+  def recordBlobOperation(
+    operation: String,
+    error: Boolean,
+    failureKind: Option[String] = None,
+    kind: Option[String] = None,
+    sourceMode: Option[String] = None,
+    backend: Option[String] = None
+  ): Unit = synchronized {
+    _blobEvents = (_blobEvents :+ Event(
+      observedAt = java.time.Instant.now.toEpochMilli,
+      error = error,
+      failureKind = if (error) failureKind.filter(_.nonEmpty) else None,
+      operation = Some(operation).filter(_.nonEmpty),
+      kind = kind.filter(_.nonEmpty),
+      sourceMode = sourceMode.filter(_.nonEmpty),
+      backend = backend.filter(_.nonEmpty)
+    )).takeRight(10000)
+  }
+
   def htmlSnapshot: Snapshot = synchronized {
     _snapshot(_htmlEvents, _recent)
   }
@@ -106,6 +156,45 @@ object RuntimeDashboardMetrics {
 
   def dslChokepointSnapshot: Snapshot = synchronized {
     _snapshot(_dslEvents, Vector.empty)
+  }
+
+  def validationSnapshot: Snapshot = synchronized {
+    _snapshot(_validationEvents, Vector.empty)
+  }
+
+  def validationFailureKindCounts: Map[String, Long] = synchronized {
+    _validationEvents
+      .filter(_.error)
+      .groupBy(_.failureKind.getOrElse("unknown"))
+      .view
+      .mapValues(_.size.toLong)
+      .toMap
+  }
+
+  def operationRequestValidationSnapshot: Snapshot = synchronized {
+    _snapshot(_operationRequestValidationEvents, Vector.empty)
+  }
+
+  def operationRequestValidationFailureKindCounts: Map[String, Long] = synchronized {
+    _operationRequestValidationEvents
+      .filter(_.error)
+      .groupBy(_.failureKind.getOrElse("unknown"))
+      .view
+      .mapValues(_.size.toLong)
+      .toMap
+  }
+
+  def blobOperationSnapshot: Snapshot = synchronized {
+    _snapshot(_blobEvents, Vector.empty)
+  }
+
+  def blobFailureKindCounts: Map[String, Long] = synchronized {
+    _blobEvents
+      .filter(_.error)
+      .groupBy(_.failureKind.getOrElse("unknown"))
+      .view
+      .mapValues(_.size.toLong)
+      .toMap
   }
 
   private def _snapshot(
