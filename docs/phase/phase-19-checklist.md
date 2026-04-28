@@ -46,6 +46,9 @@ Open Phase 19 and freeze the application-driver scope around `textus-blog`
   remain author/admin surfaces.
 - Article body `img` tags are part of the image usage scope and should be
   synchronized with managed image records and inline image bindings.
+- HTML document handling is a reusable CNCF capability. Phase 19 introduces
+  standard HTML tree values first; CML primitive datatype support remains a
+  later decision.
 - The phase is about the CNCF usage pattern for image binding, not about adding
   a new Blob payload backend.
 - Blob metadata/payload ownership remains with the Phase 18 Blob foundation.
@@ -79,6 +82,12 @@ instances.
       thumbnail, and gallery roles.
 - [ ] Confirm article body `img` tag extraction and synchronization into inline
       image records.
+- [ ] Confirm CNCF standard HTML tree values parse full HTML, read head
+      metadata, extract article fragments, inspect `img` nodes, rewrite image
+      sources, and render HTML fragments.
+- [ ] Confirm `importPostTree` accepts a Blog article file tree archive with
+      `META-INF/blog.yaml`, parses the entry HTML, and delegates normalized
+      content/image input to `registerPost`.
 - [ ] Verify whether Blob attachment Association rows already satisfy the model.
 - [ ] Identify whether component-local image binding records are still needed
       or should collapse into Blob/Association usage.
@@ -109,6 +118,11 @@ operations and projection surfaces.
 - [ ] Define public read/search contract for published active blog posts.
 - [ ] Define article body `img` tag handling contract, including unmanaged
       source URLs, managed image ids, alt/title text, ordering, and binding sync.
+- [ ] Define file-tree import contract: local-previewable full HTML, relative
+      image paths, `META-INF/blog.yaml` metadata precedence, article extraction
+      rules, and fallback from HTML head only for missing metadata.
+- [ ] Define `registerPost` as the lower-level bulk registration boundary used
+      by `importPostTree`.
 - [ ] Define detach/delete semantics for entity images.
 - [ ] Define list/search behavior for entity images.
 - [ ] Define Aggregate/View projection shape for associated images.

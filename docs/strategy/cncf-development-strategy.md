@@ -428,6 +428,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Validate article body `img` tag handling, including source URL discovery,
   managed image resolution, alt/title metadata, ordering, and inline binding
   synchronization.
+- Introduce reusable CNCF HTML tree values for full-HTML parsing, article
+  fragment extraction, head metadata fallback, `img` discovery, and `src`
+  rewriting before considering a CML HTML datatype.
 - Define how create/update/read/search operations, Aggregate/View projections,
   Web forms, admin pages, and manual/help metadata expose associated images.
 - Implement CNCF runtime/Web/projection gaps discovered by the BlogComponent
@@ -619,6 +622,8 @@ Active in Phase 19.
   - validate primary, inline, thumbnail, and ordered supporting image roles;
   - handle article body `img` tags as image occurrences that can be reconciled
     with managed image assets and inline image bindings;
+  - support Blog file-tree import by using reusable CNCF HTML tree values rather
+    than Blog-specific parsing code;
   - decide how much should be direct Entity reference versus Blob/Association
     attachment usage;
   - expose and fix CNCF runtime/Web/projection/generator gaps using a real

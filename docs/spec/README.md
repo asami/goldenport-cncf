@@ -8,3 +8,4 @@ Always cross-check docs/rules/document-lifecycle.md before promoting a note or d
 Current Web/widget specs:
 
 - `textus-widget.md`
+- `html-tree-value.md`

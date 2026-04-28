@@ -33,6 +33,10 @@ This document is a phase dashboard, not a design journal.
   attach existing images to entities, detach images, and list an entity's images.
 - Define how article body `img` tags are detected, registered or resolved as
   managed images, and synchronized with Entity image binding records.
+- Introduce CNCF standard HTML tree values for parsing full HTML documents,
+  extracting article fragments, reading head metadata, finding `img` nodes, and
+  rewriting image sources. `BlogComponent` uses these values, but the values are
+  not Blog-specific.
 - Define how Entity read/search, Aggregate/View projection, Web forms, admin
   pages, and manual/help metadata should expose image association information.
 - Use `BlogPost`, `ImageAsset`/Blob metadata, and image binding records in
@@ -52,6 +56,9 @@ Current semantic direction:
   image synchronization flows.
 - Inline article `img` tags are treated as first-class image occurrences that
   can be reconciled with Blob-backed image assets and `inline` image bindings.
+- Blog file-tree import should parse full HTML through CNCF HTML tree values.
+  `META-INF/blog.yaml` is the authoritative metadata source; missing title,
+  description, and canonical fields may fall back to the HTML head.
 - Projections should expose image metadata and access URLs without embedding
   payload bytes.
 - Web/admin surfaces should make image association visible without requiring
@@ -68,6 +75,8 @@ Current semantic direction:
 - No general digital asset management product surface.
 - No change to SimpleEntity storage-shape rules that would embed Blob payloads
   or repeated image payloads in ordinary entity records.
+- No CML primitive datatype for HTML in this phase; HTML tree support is
+  introduced as CNCF standard values first.
 
 ## 4. Current Work Stack
 
