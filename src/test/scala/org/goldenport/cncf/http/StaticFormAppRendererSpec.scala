@@ -292,6 +292,33 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       store.as[String].unsafeRunSync() should include ("BlobStore backend status")
     }
 
+    "serve managed Blob payloads through the CNCF content route" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val bytes = "route image".getBytes(StandardCharsets.UTF_8)
+      val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary(bytes))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+        Property("kind", "image", None),
+        Property("filename", "route.png", None),
+        Property("contentType", ContentType.IMAGE_PNG.header, None)
+        )
+      ))))
+      val displayUrl = blob.getString("displayPath").getOrElse(fail("displayPath is missing"))
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val inline = server.routes(null).orNotFound.run(_get_request(displayUrl)).unsafeRunSync()
+      val download = server.routes(null).orNotFound.run(_get_request(s"$displayUrl?download=true")).unsafeRunSync()
+
+      inline.status.code shouldBe 200
+      inline.headers.get(org.typelevel.ci.CIString("Content-Disposition")).map(_.head.value) shouldBe Some("inline")
+      inline.body.compile.to(Array).unsafeRunSync().toVector shouldBe bytes.toVector
+      download.status.code shouldBe 200
+      download.headers.get(org.typelevel.ci.CIString("Content-Disposition")).map(_.head.value) shouldBe Some("attachment")
+      download.body.compile.to(Array).unsafeRunSync().toVector shouldBe bytes.toVector
+    }
+
     "serve Blob admin mutation routes" in {
       val subsystem = DefaultSubsystemFactory.default(Some("server"))
       val first = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
@@ -8151,11 +8178,19 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     operation: String,
     properties: Property*
   ): GRequest =
+    _blob_request(operation, Nil, properties.toList)
+
+  private def _blob_request(
+    operation: String,
+    arguments: List[Argument],
+    properties: List[Property]
+  ): GRequest =
     GRequest.of(
       component = "blob",
       service = "blob",
       operation = operation,
-      properties = properties.toList
+      arguments = arguments,
+      properties = properties
     )
 
   private def _blob_record(response: OperationResponse): Record =

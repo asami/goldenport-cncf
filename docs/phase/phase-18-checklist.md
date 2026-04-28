@@ -885,6 +885,63 @@ Verification snapshot:
 - [x] `StaticFormAppRendererSpec -- -z Authorization` covers dashboard JSON
       compatibility for authorization metadata.
 
+### BL-10: Configurable BlobStore and CNCF Blob Content URLs
+
+Status: DONE
+
+Make Blob payload backend selection configurable and provide a CNCF-managed
+content route for BlobStores without their own public URL capability:
+
+- [x] `RuntimeConfig` exposes BlobStore backend/name/container/local-root and
+      public-base-path settings with `textus.*`, `textus.runtime.*`, and
+      `cncf.*` aliases.
+- [x] `BlobStoreFactory` creates the default `in_memory` backend or configured
+      `local` backend and fails deterministically for unknown backends or
+      missing local root.
+- [x] BlobStore plugin/provider SPI supports registered providers and explicit
+      `textus.blob.store.provider-class` wiring for non-builtin backends.
+- [x] BlobComponent uses RuntimeConfig-derived BlobStore wiring instead of
+      hardcoded `InMemoryBlobStore`.
+- [x] BlobStore-managed object identity remains in `BlobStorageRef`.
+- [x] Managed Blob metadata stores relative CNCF content paths for public
+      display/download access.
+- [x] BlobStore backends do not synthesize CNCF content URLs from
+      `BlobStorageRef`; only Blob Entity id based routes are public.
+- [x] LocalBlobStore writes sidecar metadata and can read payloads after a
+      fresh store instance is created.
+- [x] LocalBlobStore compensates payload bytes when sidecar metadata write
+      fails.
+- [x] `/web/blob/content/{id}` serves managed Blob payloads through Blob Entity
+      read authorization and never exposes `storageRef` in the URL.
+
+Implementation notes:
+
+- Absolute deployment URLs are not stored in Blob Entity rows. Request/base URL
+  completion remains a projection concern above the saved relative path.
+- `displayPath` / `downloadPath` are saved relative paths. `displayUrl` /
+  `downloadUrl` are presentation fields and are only emitted when an absolute
+  URL is available.
+- `textus.blob.store.public-base-path` is a relative path setting. Absolute
+  backend bases belong to provider/deployment configuration, not saved Blob
+  metadata.
+- S3/S3-compatible backend implementation, signed URLs, retention, thumbnail,
+  virus-scan, MIME-kind policy, payload size limit, and resumable upload remain
+  future hardening slices.
+- `provider-class` is an explicit plugin boundary. S3 or other object-store
+  providers plug in there without changing BlobComponent or Blob metadata
+  storage.
+
+Verification snapshot:
+
+- [x] `BlobStoreSpec` covers BlobStoreFactory defaults and LocalBlobStore
+      restart-safe sidecar metadata.
+- [x] `BlobStoreSpec` covers provider registry wiring and provider-class
+      configuration failures.
+- [x] `RuntimeConfigSpec` covers BlobStore config parsing and invalid config
+      failures at the factory boundary.
+- [x] `StaticFormAppRendererSpec -- -z Blob` covers the authorized CNCF content
+      route and download header behavior.
+
 ### Deferred To 8.3 Security
 
 - first-class arbitrary ACL lists.

@@ -1,6 +1,7 @@
 package org.goldenport.cncf.config
 
 import org.goldenport.cncf.cli.RunMode
+import org.goldenport.cncf.blob.{BlobStoreConfig, BlobStoreFactory}
 import org.goldenport.cncf.log.LogBackend
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalatest.matchers.should.Matchers
@@ -8,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 18, 2026
- * @version Apr. 24, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
@@ -73,6 +74,36 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
 
       config.mode shouldBe RunMode.Server
       config.operationMode shouldBe OperationMode.Production
+    }
+
+    "parse BlobStore configuration and aliases" in {
+      val root = java.nio.file.Files.createTempDirectory("cncf-runtime-blob-store")
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.RuntimeBlobStoreBackendKey -> ConfigurationValue.StringValue("local"),
+          RuntimeConfig.RuntimeBlobStoreNameKey -> ConfigurationValue.StringValue("media-store"),
+          RuntimeConfig.RuntimeBlobStoreContainerKey -> ConfigurationValue.StringValue("media"),
+          RuntimeConfig.RuntimeBlobStoreLocalRootKey -> ConfigurationValue.StringValue(root.toString),
+          RuntimeConfig.RuntimeBlobStorePublicBasePathKey -> ConfigurationValue.StringValue("/assets/blob"),
+          RuntimeConfig.RuntimeBlobStoreProviderClassKey -> ConfigurationValue.StringValue("example.BlobProvider")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      val config = RuntimeConfig.from(configuration)
+
+      config.blobStoreConfig.backend shouldBe "local"
+      config.blobStoreConfig.effectiveName shouldBe "media-store"
+      config.blobStoreConfig.container shouldBe "media"
+      config.blobStoreConfig.localRoot shouldBe Some(root)
+      config.blobStoreConfig.publicBasePath shouldBe Some("/assets/blob")
+      config.blobStoreConfig.providerClass shouldBe Some("example.BlobProvider")
+    }
+
+    "reject invalid BlobStore runtime configuration deterministically at factory boundary" in {
+      BlobStoreFactory.create(BlobStoreConfig(backend = "s3")) shouldBe a[org.goldenport.Consequence.Failure[_]]
+      BlobStoreFactory.create(BlobStoreConfig(backend = BlobStoreConfig.BackendLocal)) shouldBe a[org.goldenport.Consequence.Failure[_]]
+      BlobStoreFactory.create(BlobStoreConfig(publicBasePath = Some("https://cdn.example.test/blob"))) shouldBe a[org.goldenport.Consequence.Failure[_]]
     }
 
     "honor operation mode aliases and runtime config aliases" in {

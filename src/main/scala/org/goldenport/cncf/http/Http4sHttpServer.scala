@@ -26,7 +26,7 @@ import org.http4s.server.websocket.WebSocketBuilder2
 import org.http4s.websocket.WebSocketFrame
 import org.typelevel.ci.CIString
 import org.goldenport.record.Record
-import org.goldenport.Conclusion
+import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.http.{HttpContext, HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeContext, ScopeKind}
@@ -44,7 +44,7 @@ import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
- * @version Apr. 27, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -106,6 +106,8 @@ final class Http4sHttpServer(
         _textus_widgets_js()
       case req @ GET -> _ if _web_global_asset_path(req).nonEmpty =>
         _web_global_asset(_web_global_asset_path(req).get)
+      case req @ GET -> Root / "web" / "blob" / "content" / id =>
+        _blob_content(req, id)
       case GET -> Root / "web" / "system" / "dashboard" =>
         _subsystem_dashboard()
       case GET -> Root / "web" / "system" / "dashboard" / "state" =>
@@ -466,6 +468,33 @@ final class Http4sHttpServer(
       Some("admin.store"),
       Some("index")
     )
+
+  private def _blob_content(req: HRequest[IO], id: String): IO[HResponse[IO]] = {
+    val request = org.goldenport.protocol.Request.of(
+      component = "blob",
+      service = "blob",
+      operation = "read_blob",
+      properties = List(org.goldenport.protocol.Property("id", id, None)) ++
+        _session_id_(req).map(x => org.goldenport.protocol.Property("x-textus-session", x, None)).toList
+    )
+    engine.runtimeSubsystem.executeWithMetadata(request) match {
+      case Consequence.Success(result) =>
+        result.response match {
+          case org.goldenport.protocol.operation.OperationResponse.Http(response) =>
+            _to_http_response_with_metadata(response, Some(req), Some("blob"), Some("blob"), Some("read_blob"), result.metadata).map { out =>
+              if (req.uri.query.params.get("download").exists(_.equalsIgnoreCase("true")))
+                out.putHeaders(Header.Raw(CIString("Content-Disposition"), "attachment"))
+              else
+                out.putHeaders(Header.Raw(CIString("Content-Disposition"), "inline"))
+            }
+          case other =>
+            _web_error_response(Some("blob"), HStatus.InternalServerError, s"Blob content operation returned ${other.show}", req.uri.path.renderString)
+        }
+      case Consequence.Failure(conclusion) =>
+        val status = HStatus.fromInt(conclusion.status.webCode.code).getOrElse(HStatus.InternalServerError)
+        _web_error_response(Some("blob"), status, conclusion, req.uri.path.renderString, req.method.name)
+    }
+  }
 
   private def _blob_admin_page(
     req: HRequest[IO],
@@ -3197,6 +3226,20 @@ final class Http4sHttpServer(
       case 404 => HStatus.NotFound
       case _ => HStatus.InternalServerError
     }
+    val mime = MediaType.parse(res.mime.value).fold(_ => MediaType.text.plain, identity)
+    val charset: Option[org.http4s.Charset] =
+      res.charset.map(c => org.http4s.Charset.fromNioCharset(c))
+    val contentType = `Content-Type`(mime, charset)
+    res.getBinary match {
+      case Some(binary) if res.code < 400 =>
+        return IO.pure(
+          _with_response_headers(_with_job_id_header(HResponse[IO](status), metadata), res)
+            .withBodyStream(fs2.io.readInputStream(IO(binary.openInputStream()), 8192, closeAfterUse = true))
+            .withContentType(contentType)
+        )
+      case _ =>
+        ()
+    }
     val body = res.getString.getOrElse("")
     if (res.code >= 400 && _is_structured_error_body(res, body)) {
       val mime = MediaType.parse(res.mime.value).fold(_ => MediaType.application.json, identity)
@@ -3223,15 +3266,21 @@ final class Http4sHttpServer(
       else
         _error_json_response(error)
     } else {
-    val mime = MediaType.parse(res.mime.value).fold(_ => MediaType.text.plain, identity)
-    val charset: Option[org.http4s.Charset] =
-      res.charset.map(c => org.http4s.Charset.fromNioCharset(c))
-    val contentType = `Content-Type`(mime, charset)
-    IO.pure(
-      _with_job_id_header(HResponse[IO](status), metadata).withEntity(body).withContentType(contentType)
-    )
+      IO.pure(
+        _with_response_headers(_with_job_id_header(HResponse[IO](status), metadata), res)
+          .withEntity(body)
+          .withContentType(contentType)
+      )
     }
   }
+
+  private def _with_response_headers(
+    response: HResponse[IO],
+    res: HttpResponse
+  ): HResponse[IO] =
+    res.header.fields.foldLeft(response) { (z, field) =>
+      z.putHeaders(Header.Raw(CIString(field.key), field.value.single.toString))
+    }
 
   private def _with_job_id_header(
     response: HResponse[IO],

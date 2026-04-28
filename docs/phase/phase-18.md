@@ -52,6 +52,9 @@ Current semantic direction:
   `BinaryBag`.
 - BlobStore is backed by a dedicated payload DataStore, not by ordinary entity
   storage.
+- BlobStore backend implementation is selected through built-in backend names,
+  registered providers, or an explicit provider class. S3/S3-compatible stores
+  are provider implementations, not BlobComponent-specific code.
 - Managed Blob entity records the storage reference; display/download URLs are
   resolved from that reference when the Blob is read or projected.
 - Association is a CNCF runtime/entity foundation, not a standalone public
@@ -117,7 +120,7 @@ Current semantic direction:
   - BL-07A (DONE): flat Blob metadata projection on Aggregate/View read responses.
   - BL-07B (DONE): projection contract closure for ordering, empty behavior,
     top-level placement, and payload exclusion.
-- H (IN PROGRESS): BL-08 — Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
+- H (DONE): BL-08 — Hardening: access control, checksum/content-type/size validation, deletion semantics, and external URL safety policy.
   - BL-08A (DONE): external URL safety policy.
   - BL-08B (DONE): metadata validation for content type, byte size, and digest.
   - BL-08C (DONE): Blob FunctionalActionCall Entity access chokepoint boundary.
@@ -134,6 +137,8 @@ Current semantic direction:
     policy surface.
   - BL-09E (DONE): introspection/manual/admin visibility for effective
     Blob authorization policy.
+- J (DONE): BL-10 — Configurable BlobStore backend wiring and CNCF Blob
+  content URLs.
 
 Current note:
 
@@ -141,13 +146,11 @@ Current note:
 - Phase 18 starts Blob management as a separate component concern. Authorization
   work in this phase is driven by Blob's concrete requirements.
 - Latest implementation snapshot:
-  - `992d1d6 Add blob metadata projection to admin views`
-  - `cca7e38 Close blob projection contract`
-  - `8f87196 Harden external blob URLs`
-  - `2d00f58 Harden blob action chokepoints`
-  - Current change: expose BL-09 resource policies and Blob operation
-    requirements through Describe/Schema/manual/security-deployment projection,
-    Blob admin read-only guidance, and authorization decision diagnostics.
+  - `7857c9c Expose blob authorization policy visibility`
+  - Current change: configure BlobStore backend selection, add BlobStore
+    plugin/provider SPI, make LocalBlobStore restart-safe with sidecar metadata,
+    store Blob public access paths as relative CNCF routes, and serve managed
+    payloads through an authorized `/web/blob/content/{id}` route.
   - BL-07B closes the projection contract:
     Aggregate/View output uses a flat, additive `blobs` field, omits it when
     empty, orders rows by `sortOrder`, and never embeds payload bytes.
@@ -240,8 +243,9 @@ Blob metadata fields:
 - `checksum` / `digest`
 - `storageRef` for managed blobs
 - `externalUrl` for external URL blobs
-- `displayUrl` / `downloadUrl` resolved from either `storageRef` or
-  `externalUrl`
+- `displayPath` / `downloadPath` as relative public paths for managed Blobs
+- `displayUrl` / `downloadUrl` as presentation URLs when an absolute URL is
+  available, such as an external URL Blob or a future signed/backend URL
 - lifecycle/audit fields
 
 Association fields used by Blob attachment:

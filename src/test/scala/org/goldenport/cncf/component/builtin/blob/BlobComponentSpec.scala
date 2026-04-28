@@ -2,13 +2,15 @@ package org.goldenport.cncf.component.builtin.blob
 
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
-import org.goldenport.Consequence
+import org.goldenport.{Consequence, ConsequenceException}
 import org.goldenport.bag.Bag
 import org.goldenport.bag.BinaryBag
 import org.goldenport.cncf.blob.*
+import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.security.{AuthorizationResourcePolicies, AuthorizationResourcePolicy}
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.subsystem.{GenericSubsystemAuthorizationBinding, GenericSubsystemComponentBinding, GenericSubsystemDescriptor, GenericSubsystemSecurityBinding}
+import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.datatype.ContentType
 import org.goldenport.http.HttpResponse
 import org.goldenport.protocol.{Argument, Property, Request}
@@ -41,6 +43,24 @@ final class BlobComponentSpec
 
       Then("the builtin Blob component is available")
       component.map(_.name) shouldBe Some("blob")
+    }
+
+    "fail startup deterministically for invalid BlobStore configuration" in {
+      Given("a subsystem configuration with an unknown BlobStore backend")
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.BlobStoreBackendKey -> ConfigurationValue.StringValue("missing_backend")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      When("the default subsystem installs builtin components")
+      val failure = intercept[ConsequenceException] {
+        DefaultSubsystemFactory.default(Some("command"), configuration)
+      }
+
+      Then("the BlobStore configuration error is raised at component creation time")
+      failure.getMessage should include ("unknown blob store backend")
     }
 
     "expose public request and response metadata for Blob operations" in {
@@ -146,7 +166,10 @@ final class BlobComponentSpec
       registered.getString("sourceMode") shouldBe Some("managed")
       registered.getString("kind") shouldBe Some("image")
       registered.getString("storageRef") should not be empty
-      registered.getString("displayUrl").getOrElse("") should include ("/web/blob/content/")
+      registered.getString("displayPath").getOrElse("") should include ("/web/blob/content/")
+      registered.getString("downloadPath").getOrElse("") should include ("download=true")
+      registered.getString("displayUrl") shouldBe empty
+      registered.getString("downloadUrl") shouldBe empty
 
       When("get_blob_metadata is executed")
       val metadata = _record(_success(subsystem.executeOperationResponse(_blob_request("get_blob_metadata", managedId))))
@@ -167,6 +190,31 @@ final class BlobComponentSpec
         case other =>
           fail(s"expected binary HTTP response but got $other")
       }
+    }
+
+    "preserve backend public paths on managed Blob metadata when the BlobStore provides them" in {
+      Given("a subsystem whose BlobStore has a public base path")
+      val subsystem = _subsystem_with_blob_store(InMemoryBlobStore(publicBasePath = Some("/assets/blob")))
+      val register = _request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary(Array[Byte](1, 2, 3)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "image", None),
+          Property("filename", "photo.png", None),
+          Property("contentType", ContentType.IMAGE_PNG.header, None)
+        )
+      )
+
+      When("register_blob is executed")
+      val registered = _record(_success(subsystem.executeOperationResponse(register)))
+
+      Then("the Blob Entity stores a relative backend public path")
+      registered.getString("displayPath").getOrElse("") should startWith ("/assets/blob/")
+      registered.getString("downloadPath") shouldBe registered.getString("displayPath")
+      registered.getString("displayUrl") shouldBe empty
+      registered.getString("downloadUrl") shouldBe empty
+      registered.getString("urlSource") shouldBe Some("backend")
     }
 
     "attach, list, and detach Blob metadata through generic associations" in {
@@ -974,7 +1022,7 @@ final class BlobComponentSpec
         contentType = request.contentType,
         byteSize = bytes.length.toLong,
         digest = "sha256:test",
-        accessUrl = BlobUrl.cncfRoute(ref),
+        accessUrl = BlobAccessUrl.unresolved,
         storedAt = java.time.Instant.parse("2026-04-27T00:00:00Z")
       ))
     }
@@ -991,7 +1039,7 @@ final class BlobComponentSpec
     }
 
     def accessUrl(ref: BlobStorageRef): Consequence[BlobAccessUrl] =
-      Consequence.success(BlobUrl.cncfRoute(ref))
+      Consequence.success(BlobAccessUrl.unresolved)
 
     def status(): Consequence[BlobStoreStatus] =
       Consequence.success(BlobStoreStatus("recording", available = true))

@@ -630,18 +630,18 @@ Current active phase: Phase 18.
   status. Ingress execution rebinds UoW interpretation to the resolved request
   security context while preserving runtime UoW lifecycle actions, so
   ActionCall/UoW authorization observes the active subject.
-- BL-09E is completed in this change. Describe/Schema projection exposes
-  `authorizationPolicies`, security deployment Markdown renders role/resource
-  tables, manual pages and Blob admin home show read-only Blob authorization
-  requirements, and authorization decision diagnostics include coarse
-  `failureKind` counts for capability, permission, guard, ABAC, relation,
-  cross-component, and unknown failures.
-- BL-09 is now complete for Phase 18. Broader ACL administration, subject grant
-  UI, role lifecycle UI, and organization-grade policy management remain under
+- BL-09 is complete for Phase 18. Broader ACL administration, subject grant UI,
+  role lifecycle UI, and organization-grade policy management remain under
   strategy section 8.3 Security.
-- Remaining Blob hardening outside BL-09 includes UoW-backed application
-  create/update Blob attachment workflow adapters, deletion/retention policy,
-  signed URLs, production BlobStore backends, MIME-kind policy, payload size
+- BL-10 is completed in this change. BlobStore backend selection is configurable,
+  BlobStore provider/plugin SPI is available for non-builtin stores,
+  BlobComponent uses RuntimeConfig-derived store wiring, LocalBlobStore is
+  restart-safe with sidecar metadata, managed Blob public paths are stored as
+  relative CNCF routes, BlobStores no longer expose storageRef-based CNCF
+  routes, and `/web/blob/content/{id}` serves payloads through Blob Entity read
+  authorization.
+- Remaining Blob hardening includes deletion/retention policy, signed URLs,
+  real S3/S3-compatible BlobStore backends, MIME-kind policy, payload size
   limits, thumbnail generation, virus scanning, and resumable upload.
 - Active dashboard: `docs/phase/phase-18.md`
 - Active checklist: `docs/phase/phase-18-checklist.md`

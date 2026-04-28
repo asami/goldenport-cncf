@@ -12,6 +12,7 @@ import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.config.RuntimeDefaults
 import org.goldenport.cncf.action.CommandExecutionMode
 import org.goldenport.cncf.observability.ObservabilityEngine
+import org.goldenport.cncf.blob.BlobStoreConfig
 
 /*
  * @since   Jan. 18, 2026
@@ -39,7 +40,8 @@ final case class RuntimeConfig(
   webProductionAdminJobsRoles: Vector[String] = RuntimeConfig.DefaultWebProductionAdminJobsRoles,
   commandExecutionMode: Option[CommandExecutionMode] = None,
   executionHistoryConfig: ObservabilityEngine.ExecutionHistoryConfig =
-    ObservabilityEngine.ExecutionHistoryConfig()
+    ObservabilityEngine.ExecutionHistoryConfig(),
+  blobStoreConfig: BlobStoreConfig = BlobStoreConfig()
 )
 
 object RuntimeConfig {
@@ -109,6 +111,18 @@ object RuntimeConfig {
   val RuntimeWebProductionAdminComponentRolesKey = "textus.runtime.web.production.admin.component.roles"
   val WebProductionAdminJobsRolesKey = "textus.web.production.admin.jobs.roles"
   val RuntimeWebProductionAdminJobsRolesKey = "textus.runtime.web.production.admin.jobs.roles"
+  val BlobStoreBackendKey = "textus.blob.store.backend"
+  val RuntimeBlobStoreBackendKey = "textus.runtime.blob.store.backend"
+  val BlobStoreNameKey = "textus.blob.store.name"
+  val RuntimeBlobStoreNameKey = "textus.runtime.blob.store.name"
+  val BlobStoreContainerKey = "textus.blob.store.container"
+  val RuntimeBlobStoreContainerKey = "textus.runtime.blob.store.container"
+  val BlobStoreLocalRootKey = "textus.blob.store.local.root"
+  val RuntimeBlobStoreLocalRootKey = "textus.runtime.blob.store.local.root"
+  val BlobStorePublicBasePathKey = "textus.blob.store.public-base-path"
+  val RuntimeBlobStorePublicBasePathKey = "textus.runtime.blob.store.public-base-path"
+  val BlobStoreProviderClassKey = "textus.blob.store.provider-class"
+  val RuntimeBlobStoreProviderClassKey = "textus.runtime.blob.store.provider-class"
 
   val DefaultServerEmulatorBaseUrl = "http://localhost/"
   val DefaultHttpDriverName = "real"
@@ -140,7 +154,8 @@ object RuntimeConfig {
       webProductionAdminComponentRoles = DefaultWebProductionAdminComponentRoles,
       webProductionAdminJobsRoles = DefaultWebProductionAdminJobsRoles,
       commandExecutionMode = None,
-      executionHistoryConfig = ObservabilityEngine.ExecutionHistoryConfig()
+      executionHistoryConfig = ObservabilityEngine.ExecutionHistoryConfig(),
+      blobStoreConfig = BlobStoreConfig()
     )
 
   def from(
@@ -202,6 +217,7 @@ object RuntimeConfig {
     val datastorespace = DataStoreSpace.create(configuration)
     val entitystorespace = EntityStoreSpace.create(configuration)
     val executionHistoryConfig = _execution_history_config(configuration)
+    val blobStoreConfig = BlobStoreConfig.fromConfiguration(configuration)
     val webOperationDispatcher =
       _get_string(configuration, WebOperationDispatcherKey)
         .map(_.trim.toLowerCase)
@@ -251,7 +267,8 @@ object RuntimeConfig {
       webProductionAdminComponentRoles = webProductionAdminComponentRoles,
       webProductionAdminJobsRoles = webProductionAdminJobsRoles,
       commandExecutionMode = commandExecutionMode,
-      executionHistoryConfig = executionHistoryConfig
+      executionHistoryConfig = executionHistoryConfig,
+      blobStoreConfig = blobStoreConfig
     )
   }
 
@@ -386,6 +403,12 @@ object RuntimeConfig {
         case WebProductionAdminSystemRolesKey => Vector(RuntimeWebProductionAdminSystemRolesKey)
         case WebProductionAdminComponentRolesKey => Vector(RuntimeWebProductionAdminComponentRolesKey)
         case WebProductionAdminJobsRolesKey => Vector(RuntimeWebProductionAdminJobsRolesKey)
+        case BlobStoreBackendKey => Vector(RuntimeBlobStoreBackendKey)
+        case BlobStoreNameKey => Vector(RuntimeBlobStoreNameKey)
+        case BlobStoreContainerKey => Vector(RuntimeBlobStoreContainerKey)
+        case BlobStoreLocalRootKey => Vector(RuntimeBlobStoreLocalRootKey)
+        case BlobStorePublicBasePathKey => Vector(RuntimeBlobStorePublicBasePathKey)
+        case BlobStoreProviderClassKey => Vector(RuntimeBlobStoreProviderClassKey)
         case _ => Vector.empty
       }
     val cncfAliases =

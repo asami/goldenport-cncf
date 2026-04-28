@@ -13,7 +13,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Entity-backed repository for Blob metadata.
  *
  * @since   Apr. 27, 2026
- * @version Apr. 27, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BlobRepository {
@@ -151,8 +151,10 @@ object BlobRecordCodec {
       "storageRefVersion" -> storageref.flatMap(_.version),
       "storageRefEtag" -> storageref.flatMap(_.etag),
       "externalUrl" -> externalurl,
-      "displayUrl" -> accessurl.displayUrl,
-      "downloadUrl" -> accessurl.downloadUrl,
+      "displayPath" -> accessurl.displayPath,
+      "downloadPath" -> accessurl.downloadPath,
+      "displayUrl" -> accessurl.displayUrlForPresentation,
+      "downloadUrl" -> accessurl.downloadUrlForPresentation,
       "urlSource" -> accessurl.urlSource.print,
       "createdAt" -> createdat.map(_.toString),
       "updatedAt" -> updatedat.map(_.toString),
@@ -161,8 +163,8 @@ object BlobRecordCodec {
 
   private def _access_url(record: Record): Consequence[BlobAccessUrl] =
     for {
-      display <- _string(record, "displayUrl", "display_url").map(Consequence.success).getOrElse(Consequence.argumentMissing("displayUrl"))
-      download <- _string(record, "downloadUrl", "download_url").map(Consequence.success).getOrElse(Consequence.argumentMissing("downloadUrl"))
+      display <- _string(record, "displayPath", "display_path", "displayUrl", "display_url").map(Consequence.success).getOrElse(Consequence.argumentMissing("displayPath"))
+      download <- _string(record, "downloadPath", "download_path", "downloadUrl", "download_url").map(Consequence.success).getOrElse(Consequence.argumentMissing("downloadPath"))
       source <- _string(record, "urlSource", "url_source").map(_url_source).getOrElse(Consequence.success(BlobAccessUrlSource.CncfRoute))
     } yield BlobAccessUrl(display, download, _instant(record, "expiresAt", "expires_at"), source)
 

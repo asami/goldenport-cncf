@@ -1,9 +1,11 @@
 package org.goldenport.cncf.blob
 
+import java.io.{InputStream, OutputStream}
 import java.nio.file.{Files, Path}
 import java.security.MessageDigest
 import java.time.Instant
 import java.util.Locale
+import java.util.Properties
 import scala.collection.concurrent.TrieMap
 import scala.util.Using
 import org.goldenport.Consequence
@@ -15,12 +17,13 @@ import org.simplemodeling.model.datatype.EntityId
  * Initial BlobStore backends for development and executable specifications.
  *
  * @since   Apr. 26, 2026
- * @version Apr. 27, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class InMemoryBlobStore(
   val name: String = "in-memory",
   container: String = BlobStorageRef.DefaultContainer,
+  publicBasePath: Option[String] = None,
   backendBaseUrl: Option[String] = None
 ) extends BlobStore {
   private final case class Stored(
@@ -43,7 +46,7 @@ final class InMemoryBlobStore(
       ref = BlobStorageRef(name, container, key)
       stored = Stored(request.id, ref, request.contentType, bytes, digest, now)
       _ = _entries.update(ref.print, stored)
-      access <- accessUrl(ref)
+      access = _access_url_for_result(ref)
     } yield BlobPutResult(
       id = request.id,
       storageRef = ref,
@@ -58,7 +61,7 @@ final class InMemoryBlobStore(
     _validate_ref(ref).flatMap { _ =>
       _entries.get(ref.print) match {
         case Some(stored) =>
-          accessUrl(ref).map { access =>
+          Consequence.success {
             BlobReadResult(
               id = stored.id,
               storageRef = ref,
@@ -66,7 +69,7 @@ final class InMemoryBlobStore(
               byteSize = stored.bytes.length.toLong,
               digest = stored.digest,
               payload = Bag.binary(stored.bytes.clone()),
-              accessUrl = access,
+              accessUrl = _access_url_for_result(ref),
               storedAt = stored.storedAt
             )
           }
@@ -82,10 +85,11 @@ final class InMemoryBlobStore(
     }
 
   def accessUrl(ref: BlobStorageRef): Consequence[BlobAccessUrl] =
-    _validate_ref(ref).map { _ =>
-      backendBaseUrl
-        .map(base => BlobStoreSupport.backendAccessUrl(base, ref))
-        .getOrElse(BlobUrl.cncfRoute(ref))
+    _validate_ref(ref).flatMap { _ =>
+      publicBasePath.orElse(backendBaseUrl) match {
+        case Some(base) => Consequence.success(BlobStoreSupport.backendAccessUrl(base, ref))
+        case None => Consequence.resourceUnsupported(s"BlobStore does not expose a backend public URL: ${ref.print}")
+      }
     }
 
   def status(): Consequence[BlobStoreStatus] =
@@ -108,12 +112,18 @@ final class InMemoryBlobStore(
       Consequence.argumentInvalid(s"invalid blob storage key: ${ref.key}")
     else
       Consequence.unit
+
+  private def _access_url_for_result(ref: BlobStorageRef): BlobAccessUrl =
+    publicBasePath.orElse(backendBaseUrl)
+      .map(base => BlobStoreSupport.backendAccessUrl(base, ref))
+      .getOrElse(BlobAccessUrl.unresolved)
 }
 
 final class LocalBlobStore(
   root: Path,
   val name: String = "local",
   container: String = BlobStorageRef.DefaultContainer,
+  publicBasePath: Option[String] = None,
   backendBaseUrl: Option[String] = None
 ) extends BlobStore {
   private final case class StoredMetadata(
@@ -136,8 +146,10 @@ final class LocalBlobStore(
       ref = BlobStorageRef(name, container, key)
       path <- _path(ref)
       _ <- _write(path, bytes)
-      _ = _metadata.update(ref.print, StoredMetadata(request.id, request.contentType, bytes.length.toLong, digest, now))
-      access <- accessUrl(ref)
+      metadata = StoredMetadata(request.id, request.contentType, bytes.length.toLong, digest, now)
+      _ <- _write_metadata_with_payload_cleanup(path, metadata)
+      _ = _metadata.update(ref.print, metadata)
+      access = _access_url_for_result(ref)
     } yield BlobPutResult(
       id = request.id,
       storageRef = ref,
@@ -160,9 +172,8 @@ final class LocalBlobStore(
           for {
             metadata <- _metadata.get(ref.print) match {
               case Some(m) => Consequence.success(m)
-              case None => Consequence.operationNotFound(s"blob metadata:${ref.print}")
+              case None => _read_metadata(path)
             }
-            access <- accessUrl(ref)
           } yield BlobReadResult(
             id = metadata.id,
             storageRef = ref,
@@ -170,7 +181,7 @@ final class LocalBlobStore(
             byteSize = metadata.byteSize,
             digest = metadata.digest,
             payload = Bag.file(path).promoteToBinary(),
-            accessUrl = access,
+            accessUrl = _access_url_for_result(ref),
             storedAt = metadata.storedAt
           )
     } yield result
@@ -180,16 +191,18 @@ final class LocalBlobStore(
       path <- _path(ref)
       _ <- Consequence {
         Files.deleteIfExists(path)
+        Files.deleteIfExists(_metadata_path(path))
         _metadata.remove(ref.print)
         ()
       }
     } yield ()
 
   def accessUrl(ref: BlobStorageRef): Consequence[BlobAccessUrl] =
-    _path(ref).map { _ =>
-      backendBaseUrl
-        .map(base => BlobStoreSupport.backendAccessUrl(base, ref))
-        .getOrElse(BlobUrl.cncfRoute(ref))
+    _path(ref).flatMap { _ =>
+      publicBasePath.orElse(backendBaseUrl) match {
+        case Some(base) => Consequence.success(BlobStoreSupport.backendAccessUrl(base, ref))
+        case None => Consequence.resourceUnsupported(s"BlobStore does not expose a backend public URL: ${ref.print}")
+      }
     }
 
   def status(): Consequence[BlobStoreStatus] =
@@ -231,6 +244,68 @@ final class LocalBlobStore(
       Files.write(path, bytes)
       ()
     }
+
+  private def _metadata_path(path: Path): Path =
+    path.resolveSibling(path.getFileName.toString + ".blob-meta.properties")
+
+  private def _write_metadata(path: Path, metadata: StoredMetadata): Consequence[Unit] =
+    Consequence {
+      val props = new Properties()
+      props.setProperty("id", metadata.id.value)
+      props.setProperty("contentType", metadata.contentType.header)
+      props.setProperty("byteSize", metadata.byteSize.toString)
+      props.setProperty("digest", metadata.digest)
+      props.setProperty("storedAt", metadata.storedAt.toString)
+      val meta = _metadata_path(path)
+      Files.createDirectories(meta.getParent)
+      val out: OutputStream = Files.newOutputStream(meta)
+      try props.store(out, "CNCF BlobStore metadata")
+      finally out.close()
+      ()
+    }
+
+  private def _write_metadata_with_payload_cleanup(path: Path, metadata: StoredMetadata): Consequence[Unit] =
+    _write_metadata(path, metadata) match {
+      case success @ Consequence.Success(_) =>
+        success
+      case failure @ Consequence.Failure(_) =>
+        _delete_payload_files(path)
+        failure
+    }
+
+  private def _delete_payload_files(path: Path): Unit =
+    try {
+      Files.deleteIfExists(path)
+      Files.deleteIfExists(_metadata_path(path))
+    } catch {
+      case scala.util.control.NonFatal(_) => ()
+    }
+
+  private def _read_metadata(path: Path): Consequence[StoredMetadata] =
+    if (!Files.exists(_metadata_path(path)))
+      Consequence.operationNotFound(s"blob metadata:${path.toAbsolutePath.normalize}")
+    else
+      Consequence {
+        val props = new Properties()
+        val in: InputStream = Files.newInputStream(_metadata_path(path))
+        try props.load(in)
+        finally in.close()
+        StoredMetadata(
+          id = EntityId.parse(props.getProperty("id")) match {
+            case Consequence.Success(value) => value
+            case Consequence.Failure(conclusion) => throw new IllegalArgumentException(conclusion.show)
+          },
+          contentType = ContentType.parse(props.getProperty("contentType")),
+          byteSize = props.getProperty("byteSize").toLong,
+          digest = props.getProperty("digest"),
+          storedAt = Instant.parse(props.getProperty("storedAt"))
+        )
+      }
+
+  private def _access_url_for_result(ref: BlobStorageRef): BlobAccessUrl =
+    publicBasePath.orElse(backendBaseUrl)
+      .map(base => BlobStoreSupport.backendAccessUrl(base, ref))
+      .getOrElse(BlobAccessUrl.unresolved)
 }
 
 object BlobStoreSupport {

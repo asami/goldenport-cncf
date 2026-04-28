@@ -13,7 +13,7 @@ import org.simplemodeling.model.datatype.EntityId
  * Runtime model for CNCF-managed Blob payload storage.
  *
  * @since   Apr. 26, 2026
- * @version Apr. 27, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 enum BlobKind(val value: String) {
@@ -86,7 +86,27 @@ final case class BlobAccessUrl(
   downloadUrl: String,
   expiresAt: Option[Instant] = None,
   urlSource: BlobAccessUrlSource = BlobAccessUrlSource.CncfRoute
-)
+) {
+  def displayPath: String = displayUrl
+  def downloadPath: String = downloadUrl
+  def displayUrlForPresentation: Option[String] =
+    BlobAccessUrl.absoluteHttpUrl(displayUrl)
+  def downloadUrlForPresentation: Option[String] =
+    BlobAccessUrl.absoluteHttpUrl(downloadUrl)
+}
+
+object BlobAccessUrl {
+  val unresolved: BlobAccessUrl =
+    BlobAccessUrl("", "", None, BlobAccessUrlSource.CncfRoute)
+
+  def absoluteHttpUrl(value: String): Option[String] = {
+    val lower = value.trim.toLowerCase(java.util.Locale.ROOT)
+    if (lower.startsWith("http://") || lower.startsWith("https://"))
+      Some(value)
+    else
+      None
+  }
+}
 
 final case class BlobPutRequest(
   id: EntityId,
@@ -143,8 +163,10 @@ final case class BlobMetadata(
       "digest" -> digest,
       "storageRef" -> storageRef.map(_.print),
       "externalUrl" -> externalUrl,
-      "displayUrl" -> accessUrl.displayUrl,
-      "downloadUrl" -> accessUrl.downloadUrl,
+      "displayPath" -> accessUrl.displayPath,
+      "downloadPath" -> accessUrl.downloadPath,
+      "displayUrl" -> accessUrl.displayUrlForPresentation,
+      "downloadUrl" -> accessUrl.downloadUrlForPresentation,
       "urlSource" -> accessUrl.urlSource.print,
       "createdAt" -> createdAt.toString,
       "updatedAt" -> updatedAt.toString,
@@ -217,10 +239,8 @@ trait BlobStore {
 }
 
 object BlobUrl {
-  def cncfRoute(ref: BlobStorageRef): BlobAccessUrl = {
-    val encodedContainer = _encode(ref.container)
-    val encodedKey = ref.key.split("/").toVector.map(_encode).mkString("/")
-    val base = s"/web/blob/content/$encodedContainer/$encodedKey"
+  def cncfRoute(id: EntityId): BlobAccessUrl = {
+    val base = s"/web/blob/content/${_encode(id.value)}"
     BlobAccessUrl(
       displayUrl = base,
       downloadUrl = s"$base?download=true",

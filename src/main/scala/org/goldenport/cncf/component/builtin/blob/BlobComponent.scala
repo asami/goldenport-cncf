@@ -5,7 +5,7 @@ import java.util.UUID
 import cats.free.Free
 import cats.data.NonEmptyVector
 import cats.syntax.all.*
-import org.goldenport.{Consequence, ConsequenceT, Conclusion}
+import org.goldenport.{Consequence, ConsequenceException, ConsequenceT, Conclusion}
 import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.cncf.action.{ActionCall, ActionCallFeaturePart, CommandAction, CommandExecutionMode, FunctionalActionCall, QueryAction}
 import org.goldenport.cncf.association.{Association, AssociationCreate, AssociationDomain, AssociationFilter, AssociationRecordCodec, AssociationRepository, AssociationStoragePolicy}
@@ -193,12 +193,20 @@ object BlobComponent {
       )
       comp.withPort(
         Component.Port.of(
-          new DefaultBlobService(InMemoryBlobStore())
+          new DefaultBlobService(_blob_store(params))
         )
       )
       val instanceid = ComponentInstanceId.default(componentId)
       Component.Core.create(name, componentId, instanceid, protocol)
     }
+
+    private def _blob_store(params: ComponentCreate): BlobStore =
+      BlobStoreFactory.create(RuntimeConfig.from(params.subsystem.configuration).blobStoreConfig) match {
+        case Consequence.Success(store) =>
+          store
+        case failure @ Consequence.Failure(_) =>
+          throw new ConsequenceException(failure)
+      }
 
     private def _id_request: spec.RequestDefinition =
       spec.RequestDefinition(
@@ -885,7 +893,7 @@ object BlobComponent {
                 digest = Some(result.digest),
                 storageRef = Some(result.storageRef),
                 externalUrl = None,
-                accessUrl = result.accessUrl,
+                accessUrl = _managed_blob_access_url(result),
                 attributes = request.attributes
               ),
               store,
@@ -927,6 +935,14 @@ object BlobComponent {
         case _ =>
           exec_from(Consequence.argumentMissing("externalUrl"))
       }
+
+    private def _managed_blob_access_url(
+      result: BlobPutResult
+    ): BlobAccessUrl =
+      if (result.accessUrl.urlSource == BlobAccessUrlSource.Backend)
+        result.accessUrl
+      else
+        BlobUrl.cncfRoute(result.id)
 
     protected final def _blob_load(id: EntityId, system: Boolean = false): ExecUowM[Blob] = {
       import BlobRepository.given
@@ -1585,8 +1601,10 @@ object BlobComponent {
       Consequence.success(Record.dataAuto(
         "id" -> metadata.id.value,
         "sourceMode" -> metadata.sourceMode.print,
-        "displayUrl" -> metadata.accessUrl.displayUrl,
-        "downloadUrl" -> metadata.accessUrl.downloadUrl,
+        "displayPath" -> metadata.accessUrl.displayPath,
+        "downloadPath" -> metadata.accessUrl.downloadPath,
+        "displayUrl" -> metadata.accessUrl.displayUrlForPresentation,
+        "downloadUrl" -> metadata.accessUrl.downloadUrlForPresentation,
         "urlSource" -> metadata.accessUrl.urlSource.print,
         "expiresAt" -> metadata.accessUrl.expiresAt.map(_.toString)
       ))

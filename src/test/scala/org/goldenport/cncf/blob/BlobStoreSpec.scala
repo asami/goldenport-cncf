@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the Phase 18 BL-02 BlobStore SPI baseline.
  *
  * @since   Apr. 26, 2026
- * @version Apr. 27, 2026
+ * @version Apr. 28, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobStoreSpec
@@ -108,14 +108,15 @@ final class BlobStoreSpec
       When("putting the payload")
       val put = store.put(request, payload)
 
-      Then("the store returns metadata and CNCF route access URLs")
+      Then("the store returns metadata without inventing a public content URL")
       val putResult = _success(put)
       putResult.id shouldBe request.id
       putResult.contentType shouldBe ContentType.TEXT_PLAIN
       putResult.byteSize shouldBe 10L
       putResult.digest shouldBe BlobStoreSupport.sha256("hello blob".getBytes(StandardCharsets.UTF_8))
-      putResult.accessUrl.displayUrl should include ("/web/blob/content/")
-      putResult.accessUrl.downloadUrl should include ("download=true")
+      putResult.accessUrl.displayUrl shouldBe ""
+      putResult.accessUrl.downloadUrl shouldBe ""
+      store.accessUrl(putResult.storageRef) shouldBe a[Consequence.Failure[_]]
 
       When("reading the payload")
       val read = _success(store.get(putResult.storageRef))
@@ -144,6 +145,64 @@ final class BlobStoreSpec
       Then("the access URL is marked as backend-provided")
       result.accessUrl.urlSource shouldBe BlobAccessUrlSource.Backend
       result.accessUrl.displayUrl should startWith ("https://blob.example.test/assets/")
+    }
+
+    "create the default in-memory backend through BlobStoreFactory" in {
+      Given("the default BlobStore configuration")
+      val config = BlobStoreConfig()
+
+      When("creating a BlobStore")
+      val store = _success(BlobStoreFactory.create(config))
+
+      Then("an in-memory store is created for compatibility")
+      store.status().map(_.backend) shouldBe Consequence.success("in_memory")
+    }
+
+    "create plugin BlobStores through the provider registry" in {
+      Given("a registered BlobStore provider")
+      BlobStoreFactory.register("custom-store", _CustomBlobStoreProvider)
+      val config = BlobStoreConfig(backend = "custom-store", name = Some("custom-name"))
+
+      try {
+        When("creating a BlobStore for the custom backend")
+        val store = _success(BlobStoreFactory.create(config))
+
+        Then("the provider controls the resulting backend")
+        store.name shouldBe "custom-name"
+        _success(store.status()).backend shouldBe "custom"
+      } finally {
+        BlobStoreFactory.unregister("custom-store")
+      }
+    }
+
+    "create plugin BlobStores through provider-class configuration" in {
+      Given("a BlobStoreProvider class name")
+      val config = BlobStoreConfig(
+        backend = BlobStoreConfig.BackendLocal,
+        name = Some("class-name"),
+        providerClass = Some(classOf[_ClassBlobStoreProvider].getName)
+      )
+
+      When("creating a BlobStore through the provider class")
+      val store = _success(BlobStoreFactory.create(config))
+
+      Then("the instantiated provider controls the resulting backend even when backend names a builtin")
+      store.name shouldBe "class-name"
+      _success(store.status()).backend shouldBe "class"
+    }
+
+    "reject invalid provider-class configuration deterministically" in {
+      Given("a provider-class that does not implement BlobStoreProvider")
+      val config = BlobStoreConfig(
+        backend = "invalid-provider",
+        providerClass = Some(classOf[String].getName)
+      )
+
+      When("creating a BlobStore")
+      val result = BlobStoreFactory.create(config)
+
+      Then("the factory reports a configuration failure instead of falling back")
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "reject storage refs from another store" in {
@@ -189,6 +248,44 @@ final class BlobStoreSpec
       _bytes(read.payload) shouldBe "local blob".getBytes(StandardCharsets.UTF_8).toVector
       read.contentType shouldBe ContentType.TEXT_PLAIN
       read.digest shouldBe putResult.digest
+    }
+
+    "read payload metadata after a LocalBlobStore restart" in {
+      Given("a local BlobStore that has written a payload and sidecar metadata")
+      val root = Files.createTempDirectory("cncf-blob-store-restart-spec")
+      val writer = LocalBlobStore(root)
+      val request = _request("blob-local-restart", Some("photo.png"), ContentType.IMAGE_PNG)
+      val payload = Bag.binary(Array[Byte](9, 8, 7))
+      val putResult = _success(writer.put(request, payload))
+
+      When("a fresh LocalBlobStore instance reads the same storage ref")
+      val reader = LocalBlobStore(root)
+      val read = _success(reader.get(putResult.storageRef))
+
+      Then("the sidecar metadata preserves the BlobStore read contract")
+      read.id shouldBe putResult.id
+      read.contentType shouldBe ContentType.IMAGE_PNG
+      read.byteSize shouldBe 3L
+      read.digest shouldBe putResult.digest
+      _bytes(read.payload) shouldBe Vector[Byte](9, 8, 7)
+    }
+
+    "delete payload bytes when sidecar metadata write fails" in {
+      Given("a local BlobStore whose sidecar metadata path is blocked")
+      val root = Files.createTempDirectory("cncf-blob-store-sidecar-failure-spec")
+      val store = LocalBlobStore(root)
+      val request = _request("blob-local-sidecar-failure", Some("photo.png"), ContentType.IMAGE_PNG)
+      val key = BlobStoreSupport.keyFor(request.id, request.filename)
+      val payloadPath = root.resolve("default").resolve(key)
+      val metadataPath = payloadPath.resolveSibling(payloadPath.getFileName.toString + ".blob-meta.properties")
+      Files.createDirectories(metadataPath)
+
+      When("put writes the payload but cannot write sidecar metadata")
+      val result = store.put(request, Bag.binary(Array[Byte](1, 2, 3)))
+
+      Then("the operation fails and compensates the payload file")
+      result shouldBe a[Consequence.Failure[_]]
+      Files.exists(payloadPath) shouldBe false
     }
 
     "return Failure for missing storage references and I/O failures" in {
@@ -346,4 +443,34 @@ final class BlobStoreSpec
 
   private def _bytes(payload: org.goldenport.bag.BinaryBag): Vector[Byte] =
     payload.openInputStream().readAllBytes().toVector
+}
+
+private object _CustomBlobStoreProvider extends BlobStoreProvider {
+  def createBlobStore(config: BlobStoreConfig): Consequence[BlobStore] =
+    Consequence.success(new _ProviderBlobStore(config.effectiveName, "custom"))
+}
+
+final class _ClassBlobStoreProvider extends BlobStoreProvider {
+  def createBlobStore(config: BlobStoreConfig): Consequence[BlobStore] =
+    Consequence.success(new _ProviderBlobStore(config.effectiveName, "class"))
+}
+
+private final class _ProviderBlobStore(
+  val name: String,
+  backendName: String
+) extends BlobStore {
+  def put(request: BlobPutRequest, payload: org.goldenport.bag.BinaryBag): Consequence[BlobPutResult] =
+    Consequence.argumentInvalid("test provider does not store payloads")
+
+  def get(ref: BlobStorageRef): Consequence[BlobReadResult] =
+    Consequence.argumentInvalid("test provider does not store payloads")
+
+  def delete(ref: BlobStorageRef): Consequence[Unit] =
+    Consequence.unit
+
+  def accessUrl(ref: BlobStorageRef): Consequence[BlobAccessUrl] =
+    Consequence.success(BlobAccessUrl.unresolved)
+
+  def status(): Consequence[BlobStoreStatus] =
+    Consequence.success(BlobStoreStatus(backendName, available = true))
 }
