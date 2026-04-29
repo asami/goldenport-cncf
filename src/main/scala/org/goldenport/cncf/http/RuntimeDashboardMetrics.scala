@@ -43,7 +43,7 @@ object RuntimeDashboardMetrics {
   private final case class Event(
     observedAt: Long,
     error: Boolean,
-    failureKind: Option[String] = None,
+    diagnosticKey: Option[String] = None,
     operation: Option[String] = None,
     kind: Option[String] = None,
     sourceMode: Option[String] = None,
@@ -80,9 +80,9 @@ object RuntimeDashboardMetrics {
 
   def recordAuthorizationDecision(
     denied: Boolean,
-    failureKind: Option[String]
+    diagnosticKey: Option[String]
   ): Unit = synchronized {
-    val kind = if (denied) failureKind.filter(_.nonEmpty) else None
+    val kind = if (denied) diagnosticKey.filter(_.nonEmpty) else None
     _authorizationEvents = (_authorizationEvents :+ Event(java.time.Instant.now.toEpochMilli, denied, kind)).takeRight(10000)
   }
 
@@ -92,24 +92,24 @@ object RuntimeDashboardMetrics {
 
   def recordValidation(
     operation: String,
-    failureKind: Option[String]
+    diagnosticKey: Option[String]
   ): Unit = synchronized {
     _validationEvents = (_validationEvents :+ Event(
       observedAt = java.time.Instant.now.toEpochMilli,
       error = true,
-      failureKind = failureKind.filter(_.nonEmpty),
+      diagnosticKey = diagnosticKey.filter(_.nonEmpty),
       operation = Some(operation).filter(_.nonEmpty)
     )).takeRight(10000)
   }
 
   def recordOperationRequestValidation(
     operation: String,
-    failureKind: Option[String]
+    diagnosticKey: Option[String]
   ): Unit = synchronized {
     _operationRequestValidationEvents = (_operationRequestValidationEvents :+ Event(
       observedAt = java.time.Instant.now.toEpochMilli,
       error = true,
-      failureKind = failureKind.filter(_.nonEmpty),
+      diagnosticKey = diagnosticKey.filter(_.nonEmpty),
       operation = Some(operation).filter(_.nonEmpty)
     )).takeRight(10000)
   }
@@ -117,7 +117,7 @@ object RuntimeDashboardMetrics {
   def recordBlobOperation(
     operation: String,
     error: Boolean,
-    failureKind: Option[String] = None,
+    diagnosticKey: Option[String] = None,
     kind: Option[String] = None,
     sourceMode: Option[String] = None,
     backend: Option[String] = None
@@ -125,7 +125,7 @@ object RuntimeDashboardMetrics {
     _blobEvents = (_blobEvents :+ Event(
       observedAt = java.time.Instant.now.toEpochMilli,
       error = error,
-      failureKind = if (error) failureKind.filter(_.nonEmpty) else None,
+      diagnosticKey = if (error) diagnosticKey.filter(_.nonEmpty) else None,
       operation = Some(operation).filter(_.nonEmpty),
       kind = kind.filter(_.nonEmpty),
       sourceMode = sourceMode.filter(_.nonEmpty),
@@ -145,10 +145,10 @@ object RuntimeDashboardMetrics {
     _snapshot(_authorizationEvents, Vector.empty)
   }
 
-  def authorizationFailureKindCounts: Map[String, Long] = synchronized {
+  def authorizationDiagnosticCounts: Map[String, Long] = synchronized {
     _authorizationEvents
       .filter(_.error)
-      .groupBy(_.failureKind.getOrElse("unknown"))
+      .groupBy(_.diagnosticKey.getOrElse("unknown"))
       .view
       .mapValues(_.size.toLong)
       .toMap
@@ -162,10 +162,10 @@ object RuntimeDashboardMetrics {
     _snapshot(_validationEvents, Vector.empty)
   }
 
-  def validationFailureKindCounts: Map[String, Long] = synchronized {
+  def validationDiagnosticCounts: Map[String, Long] = synchronized {
     _validationEvents
       .filter(_.error)
-      .groupBy(_.failureKind.getOrElse("unknown"))
+      .groupBy(_.diagnosticKey.getOrElse("unknown"))
       .view
       .mapValues(_.size.toLong)
       .toMap
@@ -175,10 +175,10 @@ object RuntimeDashboardMetrics {
     _snapshot(_operationRequestValidationEvents, Vector.empty)
   }
 
-  def operationRequestValidationFailureKindCounts: Map[String, Long] = synchronized {
+  def operationRequestValidationDiagnosticCounts: Map[String, Long] = synchronized {
     _operationRequestValidationEvents
       .filter(_.error)
-      .groupBy(_.failureKind.getOrElse("unknown"))
+      .groupBy(_.diagnosticKey.getOrElse("unknown"))
       .view
       .mapValues(_.size.toLong)
       .toMap
@@ -188,10 +188,10 @@ object RuntimeDashboardMetrics {
     _snapshot(_blobEvents, Vector.empty)
   }
 
-  def blobFailureKindCounts: Map[String, Long] = synchronized {
+  def blobDiagnosticCounts: Map[String, Long] = synchronized {
     _blobEvents
       .filter(_.error)
-      .groupBy(_.failureKind.getOrElse("unknown"))
+      .groupBy(_.diagnosticKey.getOrElse("unknown"))
       .view
       .mapValues(_.size.toLong)
       .toMap

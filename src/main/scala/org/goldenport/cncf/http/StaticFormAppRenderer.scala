@@ -6044,14 +6044,14 @@ object StaticFormAppRenderer {
     val htmlRequests = RuntimeDashboardMetrics.htmlSnapshot
     val actionCalls = RuntimeDashboardMetrics.actionCallSnapshot
     val authorizationDecisions = RuntimeDashboardMetrics.authorizationDecisionSnapshot
-    val authorizationFailureKinds = RuntimeDashboardMetrics.authorizationFailureKindCounts
+    val authorizationDiagnostics = RuntimeDashboardMetrics.authorizationDiagnosticCounts
     val dslChokepoints = RuntimeDashboardMetrics.dslChokepointSnapshot
     val validation = RuntimeDashboardMetrics.validationSnapshot
-    val validationFailureKinds = RuntimeDashboardMetrics.validationFailureKindCounts
+    val validationDiagnostics = RuntimeDashboardMetrics.validationDiagnosticCounts
     val operationRequestValidation = RuntimeDashboardMetrics.operationRequestValidationSnapshot
-    val operationRequestValidationFailureKinds = RuntimeDashboardMetrics.operationRequestValidationFailureKindCounts
+    val operationRequestValidationDiagnostics = RuntimeDashboardMetrics.operationRequestValidationDiagnosticCounts
     val blobOperations = RuntimeDashboardMetrics.blobOperationSnapshot
-    val blobFailureKinds = RuntimeDashboardMetrics.blobFailureKindCounts
+    val blobDiagnostics = RuntimeDashboardMetrics.blobDiagnosticCounts
     val jobs = _job_metrics(subsystem)
     _simple_page(
       title = "System Performance",
@@ -6089,8 +6089,8 @@ object StaticFormAppRenderer {
            |<article>
            |  <h2>Authorization</h2>
            |  ${_summary_table(authorizationDecisions.summary)}
-           |  <h3 class="h6 mt-3">Failure kind</h3>
-           |  ${_authorization_failure_kind_table(authorizationFailureKinds)}
+           |  <h3 class="h6 mt-3">Diagnostic</h3>
+           |  ${_diagnostics_table(authorizationDiagnostics)}
            |</article>
            |<article>
            |  <h2>DSL Chokepoints</h2>
@@ -6099,20 +6099,20 @@ object StaticFormAppRenderer {
            |<article>
            |  <h2>Validation</h2>
            |  ${_summary_table(validation.summary)}
-           |  <h3 class="h6 mt-3">Failure kind</h3>
-           |  ${_authorization_failure_kind_table(validationFailureKinds)}
+           |  <h3 class="h6 mt-3">Diagnostic</h3>
+           |  ${_diagnostics_table(validationDiagnostics)}
            |</article>
            |<article>
            |  <h2>Operation Request Validation</h2>
            |  ${_summary_table(operationRequestValidation.summary)}
-           |  <h3 class="h6 mt-3">Failure kind</h3>
-           |  ${_authorization_failure_kind_table(operationRequestValidationFailureKinds)}
+           |  <h3 class="h6 mt-3">Diagnostic</h3>
+           |  ${_diagnostics_table(operationRequestValidationDiagnostics)}
            |</article>
            |<article>
            |  <h2>Blob operations</h2>
            |  ${_summary_table(blobOperations.summary)}
-           |  <h3 class="h6 mt-3">Failure kind</h3>
-           |  ${_authorization_failure_kind_table(blobFailureKinds)}
+           |  <h3 class="h6 mt-3">Diagnostic</h3>
+           |  ${_diagnostics_table(blobDiagnostics)}
            |</article>
            |<article>
            |  <h2>Jobs</h2>
@@ -8005,14 +8005,14 @@ object StaticFormAppRenderer {
     val htmlRequests = RuntimeDashboardMetrics.htmlSnapshot
     val actionCalls = RuntimeDashboardMetrics.actionCallSnapshot
     val authorizationDecisions = RuntimeDashboardMetrics.authorizationDecisionSnapshot
-    val authorizationFailureKinds = RuntimeDashboardMetrics.authorizationFailureKindCounts
+    val authorizationDiagnostics = RuntimeDashboardMetrics.authorizationDiagnosticCounts
     val dslChokepoints = RuntimeDashboardMetrics.dslChokepointSnapshot
     val validation = RuntimeDashboardMetrics.validationSnapshot
-    val validationFailureKinds = RuntimeDashboardMetrics.validationFailureKindCounts
+    val validationDiagnostics = RuntimeDashboardMetrics.validationDiagnosticCounts
     val operationRequestValidation = RuntimeDashboardMetrics.operationRequestValidationSnapshot
-    val operationRequestValidationFailureKinds = RuntimeDashboardMetrics.operationRequestValidationFailureKindCounts
+    val operationRequestValidationDiagnostics = RuntimeDashboardMetrics.operationRequestValidationDiagnosticCounts
     val blobOperations = RuntimeDashboardMetrics.blobOperationSnapshot
-    val blobFailureKinds = RuntimeDashboardMetrics.blobFailureKindCounts
+    val blobDiagnostics = RuntimeDashboardMetrics.blobDiagnosticCounts
     val avgMillis =
       if (htmlRequests.recent.isEmpty) 0L
       else htmlRequests.recent.map(_.elapsedMillis).sum / htmlRequests.recent.size
@@ -8022,7 +8022,7 @@ object StaticFormAppRenderer {
     val manualPath =
       if (scope == "component") s"/web/${NamingConventions.toNormalizedSegment(name)}/manual"
       else "/web/system/manual"
-    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"dsl":{"chokepoints":${_snapshot_json(dslChokepoints, includeRecent = false)},"validation":${_snapshot_json(validation, includeRecent = false)},"validationFailureKinds":${_string_long_map_json(validationFailureKinds)},"operationRequestValidation":${_snapshot_json(operationRequestValidation, includeRecent = false)},"operationRequestValidationFailureKinds":${_string_long_map_json(operationRequestValidationFailureKinds)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)},"failureKinds":${_string_long_map_json(authorizationFailureKinds)}},"blob":{"operations":${_snapshot_json(blobOperations, includeRecent = false)},"failureKinds":${_string_long_map_json(blobFailureKinds)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance","manual":"${_json(manualPath)}","console":"/web/console","assemblyWarnings":"/form/admin/assembly/warnings"},"components":${componentJson}}"""
+    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"dsl":{"chokepoints":${_snapshot_json(dslChokepoints, includeRecent = false)},"validation":${_snapshot_json(validation, includeRecent = false)},"validationDiagnostics":${_string_long_map_json(validationDiagnostics)},"operationRequestValidation":${_snapshot_json(operationRequestValidation, includeRecent = false)},"operationRequestValidationDiagnostics":${_string_long_map_json(operationRequestValidationDiagnostics)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)},"diagnostics":${_string_long_map_json(authorizationDiagnostics)}},"blob":{"operations":${_snapshot_json(blobOperations, includeRecent = false)},"diagnostics":${_string_long_map_json(blobDiagnostics)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance","manual":"${_json(manualPath)}","console":"/web/console","assemblyWarnings":"/form/admin/assembly/warnings"},"components":${componentJson}}"""
   }
 
   private def _snapshot_json(
@@ -8091,18 +8091,18 @@ object StaticFormAppRenderer {
   ): String =
     s"<tr><td>${_escape(label)}</td><td>${window.total}</td><td>${window.errors}</td></tr>"
 
-  private def _authorization_failure_kind_table(
+  private def _diagnostics_table(
     counts: Map[String, Long]
   ): String =
     if (counts.isEmpty)
-      """<p class="text-secondary">No authorization failures by kind have been recorded.</p>"""
+      """<p class="text-secondary">No diagnostics have been recorded.</p>"""
     else {
       val rows = counts.toVector.sortBy(_._1).map {
         case (kind, count) =>
           s"<tr><td><code>${_escape(kind)}</code></td><td>${count}</td></tr>"
       }.mkString("\n")
       s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
-         |  <thead><tr><th>Failure kind</th><th>Count</th></tr></thead>
+         |  <thead><tr><th>Diagnostic</th><th>Count</th></tr></thead>
          |  <tbody>${rows}</tbody>
          |</table></div>""".stripMargin
     }

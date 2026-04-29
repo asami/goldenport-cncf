@@ -1,7 +1,7 @@
 package org.goldenport.cncf.protocol
 
 import org.goldenport.Conclusion
-import org.goldenport.cncf.observability.ValidationDiagnostics
+import org.goldenport.cncf.observability.ConclusionDiagnostics
 
 /*
  * Common diagnostics for OperationDefinition request parsing failures.
@@ -14,8 +14,8 @@ import org.goldenport.cncf.observability.ValidationDiagnostics
  * @author  ASAMI, Tomoharu
  */
 object OperationRequestValidationDiagnostics {
-  type Classification = ValidationDiagnostics.Classification
+  type Classification = ConclusionDiagnostics.Classification
 
   def classify(conclusion: Conclusion): Classification =
-    ValidationDiagnostics.classify(conclusion)
+    ConclusionDiagnostics.classify(conclusion)
 }

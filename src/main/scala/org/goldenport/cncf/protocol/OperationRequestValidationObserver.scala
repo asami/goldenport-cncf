@@ -43,12 +43,12 @@ object OperationRequestValidationObserver {
         val classification = OperationRequestValidationDiagnostics.classify(conclusion)
         RuntimeDashboardMetrics.recordOperationRequestValidation(
           operation = fqn,
-          failureKind = Some(classification.failureKind)
+          diagnosticKey = Some(classification.diagnosticKey)
         )
         if (ValidationDiagnostics.isValidation(conclusion))
           RuntimeDashboardMetrics.recordValidation(
             operation = fqn,
-            failureKind = Some(classification.failureKind)
+            diagnosticKey = Some(classification.diagnosticKey)
           )
         val _ = context.observability.emitInfo(
           context.cncfCore.scope,
@@ -60,11 +60,7 @@ object OperationRequestValidationObserver {
             "operation.name" -> operationName,
             "request.operation" -> request.operation,
             "result.success" -> false,
-            "failureKind" -> classification.failureKind,
-            "error.causeKind" -> classification.causeKind,
-            "error.parameter" -> classification.parameter,
-            "error.fieldPath" -> classification.fieldPath,
-            "error.policy" -> classification.policy,
+            "diagnostic" -> classification.toRecord,
             "error.kind" -> conclusion.observation.taxonomy.print,
             "error.code" -> conclusion.status.webCode.code
           )

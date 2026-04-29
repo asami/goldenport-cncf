@@ -638,6 +638,19 @@ Active in Phase 19.
 ### 8.10 Error Model / Consequence-Conclusion Realignment
 Future platform development item.
 
+- `8.10-A Consequence/Conclusion-based failure diagnostics` is now the active
+  cleanup slice for the diagnostics work first exposed by Phase 18 Blob
+  metrics. The implementation direction is:
+  - reusable framework and builtin components emit ordinary
+    `Consequence.Failure(Conclusion)` values;
+  - `Cause.Kind` carries coarse mechanism classification such as capability,
+    permission, guard, relation, format, policy, limit, and inconsistency;
+  - `Descriptor.Facet` carries machine-readable detail such as parameter,
+    field path, policy, algorithm, capability, permission, guard, relation, and
+    reason;
+  - metrics, dashboards, Web/admin diagnostics, and observability records
+    project diagnostics from `Conclusion` structure;
+  - component-local failure labels are not a public or compatibility surface.
 - Revisit the core `Consequence` / `Conclusion` / `Observation` model before
   adding more component-local error classification surfaces.
 - Clarify `Status` structure and semantics:
@@ -666,8 +679,8 @@ Future platform development item.
   coarse mechanism classification and `Descriptor.Facet` provides
   machine-readable detail. Reusable validation distinctions such as payload
   byte-size, MIME-kind, digest, expected-size, content-type, and external URL policy are
-  projected from structured `Conclusion` data instead of component-local
-  `Status.detailCodes` or message parsing.
+    projected from structured `Conclusion` data instead of component-local
+    `Status.detailCodes` or message parsing.
 - Remaining work in this item is broader platform cleanup: the intended
   `Status.detailCode` / `detailCodes` / `strategies` shape, possible
   `Cause.Kind` refinements beyond ordinary validation, and cross-component

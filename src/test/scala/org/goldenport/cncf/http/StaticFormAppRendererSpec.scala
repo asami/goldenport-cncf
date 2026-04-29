@@ -86,7 +86,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       c.downField("authorization").downField("decisions").downField("summary").downField("cumulative").get[Long]("count").isRight shouldBe true
       c.downField("authorization").downField("decisions").downField("summary").downField("cumulative").get[Long]("errors").isRight shouldBe true
       c.downField("authorization").downField("decisions").downField("series").downField("hour").focus.flatMap(_.asArray).exists(_.nonEmpty) shouldBe true
-      c.downField("authorization").downField("failureKinds").focus.exists(_.isObject) shouldBe true
+      c.downField("authorization").downField("diagnostics").focus.exists(_.isObject) shouldBe true
       c.downField("dsl").downField("chokepoints").downField("summary").downField("cumulative").get[Long]("count").isRight shouldBe true
       c.downField("dsl").downField("chokepoints").downField("summary").downField("cumulative").get[Long]("errors").isRight shouldBe true
       c.downField("dsl").downField("chokepoints").downField("series").downField("hour").focus.flatMap(_.asArray).exists(_.nonEmpty) shouldBe true
@@ -348,7 +348,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         )
       ).unsafeRunSync()
       missing.status.code shouldBe 404
-      RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("not_found", 0L) should be >= 1L
+      RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("not_found", 0L) should be >= 1L
 
       val unsafeBlob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "register_blob",
@@ -3670,7 +3670,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("ActionCall")
       html should include ("DSL Chokepoints")
       html should include ("Authorization")
-      html should include ("Failure kind")
+      html should include ("Diagnostic")
       html should include ("capability")
       html should include ("Jobs")
       html should include ("Assembly warnings")

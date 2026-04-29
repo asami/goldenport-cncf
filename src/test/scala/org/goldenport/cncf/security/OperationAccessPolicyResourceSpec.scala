@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 28, 2026
- * @version Apr. 28, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers {
@@ -143,8 +143,8 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
       }
     }
 
-    "record missing capability as an authorization failure kind" in {
-      val before = RuntimeDashboardMetrics.authorizationFailureKindCounts.getOrElse("capability", 0L)
+    "record missing capability as an authorization diagnostic" in {
+      val before = RuntimeDashboardMetrics.authorizationDiagnosticCounts.getOrElse("capability", 0L)
       given ExecutionContext = _context(capabilities = Set.empty)
 
       OperationAccessPolicy.authorizeUnitOfWorkDefault(
@@ -156,11 +156,11 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
         )
       ) shouldBe a[Consequence.Failure[_]]
 
-      RuntimeDashboardMetrics.authorizationFailureKindCounts.getOrElse("capability", 0L) should be > before
+      RuntimeDashboardMetrics.authorizationDiagnosticCounts.getOrElse("capability", 0L) should be > before
     }
 
-    "record permission override denial as a permission failure kind" in {
-      val before = RuntimeDashboardMetrics.authorizationFailureKindCounts.getOrElse("permission", 0L)
+    "record permission override denial as a permission diagnostic" in {
+      val before = RuntimeDashboardMetrics.authorizationDiagnosticCounts.getOrElse("permission", 0L)
       given ExecutionContext = _context(capabilities = Set.empty, principalId = "owner")
       val record = _record(SecurityAttributes.ownedBy("owner"))
 
@@ -175,11 +175,11 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
         _ => Consequence.success(Some(record))
       ) shouldBe a[Consequence.Failure[_]]
 
-      RuntimeDashboardMetrics.authorizationFailureKindCounts.getOrElse("permission", 0L) should be > before
+      RuntimeDashboardMetrics.authorizationDiagnosticCounts.getOrElse("permission", 0L) should be > before
     }
 
-    "record natural-condition denial as an ABAC failure kind" in {
-      val before = RuntimeDashboardMetrics.authorizationFailureKindCounts.getOrElse("abac", 0L)
+    "record natural-condition denial as an ABAC diagnostic" in {
+      val before = RuntimeDashboardMetrics.authorizationDiagnosticCounts.getOrElse("abac", 0L)
       given ExecutionContext = _context(capabilities = Set.empty, principalId = "owner")
       val record = Record.create(_record(SecurityAttributes.ownedBy("owner")).asMap.toVector :+ ("tenantId" -> "tenant-b"))
 
@@ -195,7 +195,7 @@ final class OperationAccessPolicyResourceSpec extends AnyWordSpec with Matchers 
         _ => Consequence.success(Some(record))
       ) shouldBe a[Consequence.Failure[_]]
 
-      RuntimeDashboardMetrics.authorizationFailureKindCounts.getOrElse("abac", 0L) should be > before
+      RuntimeDashboardMetrics.authorizationDiagnosticCounts.getOrElse("abac", 0L) should be > before
     }
 
     "preserve existing behavior when no resource policy is configured" in {

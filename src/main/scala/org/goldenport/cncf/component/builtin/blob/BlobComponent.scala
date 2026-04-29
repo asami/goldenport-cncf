@@ -20,7 +20,7 @@ import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.{EntityCreateOptions, EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope}
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
-import org.goldenport.cncf.observability.ValidationDiagnostics
+import org.goldenport.cncf.observability.{ConclusionDiagnostics, ValidationDiagnostics}
 import org.goldenport.cncf.security.{AdminAuthorizationPolicy, EntityAccessMode, OperationAuthorizationProvider, OperationAuthorizationRule}
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkAuthorization, UnitOfWorkOp}
 import org.goldenport.datatype.{ContentType, MimeBody}
@@ -34,7 +34,6 @@ import org.goldenport.record.Record
 import org.goldenport.cncf.protocol.OperationRequestValidationObserver
 import org.goldenport.schema.{Column, DataType, Multiplicity, Schema, ValueDomain, XBlob, XBoolean, XInt, XLong, XString}
 import org.goldenport.observation.Descriptor
-import org.goldenport.provisional.observation.Cause
 import org.goldenport.value.BaseContent
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
@@ -1828,7 +1827,7 @@ object BlobComponent {
       "mimeKindPolicy" -> _blob_mime_kind_policy_record,
       "contentRouteCachePolicy" -> "private, max-age=60",
       "blobMetrics" -> _blob_metrics_record,
-      "blobFailureKinds" -> Record.data(RuntimeDashboardMetrics.blobFailureKindCounts.toVector.sortBy(_._1)*)
+      "blobDiagnostics" -> Record.data(RuntimeDashboardMetrics.blobDiagnosticCounts.toVector.sortBy(_._1)*)
     )
 
   private def _record_blob_observation(
@@ -1841,18 +1840,19 @@ object BlobComponent {
     backend: Option[String],
     recordGenericValidation: Boolean = true
   ): Unit = {
-    val failurekind = conclusion.map(_blob_failure_kind)
+    val diagnostic = conclusion.map(ConclusionDiagnostics.classify)
+    val diagnostickey = diagnostic.map(_.diagnosticKey)
     conclusion.filter(c => recordGenericValidation && ValidationDiagnostics.isValidation(c)).foreach { c =>
-      val classification = ValidationDiagnostics.classify(c)
+      val classification = ConclusionDiagnostics.classify(c)
       RuntimeDashboardMetrics.recordValidation(
         operation = operation,
-        failureKind = Some(classification.failureKind)
+        diagnosticKey = Some(classification.diagnosticKey)
       )
     }
     RuntimeDashboardMetrics.recordBlobOperation(
       operation = operation,
       error = !success,
-      failureKind = failurekind,
+      diagnosticKey = diagnostickey,
       kind = kind,
       sourceMode = sourceMode,
       backend = backend
@@ -1863,7 +1863,7 @@ object BlobComponent {
       Record.dataAuto(
         "blob.operation" -> operation,
         "blob.outcome" -> (if (success) "success" else "failure"),
-        "failureKind" -> failurekind,
+        "diagnostic" -> diagnostic.map(_.toRecord),
         "blob.kind" -> kind,
         "blob.sourceMode" -> sourceMode,
         "blob.backend" -> backend
@@ -1900,52 +1900,6 @@ object BlobComponent {
       "count" -> window.total,
       "errors" -> window.errors
     )
-
-  private def _blob_failure_kind(conclusion: Conclusion): String =
-    _blob_validation_failure_kind(conclusion).getOrElse {
-      val taxonomy = conclusion.observation.taxonomy
-      val category = taxonomy.category
-      val symptom = taxonomy.symptom
-      val status = conclusion.status.webCode.code
-      if (symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.PermissionDenied || status == 403)
-        "authorization"
-      else if (symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.NotFound || status == 404)
-        "not_found"
-      else if (symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.Conflict || status == 409)
-        "conflict"
-      else if (category == org.goldenport.provisional.observation.Taxonomy.Category.Argument || status == 400)
-        "argument"
-      else
-        "unknown"
-    }
-
-  private def _blob_validation_failure_kind(conclusion: Conclusion): Option[String] = {
-    val classification = ValidationDiagnostics.classify(conclusion)
-    val kind = conclusion.observation.cause.kind
-    val facets = conclusion.observation.cause.descriptor.facets
-    val policies = facets.collect { case Descriptor.Facet.Policy(name) => name }.toSet
-    val parameters = facets.collect { case Descriptor.Facet.Parameter(_, name) => name }.toSet
-    val fieldPaths = facets.collect { case Descriptor.Facet.FieldPath(path) => path }.toSet
-    val algorithms = facets.collect { case Descriptor.Facet.Algorithm(name) => name.toLowerCase(java.util.Locale.ROOT) }.toSet
-    if (classification.failureKind == "payload_size" && policies.contains("blob.upload.max-byte-size"))
-      Some("payload_size")
-    else if (classification.failureKind == "mime_kind")
-      Some("mime_kind")
-    else if (kind.contains(Cause.Kind.Policy) && policies.contains("blob.external-url-safety"))
-      Some("external_url")
-    else if (kind.contains(Cause.Kind.Inconsistency) && algorithms.contains("sha-256"))
-      Some("digest")
-    else if ((kind.contains(Cause.Kind.Inconsistency) || kind.contains(Cause.Kind.Format) || kind.contains(Cause.Kind.Limit)) && parameters.contains("expectedByteSize"))
-      Some("expected_size")
-    else if (kind.contains(Cause.Kind.Format) && parameters.contains("expectedDigest"))
-      Some("digest")
-    else if (kind.contains(Cause.Kind.Format) && parameters.contains("contentType"))
-      Some("content_type")
-    else if (kind.contains(Cause.Kind.Limit) && fieldPaths.contains("payload.byteSize"))
-      Some("payload_size")
-    else
-      None
-  }
 
   private def _string(req: Request, names: String*): Option[String] =
     _any(req, names*).map(_.toString).map(_.trim).filter(_.nonEmpty)

@@ -33,7 +33,7 @@ import org.goldenport.cncf.context.{ExecutionContext, RuntimeContext, ScopeConte
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.job.JobId
-import org.goldenport.cncf.observability.{DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
+import org.goldenport.cncf.observability.{ConclusionDiagnostics, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
 import org.goldenport.cncf.openapi.OpenApiProjector
 import org.goldenport.cncf.security.AuthenticationRequest
@@ -488,12 +488,12 @@ final class Http4sHttpServer(
             else
               _blob_content_response(req, response, result.metadata)
           case other =>
-            RuntimeDashboardMetrics.recordBlobOperation("content", error = true, failureKind = Some("unknown"))
+            RuntimeDashboardMetrics.recordBlobOperation("content", error = true, diagnosticKey = Some(ConclusionDiagnostics.unknown.diagnosticKey))
             _web_error_response(Some("blob"), HStatus.InternalServerError, s"Blob content operation returned ${other.show}", req.uri.path.renderString)
         }
       case Consequence.Failure(conclusion) =>
         val status = HStatus.fromInt(conclusion.status.webCode.code).getOrElse(HStatus.InternalServerError)
-        RuntimeDashboardMetrics.recordBlobOperation("content", error = true, failureKind = Some(_blob_content_failure_kind(status, conclusion)))
+        RuntimeDashboardMetrics.recordBlobOperation("content", error = true, diagnosticKey = Some(ConclusionDiagnostics.classify(conclusion).diagnosticKey))
         _web_error_response(Some("blob"), status, conclusion, req.uri.path.renderString, req.method.name)
     }
   }
@@ -545,28 +545,13 @@ final class Http4sHttpServer(
             .putHeaders(Header.Raw(CIString("Content-Disposition"), _blob_content_disposition(req, response)))
         )
       case _ =>
-        RuntimeDashboardMetrics.recordBlobOperation("content", error = response.code >= 400, failureKind = if (response.code >= 400) Some("unknown") else None)
+        RuntimeDashboardMetrics.recordBlobOperation(
+          "content",
+          error = response.code >= 400,
+          diagnosticKey = if (response.code >= 400) Some(ConclusionDiagnostics.unknown.diagnosticKey) else None
+        )
         _to_http_response_with_metadata(response, Some(req), Some("blob"), Some("blob"), Some("read_blob"), metadata)
     }
-
-  private def _blob_content_failure_kind(
-    status: HStatus,
-    conclusion: Conclusion
-  ): String = {
-    val taxonomy = conclusion.observation.taxonomy
-    val category = taxonomy.category
-    val symptom = taxonomy.symptom
-    if (symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.PermissionDenied || status.code == 403)
-      "authorization"
-    else if (symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.NotFound || status.code == 404)
-      "not_found"
-    else if (symptom == org.goldenport.provisional.observation.Taxonomy.Symptom.Conflict || status.code == 409)
-      "conflict"
-    else if (category == org.goldenport.provisional.observation.Taxonomy.Category.Argument || status.code == 400)
-      "argument"
-    else
-      "unknown"
-  }
 
   private def _blob_cache_headers(
     out: HResponse[IO],

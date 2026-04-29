@@ -547,6 +547,27 @@ The stable CML location decision is:
 
 ## Variation Points
 
+## Failure Diagnostics
+
+Entity authorization denial is reported as
+`Consequence.Failure(Conclusion)` at the UnitOfWork boundary.
+
+The failure uses the shared authorization diagnostic structure:
+
+- collection or association resource grants use `Cause.Kind.Capability` with a
+  `Capability(...)` facet;
+- owner/group/other permission denial uses `Cause.Kind.Permission` with a
+  `Permission(...)` facet;
+- manager-only, owner-or-manager, privilege ceiling, ABAC, and other natural
+  conditions use `Cause.Kind.Guard` with a `Guard(...)` facet;
+- relation mismatch uses `Cause.Kind.Relation` with a `Relation(...)` facet.
+
+Dashboard and observability projections derive diagnostic keys from these
+`Conclusion` fields. The Entity model does not define or emit separate
+failure-label fields.
+
+## Variation Points
+
 Component factories can provide coarse and fine-grained entity authorization
 defaults through these variation points:
 

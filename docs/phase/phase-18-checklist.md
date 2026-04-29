@@ -862,7 +862,7 @@ authorization decisions:
 - [x] Blob admin home renders read-only Authorization requirements guidance.
 - [x] Admin visibility covers Blob collection, association-domain, and store
       policy.
-- [x] Diagnostics include coarse `failureKind` on `authorization.decision`.
+- [x] Diagnostics include coarse `diagnosticKey` on `authorization.decision`.
 - [x] Runtime dashboard metrics expose authorization failure counts by kind.
 
 Implementation notes:
@@ -871,7 +871,7 @@ Implementation notes:
   match `OperationAccessPolicy` lookup behavior.
 - Blob operation requirement rows are read-only metadata. Enforcement remains
   generic through UnitOfWork authorization and resource policies.
-- Failure kind is diagnostic only; structured `Conclusion` detail codes remain
+- Diagnostic is diagnostic only; structured `Conclusion` detail codes remain
   the operational error-code source.
 
 Verification snapshot:
@@ -880,8 +880,8 @@ Verification snapshot:
       rows and Blob operation requirements.
 - [x] `SecurityDeploymentMarkdownProjectionSpec` covers resource policy and
       role tables.
-- [x] `OperationAccessPolicyResourceSpec` covers `failureKind=capability`,
-      `failureKind=permission`, and `failureKind=abac`.
+- [x] `OperationAccessPolicyResourceSpec` covers `diagnosticKey=capability`,
+      `diagnosticKey=permission`, and `diagnosticKey=abac`.
 - [x] `StaticFormAppRendererSpec -- -z Authorization` covers dashboard JSON
       compatibility for authorization metadata.
 
@@ -1016,9 +1016,9 @@ storage, public operation shape, or BlobStore backend SPI:
 
 - [x] `RuntimeDashboardMetrics` tracks Blob operation events separately from
       HTML/action/authorization/DSL metrics.
-- [x] Blob metrics record operation, outcome, failure kind, optional kind,
+- [x] Blob metrics record operation, outcome, diagnostic, optional kind,
       source mode, and backend when available.
-- [x] Blob failure kinds are projected from `Conclusion` status/taxonomy and
+- [x] Blob diagnostics are projected from `Conclusion` status/taxonomy and
       structured validation facets, not from `Status.detailCodes` or message
       text.
 - [x] Detailed Blob metrics are restored for payload byte-size, MIME-kind,
@@ -1029,7 +1029,7 @@ storage, public operation shape, or BlobStore backend SPI:
 - [x] `read_blob` and `/web/blob/content/{id}` record managed payload reads,
       authorized `304 Not Modified`, missing Blob, and authorization failures.
 - [x] `admin_blob_store_status` includes max byte size, MIME-kind policy,
-      content-route cache policy, Blob metrics summary, and Blob failure-kind
+      content-route cache policy, Blob metrics summary, and Blob diagnostic
       counts.
 - [x] Runtime dashboard status JSON exposes additive Blob metric summaries.
 

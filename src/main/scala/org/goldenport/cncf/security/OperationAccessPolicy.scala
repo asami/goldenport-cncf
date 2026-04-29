@@ -9,14 +9,16 @@ import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.SimpleEntityStorageShapePolicy
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
+import org.goldenport.cncf.observability.ConclusionDiagnostics
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.unitofwork.UnitOfWorkAuthorization
+import org.goldenport.provisional.observation.Cause
 import org.simplemodeling.model.datatype.EntityId
 import org.simplemodeling.model.value.SecurityAttributes
 
 /*
  * @since   Apr.  6, 2026
- * @version Apr. 28, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationAccessPolicy {
@@ -162,16 +164,38 @@ object OperationAccessPolicy {
     message: String,
     reason: String,
     accessKind: String
-  )(using ctx: ExecutionContext): Consequence[A] =
+  )(using ctx: ExecutionContext): Consequence[A] = {
+    val (kind, diagnostic) = _authorization_diagnostic(reason)
     Consequence.securityPermissionDenied(
       message,
+      kind,
       Seq(
-        Descriptor.Facet.Name(reason),
+        Descriptor.Facet.Reason(reason),
+        diagnostic,
         Descriptor.Facet.Parameter.argument("access-kind"),
         Descriptor.Facet.Value(accessKind),
         Descriptor.Facet.Id(_subject.subjectId)
       )
     )
+  }
+
+  private def _authorization_diagnostic(reason: String): (Cause.Kind, Descriptor.Facet) =
+    reason match {
+      case "required-capability" =>
+        Cause.Kind.Capability -> Descriptor.Facet.Capability("required-capability")
+      case "cross-component-service-grant" =>
+        Cause.Kind.Capability -> Descriptor.Facet.Guard("cross-component-service-grant")
+      case "abac-condition" =>
+        Cause.Kind.Guard -> Descriptor.Facet.Guard("abac-condition")
+      case "manager-only" | "owner-or-manager" =>
+        Cause.Kind.Guard -> Descriptor.Facet.Guard(reason)
+      case "relation" =>
+        Cause.Kind.Relation -> Descriptor.Facet.Relation(reason)
+      case "owner" | "group" | "other" | "security-attributes-missing" | "owner-missing" =>
+        Cause.Kind.Permission -> Descriptor.Facet.Permission(reason)
+      case other =>
+        Cause.Kind.Permission -> Descriptor.Facet.Permission(other)
+    }
 
   private def _cross_component_grant_required[A](
     authorization: UnitOfWorkAuthorization
@@ -418,16 +442,15 @@ object OperationAccessPolicy {
     val outcome = result match
       case Consequence.Success(_) => "allow"
       case Consequence.Failure(_) => "deny"
-    val failureKind = _failure_kind(result)
-    RuntimeDashboardMetrics.recordAuthorizationDecision(outcome == "deny", failureKind)
+    val diagnostic = _diagnostic(result)
+    RuntimeDashboardMetrics.recordAuthorizationDecision(outcome == "deny", diagnostic.map(_.diagnosticKey))
     val _ = ctx.observability.emitInfo(
       ctx.cncfCore.scope,
       "authorization.decision",
       Record.dataAuto(
         "surface" -> surface,
         "outcome" -> outcome,
-        "failureKind" -> failureKind.getOrElse(""),
-        "failure-kind" -> failureKind.getOrElse(""),
+        "diagnostic" -> diagnostic.map(_.toRecord),
         "access-mode" -> _label(authorization.accessMode),
         "resource-family" -> authorization.resourceFamily,
         "resource-type" -> authorization.resourceType,
@@ -446,30 +469,13 @@ object OperationAccessPolicy {
     )
   }
 
-  private def _failure_kind[A](
+  private def _diagnostic[A](
     result: Consequence[A]
-  ): Option[String] =
+  ): Option[ConclusionDiagnostics.Classification] =
     result match {
-      case Consequence.Failure(conclusion) => Some(_failure_kind(conclusion))
+      case Consequence.Failure(conclusion) => Some(ConclusionDiagnostics.classify(conclusion))
       case _ => None
     }
-
-  private def _failure_kind(
-    conclusion: Conclusion
-  ): String = {
-    val reason = conclusion.observation.cause.descriptor.facets.collectFirst {
-      case Descriptor.Facet.Name(name) => name.trim.toLowerCase(java.util.Locale.ROOT)
-    }.getOrElse("")
-    reason match {
-      case "required-capability" => "capability"
-      case "abac-condition" => "abac"
-      case "cross-component-service-grant" => "cross_component"
-      case "manager-only" | "owner-or-manager" => "guard"
-      case "relation" => "relation"
-      case "owner" | "group" | "other" | "security-attributes-missing" | "owner-missing" => "permission"
-      case _ => "unknown"
-    }
-  }
 
   private def _is_public_policy(
     authorization: UnitOfWorkAuthorization
@@ -626,8 +632,10 @@ object OperationAccessPolicy {
           case Some(raw) => OperationAccessPolicy.authorizeSimpleEntity(raw, "read")
           case None => Consequence.securityPermissionDenied(
             "Security attributes are not available for authorization.",
+            Cause.Kind.Permission,
             Seq(
-              Descriptor.Facet.Name("security-attributes-missing"),
+              Descriptor.Facet.Reason("security-attributes-missing"),
+              Descriptor.Facet.Permission("security-attributes-missing"),
               Descriptor.Facet.Parameter.argument("access-kind"),
               Descriptor.Facet.Value("read"),
               Descriptor.Facet.Id(_subject.subjectId)

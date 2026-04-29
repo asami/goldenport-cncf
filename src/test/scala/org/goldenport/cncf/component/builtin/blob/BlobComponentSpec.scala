@@ -560,9 +560,9 @@ final class BlobComponentSpec
     "reject invalid Blob content type metadata" in {
       Given("a default subsystem")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
-      val failuresBefore = RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("content_type", 0L)
-      val requestValidationBefore = RuntimeDashboardMetrics.operationRequestValidationFailureKindCounts.getOrElse("format", 0L)
-      val validationBefore = RuntimeDashboardMetrics.validationFailureKindCounts.getOrElse("format", 0L)
+      val failuresBefore = RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("content_type", 0L)
+      val requestValidationBefore = RuntimeDashboardMetrics.operationRequestValidationDiagnosticCounts.getOrElse("content_type", 0L)
+      val validationBefore = RuntimeDashboardMetrics.validationDiagnosticCounts.getOrElse("content_type", 0L)
 
       When("register_blob receives a non-MIME content type")
       val result = subsystem.executeOperationResponse(_request(
@@ -580,9 +580,9 @@ final class BlobComponentSpec
       result shouldBe a[Consequence.Failure[_]]
       _failure_cause_kind(result) shouldBe Some(Cause.Kind.Format)
       _failure_facets(result) should contain (Descriptor.Facet.Parameter.argument("contentType"))
-      RuntimeDashboardMetrics.operationRequestValidationFailureKindCounts.getOrElse("format", 0L) should be > requestValidationBefore
-      RuntimeDashboardMetrics.validationFailureKindCounts.getOrElse("format", 0L) should be > validationBefore
-      RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("content_type", 0L) should be > failuresBefore
+      RuntimeDashboardMetrics.operationRequestValidationDiagnosticCounts.getOrElse("content_type", 0L) should be > requestValidationBefore
+      RuntimeDashboardMetrics.validationDiagnosticCounts.getOrElse("content_type", 0L) should be > validationBefore
+      RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("content_type", 0L) should be > failuresBefore
     }
 
     "reject managed Blob expected metadata mismatches and compensate payloads" in {
@@ -591,7 +591,7 @@ final class BlobComponentSpec
       val subsystem = _subsystem_with_blob_store(store)
 
       When("expectedByteSize does not match the stored payload")
-      val expectedSizeFailuresBefore = RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("expected_size", 0L)
+      val expectedSizeFailuresBefore = RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("expected_size", 0L)
       val sizeMismatch = subsystem.executeOperationResponse(_request(
         "register_blob",
         arguments = List(Argument("payload", Bag.binary("size".getBytes(StandardCharsets.UTF_8)))),
@@ -607,12 +607,12 @@ final class BlobComponentSpec
       Then("registration fails and the payload is deleted through the ActionCall path")
       sizeMismatch shouldBe a[Consequence.Failure[_]]
       store.deletedRefs shouldBe store.putRefs
-      RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("expected_size", 0L) should be > expectedSizeFailuresBefore
+      RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("expected_size", 0L) should be > expectedSizeFailuresBefore
 
       val putCountBeforeInvalidDigest = store.putRefs.size
 
       When("expectedDigest has an invalid format")
-      val digestFailuresBefore = RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("digest", 0L)
+      val digestFailuresBefore = RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("digest", 0L)
       val invalidDigest = subsystem.executeOperationResponse(_request(
         "register_blob",
         arguments = List(Argument("payload", Bag.binary("digest".getBytes(StandardCharsets.UTF_8)))),
@@ -629,9 +629,9 @@ final class BlobComponentSpec
       invalidDigest shouldBe a[Consequence.Failure[_]]
       store.deletedRefs shouldBe store.putRefs
       store.putRefs.size shouldBe putCountBeforeInvalidDigest
-      RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("digest", 0L) should be > digestFailuresBefore
+      RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("digest", 0L) should be > digestFailuresBefore
 
-      val expectedSizeFailuresBeforeInvalid = RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("expected_size", 0L)
+      val expectedSizeFailuresBeforeInvalid = RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("expected_size", 0L)
 
       When("expectedByteSize is fractional or negative")
       val fractionalSize = subsystem.executeOperationResponse(_request(
@@ -658,16 +658,16 @@ final class BlobComponentSpec
       Then("both byte-size contracts are rejected without numeric truncation")
       fractionalSize shouldBe a[Consequence.Failure[_]]
       negativeSize shouldBe a[Consequence.Failure[_]]
-      RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("expected_size", 0L) should be > expectedSizeFailuresBeforeInvalid
+      RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("expected_size", 0L) should be > expectedSizeFailuresBeforeInvalid
     }
 
     "apply managed Blob size and MIME-kind policy" in {
       Given("a subsystem with a small managed Blob size limit")
       val preStore = new RecordingBlobStore
       val preSubsystem = _subsystem_with_blob_store(preStore, maxByteSize = 4)
-      val payloadSizeFailuresBefore = RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("payload_size", 0L)
-      val genericLimitFailuresBefore = RuntimeDashboardMetrics.operationRequestValidationFailureKindCounts.getOrElse("limit", 0L)
-      val validationPayloadSizeFailuresBefore = RuntimeDashboardMetrics.validationFailureKindCounts.getOrElse("payload_size", 0L)
+      val payloadSizeFailuresBefore = RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("payload_size", 0L)
+      val genericLimitFailuresBefore = RuntimeDashboardMetrics.operationRequestValidationDiagnosticCounts.getOrElse("limit", 0L)
+      val validationPayloadSizeFailuresBefore = RuntimeDashboardMetrics.validationDiagnosticCounts.getOrElse("payload_size", 0L)
 
       When("a known oversized payload is registered")
       val knownOversize = preSubsystem.executeOperationResponse(_request(
@@ -686,9 +686,9 @@ final class BlobComponentSpec
       _failure_cause_kind(knownOversize) shouldBe Some(Cause.Kind.Limit)
       _failure_facets(knownOversize) should contain (Descriptor.Facet.Policy("blob.upload.max-byte-size"))
       preStore.putRefs shouldBe Vector.empty
-      RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("payload_size", 0L) should be > payloadSizeFailuresBefore
-      RuntimeDashboardMetrics.operationRequestValidationFailureKindCounts.getOrElse("limit", 0L) shouldBe genericLimitFailuresBefore
-      RuntimeDashboardMetrics.validationFailureKindCounts.getOrElse("payload_size", 0L) should be > validationPayloadSizeFailuresBefore
+      RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("payload_size", 0L) should be > payloadSizeFailuresBefore
+      RuntimeDashboardMetrics.operationRequestValidationDiagnosticCounts.getOrElse("limit", 0L) shouldBe genericLimitFailuresBefore
+      RuntimeDashboardMetrics.validationDiagnosticCounts.getOrElse("payload_size", 0L) should be > validationPayloadSizeFailuresBefore
 
       Given("a store whose measured size exceeds the configured policy")
       val postStore = new RecordingBlobStore(reportedByteSize = Some(8L))
@@ -741,8 +741,8 @@ final class BlobComponentSpec
       video shouldBe a[Consequence.Success[_]]
       RuntimeDashboardMetrics.blobOperationSnapshot.summary.cumulative.total should be > successfulBlobOperationsBefore
 
-      val mimeFailuresBefore = RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("mime_kind", 0L)
-      val genericMimeFailuresBefore = RuntimeDashboardMetrics.validationFailureKindCounts.getOrElse("mime_kind", 0L)
+      val mimeFailuresBefore = RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("mime_kind", 0L)
+      val genericMimeFailuresBefore = RuntimeDashboardMetrics.validationDiagnosticCounts.getOrElse("mime_kind", 0L)
       When("image and video Blob registrations use incompatible or default MIME types")
       val badImage = subsystem.executeOperationResponse(_request(
         "register_blob",
@@ -769,8 +769,8 @@ final class BlobComponentSpec
       defaultVideo shouldBe a[Consequence.Failure[_]]
       _failure_cause_kind(badImage) shouldBe Some(Cause.Kind.Policy)
       _failure_facets(badImage) should contain (Descriptor.Facet.Policy("mime-kind"))
-      RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("mime_kind", 0L) should be > mimeFailuresBefore
-      RuntimeDashboardMetrics.validationFailureKindCounts.getOrElse("mime_kind", 0L) should be > genericMimeFailuresBefore
+      RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("mime_kind", 0L) should be > mimeFailuresBefore
+      RuntimeDashboardMetrics.validationDiagnosticCounts.getOrElse("mime_kind", 0L) should be > genericMimeFailuresBefore
     }
 
     "record BlobStore failures as Blob operational diagnostics" in {
@@ -799,7 +799,7 @@ final class BlobComponentSpec
     "reject unsafe external URL Blob registrations" in {
       Given("a default subsystem")
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
-      val externalUrlFailuresBefore = RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("external_url", 0L)
+      val externalUrlFailuresBefore = RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("external_url", 0L)
       val unsafeUrls = Vector(
         "javascript:alert(1)",
         "data:text/html,<script>alert(1)</script>",
@@ -830,7 +830,7 @@ final class BlobComponentSpec
         case (_, result) =>
           result shouldBe a[Consequence.Failure[_]]
       }
-      RuntimeDashboardMetrics.blobFailureKindCounts.getOrElse("external_url", 0L) should be > externalUrlFailuresBefore
+      RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("external_url", 0L) should be > externalUrlFailuresBefore
     }
 
     "reject external URL Blob payload validation fields" in {
@@ -932,7 +932,7 @@ final class BlobComponentSpec
       status.getRecord("mimeKindPolicy").flatMap(_.getString("image")) shouldBe Some("image/*")
       status.getRecord("mimeKindPolicy").flatMap(_.getString("video")) shouldBe Some("video/*")
       status.getRecord("blobMetrics").flatMap(_.getRecord("summary")).flatMap(_.getRecord("cumulative")).flatMap(_.getString("count")) should not be empty
-      status.getRecord("blobFailureKinds") should not be empty
+      status.getRecord("blobDiagnostics") should not be empty
     }
 
     "apply resource policies to Blob admin operations after the admin gate" in {

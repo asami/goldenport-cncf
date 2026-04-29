@@ -104,6 +104,17 @@ command, client, server, and REST behavior.
 
 Authorization failure is a structured `Consequence.securityPermissionDenied`
 with the selector and denial reason attached to the observation descriptor.
+The failure uses the common authorization diagnostic model:
+
+- missing operation capability uses `Cause.Kind.Capability` plus a
+  `Capability(...)` facet;
+- privilege ceiling, runtime-mode, and other operation guards use
+  `Cause.Kind.Guard` plus a `Guard(...)` facet;
+- `Reason(...)` records the stable denial reason.
+
+Runtime metrics, dashboard rows, and `authorization.decision` observability
+events project their diagnostic records from the `Conclusion`. They do not emit
+legacy failure-label fields or a parallel operation-local error label.
 
 HTTP/Web entry points map the same failure to an HTTP admission response such
 as 403. Command/client/REST style callers receive the structured failure or the

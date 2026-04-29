@@ -502,3 +502,28 @@ Current primary chokepoints:
 
 Direct storage/repository adapters are low-level implementation details. They are
 not public authorization boundaries.
+
+## Authorization Diagnostics
+
+Authorization denial is represented as an ordinary
+`Consequence.Failure(Conclusion)`.
+
+The `Conclusion` observation carries the machine-readable diagnostic structure:
+
+- `Cause.Kind.Capability` for missing subject/resource capabilities;
+- `Cause.Kind.Permission` for owner/group/other permission-bit denial;
+- `Cause.Kind.Guard` for privilege ceiling, manager-only, owner-or-manager,
+  ABAC, and other guard failures;
+- `Cause.Kind.Relation` for relation-based access failures.
+
+`Descriptor.Facet` carries the details used by diagnostics projections:
+
+- `Reason(...)` records the policy reason in a stable framework vocabulary;
+- `Capability(...)`, `Permission(...)`, `Guard(...)`, and `Relation(...)`
+  record the authorization mechanism detail;
+- parameter, field-path, policy, and value facets may be added when they help
+  explain the failing request.
+
+Metrics, dashboards, Web/admin diagnostics, and observability records derive
+their diagnostic keys from this `Conclusion` structure. They must not introduce
+component-local error structures or legacy failure-label fields.

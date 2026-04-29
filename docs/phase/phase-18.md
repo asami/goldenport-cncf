@@ -220,7 +220,7 @@ Current note:
     `authorizationPolicies`; security deployment Markdown adds role/resource
     tables; manual pages and Blob admin home show read-only authorization
     requirements; authorization decision observability records include coarse
-    `failureKind`.
+    `diagnosticKey`.
   - UoW-backed application create/update Blob attachment workflow adapters are
     split out as follow-up hardening work.
 - `docs/journal/2026/04/blob-management-component-specification-note.md` is the
