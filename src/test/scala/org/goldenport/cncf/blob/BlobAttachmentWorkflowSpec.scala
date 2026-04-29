@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for BL-05B entity create/update Blob attachment workflow.
  *
  * @since   Apr. 27, 2026
- * @version Apr. 27, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobAttachmentWorkflowSpec
@@ -47,6 +47,51 @@ final class BlobAttachmentWorkflowSpec
       extracted.uploads.map(_.kind) shouldBe Vector(BlobKind.Image)
       extracted.uploads.flatMap(_.filename) shouldBe Vector("cover.png")
       extracted.references.map(x => x.role -> x.id.value) shouldBe Vector("attachment" -> existingId.value)
+    }
+
+    "extract hybrid imageAttachments rows with existing blob syntax" in {
+      Given("a request using the structured imageAttachments rows and legacy blobId fields")
+      val existingId = _blob_entity_id("existing_hybrid")
+      val request = Request.of(
+        component = "sample",
+        service = "article",
+        operation = "create",
+        arguments = List(
+          Argument("imageAttachments.0.role", "primary", None),
+          Argument("imageAttachments.0.file", MimeBody(ContentType.IMAGE_PNG, Bag.binary("image".getBytes(StandardCharsets.UTF_8))), None),
+          Argument("imageAttachments.0.file.filename", "primary.png", None),
+          Argument("imageAttachments.0.sortOrder", "10", None),
+          Argument("blobId.thumbnail", existingId.value, None)
+        )
+      )
+
+      When("extracting Blob attachment parts")
+      val extracted = _success(BlobAttachmentWorkflow.extract(request))
+
+      Then("structured upload rows and legacy references are normalized together")
+      extracted.uploads.map(x => (x.role, x.filename, x.sortOrder)) shouldBe Vector(("primary", Some("primary.png"), Some(10)))
+      extracted.references.map(x => x.role -> x.id.value) shouldBe Vector("thumbnail" -> existingId.value)
+    }
+
+    "reject malformed imageAttachments rows deterministically" in {
+      Given("a structured row that specifies both upload and existing Blob id")
+      val existingId = _blob_entity_id("existing_invalid")
+      val request = Request.of(
+        component = "sample",
+        service = "article",
+        operation = "create",
+        arguments = List(
+          Argument("imageAttachments.0.role", "primary", None),
+          Argument("imageAttachments.0.file", MimeBody(ContentType.IMAGE_PNG, Bag.binary("image".getBytes(StandardCharsets.UTF_8))), None),
+          Argument("imageAttachments.0.blobId", existingId.value, None)
+        )
+      )
+
+      When("extracting Blob attachment parts")
+      val result = BlobAttachmentWorkflow.extract(request)
+
+      Then("the row fails instead of selecting an arbitrary source")
+      result shouldBe a[Consequence.Failure[_]]
     }
 
     "register uploaded files and attach uploaded plus existing Blob ids to an entity" in {
@@ -140,7 +185,7 @@ final class BlobAttachmentWorkflowSpec
           digest = Some(put.digest),
           storageRef = Some(put.storageRef),
           externalUrl = None,
-          accessUrl = put.accessUrl
+          accessUrl = BlobUrl.cncfRoute(put.id)
         )
       )
     }

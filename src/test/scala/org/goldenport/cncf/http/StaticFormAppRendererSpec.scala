@@ -19,7 +19,7 @@ import org.goldenport.error.ErrorCode
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.http.HttpStatus
 import org.goldenport.bag.Bag
-import org.goldenport.datatype.{ContentType, MimeType}
+import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
 import org.goldenport.value.BaseContent
 import org.goldenport.protocol.{Argument, Property, Protocol, Request as GRequest}
 import org.goldenport.protocol.handler.ProtocolHandler
@@ -32,6 +32,7 @@ import org.goldenport.record.Record
 import org.goldenport.schema.{Column, Multiplicity, Schema, ValueDomain, WebColumn, WebValidationHints, XBoolean, XDateTime, XInt, XString}
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, ProcedureActionCall, QueryAction}
+import org.goldenport.cncf.association.{AssociationDomain, AssociationFilter, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.blob.*
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentFactory, ComponentletDescriptor}
@@ -1467,6 +1468,145 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       dispatcher.paths should contain ("/admin/entity/create")
     }
 
+    "attach uploaded and existing Blob images during admin entity create" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val existingBlobId = _register_external_blob(subsystem, "existing-admin.png", "https://example.com/existing-admin.png")
+      val localId = s"notice_admin_image_${java.util.UUID.randomUUID().toString.replace("-", "")}"
+      val filename = s"${localId}.png"
+
+      val response = _success(subsystem.executeOperationResponse(GRequest.of(
+        component = "admin",
+        service = "entity",
+        operation = "create",
+        arguments = List(
+          Argument("component", "notice-board", None),
+          Argument("entity", "notice", None),
+          Argument("title", "image create", None),
+          Argument("author", "dana", None),
+          Argument("imageAttachments.0.role", "primary", None),
+          Argument("imageAttachments.0.file", MimeBody(ContentType.IMAGE_PNG, Bag.binary("uploaded-image".getBytes(StandardCharsets.UTF_8))), None),
+          Argument("imageAttachments.0.file.filename", filename, None),
+          Argument("blobId.cover", existingBlobId, None)
+        )
+      )))
+
+      response shouldBe OperationResponse.Scalar("Entity record was applied.")
+      val created = collection.storage.storeRealm.values.find(_.title == "image create").getOrElse(fail("created entity is missing"))
+      val stored = created.toRecord()
+      stored.getString("imageAttachments.0.role") shouldBe None
+      stored.getString("blobId.cover") shouldBe None
+
+      given ExecutionContext = subsystem.findComponent("blob").getOrElse(fail("Blob component is missing")).logic.executionContext()
+      val repository = AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
+      val rows = _success(repository.list(AssociationFilter(
+        domain = AssociationDomain.BlobAttachment,
+        sourceEntityId = Some(created.id.value),
+        targetKind = Some("blob")
+      )))
+      rows.map(_.role).toSet shouldBe Set("primary", "cover")
+      rows.find(_.role == "cover").map(_.targetEntityId) shouldBe Some(existingBlobId)
+      val uploadedId = EntityId.parse(rows.find(_.role == "primary").map(_.targetEntityId).getOrElse(fail("uploaded association is missing"))).toOption.getOrElse(fail("uploaded Blob id is invalid"))
+      val uploaded = _success(BlobRepository.entityStore().get(uploadedId))
+      uploaded.filename shouldBe Some(filename)
+      uploaded.byteSize shouldBe Some("uploaded-image".getBytes(StandardCharsets.UTF_8).length.toLong)
+    }
+
+    "submit multipart admin entity create with image attachment through Web handler" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val engine = new HttpExecutionEngine(subsystem)
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val filename = s"web-admin-${java.util.UUID.randomUUID().toString.replace("-", "")}.png"
+      val req = _post_multipart_request(
+        "/form/notice-board/admin/entities/notice/create",
+        Vector(
+          "id" -> s"notice_web_image_${java.util.UUID.randomUUID().toString.replace("-", "")}",
+          "title" -> "multipart image create",
+          "author" -> "web",
+          "imageAttachments.0.role" -> "primary"
+        ),
+        Vector(
+          ("imageAttachments.0.file", filename, "image/png", "web-upload-image".getBytes(StandardCharsets.UTF_8))
+        )
+      )
+
+      val html = server
+        ._submit_component_admin_entity_create(req, "notice-board", "notice")
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      html should include ("Entity record was applied")
+      val created = collection.storage.storeRealm.values.find(_.title == "multipart image create").getOrElse(fail("created entity is missing"))
+      created.author shouldBe "web"
+      given ExecutionContext = subsystem.findComponent("blob").getOrElse(fail("Blob component is missing")).logic.executionContext()
+      val rows = _success(AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault).list(AssociationFilter(
+        domain = AssociationDomain.BlobAttachment,
+        sourceEntityId = Some(created.id.value),
+        targetKind = Some("blob")
+      )))
+      rows.map(_.role) shouldBe Vector("primary")
+      val uploadedId = EntityId.parse(rows.head.targetEntityId).toOption.getOrElse(fail("uploaded Blob id is invalid"))
+      _success(BlobRepository.entityStore().get(uploadedId)).filename shouldBe Some(filename)
+      dispatcher.paths should contain ("/admin/entity/create")
+    }
+
+    "compensate admin entity create when image attachment fails" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val localId = s"notice_admin_compensate_${java.util.UUID.randomUUID().toString.replace("-", "")}"
+      val missingBlobId = EntityId(BlobRepository.CollectionId.major, s"missing_${localId}", BlobRepository.CollectionId).value
+
+      val result = subsystem.executeOperationResponse(GRequest.of(
+        component = "admin",
+        service = "entity",
+        operation = "create",
+        arguments = List(
+          Argument("component", "notice-board", None),
+          Argument("entity", "notice", None),
+          Argument("title", "compensated image create", None),
+          Argument("author", "erin", None),
+          Argument("imageAttachments.0.role", "primary", None),
+          Argument("imageAttachments.0.file", MimeBody(ContentType.IMAGE_PNG, Bag.binary("temporary-image".getBytes(StandardCharsets.UTF_8))), None),
+          Argument("imageAttachments.0.file.filename", s"${localId}.png", None),
+          Argument("blobId.cover", missingBlobId, None)
+        )
+      ))
+
+      result shouldBe a[Consequence.Failure[_]]
+      collection.storage.storeRealm.values.exists(_.title == "compensated image create") shouldBe false
+      given ExecutionContext = subsystem.findComponent("blob").getOrElse(fail("Blob component is missing")).logic.executionContext()
+      _success(BlobRepository.entityStore().list()).flatMap(_.filename).filter(_ == s"${localId}.png") shouldBe Vector.empty
+    }
+
+    "keep admin entity update when image attachment fails" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val collection = _notice_fixture_component(subsystem).entitySpace.entity[_NoticeEntity]("notice")
+      val recordId = collection.storage.storeRealm.values.head.id
+      val missingBlobId = EntityId(BlobRepository.CollectionId.major, s"missing_update_${java.util.UUID.randomUUID().toString.replace("-", "")}", BlobRepository.CollectionId).value
+
+      val result = subsystem.executeOperationResponse(GRequest.of(
+        component = "admin",
+        service = "entity",
+        operation = "update",
+        arguments = List(
+          Argument("component", "notice-board", None),
+          Argument("entity", "notice", None),
+          Argument("id", recordId.value, None),
+          Argument("title", "updated despite image failure", None),
+          Argument("author", "frank", None),
+          Argument("imageAttachments.0.role", "primary", None),
+          Argument("imageAttachments.0.blobId", missingBlobId, None)
+        )
+      ))
+
+      result shouldBe a[Consequence.Failure[_]]
+      val stored = collection.storage.storeRealm.values.find(_.id == recordId).map(_.toRecord()).getOrElse(fail("updated notice is missing"))
+      stored.getString("title") shouldBe Some("updated despite image failure")
+      stored.getString("imageAttachments.0.blobId") shouldBe None
+    }
+
     "render admin entity create and update forms from derived alias schema fields" in {
       val subsystem = _management_console_fixture_subsystem(schema = _schema("id", "senderName", "recipientName", "subject", "body"))
       val componentName = "notice_board"
@@ -1486,13 +1626,18 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         .getOrElse(fail("component entity edit admin is missing"))
 
       newHtml should include (s"/form/${componentPath}/admin/entities/${entityPath}/create")
+      newHtml should include ("enctype=\"multipart/form-data\"")
       newHtml should include ("name=\"subject\"")
       newHtml should include ("name=\"body\"")
+      newHtml should include ("name=\"imageAttachments.0.file\"")
+      newHtml should include ("Image Attachments")
       newHtml should not include ("name=\"title\"")
       newHtml should not include ("name=\"content\"")
       editHtml should include (s"/form/${componentPath}/admin/entities/${entityPath}/${recordShortid}/update")
+      editHtml should include ("enctype=\"multipart/form-data\"")
       editHtml should include ("name=\"subject\"")
       editHtml should include ("name=\"body\"")
+      editHtml should include ("name=\"imageAttachments.0.blobId\"")
       editHtml should not include ("name=\"title\"")
       editHtml should not include ("name=\"content\"")
     }
@@ -7449,6 +7594,32 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       method = Method.POST,
       uri = Uri.unsafeFromString(path)
     ).withEntity(body)
+
+  private def _post_multipart_request(
+    path: String,
+    fields: Vector[(String, String)],
+    files: Vector[(String, String, String, Array[Byte])]
+  ): Request[IO] = {
+    val boundary = s"----cncf-test-${java.util.UUID.randomUUID().toString.replace("-", "")}"
+    val fieldParts = fields.map { case (name, value) =>
+      s"--${boundary}\r\nContent-Disposition: form-data; name=\"${name}\"\r\n\r\n${value}\r\n".getBytes(StandardCharsets.UTF_8)
+    }
+    val fileParts = files.map { case (name, filename, contentType, bytes) =>
+      val header =
+        s"--${boundary}\r\nContent-Disposition: form-data; name=\"${name}\"; filename=\"${filename}\"\r\nContent-Type: ${contentType}\r\n\r\n"
+          .getBytes(StandardCharsets.UTF_8)
+      header ++ bytes ++ "\r\n".getBytes(StandardCharsets.UTF_8)
+    }
+    val trailer = s"--${boundary}--\r\n".getBytes(StandardCharsets.UTF_8)
+    val body = (fieldParts ++ fileParts).foldLeft(Array.emptyByteArray)(_ ++ _) ++ trailer
+    Request[IO](
+      method = Method.POST,
+      uri = Uri.unsafeFromString(path),
+      body = fs2.Stream.emits(body).covary[IO]
+    ).putHeaders(
+      org.http4s.headers.`Content-Type`.parse(s"multipart/form-data; boundary=${boundary}").toOption.get
+    )
+  }
 
   private def _get_request(
     path: String

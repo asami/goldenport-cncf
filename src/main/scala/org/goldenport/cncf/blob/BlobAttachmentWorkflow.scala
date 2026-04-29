@@ -6,6 +6,7 @@ import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.cncf.association.{Association, AssociationCreate, AssociationDomain, AssociationFilter, AssociationRecordCodec, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.datatype.{ContentType, MimeBody}
+import org.goldenport.id.UniversalId
 import org.goldenport.protocol.Request
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.EntityId
@@ -15,7 +16,7 @@ import org.simplemodeling.model.datatype.EntityId
  * entities in the same create/update request flow.
  *
  * @since   Apr. 27, 2026
- * @version Apr. 27, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class BlobUploadPart(
@@ -159,13 +160,19 @@ final class BlobAttachmentWorkflow(
           digest = Some(result.digest),
           storageRef = Some(result.storageRef),
           externalUrl = None,
-          accessUrl = result.accessUrl
+          accessUrl = _managed_blob_access_url(result)
         )
       ).recoverWith { conclusion =>
         store.delete(result.storageRef).recover(_ => ()).flatMap(_ => Consequence.Failure[Blob](conclusion))
       }
     }
   }
+
+  private def _managed_blob_access_url(result: BlobPutResult): BlobAccessUrl =
+    if (result.accessUrl.urlSource == BlobAccessUrlSource.Backend && result.accessUrl.displayUrl.nonEmpty)
+      result.accessUrl
+    else
+      BlobUrl.cncfRoute(result.id)
 
   private def _attach_references(
     sourceEntityId: String,
@@ -193,9 +200,10 @@ final class BlobAttachmentWorkflow(
       case existing +: _ =>
         Consequence.success(existing)
       case _ =>
+        val collection = AssociationStoragePolicy.BlobAttachmentCollection
         associations.create(
           AssociationCreate(
-            id = None,
+            id = Some(_association_entity_id(collection)),
             associationId = UUID.randomUUID().toString,
             sourceEntityId = sourceEntityId,
             targetEntityId = id.value,
@@ -203,10 +211,21 @@ final class BlobAttachmentWorkflow(
             role = role,
             associationDomain = AssociationDomain.BlobAttachment,
             sortOrder = sortOrder,
-            collectionId = AssociationStoragePolicy.BlobAttachmentCollection
+            collectionId = collection
           )
         )
     }
+
+  private def _association_entity_id(
+    collection: org.simplemodeling.model.datatype.EntityCollectionId
+  ): EntityId =
+    EntityId(
+      collection.major,
+      collection.minor,
+      collection,
+      Some(UniversalId.StableTimestamp),
+      Some(s"association_${UUID.randomUUID().toString.replace("-", "_")}")
+    )
 
   private def _blob_association_filter(
     sourceid: String,
@@ -249,7 +268,8 @@ object BlobAttachmentWorkflow {
     for {
       uploads <- _uploads(values)
       refs <- _references(values)
-    } yield BlobAttachmentRequest(uploads, refs)
+      structured <- _image_attachments(values)
+    } yield BlobAttachmentRequest(uploads ++ structured.uploads, refs ++ structured.references)
   }
 
   private def _values(
@@ -305,6 +325,96 @@ object BlobAttachmentWorkflow {
         }
       }
     }
+
+  private def _image_attachments(
+    values: Vector[(String, Any)]
+  ): Consequence[BlobAttachmentRequest] = {
+    val rows = _image_attachment_rows(values)
+    rows.foldLeft(Consequence.success(BlobAttachmentRequest(Vector.empty, Vector.empty))) { (z, row) =>
+      z.flatMap { acc =>
+        _image_attachment(row).map { part =>
+          BlobAttachmentRequest(
+            uploads = acc.uploads ++ part.uploads,
+            references = acc.references ++ part.references
+          )
+        }
+      }
+    }
+  }
+
+  private def _image_attachment_rows(
+    values: Vector[(String, Any)]
+  ): Vector[_ImageAttachmentRow] = {
+    val rows = scala.collection.mutable.Map.empty[Int, Vector[(String, Any, Int)]]
+    values.zipWithIndex.foreach { case ((name, value), position) =>
+      _image_attachment_name(name).foreach { case (index, field) =>
+        val current = rows.getOrElse(index, Vector.empty)
+        rows.update(index, current :+ (field, value, position))
+      }
+    }
+    rows.toVector.sortBy(_._1).map { case (index, fields) =>
+      _ImageAttachmentRow(index, fields)
+    }
+  }
+
+  private def _image_attachment(
+    row: _ImageAttachmentRow
+  ): Consequence[BlobAttachmentRequest] =
+    if (row.isEmpty)
+      Consequence.success(BlobAttachmentRequest(Vector.empty, Vector.empty))
+    else {
+      row.string("role") match {
+        case None =>
+          Consequence.argumentInvalid(s"imageAttachments.${row.index}.role is required")
+        case Some(role) =>
+          (row.upload, row.string("blobId")) match {
+            case (Some(_), Some(_)) =>
+              Consequence.argumentInvalid(s"imageAttachments.${row.index} cannot specify both file and blobId")
+            case (None, None) =>
+              Consequence.argumentInvalid(s"imageAttachments.${row.index} requires file or blobId")
+            case (Some(value), None) =>
+              _binary(value).flatMap { case (payload, contenttype) =>
+                _kind(row.fields, s"imageAttachments.${row.index}", contenttype).map { kind =>
+                  BlobAttachmentRequest(
+                    uploads = Vector(BlobUploadPart(
+                      role = role,
+                      payload = payload,
+                      kind = kind,
+                      filename = row.string("filename").orElse(row.string("file.filename")).orElse(row.string("file.fileName")),
+                      contentType = contenttype,
+                      sortOrder = row.int("sortOrder", "sort_order").orElse(Some(row.position))
+                    )),
+                    references = Vector.empty
+                  )
+                }
+              }
+            case (None, Some(blobId)) =>
+              EntityId.parse(blobId).map { id =>
+                BlobAttachmentRequest(
+                  uploads = Vector.empty,
+                  references = Vector(BlobReferencePart(role, id, row.int("sortOrder", "sort_order").orElse(Some(row.position))))
+                )
+              }
+          }
+      }
+    }
+
+  private def _image_attachment_name(
+    name: String
+  ): Option[(Int, String)] = {
+    val prefix = "imageAttachments."
+    if (!name.startsWith(prefix))
+      None
+    else {
+      val rest = name.drop(prefix.length)
+      val i = rest.indexOf('.')
+      if (i <= 0 || i == rest.length - 1)
+        None
+      else {
+        rest.take(i).toIntOption.map(_ -> rest.drop(i + 1))
+      }
+    }
+  }
 
   private def _upload_name(name: String): Option[(String, Option[Int])] =
     _role_index(name, "blob")
@@ -395,4 +505,55 @@ object BlobAttachmentWorkflow {
     names: String*
   ): Option[Int] =
     _string(values, names*).flatMap(_.toIntOption)
+
+  private final case class _ImageAttachmentRow(
+    index: Int,
+    values: Vector[(String, Any, Int)]
+  ) {
+    lazy val fields: Vector[(String, Any)] =
+      values.map { case (field, value, _) => s"imageAttachments.${index}.${field}" -> value }
+
+    def position: Int =
+      values.map(_._3).minOption.getOrElse(index)
+
+    def string(names: String*): Option[String] =
+      names.iterator.flatMap { name =>
+        values.collectFirst {
+          case (field, value, _) if field == name => value.toString.trim
+        }
+      }.find(_.nonEmpty)
+
+    def int(names: String*): Option[Int] =
+      string(names*).flatMap(_.toIntOption)
+
+    def upload: Option[Any] =
+      values.collectFirst {
+        case ("file", value, _) if !_is_empty_upload(value) => value
+      }
+
+    def isEmpty: Boolean =
+      values.forall { case (field, value, _) =>
+        field == "file" && _is_empty_upload(value) || _is_empty_scalar(value)
+      }
+
+    private def _is_empty_scalar(value: Any): Boolean =
+      value match {
+        case m: MimeBody => _is_empty_upload(m)
+        case b: Bag => b.metadata.size.contains(0L)
+        case a: Array[Byte] => a.isEmpty
+        case other => other.toString.trim.isEmpty
+      }
+
+    private def _is_empty_upload(value: Any): Boolean =
+      value match {
+        case m: MimeBody =>
+          m.value.metadata.size.contains(0L)
+        case b: Bag =>
+          b.metadata.size.contains(0L)
+        case a: Array[Byte] =>
+          a.isEmpty
+        case other =>
+          other.toString.trim.isEmpty
+      }
+  }
 }

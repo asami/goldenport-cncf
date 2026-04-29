@@ -44,7 +44,7 @@ import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
- * @version Apr. 29, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -422,7 +422,7 @@ final class Http4sHttpServer(
 
   private def _blob_admin_blob_delete_submit(req: HRequest[IO], id: String): IO[HResponse[IO]] =
     for {
-      form <- _to_plain_form_record(req)
+      form <- _to_form_record(req)
       response <- _blob_admin_page(
         req,
         StaticFormAppRenderer.renderBlobAdminBlobDeleteResult(engine.runtimeSubsystem, id, form.asMap.map { case (k, v) => k -> v.toString }, _blob_admin_request_properties(req)),
@@ -441,7 +441,7 @@ final class Http4sHttpServer(
 
   private def _blob_admin_association_attach(req: HRequest[IO]): IO[HResponse[IO]] =
     for {
-      form <- _to_plain_form_record(req)
+      form <- _to_form_record(req)
       response <- _blob_admin_page(
         req,
         StaticFormAppRenderer.renderBlobAdminAssociationAttachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _blob_admin_request_properties(req)),
@@ -452,7 +452,7 @@ final class Http4sHttpServer(
 
   private def _blob_admin_association_detach(req: HRequest[IO]): IO[HResponse[IO]] =
     for {
-      form <- _to_plain_form_record(req)
+      form <- _to_form_record(req)
       response <- _blob_admin_page(
         req,
         StaticFormAppRenderer.renderBlobAdminAssociationDetachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _blob_admin_request_properties(req)),
@@ -1083,7 +1083,7 @@ final class Http4sHttpServer(
     } else {
     val started = System.nanoTime()
     for {
-      form <- _to_plain_form_record(req)
+      form <- _to_form_record(req)
       operationValues = _operation_form_values(form)
       pageValues = _form_values(form)
       validation = StaticFormAppRenderer.validateOperationForm(
@@ -1366,7 +1366,7 @@ final class Http4sHttpServer(
       return _forbidden_web(req, Some(app), Some("admin.entities"), Some(entity))
     val started = System.nanoTime()
     for {
-      form <- _to_plain_form_record(req)
+      form <- _to_form_record(req)
       record = Record.create((form.asMap + ("id" -> id)).toVector)
       values = _form_values(record)
       validation = StaticFormAppRenderer.validateComponentAdminEntityForm(engine.runtimeSubsystem, app, entity, values, engine.webDescriptor, Some("detail"))
@@ -1398,7 +1398,7 @@ final class Http4sHttpServer(
       return _forbidden_web(req, Some(app), Some("admin.entities"), Some(entity))
     val started = System.nanoTime()
     for {
-      form <- _to_plain_form_record(req)
+      form <- _to_form_record(req)
       values = _form_values(form)
       validation = StaticFormAppRenderer.validateComponentAdminEntityForm(engine.runtimeSubsystem, app, entity, values, engine.webDescriptor, Some("create"))
       html <- validation match {
@@ -3136,6 +3136,21 @@ final class Http4sHttpServer(
       }
     }
 
+  private def _to_form_record(
+    req: org.http4s.Request[IO]
+  ): IO[Record] =
+    if (_is_multipart(req.headers.get[`Content-Type`]))
+      _to_multipart_form_record(req)
+    else
+      _to_plain_form_record(req)
+
+  private def _to_multipart_form_record(
+    req: org.http4s.Request[IO]
+  ): IO[Record] =
+    _multipart_form_entries(req).map { values =>
+      if (values.isEmpty) Record.empty else Record.create(values)
+    }
+
   private def _fields_to_record(text: String): Record = {
     val trimmedText = text.trim
     if (!trimmedText.contains("\n") && trimmedText.contains("&")) {
@@ -3233,6 +3248,23 @@ final class Http4sHttpServer(
     header: Record,
     context: HttpContext
   ): IO[HttpRequest] =
+    _multipart_form_entries(req).map { values =>
+      val form =
+        if (values.isEmpty) Record.empty else Record.create(values)
+      HttpRequest.fromPath(
+        method = method,
+        path = path,
+        query = query,
+        header = header,
+        body = None,
+        context = context,
+        form = form
+      )
+    }
+
+  private def _multipart_form_entries(
+    req: org.http4s.Request[IO]
+  ): IO[Vector[(String, Any)]] =
     req.as[Multipart[IO]].flatMap { multipart =>
       multipart.parts.toVector.traverse { part =>
         part.name match {
@@ -3245,26 +3277,55 @@ final class Http4sHttpServer(
                   .map(_.value)
                   .map(ContentType.parse)
                   .getOrElse(ContentType.APPLICATION_OCTET_STREAM)
-              Some(name -> MimeBody(contentType, bag))
+              if (_is_multipart_upload_part(name, part.filename)) {
+                val body = Vector(name -> MimeBody(contentType, bag))
+                val filename = part.filename.toVector.filter(_.nonEmpty).map(x => s"$name.filename" -> x)
+                body ++ filename
+              } else {
+                Vector(name -> new String(bytes.toArray, StandardCharsets.UTF_8))
+              }
             }
           case _ =>
-            IO.pure(None)
+            IO.pure(Vector.empty)
         }
-      }.map { entries =>
-        val values = entries.flatten
-        val form =
-          if (values.isEmpty) Record.empty else Record.create(values)
-        HttpRequest.fromPath(
-          method = method,
-          path = path,
-          query = query,
-          header = header,
-          body = None,
-          context = context,
-          form = form
-        )
+      }.map(_.flatten)
+    }
+
+  private def _is_multipart_upload_part(
+    name: String,
+    filename: Option[String]
+  ): Boolean =
+    filename.exists(_.nonEmpty) ||
+      _is_legacy_blob_upload_field(name) ||
+      _is_image_attachment_file_field(name)
+
+  private def _is_legacy_blob_upload_field(name: String): Boolean = {
+    val prefix = "blob."
+    if (!name.startsWith(prefix))
+      false
+    else {
+      val suffix = name.drop(prefix.length)
+      val parts = suffix.split("\\.").toVector
+      parts match {
+        case Vector(role) if role.nonEmpty =>
+          true
+        case Vector(role, index) if role.nonEmpty && index.forall(_.isDigit) =>
+          true
+        case _ =>
+          false
       }
     }
+  }
+
+  private def _is_image_attachment_file_field(name: String): Boolean = {
+    val prefix = "imageAttachments."
+    if (!name.startsWith(prefix) || !name.endsWith(".file"))
+      false
+    else {
+      val index = name.drop(prefix.length).stripSuffix(".file")
+      index.nonEmpty && index.forall(_.isDigit)
+    }
+  }
 
   private def _to_http_response(
     res: HttpResponse

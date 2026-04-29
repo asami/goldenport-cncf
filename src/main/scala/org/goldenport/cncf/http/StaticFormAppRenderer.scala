@@ -3054,6 +3054,7 @@ object StaticFormAppRenderer {
         effectiveValidation,
         includeExtensionFields = false
       )
+      val imageAttachments = _admin_entity_image_attachment_controls("imageAttachments")
       val nav = _admin_nav_card(Vector(
         "Detail" -> s"${webBasePath}/${routeId}",
         s"Back to ${entityLabel} records" -> webBasePath
@@ -3067,8 +3068,9 @@ object StaticFormAppRenderer {
              |  <div class="card-body">
              |    <h2 class="card-title">Edit ${_escape(entityLabel)}</h2>
              |    ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
-             |    <form method="post" action="${_escape(actionPath)}" class="admin-form">
+             |    <form method="post" action="${_escape(actionPath)}" class="admin-form" enctype="multipart/form-data">
              |      ${controls}
+             |      ${imageAttachments}
              |      ${hiddenContext}
              |      <div class="d-flex flex-wrap gap-2">
              |        <button type="submit" class="btn btn-primary">Update</button>
@@ -3106,6 +3108,7 @@ object StaticFormAppRenderer {
       val effectiveValidation = validation.filter(_.webSchema.selector == displaySchema.selector)
       val hiddenContext = _hidden_form_context_inputs(values)
       val controls = _admin_new_controls(displaySchema.fields, values, "entityFields", "id=sales-order-1&#10;status=draft", effectiveValidation)
+      val imageAttachments = _admin_entity_image_attachment_controls("newImageAttachments")
       val nav = _admin_nav_card(Vector(
         s"Back to ${entityLabel} records" -> webBasePath,
         "Entity types" -> s"/web/${componentPath}/admin/entities"
@@ -3119,8 +3122,9 @@ object StaticFormAppRenderer {
              |  <div class="card-body">
              |    <h2 class="card-title">New ${_escape(entityLabel)}</h2>
              |    ${_form_error_panel(values)}${_form_validation_panel(effectiveValidation)}
-             |    <form method="post" action="${_escape(actionPath)}" class="admin-form">
+             |    <form method="post" action="${_escape(actionPath)}" class="admin-form" enctype="multipart/form-data">
              |      ${controls}
+             |      ${imageAttachments}
              |      ${hiddenContext}
              |      <div class="d-flex flex-wrap gap-2">
              |        <button type="submit" class="btn btn-primary">Create</button>
@@ -3131,6 +3135,37 @@ object StaticFormAppRenderer {
              |</article>""".stripMargin
       ))
     }
+
+  private def _admin_entity_image_attachment_controls(
+    idPrefix: String
+  ): String = {
+    val rows = (0 until 3).map { index =>
+      val base = s"imageAttachments.${index}"
+      s"""<div class="row g-2 align-items-end mb-2">
+         |  <div class="col-md-2">
+         |    <label class="form-label" for="${_escape(idPrefix)}Role${index}">Role</label>
+         |    <input class="form-control" id="${_escape(idPrefix)}Role${index}" name="${base}.role" list="entityImageAttachmentRoleOptions">
+         |  </div>
+         |  <div class="col-md-3">
+         |    <label class="form-label" for="${_escape(idPrefix)}BlobId${index}">Existing Blob id</label>
+         |    <input class="form-control" id="${_escape(idPrefix)}BlobId${index}" name="${base}.blobId">
+         |  </div>
+         |  <div class="col-md-4">
+         |    <label class="form-label" for="${_escape(idPrefix)}File${index}">Upload image</label>
+         |    <input class="form-control" id="${_escape(idPrefix)}File${index}" name="${base}.file" type="file" accept="image/*">
+         |  </div>
+         |  <div class="col-md-2">
+         |    <label class="form-label" for="${_escape(idPrefix)}Sort${index}">Sort</label>
+         |    <input class="form-control" id="${_escape(idPrefix)}Sort${index}" name="${base}.sortOrder">
+         |  </div>
+         |</div>""".stripMargin
+    }.mkString("\n")
+    s"""<section class="border rounded p-3 mb-3">
+       |  <h3 class="h6">Image Attachments</h3>
+       |  ${rows}
+       |  <datalist id="entityImageAttachmentRoleOptions"><option value="primary"><option value="cover"><option value="thumbnail"><option value="gallery"><option value="inline"></datalist>
+       |</section>""".stripMargin
+  }
 
   def renderComponentAdminEntityUpdateResult(
     componentName: String,

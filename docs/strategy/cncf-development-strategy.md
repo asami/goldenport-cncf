@@ -437,9 +437,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   driver.
 - Current BI-04 slice completed reusable `BlobProjection` output, Entity admin
   image visibility with existing Blob attach/detach controls, and
-  operation manual/help image-binding metadata.
-- Remaining BI-04 work is limited to upload/register adapters and generic
-  Entity create/update attachment support.
+  operation manual/help image-binding metadata. The following slice connects
+  Entity admin create/update to `BlobAttachmentWorkflow` for uploaded image
+  files and existing Blob ids.
+- Remaining BI-04 work is limited to upload/register adapters outside Entity
+  admin.
 - Non-goals:
 - No new Blob payload storage backend in CNCF core.
 - No S3/S3-compatible BlobStore provider implementation in this phase.

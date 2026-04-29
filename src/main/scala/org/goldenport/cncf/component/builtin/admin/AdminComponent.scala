@@ -9,8 +9,8 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall, QueryAction, ResourceAccess}
-import org.goldenport.cncf.association.{Association, AssociationFilter, AssociationStoragePolicy}
-import org.goldenport.cncf.blob.{Blob, BlobProjection, BlobRepository}
+import org.goldenport.cncf.association.{Association, AssociationFilter, AssociationRepository, AssociationStoragePolicy}
+import org.goldenport.cncf.blob.{Blob, BlobAttachmentWorkflow, BlobPayloadSupport, BlobProjection, BlobRepository}
 import org.goldenport.cncf.component.{Component, ComponentInit, ComponentOrigin}
 import org.goldenport.cncf.component.ComponentOriginLabel
 import org.goldenport.cncf.component.ComponentCreate
@@ -868,7 +868,7 @@ object AdminComponent {
     subsystem: Subsystem
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _admin_entity_put(core, subsystem)
+      _admin_entity_put("create", core, subsystem)
   }
 
   private final case class EntityUpdateActionCall(
@@ -876,7 +876,7 @@ object AdminComponent {
     subsystem: Subsystem
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
-      _admin_entity_put(core, subsystem)
+      _admin_entity_put("update", core, subsystem)
   }
 
   private final case class DataCreateAction(
@@ -1700,6 +1700,7 @@ object AdminComponent {
   }
 
   private def _admin_entity_put(
+    operation: String,
     core: ActionCall.Core,
     subsystem: Subsystem
   ): Consequence[OperationResponse] = {
@@ -1711,9 +1712,89 @@ object AdminComponent {
         _component_by_name(subsystem, componentName).flatMap(_entity_collection(_, entityName)),
         s"Entity collection not found: ${entityName}"
       )
-      _ <- collection.putRecordSynced(_admin_entity_record(collection, args))(using core.executionContext)
+      attachmentRequest <- BlobAttachmentWorkflow.extract(_admin_entity_blob_attachment_request(operation, componentName, entityName, core))
+      inputRecord = _admin_entity_record(collection, args)
+      record <- _canonical_admin_entity_record(collection, inputRecord)
+      entityId <- Consequence.fromOption(record.getString("id"), "entity id is required")
+      _ <-
+        if (attachmentRequest.isEmpty)
+          collection.putRecordSynced(record)(using core.executionContext)
+        else
+          _admin_entity_put_with_blob_attachments(operation, core, collection, record, entityId)
     } yield OperationResponse.Scalar("Entity record was applied.")
   }
+
+  private def _admin_entity_put_with_blob_attachments(
+    operation: String,
+    core: ActionCall.Core,
+    collection: EntityCollection[?],
+    record: Record,
+    entityId: String
+  ): Consequence[Unit] =
+    for {
+      workflow <- _blob_attachment_workflow(core)
+      _ <- operation match {
+        case "create" =>
+          workflow.createEntityWithBlobAttachments(_admin_entity_blob_attachment_request(operation, "", "", core))(
+            create = collection.putRecordSynced(record)(using core.executionContext).map(_ => record),
+            entityId = _ => entityId,
+            compensateEntity = _ => _delete_admin_entity_record(collection, entityId)(using core.executionContext)
+          )(using core.executionContext).map(_ => ())
+        case _ =>
+          collection.putRecordSynced(record)(using core.executionContext) match {
+            case Consequence.Success(_) =>
+              workflow.attachToEntity(entityId, _admin_entity_blob_attachment_request(operation, "", "", core))(using core.executionContext).map(_ => ())
+            case Consequence.Failure(conclusion) =>
+              Consequence.Failure(conclusion)
+          }
+      }
+    } yield ()
+
+  private def _blob_attachment_workflow(
+    core: ActionCall.Core
+  ): Consequence[BlobAttachmentWorkflow] =
+    for {
+      component <- Consequence.fromOption(core.component, "admin component is not available")
+      service <- BlobPayloadSupport.service(component)
+    } yield BlobAttachmentWorkflow(
+      service.blobStore,
+      BlobRepository.entityStore(),
+      AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
+    )
+
+  private def _admin_entity_blob_attachment_request(
+    operation: String,
+    componentName: String,
+    entityName: String,
+    core: ActionCall.Core
+  ): Request =
+    Request.of(
+      component = if (componentName.isEmpty) "admin" else componentName,
+      service = if (entityName.isEmpty) "entity" else entityName,
+      operation = operation,
+      arguments = core.action.arguments,
+      properties = core.action.properties
+    )
+
+  private def _canonical_admin_entity_record[E](
+    collection: EntityCollection[E],
+    record: Record
+  ): Consequence[Record] =
+    collection.descriptor.persistent.fromRecord(record).map { entity =>
+      val persistent = collection.descriptor.persistent
+      val canonical = persistent.toRecord(entity)
+      Record.create((canonical.asMap + ("id" -> persistent.id(entity).value)).toVector)
+    }
+
+  private def _delete_admin_entity_record(
+    collection: EntityCollection[?],
+    entityId: String
+  )(using ctx: org.goldenport.cncf.context.ExecutionContext): Consequence[Unit] =
+    for {
+      id <- EntityId.parse(entityId)
+      _ <- ctx.entityStoreSpace.delete(UnitOfWorkOp.EntityStoreDelete(id))
+      _ = collection.evict(id)
+    } yield ()
 
   private def _admin_entity_list(
     core: ActionCall.Core,
@@ -2215,7 +2296,7 @@ object AdminComponent {
     args: Map[String, Any]
   ): Record = {
     val data = args.filterNot {
-      case (key, _) => key == "component" || key == "entity"
+      case (key, _) => key == "component" || key == "entity" || _is_blob_attachment_form_key(key)
     }
     val withId =
       data.get("id").map(_.toString).filter(_.nonEmpty) match {
@@ -2229,6 +2310,11 @@ object AdminComponent {
       }
     Record.create(withId.toVector)
   }
+
+  private def _is_blob_attachment_form_key(key: String): Boolean =
+    key.startsWith("blob.") ||
+      key.startsWith("blobId.") ||
+      key.startsWith("imageAttachments.")
 
   private def _admin_data_record(
     args: Map[String, Any]

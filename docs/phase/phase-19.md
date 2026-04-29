@@ -97,8 +97,10 @@ Resume hint:
 - The BI-04 projection/admin/manual slice adds `images` plus derived
   `representativeImage` output, Entity admin image visibility with existing
   Blob attach/detach affordances, and operation manual metadata for
-  image-capable operations. Continue with upload/register adapters and generic
-  Entity create/update attachment support.
+  image-capable operations. The current Entity create/update slice connects
+  same-request upload and existing Blob id attachment through
+  `BlobAttachmentWorkflow`. Continue with remaining upload/register adapters
+  outside Entity admin.
 
 ## 5. Development Items
 

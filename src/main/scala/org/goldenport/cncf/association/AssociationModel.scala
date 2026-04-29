@@ -13,7 +13,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Generic entity-to-entity association runtime foundation.
  *
  * @since   Apr. 27, 2026
- * @version Apr. 27, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AssociationDomain(value: String) extends Presentable {
@@ -127,7 +127,7 @@ final class EntityStoreAssociationRepository(
     } yield created
 
   def delete(association: Association)(using ctx: ExecutionContext): Consequence[Unit] =
-    EntityStore.standard().delete(association.id)
+    EntityStore.standard().deleteHard(association.id)
 
   def list(filter: AssociationFilter, offset: Int = 0, limit: Option[Int] = None)(using ctx: ExecutionContext): Consequence[Vector[Association]] =
     _store_search(filter, offset, limit)
@@ -139,23 +139,19 @@ final class EntityStoreAssociationRepository(
   )(using ctx: ExecutionContext): Consequence[Vector[Association]] = {
     val collection = storagepolicy.collection(filter.domain)
     EntityStore.standard()
-      .search[Association](EntityQuery(collection, _query(filter), EntitySearchScope.Store))
+      .search[Association](EntityQuery(collection, Query.plan(Record.empty), EntitySearchScope.Store))
       .map { values =>
-        val sorted = values.data.sortBy(x => (x.sortOrder.getOrElse(Int.MaxValue), x.createdAt.toString, x.associationId))
+        val sorted = values.data.filter(_matches(filter)).sortBy(x => (x.sortOrder.getOrElse(Int.MaxValue), x.createdAt.toString, x.associationId))
         Query.sliceValues(sorted, Some(offset), limit)
       }
   }
 
-  private def _query(filter: AssociationFilter): Query[?] =
-    Query.plan(
-      Record.dataAuto(
-        "associationDomain" -> filter.domain.value,
-        "sourceEntityId" -> filter.sourceEntityId,
-        "targetEntityId" -> filter.targetEntityId,
-        "targetKind" -> filter.targetKind,
-        "role" -> filter.role
-      )
-    )
+  private def _matches(filter: AssociationFilter)(association: Association): Boolean =
+    association.associationDomain == filter.domain &&
+      filter.sourceEntityId.forall(_ == association.sourceEntityId) &&
+      filter.targetEntityId.forall(_ == association.targetEntityId) &&
+      filter.targetKind.forall(x => association.targetKind.contains(x)) &&
+      filter.role.forall(_ == association.role)
 }
 
 object AssociationRecordCodec {
@@ -236,7 +232,7 @@ object AssociationRecordCodec {
     attributes: Map[String, String]
   ): Record =
     Record.dataAuto(
-      "id" -> id.map(_.print),
+      "id" -> id.map(_.value),
       "associationId" -> associationid,
       "sourceEntityId" -> sourceid,
       "targetEntityId" -> targetid,
