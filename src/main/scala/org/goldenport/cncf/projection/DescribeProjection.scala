@@ -60,6 +60,8 @@ object DescribeProjection {
             "outputType" -> x.outputType,
             "inputValueKind" -> x.inputValueKind,
             "parameters" -> x.parameters,
+            "childEntityBindings" -> x.childEntityBindings,
+            "associationBinding" -> x.associationBinding,
             "imageBinding" -> x.imageBinding
           )
         }
@@ -87,6 +89,8 @@ object DescribeProjection {
           "operations" -> operations.map(operation_record(service, _))
         )
       case Target.OperationTarget(component, service, operation) =>
+        val childentitybindings = operation_child_entity_bindings(component, operation).map(child_entity_binding_record)
+        val associationbinding = operation_association_binding(component, operation).map(association_binding_record)
         val imagebinding = operation_image_binding(component, operation).map(image_binding_record)
         Record.dataAuto(
           "type" -> "operation",
@@ -94,6 +98,8 @@ object DescribeProjection {
           "summary" -> s"Operation ${service.name}.${operation.name}",
           "arguments" -> operation.specification.request.parameters.toVector.map(parameter_record),
           "returns" -> render_operation_returns(operation),
+          "childEntityBindings" -> childentitybindings,
+          "associationBinding" -> associationbinding,
           "imageBinding" -> imagebinding
         )
       case Target.NotFound(target) =>

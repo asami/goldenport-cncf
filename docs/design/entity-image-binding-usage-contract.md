@@ -60,10 +60,33 @@ association ordering.
 Create, update, register, and import flows may attach either uploaded Blob
 payloads or existing Blob ids.
 
-`BlobAttachmentWorkflow` is the reusable helper for same-request create/update
+The internal operation contract is split into a generic Association layer and
+an image-specific specialization:
+
+- `associationBinding` describes Entity-to-Entity Association creation from
+  existing target ids.
+- `imageBinding` describes image-specific input capabilities, such as uploaded
+  payloads, existing Blob ids, and archive Blob ids.
+- `imageBinding` maps internally to `associationBinding` with
+  `domain = blob_attachment` and `targetKind = blob`.
+
+`AssociationBindingWorkflow` is the reusable helper for creating Associations
+from existing target ids after an operation succeeds. Source Entity id
+resolution can use an operation parameter or a result field. Entity creation
+operations should return `entity_id` as the primary source id field, with
+`entityId` and `id` as secondary fallbacks.
+
+`ChildEntityBindingWorkflow` covers SalesOrder/SalesOrderLine-style operation
+registration. It creates child Entity records from a request collection after
+the parent operation succeeds, injects the resolved parent id into the child
+parent-id field, and compensates created children plus the created parent when
+an entity-create-result registration fails.
+
+`BlobAttachmentWorkflow` is the image/blob specialization for same-request
 flows that need Blob uploads or existing Blob references attached to an Entity.
 It creates managed Blobs for upload parts, verifies existing Blob references,
-and creates BlobAttachment associations.
+and delegates final BlobAttachment creation to the same Association binding
+structure.
 
 Application-specific imports, such as a Blog ZIP or file-tree import, are
 adapters. They normalize local file references into managed Blobs first, then
@@ -129,6 +152,10 @@ operation accepts:
 - uploaded Blob payloads;
 - existing Blob ids;
 - both uploaded payloads and existing Blob ids.
+
+Manual/help metadata may also expose generic `associationBinding` information
+for non-image Association-capable operations, including domain, target kind,
+source id mode, roles, target id parameters, and sort-order parameters.
 
 Generic Web/admin/projection affordances are Phase 19 BI-04 implementation
 gaps. This document defines the contract those implementations should follow.

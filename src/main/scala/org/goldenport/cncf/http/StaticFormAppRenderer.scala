@@ -6709,11 +6709,68 @@ object StaticFormAppRenderer {
          "REST" -> restPath,
          "Form" -> formPath,
          "Form API" -> formApiPath,
-         "OpenAPI JSON" -> "/web/system/manual/openapi.json"
-       ))}
+       "OpenAPI JSON" -> "/web/system/manual/openapi.json"
+      ))}
+       |${_manual_child_entity_binding_summary(record)}
+       |${_manual_association_binding_summary(record)}
        |${_manual_image_binding_summary(record)}
        |${_manual_parameter_table(parameterRows)}
        |${_manual_response_summary(returns)}""".stripMargin
+  }
+
+  private def _manual_child_entity_binding_summary(
+    record: Record
+  ): String = {
+    val bindings = _manual_record_seq(record.asMap.get("childEntityBindings"))
+    if (bindings.isEmpty)
+      ""
+    else {
+      val rows = bindings.flatMap { binding =>
+        val name = binding.getString("name").getOrElse("")
+        val entity = binding.getString("entityName").getOrElse("")
+        val input = binding.getString("inputParameter").getOrElse("")
+        val parent = binding.getString("parentIdField").getOrElse("")
+        val source = binding.getString("sourceEntityIdMode").getOrElse("")
+        val policy = binding.getString("failurePolicy").getOrElse("")
+        val title = Vector(name, entity).filter(_.nonEmpty).mkString(" / ")
+        Vector(
+          s"${title} input" -> input,
+          s"${title} parent field" -> parent,
+          s"${title} source id mode" -> source,
+          s"${title} failure policy" -> policy
+        )
+      }.filter { case (_, value) => value.nonEmpty }
+      s"""<section class="mt-3">
+         |  <h3 class="h6">Child Entity Binding</h3>
+         |  ${_manual_kv_summary(rows)}
+         |</section>""".stripMargin
+    }
+  }
+
+  private def _manual_association_binding_summary(
+    record: Record
+  ): String = {
+    val binding = _manual_record_values(record.asMap.get("associationBinding"))
+    if (binding.isEmpty)
+      ""
+    else {
+      val behavior = Vector(
+        "create" -> binding.get("createsAssociation").flatMap(_manual_scalar).contains("true"),
+        "detach" -> binding.get("detachesAssociation").flatMap(_manual_scalar).contains("true")
+      ).collect { case (label, true) => label }
+      val rows = Vector(
+        "Domain" -> binding.get("domain").flatMap(_manual_scalar).getOrElse(""),
+        "Target kind" -> binding.get("targetKind").flatMap(_manual_scalar).getOrElse(""),
+        "Behavior" -> behavior.mkString(", "),
+        "Source id mode" -> binding.get("sourceEntityIdMode").flatMap(_manual_scalar).getOrElse(""),
+        "Roles" -> _manual_seq_values(binding.get("roles")).mkString(", "),
+        "Target id parameters" -> _manual_seq_values(binding.get("targetIdParameters")).mkString(", ")
+      ).filter { case (_, value) => value.nonEmpty }
+      s"""<section class="mt-3">
+         |  <h3 class="h6">Association Binding</h3>
+         |  ${_manual_kv_summary(rows)}
+         |</section>""".stripMargin
+    }
   }
 
   private def _manual_image_binding_summary(

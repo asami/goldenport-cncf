@@ -1176,7 +1176,7 @@ final class Http4sHttpServer(
     } else {
       val started = System.nanoTime()
       for {
-        form <- _to_plain_form_record(req)
+        form <- _to_form_record(req)
         query = Record.create(req.uri.query.params.toVector)
         header = _request_header_record(req, query, form)
         componentSegment = _dispatch_component_segment(app)

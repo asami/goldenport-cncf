@@ -436,12 +436,14 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Implement CNCF runtime/Web/projection gaps discovered by the BlogComponent
   driver.
 - Current BI-04 slice completed reusable `BlobProjection` output, Entity admin
-  image visibility with existing Blob attach/detach controls, and
-  operation manual/help image-binding metadata. The following slice connects
-  Entity admin create/update to `BlobAttachmentWorkflow` for uploaded image
-  files and existing Blob ids.
-- Remaining BI-04 work is limited to upload/register adapters outside Entity
-  admin.
+  image visibility with existing Blob attach/detach controls, operation
+  manual/help image-binding metadata, Entity admin create/update image
+  attachments, and the generic `associationBinding` core used by
+  image-specific binding. It also now includes `childEntityBinding` for
+  SalesOrder/SalesOrderLine-style same-request child Entity creation from an
+  operation result `entity_id`.
+- Remaining BI-04 work is limited to broader upload/register adapters outside
+  Entity admin and additional non-image Association binding surfaces.
 - Non-goals:
 - No new Blob payload storage backend in CNCF core.
 - No S3/S3-compatible BlobStore provider implementation in this phase.
@@ -642,6 +644,11 @@ Active in Phase 19.
     `images` plus derived `representativeImage`;
   - expose associated images on Entity admin detail pages and surface
     image-capable operation metadata in manual/help output;
+  - keep image-specific metadata on top of a reusable `associationBinding`
+    operation contract so non-image Entity associations can use the same
+    source/target binding structure later;
+  - support operation child Entity binding for aggregate-like registration
+    flows where the parent result id is injected into child records;
   - expose and fix CNCF runtime/Web/projection/generator gaps using a real
     component driver.
 - Scope boundary:

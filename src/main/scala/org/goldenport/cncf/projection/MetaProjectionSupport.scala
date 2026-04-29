@@ -8,7 +8,7 @@ import org.goldenport.cncf.component.ComponentOriginLabel
 import org.goldenport.cncf.entity.SimpleEntityStorageShapePolicy
 import org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor
 import org.goldenport.cncf.naming.NamingConventions
-import org.goldenport.cncf.operation.{CmlOperationImageBinding, ImageBindingOperationDefinition}
+import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, ChildEntityBindingOperationDefinition, CmlOperationAssociationBinding, CmlOperationChildEntityBinding, CmlOperationImageBinding, ImageBindingOperationDefinition}
 
 /*
  * @since   Mar.  5, 2026
@@ -39,6 +39,8 @@ private[projection] object MetaProjectionSupport {
     outputType: String,
     inputValueKind: String,
     parameters: Vector[Record],
+    childEntityBindings: Vector[Record] = Vector.empty,
+    associationBinding: Option[Record] = None,
     imageBinding: Option[Record] = None
   )
 
@@ -136,6 +138,8 @@ private[projection] object MetaProjectionSupport {
       "type" -> "operation",
       "name" -> s"${service.name}.${operation.name}",
       "runtimeName" -> s"${service_runtime_name(service)}.${operation_runtime_name(operation)}",
+      "childEntityBindings" -> operation_child_entity_bindings(operation).map(child_entity_binding_record),
+      "associationBinding" -> operation_association_binding(operation).map(association_binding_record),
       "imageBinding" -> operation_image_binding(operation).map(image_binding_record)
     )
 
@@ -156,6 +160,8 @@ private[projection] object MetaProjectionSupport {
     Record.dataAuto(
       "arguments" -> args,
       "returns" -> returns,
+      "childEntityBindings" -> operation_child_entity_bindings(operation).map(child_entity_binding_record),
+      "associationBinding" -> operation_association_binding(operation).map(association_binding_record),
       "imageBinding" -> operation_image_binding(operation).map(image_binding_record)
     )
   }
@@ -169,9 +175,51 @@ private[projection] object MetaProjectionSupport {
     Record.dataAuto(
       "arguments" -> args,
       "returns" -> returns,
+      "childEntityBindings" -> operation_child_entity_bindings(component, operation).map(child_entity_binding_record),
+      "associationBinding" -> operation_association_binding(component, operation).map(association_binding_record),
       "imageBinding" -> operation_image_binding(component, operation).map(image_binding_record)
     )
   }
+
+  def operation_child_entity_bindings(
+    operation: OperationDefinition
+  ): Vector[CmlOperationChildEntityBinding] =
+    operation match {
+      case x: ChildEntityBindingOperationDefinition => x.childEntityBindings
+      case _ => Vector.empty
+    }
+
+  def operation_child_entity_bindings(
+    component: Component,
+    operation: OperationDefinition
+  ): Vector[CmlOperationChildEntityBinding] = {
+    val direct = operation_child_entity_bindings(operation)
+    if (direct.nonEmpty)
+      direct
+    else
+      component.operationDefinitions
+        .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
+        .map(_.childEntityBindings)
+        .getOrElse(Vector.empty)
+  }
+
+  def operation_association_binding(
+    operation: OperationDefinition
+  ): Option[CmlOperationAssociationBinding] =
+    operation match {
+      case x: AssociationBindingOperationDefinition => Some(x.associationBinding)
+      case _ => None
+    }
+
+  def operation_association_binding(
+    component: Component,
+    operation: OperationDefinition
+  ): Option[CmlOperationAssociationBinding] =
+    operation_association_binding(operation).orElse {
+      component.operationDefinitions
+        .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
+        .flatMap(_.associationBinding)
+    }
 
   def operation_image_binding(
     operation: OperationDefinition
@@ -202,7 +250,47 @@ private[projection] object MetaProjectionSupport {
       "createsAttachment" -> value.createsAttachment,
       "detachesAttachment" -> value.detachesAttachment,
       "roles" -> value.roles,
-      "parameters" -> value.parameters
+      "parameters" -> value.parameters,
+      "sourceEntityIdMode" -> value.sourceEntityIdMode,
+      "sourceEntityIdParameters" -> value.sourceEntityIdParameters,
+      "sourceEntityIdResultFields" -> value.sourceEntityIdResultFields,
+      "targetIdParameters" -> value.targetIdParameters,
+      "sortOrderParameters" -> value.sortOrderParameters,
+      "associationBinding" -> association_binding_record(value.toAssociationBinding)
+    )
+
+  def association_binding_record(
+    value: CmlOperationAssociationBinding
+  ): Record =
+    Record.dataAuto(
+      "domain" -> value.domain,
+      "targetKind" -> value.targetKind,
+      "createsAssociation" -> value.createsAssociation,
+      "detachesAssociation" -> value.detachesAssociation,
+      "roles" -> value.roles,
+      "parameters" -> value.parameters,
+      "sourceEntityIdMode" -> value.sourceEntityIdMode,
+      "sourceEntityIdParameters" -> value.sourceEntityIdParameters,
+      "sourceEntityIdResultFields" -> value.sourceEntityIdResultFields,
+      "targetIdParameters" -> value.targetIdParameters,
+      "sortOrderParameters" -> value.sortOrderParameters
+    )
+
+  def child_entity_binding_record(
+    value: CmlOperationChildEntityBinding
+  ): Record =
+    Record.dataAuto(
+      "name" -> value.name,
+      "entityName" -> value.entityName,
+      "inputParameter" -> value.inputParameter,
+      "parentIdField" -> value.parentIdField,
+      "sourceEntityIdMode" -> value.sourceEntityIdMode,
+      "sourceEntityIdParameters" -> value.sourceEntityIdParameters,
+      "sourceEntityIdResultFields" -> value.sourceEntityIdResultFields,
+      "childIdField" -> value.childIdField,
+      "sortOrderField" -> value.sortOrderField,
+      "createsEntity" -> value.createsEntity,
+      "failurePolicy" -> value.failurePolicy
     )
 
   def render_operation_returns(operation: OperationDefinition): String =
@@ -249,6 +337,8 @@ private[projection] object MetaProjectionSupport {
               "multiplicity" -> p.multiplicity
             )
           },
+          childEntityBindings = x.childEntityBindings.map(child_entity_binding_record),
+          associationBinding = x.associationBinding.map(association_binding_record),
           imageBinding = x.imageBinding.map(image_binding_record)
         )
       }

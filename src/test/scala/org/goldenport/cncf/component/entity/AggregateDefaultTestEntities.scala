@@ -1,7 +1,6 @@
 /*
  * @since   Mar. 30, 2026
- *  version Apr. 10, 2026
- * @version Apr. 16, 2026
+ * @version Apr. 30, 2026
  */
 package org.goldenport.cncf.component.entity
 
@@ -73,7 +72,8 @@ object OrderLine {
         id = EntityId.parse(r.getString("id").getOrElse(sys.error("id missing"))).TAKE,
         orderId = EntityId.parse(r.getString("orderId").getOrElse(sys.error("orderId missing"))).TAKE,
         name = r.getString("name").getOrElse(sys.error("name missing")),
-        quantity = r.getInt("quantity").getOrElse(sys.error("quantity missing"))
+        quantity = r.getInt("quantity").getOrElse(sys.error("quantity missing")),
+        sortOrder = r.getInt("sortOrder")
       )
     )
 }
@@ -82,7 +82,8 @@ final case class OrderLine(
   id: EntityId,
   orderId: EntityId,
   name: String,
-  quantity: Int
+  quantity: Int,
+  sortOrder: Option[Int] = None
 ) extends EntityPersistable {
   def toRecord(): Record =
     Record.dataAuto(
@@ -90,6 +91,7 @@ final case class OrderLine(
       "orderId" -> orderId.value,
       "name" -> name,
       "quantity" -> quantity,
+      "sortOrder" -> sortOrder,
       "postStatus" -> "draft",
       "aliveness" -> "alive"
     )

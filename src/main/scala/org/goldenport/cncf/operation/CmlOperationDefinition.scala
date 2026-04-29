@@ -8,6 +8,55 @@ import org.goldenport.cncf.security.OperationAuthorizationRule
  * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
+final case class CmlOperationAssociationBinding(
+  domain: String,
+  targetKind: String,
+  createsAssociation: Boolean = false,
+  detachesAssociation: Boolean = false,
+  roles: Vector[String] = Vector.empty,
+  parameters: Vector[String] = Vector.empty,
+  sourceEntityIdMode: String = "none",
+  sourceEntityIdParameters: Vector[String] = Vector.empty,
+  sourceEntityIdResultFields: Vector[String] = CmlOperationAssociationBinding.defaultSourceEntityIdResultFields,
+  targetIdParameters: Vector[String] = Vector.empty,
+  sortOrderParameters: Vector[String] = Vector.empty
+) {
+  def isAutomaticCreate: Boolean =
+    createsAssociation && sourceEntityIdMode != "none"
+}
+
+object CmlOperationAssociationBinding {
+  val SourceEntityIdModeEntityCreateResult: String = "entity-create-result"
+  val SourceEntityIdModeParameter: String = "parameter"
+  val SourceEntityIdModeResultField: String = "result-field"
+  val SourceEntityIdModeNone: String = "none"
+
+  val defaultSourceEntityIdResultFields: Vector[String] =
+    Vector("entity_id", "entityId", "id")
+}
+
+final case class CmlOperationChildEntityBinding(
+  name: String,
+  entityName: String,
+  inputParameter: String,
+  parentIdField: String,
+  sourceEntityIdMode: String = CmlOperationAssociationBinding.SourceEntityIdModeNone,
+  sourceEntityIdParameters: Vector[String] = Vector.empty,
+  sourceEntityIdResultFields: Vector[String] = CmlOperationAssociationBinding.defaultSourceEntityIdResultFields,
+  childIdField: Option[String] = Some("id"),
+  sortOrderField: Option[String] = None,
+  createsEntity: Boolean = false,
+  failurePolicy: String = CmlOperationChildEntityBinding.FailurePolicyCompensateParentOnCreate
+) {
+  def isAutomaticCreate: Boolean =
+    createsEntity && sourceEntityIdMode != CmlOperationAssociationBinding.SourceEntityIdModeNone
+}
+
+object CmlOperationChildEntityBinding {
+  val FailurePolicyCompensateParentOnCreate: String = "compensate-parent-on-create"
+  val FailurePolicyKeepParent: String = "keep-parent"
+}
+
 final case class CmlOperationImageBinding(
   mediaKind: String = "image",
   acceptsUpload: Boolean = false,
@@ -16,8 +65,28 @@ final case class CmlOperationImageBinding(
   createsAttachment: Boolean = false,
   detachesAttachment: Boolean = false,
   roles: Vector[String] = Vector.empty,
-  parameters: Vector[String] = Vector.empty
-)
+  parameters: Vector[String] = Vector.empty,
+  sourceEntityIdMode: String = CmlOperationAssociationBinding.SourceEntityIdModeNone,
+  sourceEntityIdParameters: Vector[String] = Vector.empty,
+  sourceEntityIdResultFields: Vector[String] = CmlOperationAssociationBinding.defaultSourceEntityIdResultFields,
+  targetIdParameters: Vector[String] = Vector.empty,
+  sortOrderParameters: Vector[String] = Vector.empty
+) {
+  def toAssociationBinding: CmlOperationAssociationBinding =
+    CmlOperationAssociationBinding(
+      domain = "blob_attachment",
+      targetKind = "blob",
+      createsAssociation = createsAttachment,
+      detachesAssociation = detachesAttachment,
+      roles = roles,
+      parameters = parameters,
+      sourceEntityIdMode = sourceEntityIdMode,
+      sourceEntityIdParameters = sourceEntityIdParameters,
+      sourceEntityIdResultFields = sourceEntityIdResultFields,
+      targetIdParameters = targetIdParameters,
+      sortOrderParameters = sortOrderParameters
+    )
+}
 
 final case class CmlOperationField(
   name: String,
@@ -61,8 +130,18 @@ final case class CmlOperationDefinition(
   access: Option[CmlOperationAccess] = None,
   parameters: Vector[CmlOperationField] = Vector.empty,
   operationAuthorization: Option[OperationAuthorizationRule] = None,
+  childEntityBindings: Vector[CmlOperationChildEntityBinding] = Vector.empty,
+  associationBinding: Option[CmlOperationAssociationBinding] = None,
   imageBinding: Option[CmlOperationImageBinding] = None
 )
+
+trait ChildEntityBindingOperationDefinition {
+  def childEntityBindings: Vector[CmlOperationChildEntityBinding]
+}
+
+trait AssociationBindingOperationDefinition {
+  def associationBinding: CmlOperationAssociationBinding
+}
 
 trait ImageBindingOperationDefinition {
   def imageBinding: CmlOperationImageBinding

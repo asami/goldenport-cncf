@@ -97,10 +97,15 @@ Resume hint:
 - The BI-04 projection/admin/manual slice adds `images` plus derived
   `representativeImage` output, Entity admin image visibility with existing
   Blob attach/detach affordances, and operation manual metadata for
-  image-capable operations. The current Entity create/update slice connects
+  image-capable operations. The Entity create/update slice connects
   same-request upload and existing Blob id attachment through
-  `BlobAttachmentWorkflow`. Continue with remaining upload/register adapters
-  outside Entity admin.
+  `BlobAttachmentWorkflow`. The current binding-core slice adds generic
+  `associationBinding` metadata and `AssociationBindingWorkflow`, with
+  `imageBinding` mapped to the same internal Association path. The child
+  Entity binding slice adds SalesOrder/SalesOrderLine-style same-request child
+  creation using operation result `entity_id`. Continue with remaining
+  upload/register adapters outside Entity admin and later non-image Association
+  binding surfaces.
 
 ## 5. Development Items
 

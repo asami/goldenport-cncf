@@ -115,6 +115,8 @@ object HelpProjection {
         val returns = render_operation_returns(operation)
         val summary = _operation_summary(service, operation).getOrElse(s"Operation: ${service.name}.${operation.name}")
         val descriptionDetails = _trim_i18n(operation.specification.description).fold(Map.empty[String, Vector[String]])(x => Map("description" -> Vector(x)))
+        val childEntityBindings = operation_child_entity_bindings(component, operation).map(child_entity_binding_record)
+        val associationBinding = operation_association_binding(component, operation).map(association_binding_record)
         val imageBinding = operation_image_binding(component, operation).map(image_binding_record)
         HelpModel(
           `type` = "operation",
@@ -128,6 +130,8 @@ object HelpProjection {
             "arguments" -> args,
             "returns" -> Vector(returns)
           ) ++ descriptionDetails,
+          childEntityBindings = childEntityBindings,
+          associationBinding = associationBinding,
           imageBinding = imageBinding,
           usage = Vector(s"command ${_operation_cli_selector(componentName, serviceName, operationName)}")
         )
@@ -159,6 +163,8 @@ object HelpProjection {
       "children" -> model.children,
       "details" -> details,
       "usage" -> model.usage,
+      "childEntityBindings" -> model.childEntityBindings,
+      "associationBinding" -> model.associationBinding,
       "imageBinding" -> model.imageBinding,
       "domainContexts" -> model.domainContexts.map(_context_record),
       "domainSystemContexts" -> model.domainSystemContexts.map(_system_context_record),

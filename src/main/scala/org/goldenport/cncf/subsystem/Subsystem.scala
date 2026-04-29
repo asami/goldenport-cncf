@@ -19,7 +19,10 @@ import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.component.ComponentLocator.NameLocator
 import org.goldenport.cncf.component.builtin.admin.AdminComponent
 import org.goldenport.cncf.component.builtin.debug.DebugComponent
+import org.goldenport.cncf.association.{AssociationBindingWorkflow, AssociationDomain, AssociationRepository, AssociationStoragePolicy}
+import org.goldenport.cncf.blob.{BlobAttachmentWorkflow, BlobPayloadSupport, BlobRepository}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
+import org.goldenport.cncf.entity.{ChildEntityBindingSummary, ChildEntityBindingWorkflow}
 import org.goldenport.cncf.http.{HttpDriver, HttpExecutionResult}
 import org.goldenport.cncf.job.{InMemoryJobEngine, JobEngine}
 import org.goldenport.cncf.datastore.DataStore
@@ -34,6 +37,8 @@ import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.path.{AliasResolver, PathPreNormalizer}
 import org.goldenport.cncf.protocol.OperationResponseFormatter
 import org.goldenport.cncf.protocol.OperationRequestValidationObserver
+import org.goldenport.cncf.naming.NamingConventions
+import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, ChildEntityBindingOperationDefinition, CmlOperationAssociationBinding, CmlOperationChildEntityBinding, CmlOperationImageBinding, ImageBindingOperationDefinition}
 import org.goldenport.cncf.security.{AdminAuthorizationPolicy, IngressSecurityResolver, OperationAuthorization, OperationAuthorizationProvider}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
@@ -42,7 +47,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
- * @version Apr. 29, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -277,8 +282,10 @@ final class Subsystem(
             )
             oprequest.flatMap {
               case action: Action =>
-                component.logic.executeAction(action, security.executionContext).map { response =>
-                  ExecutionResult(response, security.executionContext.runtime.executionMetadata)
+                component.logic.executeAction(action, security.executionContext).flatMap { response =>
+                  _apply_operation_association_bindings(route, domainRequest, response, security.executionContext).map { bound =>
+                    ExecutionResult(bound, security.executionContext.runtime.executionMetadata)
+                  }
                 }
               case _ =>
                 Consequence.argumentInvalid("OperationRequest must be Action")
@@ -290,6 +297,157 @@ final class Subsystem(
     _observe_execute_failure(request, r)
     r
   }
+
+  private def _apply_operation_association_bindings(
+    route: (Component, ServiceDefinition, OperationDefinition),
+    request: Request,
+    response: OperationResponse,
+    context: ExecutionContext
+  ): Consequence[OperationResponse] = {
+    val (component, _, operation) = route
+    given ExecutionContext = context
+    val childEntityBindings =
+      _operation_child_entity_bindings(component, operation).filter(_.isAutomaticCreate)
+    val associationBindings =
+      _operation_association_binding(component, operation).filter(_.isAutomaticCreate).toVector
+    val imageBindings =
+      _operation_image_binding(component, operation).filter(_.toAssociationBinding.isAutomaticCreate).toVector
+    for {
+      childSummaries <- childEntityBindings.foldLeft(
+        Consequence.success(Vector.empty[(CmlOperationChildEntityBinding, ChildEntityBindingSummary)])
+      ) { (z, binding) =>
+        z.flatMap { xs =>
+          _apply_child_entity_binding(component, binding, request, response).map(summary => xs :+ (binding -> summary))
+        }
+      }
+      _ <- {
+        val result = for {
+          _ <- associationBindings.foldLeft(Consequence.unit) { (z, binding) =>
+            z.flatMap(_ => _apply_association_binding(binding, request, response))
+          }
+          _ <- imageBindings.foldLeft(Consequence.unit) { (z, binding) =>
+            z.flatMap(_ => _apply_image_binding(component, binding, request, response))
+          }
+        } yield ()
+        result.recoverWith { conclusion =>
+          _compensate_child_entity_bindings(component, childSummaries.reverse)
+            .flatMap(_ => Consequence.Failure[Unit](conclusion))
+        }
+      }
+    } yield response
+  }
+
+  private def _apply_child_entity_binding(
+    component: Component,
+    binding: CmlOperationChildEntityBinding,
+    request: Request,
+    response: OperationResponse
+  )(using ExecutionContext): Consequence[ChildEntityBindingSummary] =
+    ChildEntityBindingWorkflow(component).createChildren(binding, request, response)
+
+  private def _compensate_child_entity_bindings(
+    component: Component,
+    summaries: Vector[(CmlOperationChildEntityBinding, ChildEntityBindingSummary)]
+  )(using ExecutionContext): Consequence[Unit] = {
+    val workflow = ChildEntityBindingWorkflow(component)
+    summaries.foldLeft(Consequence.unit) {
+      case (z, (binding, summary)) =>
+        z.flatMap(_ => workflow.compensate(binding, summary))
+    }
+  }
+
+  private def _apply_association_binding(
+    binding: CmlOperationAssociationBinding,
+    request: Request,
+    response: OperationResponse
+  )(using ExecutionContext): Consequence[Unit] = {
+    val storagepolicy = _association_storage_policy(binding.domain)
+    val workflow = AssociationBindingWorkflow(
+      AssociationRepository.entityStore(storagepolicy),
+      storagepolicy
+    )
+    AssociationBindingWorkflow.extract(binding, request).flatMap {
+      case Vector() =>
+        Consequence.unit
+      case _ =>
+        for {
+          sourceid <- AssociationBindingWorkflow.resolveSourceEntityId(binding, request, response)
+          _ <- workflow.attachExistingTargets(sourceid, binding, request)
+        } yield ()
+    }
+  }
+
+  private def _apply_image_binding(
+    component: Component,
+    binding: CmlOperationImageBinding,
+    request: Request,
+    response: OperationResponse
+  )(using ExecutionContext): Consequence[Unit] =
+    BlobAttachmentWorkflow.extract(
+      request,
+      acceptsUpload = binding.acceptsUpload,
+      acceptsExistingBlobId = binding.acceptsExistingBlobId
+    ).flatMap {
+      case attachment if attachment.isEmpty =>
+        Consequence.unit
+      case attachment =>
+        for {
+          sourceid <- AssociationBindingWorkflow.resolveSourceEntityId(binding.toAssociationBinding, request, response)
+          service <- BlobPayloadSupport.service(component)
+          workflow = BlobAttachmentWorkflow(
+            service.blobStore,
+            BlobRepository.entityStore(),
+            AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
+          )
+          _ <- workflow.attachToEntity(sourceid, attachment)
+        } yield ()
+    }
+
+  private def _operation_child_entity_bindings(
+    component: Component,
+    operation: OperationDefinition
+  ): Vector[CmlOperationChildEntityBinding] =
+    operation match {
+      case x: ChildEntityBindingOperationDefinition =>
+        x.childEntityBindings
+      case _ =>
+        component.operationDefinitions
+          .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
+          .map(_.childEntityBindings)
+          .getOrElse(Vector.empty)
+    }
+
+  private def _operation_association_binding(
+    component: Component,
+    operation: OperationDefinition
+  ): Option[CmlOperationAssociationBinding] =
+    operation match {
+      case x: AssociationBindingOperationDefinition =>
+        Some(x.associationBinding)
+      case _ =>
+        component.operationDefinitions
+          .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
+          .flatMap(_.associationBinding)
+    }
+
+  private def _operation_image_binding(
+    component: Component,
+    operation: OperationDefinition
+  ): Option[CmlOperationImageBinding] =
+    operation match {
+      case x: ImageBindingOperationDefinition =>
+        Some(x.imageBinding)
+      case _ =>
+        component.operationDefinitions
+          .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
+          .flatMap(_.imageBinding)
+    }
+
+  private def _association_storage_policy(domain: String): AssociationStoragePolicy =
+    if (domain == AssociationDomain.BlobAttachment.value)
+      AssociationStoragePolicy.blobAttachmentDefault
+    else
+      AssociationStoragePolicy.shared
 
   private def _observe_execute_failure[A](
     request: Request,

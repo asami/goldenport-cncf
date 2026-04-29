@@ -1,12 +1,10 @@
 package org.goldenport.cncf.blob
 
-import java.util.UUID
 import org.goldenport.Consequence
 import org.goldenport.bag.{Bag, BinaryBag}
-import org.goldenport.cncf.association.{Association, AssociationCreate, AssociationDomain, AssociationFilter, AssociationRecordCodec, AssociationRepository, AssociationStoragePolicy}
+import org.goldenport.cncf.association.{Association, AssociationBindingAttachResult, AssociationBindingWorkflow, AssociationDomain, AssociationRecordCodec, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.datatype.{ContentType, MimeBody}
-import org.goldenport.id.UniversalId
 import org.goldenport.protocol.Request
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.EntityId
@@ -66,6 +64,9 @@ final class BlobAttachmentWorkflow(
   repository: BlobRepository,
   associations: AssociationRepository
 ) {
+  private val associationWorkflow: AssociationBindingWorkflow =
+    AssociationBindingWorkflow(associations, AssociationStoragePolicy.blobAttachmentDefault)
+
   def extract(request: Request): Consequence[BlobAttachmentRequest] =
     BlobAttachmentWorkflow.extract(request)
 
@@ -89,7 +90,7 @@ final class BlobAttachmentWorkflow(
             sourceEntityId = sourceEntityId,
             uploaded = uploaded.map(_.metadata),
             referenced = referenced.map(_.metadata),
-            associations = (uploadedAssociations ++ referencedAssociations).map(AssociationRecordCodec.toRecord)
+            associations = (uploadedAssociations ++ referencedAssociations).map(x => AssociationRecordCodec.toRecord(x.association))
           ))
         }.recoverWith { conclusion =>
           _cleanup_associations(uploadedAssociations)
@@ -177,15 +178,15 @@ final class BlobAttachmentWorkflow(
   private def _attach_references(
     sourceEntityId: String,
     parts: Vector[BlobReferencePart]
-  )(using ExecutionContext): Consequence[(Vector[Blob], Vector[Association])] =
-    parts.foldLeft(Consequence.success((Vector.empty[Blob], Vector.empty[Association]))) { (z, part) =>
+  )(using ExecutionContext): Consequence[(Vector[Blob], Vector[AssociationBindingAttachResult])] =
+    parts.foldLeft(Consequence.success((Vector.empty[Blob], Vector.empty[AssociationBindingAttachResult]))) { (z, part) =>
       z.flatMap { case (blobs, created) =>
         repository.get(part.id).flatMap { blob =>
           _attach_blob(sourceEntityId, blob.id, part.role, part.sortOrder).map { association =>
             (blobs :+ blob, created :+ association)
           }
         }.recoverWith { conclusion =>
-          _cleanup_associations(created).flatMap(_ => Consequence.Failure[(Vector[Blob], Vector[Association])](conclusion))
+          _cleanup_associations(created).flatMap(_ => Consequence.Failure[(Vector[Blob], Vector[AssociationBindingAttachResult])](conclusion))
         }
       }
     }
@@ -195,49 +196,14 @@ final class BlobAttachmentWorkflow(
     id: EntityId,
     role: String,
     sortOrder: Option[Int]
-  )(using ExecutionContext): Consequence[Association] =
-    associations.list(_blob_association_filter(sourceEntityId, Some(role), Some(id))).flatMap {
-      case existing +: _ =>
-        Consequence.success(existing)
-      case _ =>
-        val collection = AssociationStoragePolicy.BlobAttachmentCollection
-        associations.create(
-          AssociationCreate(
-            id = Some(_association_entity_id(collection)),
-            associationId = UUID.randomUUID().toString,
-            sourceEntityId = sourceEntityId,
-            targetEntityId = id.value,
-            targetKind = Some("blob"),
-            role = role,
-            associationDomain = AssociationDomain.BlobAttachment,
-            sortOrder = sortOrder,
-            collectionId = collection
-          )
-        )
-    }
-
-  private def _association_entity_id(
-    collection: org.simplemodeling.model.datatype.EntityCollectionId
-  ): EntityId =
-    EntityId(
-      collection.major,
-      collection.minor,
-      collection,
-      Some(UniversalId.StableTimestamp),
-      Some(s"association_${UUID.randomUUID().toString.replace("-", "_")}")
-    )
-
-  private def _blob_association_filter(
-    sourceid: String,
-    role: Option[String],
-    id: Option[EntityId]
-  ): AssociationFilter =
-    AssociationFilter(
+  )(using ExecutionContext): Consequence[AssociationBindingAttachResult] =
+    associationWorkflow.attachExistingTargetResult(
+      sourceEntityId = sourceEntityId,
       domain = AssociationDomain.BlobAttachment,
-      sourceEntityId = Some(sourceid),
-      targetEntityId = id.map(_.value),
       targetKind = Some("blob"),
-      role = role
+      targetEntityId = id,
+      role = role,
+      sortOrder = sortOrder
     )
 
   private def _cleanup_uploaded(
@@ -255,9 +221,9 @@ final class BlobAttachmentWorkflow(
     }
 
   private def _cleanup_associations(
-    values: Vector[Association]
+    values: Vector[AssociationBindingAttachResult]
   )(using ExecutionContext): Consequence[Unit] =
-    values.foldLeft(Consequence.unit) { (z, association) =>
+    values.filter(_.created).map(_.association).foldLeft(Consequence.unit) { (z, association) =>
       z.flatMap(_ => associations.delete(association).recover(_ => ()))
     }
 }
@@ -271,6 +237,20 @@ object BlobAttachmentWorkflow {
       structured <- _image_attachments(values)
     } yield BlobAttachmentRequest(uploads ++ structured.uploads, refs ++ structured.references)
   }
+
+  def extract(
+    request: Request,
+    acceptsUpload: Boolean,
+    acceptsExistingBlobId: Boolean
+  ): Consequence[BlobAttachmentRequest] =
+    extract(request).flatMap { attachment =>
+      if (!acceptsUpload && attachment.uploads.nonEmpty)
+        Consequence.argumentInvalid("imageBinding does not accept upload payloads")
+      else if (!acceptsExistingBlobId && attachment.references.nonEmpty)
+        Consequence.argumentInvalid("imageBinding does not accept existing Blob ids")
+      else
+        Consequence.success(attachment)
+    }
 
   private def _values(
     request: Request

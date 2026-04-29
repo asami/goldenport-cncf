@@ -182,7 +182,15 @@ Implement CNCF gaps discovered by the `BlogComponent` driver.
 
 ### Candidate Work Areas
 
-- [ ] Operation adapters for upload/register-and-attach flows outside Entity admin.
+- [x] Generic `associationBinding` operation metadata and
+      `AssociationBindingWorkflow` core.
+- [x] Operation execution adapter for result-field source id binding,
+      including `entity_id` Entity-create result handling.
+- [x] Operation child Entity binding for SalesOrder/SalesOrderLine-style
+      same-request child creation.
+- [ ] Broader upload/register-and-attach adapters outside Entity admin.
+- [ ] Non-image Association binding Web/manual surfaces beyond the core
+      operation metadata.
 - [x] Entity create/update support for Blob attachment requests.
 - [x] Projection helper expansion for `images` and `representativeImage`
       contract output.
