@@ -1,10 +1,12 @@
 package org.goldenport.cncf.cli
 
+import java.io.ByteArrayOutputStream
 import java.net.{URI, URL, URLEncoder}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import java.net.URLClassLoader
 import java.util.ServiceLoader
+import java.util.zip.{ZipEntry, ZipOutputStream}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
@@ -60,7 +62,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -1822,6 +1824,12 @@ object CncfRuntime extends GlobalObservable {
   ): Consequence[Option[MimeBody]] =
     new CncfRuntime()._client_mime_body_from_request(req)
 
+  private[cli] def _prepare_filetree_parameters(
+    operation: org.goldenport.protocol.spec.OperationDefinition,
+    req: Request
+  ): Consequence[Request] =
+    new CncfRuntime()._prepare_filetree_parameters(operation, req)
+
   private[cli] def _client_http_body_and_header(
     req: Request
   ): Consequence[(Option[MimeBody], Record)] =
@@ -3322,16 +3330,131 @@ class CncfRuntime() extends GlobalObservable {
     subsystem: Subsystem,
     req: Request
   ): Consequence[Request] =
-    _http_method_for_request(subsystem, req).map { method =>
+    for {
+      operation <- _operation_request_definition(subsystem, req)
+      normalized <- _prepare_filetree_parameters(operation, req)
+      action <- operation.createOperationRequest(normalized)
+    } yield {
+      val method = action match {
+        case _: org.goldenport.cncf.action.QueryAction => "get"
+        case _ => "post"
+      }
       Request.of(
         component = "client",
         service = "http",
         operation = method,
-        arguments = Argument("path", _request_path(req), None) :: req.arguments,
-        switches = req.switches,
-        properties = req.properties
+        arguments = Argument("path", _request_path(req), None) :: normalized.arguments,
+        switches = normalized.switches,
+        properties = normalized.properties
       )
     }
+
+  private[cli] def _prepare_filetree_parameters(
+    operation: org.goldenport.protocol.spec.OperationDefinition,
+    req: Request
+  ): Consequence[Request] = {
+    val names = operation.specification.request.parameters
+      .filter(_is_filetree_parameter)
+      .flatMap(_.names)
+      .toSet
+    if (names.isEmpty) {
+      Consequence.success(req)
+    } else {
+      for {
+        arguments <- Consequence.zipN(req.arguments.map { argument =>
+          if (names.contains(argument.name))
+            _filetree_value(argument.name, argument.value).map(v => argument.copy(value = v))
+          else
+            Consequence.success(argument)
+        })
+        properties <- Consequence.zipN(req.properties.map { property =>
+          if (names.contains(property.name))
+            _filetree_value(property.name, property.value).map(v => property.copy(value = v))
+          else
+            Consequence.success(property)
+        })
+      } yield req.copy(arguments = arguments.toList, properties = properties.toList)
+    }
+  }
+
+  private def _is_filetree_parameter(
+    parameter: ParameterDefinition
+  ): Boolean =
+    Option(parameter.datatype).map(_.name).exists { name =>
+      _normalize_datatype_name(name) == "filetree"
+    }
+
+  private def _normalize_datatype_name(
+    name: String
+  ): String =
+    name.toLowerCase(java.util.Locale.ROOT).filter(_.isLetterOrDigit)
+
+  private def _filetree_value(
+    name: String,
+    value: Any
+  ): Consequence[MimeBody] =
+    value match {
+      case body: MimeBody => Consequence.success(body)
+      case path: Path => _zip_filetree(name, path)
+      case text: String => _zip_filetree(name, Paths.get(text))
+      case other => Consequence.argumentInvalid(s"filetree parameter ${name} must be a directory path: ${other}")
+    }
+
+  private def _zip_filetree(
+    name: String,
+    path: Path
+  ): Consequence[MimeBody] = {
+    val root = path.toAbsolutePath.normalize()
+    if (!Files.exists(root)) {
+      Consequence.argumentInvalid(s"filetree parameter ${name} directory does not exist: ${root}")
+    } else if (!Files.isDirectory(root)) {
+      Consequence.argumentInvalid(s"filetree parameter ${name} must be a directory: ${root}")
+    } else {
+      try {
+        val bytes = _zip_directory_bytes(root)
+        Consequence.success(MimeBody(ContentType.APPLICATION_ZIP, Bag.binary(bytes)))
+      } catch {
+        case NonFatal(e) =>
+          Consequence.argumentInvalid(s"filetree parameter ${name} zip failed: ${Option(e.getMessage).getOrElse(e.getClass.getSimpleName)}")
+      }
+    }
+  }
+
+  private def _zip_directory_bytes(
+    root: Path
+  ): Array[Byte] = {
+    val files = {
+      val stream = Files.walk(root)
+      try {
+        stream.iterator().asScala.toVector
+          .filter(p => Files.isRegularFile(p))
+          .sortBy(p => _zip_entry_name(root, p))
+      } finally {
+        stream.close()
+      }
+    }
+    val out = new ByteArrayOutputStream()
+    val zip = new ZipOutputStream(out, StandardCharsets.UTF_8)
+    try {
+      files.foreach { file =>
+        if (Files.isSymbolicLink(file))
+          throw new IllegalArgumentException(s"symbolic link is not supported: ${file}")
+        val entry = new ZipEntry(_zip_entry_name(root, file))
+        zip.putNextEntry(entry)
+        Files.copy(file, zip)
+        zip.closeEntry()
+      }
+    } finally {
+      zip.close()
+    }
+    out.toByteArray
+  }
+
+  private def _zip_entry_name(
+    root: Path,
+    file: Path
+  ): String =
+    root.relativize(file).iterator().asScala.map(_.toString).mkString("/")
 
   private[cli] def _request_path(req: Request): String =
     NamingConventions.toNormalizedPath(
@@ -3484,13 +3607,14 @@ class CncfRuntime() extends GlobalObservable {
           )
           req.operation match {
         case "post" =>
-          _client_mime_body_from_request(req).map { body =>
+          _client_http_body_and_header(req).map { case (body, header) =>
             new PostCommand(
               req,
               // "system.ping", // TODO generic
               HttpRequest.fromUrl(
                 method = HttpRequest.POST,
                 url = URI.create(url).toURL,
+                header = header,
                 body = body.map(_.value)
               )
             )
@@ -3549,13 +3673,13 @@ class CncfRuntime() extends GlobalObservable {
     req: Request
   ): Option[String] = {
     val argumentParams = req.arguments.collect {
-      case Argument(name, value, _) if name.startsWith("arg") =>
+      case Argument(name, value, _) if name.startsWith("arg") && !_is_multipart_value(value) =>
         val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8)
         val encodedValue = URLEncoder.encode(value.toString, StandardCharsets.UTF_8)
         s"${encodedName}=${encodedValue}"
     }
     val propertyParams = req.properties.collect {
-      case Property(name, value, _) if _is_http_parameter_property(name) =>
+      case Property(name, value, _) if _is_http_parameter_property(name) && !_is_multipart_value(value) =>
         val encodedName = URLEncoder.encode(name, StandardCharsets.UTF_8)
         val encodedValue = URLEncoder.encode(value.toString, StandardCharsets.UTF_8)
         s"${encodedName}=${encodedValue}"
@@ -3588,9 +3712,13 @@ class CncfRuntime() extends GlobalObservable {
     _mime_body_from_property_names(req.properties, List("http.body", "http.data", "-d")).flatMap {
       case Some(body) => Consequence.success(Some(body))
       case None =>
-        _client_form_mime_body(req) match {
+        _client_multipart_mime_body(req) match {
           case Some(body) => Consequence.success(Some(body))
-          case None => Consequence.success(_mime_body_from_arguments(req.arguments))
+          case None =>
+            _client_form_mime_body(req) match {
+              case Some(body) => Consequence.success(Some(body))
+              case None => Consequence.success(_mime_body_from_arguments(req.arguments))
+            }
         }
     }
 
@@ -3606,13 +3734,109 @@ class CncfRuntime() extends GlobalObservable {
     req: Request
   ): Consequence[(Option[MimeBody], Record)] =
     _client_mime_body_from_request(req).map {
-      case Some(body) if _is_form_urlencoded(body) =>
-        (Some(body), Record.create(Vector("Content-Type" -> "application/x-www-form-urlencoded")))
       case Some(body) =>
-        (Some(body), Record.empty)
+        (Some(body), Record.create(Vector("Content-Type" -> body.contentType.header)))
       case None =>
         (None, Record.empty)
     }
+
+  private[cli] def _client_multipart_mime_body(
+    req: Request
+  ): Option[MimeBody] = {
+    val fields = _client_multipart_fields(req)
+    if (!fields.exists(_.isBinary)) {
+      None
+    } else {
+      val boundary = s"cncf-${java.util.UUID.randomUUID().toString}"
+      val bytes = _render_multipart(fields, boundary)
+      Some(
+        MimeBody(
+          ContentType.MULTIPART_FORM_DATA.copy(parameters = Map("boundary" -> boundary)),
+          Bag.binary(bytes)
+        )
+      )
+    }
+  }
+
+  private final case class ClientMultipartField(
+    name: String,
+    value: Any
+  ) {
+    def isBinary: Boolean = _is_multipart_value(value)
+  }
+
+  private def _client_multipart_fields(
+    req: Request
+  ): Vector[ClientMultipartField] = {
+    val argumentParams = req.arguments.collect {
+      case Argument(name, value, _) if name != "path" =>
+        ClientMultipartField(name, value)
+    }
+    val switchParams = req.switches.collect {
+      case Switch(name, value, _) if value =>
+        ClientMultipartField(name, "true")
+    }
+    val propertyParams = _client_http_parameter_properties(req).map { p =>
+      ClientMultipartField(p.name, p.value)
+    }
+    (argumentParams ++ switchParams ++ propertyParams).toVector
+  }
+
+  private def _render_multipart(
+    fields: Vector[ClientMultipartField],
+    boundary: String
+  ): Array[Byte] = {
+    val out = new ByteArrayOutputStream()
+    fields.foreach { field =>
+      _write_ascii(out, s"--${boundary}\r\n")
+      field.value match {
+        case body: MimeBody =>
+          _write_ascii(out, s"""Content-Disposition: form-data; name="${_quote_http_header(field.name)}"; filename="${_quote_http_header(field.name)}.zip"\r\n""")
+          _write_ascii(out, s"Content-Type: ${body.contentType.header}\r\n\r\n")
+          _write_bag(out, body.value)
+          _write_ascii(out, "\r\n")
+        case bag: Bag =>
+          _write_ascii(out, s"""Content-Disposition: form-data; name="${_quote_http_header(field.name)}"; filename="${_quote_http_header(field.name)}"\r\n""")
+          _write_ascii(out, s"Content-Type: ${ContentType.APPLICATION_OCTET_STREAM.header}\r\n\r\n")
+          _write_bag(out, bag)
+          _write_ascii(out, "\r\n")
+        case other =>
+          _write_ascii(out, s"""Content-Disposition: form-data; name="${_quote_http_header(field.name)}"\r\n\r\n""")
+          out.write(other.toString.getBytes(StandardCharsets.UTF_8))
+          _write_ascii(out, "\r\n")
+      }
+    }
+    _write_ascii(out, s"--${boundary}--\r\n")
+    out.toByteArray
+  }
+
+  private def _write_ascii(
+    out: ByteArrayOutputStream,
+    text: String
+  ): Unit =
+    out.write(text.getBytes(StandardCharsets.US_ASCII))
+
+  private def _write_bag(
+    out: ByteArrayOutputStream,
+    bag: Bag
+  ): Unit = {
+    val in = bag.openInputStream()
+    try {
+      val buffer = new Array[Byte](8192)
+      var read = in.read(buffer)
+      while (read != -1) {
+        out.write(buffer, 0, read)
+        read = in.read(buffer)
+      }
+    } finally {
+      in.close()
+    }
+  }
+
+  private def _quote_http_header(
+    value: String
+  ): String =
+    value.replace("\\", "\\\\").replace("\"", "\\\"")
 
   private[cli] def _client_form_mime_body(
     req: Request
@@ -3635,7 +3859,7 @@ class CncfRuntime() extends GlobalObservable {
       case Switch(name, value, _) if value =>
         s"${URLEncoder.encode(name, StandardCharsets.UTF_8)}=true"
     }
-    val propertyParams = _client_http_parameter_properties(req).map { p =>
+    val propertyParams = _client_http_parameter_properties(req).filterNot(p => _is_multipart_value(p.value)).map { p =>
       s"${URLEncoder.encode(p.name, StandardCharsets.UTF_8)}=${URLEncoder.encode(p.value.toString, StandardCharsets.UTF_8)}"
     }
     val params = argumentParams ++ switchParams ++ propertyParams
@@ -3646,6 +3870,11 @@ class CncfRuntime() extends GlobalObservable {
     req: Request
   ): List[Property] =
     req.properties.filter(p => _is_http_parameter_property(p.name))
+
+  private def _is_multipart_value(
+    value: Any
+  ): Boolean =
+    value.isInstanceOf[MimeBody] || value.isInstanceOf[Bag]
 
   private[cli] def _is_form_urlencoded(
     body: MimeBody

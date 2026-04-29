@@ -59,6 +59,12 @@ Current semantic direction:
 - Blog file-tree import should parse full HTML through CNCF HTML tree values.
   `META-INF/blog.yaml` is the authoritative metadata source; missing title,
   description, and canonical fields may fall back to the HTML head.
+- Production Blog file-tree import uses a managed Blob ZIP archive as the
+  user-facing input path. The development `treeRootPath` path remains available
+  as a driver path for local validation.
+- `registerPost` is the lower-level registration boundary. It accepts
+  normalized HTML fragment content and existing image/Blob references; local
+  path-only image payload registration is handled by `importPostTree`.
 - Projections should expose image metadata and access URLs without embedding
   payload bytes.
 - Web/admin surfaces should make image association visible without requiring
@@ -89,9 +95,10 @@ Current semantic direction:
 Resume hint:
 
 - Start from `textus-blog` `BlogComponent` and verify which image binding flows
-  already work using Phase 18 Blob/Association capabilities. Record every gap as
-  a CNCF runtime, Web, projection, or generator work item before changing core
-  behavior.
+  already work using Phase 18 Blob/Association capabilities. The current
+  validated slice is archive ZIP import into normalized Blog registration with
+  managed Blob payload registration for inline and entity-bound images. Resume
+  with primary-image/public-read/projection behavior before closing BI-02.
 
 ## 5. Development Items
 

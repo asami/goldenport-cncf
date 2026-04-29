@@ -28,7 +28,7 @@ import org.goldenport.record.Record
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 29, 2026
- * @version Apr. 28, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -88,6 +88,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     case UnitOfWorkOp.HttpPost(path, body, headers) =>
       withCallTree("uow:http:post") {
         Consequence(_http_driver.post(path, body, headers))
+      }
+
+    case UnitOfWorkOp.HttpPostBag(path, body, headers) =>
+      withCallTree("uow:http:post") {
+        Consequence(_http_driver.postBag(path, body, headers))
       }
 
     case UnitOfWorkOp.HttpPut(path, body, headers) =>

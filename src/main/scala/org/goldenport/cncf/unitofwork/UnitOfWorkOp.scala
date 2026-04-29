@@ -20,7 +20,7 @@ import org.goldenport.cncf.directive.*
  * @since   Jan. 10, 2026
  *  version Feb. 25, 2026
  *  version Mar. 24, 2026
- * @version Apr. 15, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -45,6 +45,12 @@ object UnitOfWorkOp {
   final case class HttpPost(
     path: String,
     body: Option[String],
+    headers: Map[String, String]
+  ) extends UnitOfWorkOp[HttpResponse]
+
+  final case class HttpPostBag(
+    path: String,
+    body: Option[org.goldenport.bag.Bag],
     headers: Map[String, String]
   ) extends UnitOfWorkOp[HttpResponse]
 

@@ -12,7 +12,7 @@ import org.goldenport.record.Record
 /*
  * @since   Jan. 20, 2026
  *  version Feb.  7, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class LoopbackHttpDriver(
@@ -32,6 +32,13 @@ final class LoopbackHttpDriver(
     val bag = body.map(b => Bag.text(b, charset))
     _execute(_buildRequest(HttpRequest.POST, path, bag, headers))
   }
+
+  override def postBag(
+    path: String,
+    body: Option[Bag],
+    headers: Map[String, String]
+  ): HttpResponse =
+    _execute(_buildRequest(HttpRequest.POST, path, body, headers))
 
   def put(
     path: String,

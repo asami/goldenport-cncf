@@ -75,17 +75,17 @@ instances.
 ### Detailed Tasks
 
 - [ ] Confirm the `BlogPost` primary image path.
-- [ ] Confirm the `BlogPost` author account ownership path for draft creation.
+- [x] Confirm the `BlogPost` author account ownership path for draft creation.
 - [ ] Confirm public read/search filtering for published active posts.
 - [ ] Confirm draft, publish, and deactivate lifecycle operations.
-- [ ] Confirm repeated/role-based image binding model for cover, inline,
+- [x] Confirm repeated/role-based image binding model for cover, inline,
       thumbnail, and gallery roles.
-- [ ] Confirm article body `img` tag extraction and synchronization into inline
+- [x] Confirm article body `img` tag extraction and synchronization into inline
       image records.
-- [ ] Confirm CNCF standard HTML tree values parse full HTML, read head
+- [x] Confirm CNCF standard HTML tree values parse full HTML, read head
       metadata, extract article fragments, inspect `img` nodes, rewrite image
       sources, and render HTML fragments.
-- [ ] Confirm `importPostTree` accepts a Blog article file tree archive with
+- [x] Confirm `importPostTree` accepts a Blog article file tree archive with
       `META-INF/blog.yaml`, parses the entry HTML, and delegates normalized
       content/image input to `registerPost`.
 - [ ] Verify whether Blob attachment Association rows already satisfy the model.
@@ -98,6 +98,19 @@ instances.
 - A short usage contract for domain entities that need images.
 - A decision on when a component should store a direct image reference versus
   relying on Association-backed image bindings.
+
+### Current Validation Notes
+
+- `textus-blog` executable specs cover managed ZIP archive import, metadata
+  precedence, HTML head fallback, article extraction, inline image source
+  rewriting, entity image definitions, payload-backed Blob registration, and
+  direct `registerPost` rejection for path-only image specs.
+- CNCF now has a reusable managed Blob payload helper for non-Blob components
+  and a client-side `filetree` parameter path that ZIPs a local directory and
+  submits it as multipart form data.
+- Remaining BI-02 work is primary image behavior, public read/search filtering,
+  lifecycle operations, and the final decision on direct fields versus
+  Association-backed image links.
 
 ---
 
@@ -118,10 +131,10 @@ operations and projection surfaces.
 - [ ] Define public read/search contract for published active blog posts.
 - [ ] Define article body `img` tag handling contract, including unmanaged
       source URLs, managed image ids, alt/title text, ordering, and binding sync.
-- [ ] Define file-tree import contract: local-previewable full HTML, relative
+- [x] Define file-tree import contract: local-previewable full HTML, relative
       image paths, `META-INF/blog.yaml` metadata precedence, article extraction
       rules, and fallback from HTML head only for missing metadata.
-- [ ] Define `registerPost` as the lower-level bulk registration boundary used
+- [x] Define `registerPost` as the lower-level bulk registration boundary used
       by `importPostTree`.
 - [ ] Define detach/delete semantics for entity images.
 - [ ] Define list/search behavior for entity images.
@@ -175,8 +188,8 @@ Entity image binding usage and the reusable CNCF behavior is verified.
 
 ### Detailed Tasks
 
-- [ ] Verify `textus-blog` `BlogComponent` compile/generation path.
-- [ ] Verify live or executable-spec image binding flows.
+- [x] Verify `textus-blog` `BlogComponent` compile/generation path.
+- [x] Verify live or executable-spec image binding flows.
 - [ ] Verify projection output for associated images.
 - [ ] Verify Web/admin/manual behavior.
 - [ ] Update strategy history and close phase documents.

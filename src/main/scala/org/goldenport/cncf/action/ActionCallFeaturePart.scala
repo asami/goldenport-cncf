@@ -40,7 +40,7 @@ import org.goldenport.configuration.ConfigurationValue
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 30, 2026
- * @version Apr. 26, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -651,6 +651,15 @@ trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.H
     ConsequenceT.liftF(Free.liftF(op))
   }
 
+  protected final def http_post_bag(
+    path: String,
+    body: Option[org.goldenport.bag.Bag] = None,
+    headers: Map[String, String] = Map.empty
+  ): ExecUowM[HttpResponse] = {
+    val op = _op_http_post_bag(path, body, headers)
+    ConsequenceT.liftF(Free.liftF(op))
+  }
+
   protected final def http_put(
     path: String,
     body: Option[String] = None,
@@ -720,6 +729,13 @@ trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.H
     headers: Map[String, String]
   ): UnitOfWorkOp[HttpResponse] =
     UnitOfWorkOp.HttpPost(path, body, headers)
+
+  private def _op_http_post_bag(
+    path: String,
+    body: Option[org.goldenport.bag.Bag],
+    headers: Map[String, String]
+  ): UnitOfWorkOp[HttpResponse] =
+    UnitOfWorkOp.HttpPostBag(path, body, headers)
 
   private def _op_http_put(
     path: String,

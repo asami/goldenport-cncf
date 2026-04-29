@@ -2,6 +2,7 @@ package org.goldenport.cncf.cli
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.util.zip.ZipInputStream
 
 import org.goldenport.bag.{Bag, TextBag}
 import org.goldenport.cncf.component.ComponentCreate
@@ -9,9 +10,12 @@ import org.goldenport.cncf.component.ComponentOrigin
 import org.goldenport.cncf.component.builtin.admin.AdminComponent
 import org.goldenport.cncf.config.ClientConfig
 import org.goldenport.cncf.testutil.TestComponentFactory
-import org.goldenport.datatype.MimeBody
+import org.goldenport.datatype.{ContentType, MimeBody}
 import org.goldenport.protocol.{Argument, Property, Request}
+import org.goldenport.protocol.spec as spec
+import org.goldenport.schema.{DataType, ValueDomain}
 import org.goldenport.test.matchers.ConsequenceMatchers
+import org.goldenport.value.BaseContent
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.prop.TableDrivenPropertyChecks
@@ -20,7 +24,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan. 10, 2026
  *  version Mar. 29, 2026
- * @version Apr. 12, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientRequestNormalizationSpec
@@ -204,6 +208,77 @@ class ClientRequestNormalizationSpec
           fail("expected successful normalization")
       }
     }
+
+    "zip filetree parameters before client HTTP submission" in {
+      Given("an operation parameter declared as filetree and a local directory")
+      val root = Files.createTempDirectory("cncf-client-filetree")
+      val meta = Files.createDirectories(root.resolve("META-INF"))
+      Files.writeString(meta.resolve("blog.yaml"), "title: Client Tree\n", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("index.html"), "<article>body</article>\n", StandardCharsets.UTF_8)
+      val operation = _filetree_operation("tree")
+      val req = Request.of(
+        component = "blog",
+        service = "post",
+        operation = "importPostTree",
+        arguments = Nil,
+        switches = Nil,
+        properties = List(
+          Property("tree", root.toString, None),
+          Property("title", "client-title", None)
+        )
+      )
+
+      When("the client request is prepared")
+      val prepared = CncfRuntime._prepare_filetree_parameters(operation, req)
+
+      Then("the filetree parameter is replaced by an application/zip MimeBody")
+      prepared should be_success
+      prepared match {
+        case org.goldenport.Consequence.Success(normalized) =>
+          val body = _property(normalized, "tree").map(_.value).collect { case m: MimeBody => m }
+          body.map(_.contentType.mimeType.value) shouldBe Some("application/zip")
+          body.map(_zip_entries).getOrElse(Vector.empty) should contain theSameElementsAs Vector(
+            "META-INF/blog.yaml",
+            "index.html"
+          )
+        case _ =>
+          fail("expected successful filetree preparation")
+      }
+    }
+
+    "send filetree parameters as multipart form data" in {
+      Given("a prepared client request with a zipped filetree and a text field")
+      val body = MimeBody(ContentType.APPLICATION_ZIP, Bag.binary(Array[Byte](1, 2, 3, 4)))
+      val req = Request.of(
+        component = "client",
+        service = "http",
+        operation = "post",
+        arguments = List(Argument("path", "/blog/post/import-post-tree", None)),
+        switches = Nil,
+        properties = List(
+          Property("tree", body, None),
+          Property("title", "client-title", None)
+        )
+      )
+
+      When("the HTTP body is built")
+      val result = CncfRuntime._client_http_body_and_header(req)
+
+      Then("the body is multipart/form-data and preserves the filetree field name")
+      result should be_success
+      result match {
+        case org.goldenport.Consequence.Success((Some(multipart), header)) =>
+          multipart.contentType.mimeType.value shouldBe "multipart/form-data"
+          multipart.contentType.parameter("boundary") shouldBe defined
+          header.asMap.get("Content-Type").map(_.toString) shouldBe Some(multipart.contentType.header)
+          val text = new String(_bag_bytes(multipart.value), java.nio.charset.StandardCharsets.ISO_8859_1)
+          text should include ("Content-Disposition: form-data; name=\"tree\"; filename=\"tree.zip\"")
+          text should include ("Content-Type: application/zip")
+          text should include ("Content-Disposition: form-data; name=\"title\"")
+        case _ =>
+          fail("expected multipart body")
+      }
+    }
   }
 
   private def _subsystem_with_admin() = {
@@ -218,6 +293,35 @@ class ClientRequestNormalizationSpec
     name: String
   ): Option[Property] =
     req.properties.find(_.name == name)
+
+  private def _filetree_operation(
+    parameterName: String
+  ): spec.OperationDefinition =
+    new spec.OperationDefinition {
+      val specification: spec.OperationDefinition.Specification =
+        spec.OperationDefinition.Specification(
+          name = "importPostTree",
+          request = spec.RequestDefinition(
+            List(
+              spec.ParameterDefinition(
+                content = BaseContent.simple(parameterName),
+                kind = spec.ParameterDefinition.Kind.Property,
+                domain = ValueDomain(datatype = DataType.Named("filetree"))
+              ),
+              spec.ParameterDefinition(
+                content = BaseContent.simple("title"),
+                kind = spec.ParameterDefinition.Kind.Property
+              )
+            )
+          ),
+          response = spec.ResponseDefinition(result = List(org.goldenport.schema.XString))
+        )
+
+      def createOperationRequest(
+        req: Request
+      ): org.goldenport.Consequence[org.goldenport.protocol.operation.OperationRequest] =
+        org.goldenport.Consequence.argumentInvalid("not executable in this spec")
+    }
 
   private def _bag_text(
     value: Any
@@ -239,6 +343,28 @@ class ClientRequestNormalizationSpec
       Some(new String(bytes, StandardCharsets.UTF_8))
     } catch {
       case _: Exception => None
+    } finally {
+      in.close()
+    }
+  }
+
+  private def _bag_bytes(
+    bag: Bag
+  ): Array[Byte] = {
+    val in = bag.openInputStream()
+    try {
+      in.readAllBytes()
+    } finally {
+      in.close()
+    }
+  }
+
+  private def _zip_entries(
+    body: MimeBody
+  ): Vector[String] = {
+    val in = new ZipInputStream(body.value.openInputStream(), StandardCharsets.UTF_8)
+    try {
+      Iterator.continually(in.getNextEntry).takeWhile(_ != null).map(_.getName).toVector
     } finally {
       in.close()
     }

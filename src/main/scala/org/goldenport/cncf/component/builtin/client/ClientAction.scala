@@ -7,13 +7,13 @@ import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import cats.syntax.functor.*
 import cats.Functor
-import org.goldenport.bag.TextBag
 
 /*
  * @since   Jan. 10, 2026
  *  version Jan. 21, 2026
  *  version Feb. 19, 2026
- * @version Mar. 29, 2026
+ *  version Mar. 29, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class HttpCommand(
@@ -53,17 +53,11 @@ sealed trait ClientHttpActionCall extends FunctionalActionCall with ActionCallHt
     val headers = req.header.asMap.map { case (k, v) => k -> v.toString }
     req.method match {
       case HttpRequest.POST =>
-        http_post(url, _body(req), headers)
+        http_post_bag(url, req.body, headers)
       case _ =>
         http_get(url)
     }
   }
-
-  private def _body(req: HttpRequest): Option[String] =
-    req.body match {
-      case Some(t: TextBag) => Some(t.toTextUnsafe)
-      case _ => None
-    }
 }
 
 final case class ClientHttpPostCall(

@@ -624,6 +624,10 @@ Active in Phase 19.
     with managed image assets and inline image bindings;
   - support Blog file-tree import by using reusable CNCF HTML tree values rather
     than Blog-specific parsing code;
+  - use managed Blob ZIP archives as the production Blog file-tree import
+    input while keeping local `treeRootPath` as a development driver path;
+  - keep `registerPost` as the lower-level normalized HTML/image-reference
+    boundary, with local path payload registration owned by `importPostTree`;
   - decide how much should be direct Entity reference versus Blob/Association
     attachment usage;
   - expose and fix CNCF runtime/Web/projection/generator gaps using a real

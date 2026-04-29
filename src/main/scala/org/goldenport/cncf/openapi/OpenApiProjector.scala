@@ -10,7 +10,7 @@ import org.slf4j.LoggerFactory
 /*
  * @since   Jan.  8, 2026
  *  version Jan. 20, 2026
- * @version Apr. 27, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 object OpenApiProjector {
@@ -136,22 +136,25 @@ object OpenApiProjector {
       _has_multipart_body(op)
 
   private def _has_multipart_body(op: OperationDefinition): Boolean =
-    op.specification.request.parameters.exists(_is_blob_parameter)
+    op.specification.request.parameters.exists(_is_binary_upload_parameter)
 
-  private def _is_blob_parameter(parameter: ParameterDefinition): Boolean =
+  private def _is_binary_upload_parameter(parameter: ParameterDefinition): Boolean =
     parameter.datatype == XBlob ||
-      Option(parameter.datatype).map(_.name).exists(_.equalsIgnoreCase("blob"))
+      Option(parameter.datatype).map(_.name).exists { name =>
+        val normalized = name.toLowerCase(java.util.Locale.ROOT).filter(_.isLetterOrDigit)
+        normalized == "blob" || normalized == "filetree"
+      }
 
   private def _query_parameters(op: OperationDefinition): Vector[String] =
     op.specification.request.parameters.toVector
       .filterNot(_.kind == ParameterDefinition.Kind.Property)
-      .filterNot(_is_blob_parameter)
+      .filterNot(_is_binary_upload_parameter)
       .map(_.name)
 
   private def _request_body_fields(op: OperationDefinition): Vector[(String, Boolean)] =
     op.specification.request.parameters.toVector.collect {
+      case p if _is_binary_upload_parameter(p) => p.name -> true
       case p if p.kind == ParameterDefinition.Kind.Property => p.name -> false
-      case p if _is_blob_parameter(p) => p.name -> true
     }
 
   private def _openapi_json(paths: Vector[PathSpec]): String = {

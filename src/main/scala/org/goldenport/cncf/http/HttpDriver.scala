@@ -12,12 +12,14 @@ import org.slf4j.LoggerFactory
 /*
  * @since   Jan. 11, 2026
  *  version Feb.  7, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 trait HttpDriver {
   def get(path: String): HttpResponse
   def post(path: String, body: Option[String], headers: Map[String, String]): HttpResponse
+  def postBag(path: String, body: Option[Bag], headers: Map[String, String]): HttpResponse =
+    throw new UnsupportedOperationException("HttpDriver.postBag is not implemented by this driver")
   def put(path: String, body: Option[String], headers: Map[String, String]): HttpResponse
 }
 
@@ -36,6 +38,16 @@ final class UrlConnectionHttpDriver(
   ): HttpResponse = {
     val conn = _open_connection(_build_url(path), "POST")
     headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
+    _execute(conn, body.map(Bag.text(_, StandardCharsets.UTF_8)))
+  }
+
+  override def postBag(
+    path: String,
+    body: Option[Bag],
+    headers: Map[String, String]
+  ): HttpResponse = {
+    val conn = _open_connection(_build_url(path), "POST")
+    headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
     _execute(conn, body)
   }
 
@@ -46,7 +58,7 @@ final class UrlConnectionHttpDriver(
   ): HttpResponse = {
     val conn = _open_connection(_build_url(path), "PUT")
     headers.foreach { case (k, v) => conn.setRequestProperty(k, v) }
-    _execute(conn, body)
+    _execute(conn, body.map(Bag.text(_, StandardCharsets.UTF_8)))
   }
 
   private val log = LoggerFactory.getLogger(classOf[UrlConnectionHttpDriver])
@@ -78,13 +90,23 @@ final class UrlConnectionHttpDriver(
 
   private def _execute(
     conn: HttpURLConnection,
-    body: Option[String]
+    body: Option[Bag]
   ): HttpResponse = {
     body.foreach { b =>
-      val bytes = b.getBytes(StandardCharsets.UTF_8)
-      conn.getOutputStream.write(bytes)
-      conn.getOutputStream.flush()
-      conn.getOutputStream.close()
+      val in = b.openInputStream()
+      val out = conn.getOutputStream
+      try {
+        val buffer = new Array[Byte](8192)
+        var read = in.read(buffer)
+        while (read != -1) {
+          out.write(buffer, 0, read)
+          read = in.read(buffer)
+        }
+        out.flush()
+      } finally {
+        in.close()
+        out.close()
+      }
     }
     val code = conn.getResponseCode
     val stream = _response_stream(conn)
@@ -172,6 +194,15 @@ final class FakeHttpDriver(
   def post(
     path: String,
     body: Option[String],
+    headers: Map[String, String]
+  ): HttpResponse = {
+    val _ = (path, body, headers)
+    response
+  }
+
+  override def postBag(
+    path: String,
+    body: Option[Bag],
     headers: Map[String, String]
   ): HttpResponse = {
     val _ = (path, body, headers)
