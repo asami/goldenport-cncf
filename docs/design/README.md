@@ -17,3 +17,7 @@ Current Web/admin design:
 - `management-console.md`
 - `web-form-api-schema.md`
 - `web-operation-dispatcher.md`
+
+Current Entity/Blob usage design:
+
+- `entity-image-binding-usage-contract.md`

@@ -631,6 +631,8 @@ Active in Phase 19.
     boundary, with local path payload registration owned by `importPostTree`;
   - use Association-only image links for BlogPost, including primary image
     selection by role priority;
+  - expose associated Blob images through reusable `BlobProjection` output with
+    `images` plus derived `representativeImage`;
   - expose and fix CNCF runtime/Web/projection/generator gaps using a real
     component driver.
 - Scope boundary:

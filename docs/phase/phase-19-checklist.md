@@ -109,8 +109,9 @@ instances.
   entities as canonical state. BlogPost image links are represented by CNCF
   BlobAttachment Association rows only.
 - Representative images are derived from Association roles in
-  `primary -> cover -> thumbnail` order; `gallery` does not act as a
-  representative fallback.
+  `primary -> cover -> thumbnail -> inline` order; `inline` uses the first
+  managed content occurrence, while `gallery` does not act as a representative
+  fallback.
 - Public get/search and publish/deactivate lifecycle behavior are verified in
   `textus-blog` executable specs.
 - CNCF now has a reusable managed Blob payload helper for non-Blob components
@@ -123,45 +124,57 @@ instances.
 
 ## BI-03: Entity Image Binding Usage Contract
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
 Define the concrete CNCF usage contract for image binding across component
 operations and projection surfaces.
 
+Contract baseline: `docs/design/entity-image-binding-usage-contract.md`.
+
 ### Detailed Tasks
 
-- [ ] Define create/update workflow for image uploads and existing image ids.
-- [ ] Define protected author/admin workflow for create draft, publish, and
+- [x] Define create/update workflow for image uploads and existing Blob ids.
+- [x] Define protected author/admin workflow for create draft, publish, and
       deactivate operations.
-- [ ] Define public read/search contract for published active blog posts.
-- [ ] Define article body `img` tag handling contract, including unmanaged
-      source URLs, managed image ids, alt/title text, ordering, and binding sync.
+- [x] Define public read/search contract for published active blog posts.
+- [x] Define article body `img` tag handling contract, including unmanaged
+      source URLs, managed Blob ids, alt/title text, ordering, and binding sync.
 - [x] Define file-tree import contract: local-previewable full HTML, relative
       image paths, `META-INF/blog.yaml` metadata precedence, article extraction
       rules, and fallback from HTML head only for missing metadata.
 - [x] Define `registerPost` as the lower-level bulk registration boundary used
       by `importPostTree`.
-- [ ] Define detach/delete semantics for entity images.
-- [ ] Define list/search behavior for entity images.
-- [ ] Define Aggregate/View projection shape for associated images.
-- [ ] Define Web form and admin page expectations.
-- [ ] Define manual/help metadata expectations for image-capable operations.
+- [x] Define detach/delete semantics for entity images.
+- [x] Define list/search behavior for entity images.
+- [x] Define Aggregate/View projection shape for associated images.
+- [x] Define Web form and admin page expectations.
+- [x] Define manual/help metadata expectations for image-capable operations.
 
 ### Decisions To Make
 
-- Whether image role names are free strings, constrained by descriptor metadata,
-  or backed by a small CNCF vocabulary.
-- Whether primary image is a special association role, a direct field, or both
-  depending on component needs.
-- How ordered images should be represented in projections.
+- Role names use a recommended CNCF vocabulary
+  (`primary`, `cover`, `thumbnail`, `gallery`, `inline`) with application-specific
+  free-string extensions.
+- Primary image is derived from BlobAttachment Association roles, not stored as
+  a direct Entity field by default.
+- Content-bearing entities may use the first managed inline image as the
+  representative fallback when no explicit primary/cover/thumbnail image exists.
+- Ordered images are represented by the association `sortOrder`; projection
+  rows include Blob metadata plus `associationId`, `role`, and `sortOrder`.
+
+### Result
+
+- Added `docs/design/entity-image-binding-usage-contract.md`.
+- BI-04 inherits the implementation gaps for projection helper expansion,
+  Web/admin affordances, and manual/help metadata.
 
 ---
 
 ## BI-04: Runtime/Web/Projection Gap Implementation
 
-Status: SUSPENDED
+Status: ACTIVE
 
 ### Objective
 
@@ -171,9 +184,12 @@ Implement CNCF gaps discovered by the `BlogComponent` driver.
 
 - [ ] Operation adapters for upload/register-and-attach flows.
 - [ ] Entity create/update support for Blob attachment requests.
-- [ ] Projection helpers for image metadata and access URLs.
-- [ ] Web/admin affordances for associated images on Entity pages.
-- [ ] Descriptor/manual visibility for image-capable Entity operations.
+- [x] Projection helper expansion for `images` and `representativeImage`
+      contract output.
+- [ ] Web/admin affordances for associated images on Entity pages, including
+      role/sort-order display and attach/detach repair flows.
+- [ ] Descriptor/manual visibility for image-capable operations, including
+      upload and existing-Blob input capabilities.
 - [ ] Regression coverage for Blob/Association image usage.
 
 ### Guardrails

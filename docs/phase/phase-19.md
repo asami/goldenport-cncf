@@ -88,22 +88,21 @@ Current semantic direction:
 
 - A (DONE): BI-01 — Open Phase 19 and freeze BlogComponent image-use scope.
 - B (DONE): BI-02 — Validate `BlogComponent` image binding model against the Blob/Association foundation.
-- C (ACTIVE): BI-03 — Define Entity image binding usage contract for create/update/read/search/projection flows.
-- D (SUSPENDED): BI-04 — Implement CNCF runtime/Web/projection gaps discovered by the BlogComponent driver.
+- C (DONE): BI-03 — Define Entity image binding usage contract for create/update/read/search/projection flows.
+- D (ACTIVE): BI-04 — Implement CNCF runtime/Web/projection gaps discovered by the BlogComponent driver.
 - E (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
 
 Resume hint:
 
-- Start from the BI-02 result in `textus-blog` `BlogComponent`: all BlogPost
-  image links, including primary/cover/thumbnail/gallery/inline roles, are
-  represented by BlobAttachment Association rows. Resume with BI-03 usage
-  contract details for create/update/read/search/projection flows.
+- The BI-04 projection helper slice adds `images` plus derived
+  `representativeImage` output. Continue with Web/admin affordances and
+  manual/help metadata for image-capable operations.
 
 ## 5. Development Items
 
 - [x] BI-01: Open Phase 19 and freeze BlogComponent image-use scope.
 - [x] BI-02: Validate BlogComponent image binding model against Blob/Association foundation.
-- [ ] BI-03: Define Entity image binding usage contract.
+- [x] BI-03: Define Entity image binding usage contract.
 - [ ] BI-04: Implement CNCF runtime/Web/projection gaps discovered by the driver.
 - [ ] BI-05: Verification, documentation, and phase closure.
 
