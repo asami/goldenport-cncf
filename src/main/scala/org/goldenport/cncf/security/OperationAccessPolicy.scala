@@ -184,7 +184,7 @@ object OperationAccessPolicy {
       case "required-capability" =>
         Cause.Kind.Capability -> Descriptor.Facet.Capability("required-capability")
       case "cross-component-service-grant" =>
-        Cause.Kind.Capability -> Descriptor.Facet.Guard("cross-component-service-grant")
+        Cause.Kind.Guard -> Descriptor.Facet.Guard("cross-component-service-grant")
       case "abac-condition" =>
         Cause.Kind.Guard -> Descriptor.Facet.Guard("abac-condition")
       case "manager-only" | "owner-or-manager" =>

@@ -545,8 +545,6 @@ The stable CML location decision is:
 - entity-level declarations and separate policy blocks are future reuse/default
   mechanisms, not the first stable relation syntax.
 
-## Variation Points
-
 ## Failure Diagnostics
 
 Entity authorization denial is reported as
