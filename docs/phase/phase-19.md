@@ -39,23 +39,23 @@ This document is a phase dashboard, not a design journal.
   not Blog-specific.
 - Define how Entity read/search, Aggregate/View projection, Web forms, admin
   pages, and manual/help metadata should expose image association information.
-- Use `BlogPost`, `ImageAsset`/Blob metadata, and image binding records in
-  `BlogComponent` to expose gaps in CNCF runtime, Web, projection, and generated
-  component behavior.
+- Use `BlogPost`, Blob metadata, and BlobAttachment Association rows in
+  `BlogComponent` to expose gaps in CNCF runtime, Web, projection, and
+  generated component behavior.
 
 Current semantic direction:
 
 - Blob metadata and payload storage remain owned by the CNCF Blob foundation.
-- Domain entities should store image references only when the reference is part
-  of their own domain contract; repeated or role-based image links should use
-  the generic Association/Blob attachment model.
+- Domain entities should avoid direct image fields by default; BlogComponent
+  validates role-based image links through the generic BlobAttachment
+  Association model, including primary image selection.
 - Application components may provide component-specific image operations as
   workflow adapters over Blob registration and Association attachment.
 - Public blog read/search should expose only published and active posts;
   protected author/admin operations own draft, publish, deactivate, and inline
   image synchronization flows.
 - Inline article `img` tags are treated as first-class image occurrences that
-  can be reconciled with Blob-backed image assets and `inline` image bindings.
+  can be reconciled with Blob-backed `inline` Association rows.
 - Blog file-tree import should parse full HTML through CNCF HTML tree values.
   `META-INF/blog.yaml` is the authoritative metadata source; missing title,
   description, and canonical fields may fall back to the HTML head.
@@ -63,7 +63,7 @@ Current semantic direction:
   user-facing input path. The development `treeRootPath` path remains available
   as a driver path for local validation.
 - `registerPost` is the lower-level registration boundary. It accepts
-  normalized HTML fragment content and existing image/Blob references; local
+  normalized HTML fragment content and existing Blob references; local
   path-only image payload registration is handled by `importPostTree`.
 - Projections should expose image metadata and access URLs without embedding
   payload bytes.
@@ -87,23 +87,22 @@ Current semantic direction:
 ## 4. Current Work Stack
 
 - A (DONE): BI-01 — Open Phase 19 and freeze BlogComponent image-use scope.
-- B (ACTIVE): BI-02 — Validate `BlogComponent` image binding model against the Blob/Association foundation.
-- C (SUSPENDED): BI-03 — Define Entity image binding usage contract for create/update/read/search/projection flows.
+- B (DONE): BI-02 — Validate `BlogComponent` image binding model against the Blob/Association foundation.
+- C (ACTIVE): BI-03 — Define Entity image binding usage contract for create/update/read/search/projection flows.
 - D (SUSPENDED): BI-04 — Implement CNCF runtime/Web/projection gaps discovered by the BlogComponent driver.
 - E (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
 
 Resume hint:
 
-- Start from `textus-blog` `BlogComponent` and verify which image binding flows
-  already work using Phase 18 Blob/Association capabilities. The current
-  validated slice is archive ZIP import into normalized Blog registration with
-  managed Blob payload registration for inline and entity-bound images. Resume
-  with primary-image/public-read/projection behavior before closing BI-02.
+- Start from the BI-02 result in `textus-blog` `BlogComponent`: all BlogPost
+  image links, including primary/cover/thumbnail/gallery/inline roles, are
+  represented by BlobAttachment Association rows. Resume with BI-03 usage
+  contract details for create/update/read/search/projection flows.
 
 ## 5. Development Items
 
 - [x] BI-01: Open Phase 19 and freeze BlogComponent image-use scope.
-- [ ] BI-02: Validate BlogComponent image binding model against Blob/Association foundation.
+- [x] BI-02: Validate BlogComponent image binding model against Blob/Association foundation.
 - [ ] BI-03: Define Entity image binding usage contract.
 - [ ] BI-04: Implement CNCF runtime/Web/projection gaps discovered by the driver.
 - [ ] BI-05: Verification, documentation, and phase closure.

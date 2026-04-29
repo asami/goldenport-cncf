@@ -65,7 +65,7 @@ Open Phase 19 and freeze the application-driver scope around `textus-blog`
 
 ## BI-02: Validate BlogComponent Image Binding Model
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -74,10 +74,10 @@ instances.
 
 ### Detailed Tasks
 
-- [ ] Confirm the `BlogPost` primary image path.
+- [x] Confirm the `BlogPost` primary image path.
 - [x] Confirm the `BlogPost` author account ownership path for draft creation.
-- [ ] Confirm public read/search filtering for published active posts.
-- [ ] Confirm draft, publish, and deactivate lifecycle operations.
+- [x] Confirm public read/search filtering for published active posts.
+- [x] Confirm draft, publish, and deactivate lifecycle operations.
 - [x] Confirm repeated/role-based image binding model for cover, inline,
       thumbnail, and gallery roles.
 - [x] Confirm article body `img` tag extraction and synchronization into inline
@@ -88,10 +88,10 @@ instances.
 - [x] Confirm `importPostTree` accepts a Blog article file tree archive with
       `META-INF/blog.yaml`, parses the entry HTML, and delegates normalized
       content/image input to `registerPost`.
-- [ ] Verify whether Blob attachment Association rows already satisfy the model.
-- [ ] Identify whether component-local image binding records are still needed
+- [x] Verify whether Blob attachment Association rows already satisfy the model.
+- [x] Identify whether component-local image binding records are still needed
       or should collapse into Blob/Association usage.
-- [ ] Record every missing runtime capability as a Phase 19 gap.
+- [x] Record every missing runtime capability as a Phase 19 gap.
 
 ### Expected Output
 
@@ -105,18 +105,25 @@ instances.
   precedence, HTML head fallback, article extraction, inline image source
   rewriting, entity image definitions, payload-backed Blob registration, and
   direct `registerPost` rejection for path-only image specs.
+- BI-02 rejects `BlogPost.primaryImageId` and Blog-local image metadata/binding
+  entities as canonical state. BlogPost image links are represented by CNCF
+  BlobAttachment Association rows only.
+- Representative images are derived from Association roles in
+  `primary -> cover -> thumbnail` order; `gallery` does not act as a
+  representative fallback.
+- Public get/search and publish/deactivate lifecycle behavior are verified in
+  `textus-blog` executable specs.
 - CNCF now has a reusable managed Blob payload helper for non-Blob components
   and a client-side `filetree` parameter path that ZIPs a local directory and
   submits it as multipart form data.
-- Remaining BI-02 work is primary image behavior, public read/search filtering,
-  lifecycle operations, and the final decision on direct fields versus
-  Association-backed image links.
+- Remaining Phase 19 work moves to BI-03/BI-04: contract documentation,
+  projection shape, and Web/admin/manual behavior for associated images.
 
 ---
 
 ## BI-03: Entity Image Binding Usage Contract
 
-Status: SUSPENDED
+Status: ACTIVE
 
 ### Objective
 

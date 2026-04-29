@@ -619,17 +619,18 @@ Active in Phase 19.
   - keep public Blog references limited to published active posts while
     protected author/admin operations own draft, publish, deactivate, and image
     synchronization flows;
-  - validate primary, inline, thumbnail, and ordered supporting image roles;
+  - validate primary, inline, thumbnail, and ordered supporting image roles as
+    CNCF BlobAttachment Association roles rather than direct entity fields;
   - handle article body `img` tags as image occurrences that can be reconciled
-    with managed image assets and inline image bindings;
+    with managed Blob metadata and inline Association rows;
   - support Blog file-tree import by using reusable CNCF HTML tree values rather
     than Blog-specific parsing code;
   - use managed Blob ZIP archives as the production Blog file-tree import
     input while keeping local `treeRootPath` as a development driver path;
-  - keep `registerPost` as the lower-level normalized HTML/image-reference
+  - keep `registerPost` as the lower-level normalized HTML/Blob-reference
     boundary, with local path payload registration owned by `importPostTree`;
-  - decide how much should be direct Entity reference versus Blob/Association
-    attachment usage;
+  - use Association-only image links for BlogPost, including primary image
+    selection by role priority;
   - expose and fix CNCF runtime/Web/projection/generator gaps using a real
     component driver.
 - Scope boundary:
