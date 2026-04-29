@@ -56,7 +56,6 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- *  version Apr. 28, 2026
  * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
@@ -350,6 +349,21 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       missing.status.code shouldBe 404
       RuntimeDashboardMetrics.blobDiagnosticCounts.getOrElse("not_found", 0L) should be >= 1L
 
+      val refRoute = server.routes(null).orNotFound.run(_get_request("/web/blob/content/default/storage-key")).unsafeRunSync()
+      refRoute.status.code shouldBe 404
+
+      val external = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
+        "register_blob",
+        Property("sourceMode", "external_url", None),
+        Property("kind", "image", None),
+        Property("filename", "external.png", None),
+        Property("contentType", ContentType.IMAGE_PNG.header, None),
+        Property("externalUrl", "https://example.test/external.png", None)
+      ))))
+      val externalId = external.getString("id").getOrElse(fail("external Blob id is missing"))
+      val externalContent = server.routes(null).orNotFound.run(_get_request(s"/web/blob/content/$externalId")).unsafeRunSync()
+      externalContent.status.code shouldBe 400
+
       val unsafeBlob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
         "register_blob",
         arguments = List(Argument("payload", Bag.binary("unsafe".getBytes(StandardCharsets.UTF_8)))),
@@ -365,6 +379,43 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       ).unsafeRunSync()
       header(unsafeInline, "Content-Disposition") shouldBe
         Some("""inline; filename="bad_____name-__.png"; filename*=UTF-8''bad%22%3B%0D%0A%2Fname-%E7%94%BB%E5%83%8F.png""")
+    }
+
+    "serve structured Blob content errors when managed payload is missing" in {
+      val root = Files.createTempDirectory("cncf-blob-content-missing-payload-spec")
+      val subsystem = DefaultSubsystemFactory.default(
+        Some("server"),
+        ResolvedConfiguration(
+          Configuration(Map(
+            RuntimeConfig.BlobStoreBackendKey -> ConfigurationValue.StringValue(BlobStoreConfig.BackendLocal),
+            RuntimeConfig.BlobStoreLocalRootKey -> ConfigurationValue.StringValue(root.toString)
+          )),
+          ConfigurationTrace.empty
+        )
+      )
+      val blob = _blob_record(_success(subsystem.executeOperationResponse(_blob_request(
+        "register_blob",
+        arguments = List(Argument("payload", Bag.binary("missing payload".getBytes(StandardCharsets.UTF_8)))),
+        properties = List(
+          Property("sourceMode", "managed", None),
+          Property("kind", "attachment", None),
+          Property("filename", "missing.txt", None),
+          Property("contentType", ContentType.TEXT_PLAIN.header, None)
+        )
+      ))))
+      val displayPath = blob.getString("displayPath").getOrElse(fail("displayPath is missing"))
+      val storageRef = blob.getString("storageRef").getOrElse(fail("storageRef is missing"))
+      val key = storageRef.stripPrefix("local://default/")
+      val payloadPath = root.resolve("default").resolve(key)
+      Files.delete(payloadPath)
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val response = server.routes(null).orNotFound.run(_get_request(displayPath)).unsafeRunSync()
+      val body = response.as[String].unsafeRunSync()
+
+      response.status.code shouldBe 400
+      body should include ("Request failed")
+      body should include ("Error code")
     }
 
     "serve Blob admin mutation routes" in {

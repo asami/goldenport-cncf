@@ -812,6 +812,8 @@ Completed in Phase 18.
     provider/plugin extension points, and restart-safe local sidecar metadata
   - authorized CNCF content route `/web/blob/content/{id}` with cache/content
     headers and conditional GET
+  - post-close Blob core hardening guardrails for BlobStore/content URL
+    boundaries, id-based content routes, and missing-payload route failures
   - user-facing Blob register/read/metadata/attach/detach/list operations
   - admin-facing Blob list/get/delete/association/store-status operations
   - Web/admin Blob metadata, association, store, delete, attach, and detach pages

@@ -144,6 +144,7 @@ Current semantic direction:
   - BL-10D (DONE): Blob operational diagnostics and metrics.
   - BL-10E (DONE): common structured validation errors and Blob metrics
     recovery.
+  - BL-10F (DONE): post-close Blob core hardening closure review.
 
 Current note:
 
@@ -177,6 +178,11 @@ Current note:
     classified as generic `payload_size`, content-type/kind policy failures as
     generic `mime_kind`, and Blob keeps Blob-local labels only for
     Blob-specific policies such as external URL safety.
+  - BL-10F closes the Blob core hardening review by locking BlobStore/content
+    URL boundaries in executable specs: BlobStore does not generate
+    storage-ref-based CNCF content routes, `/web/blob/content/{id}` remains
+    Blob Entity id based, backend public URLs stay backend-sourced, and missing
+    managed payloads remain structured route failures.
   - BL-07B closes the projection contract:
     Aggregate/View output uses a flat, additive `blobs` field, omits it when
     empty, orders rows by `sortOrder`, and never embeds payload bytes.
@@ -260,6 +266,7 @@ Current note:
   - [x] BL-10C: Blob upload acceptance policy.
   - [x] BL-10D: Blob operational diagnostics and metrics.
   - [x] BL-10E: Common structured validation errors and Blob metrics recovery.
+  - [x] BL-10F: Blob core hardening closure review.
 
 ## 6. Public Interface Direction
 

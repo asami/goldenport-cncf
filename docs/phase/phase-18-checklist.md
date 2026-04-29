@@ -1101,6 +1101,38 @@ Verification snapshot:
 - [x] `BlobComponentSpec -- -z Blob`, `StaticFormAppRendererSpec -- -z Blob`,
       and `sbt --batch Test/compile` passed.
 
+---
+
+### BL-10F: Blob Core Hardening Closure Review
+
+Status: DONE
+
+Close the Blob core implementation with executable guardrails rather than new
+public APIs:
+
+- [x] BlobStore SPI does not generate storage-ref-based CNCF content routes.
+- [x] In-memory and local stores return backend access metadata only when a
+      backend/public path is configured.
+- [x] CNCF content route remains Blob Entity id based and does not expose
+      `BlobStorageRef`.
+- [x] Missing Blob metadata, external URL payload reads, and missing managed
+      payload files remain structured content-route failures.
+- [x] LocalBlobStore restart-safe sidecar metadata, sidecar-missing failures,
+      invalid key guards, and sidecar-write compensation remain covered.
+
+Deferred:
+
+- S3/S3-compatible BlobStore provider remains AwsComponent work.
+- signed URLs, thumbnails, virus scanning, resumable upload, and range requests
+  remain outside Phase 18.
+
+Verification snapshot:
+
+- [x] `BlobStoreSpec` covers BlobStore URL boundary and local/in-memory guards.
+- [x] `StaticFormAppRendererSpec -- -z Blob` covers content-route closure
+      behavior.
+- [x] `BlobComponentSpec -- -z Blob` covers Blob metadata URL projection.
+
 ### Deferred To 8.3 Security
 
 - first-class arbitrary ACL lists.

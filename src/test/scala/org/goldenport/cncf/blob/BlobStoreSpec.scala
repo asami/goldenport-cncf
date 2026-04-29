@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the Phase 18 BL-02 BlobStore SPI baseline.
  *
  * @since   Apr. 26, 2026
- * @version Apr. 28, 2026
+ * @version Apr. 29, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobStoreSpec
@@ -116,6 +116,7 @@ final class BlobStoreSpec
       putResult.digest shouldBe BlobStoreSupport.sha256("hello blob".getBytes(StandardCharsets.UTF_8))
       putResult.accessUrl.displayUrl shouldBe ""
       putResult.accessUrl.downloadUrl shouldBe ""
+      _assert_no_cncf_content_route(putResult.accessUrl)
       store.accessUrl(putResult.storageRef) shouldBe a[Consequence.Failure[_]]
 
       When("reading the payload")
@@ -145,6 +146,7 @@ final class BlobStoreSpec
       Then("the access URL is marked as backend-provided")
       result.accessUrl.urlSource shouldBe BlobAccessUrlSource.Backend
       result.accessUrl.displayUrl should startWith ("https://blob.example.test/assets/")
+      _assert_no_cncf_content_route(result.accessUrl)
     }
 
     "create the default in-memory backend through BlobStoreFactory" in {
@@ -240,6 +242,10 @@ final class BlobStoreSpec
       Then("the bytes are written under the BlobStore root, outside entity records")
       Files.exists(storedPath) shouldBe true
       Files.readAllBytes(storedPath).toVector shouldBe "local blob".getBytes(StandardCharsets.UTF_8).toVector
+      putResult.accessUrl.displayUrl shouldBe ""
+      putResult.accessUrl.downloadUrl shouldBe ""
+      _assert_no_cncf_content_route(putResult.accessUrl)
+      store.accessUrl(putResult.storageRef) shouldBe a[Consequence.Failure[_]]
 
       When("reading the payload through the store")
       val read = _success(store.get(putResult.storageRef))
@@ -443,6 +449,11 @@ final class BlobStoreSpec
 
   private def _bytes(payload: org.goldenport.bag.BinaryBag): Vector[Byte] =
     payload.openInputStream().readAllBytes().toVector
+
+  private def _assert_no_cncf_content_route(accessUrl: BlobAccessUrl): Unit = {
+    accessUrl.displayUrl should not include ("/web/blob/content/")
+    accessUrl.downloadUrl should not include ("/web/blob/content/")
+  }
 }
 
 private object _CustomBlobStoreProvider extends BlobStoreProvider {
