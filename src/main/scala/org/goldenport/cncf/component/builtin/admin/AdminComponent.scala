@@ -51,7 +51,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
- * @version Apr. 28, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -1788,14 +1788,20 @@ object AdminComponent {
       view = args.get("view").map(_.toString).getOrElse("detail")
       fields = _entity_view_fields(component, entityName, view)
       record <- Consequence.fromOption(_entity_record(collection, id, fields), s"Entity record not found: ${id}")
-    } yield OperationResponse.RecordResponse(
-      _read_response_record(
+      sourceEntityId = record.getString("id").filter(_.nonEmpty).getOrElse(id)
+      base = _read_response_record(
         "entity",
         componentName,
         entityName,
         id,
         record
       )
+      projection <- {
+        given org.goldenport.cncf.context.ExecutionContext = core.executionContext
+        _blob_projection_record(core, sourceEntityId)
+      }
+    } yield OperationResponse.RecordResponse(
+      _with_blob_projection(base, projection, sourceEntityId)
     )
   }
 
@@ -2483,19 +2489,33 @@ object AdminComponent {
     collectionName: String,
     id: String,
     value: Any
-  )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
-    _blob_projection_records(core, id).map { blobs =>
+  )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] = {
+    val base = _read_value_response_record(kind, componentName, collectionName, id, value)
+    val sourceEntityId = _source_entity_id(id, value, base)
+    _blob_projection_record(core, sourceEntityId).map { projection =>
       _with_blob_projection(
-        _read_value_response_record(kind, componentName, collectionName, id, value),
-        blobs
+        base,
+        projection,
+        sourceEntityId
       )
     }
+  }
 
-  private def _blob_projection_records(
+  private def _source_entity_id(
+    routeId: String,
+    value: Any,
+    record: Record
+  ): String =
+    _read_item_id(value).filter(_.nonEmpty)
+      .orElse(record.getString("sourceEntityId").filter(_.nonEmpty))
+      .orElse(record.getString("id").filter(_.nonEmpty))
+      .getOrElse(routeId)
+
+  private def _blob_projection_record(
     core: ActionCall.Core,
     sourceEntityId: String
-  )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Vector[Record]] =
-    BlobProjection.entityBlobRecords(sourceEntityId)(_blob_projection_loaders(core))
+  )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Record] =
+    BlobProjection.entityImageProjectionRecord(sourceEntityId)(_blob_projection_loaders(core))
 
   private def _blob_projection_loaders(core: ActionCall.Core): BlobProjection.Loaders =
     BlobProjection.Loaders(
@@ -2572,21 +2592,43 @@ object AdminComponent {
 
   private def _with_blob_projection(
     record: Record,
-    blobs: Vector[Record]
-  ): Record =
-    if (blobs.isEmpty)
-      record
-    else
-      Record.dataAuto(
-        (record.asMap.toVector.filterNot { case (key, _) => key.equalsIgnoreCase("blobs") } :+ ("blobs" -> blobs))*
+    projection: Record,
+    sourceEntityId: String
+  ): Record = {
+    val images = _record_seq(projection.getAny("images"))
+    val representative = projection.getAny("representativeImage").collect { case r: Record => r }
+    Record.createFull(
+      record.asMap.toVector.filterNot { case (key, _) =>
+        key.equalsIgnoreCase("sourceEntityId") ||
+          key.equalsIgnoreCase("images") ||
+          key.equalsIgnoreCase("representativeImage") ||
+          key.equalsIgnoreCase("blobs")
+      } ++ Vector(
+        "sourceEntityId" -> sourceEntityId,
+        "images" -> images,
+        "representativeImage" -> representative
       )
+    )
+  }
+
+  private def _record_seq(
+    value: Option[Any]
+  ): Vector[Record] =
+    value.toVector.flatMap {
+      case r: Record => Vector(r)
+      case xs: Vector[?] => xs.collect { case r: Record => r }
+      case xs: Seq[?] => xs.toVector.collect { case r: Record => r }
+      case xs: Array[?] => xs.toVector.collect { case r: Record => r }
+      case _ => Vector.empty
+    }
 
   private final case class _AdminReadItem(
     id: String,
     label: String,
     value: String,
     shortid: Option[String] = None,
-    blobs: Vector[Record] = Vector.empty
+    images: Vector[Record] = Vector.empty,
+    representativeImage: Option[Record] = None
   ) {
     def toRecord: Record =
       Record.dataAuto(
@@ -2596,7 +2638,10 @@ object AdminComponent {
           "value" -> value
         ) ++
           shortid.map("shortid" -> _).toVector ++
-          (if (blobs.isEmpty) Vector.empty else Vector("blobs" -> blobs)))*
+          (if (images.isEmpty) Vector.empty else Vector(
+            "images" -> images,
+            "representativeImage" -> representativeImage
+          )))*
       )
   }
 
@@ -2609,7 +2654,11 @@ object AdminComponent {
   )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Vector[_AdminReadItem]] =
     _read_items(values).foldLeft(Consequence.success(Vector.empty[_AdminReadItem])) { (z, item) =>
       z.flatMap { acc =>
-        _blob_projection_records(core, item.id).map(blobs => acc :+ item.copy(blobs = blobs))
+        _blob_projection_record(core, item.id).map { projection =>
+          val images = _record_seq(projection.getAny("images"))
+          val representative = projection.getAny("representativeImage").collect { case r: Record => r }
+          acc :+ item.copy(images = images, representativeImage = representative)
+        }
       }
     }
 

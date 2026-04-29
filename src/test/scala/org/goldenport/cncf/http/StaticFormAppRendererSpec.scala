@@ -56,7 +56,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 29, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -939,6 +939,15 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       operationHtml should include ("approve-notice-aggregate")
       operationHtml should not include ("admin entity")
       operationHtml should not include ("method=\"post\"")
+
+      val blobSubsystem = DefaultSubsystemFactory.default(Some("server"))
+      val blobAttachHtml = StaticFormAppRenderer.renderComponentManualOperation(blobSubsystem, "blob", "blob", "admin-attach-blob-to-entity").map(_.body).getOrElse(fail("blob attach manual is missing"))
+      blobAttachHtml should include ("Image Binding")
+      blobAttachHtml should include ("existing Blob id")
+      blobAttachHtml should include ("attach")
+      blobAttachHtml should include ("primary, cover, thumbnail, gallery, inline")
+      blobAttachHtml should include ("sourceEntityId")
+      blobAttachHtml should include ("sortOrder")
     }
 
     "preserve real componentlet path in rendered manual admin and form links" in {
@@ -1128,8 +1137,19 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       totalPage should include ("includeTotal=true")
       detail should include ("board update")
       detail should include ("alice")
+      detail should include ("Images")
+      detail should include ("Representative Image")
+      detail should include ("Attach Existing Blob")
+      detail should include ("Associated Images")
+      detail should include ("action=\"/web/blob/admin/associations/attach\"")
+      detail should include ("name=\"sourceEntityId\"")
+      detail should include ("entityImageRoleOptions")
+      detail should include ("No BlobAttachment images are associated with this Entity.")
       detailByShortid should include ("board update")
       detailByShortid should include ("alice")
+      val shortDetailSourceId = """name="sourceEntityId" value="([^"]+)"""".r.findFirstMatchIn(detailByShortid).map(_.group(1)).getOrElse(fail("short-id detail sourceEntityId is missing"))
+      shortDetailSourceId should include ("notice_1")
+      shortDetailSourceId should not be recordShortid
       edit should include ("name=\"title\"")
       edit should include ("value=\"board update\"")
       edit should include (s"/form/${componentPath}/admin/entities/${entityPath}/${recordShortid}/update")
@@ -3042,12 +3062,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       secondViewPage.getBoolean("hasNext") shouldBe Some(false)
       val viewBlobId = _register_external_blob(viewSubsystem, "view-image.png", "https://example.test/view-image.png")
       val viewNoBlobRecord = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "id" -> "notice_2")
-      viewNoBlobRecord.getAny("blobs") shouldBe None
+      viewNoBlobRecord.getAny("images") shouldBe Some(Vector.empty)
+      viewNoBlobRecord.getAny("representativeImage") shouldBe Some(None)
+      val viewSourceEntityId = viewNoBlobRecord.getString("sourceEntityId").getOrElse(fail("view sourceEntityId is missing"))
       _success(viewSubsystem.executeOperationResponse(_blob_request(
         "admin_attach_blob_to_entity",
-        Property("sourceEntityId", "notice_2", None),
+        Property("sourceEntityId", viewSourceEntityId, None),
         Property("id", viewBlobId, None),
-        Property("role", "mainImage", None),
+        Property("role", "primary", None),
         Property("sortOrder", "1", None)
       )))
       val viewInstanceRecord = _admin_record_response(viewSubsystem, "view", "read", "component" -> "notice-board", "view" -> "notice-view", "id" -> "notice_2")
@@ -3056,8 +3078,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       viewInstanceRecord.getString("label").getOrElse("") should include ("notice detail notice_2")
       viewInstanceRecord.getAny("item").map(_.toString).getOrElse("") should include ("notice_2")
       viewInstanceRecord.getString("fields").getOrElse("") should include ("notice detail notice_2")
-      viewInstanceRecord.getAny("blobs").map(_.toString).getOrElse("") should include (viewBlobId)
-      viewInstanceRecord.getAny("blobs").map(_.toString).getOrElse("") should include ("mainImage")
+      viewInstanceRecord.getAny("images").map(_.toString).getOrElse("") should include (viewBlobId)
+      viewInstanceRecord.getAny("images").map(_.toString).getOrElse("") should include ("primary")
+      viewInstanceRecord.getAny("representativeImage").map(_.toString).getOrElse("") should include (viewBlobId)
+      viewInstanceRecord.getAny("representativeImage").map(_.toString).getOrElse("") should include ("primary")
       _blob_records(viewInstanceRecord).map(_.getString("id").getOrElse("")) shouldBe Vector(viewBlobId)
       _blob_records(viewInstanceRecord).foreach { blob =>
         blob.getAny("payload") shouldBe None
@@ -3138,8 +3162,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       aggregateInstanceRecord.getAny("item").map(_.toString).getOrElse("") should include ("notice_1")
       aggregateInstanceRecord.getString("fields").getOrElse("") should include ("notice aggregate")
       aggregateInstanceRecord.getAny("record").map(_.toString).getOrElse("") should not include ("blobs")
-      aggregateInstanceRecord.getAny("blobs").map(_.toString).getOrElse("") should include (aggregateBlobId)
-      aggregateInstanceRecord.getAny("blobs").map(_.toString).getOrElse("") should include ("heroImage")
+      aggregateInstanceRecord.getAny("record").map(_.toString).getOrElse("") should not include ("images")
+      aggregateInstanceRecord.getAny("images").map(_.toString).getOrElse("") should include (aggregateBlobId)
+      aggregateInstanceRecord.getAny("images").map(_.toString).getOrElse("") should include ("heroImage")
       val aggregateBlobs = _blob_records(aggregateInstanceRecord)
       aggregateBlobs.map(_.getString("id").getOrElse("")) shouldBe Vector(
         earlyAggregateBlobId,
@@ -8346,7 +8371,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
   private def _blob_records(
     record: Record
   ): Vector[Record] =
-    record.getAny("blobs").collect {
+    record.getAny("images").collect {
       case xs: Seq[?] => xs.collect { case r: Record => r }.toVector
     }.getOrElse(Vector.empty)
 

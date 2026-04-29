@@ -5,7 +5,7 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version Apr. 28, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object DescribeProjection {
@@ -53,13 +53,14 @@ object DescribeProjection {
           )
         }
         val operationdefs = operationMetas(component).map { x =>
-          Record.data(
+          Record.dataAuto(
             "name" -> x.name,
             "kind" -> x.kind,
             "inputType" -> x.inputType,
             "outputType" -> x.outputType,
             "inputValueKind" -> x.inputValueKind,
-            "parameters" -> x.parameters
+            "parameters" -> x.parameters,
+            "imageBinding" -> x.imageBinding
           )
         }
         val entitycollections = entityCollectionRecords(component)
@@ -86,12 +87,14 @@ object DescribeProjection {
           "operations" -> operations.map(operation_record(service, _))
         )
       case Target.OperationTarget(component, service, operation) =>
-        Record.data(
+        val imagebinding = operation_image_binding(component, operation).map(image_binding_record)
+        Record.dataAuto(
           "type" -> "operation",
           "name" -> s"${component.name}.${service.name}.${operation.name}",
           "summary" -> s"Operation ${service.name}.${operation.name}",
           "arguments" -> operation.specification.request.parameters.toVector.map(parameter_record),
-          "returns" -> render_operation_returns(operation)
+          "returns" -> render_operation_returns(operation),
+          "imageBinding" -> imagebinding
         )
       case Target.NotFound(target) =>
         Record.data(

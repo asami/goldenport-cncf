@@ -435,6 +435,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   Web forms, admin pages, and manual/help metadata expose associated images.
 - Implement CNCF runtime/Web/projection gaps discovered by the BlogComponent
   driver.
+- Current BI-04 slice completed reusable `BlobProjection` output, Entity admin
+  image visibility with existing Blob attach/detach controls, and
+  operation manual/help image-binding metadata.
+- Remaining BI-04 work is limited to upload/register adapters and generic
+  Entity create/update attachment support.
 - Non-goals:
 - No new Blob payload storage backend in CNCF core.
 - No S3/S3-compatible BlobStore provider implementation in this phase.
@@ -633,6 +638,8 @@ Active in Phase 19.
     selection by role priority;
   - expose associated Blob images through reusable `BlobProjection` output with
     `images` plus derived `representativeImage`;
+  - expose associated images on Entity admin detail pages and surface
+    image-capable operation metadata in manual/help output;
   - expose and fix CNCF runtime/Web/projection/generator gaps using a real
     component driver.
 - Scope boundary:

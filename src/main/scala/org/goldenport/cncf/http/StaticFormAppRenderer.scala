@@ -24,8 +24,7 @@ import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- *  version Apr. 28, 2026
- * @version Apr. 29, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -2430,6 +2429,117 @@ object StaticFormAppRenderer {
        |</form>""".stripMargin
   }
 
+  private def _admin_entity_images_section(
+    record: Option[Record],
+    fallbackId: String
+  ): String = {
+    val sourceId = record.flatMap(_.getString("sourceEntityId")).orElse(record.flatMap(_.getString("id"))).getOrElse(fallbackId)
+    val images = record.map(r => _record_seq(r.getAny("images"))).getOrElse(Vector.empty)
+    val representative = record.flatMap(_.getAny("representativeImage")).collect { case r: Record => r }
+    val representativeHtml = representative.map(_admin_entity_representative_image).getOrElse(_admin_empty_state("No representative image is currently derived."))
+    val table =
+      if (images.isEmpty)
+        s"""<tbody>${_admin_empty_table_cell(7, "No BlobAttachment images are associated with this Entity.")}</tbody>"""
+      else
+        s"""<tbody>${images.map(row => _admin_entity_image_row(sourceId, row)).mkString("\n")}</tbody>"""
+    s"""<article class="card admin-card mt-3">
+       |  <div class="card-body">
+       |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+       |      <h2 class="card-title mb-0">Images</h2>
+       |      <a class="btn btn-outline-secondary btn-sm" href="/web/blob/admin/associations?sourceEntityId=${_escape_query(sourceId)}">Open Blob associations</a>
+       |    </div>
+       |    <section class="mb-3">
+       |      <h3 class="h6">Representative Image</h3>
+       |      ${representativeHtml}
+       |    </section>
+       |    <section class="mb-3">
+       |      <h3 class="h6">Attach Existing Blob</h3>
+       |      ${_admin_entity_image_attach_form(sourceId)}
+       |    </section>
+       |    <section>
+       |      <h3 class="h6">Associated Images</h3>
+       |      <div class="table-responsive">
+       |        <table class="table table-sm align-middle">
+       |          <thead><tr><th>Role</th><th>Sort</th><th>Blob</th><th>Kind</th><th>Filename</th><th>Display</th><th>Actions</th></tr></thead>
+       |          ${table}
+       |        </table>
+       |      </div>
+       |    </section>
+       |  </div>
+       |</article>""".stripMargin
+  }
+
+  private def _admin_entity_representative_image(
+    record: Record
+  ): String = {
+    val url = _admin_entity_image_display_url(record)
+    val id = record.getString("id").getOrElse("")
+    val role = record.getString("role").getOrElse("")
+    val filename = record.getString("filename").getOrElse(id)
+    val media =
+      url.flatMap(_blob_admin_safe_display_url) match {
+        case Some(safe) =>
+          s"""<img src="${_escape(safe)}" alt="${_escape(filename)}" class="img-thumbnail" style="max-width: 12rem; max-height: 8rem;">"""
+        case None =>
+          s"""<code>${_escape(url.getOrElse(""))}</code>"""
+      }
+    s"""<div class="d-flex flex-wrap gap-3 align-items-center">
+       |  ${media}
+       |  <div><div><strong>${_escape(role)}</strong></div><code>${_escape(id)}</code></div>
+       |</div>""".stripMargin
+  }
+
+  private def _admin_entity_image_row(
+    sourceId: String,
+    record: Record
+  ): String = {
+    val id = record.getString("id").getOrElse("")
+    val display = _admin_entity_image_display_url(record).flatMap(_blob_admin_safe_display_url) match {
+      case Some(url) => s"""<a href="${_escape(url)}">display</a>"""
+      case None => _admin_entity_image_display_url(record).map(x => s"""<code>${_escape(x)}</code>""").getOrElse("")
+    }
+    s"""<tr>
+       |  <td>${_escape(record.getString("role").getOrElse(""))}</td>
+       |  <td>${_escape(record.getString("sortOrder").getOrElse(""))}</td>
+       |  <td><code>${_escape(id)}</code></td>
+       |  <td>${_escape(record.getString("kind").getOrElse(""))}</td>
+       |  <td>${_escape(record.getString("filename").getOrElse(""))}</td>
+       |  <td>${display}</td>
+       |  <td><a href="/web/blob/admin/blobs/${_escape_path_segment(id)}">Blob</a>${_admin_entity_image_detach_form(sourceId, record)}</td>
+       |</tr>""".stripMargin
+  }
+
+  private def _admin_entity_image_display_url(
+    record: Record
+  ): Option[String] =
+    record.getString("displayPath").orElse(record.getString("displayUrl"))
+
+  private def _admin_entity_image_attach_form(
+    sourceId: String
+  ): String =
+    s"""<form method="post" action="/web/blob/admin/associations/attach" class="row g-2 align-items-end">
+       |  <input type="hidden" name="sourceEntityId" value="${_escape(sourceId)}">
+       |  <div class="col-md-5"><label class="form-label" for="entityImageAttachId">Blob id</label><input class="form-control" id="entityImageAttachId" name="id" required></div>
+       |  <div class="col-md-3"><label class="form-label" for="entityImageAttachRole">Role</label><input class="form-control" id="entityImageAttachRole" name="role" list="entityImageRoleOptions" required></div>
+       |  <div class="col-md-2"><label class="form-label" for="entityImageAttachSortOrder">Sort</label><input class="form-control" id="entityImageAttachSortOrder" name="sortOrder"></div>
+       |  <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Attach</button></div>
+       |  <datalist id="entityImageRoleOptions"><option value="primary"><option value="cover"><option value="thumbnail"><option value="gallery"><option value="inline"></datalist>
+       |</form>""".stripMargin
+
+  private def _admin_entity_image_detach_form(
+    sourceId: String,
+    record: Record
+  ): String = {
+    val id = record.getString("id").getOrElse("")
+    val role = record.getString("role").getOrElse("")
+    s"""<form method="post" action="/web/blob/admin/associations/detach" class="d-inline ms-2">
+       |  <input type="hidden" name="sourceEntityId" value="${_escape(sourceId)}">
+       |  <input type="hidden" name="id" value="${_escape(id)}">
+       |  <input type="hidden" name="role" value="${_escape(role)}">
+       |  <button class="btn btn-outline-danger btn-sm" type="submit">Detach</button>
+       |</form>""".stripMargin
+  }
+
   private def _blob_admin_paging(
     basePath: String,
     params: Map[String, String],
@@ -2883,7 +2993,9 @@ object StaticFormAppRenderer {
       val basePath = s"/web/${componentPath}/admin/entities/${entityPath}"
       val routeId = _entity_route_id(id)
       val querySuffix = _hidden_form_context_query_suffix(values)
-      val body = _admin_entity_record_table(subsystem, component, componentPath, entityPath, id, webDescriptor)
+      val readRecord = _admin_entity_read_record(subsystem, componentPath, entityPath, id)
+      val body = _admin_entity_record_table_from_record(subsystem, component, componentPath, entityPath, id, readRecord, webDescriptor)
+      val images = _admin_entity_images_section(readRecord, id)
       val nav = _admin_nav_card(Vector(
         s"Back to ${entityLabel} records" -> s"${basePath}${querySuffix}",
         "Entity types" -> s"/web/${componentPath}/admin/entities"
@@ -2901,7 +3013,8 @@ object StaticFormAppRenderer {
              |    </div>
              |    ${body}
              |  </div>
-             |</article>""".stripMargin
+             |</article>
+             |${images}""".stripMargin
       ))
     }
 
@@ -3131,6 +3244,44 @@ object StaticFormAppRenderer {
       s"""No record is currently available for id <code>${_escape(id)}</code>."""
     )
   }
+
+  private def _admin_entity_record_table_from_record(
+    subsystem: Subsystem,
+    component: Component,
+    componentPath: String,
+    entityPath: String,
+    id: String,
+    record: Option[Record],
+    webDescriptor: WebDescriptor = WebDescriptor.empty
+  ): String = {
+    val webSchema = WebSchemaResolver.resolveEntity(
+      component,
+      componentPath,
+      entityPath,
+      webDescriptor,
+      _admin_entity_schema_fields(subsystem, component, componentPath, entityPath),
+      fieldOrderStrategy = WebSchemaResolver.FieldOrderStrategy.SchemaOrder
+    )
+    val displayFields = _admin_entity_display_fields(component, entityPath, "detail", webSchema.fieldNames)
+    val fields = record.flatMap(_.getString("fields")).map(_field_lines)
+    _admin_record_table(
+      displayFields,
+      fields,
+      s"""No record is currently available for id <code>${_escape(id)}</code>."""
+    )
+  }
+
+  private def _admin_entity_read_record(
+    subsystem: Subsystem,
+    componentPath: String,
+    entityPath: String,
+    id: String
+  ): Option[Record] =
+    _admin_operation_record(
+      subsystem,
+      "/admin/entity/read",
+      Record.data("component" -> componentPath, "entity" -> entityPath, "id" -> id, "view" -> "detail")
+    )
 
   private def _admin_entity_record_fields(
     subsystem: Subsystem,
@@ -6525,8 +6676,39 @@ object StaticFormAppRenderer {
          "Form API" -> formApiPath,
          "OpenAPI JSON" -> "/web/system/manual/openapi.json"
        ))}
+       |${_manual_image_binding_summary(record)}
        |${_manual_parameter_table(parameterRows)}
        |${_manual_response_summary(returns)}""".stripMargin
+  }
+
+  private def _manual_image_binding_summary(
+    record: Record
+  ): String = {
+    val binding = _manual_record_values(record.asMap.get("imageBinding"))
+    if (binding.isEmpty)
+      ""
+    else {
+      val modes = Vector(
+        "upload" -> binding.get("acceptsUpload").flatMap(_manual_scalar).contains("true"),
+        "existing Blob id" -> binding.get("acceptsExistingBlobId").flatMap(_manual_scalar).contains("true"),
+        "archive Blob id" -> binding.get("acceptsArchiveBlobId").flatMap(_manual_scalar).contains("true")
+      ).collect { case (label, true) => label }
+      val behavior = Vector(
+        "attach" -> binding.get("createsAttachment").flatMap(_manual_scalar).contains("true"),
+        "detach" -> binding.get("detachesAttachment").flatMap(_manual_scalar).contains("true")
+      ).collect { case (label, true) => label }
+      val rows = Vector(
+        "Media kind" -> binding.get("mediaKind").flatMap(_manual_scalar).getOrElse("image"),
+        "Accepted input" -> modes.mkString(", "),
+        "Behavior" -> behavior.mkString(", "),
+        "Roles" -> _manual_seq_values(binding.get("roles")).mkString(", "),
+        "Parameters" -> _manual_seq_values(binding.get("parameters")).mkString(", ")
+      ).filter { case (_, value) => value.nonEmpty }
+      s"""<section class="mt-3">
+         |  <h3 class="h6">Image Binding</h3>
+         |  ${_manual_kv_summary(rows)}
+         |</section>""".stripMargin
+    }
   }
 
   private def _manual_canonical_rest_path(

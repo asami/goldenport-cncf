@@ -186,11 +186,11 @@ Implement CNCF gaps discovered by the `BlogComponent` driver.
 - [ ] Entity create/update support for Blob attachment requests.
 - [x] Projection helper expansion for `images` and `representativeImage`
       contract output.
-- [ ] Web/admin affordances for associated images on Entity pages, including
+- [x] Web/admin affordances for associated images on Entity pages, including
       role/sort-order display and attach/detach repair flows.
-- [ ] Descriptor/manual visibility for image-capable operations, including
+- [x] Descriptor/manual visibility for image-capable operations, including
       upload and existing-Blob input capabilities.
-- [ ] Regression coverage for Blob/Association image usage.
+- [x] Regression coverage for Blob/Association image usage.
 
 ### Guardrails
 
@@ -213,8 +213,8 @@ Entity image binding usage and the reusable CNCF behavior is verified.
 
 - [x] Verify `textus-blog` `BlogComponent` compile/generation path.
 - [x] Verify live or executable-spec image binding flows.
-- [ ] Verify projection output for associated images.
-- [ ] Verify Web/admin/manual behavior.
+- [x] Verify projection output for associated images.
+- [x] Verify Web/admin/manual behavior.
 - [ ] Update strategy history and close phase documents.
 
 ---

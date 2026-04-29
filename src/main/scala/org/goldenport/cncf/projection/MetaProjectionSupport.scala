@@ -8,10 +8,11 @@ import org.goldenport.cncf.component.ComponentOriginLabel
 import org.goldenport.cncf.entity.SimpleEntityStorageShapePolicy
 import org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor
 import org.goldenport.cncf.naming.NamingConventions
+import org.goldenport.cncf.operation.{CmlOperationImageBinding, ImageBindingOperationDefinition}
 
 /*
  * @since   Mar.  5, 2026
- * @version Apr. 26, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -37,7 +38,8 @@ private[projection] object MetaProjectionSupport {
     inputType: String,
     outputType: String,
     inputValueKind: String,
-    parameters: Vector[Record]
+    parameters: Vector[Record],
+    imageBinding: Option[Record] = None
   )
 
   sealed trait Target
@@ -130,10 +132,11 @@ private[projection] object MetaProjectionSupport {
     }
 
   def operation_record(service: ServiceDefinition, operation: OperationDefinition): Record =
-    Record.data(
+    Record.dataAuto(
       "type" -> "operation",
       "name" -> s"${service.name}.${operation.name}",
-      "runtimeName" -> s"${service_runtime_name(service)}.${operation_runtime_name(operation)}"
+      "runtimeName" -> s"${service_runtime_name(service)}.${operation_runtime_name(operation)}",
+      "imageBinding" -> operation_image_binding(operation).map(image_binding_record)
     )
 
   def parameter_record(param: ParameterDefinition): Record = {
@@ -150,11 +153,57 @@ private[projection] object MetaProjectionSupport {
   def operation_details(operation: OperationDefinition): Record = {
     val args = operation.specification.request.parameters.toVector.map(parameter_record)
     val returns = render_operation_returns(operation)
-    Record.data(
+    Record.dataAuto(
       "arguments" -> args,
-      "returns" -> returns
+      "returns" -> returns,
+      "imageBinding" -> operation_image_binding(operation).map(image_binding_record)
     )
   }
+
+  def operation_details(
+    component: Component,
+    operation: OperationDefinition
+  ): Record = {
+    val args = operation.specification.request.parameters.toVector.map(parameter_record)
+    val returns = render_operation_returns(operation)
+    Record.dataAuto(
+      "arguments" -> args,
+      "returns" -> returns,
+      "imageBinding" -> operation_image_binding(component, operation).map(image_binding_record)
+    )
+  }
+
+  def operation_image_binding(
+    operation: OperationDefinition
+  ): Option[CmlOperationImageBinding] =
+    operation match {
+      case x: ImageBindingOperationDefinition => Some(x.imageBinding)
+      case _ => None
+    }
+
+  def operation_image_binding(
+    component: Component,
+    operation: OperationDefinition
+  ): Option[CmlOperationImageBinding] =
+    operation_image_binding(operation).orElse {
+      component.operationDefinitions
+        .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
+        .flatMap(_.imageBinding)
+    }
+
+  def image_binding_record(
+    value: CmlOperationImageBinding
+  ): Record =
+    Record.dataAuto(
+      "mediaKind" -> value.mediaKind,
+      "acceptsUpload" -> value.acceptsUpload,
+      "acceptsExistingBlobId" -> value.acceptsExistingBlobId,
+      "acceptsArchiveBlobId" -> value.acceptsArchiveBlobId,
+      "createsAttachment" -> value.createsAttachment,
+      "detachesAttachment" -> value.detachesAttachment,
+      "roles" -> value.roles,
+      "parameters" -> value.parameters
+    )
 
   def render_operation_returns(operation: OperationDefinition): String =
     Option(operation.specification.response.result)
@@ -199,7 +248,8 @@ private[projection] object MetaProjectionSupport {
               "datatype" -> p.datatype,
               "multiplicity" -> p.multiplicity
             )
-          }
+          },
+          imageBinding = x.imageBinding.map(image_binding_record)
         )
       }
 

@@ -3,7 +3,7 @@ package org.goldenport.cncf.projection.model
 /*
  * @since   Mar.  5, 2026
  *  version Mar. 28, 2026
- * @version Apr.  6, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class HelpModel(
@@ -15,6 +15,7 @@ final case class HelpModel(
   selector: Option[HelpSelectorModel] = None,
   children: Vector[String] = Vector.empty,
   details: Map[String, Vector[String]] = Map.empty,
+  imageBinding: Option[org.goldenport.record.Record] = None,
   usage: Vector[String] = Vector.empty,
   domainVisions: Vector[HelpVisionModel] = Vector.empty,
   domainContexts: Vector[HelpContextModel] = Vector.empty,

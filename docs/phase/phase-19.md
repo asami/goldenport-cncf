@@ -94,9 +94,11 @@ Current semantic direction:
 
 Resume hint:
 
-- The BI-04 projection helper slice adds `images` plus derived
-  `representativeImage` output. Continue with Web/admin affordances and
-  manual/help metadata for image-capable operations.
+- The BI-04 projection/admin/manual slice adds `images` plus derived
+  `representativeImage` output, Entity admin image visibility with existing
+  Blob attach/detach affordances, and operation manual metadata for
+  image-capable operations. Continue with upload/register adapters and generic
+  Entity create/update attachment support.
 
 ## 5. Development Items
 

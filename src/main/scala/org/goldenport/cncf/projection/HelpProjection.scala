@@ -10,7 +10,7 @@ import org.goldenport.datatype.I18nString
 /*
  * @since   Mar.  5, 2026
  *  version Mar. 28, 2026
- * @version Apr. 11, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object HelpProjection {
@@ -115,6 +115,7 @@ object HelpProjection {
         val returns = render_operation_returns(operation)
         val summary = _operation_summary(service, operation).getOrElse(s"Operation: ${service.name}.${operation.name}")
         val descriptionDetails = _trim_i18n(operation.specification.description).fold(Map.empty[String, Vector[String]])(x => Map("description" -> Vector(x)))
+        val imageBinding = operation_image_binding(component, operation).map(image_binding_record)
         HelpModel(
           `type` = "operation",
           name = operationName,
@@ -127,6 +128,7 @@ object HelpProjection {
             "arguments" -> args,
             "returns" -> Vector(returns)
           ) ++ descriptionDetails,
+          imageBinding = imageBinding,
           usage = Vector(s"command ${_operation_cli_selector(componentName, serviceName, operationName)}")
         )
       case Target.NotFound(target) =>
@@ -157,6 +159,7 @@ object HelpProjection {
       "children" -> model.children,
       "details" -> details,
       "usage" -> model.usage,
+      "imageBinding" -> model.imageBinding,
       "domainContexts" -> model.domainContexts.map(_context_record),
       "domainSystemContexts" -> model.domainSystemContexts.map(_system_context_record),
       "domainContextMaps" -> model.domainContextMaps.map(_context_map_record),

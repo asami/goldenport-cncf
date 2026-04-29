@@ -21,6 +21,7 @@ import org.goldenport.cncf.entity.{EntityCreateOptions, EntityPersistent, Entity
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.observability.{ConclusionDiagnostics, ValidationDiagnostics}
+import org.goldenport.cncf.operation.{CmlOperationImageBinding, ImageBindingOperationDefinition}
 import org.goldenport.cncf.security.{AdminAuthorizationPolicy, EntityAccessMode, OperationAuthorizationProvider, OperationAuthorizationRule}
 import org.goldenport.cncf.unitofwork.{ExecUowM, UnitOfWorkAuthorization, UnitOfWorkOp}
 import org.goldenport.datatype.{ContentType, MimeBody}
@@ -41,8 +42,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Builtin Blob user-facing component.
  *
  * @since   Apr. 26, 2026
- *  version Apr. 28, 2026
- * @version Apr. 29, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponent() extends Component {
@@ -336,7 +336,13 @@ object BlobComponent {
   private final class RegisterBlobOperationDefinition(
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition
-  ) extends spec.OperationDefinition with OperationRequestValidationObserver {
+  ) extends spec.OperationDefinition with OperationRequestValidationObserver with ImageBindingOperationDefinition {
+    val imageBinding: CmlOperationImageBinding =
+      CmlOperationImageBinding(
+        acceptsUpload = true,
+        parameters = Vector("payload", "externalUrl", "sourceMode", "kind")
+      )
+
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "register_blob",
@@ -412,7 +418,15 @@ object BlobComponent {
   private final class AttachBlobToEntityOperationDefinition(
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with ImageBindingOperationDefinition {
+    val imageBinding: CmlOperationImageBinding =
+      CmlOperationImageBinding(
+        acceptsExistingBlobId = true,
+        createsAttachment = true,
+        roles = Vector("primary", "cover", "thumbnail", "gallery", "inline"),
+        parameters = Vector("sourceEntityId", "id", "role", "sortOrder")
+      )
+
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "attach_blob_to_entity",
@@ -427,7 +441,15 @@ object BlobComponent {
   private final class DetachBlobFromEntityOperationDefinition(
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with ImageBindingOperationDefinition {
+    val imageBinding: CmlOperationImageBinding =
+      CmlOperationImageBinding(
+        acceptsExistingBlobId = true,
+        detachesAttachment = true,
+        roles = Vector("primary", "cover", "thumbnail", "gallery", "inline"),
+        parameters = Vector("sourceEntityId", "id", "role")
+      )
+
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "detach_blob_from_entity",
@@ -442,7 +464,14 @@ object BlobComponent {
   private final class ListEntityBlobsOperationDefinition(
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition
-  ) extends spec.OperationDefinition {
+  ) extends spec.OperationDefinition with ImageBindingOperationDefinition {
+    val imageBinding: CmlOperationImageBinding =
+      CmlOperationImageBinding(
+        acceptsExistingBlobId = true,
+        roles = Vector("primary", "cover", "thumbnail", "gallery", "inline"),
+        parameters = Vector("sourceEntityId", "role")
+      )
+
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "list_entity_blobs",
@@ -494,7 +523,14 @@ object BlobComponent {
   private final class AdminListBlobAssociationsOperationDefinition(
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition
-  ) extends spec.OperationDefinition with BlobAdminOperationAuthorization {
+  ) extends spec.OperationDefinition with BlobAdminOperationAuthorization with ImageBindingOperationDefinition {
+    val imageBinding: CmlOperationImageBinding =
+      CmlOperationImageBinding(
+        acceptsExistingBlobId = true,
+        roles = Vector("primary", "cover", "thumbnail", "gallery", "inline"),
+        parameters = Vector("sourceEntityId", "id", "role")
+      )
+
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "admin_list_blob_associations",
@@ -539,7 +575,15 @@ object BlobComponent {
   private final class AdminAttachBlobToEntityOperationDefinition(
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition
-  ) extends spec.OperationDefinition with BlobAdminOperationAuthorization {
+  ) extends spec.OperationDefinition with BlobAdminOperationAuthorization with ImageBindingOperationDefinition {
+    val imageBinding: CmlOperationImageBinding =
+      CmlOperationImageBinding(
+        acceptsExistingBlobId = true,
+        createsAttachment = true,
+        roles = Vector("primary", "cover", "thumbnail", "gallery", "inline"),
+        parameters = Vector("sourceEntityId", "id", "role", "sortOrder")
+      )
+
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "admin_attach_blob_to_entity",
@@ -554,7 +598,15 @@ object BlobComponent {
   private final class AdminDetachBlobFromEntityOperationDefinition(
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition
-  ) extends spec.OperationDefinition with BlobAdminOperationAuthorization {
+  ) extends spec.OperationDefinition with BlobAdminOperationAuthorization with ImageBindingOperationDefinition {
+    val imageBinding: CmlOperationImageBinding =
+      CmlOperationImageBinding(
+        acceptsExistingBlobId = true,
+        detachesAttachment = true,
+        roles = Vector("primary", "cover", "thumbnail", "gallery", "inline"),
+        parameters = Vector("sourceEntityId", "id", "role")
+      )
+
     val specification: spec.OperationDefinition.Specification =
       spec.OperationDefinition.Specification(
         name = "admin_detach_blob_from_entity",

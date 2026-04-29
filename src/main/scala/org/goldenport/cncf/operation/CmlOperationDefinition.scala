@@ -5,10 +5,20 @@ import org.goldenport.cncf.security.OperationAuthorizationRule
 /*
  * @since   Mar. 22, 2026
  *  version Mar. 28, 2026
- *  version Apr. 13, 2026
- * @version Apr. 18, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
+final case class CmlOperationImageBinding(
+  mediaKind: String = "image",
+  acceptsUpload: Boolean = false,
+  acceptsExistingBlobId: Boolean = false,
+  acceptsArchiveBlobId: Boolean = false,
+  createsAttachment: Boolean = false,
+  detachesAttachment: Boolean = false,
+  roles: Vector[String] = Vector.empty,
+  parameters: Vector[String] = Vector.empty
+)
+
 final case class CmlOperationField(
   name: String,
   datatype: String,
@@ -50,5 +60,10 @@ final case class CmlOperationDefinition(
   inputValueKind: String,
   access: Option[CmlOperationAccess] = None,
   parameters: Vector[CmlOperationField] = Vector.empty,
-  operationAuthorization: Option[OperationAuthorizationRule] = None
+  operationAuthorization: Option[OperationAuthorizationRule] = None,
+  imageBinding: Option[CmlOperationImageBinding] = None
 )
+
+trait ImageBindingOperationDefinition {
+  def imageBinding: CmlOperationImageBinding
+}
