@@ -451,9 +451,10 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   generic association list, attach, detach, and Entity detail rendering, plus
   operation HTML/Form API binding adapters for image upload/existing Blob
   attachments and generic Association target id inputs outside Entity admin.
-  It also standardizes `filebundle` as a core DataType and normalizes
-  client/command directory, single-file, and existing-ZIP inputs into validated
-  ZIP payloads for component operations.
+  It also standardizes `filebundle` as a core DataType so command execution can
+  keep directory, single-file, and existing-ZIP inputs as path-preserving
+  FileBundle values while client HTTP transport converts them to validated ZIP
+  payloads at the network boundary.
 - Remaining BI-04 work is phase closure validation rather than a known runtime
   adapter gap.
 - Non-goals:

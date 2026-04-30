@@ -116,8 +116,9 @@ instances.
   `textus-blog` executable specs.
 - CNCF now has a reusable managed Blob payload helper for non-Blob components
   and a core `filebundle` DataType whose client/command boundary accepts
-  directories, single files, and existing ZIPs before submitting or executing
-  them as validated ZIP payloads.
+  directories, single files, and existing ZIPs as path-preserving FileBundle
+  values for direct execution and as validated ZIP payloads only for network
+  transport.
 - Remaining Phase 19 work moves to BI-03/BI-04: contract documentation,
   projection shape, and Web/admin/manual behavior for associated images.
 
@@ -204,8 +205,9 @@ Implement CNCF gaps discovered by the `BlogComponent` driver.
       workflows.
 - [x] `filebundle` client/command transport DataType.
       Directory, single-file, and existing-ZIP inputs are normalized through
-      the core `FileBundle` companion into `application/zip` `MimeBody`
-      payloads before operation execution.
+      the core `FileBundle` companion without eager ZIP conversion for command
+      execution; client HTTP transport converts them to `application/zip`
+      `MimeBody` payloads at the network boundary.
 - [x] Non-image Association binding Web/manual surfaces beyond the core
       operation metadata.
 - [x] Entity create/update support for Blob attachment requests.

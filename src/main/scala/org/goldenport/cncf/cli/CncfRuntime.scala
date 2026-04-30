@@ -1835,6 +1835,12 @@ object CncfRuntime extends GlobalObservable {
   ): Consequence[Request] =
     new CncfRuntime()._prepare_filebundle_parameters(subsystem, req)
 
+  private[cli] def _prepare_filebundle_transport_parameters(
+    operation: org.goldenport.protocol.spec.OperationDefinition,
+    req: Request
+  ): Consequence[Request] =
+    new CncfRuntime()._prepare_filebundle_transport_parameters(operation, req)
+
   private[cli] def _client_http_body_and_header(
     req: Request
   ): Consequence[(Option[MimeBody], Record)] =
@@ -3338,6 +3344,7 @@ class CncfRuntime() extends GlobalObservable {
     for {
       operation <- _operation_request_definition(subsystem, req)
       normalized <- _prepare_filebundle_parameters(operation, req)
+      transport <- _prepare_filebundle_transport_parameters(operation, normalized)
       action <- operation.createOperationRequest(normalized)
     } yield {
       val method = action match {
@@ -3348,9 +3355,9 @@ class CncfRuntime() extends GlobalObservable {
         component = "client",
         service = "http",
         operation = method,
-        arguments = Argument("path", _request_path(req), None) :: normalized.arguments,
-        switches = normalized.switches,
-        properties = normalized.properties
+        arguments = Argument("path", _request_path(req), None) :: transport.arguments,
+        switches = transport.switches,
+        properties = transport.properties
       )
     }
 
@@ -3388,6 +3395,34 @@ class CncfRuntime() extends GlobalObservable {
   ): Consequence[Request] =
     _operation_request_definition(subsystem, req).flatMap(_prepare_filebundle_parameters(_, req))
 
+  private[cli] def _prepare_filebundle_transport_parameters(
+    operation: org.goldenport.protocol.spec.OperationDefinition,
+    req: Request
+  ): Consequence[Request] = {
+    val names = operation.specification.request.parameters
+      .filter(_is_filebundle_parameter)
+      .flatMap(_.names)
+      .toSet
+    if (names.isEmpty) {
+      Consequence.success(req)
+    } else {
+      for {
+        arguments <- Consequence.zipN(req.arguments.map { argument =>
+          if (names.contains(argument.name))
+            _filebundle_transport_value(argument.name, argument.value).map(v => argument.copy(value = v))
+          else
+            Consequence.success(argument)
+        })
+        properties <- Consequence.zipN(req.properties.map { property =>
+          if (names.contains(property.name))
+            _filebundle_transport_value(property.name, property.value).map(v => property.copy(value = v))
+          else
+            Consequence.success(property)
+        })
+      } yield req.copy(arguments = arguments.toList, properties = properties.toList)
+    }
+  }
+
   private def _is_filebundle_parameter(
     parameter: ParameterDefinition
   ): Boolean =
@@ -3404,8 +3439,17 @@ class CncfRuntime() extends GlobalObservable {
   private def _filebundle_value(
     name: String,
     value: Any
+  ): Consequence[FileBundle] =
+    FileBundle.create(name, value)
+
+  private def _filebundle_transport_value(
+    name: String,
+    value: Any
   ): Consequence[MimeBody] =
-    FileBundle.mimeBody(name, value)
+    value match {
+      case bundle: FileBundle => bundle.toMimeBody
+      case other => FileBundle.mimeBody(name, other)
+    }
 
   private[cli] def _request_path(req: Request): String =
     NamingConventions.toNormalizedPath(

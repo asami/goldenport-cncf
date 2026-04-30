@@ -3,18 +3,22 @@ package org.goldenport.cncf.cli
 import java.io.ByteArrayOutputStream
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
+import java.util.concurrent.atomic.AtomicReference
 import java.util.zip.{ZipEntry, ZipInputStream, ZipOutputStream}
 
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.bag.{Bag, TextBag}
+import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall}
 import org.goldenport.cncf.component.ComponentCreate
 import org.goldenport.cncf.component.ComponentOrigin
 import org.goldenport.cncf.component.builtin.admin.AdminComponent
 import org.goldenport.cncf.config.ClientConfig
 import org.goldenport.cncf.testutil.TestComponentFactory
-import org.goldenport.datatype.{ContentType, MimeBody}
+import org.goldenport.datatype.{ContentType, FileBundle, MimeBody}
 import org.goldenport.protocol.{Argument, Property, Protocol, Request}
+import org.goldenport.protocol.handler.ProtocolHandler
+import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.spec as spec
 import org.goldenport.schema.{ValueDomain, XFileBundle}
 import org.goldenport.test.matchers.ConsequenceMatchers
@@ -212,7 +216,7 @@ class ClientRequestNormalizationSpec
       }
     }
 
-    "zip filebundle parameters before client HTTP submission" in {
+    "keep directory filebundle parameters as FileBundle before transport" in {
       Given("an operation parameter declared as filebundle and a local directory")
       val root = Files.createTempDirectory("cncf-client-filebundle")
       val meta = Files.createDirectories(root.resolve("META-INF"))
@@ -234,22 +238,20 @@ class ClientRequestNormalizationSpec
       When("the client request is prepared")
       val prepared = CncfRuntime._prepare_filebundle_parameters(operation, req)
 
-      Then("the filebundle parameter is replaced by an application/zip MimeBody")
+      Then("the filebundle parameter is replaced by a path-preserving FileBundle")
       prepared should be_success
       prepared match {
         case org.goldenport.Consequence.Success(normalized) =>
-          val body = _property(normalized, "tree").map(_.value).collect { case m: MimeBody => m }
-          body.map(_.contentType.mimeType.value) shouldBe Some("application/zip")
-          body.map(_zip_entries).getOrElse(Vector.empty) should contain theSameElementsAs Vector(
-            "META-INF/blog.yaml",
-            "index.html"
-          )
+          val bundle = _property(normalized, "tree").map(_.value).collect { case m: FileBundle.Directory => m }
+          bundle.map(_.root) shouldBe Some(root.toAbsolutePath.normalize())
+          val view = bundle.map(_.toFileSystemView.TAKE)
+          view.map(_.listUnsafe.map(_.path.toString).toVector).getOrElse(Vector.empty) should contain theSameElementsAs Vector("META-INF", "index.html")
         case _ =>
           fail("expected successful filebundle preparation")
       }
     }
 
-    "wrap a single file filebundle parameter as a one-entry zip" in {
+    "keep a single file filebundle parameter as FileBundle before transport" in {
       Given("an operation parameter declared as filebundle and a local file")
       val file = Files.createTempFile("cncf-client-filebundle-single", ".html")
       Files.writeString(file, "<article>single</article>\n", StandardCharsets.UTF_8)
@@ -266,13 +268,13 @@ class ClientRequestNormalizationSpec
       When("the client request is prepared")
       val prepared = CncfRuntime._prepare_filebundle_parameters(operation, req)
 
-      Then("the filebundle parameter becomes an application/zip MimeBody with the file basename")
+      Then("the filebundle parameter becomes a path-preserving single-file FileBundle")
       prepared should be_success
       prepared match {
         case Consequence.Success(normalized) =>
-          val body = _property(normalized, "tree").map(_.value).collect { case m: MimeBody => m }
-          body.map(_.contentType.mimeType.value) shouldBe Some("application/zip")
-          body.map(_zip_entries).getOrElse(Vector.empty) shouldBe Vector(file.getFileName.toString)
+          val bundle = _property(normalized, "tree").map(_.value).collect { case m: FileBundle.SingleFile => m }
+          bundle.map(_.file) shouldBe Some(file.toAbsolutePath.normalize())
+          bundle.map(_.toFileSystemView.TAKE.listUnsafe.map(_.path.toString).toVector).getOrElse(Vector.empty) shouldBe Vector(file.getFileName.toString)
         case _ =>
           fail("expected successful filebundle preparation")
       }
@@ -296,13 +298,13 @@ class ClientRequestNormalizationSpec
       When("the client request is prepared")
       val prepared = CncfRuntime._prepare_filebundle_parameters(operation, req)
 
-      Then("the original zip bytes are used as the application/zip MimeBody")
+      Then("the zip path is kept without rezipping")
       prepared should be_success
       prepared match {
         case Consequence.Success(normalized) =>
-          val body = _property(normalized, "tree").map(_.value).collect { case m: MimeBody => m }
-          body.map(_.contentType.mimeType.value) shouldBe Some("application/zip")
-          body.map(b => _bag_bytes(b.value).toVector) shouldBe Some(bytes.toVector)
+          val bundle = _property(normalized, "tree").map(_.value).collect { case m: FileBundle.ZipFile => m }
+          bundle.map(_.file) shouldBe Some(zip.toAbsolutePath.normalize())
+          bundle.map(_.toFileSystemView.TAKE.getFileUnsafe(java.nio.file.Paths.get("index.html")).map(_.filename)).flatten shouldBe Some("index.html")
         case _ =>
           fail("expected successful filebundle preparation")
       }
@@ -345,7 +347,10 @@ class ClientRequestNormalizationSpec
         name = "post",
         operations = spec.OperationDefinitionGroup(NonEmptyVector.of(operation))
       )
-      val protocol = Protocol(services = spec.ServiceDefinitionGroup(Vector(service)))
+      val protocol = Protocol(
+        services = spec.ServiceDefinitionGroup(Vector(service)),
+        handler = ProtocolHandler.default
+      )
       val component = TestComponentFactory.create("blog", protocol, subsystem = subsystem)
       subsystem.add(component)
       val file = Files.createTempFile("cncf-command-filebundle-single", ".html")
@@ -359,21 +364,55 @@ class ClientRequestNormalizationSpec
       parsed should be_success
       val prepared = parsed.flatMap(CncfRuntime._prepare_filebundle_parameters(subsystem, _))
 
-      Then("the command operation receives an application/zip MimeBody")
+      Then("the command operation receives a FileBundle instead of a zipped MimeBody")
       prepared should be_success
       prepared match {
         case Consequence.Success(normalized) =>
-          val body = _property(normalized, "tree").map(_.value).collect { case m: MimeBody => m }
-          body.map(_.contentType.mimeType.value) shouldBe Some("application/zip")
-          body.map(_zip_entries).getOrElse(Vector.empty) shouldBe Vector(file.getFileName.toString)
+          val bundle = _property(normalized, "tree").map(_.value).collect { case m: FileBundle.SingleFile => m }
+          bundle.map(_.file) shouldBe Some(file.toAbsolutePath.normalize())
         case _ =>
           fail("expected successful command filebundle preparation")
       }
     }
 
+    "convert prepared filebundle parameters to zip only for client HTTP transport" in {
+      Given("a prepared FileBundle request")
+      val root = Files.createTempDirectory("cncf-client-filebundle-transport")
+      Files.createDirectories(root.resolve("META-INF"))
+      Files.writeString(root.resolve("META-INF").resolve("blog.yaml"), "title: Client Tree\n", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("index.html"), "<article>body</article>\n", StandardCharsets.UTF_8)
+      val operation = _filebundle_operation("tree")
+      val req = Request.of(
+        component = "blog",
+        service = "post",
+        operation = "importPostTree",
+        arguments = Nil,
+        switches = Nil,
+        properties = List(Property("tree", root.toString, None))
+      )
+      val prepared = CncfRuntime._prepare_filebundle_parameters(operation, req)
+
+      When("the client transport request is prepared")
+      val transport = prepared.flatMap(CncfRuntime._prepare_filebundle_transport_parameters(operation, _))
+
+      Then("the filebundle parameter is converted to an application/zip MimeBody")
+      transport should be_success
+      transport match {
+        case Consequence.Success(normalized) =>
+          val body = _property(normalized, "tree").map(_.value).collect { case m: MimeBody => m }
+          body.map(_.contentType.mimeType.value) shouldBe Some("application/zip")
+          body.map(_zip_entries).getOrElse(Vector.empty) should contain theSameElementsAs Vector(
+            "META-INF/blog.yaml",
+            "index.html"
+          )
+        case _ =>
+          fail("expected successful filebundle transport preparation")
+      }
+    }
+
     "send filebundle parameters as multipart form data" in {
       Given("a prepared client request with a zipped filebundle and a text field")
-      val body = MimeBody(ContentType.APPLICATION_ZIP, Bag.binary(Array[Byte](1, 2, 3, 4)))
+      val body = MimeBody(ContentType.APPLICATION_ZIP, Bag.binary(_zip_bytes(Vector("index.html" -> "<article>body</article>\n"))))
       val req = Request.of(
         component = "client",
         service = "http",
@@ -402,6 +441,37 @@ class ClientRequestNormalizationSpec
           text should include ("Content-Disposition: form-data; name=\"title\"")
         case _ =>
           fail("expected multipart body")
+      }
+    }
+
+    "normalize uploaded filebundle MimeBody before operation execution" in {
+      Given("an operation whose parameter is declared as filebundle")
+      val subsystem = TestComponentFactory.emptySubsystem("client-request-normalization-http-filebundle")
+      val seen = new AtomicReference[String]("")
+      val operation = _capturing_filebundle_operation("tree", seen)
+      val service = spec.ServiceDefinition(
+        name = "post",
+        operations = spec.OperationDefinitionGroup(NonEmptyVector.of(operation))
+      )
+      val protocol = Protocol(services = spec.ServiceDefinitionGroup(Vector(service)))
+      val component = TestComponentFactory.create("blog", protocol, subsystem = subsystem)
+      subsystem.add(component)
+      val body = MimeBody(ContentType.APPLICATION_ZIP, Bag.binary(_zip_bytes(Vector("index.html" -> "<article>body</article>\n"))))
+      val request = Request.of(
+        component = "blog",
+        service = "post",
+        operation = "importPostTree",
+        arguments = Nil,
+        switches = Nil,
+        properties = List(Property("tree", body, None))
+      )
+
+      When("the request is executed")
+      val result = subsystem.executeOperationResponse(request)
+
+      Then("the operation sees FileBundle.ZipMime rather than raw MimeBody")
+      withClue(result.toString) {
+        seen.get() shouldBe "zip-mime"
       }
     }
   }
@@ -446,6 +516,38 @@ class ClientRequestNormalizationSpec
         req: Request
       ): org.goldenport.Consequence[org.goldenport.protocol.operation.OperationRequest] =
         org.goldenport.Consequence.argumentInvalid("not executable in this spec")
+    }
+
+  private def _capturing_filebundle_operation(
+    parameterName: String,
+    seen: AtomicReference[String]
+  ): spec.OperationDefinition =
+    new spec.OperationDefinition {
+      val specification: spec.OperationDefinition.Specification =
+        spec.OperationDefinition.Specification(
+          name = "importPostTree",
+          request = spec.RequestDefinition(
+            List(
+              spec.ParameterDefinition(
+                content = BaseContent.simple(parameterName),
+                kind = spec.ParameterDefinition.Kind.Property,
+                domain = ValueDomain(datatype = XFileBundle)
+              )
+            )
+          ),
+          response = spec.ResponseDefinition(result = List(org.goldenport.schema.XString))
+        )
+
+      def createOperationRequest(
+        req: Request
+      ): org.goldenport.Consequence[org.goldenport.protocol.operation.OperationRequest] = {
+        val values =
+          req.arguments.collect { case Argument(`parameterName`, value, _) => value } ++
+            req.properties.collect { case Property(`parameterName`, value, _) => value }
+        val kind = values.collectFirst { case bundle: FileBundle => bundle.kind }.getOrElse("not-filebundle")
+        seen.set(kind)
+        org.goldenport.Consequence.success(_FileBundleCaptureAction(req, kind))
+      }
     }
 
   private def _bag_text(
@@ -511,4 +613,20 @@ class ClientRequestNormalizationSpec
     }
     out.toByteArray
   }
+}
+
+private final case class _FileBundleCaptureAction(
+  request: Request,
+  kind: String
+) extends Action {
+  override def createCall(core: ActionCall.Core): ActionCall =
+    _FileBundleCaptureActionCall(core, kind)
+}
+
+private final case class _FileBundleCaptureActionCall(
+  core: ActionCall.Core,
+  kind: String
+) extends ProcedureActionCall {
+  override def execute(): Consequence[OperationResponse] =
+    Consequence.success(OperationResponse.Scalar(kind))
 }

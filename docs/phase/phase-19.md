@@ -120,9 +120,10 @@ Resume hint:
   definitions, preserves multipart upload inputs, and keeps binding-only
   fields out of operation business inputs while the post-operation binding
   workflows consume the original request. The client/command transport slice
-  standardizes the core `filebundle` DataType so directory, single-file, and
-  existing-ZIP inputs are normalized to `application/zip` `MimeBody` payloads
-  before operation execution.
+  standardizes the core `filebundle` DataType so command execution can carry
+  directory, single-file, and existing-ZIP inputs as path-preserving
+  `FileBundle` values, while client HTTP transport converts them to
+  `application/zip` `MimeBody` payloads at the network boundary.
 
 ## 5. Development Items
 

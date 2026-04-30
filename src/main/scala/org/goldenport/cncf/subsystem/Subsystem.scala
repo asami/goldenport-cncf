@@ -2,10 +2,12 @@ package org.goldenport.cncf.subsystem
 
 import scala.collection.mutable
 import org.goldenport.Consequence
+import org.goldenport.datatype.FileBundle
 import org.goldenport.http.{HttpRequest, HttpResponse, HttpStatus}
 import org.goldenport.protocol.handler.egress.Egress
-import org.goldenport.protocol.spec.{OperationDefinition, ServiceDefinition}
+import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, ServiceDefinition}
 import org.goldenport.record.Record
+import org.goldenport.schema.XFileBundle
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.action.Action
 import org.goldenport.cncf.CncfVersion
@@ -260,7 +262,6 @@ final class Subsystem(
   }
 
   def executeWithMetadata(request: Request): Consequence[ExecutionResult] = {
-    val domainRequest = _domain_request(request)
     val r: Consequence[ExecutionResult] = for {
       route <- _resolve_route(request) match {
         case Some(r) =>
@@ -268,9 +269,11 @@ final class Subsystem(
         case None =>
           Consequence.operationNotFound("operation route")
       }
+      normalizedRequest <- _prepare_filebundle_parameters(route._3, request)
       response <- {
         val (component, _, _) = route
-        IngressSecurityResolver.resolve(component.logic.executionContext(), request).flatMap { security =>
+        val domainRequest = _domain_request(normalizedRequest)
+        IngressSecurityResolver.resolve(component.logic.executionContext(), normalizedRequest).flatMap { security =>
           given ExecutionContext = security.executionContext
           _authorize_operation(route, security.executionContext).flatMap { _ =>
             val operationDomainRequest = _operation_business_request(route, domainRequest)
@@ -922,11 +925,12 @@ final class Subsystem(
       // } else {
       //   request
       // }
+      normalized <- _prepare_filebundle_parameters(operation, request)
       // Route HTTP ingress through the standard request execution path so
       // request-derived execution mode, security, and other ingress context
       // are applied consistently with command/client execution.
-      result <- executeWithMetadata(request)
-      response = _to_response(request, result.response, result.metadata)
+      result <- executeWithMetadata(normalized)
+      response = _to_response(normalized, result.response, result.metadata)
     } yield response -> result.metadata
     r match {
       case Consequence.Success((res, metadata)) =>
@@ -944,6 +948,47 @@ final class Subsystem(
       .getOrElse {
         throw new IllegalStateException("HTTP egress not configured")
       }
+
+  private def _prepare_filebundle_parameters(
+    operation: OperationDefinition,
+    req: Request
+  ): Consequence[Request] = {
+    val names = operation.specification.request.parameters
+      .filter(_is_filebundle_parameter)
+      .flatMap(_.names)
+      .toSet
+    if (names.isEmpty) {
+      Consequence.success(req)
+    } else {
+      for {
+        arguments <- Consequence.zipN(req.arguments.map { argument =>
+          if (names.contains(argument.name))
+            FileBundle.create(argument.name, argument.value).map(v => argument.copy(value = v))
+          else
+            Consequence.success(argument)
+        })
+        properties <- Consequence.zipN(req.properties.map { property =>
+          if (names.contains(property.name))
+            FileBundle.create(property.name, property.value).map(v => property.copy(value = v))
+          else
+            Consequence.success(property)
+        })
+      } yield req.copy(arguments = arguments.toList, properties = properties.toList)
+    }
+  }
+
+  private def _is_filebundle_parameter(
+    parameter: ParameterDefinition
+  ): Boolean =
+    parameter.datatype == XFileBundle ||
+      Option(parameter.datatype).map(_.name).exists { name =>
+        _normalize_datatype_name(name) == "filebundle"
+      }
+
+  private def _normalize_datatype_name(
+    name: String
+  ): String =
+    name.toLowerCase(java.util.Locale.ROOT).filter(_.isLetterOrDigit)
 
   private def _framework_properties_from_http(
     req: HttpRequest
