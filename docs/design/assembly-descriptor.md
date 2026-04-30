@@ -33,13 +33,15 @@ It is also the descriptor representation of the wiring diagram.
 The primary deployment placement is the top level of the SAR.
 
 A component CAR may also carry `assembly-descriptor.*` as component-local
-runtime defaults. This is for one-component application startup and for
-component-provided defaults reused by a SAR. In that placement, the descriptor
-declares required components and wiring defaults, but it must not embed provider
-component artifacts. Provider component CARs are still resolved from the standard
-component repository or `repository.d`. A component CAR with this metadata can
-therefore be selected by name, for example `cncf --textus.component=<component-name> server`,
-without embedding provider component CARs.
+runtime defaults. In an sbt/cozy component project, the source file is
+`src/main/car/assembly-descriptor.yaml` and is packaged at the CAR root. This is
+for one-component application startup and for component-provided defaults reused
+by a SAR. In that placement, the descriptor declares required components and
+wiring defaults, but it must not embed provider component artifacts. Provider
+component CARs are still resolved from the standard component repository or
+`repository.d`. A component CAR with this metadata can therefore be selected by
+name, for example `cncf --textus.component=<component-name> server`, without
+embedding provider component CARs.
 
 The intended packaged layout is:
 

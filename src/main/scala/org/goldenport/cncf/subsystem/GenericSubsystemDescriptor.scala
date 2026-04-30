@@ -14,7 +14,8 @@ import org.goldenport.cncf.security.{AuthorizationResourcePolicies, Authorizatio
 
 /*
  * @since   Apr.  7, 2026
- * @version Apr. 28, 2026
+ *  version Apr. 28, 2026
+ * @version May.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class GenericSubsystemAuthenticationProviderBinding(
@@ -441,9 +442,7 @@ object GenericSubsystemDescriptor {
     else if (Files.isDirectory(path))
       _resolve_descriptor_file(path) match {
         case Some(file) => _load_file(file)
-        // Descriptor-first path is the current design.
-        // manifest.json fallback remains only as a compatibility memo.
-        case None => _load_manifest_compat(path)
+        case None => Consequence.resourceNotFound(s"subsystem descriptor not found: ${path}")
       }
     else if (_is_archive_file(path))
       _load_archive_file(path)
@@ -515,9 +514,7 @@ object GenericSubsystemDescriptor {
   def looksLikeArchiveDirectory(path: Path): Boolean = {
     val componentdir = path.resolve("component")
     Files.isDirectory(path) && Files.isDirectory(componentdir) &&
-      // Descriptor files are the intended signal.
-      // manifest.json is still accepted only for compatibility.
-      (_resolve_descriptor_file(path).nonEmpty || Files.exists(path.resolve("meta").resolve("manifest.json"))) &&
+      _resolve_descriptor_file(path).nonEmpty &&
       _contains_component_archive(componentdir)
   }
 
@@ -554,6 +551,10 @@ object GenericSubsystemDescriptor {
     componentName.trim
 
   private def _resolve_descriptor_file(path: Path): Option[Path] =
+    _resolve_descriptor_file_in(path)
+      .orElse(_resolve_descriptor_file_in(path.resolve("subsystem").normalize))
+
+  private def _resolve_descriptor_file_in(path: Path): Option[Path] =
     _canonical_descriptor_files
       .map(path.resolve(_).normalize)
       .find(Files.isRegularFile(_))
@@ -669,25 +670,6 @@ object GenericSubsystemDescriptor {
   private def _load_file(path: Path): Consequence[GenericSubsystemDescriptor] =
     DescriptorRecordLoader.load(path).flatMap { records =>
       records.headOption.map(_from_record(path, _)).getOrElse(Consequence.resourceInvalid(s"subsystem descriptor is empty: ${path}"))
-    }
-
-  private def _load_manifest_compat(path: Path): Consequence[GenericSubsystemDescriptor] =
-    // Compatibility-only path. New subsystem archives are expected to carry
-    // an explicit descriptor instead of relying on meta/manifest.json.
-    org.goldenport.cncf.component.ArchiveManifest.load(path, "sar").map { m =>
-      GenericSubsystemDescriptor(
-        path = path,
-        subsystemName = m.subsystem.getOrElse(m.name),
-        version = Some(m.version),
-        componentBindings = Vector.empty,
-        extensions = m.extensions,
-        config = m.config,
-        wiring = Record.empty,
-        assemblyDescriptor = loadAdjacentAssemblyDescriptor(path),
-        security = None,
-        builtin = None,
-        operationAuthorization = Map.empty
-      )
     }
 
   private def _from_record(

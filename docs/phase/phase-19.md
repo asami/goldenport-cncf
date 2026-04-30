@@ -127,7 +127,12 @@ Resume hint:
   standardizes the core `filebundle` DataType so command execution can carry
   directory, single-file, and existing-ZIP inputs as path-preserving
   `FileBundle` values, while client HTTP transport converts them to
-  `application/zip` `MimeBody` payloads at the network boundary.
+  `application/zip` `MimeBody` payloads at the network boundary. The packaged
+  source activation hardening slice clarifies component/subsystem development
+  startup: `--component-dev-dir` and `--subsystem-dev-dir` are the normal
+  selector-less edit/run routes, while expanded `car.d` and `sar.d` directories
+  are explicit loader/debug inputs through `--component-car-dir` and
+  `--subsystem-sar-dir`.
   AF-01 adds a reusable CNCF Atom feed model, renderer, and Record projection
   helper, then applies it to BlogComponent through a public `atomFeed` query
   that emits published active posts as `application/atom+xml`.

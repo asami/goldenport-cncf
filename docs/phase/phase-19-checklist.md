@@ -208,6 +208,12 @@ Implement CNCF gaps discovered by the `BlogComponent` driver.
       the core `FileBundle` companion without eager ZIP conversion for command
       execution; client HTTP transport converts them to `application/zip`
       `MimeBody` payloads at the network boundary.
+- [x] Packaged source activation hardening for component/subsystem development
+      startup.
+      `--component-dev-dir` and `--subsystem-dev-dir` are documented as the
+      normal selector-less edit/run routes, while expanded `car.d` and `sar.d`
+      remain explicit loader/debug inputs through `--component-car-dir` and
+      `--subsystem-sar-dir`.
 - [x] Non-image Association binding Web/manual surfaces beyond the core
       operation metadata.
 - [x] Entity create/update support for Blob attachment requests.

@@ -38,7 +38,8 @@ import scala.util.Try
  *  version Feb.  5, 2026
  *  version Mar. 31, 2026
  *  version Apr. 25, 2026
- * @version Apr. 26, 2026
+ *  version Apr. 26, 2026
+ * @version May.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactory(
@@ -2081,8 +2082,6 @@ object ComponentFactory {
 
   private val _component_descriptor_key = "cncf.component.descriptor"
   private val _component_descriptor_dir_key = "cncf.component.descriptor.dir"
-  private val _component_descriptor_default_dir = "car.d"
-
   private def _resolve_entity_runtime_descriptors(
     cwd: Path,
     c: ResolvedConfiguration
@@ -2098,20 +2097,12 @@ object ComponentFactory {
   private def _resolve_component_descriptors(
     cwd: Path,
     c: ResolvedConfiguration,
-    repositorySpecs: Vector[ComponentRepository.Specification]
+    _repositorySpecs: Vector[ComponentRepository.Specification]
   ): Vector[ComponentDescriptor] = {
     val explicit =
       _split_paths(ConfigurationAccess.getString(c, _component_descriptor_key)) ++
       _split_paths(ConfigurationAccess.getString(c, _component_descriptor_dir_key))
-    val repositoryDirs = repositorySpecs.collect {
-      case ComponentRepository.ComponentDirRepository.Specification(base) =>
-        base.normalize
-    }
-    val default = {
-      val path = cwd.resolve(_component_descriptor_default_dir).normalize
-      if (Files.exists(path) && !repositoryDirs.contains(path)) Vector(path) else Vector.empty
-    }
-    (explicit.map(_normalize_path(cwd, _)) ++ default).distinct.flatMap { path =>
+    explicit.map(_normalize_path(cwd, _)).distinct.flatMap { path =>
       ComponentDescriptorLoader.load(path) match {
         case Consequence.Success(xs) => xs
         case Consequence.Failure(_) => Vector.empty

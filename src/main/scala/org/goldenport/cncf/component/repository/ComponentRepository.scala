@@ -1,6 +1,7 @@
 package org.goldenport.cncf.component.repository
 
 import java.net.URLClassLoader
+import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import java.lang.reflect.Modifier
 import java.util.ServiceLoader
@@ -26,7 +27,8 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Jan. 29, 2026
  *  version Feb.  5, 2026
  *  version Mar. 22, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version May.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed abstract class ComponentRepository {
@@ -37,6 +39,8 @@ object ComponentRepository extends GlobalObservable {
   private val _scala_cli_type = "scala-cli"
   private val _component_dir_type = "component-dir"
   private val _component_file_type = "component-file"
+  private val _component_dev_dir_type = "component-dev-dir"
+  private val _subsystem_dev_dir_type = "subsystem-dev-dir"
   private val _scala_cli_default_dir = ".scala-build"
   private val _component_dir_default_dir = "component.dir"
   private val _standard_repository_group_path = Paths.get("org", "simplemodeling", "car")
@@ -114,6 +118,12 @@ object ComponentRepository extends GlobalObservable {
           case None =>
             Left("component-file repository requires a CAR path")
         }
+      case `_component_dev_dir_type` =>
+        val dir = _resolve_dir(dirOpt, ".", baseDir)
+        Right(ComponentDevDirRepository.Specification(dir))
+      case `_subsystem_dev_dir_type` =>
+        val dir = _resolve_dir(dirOpt, ".", baseDir)
+        Right(SubsystemDevDirRepository.Specification(dir))
       case other =>
         Left(s"unknown component repository type: ${other}")
     }
@@ -297,6 +307,163 @@ object ComponentRepository extends GlobalObservable {
         componentName: String
       ): Option[Path] =
         resolveComponentDescriptor(componentName).map(_ => file)
+    }
+  }
+
+  final class ComponentDevDirRepository(
+    baseDir: Path,
+    params: ComponentCreate,
+    packagePrefixes: Seq[String]
+  ) extends ComponentRepository {
+    def discover(): Seq[Component] = {
+      val log = PersistentBootstrapLog.forClass(classOf[ComponentDevDirRepository], ObservabilityScopeDefaults.Bootstrap)
+      val classpath = _dev_runtime_classpath(baseDir)
+      if (classpath.isEmpty) {
+        log.warn(s"[component-dev-dir] runtime classpath file missing or empty under ${baseDir}")
+        Vector.empty
+      } else {
+        val classDirs = classpath.filter(Files.isDirectory(_))
+        if (classDirs.isEmpty) {
+          log.warn(s"[component-dev-dir] runtime classpath contains no class directories: ${baseDir}")
+          Vector.empty
+        } else {
+          Using.resource(_class_loader_from_paths(classpath, getClass.getClassLoader)) { loader =>
+            _discover_components(
+              loader,
+              params,
+              classDirs,
+              packagePrefixes,
+              ComponentOrigin.Repository("component-dev-dir"),
+              log
+            ) match {
+              case Consequence.Success(components) =>
+                components.map(_.withArtifactMetadata(_dev_artifact_metadata(baseDir)))
+              case Consequence.Failure(conclusion) =>
+                log.warn(s"[component-dev-dir] discovery failed cause=${conclusion.show}")
+                Vector.empty
+            }
+          }
+        }
+      }
+    }
+
+    private def _dev_runtime_classpath(base: Path): Vector[Path] = {
+      val file = base.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt")
+      if (!Files.isRegularFile(file)) {
+        Vector.empty
+      } else {
+        Files.readAllLines(file, StandardCharsets.UTF_8).asScala.toVector
+          .map(_.trim)
+          .filter(_.nonEmpty)
+          .map(p => Paths.get(p).toAbsolutePath.normalize)
+          .filter(Files.exists(_))
+          .distinct
+      }
+    }
+
+    private def _dev_artifact_metadata(base: Path): Component.ArtifactMetadata = {
+      val descriptor = _dev_component_descriptors(base).headOption
+      Component.ArtifactMetadata(
+        sourceType = "component-dev-dir",
+        name = descriptor.flatMap(_.name).orElse(descriptor.flatMap(_.componentName)).getOrElse(base.getFileName.toString),
+        version = descriptor.flatMap(_.version).getOrElse("0.1.0"),
+        component = descriptor.flatMap(_.componentName),
+        subsystem = descriptor.flatMap(_.subsystemName),
+        archivePath = Some(base.toString),
+        effectiveExtensions = descriptor.map(_.extensions).getOrElse(Map.empty),
+        effectiveConfig = descriptor.map(_.config).getOrElse(Map.empty)
+      )
+    }
+
+    private def _dev_component_descriptors(base: Path): Vector[ComponentDescriptor] =
+      Vector(
+        base.resolve("car.d"),
+        base.resolve("src").resolve("main").resolve("car")
+      ).flatMap { dir =>
+        ComponentDescriptorLoader.load(dir) match {
+          case Consequence.Success(xs) => xs
+          case Consequence.Failure(_) => Vector.empty
+        }
+      }
+  }
+
+  object ComponentDevDirRepository {
+    final case class Specification(
+      baseDir: Path
+    ) extends ComponentRepository.Specification {
+      def build(params: ComponentCreate): ComponentRepository =
+        new ComponentDevDirRepository(
+          baseDir = baseDir,
+          params = params,
+          packagePrefixes = ComponentRepository.resolvePackagePrefixes()
+        )
+    }
+  }
+
+  final class SubsystemDevDirRepository(
+    baseDir: Path,
+    params: ComponentCreate,
+    packagePrefixes: Seq[String]
+  ) extends ComponentRepository {
+    def discover(): Seq[Component] = {
+      val specs = _component_specs(baseDir)
+      if (specs.isEmpty) {
+        val log = PersistentBootstrapLog.forClass(classOf[SubsystemDevDirRepository], ObservabilityScopeDefaults.Bootstrap)
+        log.warn(s"[subsystem-dev-dir] component development source not found under ${baseDir}")
+        Vector.empty
+      } else {
+        val requested = _requested_component_names(params)
+        val discovered = specs.flatMap(_.build(params).discover()).distinctBy(_.name)
+        if (requested.isEmpty)
+          discovered
+        else
+          discovered.filter(component => requested.contains(NamingConventions.toComparisonKey(component.name)))
+      }
+    }
+
+    private def _requested_component_names(params: ComponentCreate): Set[String] =
+      params.componentDescriptors.flatMap(d => d.componentName.orElse(d.name))
+        .map(NamingConventions.toComparisonKey)
+        .toSet
+
+    private def _component_specs(base: Path): Vector[ComponentRepository.Specification] = {
+      val componentdir = base.resolve("component").normalize
+      if (!Files.isDirectory(componentdir)) {
+        Vector.empty
+      } else if (Files.isRegularFile(componentdir.resolve("target").resolve("cncf.d").resolve("runtime-classpath.txt"))) {
+        Vector(ComponentDevDirRepository.Specification(componentdir))
+      } else {
+        Vector(ComponentDirRepository.Specification(componentdir))
+      }
+    }
+  }
+
+  object SubsystemDevDirRepository {
+    final case class Specification(
+      baseDir: Path
+    ) extends ComponentRepository.Specification {
+      def build(params: ComponentCreate): ComponentRepository =
+        new SubsystemDevDirRepository(
+          baseDir = baseDir,
+          params = params,
+          packagePrefixes = ComponentRepository.resolvePackagePrefixes()
+        )
+
+      override def resolveSubsystemDescriptor(
+        subsystemName: String
+      ): Option[GenericSubsystemDescriptor] =
+        GenericSubsystemDescriptor.load(baseDir).toOption
+          .filter(_matches_subsystem_descriptor(_, subsystemName))
+
+      override def resolveComponentDescriptor(
+        componentName: String
+      ): Option[ComponentDescriptor] =
+        ComponentRepository.resolveComponentDescriptorFromComponentDir(baseDir.resolve("component").normalize, componentName)
+
+      override def resolveComponentArchivePath(
+        componentName: String
+      ): Option[Path] =
+        ComponentRepository.resolveComponentArchivePathFromComponentDir(baseDir.resolve("component").normalize, componentName)
     }
   }
 

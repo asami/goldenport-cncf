@@ -19,7 +19,8 @@ import org.goldenport.record.RecordDecoder
  * @since   Mar. 27, 2026
  *  version Apr.  8, 2026
  *  version Apr. 14, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version May.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object ComponentDescriptorLoader {
@@ -69,27 +70,14 @@ object ComponentDescriptorLoader {
         case Some(file) =>
           _load_file(file).flatMap(_.headOption.map(Consequence.success).getOrElse(Consequence.resourceInvalid(s"component archive descriptor is empty: ${file}")))
         case None =>
-          // Descriptor-first path is the current design.
-          // manifest.json fallback remains only as a compatibility memo.
-          ArchiveManifest.load(path, "car").map { m =>
-            ComponentDescriptor(
-              name = Some(m.name),
-              version = Some(m.version),
-              componentName = m.component,
-              subsystemName = m.subsystem,
-              extensions = m.extensions,
-              config = m.config
-            )
-          }
+          Consequence.resourceNotFound(s"component descriptor not found under canonical CAR layout: ${path}")
       }
     }
 
   def looksLikeArchiveDirectory(path: Path): Boolean = {
     val componentdir = path.resolve("component")
     Files.isDirectory(path) && Files.isDirectory(componentdir) &&
-      // Descriptor files are the intended signal.
-      // manifest.json is still accepted only for compatibility.
-      (_resolve_canonical_descriptor_files(path).nonEmpty || Files.exists(path.resolve("meta").resolve("manifest.json"))) &&
+      _resolve_canonical_descriptor_files(path).nonEmpty &&
       _contains_component_jar(componentdir)
   }
 
@@ -136,16 +124,7 @@ object ComponentDescriptorLoader {
         case Some(file) =>
           _load_file(file).flatMap(_.headOption.map(Consequence.success).getOrElse(Consequence.resourceInvalid(s"component archive descriptor is empty: ${path}")))
         case None =>
-          ArchiveManifest.load(path, "car").map { m =>
-            ComponentDescriptor(
-              name = Some(m.name),
-              version = Some(m.version),
-              componentName = m.component,
-              subsystemName = m.subsystem,
-              extensions = m.extensions,
-              config = m.config
-            )
-          }
+          Consequence.resourceNotFound(s"component descriptor not found in archive: ${path}")
       }
     }
   }
@@ -169,7 +148,12 @@ object ComponentDescriptorLoader {
     }
 
   private def _to_descriptor(origin: String, rec: Record): Consequence[ComponentDescriptor] = {
-    summon[RecordDecoder[ComponentDescriptor]].fromRecord(rec).leftMap { c =>
+    summon[RecordDecoder[ComponentDescriptor]].fromRecord(rec).flatMap { descriptor =>
+      if (descriptor.name.orElse(descriptor.componentName).exists(_.trim.nonEmpty))
+        Consequence.success(descriptor)
+      else
+        Consequence.argumentMissing("component descriptor name/component")
+    }.leftMap { c =>
       c.copy(observation = c.observation.copy(cause = c.observation.cause.withMessage(s"${c.displayMessage} in ${origin}")))
     }
   }

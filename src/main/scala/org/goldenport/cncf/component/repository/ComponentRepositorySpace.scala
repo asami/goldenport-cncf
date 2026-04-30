@@ -16,7 +16,8 @@ import org.goldenport.cncf.subsystem.Subsystem
  * @since   Jan. 30, 2026
  *  version Feb.  5, 2026
  *  version Mar. 26, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version May.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 class ComponentRepositorySpace(
@@ -83,6 +84,10 @@ object ComponentRepositorySpace {
         ComponentOrigin.Repository("component-dir")
       case _: ComponentRepository.ComponentFileRepository.Specification =>
         ComponentOrigin.Repository("component-file")
+      case _: ComponentRepository.ComponentDevDirRepository.Specification =>
+        ComponentOrigin.Repository("component-dev-dir")
+      case _: ComponentRepository.SubsystemDevDirRepository.Specification =>
+        ComponentOrigin.Repository("subsystem-dev-dir")
       case _: ComponentRepository.ScalaCliRepository.Specification =>
         ComponentOrigin.Repository("scala-cli")
     }
@@ -149,6 +154,10 @@ object ComponentRepositorySpace {
         ComponentOrigin.Repository("component-dir")
       case _: ComponentRepository.ComponentFileRepository.Specification =>
         ComponentOrigin.Repository("component-file")
+      case _: ComponentRepository.ComponentDevDirRepository.Specification =>
+        ComponentOrigin.Repository("component-dev-dir")
+      case _: ComponentRepository.SubsystemDevDirRepository.Specification =>
+        ComponentOrigin.Repository("subsystem-dev-dir")
       case _: ComponentRepository.ScalaCliRepository.Specification =>
         ComponentOrigin.Repository("scala-cli")
     }
@@ -185,6 +194,42 @@ object ComponentRepositorySpace {
       } else if (arg.startsWith("--component-file=")) {
         active += s"component-file:${arg.stripPrefix("--component-file=")}"
         i += 1
+      } else if (arg.startsWith("--component-dev-dir=")) {
+        active += s"component-dev-dir:${arg.stripPrefix("--component-dev-dir=")}"
+        i += 1
+      } else if (arg.startsWith("--component-car-dir=")) {
+        active += s"component-dir:${arg.stripPrefix("--component-car-dir=")}"
+        i += 1
+      } else if (arg.startsWith("--subsystem-sar-dir=")) {
+        active += s"component-dir:${arg.stripPrefix("--subsystem-sar-dir=")}"
+        i += 1
+      } else if (arg.startsWith("--subsystem-dev-dir=")) {
+        active += s"subsystem-dev-dir:${arg.stripPrefix("--subsystem-dev-dir=")}"
+        i += 1
+      } else if (arg.startsWith(s"--${RuntimeConfig.ComponentDevDirKey}=")) {
+        active += s"component-dev-dir:${arg.stripPrefix(s"--${RuntimeConfig.ComponentDevDirKey}=")}"
+        i += 1
+      } else if (arg.startsWith(s"--${RuntimeConfig.ComponentCarDirKey}=")) {
+        active += s"component-dir:${arg.stripPrefix(s"--${RuntimeConfig.ComponentCarDirKey}=")}"
+        i += 1
+      } else if (arg.startsWith(s"--${RuntimeConfig.SubsystemDevDirKey}=")) {
+        active += s"subsystem-dev-dir:${arg.stripPrefix(s"--${RuntimeConfig.SubsystemDevDirKey}=")}"
+        i += 1
+      } else if (arg.startsWith(s"--${RuntimeConfig.SubsystemSarDirKey}=")) {
+        active += s"component-dir:${arg.stripPrefix(s"--${RuntimeConfig.SubsystemSarDirKey}=")}"
+        i += 1
+      } else if (arg.startsWith("--cncf.component.dev.dir=")) {
+        active += s"component-dev-dir:${arg.stripPrefix("--cncf.component.dev.dir=")}"
+        i += 1
+      } else if (arg.startsWith("--cncf.component.car.dir=")) {
+        active += s"component-dir:${arg.stripPrefix("--cncf.component.car.dir=")}"
+        i += 1
+      } else if (arg.startsWith("--cncf.subsystem.sar.dir=")) {
+        active += s"component-dir:${arg.stripPrefix("--cncf.subsystem.sar.dir=")}"
+        i += 1
+      } else if (arg.startsWith("--cncf.subsystem.dev.dir=")) {
+        active += s"subsystem-dev-dir:${arg.stripPrefix("--cncf.subsystem.dev.dir=")}"
+        i += 1
       } else if (arg.startsWith(s"--${RuntimeConfig.ComponentFileKey}=")) {
         active += s"component-file:${arg.stripPrefix(s"--${RuntimeConfig.ComponentFileKey}=")}"
         i += 1
@@ -196,6 +241,54 @@ object ComponentRepositorySpace {
           return ExtractedArgs(Right(Vector.empty), Left("--component-dir requires a value"), args, noDefault)
         }
         active += s"component-dir:${args(i + 1)}"
+        i += 2
+      } else if (arg == "--component-dev-dir" || arg == s"--${RuntimeConfig.ComponentDevDirKey}") {
+        if (i + 1 >= args.length) {
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+        }
+        active += s"component-dev-dir:${args(i + 1)}"
+        i += 2
+      } else if (arg == "--component-car-dir" || arg == s"--${RuntimeConfig.ComponentCarDirKey}") {
+        if (i + 1 >= args.length) {
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+        }
+        active += s"component-dir:${args(i + 1)}"
+        i += 2
+      } else if (arg == "--subsystem-sar-dir" || arg == s"--${RuntimeConfig.SubsystemSarDirKey}") {
+        if (i + 1 >= args.length) {
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+        }
+        active += s"component-dir:${args(i + 1)}"
+        i += 2
+      } else if (arg == "--subsystem-dev-dir" || arg == s"--${RuntimeConfig.SubsystemDevDirKey}") {
+        if (i + 1 >= args.length) {
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+        }
+        active += s"subsystem-dev-dir:${args(i + 1)}"
+        i += 2
+      } else if (arg == "--cncf.component.dev.dir") {
+        if (i + 1 >= args.length) {
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+        }
+        active += s"component-dev-dir:${args(i + 1)}"
+        i += 2
+      } else if (arg == "--cncf.component.car.dir") {
+        if (i + 1 >= args.length) {
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+        }
+        active += s"component-dir:${args(i + 1)}"
+        i += 2
+      } else if (arg == "--cncf.subsystem.sar.dir") {
+        if (i + 1 >= args.length) {
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+        }
+        active += s"component-dir:${args(i + 1)}"
+        i += 2
+      } else if (arg == "--cncf.subsystem.dev.dir") {
+        if (i + 1 >= args.length) {
+          return ExtractedArgs(Right(Vector.empty), Left(s"${arg} requires a value"), args, noDefault)
+        }
+        active += s"subsystem-dev-dir:${args(i + 1)}"
         i += 2
       } else if (
         arg == "--component-file" ||
@@ -257,6 +350,24 @@ object ComponentRepositorySpace {
           .toVector
       case _ => Vector.empty
     }
+    val devDirs = _config_values(configuration, Vector(RuntimeConfig.ComponentDevDirKey, "cncf.component.dev.dir"))
+      .map(v => if (v.startsWith("component-dev-dir:")) v else s"component-dev-dir:${v}")
+    val carDirs = _config_values(configuration, Vector(RuntimeConfig.ComponentCarDirKey, "cncf.component.car.dir"))
+      .map(v => if (v.startsWith("component-dir:") || v.contains(":")) v else s"component-dir:${v}")
+    val sarDirs = _config_values(configuration, Vector(
+      RuntimeConfig.SubsystemSarDirKey,
+      RuntimeConfig.RuntimeSubsystemSarDirKey,
+      "cncf.subsystem.sar.dir",
+      "cncf.runtime.subsystem.sar.dir"
+    ))
+      .map(v => if (v.startsWith("component-dir:") || v.contains(":")) v else s"component-dir:${v}")
+    val subsystemDevDirs = _config_values(configuration, Vector(
+      RuntimeConfig.SubsystemDevDirKey,
+      RuntimeConfig.RuntimeSubsystemDevDirKey,
+      "cncf.subsystem.dev.dir",
+      "cncf.runtime.subsystem.dev.dir"
+    ))
+      .map(v => if (v.startsWith("subsystem-dev-dir:")) v else s"subsystem-dev-dir:${v}")
     val files = Vector(RuntimeConfig.ComponentFileKey, RuntimeConfig.RuntimeComponentFileKey)
       .flatMap { key =>
         configuration.get[String](key) match {
@@ -270,8 +381,24 @@ object ComponentRepositorySpace {
           case _ => Vector.empty
         }
       }.distinct
-    dirs ++ files
+    (dirs ++ devDirs ++ carDirs ++ sarDirs ++ subsystemDevDirs ++ files).distinct
   }
+
+  private def _config_values(
+    configuration: ResolvedConfiguration,
+    keys: Vector[String]
+  ): Vector[String] =
+    keys.flatMap { key =>
+      configuration.get[String](key) match {
+        case Consequence.Success(Some(value)) =>
+          value
+            .split(",")
+            .map(_.trim)
+            .filter(_.nonEmpty)
+            .toVector
+        case _ => Vector.empty
+      }
+    }.distinct
 
   def appendDefaultSearchRepositories(
     result: Either[String, Vector[ComponentRepository.Specification]],
@@ -303,7 +430,7 @@ object ComponentRepositorySpace {
       case left @ Left(_) => left
       case Right(specs) if noDefault => Right(specs)
       case Right(specs) =>
-        val defaults = Vector(_default_component_dir(cwd), _default_car_dir(cwd), _default_component_target_dir(cwd), _default_sar_dir(cwd)).flatten
+        val defaults = Vector(_default_component_dir(cwd), _default_component_target_dir(cwd)).flatten
         Right(defaults.foldLeft(specs) { (z, dir) =>
           _append_spec_if_missing(z, ComponentRepository.ComponentDirRepository.Specification(dir))
         })
@@ -324,18 +451,8 @@ object ComponentRepositorySpace {
     if (Files.isDirectory(dir)) Some(dir) else None
   }
 
-  private def _default_car_dir(cwd: Path): Option[Path] = {
-    val dir = cwd.resolve("car.d").normalize
-    if (Files.isDirectory(dir)) Some(dir) else None
-  }
-
   private def _default_component_target_dir(cwd: Path): Option[Path] = {
     val dir = cwd.resolve("component").resolve("target").normalize
-    if (Files.isDirectory(dir)) Some(dir) else None
-  }
-
-  private def _default_sar_dir(cwd: Path): Option[Path] = {
-    val dir = cwd.resolve("sar.d").normalize
     if (Files.isDirectory(dir)) Some(dir) else None
   }
 

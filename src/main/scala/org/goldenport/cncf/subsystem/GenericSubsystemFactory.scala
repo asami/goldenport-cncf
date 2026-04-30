@@ -3,7 +3,7 @@ package org.goldenport.cncf.subsystem
 import java.nio.file.{Path, Paths}
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.assembly.AssemblyReport
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentOrigin}
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentOrigin}
 import org.goldenport.cncf.component.repository.ComponentRepository
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.{ConfigurationAccess, RuntimeConfig}
@@ -13,7 +13,8 @@ import org.goldenport.cncf.path.AliasResolver
 /*
  * @since   Apr.  7, 2026
  *  version Apr. 23, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version May.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -30,7 +31,13 @@ object GenericSubsystemFactory {
   ): Option[Path] =
     RuntimeConfig
       .getString(configuration, RuntimeConfig.SubsystemDescriptorKey)
+      .orElse(ConfigurationAccess.getString(configuration, "cncf.subsystem.descriptor"))
       .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemFileKey))
+      .orElse(ConfigurationAccess.getString(configuration, "cncf.subsystem.file"))
+      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemDevDirKey))
+      .orElse(ConfigurationAccess.getString(configuration, "cncf.subsystem.dev.dir"))
+      .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemSarDirKey))
+      .orElse(ConfigurationAccess.getString(configuration, "cncf.subsystem.sar.dir"))
       .map(_.trim)
       .filter(_.nonEmpty)
       .map(Paths.get(_))
@@ -41,6 +48,26 @@ object GenericSubsystemFactory {
     RuntimeConfig
       .getString(configuration, RuntimeConfig.ComponentFileKey)
       .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeComponentFileKey))
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .map(Paths.get(_))
+
+  def componentCarDirPath(
+    configuration: ResolvedConfiguration
+  ): Option[Path] =
+    RuntimeConfig
+      .getString(configuration, RuntimeConfig.ComponentCarDirKey)
+      .orElse(ConfigurationAccess.getString(configuration, "cncf.component.car.dir"))
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .map(Paths.get(_))
+
+  def componentDevDirPath(
+    configuration: ResolvedConfiguration
+  ): Option[Path] =
+    RuntimeConfig
+      .getString(configuration, RuntimeConfig.ComponentDevDirKey)
+      .orElse(ConfigurationAccess.getString(configuration, "cncf.component.dev.dir"))
       .map(_.trim)
       .filter(_.nonEmpty)
       .map(Paths.get(_))
@@ -66,6 +93,20 @@ object GenericSubsystemFactory {
           .map(_with_assembly_descriptor_override(_, configuration))
       }
     }.orElse {
+      componentCarDirPath(configuration).flatMap { path =>
+        ComponentDescriptorLoader.loadArchive(path).toOption
+          .map(_component_descriptor_to_subsystem(path, _))
+          .map(_with_assembly_descriptor_override(_, configuration))
+      }
+    }.orElse {
+      componentDevDirPath(configuration).map { path =>
+        _component_descriptor_to_subsystem(
+          path,
+          _load_dev_component_descriptor(path)
+            .getOrElse(_fallback_component_descriptor(path))
+        )
+      }.map(_with_assembly_descriptor_override(_, configuration))
+    }.orElse {
       RuntimeConfig
         .getString(configuration, RuntimeConfig.ComponentNameKey)
         .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeComponentNameKey))
@@ -79,6 +120,46 @@ object GenericSubsystemFactory {
           )
         }
     }
+
+  private def _load_dev_component_descriptor(
+    path: Path
+  ): Option[ComponentDescriptor] =
+    Vector(
+      path.resolve("src").resolve("main").resolve("car"),
+      path.resolve("car.d")
+    ).iterator.flatMap { dir =>
+      ComponentDescriptorLoader.load(dir).toOption.toVector.flatten
+    }.toSeq.headOption
+
+  private def _fallback_component_descriptor(
+    path: Path
+  ): ComponentDescriptor =
+    ComponentDescriptor(
+      name = Some(path.getFileName.toString),
+      version = Some("0.1.0"),
+      componentName = Some(path.getFileName.toString)
+    )
+
+  private def _component_descriptor_to_subsystem(
+    path: Path,
+    descriptor: ComponentDescriptor
+  ): GenericSubsystemDescriptor = {
+    val componentname =
+      descriptor.componentName.orElse(descriptor.name).getOrElse(path.getFileName.toString)
+    GenericSubsystemDescriptor(
+      path = path,
+      subsystemName = descriptor.subsystemName.getOrElse(componentname),
+      version = descriptor.version,
+      componentBindings = Vector(GenericSubsystemComponentBinding(
+        componentName = componentname,
+        version = descriptor.version,
+        coordinate = None,
+        extensionBindings = descriptor.extensionBindings
+      )),
+      extensions = descriptor.extensions,
+      config = descriptor.config
+    )
+  }
 
   def default(
     subsystemName: String,

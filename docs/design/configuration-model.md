@@ -81,8 +81,24 @@ Primary keys:
 
 - `textus.component`
 - `textus.subsystem`
+- `textus.component.dev.dir`
+- `textus.component.car.dir`
+- `textus.component.file`
 - `textus.subsystem.descriptor`
 - `textus.subsystem.file`
+- `textus.subsystem.dev.dir`
+- `textus.subsystem.sar.dir`
+
+Selector-less development startup uses the directory keys directly:
+
+- `textus.component.dev.dir`
+  - sbt/cozy component development directory, equivalent to
+    `--component-dev-dir`
+- `textus.subsystem.dev.dir`
+  - application/subsystem development root, equivalent to
+    `--subsystem-dev-dir`
+- `textus.component.car.dir` and `textus.subsystem.sar.dir`
+  - expanded archive directories for CAR/SAR loader debugging
 
 The older `textus.runtime.*` forms are compatibility aliases only.
 The older `cncf.*` forms are also compatibility aliases while command lines and

@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 14, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version May.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WebDescriptorSpec extends AnyWordSpec with Matchers {
@@ -329,6 +330,23 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       val web = Files.createDirectories(root.resolve("web"))
       Files.writeString(
         web.resolve("web-descriptor.yaml"),
+        """web:
+          |  expose:
+          |    notice-board.notice.search-notices: public
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val descriptor = WebDescriptor.load(root).toOption.get
+
+      descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
+    }
+
+    "discover src/main/web/web.yaml from a development project root" in {
+      val root = Files.createTempDirectory("cncf-web-descriptor-dev-root")
+      val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web"))
+      Files.writeString(
+        web.resolve("web.yaml"),
         """web:
           |  expose:
           |    notice-board.notice.search-notices: public

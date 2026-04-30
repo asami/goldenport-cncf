@@ -61,7 +61,8 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version May.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -474,6 +475,9 @@ object CncfRuntime extends GlobalObservable {
     cwd: Path,
     args: Array[String]
   ): RuntimeBootstrap = {
+    val normalizedargs = _normalize_source_args(args)
+    if (!normalizedargs.sameElements(args))
+      return bootstrap(cwd, normalizedargs)
     val configuration = _resolve_configuration(cwd, args)
     val front = frontParameters(configuration, args)
     val invocation = canonicalInvocationParameters(configuration, front.residualArgs)
@@ -493,17 +497,37 @@ object CncfRuntime extends GlobalObservable {
     val hasComponentFile =
       RuntimeConfig.getString(configuration, RuntimeConfig.ComponentFileKey).nonEmpty ||
         RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeComponentFileKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.ComponentDevDirKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.ComponentCarDirKey).nonEmpty ||
+        ConfigurationAccess.getString(configuration, "cncf.component.dev.dir").nonEmpty ||
+        ConfigurationAccess.getString(configuration, "cncf.component.car.dir").nonEmpty ||
         args.exists(_.startsWith("--component-file=")) ||
         args.contains("--component-file") ||
+        args.exists(_.startsWith("--component-dev-dir=")) ||
+        args.contains("--component-dev-dir") ||
+        args.exists(_.startsWith("--component-car-dir=")) ||
+        args.contains("--component-car-dir") ||
         args.exists(_.startsWith(s"--${RuntimeConfig.ComponentFileKey}=")) ||
         args.contains(s"--${RuntimeConfig.ComponentFileKey}") ||
         args.exists(_.startsWith(s"--${RuntimeConfig.RuntimeComponentFileKey}=")) ||
-        args.contains(s"--${RuntimeConfig.RuntimeComponentFileKey}")
+        args.contains(s"--${RuntimeConfig.RuntimeComponentFileKey}") ||
+        args.exists(_.startsWith(s"--${RuntimeConfig.ComponentDevDirKey}=")) ||
+        args.contains(s"--${RuntimeConfig.ComponentDevDirKey}") ||
+        args.exists(_.startsWith(s"--${RuntimeConfig.ComponentCarDirKey}=")) ||
+        args.contains(s"--${RuntimeConfig.ComponentCarDirKey}")
     val hasSubsystem =
       RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemFileKey).nonEmpty ||
         RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeSubsystemFileKey).nonEmpty ||
         RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemDescriptorKey).nonEmpty ||
-        RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeSubsystemDescriptorKey).nonEmpty
+        RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeSubsystemDescriptorKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemDevDirKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeSubsystemDevDirKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.SubsystemSarDirKey).nonEmpty ||
+        RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeSubsystemSarDirKey).nonEmpty ||
+        ConfigurationAccess.getString(configuration, "cncf.subsystem.descriptor").nonEmpty ||
+        ConfigurationAccess.getString(configuration, "cncf.subsystem.file").nonEmpty ||
+        ConfigurationAccess.getString(configuration, "cncf.subsystem.dev.dir").nonEmpty ||
+        ConfigurationAccess.getString(configuration, "cncf.subsystem.sar.dir").nonEmpty
     if (hasComponentFile || hasSubsystem) {
       args
     } else {
@@ -975,13 +999,78 @@ object CncfRuntime extends GlobalObservable {
     Vector(
       RuntimeConfig.SubsystemDescriptorKey,
       RuntimeConfig.SubsystemFileKey,
+      RuntimeConfig.SubsystemDevDirKey,
+      RuntimeConfig.SubsystemSarDirKey,
       RuntimeConfig.RuntimeSubsystemDescriptorKey,
       RuntimeConfig.RuntimeSubsystemFileKey,
+      RuntimeConfig.RuntimeSubsystemDevDirKey,
+      RuntimeConfig.RuntimeSubsystemSarDirKey,
       "cncf.subsystem.descriptor",
       "cncf.subsystem.file",
+      "cncf.subsystem.dev.dir",
+      "cncf.subsystem.sar.dir",
       "cncf.runtime.subsystem.descriptor",
-      "cncf.runtime.subsystem.file"
+      "cncf.runtime.subsystem.file",
+      "cncf.runtime.subsystem.dev.dir",
+      "cncf.runtime.subsystem.sar.dir"
     )
+
+  private def _normalize_source_args(
+    args: Array[String]
+  ): Array[String] = {
+    val buffer = Vector.newBuilder[String]
+    var changed = false
+    var i = 0
+    while (i < args.length) {
+      val current = args(i)
+      if (current.startsWith("--subsystem-sar-dir=")) {
+        buffer += s"--${RuntimeConfig.SubsystemSarDirKey}=${current.stripPrefix("--subsystem-sar-dir=")}"
+        changed = true
+        i += 1
+      } else if (current.startsWith("--subsystem-dev-dir=")) {
+        buffer += s"--${RuntimeConfig.SubsystemDevDirKey}=${current.stripPrefix("--subsystem-dev-dir=")}"
+        changed = true
+        i += 1
+      } else if (current.startsWith("--component-car-dir=")) {
+        buffer += s"--${RuntimeConfig.ComponentCarDirKey}=${current.stripPrefix("--component-car-dir=")}"
+        changed = true
+        i += 1
+      } else if (current.startsWith("--component-dev-dir=")) {
+        buffer += s"--${RuntimeConfig.ComponentDevDirKey}=${current.stripPrefix("--component-dev-dir=")}"
+        changed = true
+        i += 1
+      } else if (current.startsWith("--component-file=")) {
+        buffer += s"--${RuntimeConfig.ComponentFileKey}=${current.stripPrefix("--component-file=")}"
+        changed = true
+        i += 1
+      } else if (current == "--subsystem-sar-dir" && i + 1 < args.length) {
+        buffer += s"--${RuntimeConfig.SubsystemSarDirKey}=${args(i + 1)}"
+        changed = true
+        i += 2
+      } else if (current == "--subsystem-dev-dir" && i + 1 < args.length) {
+        buffer += s"--${RuntimeConfig.SubsystemDevDirKey}=${args(i + 1)}"
+        changed = true
+        i += 2
+      } else if (current == "--component-car-dir" && i + 1 < args.length) {
+        buffer += s"--${RuntimeConfig.ComponentCarDirKey}=${args(i + 1)}"
+        changed = true
+        i += 2
+      } else if (current == "--component-dev-dir" && i + 1 < args.length) {
+        buffer += s"--${RuntimeConfig.ComponentDevDirKey}=${args(i + 1)}"
+        changed = true
+        i += 2
+      } else if (current == "--component-file" && i + 1 < args.length) {
+        buffer += s"--${RuntimeConfig.ComponentFileKey}=${args(i + 1)}"
+        changed = true
+        i += 2
+      } else {
+        buffer += current
+        i += 1
+      }
+    }
+    val result = buffer.result().toArray
+    if (changed) result else args
+  }
 
   private def _is_option_name(
     current: String,
@@ -1037,6 +1126,10 @@ object CncfRuntime extends GlobalObservable {
         Some(s"component-dir:${baseDir}")
       case ComponentRepository.ComponentFileRepository.Specification(file) =>
         Some(s"component-file:${file}")
+      case ComponentRepository.ComponentDevDirRepository.Specification(baseDir) =>
+        Some(s"component-dev-dir:${baseDir}")
+      case ComponentRepository.SubsystemDevDirRepository.Specification(baseDir) =>
+        Some(s"subsystem-dev-dir:${baseDir}")
       case ComponentRepository.ScalaCliRepository.Specification(baseDir) =>
         Some(s"scala-cli:${baseDir}")
     }
@@ -1057,9 +1150,21 @@ object CncfRuntime extends GlobalObservable {
       RuntimeConfig.ComponentDirKey,
       RuntimeConfig.ComponentFileKey,
       RuntimeConfig.RuntimeComponentFileKey,
+      RuntimeConfig.ComponentDevDirKey,
+      RuntimeConfig.ComponentCarDirKey,
+      RuntimeConfig.SubsystemDevDirKey,
+      RuntimeConfig.SubsystemSarDirKey,
+      RuntimeConfig.RuntimeSubsystemDevDirKey,
+      RuntimeConfig.RuntimeSubsystemSarDirKey,
       "cncf.component.dir",
       "cncf.component.file",
-      "cncf.runtime.component.file"
+      "cncf.runtime.component.file",
+      "cncf.component.dev.dir",
+      "cncf.component.car.dir",
+      "cncf.subsystem.dev.dir",
+      "cncf.subsystem.sar.dir",
+      "cncf.runtime.subsystem.dev.dir",
+      "cncf.runtime.subsystem.sar.dir"
     )
 
   private def _has_component_activation_arg(
@@ -1067,6 +1172,14 @@ object CncfRuntime extends GlobalObservable {
   ): Boolean =
     args.exists { arg =>
       arg == "--component-file" ||
+        arg == "--component-dev-dir" ||
+        arg == "--component-car-dir" ||
+        arg == "--subsystem-dev-dir" ||
+        arg == "--subsystem-sar-dir" ||
+        arg.startsWith("--component-dev-dir=") ||
+        arg.startsWith("--component-car-dir=") ||
+        arg.startsWith("--subsystem-dev-dir=") ||
+        arg.startsWith("--subsystem-sar-dir=") ||
         _has_option_value(arg, _component_activation_keys)
     }
 
@@ -1074,6 +1187,10 @@ object CncfRuntime extends GlobalObservable {
     arg: String
   ): Boolean =
     arg == "--component-file" ||
+      arg == "--component-dev-dir" ||
+      arg == "--component-car-dir" ||
+      arg == "--subsystem-dev-dir" ||
+      arg == "--subsystem-sar-dir" ||
       _is_option_name(arg, _component_activation_keys)
 
   private def _active_spec_argument(
@@ -1084,6 +1201,10 @@ object CncfRuntime extends GlobalObservable {
         Some((RuntimeConfig.ComponentDirKey, baseDir.toString))
       case ComponentRepository.ComponentFileRepository.Specification(file) =>
         Some((RuntimeConfig.ComponentFileKey, file.toString))
+      case ComponentRepository.ComponentDevDirRepository.Specification(baseDir) =>
+        Some((RuntimeConfig.ComponentDevDirKey, baseDir.toString))
+      case ComponentRepository.SubsystemDevDirRepository.Specification(baseDir) =>
+        Some((RuntimeConfig.SubsystemDevDirKey, baseDir.toString))
       case _ =>
         None
     }
@@ -1122,6 +1243,10 @@ object CncfRuntime extends GlobalObservable {
         ComponentOrigin.Repository("component-dir")
       case _: ComponentRepository.ComponentFileRepository.Specification =>
         ComponentOrigin.Repository("component-file")
+      case _: ComponentRepository.ComponentDevDirRepository.Specification =>
+        ComponentOrigin.Repository("component-dev-dir")
+      case _: ComponentRepository.SubsystemDevDirRepository.Specification =>
+        ComponentOrigin.Repository("subsystem-dev-dir")
       case _: ComponentRepository.ScalaCliRepository.Specification =>
         ComponentOrigin.Repository("scala-cli")
     }

@@ -20,19 +20,44 @@ These concerns are intentionally separate.
 
 ## Current Runtime Rules
 
-### Development-time auto-activation
+### Development-time execution
 
-The following are development-time activation paths:
+The following are development-time execution paths:
 
 - `--discover=classes`
   - discovers compiled classes from the current workspace
   - auto-activates the discovered components
-- `car.d`
-  - expanded component shape
-  - auto-activates
-- `sar.d`
+- `--component-dev-dir <path>`
+  - treats an sbt/cozy development directory as a CAR-equivalent component
+    source
+  - reads the development runtime classpath from
+    `target/cncf.d/runtime-classpath.txt`
+  - infers the component/subsystem name from the descriptor in `src/main/car`
+    when available, so `--textus.component` is not required
+  - uses `src/main/car` as the canonical CAR-root resources that will be
+    packaged into the CAR root
+  - uses `src/main/web` as the development and packaging source for the Web app
+    surface
+  - does not package or activate `docs/`; component-facing documentation must
+    come from `src/main/car` or another `src/main` artifact source
+- `--component-car-dir <path>`
+  - explicitly runs an expanded CAR directory
+  - intended for CAR loader debugging, archive inspection, and reproducing a
+    packaged CAR without zipping it first
+  - this is the route for a standalone `car.d` directory
+- `--subsystem-dev-dir <path>`
+  - treats an sbt/cozy application development root as a SAR-equivalent
+    subsystem source
+  - reads SAR settings from `<path>` or `<path>/subsystem`
+  - reads component development output from `<path>/component`
+  - infers the subsystem name from the subsystem descriptor, so
+    `--textus.subsystem` is not required for the standard development root
+- `--subsystem-sar-dir <path>`
   - expanded subsystem shape
-  - auto-activates
+  - explicitly runs an expanded SAR directory
+  - intended for SAR loader debugging, archive inspection, and reproducing a
+    packaged SAR without zipping it first
+  - this is the route for a standalone `sar.d` directory
 
 ### Packaged search
 
@@ -118,10 +143,58 @@ they are not embedded inside the application CAR.
   - packaged search
 - `component.d`
   - packaged activation
+- `src/main/car`
+  - canonical component-owned CAR-root resources
+  - packaged into the CAR root by the build
+  - used by `--component-dev-dir` without building a CAR first
+- `src/main/web`
+  - component Web app resources
+  - kept separate from CAR metadata because it is the Web surface, not the
+    archive descriptor layer
 - `car.d`
-  - expanded development/debug component activation
+  - expanded CAR directory for loader/debug/inspection use
+  - no longer a default active component source
+  - run explicitly with `--component-car-dir car.d`
 - `sar.d`
-  - expanded development/debug subsystem activation
+  - expanded SAR directory for loader/debug/inspection use
+  - no longer a default active subsystem source
+  - run explicitly with `--subsystem-sar-dir sar.d`
+- `subsystem/`
+  - subsystem development module under an application root
+  - contains SAR descriptor/configuration for `--subsystem-dev-dir`
+
+## Development Startup Patterns
+
+Component development should normally run from the development directory:
+
+```bash
+cncf --component-dev-dir . server
+```
+
+This path avoids building a CAR on every edit. It keeps local classpath entries
+as development inputs, reads CAR-root metadata from `src/main/car`, and lets the
+runtime infer the component/subsystem identity from that metadata.
+
+Subsystem development should normally run from the application root:
+
+```bash
+cncf --subsystem-dev-dir . server
+```
+
+The root may contain `subsystem/` and `component/` modules. The subsystem
+descriptor in the root or `subsystem/` selects the subsystem; the component
+development output under `component/` supplies the component implementation.
+
+Expanded archive directories are separate debugging inputs:
+
+```bash
+cncf --component-car-dir car.d server
+cncf --subsystem-sar-dir sar.d server
+```
+
+Use these when validating the archive layout itself or comparing behavior with a
+packaged `*.car` / `*.sar`. They are not the preferred edit/run loop for sbt or
+Cozy projects.
 
 ## Operational Direction
 
@@ -130,7 +203,8 @@ The preferred operational model is:
 1. use subsystem name or component name for explicit startup
 2. use `repository.d` when packaged artifacts should be searchable but not automatically active
 3. use `component.d` when packaged artifacts should be active inputs
-4. use `car.d`, `sar.d`, or `--discover=classes` for development-time workflows
+4. use `--component-dev-dir`, `--component-car-dir`, `--subsystem-dev-dir`,
+   `--subsystem-sar-dir`, or `--discover=classes` for development-time workflows
 
 For a one-component application that depends on standard provider components,
 the component CAR may be selected by component name in production or activated

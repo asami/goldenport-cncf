@@ -12,7 +12,8 @@ import org.goldenport.record.Record
 
 /*
  * @since   Apr. 14, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version May.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class WebDescriptor(
@@ -893,6 +894,10 @@ object WebDescriptor {
 
   private def _descriptor_files(root: Path): Vector[Path] =
     Vector(
+      root.resolve("car.d").resolve("web").resolve("web-descriptor.yaml"),
+      root.resolve("car.d").resolve("web").resolve("web.yaml"),
+      root.resolve("src").resolve("main").resolve("web").resolve("web-descriptor.yaml"),
+      root.resolve("src").resolve("main").resolve("web").resolve("web.yaml"),
       root.resolve("web").resolve("web-descriptor.yaml"),
       root.resolve("web").resolve("web.yaml")
     )

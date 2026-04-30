@@ -42,7 +42,11 @@ The runtime-side launch bootstrap now also carries the current activation rule:
 
 - packaged `repository.d/*.car` stays search-oriented and does not auto-activate by default
 - packaged `component.d/*.car` is treated as an active packaged source
-- expanded `car.d` and `sar.d` are treated as development/debug shapes and can auto-activate
+- `--component-dev-dir` and `--subsystem-dev-dir` are the normal development
+  root launch routes and can infer the component/subsystem identity from
+  descriptors
+- expanded `car.d` and `sar.d` are treated as loader/debug shapes and require
+  explicit directory routes
 - subsystem-selected repository injection avoids re-injecting a repository that is already active
 - duplicate components introduced by runtime extras are collapsed during initialization
 
@@ -92,3 +96,6 @@ Remaining areas to revisit:
 - `CncfRuntime` owns canonical launch interpretation
 - `CncfMain` should not introduce an alternative interpretation of the same
   parameter/config concepts
+- use `--component-dev-dir .` or `--subsystem-dev-dir .` for the edit/run loop
+- use `--component-car-dir car.d` or `--subsystem-sar-dir sar.d` when the
+  expanded archive layout itself is what needs to be tested

@@ -454,7 +454,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   It also standardizes `filebundle` as a core DataType so command execution can
   keep directory, single-file, and existing-ZIP inputs as path-preserving
   FileBundle values while client HTTP transport converts them to validated ZIP
-  payloads at the network boundary. AF-01 adds reusable CNCF AtomFeed
+  payloads at the network boundary. Packaged source activation was hardened so
+  `--component-dev-dir` and `--subsystem-dev-dir` are selector-less development
+  startup routes, while expanded `car.d` and `sar.d` remain explicit
+  loader/debug inputs via `--component-car-dir` and `--subsystem-sar-dir`.
+  AF-01 adds reusable CNCF AtomFeed
   model/projection/rendering support and applies it to BlogComponent as a
   public `atomFeed` query for published active posts.
 - Remaining BI-04 work is phase closure validation rather than a known runtime

@@ -19,7 +19,8 @@ import org.goldenport.cncf.blob.BlobStoreConfig
  *  version Jan. 30, 2026
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version May.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -83,12 +84,18 @@ object RuntimeConfig {
   val ComponentNameKey = "textus.component"
   val SubsystemDescriptorKey = "textus.subsystem.descriptor"
   val SubsystemFileKey = "textus.subsystem.file"
+  val SubsystemDevDirKey = "textus.subsystem.dev.dir"
+  val SubsystemSarDirKey = "textus.subsystem.sar.dir"
   val RuntimeSubsystemNameKey = "textus.runtime.subsystem"
   val RuntimeComponentNameKey = "textus.runtime.component"
   val RuntimeSubsystemDescriptorKey = "textus.runtime.subsystem.descriptor"
   val RuntimeSubsystemFileKey = "textus.runtime.subsystem.file"
+  val RuntimeSubsystemDevDirKey = "textus.runtime.subsystem.dev.dir"
+  val RuntimeSubsystemSarDirKey = "textus.runtime.subsystem.sar.dir"
   val ComponentFileKey = "textus.component.file"
   val RuntimeComponentFileKey = "textus.runtime.component.file"
+  val ComponentDevDirKey = "textus.component.dev.dir"
+  val ComponentCarDirKey = "textus.component.car.dir"
   val AssemblyDescriptorKey = "textus.assembly.descriptor"
   val WebDescriptorKey = "textus.web.descriptor"
   val RepositoryDirKey = "textus.repository.dir"
@@ -397,6 +404,8 @@ object RuntimeConfig {
         case ComponentNameKey => Vector(RuntimeComponentNameKey)
         case SubsystemDescriptorKey => Vector(RuntimeSubsystemDescriptorKey)
         case SubsystemFileKey => Vector(RuntimeSubsystemFileKey)
+        case SubsystemDevDirKey => Vector(RuntimeSubsystemDevDirKey)
+        case SubsystemSarDirKey => Vector(RuntimeSubsystemSarDirKey)
         case ComponentFileKey => Vector(RuntimeComponentFileKey)
         case LogBackendKey => Vector(RuntimeLogBackendKey)
         case LogLevelKey => Vector(RuntimeLogLevelKey)

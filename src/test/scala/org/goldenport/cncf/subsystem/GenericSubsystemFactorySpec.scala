@@ -22,7 +22,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr.  8, 2026
  *  version Apr. 10, 2026
- * @version Apr. 24, 2026
+ *  version Apr. 24, 2026
+ * @version May.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
@@ -35,16 +36,16 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
     "load the descriptor-bound component through the repository runtime path" in {
       _with_temp_dir { componentdir =>
         val fakecomponentjar = _create_fake_component_jar(componentdir.resolve("assets").resolve("component-main.jar"))
-        val manifest = componentdir.resolve("manifest-car.json")
+        val componentDescriptor = componentdir.resolve("component-descriptor-car.json")
         Files.writeString(
-          manifest,
+          componentDescriptor,
           """{"name":"structured-knowledge","version":"0.1.0","component":"textus-mcp-rag"}"""
         )
         _create_car(
           componentdir.resolve("structured-knowledge.car"),
           Seq(
             "component/main.jar" -> fakecomponentjar,
-            "meta/manifest.json" -> manifest
+            "component-descriptor.json" -> componentDescriptor
           )
         )
 
@@ -86,16 +87,16 @@ final class GenericSubsystemFactorySpec extends AnyWordSpec with Matchers with B
     "make descriptor-bound component operations visible through the subsystem resolver" in {
       _with_temp_dir { componentdir =>
         val fakecomponentjar = _create_fake_component_jar(componentdir.resolve("assets").resolve("component-main.jar"))
-        val manifest = componentdir.resolve("manifest-car.json")
+        val componentDescriptor = componentdir.resolve("component-descriptor-car.json")
         Files.writeString(
-          manifest,
+          componentDescriptor,
           """{"name":"structured-knowledge","version":"0.1.0","component":"textus-mcp-rag"}"""
         )
         _create_car(
           componentdir.resolve("structured-knowledge.car"),
           Seq(
             "component/main.jar" -> fakecomponentjar,
-            "meta/manifest.json" -> manifest
+            "component-descriptor.json" -> componentDescriptor
           )
         )
 
