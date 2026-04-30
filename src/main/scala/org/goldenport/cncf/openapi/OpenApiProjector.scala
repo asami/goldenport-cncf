@@ -4,13 +4,13 @@ import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.protocol.spec.{OperationDefinition, ParameterDefinition, ServiceDefinition}
 import org.goldenport.datatype.I18nString
-import org.goldenport.schema.XBlob
+import org.goldenport.schema.{XBlob, XFileBundle}
 import org.slf4j.LoggerFactory
 
 /*
  * @since   Jan.  8, 2026
  *  version Jan. 20, 2026
- * @version Apr. 29, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object OpenApiProjector {
@@ -140,9 +140,10 @@ object OpenApiProjector {
 
   private def _is_binary_upload_parameter(parameter: ParameterDefinition): Boolean =
     parameter.datatype == XBlob ||
+      parameter.datatype == XFileBundle ||
       Option(parameter.datatype).map(_.name).exists { name =>
         val normalized = name.toLowerCase(java.util.Locale.ROOT).filter(_.isLetterOrDigit)
-        normalized == "blob" || normalized == "filetree"
+        normalized == "blob" || normalized == "filebundle"
       }
 
   private def _query_parameters(op: OperationDefinition): Vector[String] =

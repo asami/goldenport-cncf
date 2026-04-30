@@ -119,7 +119,10 @@ Resume hint:
   `associationBinding` metadata on operation HTML forms and Form API
   definitions, preserves multipart upload inputs, and keeps binding-only
   fields out of operation business inputs while the post-operation binding
-  workflows consume the original request.
+  workflows consume the original request. The client/command transport slice
+  standardizes the core `filebundle` DataType so directory, single-file, and
+  existing-ZIP inputs are normalized to `application/zip` `MimeBody` payloads
+  before operation execution.
 
 ## 5. Development Items
 

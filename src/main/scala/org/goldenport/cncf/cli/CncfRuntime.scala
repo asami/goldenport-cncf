@@ -6,7 +6,6 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import java.net.URLClassLoader
 import java.util.ServiceLoader
-import java.util.zip.{ZipEntry, ZipOutputStream}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.util.control.NonFatal
@@ -31,11 +30,11 @@ import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, Runt
 import org.goldenport.cncf.context.GlobalContext
 import org.goldenport.http.{HttpRequest, HttpResponse}
 import org.goldenport.protocol.{Argument, Property, Protocol, ProtocolEngine, Request, Response, Switch}
-import org.goldenport.datatype.{ContentType, MimeBody}
+import org.goldenport.datatype.{ContentType, FileBundle, MimeBody}
 import org.goldenport.protocol.operation.{OperationResponse, OperationRequest}
 import org.goldenport.protocol.spec.{RequestDefinition, ResponseDefinition}
 import org.goldenport.protocol.spec.ParameterDefinition
-import org.goldenport.schema.{Multiplicity, ValueDomain, XString}
+import org.goldenport.schema.{Multiplicity, ValueDomain, XFileBundle, XString}
 import org.goldenport.value.BaseContent
 import org.goldenport.cncf.log.{LogBackend, LogBackendHolder}
 import org.goldenport.cncf.http.{FakeHttpDriver, Http4sHttpServer, HttpDriver, HttpExecutionEngine, HttpDriverFactory}
@@ -62,7 +61,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
- * @version Apr. 29, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -1824,11 +1823,17 @@ object CncfRuntime extends GlobalObservable {
   ): Consequence[Option[MimeBody]] =
     new CncfRuntime()._client_mime_body_from_request(req)
 
-  private[cli] def _prepare_filetree_parameters(
+  private[cli] def _prepare_filebundle_parameters(
     operation: org.goldenport.protocol.spec.OperationDefinition,
     req: Request
   ): Consequence[Request] =
-    new CncfRuntime()._prepare_filetree_parameters(operation, req)
+    new CncfRuntime()._prepare_filebundle_parameters(operation, req)
+
+  private[cli] def _prepare_filebundle_parameters(
+    subsystem: Subsystem,
+    req: Request
+  ): Consequence[Request] =
+    new CncfRuntime()._prepare_filebundle_parameters(subsystem, req)
 
   private[cli] def _client_http_body_and_header(
     req: Request
@@ -2884,7 +2889,7 @@ class CncfRuntime() extends GlobalObservable {
       case Right(xs) => xs
     }
     val result = _to_request(subsystem, normalizedArgs).flatMap { req =>
-      subsystem.executeResponseWithMetadata(req)
+      _prepare_filebundle_parameters(subsystem, req).flatMap(subsystem.executeResponseWithMetadata)
     }
     result match {
       case Consequence.Success(res) =>
@@ -3332,7 +3337,7 @@ class CncfRuntime() extends GlobalObservable {
   ): Consequence[Request] =
     for {
       operation <- _operation_request_definition(subsystem, req)
-      normalized <- _prepare_filetree_parameters(operation, req)
+      normalized <- _prepare_filebundle_parameters(operation, req)
       action <- operation.createOperationRequest(normalized)
     } yield {
       val method = action match {
@@ -3349,12 +3354,12 @@ class CncfRuntime() extends GlobalObservable {
       )
     }
 
-  private[cli] def _prepare_filetree_parameters(
+  private[cli] def _prepare_filebundle_parameters(
     operation: org.goldenport.protocol.spec.OperationDefinition,
     req: Request
   ): Consequence[Request] = {
     val names = operation.specification.request.parameters
-      .filter(_is_filetree_parameter)
+      .filter(_is_filebundle_parameter)
       .flatMap(_.names)
       .toSet
     if (names.isEmpty) {
@@ -3363,13 +3368,13 @@ class CncfRuntime() extends GlobalObservable {
       for {
         arguments <- Consequence.zipN(req.arguments.map { argument =>
           if (names.contains(argument.name))
-            _filetree_value(argument.name, argument.value).map(v => argument.copy(value = v))
+            _filebundle_value(argument.name, argument.value).map(v => argument.copy(value = v))
           else
             Consequence.success(argument)
         })
         properties <- Consequence.zipN(req.properties.map { property =>
           if (names.contains(property.name))
-            _filetree_value(property.name, property.value).map(v => property.copy(value = v))
+            _filebundle_value(property.name, property.value).map(v => property.copy(value = v))
           else
             Consequence.success(property)
         })
@@ -3377,84 +3382,30 @@ class CncfRuntime() extends GlobalObservable {
     }
   }
 
-  private def _is_filetree_parameter(
+  private[cli] def _prepare_filebundle_parameters(
+    subsystem: Subsystem,
+    req: Request
+  ): Consequence[Request] =
+    _operation_request_definition(subsystem, req).flatMap(_prepare_filebundle_parameters(_, req))
+
+  private def _is_filebundle_parameter(
     parameter: ParameterDefinition
   ): Boolean =
-    Option(parameter.datatype).map(_.name).exists { name =>
-      _normalize_datatype_name(name) == "filetree"
-    }
+    parameter.datatype == XFileBundle ||
+      Option(parameter.datatype).map(_.name).exists { name =>
+        _normalize_datatype_name(name) == "filebundle"
+      }
 
   private def _normalize_datatype_name(
     name: String
   ): String =
     name.toLowerCase(java.util.Locale.ROOT).filter(_.isLetterOrDigit)
 
-  private def _filetree_value(
+  private def _filebundle_value(
     name: String,
     value: Any
   ): Consequence[MimeBody] =
-    value match {
-      case body: MimeBody => Consequence.success(body)
-      case path: Path => _zip_filetree(name, path)
-      case text: String => _zip_filetree(name, Paths.get(text))
-      case other => Consequence.argumentInvalid(s"filetree parameter ${name} must be a directory path: ${other}")
-    }
-
-  private def _zip_filetree(
-    name: String,
-    path: Path
-  ): Consequence[MimeBody] = {
-    val root = path.toAbsolutePath.normalize()
-    if (!Files.exists(root)) {
-      Consequence.argumentInvalid(s"filetree parameter ${name} directory does not exist: ${root}")
-    } else if (!Files.isDirectory(root)) {
-      Consequence.argumentInvalid(s"filetree parameter ${name} must be a directory: ${root}")
-    } else {
-      try {
-        val bytes = _zip_directory_bytes(root)
-        Consequence.success(MimeBody(ContentType.APPLICATION_ZIP, Bag.binary(bytes)))
-      } catch {
-        case NonFatal(e) =>
-          Consequence.argumentInvalid(s"filetree parameter ${name} zip failed: ${Option(e.getMessage).getOrElse(e.getClass.getSimpleName)}")
-      }
-    }
-  }
-
-  private def _zip_directory_bytes(
-    root: Path
-  ): Array[Byte] = {
-    val files = {
-      val stream = Files.walk(root)
-      try {
-        stream.iterator().asScala.toVector
-          .filter(p => Files.isRegularFile(p))
-          .sortBy(p => _zip_entry_name(root, p))
-      } finally {
-        stream.close()
-      }
-    }
-    val out = new ByteArrayOutputStream()
-    val zip = new ZipOutputStream(out, StandardCharsets.UTF_8)
-    try {
-      files.foreach { file =>
-        if (Files.isSymbolicLink(file))
-          throw new IllegalArgumentException(s"symbolic link is not supported: ${file}")
-        val entry = new ZipEntry(_zip_entry_name(root, file))
-        zip.putNextEntry(entry)
-        Files.copy(file, zip)
-        zip.closeEntry()
-      }
-    } finally {
-      zip.close()
-    }
-    out.toByteArray
-  }
-
-  private def _zip_entry_name(
-    root: Path,
-    file: Path
-  ): String =
-    root.relativize(file).iterator().asScala.map(_.toString).mkString("/")
+    FileBundle.mimeBody(name, value)
 
   private[cli] def _request_path(req: Request): String =
     NamingConventions.toNormalizedPath(
@@ -3984,7 +3935,7 @@ class CncfRuntime() extends GlobalObservable {
       case _ => args
     }
     _to_request(subsystem, normalized).flatMap { req =>
-      subsystem.execute(req)
+      _prepare_filebundle_parameters(subsystem, req).flatMap(subsystem.execute)
     }
   }
 
