@@ -192,6 +192,10 @@ Implement CNCF gaps discovered by the `BlogComponent` driver.
       including composition child-parent-id-field expansion from Cozy CML.
 - [x] Embedded value object composition metadata for parent-field `VALUE`
       storage without child Entity or Association creation.
+- [x] `textus-blog` BlogComponent CML declares `BlogPost.images` as a
+      BlobAttachment Association relationship and `BlogPost.inlineImages` as
+      child-parent-id-field composition, and executable specs verify the
+      generated metadata.
 - [ ] Broader upload/register-and-attach adapters outside Entity admin.
 - [ ] Non-image Association binding Web/manual surfaces beyond the core
       operation metadata.
@@ -227,6 +231,8 @@ Entity image binding usage and the reusable CNCF behavior is verified.
 - [x] Verify live or executable-spec image binding flows.
 - [x] Verify projection output for associated images.
 - [x] Verify Web/admin/manual behavior.
+- [x] Verify BlogComponent relationship metadata generation for image
+      Association and inline-image composition.
 - [ ] Update strategy history and close phase documents.
 
 ---

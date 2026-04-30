@@ -443,7 +443,10 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   SalesOrder/SalesOrderLine-style same-request child Entity creation from an
   operation result `entity_id`, plus generated `relationshipDefinitions` for
   Cozy-authored association/aggregation/composition metadata, including
-  embedded value object composition stored in parent Entity fields.
+  embedded value object composition stored in parent Entity fields. The
+  `textus-blog` driver validates those generated definitions with
+  `BlogPost.images` as BlobAttachment Association metadata and
+  `BlogPost.inlineImages` as child-parent-id-field composition metadata.
 - Remaining BI-04 work is limited to broader upload/register adapters outside
   Entity admin and additional non-image Association binding surfaces.
 - Non-goals:
@@ -655,6 +658,9 @@ Active in Phase 19.
     and composition, with composition child-parent-id-field storage feeding
     operation child Entity binding and embedded value object storage documenting
     parent-field `VALUE` ownership;
+  - validate the generated relationship metadata in `textus-blog` by declaring
+    BlogPost image BlobAttachment links and inline image occurrence composition
+    in BlogComponent CML;
   - expose and fix CNCF runtime/Web/projection/generator gaps using a real
     component driver.
 - Scope boundary:

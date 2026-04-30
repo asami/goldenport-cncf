@@ -108,9 +108,12 @@ Resume hint:
   association, aggregation, and composition and expand composition
   child-parent-id-field storage into child Entity binding metadata. It also
   recognizes embedded value object composition metadata where a target `VALUE`
-  is stored in a parent Entity field. Continue with remaining upload/register
-  adapters outside Entity admin and later non-image Association binding
-  surfaces.
+  is stored in a parent Entity field. The `textus-blog` driver now declares
+  `BlogPost.images` as a BlobAttachment Association relationship and
+  `BlogPost.inlineImages` as child-parent-id-field composition, with Cozy
+  generation and executable specs validating the metadata. Continue with
+  remaining upload/register adapters outside Entity admin and later non-image
+  Association binding surfaces.
 
 ## 5. Development Items
 
