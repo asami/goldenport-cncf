@@ -44,7 +44,7 @@ import org.goldenport.cncf.entity.{EntityPersistent, EntityStoreSpace}
 import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateCommandDefinition, AggregateCreateDefinition, AggregateDefinition, AggregateMemberDefinition}
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.view.{Browser, ViewBuilder, ViewCollection, ViewDefinition, ViewQueryDefinition}
-import org.goldenport.cncf.operation.{CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationDefinition, CmlOperationField}
+import org.goldenport.cncf.operation.{CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationDefinition, CmlOperationField, CmlOperationImageBinding}
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobPersistencePolicy, JobRunMode, JobSubmitOption}
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.subsystem.Subsystem
@@ -4358,6 +4358,330 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       fields.downN(2).downField("name").as[String].toOption shouldBe Some("limit")
       fields.downN(2).downField("type").as[String].toOption shouldBe Some("number")
       fields.downN(2).downField("required").as[Boolean].toOption shouldBe Some(false)
+    }
+
+    "render operation image binding controls and Form API metadata" in {
+      val component = new org.goldenport.cncf.component.Component() {
+        override def operationDefinitions: Vector[CmlOperationDefinition] =
+          Vector(CmlOperationDefinition(
+            name = "register-notice",
+            kind = "COMMAND",
+            inputType = "RegisterNotice",
+            outputType = "RegisterNoticeResult",
+            inputValueKind = "COMMAND_VALUE",
+            parameters = Vector(CmlOperationField("title", "string", "1")),
+            imageBinding = Some(CmlOperationImageBinding(
+              acceptsUpload = true,
+              acceptsExistingBlobId = true,
+              createsAttachment = true,
+              roles = Vector("primary", "thumbnail"),
+              sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult
+            ))
+          ))
+      }
+      val protocol = Protocol(
+        services = spec.ServiceDefinitionGroup(
+          Vector(spec.ServiceDefinition(
+            name = "notice",
+            operations = spec.OperationDefinitionGroup(
+              operations = NonEmptyVector.of(_NoopOperation("register-notice"))
+            )
+          ))
+        )
+      )
+      _initialize_component("notice_board", component, protocol)
+      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+
+      val html = StaticFormAppRenderer.renderOperationForm(
+        subsystem,
+        "notice-board",
+        "notice",
+        "register-notice"
+      ).map(_.body).getOrElse(fail("operation form is missing"))
+      val definition = StaticFormAppRenderer.renderOperationFormDefinition(
+        subsystem,
+        "notice-board",
+        "notice",
+        "register-notice"
+      ).map(_.body).getOrElse(fail("operation form definition is missing"))
+      val json = parse(definition).getOrElse(fail("form definition JSON is invalid"))
+      val fieldNames = json.hcursor.downField("fields").as[Vector[Json]].toOption.getOrElse(Vector.empty)
+        .flatMap(_.hcursor.downField("name").as[String].toOption)
+
+      html should include ("enctype=\"multipart/form-data\"")
+      html should include ("Image Attachments")
+      html should include ("name=\"imageAttachments.0.role\"")
+      html should include ("name=\"imageAttachments.0.blobId\"")
+      html should include ("name=\"imageAttachments.0.file\" type=\"file\"")
+      html should include ("<option value=\"primary\">")
+      html should include ("<option value=\"thumbnail\">")
+      json.hcursor.downField("bindings").downField("imageBinding").downField("acceptsUpload").as[Boolean].toOption shouldBe Some(true)
+      json.hcursor.downField("bindings").downField("imageBinding").downField("acceptsExistingBlobId").as[Boolean].toOption shouldBe Some(true)
+      fieldNames should contain ("imageAttachments.0.role")
+      fieldNames should contain ("imageAttachments.0.blobId")
+      fieldNames should contain ("imageAttachments.0.file")
+    }
+
+    "hide disallowed image binding input modes from operation forms" in {
+      val component = new org.goldenport.cncf.component.Component() {
+        override def operationDefinitions: Vector[CmlOperationDefinition] =
+          Vector(CmlOperationDefinition(
+            name = "attach-notice-image",
+            kind = "COMMAND",
+            inputType = "AttachNoticeImage",
+            outputType = "AttachNoticeImageResult",
+            inputValueKind = "COMMAND_VALUE",
+            imageBinding = Some(CmlOperationImageBinding(
+              acceptsUpload = false,
+              acceptsExistingBlobId = true,
+              createsAttachment = true,
+              roles = Vector("cover"),
+              sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult
+            ))
+          ))
+      }
+      val protocol = Protocol(
+        services = spec.ServiceDefinitionGroup(
+          Vector(spec.ServiceDefinition(
+            name = "notice",
+            operations = spec.OperationDefinitionGroup(
+              operations = NonEmptyVector.of(_NoopOperation("attach-notice-image"))
+            )
+          ))
+        )
+      )
+      _initialize_component("notice_board", component, protocol)
+      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+
+      val html = StaticFormAppRenderer.renderOperationForm(
+        subsystem,
+        "notice-board",
+        "notice",
+        "attach-notice-image"
+      ).map(_.body).getOrElse(fail("operation form is missing"))
+
+      html should include ("Image Attachments")
+      html should include ("name=\"imageAttachments.0.blobId\"")
+      html should not include ("name=\"imageAttachments.0.file\"")
+      html should not include ("enctype=\"multipart/form-data\"")
+    }
+
+    "render operation association binding controls and metadata" in {
+      val component = new org.goldenport.cncf.component.Component() {
+        override def operationDefinitions: Vector[CmlOperationDefinition] =
+          Vector(CmlOperationDefinition(
+            name = "register-notice-tag",
+            kind = "COMMAND",
+            inputType = "RegisterNoticeTag",
+            outputType = "RegisterNoticeTagResult",
+            inputValueKind = "COMMAND_VALUE",
+            associationBinding = Some(CmlOperationAssociationBinding(
+              domain = "notice_tag",
+              targetKind = "tag",
+              createsAssociation = true,
+              roles = Vector("tag"),
+              sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
+              targetIdParameters = Vector("tagId"),
+              sortOrderParameters = Vector("tagSortOrder")
+            ))
+          ))
+      }
+      val protocol = Protocol(
+        services = spec.ServiceDefinitionGroup(
+          Vector(spec.ServiceDefinition(
+            name = "notice",
+            operations = spec.OperationDefinitionGroup(
+              operations = NonEmptyVector.of(_NoopOperation("register-notice-tag"))
+            )
+          ))
+        )
+      )
+      _initialize_component("notice_board", component, protocol)
+      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+
+      val html = StaticFormAppRenderer.renderOperationForm(
+        subsystem,
+        "notice-board",
+        "notice",
+        "register-notice-tag"
+      ).map(_.body).getOrElse(fail("operation form is missing"))
+      val definition = StaticFormAppRenderer.renderOperationFormDefinition(
+        subsystem,
+        "notice-board",
+        "notice",
+        "register-notice-tag"
+      ).map(_.body).getOrElse(fail("operation form definition is missing"))
+      val json = parse(definition).getOrElse(fail("form definition JSON is invalid"))
+      val fieldNames = json.hcursor.downField("fields").as[Vector[Json]].toOption.getOrElse(Vector.empty)
+        .flatMap(_.hcursor.downField("name").as[String].toOption)
+
+      html should include ("Associations")
+      html should include ("name=\"tagId\"")
+      html should include ("name=\"tagSortOrder\"")
+      json.hcursor.downField("bindings").downField("associationBinding").downField("domain").as[String].toOption shouldBe Some("notice_tag")
+      json.hcursor.downField("bindings").downField("associationBinding").downField("targetKind").as[String].toOption shouldBe Some("tag")
+      fieldNames should contain ("tagId")
+      fieldNames should contain ("tagSortOrder")
+    }
+
+    "preserve declared binding parameters during operation form validation" in {
+      val component = new org.goldenport.cncf.component.Component() {
+        override def operationDefinitions: Vector[CmlOperationDefinition] =
+          Vector(CmlOperationDefinition(
+            name = "register-notice-tag",
+            kind = "COMMAND",
+            inputType = "RegisterNoticeTag",
+            outputType = "RegisterNoticeTagResult",
+            inputValueKind = "COMMAND_VALUE",
+            parameters = Vector(CmlOperationField("tagId", "string", "1")),
+            associationBinding = Some(CmlOperationAssociationBinding(
+              domain = "notice_tag",
+              targetKind = "tag",
+              createsAssociation = true,
+              roles = Vector("tag"),
+              sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
+              targetIdParameters = Vector("tagId")
+            ))
+          ))
+      }
+      val protocol = Protocol(
+        services = spec.ServiceDefinitionGroup(
+          Vector(spec.ServiceDefinition(
+            name = "notice",
+            operations = spec.OperationDefinitionGroup(
+              operations = NonEmptyVector.of(_NoopOperation("register-notice-tag"))
+            )
+          ))
+        )
+      )
+      _initialize_component("notice_board", component, protocol)
+      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+
+      val valid = StaticFormAppRenderer.validateOperationForm(
+        subsystem,
+        "notice-board",
+        "notice",
+        "register-notice-tag",
+        Map("tagId" -> "tag-1")
+      ).getOrElse(fail("operation validation is missing"))
+      val missing = StaticFormAppRenderer.validateOperationForm(
+        subsystem,
+        "notice-board",
+        "notice",
+        "register-notice-tag",
+        Map.empty
+      ).getOrElse(fail("operation validation is missing"))
+
+      valid.valid shouldBe true
+      missing.valid shouldBe false
+      missing.errors.flatMap(_.field) should contain ("tagId")
+    }
+
+    "avoid duplicate binding virtual fields for declared operation parameters" in {
+      val component = new org.goldenport.cncf.component.Component() {
+        override def operationDefinitions: Vector[CmlOperationDefinition] =
+          Vector(CmlOperationDefinition(
+            name = "register-notice-tag",
+            kind = "COMMAND",
+            inputType = "RegisterNoticeTag",
+            outputType = "RegisterNoticeTagResult",
+            inputValueKind = "COMMAND_VALUE",
+            parameters = Vector(CmlOperationField("tagId", "string", "1")),
+            associationBinding = Some(CmlOperationAssociationBinding(
+              domain = "notice_tag",
+              targetKind = "tag",
+              createsAssociation = true,
+              roles = Vector("tag"),
+              sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
+              targetIdParameters = Vector("tagId")
+            ))
+          ))
+      }
+      val protocol = Protocol(
+        services = spec.ServiceDefinitionGroup(
+          Vector(spec.ServiceDefinition(
+            name = "notice",
+            operations = spec.OperationDefinitionGroup(
+              operations = NonEmptyVector.of(_NoopOperation("register-notice-tag"))
+            )
+          ))
+        )
+      )
+      _initialize_component("notice_board", component, protocol)
+      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+
+      val html = StaticFormAppRenderer.renderOperationForm(
+        subsystem,
+        "notice-board",
+        "notice",
+        "register-notice-tag"
+      ).map(_.body).getOrElse(fail("operation form is missing"))
+      val definition = StaticFormAppRenderer.renderOperationFormDefinition(
+        subsystem,
+        "notice-board",
+        "notice",
+        "register-notice-tag"
+      ).map(_.body).getOrElse(fail("operation form definition is missing"))
+      val json = parse(definition).getOrElse(fail("form definition JSON is invalid"))
+      val fieldNames = json.hcursor.downField("fields").as[Vector[Json]].toOption.getOrElse(Vector.empty)
+        .flatMap(_.hcursor.downField("name").as[String].toOption)
+
+      fieldNames.count(_ == "tagId") shouldBe 1
+      "name=\"tagId\"".r.findAllIn(html).size shouldBe 1
+      html should not include ("Tag Id Target id")
+    }
+
+    "skip image attachment controls for non-attachment image operations" in {
+      val component = new org.goldenport.cncf.component.Component() {
+        override def operationDefinitions: Vector[CmlOperationDefinition] =
+          Vector(CmlOperationDefinition(
+            name = "register-blob-like",
+            kind = "COMMAND",
+            inputType = "RegisterBlobLike",
+            outputType = "RegisterBlobLikeResult",
+            inputValueKind = "COMMAND_VALUE",
+            parameters = Vector(CmlOperationField("payload", "blob", "1")),
+            imageBinding = Some(CmlOperationImageBinding(
+              acceptsUpload = true,
+              createsAttachment = false,
+              parameters = Vector("payload")
+            ))
+          ))
+      }
+      val protocol = Protocol(
+        services = spec.ServiceDefinitionGroup(
+          Vector(spec.ServiceDefinition(
+            name = "blob",
+            operations = spec.OperationDefinitionGroup(
+              operations = NonEmptyVector.of(_NoopOperation("register-blob-like"))
+            )
+          ))
+        )
+      )
+      _initialize_component("notice_board", component, protocol)
+      val subsystem = DefaultSubsystemFactory.default(Some("server")).add(Vector(component))
+
+      val html = StaticFormAppRenderer.renderOperationForm(
+        subsystem,
+        "notice-board",
+        "blob",
+        "register-blob-like"
+      ).map(_.body).getOrElse(fail("operation form is missing"))
+      val definition = StaticFormAppRenderer.renderOperationFormDefinition(
+        subsystem,
+        "notice-board",
+        "blob",
+        "register-blob-like"
+      ).map(_.body).getOrElse(fail("operation form definition is missing"))
+      val json = parse(definition).getOrElse(fail("form definition JSON is invalid"))
+      val fieldNames = json.hcursor.downField("fields").as[Vector[Json]].toOption.getOrElse(Vector.empty)
+        .flatMap(_.hcursor.downField("name").as[String].toOption)
+
+      html should not include ("Image Attachments")
+      html should not include ("imageAttachments.0.file")
+      fieldNames should contain ("payload")
+      fieldNames should not contain ("imageAttachments.0.file")
+      json.hcursor.downField("bindings").downField("imageBinding").downField("acceptsUpload").as[Boolean].toOption shouldBe Some(true)
     }
 
     "serve admin entity form definition API from EntityRuntimeDescriptor schema" in {

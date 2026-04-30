@@ -273,10 +273,11 @@ final class Subsystem(
         IngressSecurityResolver.resolve(component.logic.executionContext(), request).flatMap { security =>
           given ExecutionContext = security.executionContext
           _authorize_operation(route, security.executionContext).flatMap { _ =>
-            val oprequest = component.logic.makeOperationRequest(domainRequest)
+            val operationDomainRequest = _operation_business_request(route, domainRequest)
+            val oprequest = component.logic.makeOperationRequest(operationDomainRequest)
             _observe_operation_request_validation_failure(
               route,
-              domainRequest,
+              operationDomainRequest,
               oprequest,
               security.executionContext
             )
@@ -333,6 +334,67 @@ final class Subsystem(
       }
     } yield response
   }
+
+  private def _operation_business_request(
+    route: (Component, ServiceDefinition, OperationDefinition),
+    request: Request
+  ): Request = {
+    val (component, _, operation) = route
+    if (_operation_owns_binding_parameters(operation))
+      request
+    else {
+      val declared = _operation_declared_parameter_names(component, operation)
+      def keep(name: String): Boolean =
+        declared.contains(name) || !_is_operation_binding_parameter(component, operation, name)
+      request.copy(
+        arguments = request.arguments.filter(arg => keep(arg.name)),
+        properties = request.properties.filter(prop => keep(prop.name))
+      )
+    }
+  }
+
+  private def _operation_owns_binding_parameters(
+    operation: OperationDefinition
+  ): Boolean =
+    operation.isInstanceOf[AssociationBindingOperationDefinition] ||
+      operation.isInstanceOf[ImageBindingOperationDefinition]
+
+  private def _operation_declared_parameter_names(
+    component: Component,
+    operation: OperationDefinition
+  ): Set[String] = {
+    val protocolNames = operation.specification.request.parameters.toVector.flatMap(_.names)
+    val cmlNames = component.operationDefinitions
+      .find(definition => NamingConventions.equivalentByNormalized(definition.name, operation.name))
+      .toVector
+      .flatMap(_.parameters.map(_.name))
+    (protocolNames ++ cmlNames).toSet
+  }
+
+  private def _is_operation_binding_parameter(
+    component: Component,
+    operation: OperationDefinition,
+    name: String
+  ): Boolean =
+    _operation_image_binding(component, operation).exists(_ => _is_image_binding_parameter(name)) ||
+      _operation_association_binding(component, operation).exists(binding => _is_association_binding_parameter(binding, name))
+
+  private def _is_image_binding_parameter(
+    name: String
+  ): Boolean =
+    name.startsWith("imageAttachments.") ||
+      name.startsWith("blob.") ||
+      name.startsWith("blobId.")
+
+  private def _is_association_binding_parameter(
+    binding: CmlOperationAssociationBinding,
+    name: String
+  ): Boolean =
+    (binding.parameters ++
+      binding.sourceEntityIdParameters ++
+      binding.targetIdParameters ++
+      binding.sortOrderParameters).contains(name) ||
+      binding.targetIdParameters.exists(p => name == s"${p}.sortOrder")
 
   private def _apply_association_bindings(
     bindings: Vector[CmlOperationAssociationBinding],

@@ -10,7 +10,7 @@ import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.job.JobQueryReadModel
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.config.RuntimeConfig
-import org.goldenport.cncf.operation.CmlEntityRelationshipDefinition
+import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationImageBinding, ImageBindingOperationDefinition}
 import org.goldenport.cncf.projection.{AuthorizationPolicyProjection, DescribeProjection, HelpProjection, SchemaProjection}
 import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.protocol.{Argument, Property, Request as ProtocolRequest}
@@ -220,7 +220,9 @@ object StaticFormAppRenderer {
     componentPath: String,
     servicePath: String,
     operationPath: String,
-    webSchema: WebSchemaResolver.ResolvedWebSchema
+    webSchema: WebSchemaResolver.ResolvedWebSchema,
+    associationBinding: Option[CmlOperationAssociationBinding] = None,
+    imageBinding: Option[CmlOperationImageBinding] = None
   )
   private final case class FormDefinitionNavigation(
     mode: String,
@@ -313,10 +315,10 @@ object StaticFormAppRenderer {
       val action = s"/form/${context.componentPath}/${context.servicePath}/${context.operationPath}"
       val effectiveValues = _operation_form_prefill_values(subsystem, context, values)
       val effectiveValidation = validation.filter(_.webSchema.selector == context.webSchema.selector)
-      val controls = _operation_form_controls(context.webSchema, effectiveValues, effectiveValidation)
+      val controls = _operation_form_controls(context, effectiveValues, effectiveValidation)
       val hiddenContext = _hidden_form_context_inputs(effectiveValues)
       val errorPanel = _form_error_panel(effectiveValues) + _form_validation_panel(effectiveValidation)
-      val enctype = _operation_form_enctype(context.webSchema)
+      val enctype = _operation_form_enctype(context.webSchema, context.imageBinding)
       Page(_simple_page(
         title = s"${_escape(context.component.name)}.${_escape(context.serviceName)}.${_escape(context.operationName)}",
         subtitle = "HTML form operation",
@@ -338,9 +340,11 @@ object StaticFormAppRenderer {
     }
 
   private def _operation_form_enctype(
-    webSchema: WebSchemaResolver.ResolvedWebSchema
+    webSchema: WebSchemaResolver.ResolvedWebSchema,
+    imageBinding: Option[CmlOperationImageBinding] = None
   ): String =
-    if (webSchema.fields.exists(field => _is_blob_datatype(field.dataType.getOrElse(""))))
+    if (webSchema.fields.exists(field => _is_blob_datatype(field.dataType.getOrElse(""))) ||
+      imageBinding.exists(_.acceptsUpload))
       """ enctype="multipart/form-data""""
     else
       ""
@@ -366,7 +370,8 @@ object StaticFormAppRenderer {
               FormDefinitionAction("api-submit", "POST", s"/form-api/${context.componentPath}/${context.servicePath}/${context.operationPath}"),
               FormDefinitionAction("validate", "POST", s"/form-api/${context.componentPath}/${context.servicePath}/${context.operationPath}/validate")
             )
-          )
+          ),
+          operationBindings = Some(context)
         )
       }
 
@@ -592,7 +597,7 @@ object StaticFormAppRenderer {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[Page] =
     _resolve_operation_web_schema_context(subsystem, componentName, serviceName, operationName, webDescriptor)
-      .map(context => _form_validation_json(_validate_form(context.webSchema, values)))
+      .map(context => _form_validation_json(_validate_operation_form(context, values)))
 
   def validateOperationForm(
     subsystem: Subsystem,
@@ -603,7 +608,7 @@ object StaticFormAppRenderer {
     webDescriptor: WebDescriptor = WebDescriptor.empty
   ): Option[FormValidationResult] =
     _resolve_operation_web_schema_context(subsystem, componentName, serviceName, operationName, webDescriptor)
-      .map(context => _validate_form(context.webSchema, values))
+      .map(context => _validate_operation_form(context, values))
 
   def validateComponentAdminEntityForm(
     subsystem: Subsystem,
@@ -931,13 +936,16 @@ object StaticFormAppRenderer {
        |</div>""".stripMargin
 
   private def _operation_form_controls(
-    webSchema: WebSchemaResolver.ResolvedWebSchema,
+    context: OperationWebSchemaContext,
     values: Map[String, String],
     validation: Option[FormValidationResult] = None
   ): String = {
+    val webSchema = context.webSchema
     val fields = webSchema.fields
+    val bindingControls = _operation_binding_controls(context)
     if (fields.isEmpty)
-      _operation_form_fields_textarea(_visible_form_values(values), "Fields")
+      s"""${_operation_form_fields_textarea(_visible_form_values(values).filterNot { case (key, _) => _is_operation_binding_only_field(context, key) }, "Fields")}
+         |${bindingControls}""".stripMargin
     else {
       val fieldNames = fields.map(_.name).toSet
       val validationMessages = _validation_messages_by_field(validation)
@@ -963,15 +971,118 @@ object StaticFormAppRenderer {
           validationMessages = fieldMessages
         )
       }.mkString("\n")
-      val extraValues = _visible_form_values(values).filterNot { case (key, _) => fieldNames.contains(key) }
+      val extraValues = _visible_form_values(values).filterNot { case (key, _) =>
+        fieldNames.contains(key) || _is_operation_binding_only_field(context, key)
+      }
       val extra =
         if (extraValues.isEmpty)
           _operation_form_fields_textarea(Map.empty, "Additional fields", rows = 3)
         else
           _operation_form_fields_textarea(extraValues, "Additional fields", rows = 3)
       s"""${controls}
+         |${bindingControls}
          |${extra}""".stripMargin
     }
+  }
+
+  private def _operation_binding_controls(
+    context: OperationWebSchemaContext
+  ): String =
+    Vector(
+      context.imageBinding.filter(_.createsAttachment).map(binding => _operation_image_attachment_controls(context, binding)),
+      context.associationBinding.filter(_.isAutomaticCreate).map(binding => _operation_association_binding_controls(context, binding))
+    ).flatten.mkString("\n")
+
+  private def _operation_image_attachment_controls(
+    context: OperationWebSchemaContext,
+    binding: CmlOperationImageBinding
+  ): String = {
+    val schemaFields = context.webSchema.fields.map(_.name).toSet
+    val roles = if (binding.roles.nonEmpty) binding.roles else Vector("primary", "cover", "thumbnail", "gallery", "inline")
+    val options = roles.map(role => s"""<option value="${_escape(role)}">""").mkString
+    val rows = (0 until 3).map { index =>
+      val base = s"imageAttachments.${index}"
+      val role =
+        if (!schemaFields.contains(s"${base}.role"))
+          s"""<div class="col-md-2">
+             |  <label class="form-label" for="operationImageAttachmentRole${index}">Role</label>
+             |  <input class="form-control" id="operationImageAttachmentRole${index}" name="${base}.role" list="operationImageAttachmentRoleOptions">
+             |</div>""".stripMargin
+        else
+          ""
+      val blobId =
+        if (binding.acceptsExistingBlobId && !schemaFields.contains(s"${base}.blobId"))
+          s"""<div class="col-md-3">
+             |  <label class="form-label" for="operationImageAttachmentBlobId${index}">Existing Blob id</label>
+             |  <input class="form-control" id="operationImageAttachmentBlobId${index}" name="${base}.blobId">
+             |</div>""".stripMargin
+        else
+          ""
+      val file =
+        if (binding.acceptsUpload && !schemaFields.contains(s"${base}.file"))
+          s"""<div class="col-md-4">
+             |  <label class="form-label" for="operationImageAttachmentFile${index}">Upload image</label>
+             |  <input class="form-control" id="operationImageAttachmentFile${index}" name="${base}.file" type="file" accept="image/*">
+             |</div>""".stripMargin
+        else
+          ""
+      val sortOrder =
+        if (!schemaFields.contains(s"${base}.sortOrder"))
+          s"""<div class="col-md-2">
+             |  <label class="form-label" for="operationImageAttachmentSort${index}">Sort</label>
+             |  <input class="form-control" id="operationImageAttachmentSort${index}" name="${base}.sortOrder">
+             |</div>""".stripMargin
+        else
+          ""
+      val columns = Vector(role, blobId, file, sortOrder).filter(_.trim.nonEmpty)
+      if (columns.isEmpty)
+        ""
+      else
+        s"""<div class="row g-2 align-items-end mb-2">
+           |  ${columns.mkString("\n")}
+           |</div>""".stripMargin
+    }.filter(_.trim.nonEmpty).mkString("\n")
+    if (rows.trim.isEmpty)
+      ""
+    else
+      s"""<section class="border rounded p-3 mb-3">
+         |  <h3 class="h6">Image Attachments</h3>
+         |  ${rows}
+         |  <datalist id="operationImageAttachmentRoleOptions">${options}</datalist>
+         |</section>""".stripMargin
+  }
+
+  private def _operation_association_binding_controls(
+    context: OperationWebSchemaContext,
+    binding: CmlOperationAssociationBinding
+  ): String = {
+    val schemaFields = context.webSchema.fields.map(_.name).toSet
+    val sourceFields =
+      if (binding.sourceEntityIdMode == CmlOperationAssociationBinding.SourceEntityIdModeParameter)
+        binding.sourceEntityIdParameters
+      else
+        Vector.empty
+    val targetFields = binding.targetIdParameters
+    val sortFields = binding.sortOrderParameters
+    val rows = (sourceFields ++ targetFields ++ sortFields).distinct.filterNot(schemaFields.contains).map { name =>
+      val label =
+        if (targetFields.contains(name)) s"${_humanize_field_name(name)} Target id"
+        else if (sourceFields.contains(name)) s"${_humanize_field_name(name)} Source id"
+        else _humanize_field_name(name)
+      s"""<div class="col-md-4">
+         |  <label class="form-label" for="operationAssociation${_escape(NamingConventions.toNormalizedSegment(name))}">${_escape(label)}</label>
+         |  <input class="form-control" id="operationAssociation${_escape(NamingConventions.toNormalizedSegment(name))}" name="${_escape(name)}">
+         |</div>""".stripMargin
+    }.mkString("\n")
+    if (rows.isEmpty)
+      ""
+    else
+      s"""<section class="border rounded p-3 mb-3">
+         |  <h3 class="h6">Associations</h3>
+         |  <div class="row g-2 align-items-end">
+         |    ${rows}
+         |  </div>
+         |</section>""".stripMargin
   }
 
   private def _validation_messages_by_field(
@@ -1030,12 +1141,40 @@ object StaticFormAppRenderer {
             componentPath,
             servicePath,
             operationPath,
-            webSchema
+            webSchema,
+            associationBinding = _operation_association_binding(component, operation),
+            imageBinding = _operation_image_binding(component, operation)
           ))
         }
       }
     } yield
       context
+
+  private def _operation_association_binding(
+    component: Component,
+    operation: org.goldenport.protocol.spec.OperationDefinition
+  ): Option[CmlOperationAssociationBinding] =
+    operation match {
+      case x: AssociationBindingOperationDefinition =>
+        Some(x.associationBinding)
+      case _ =>
+        component.operationDefinitions
+          .find(definition => NamingConventions.equivalentByNormalized(definition.name, operation.name))
+          .flatMap(_.associationBinding)
+    }
+
+  private def _operation_image_binding(
+    component: Component,
+    operation: org.goldenport.protocol.spec.OperationDefinition
+  ): Option[CmlOperationImageBinding] =
+    operation match {
+      case x: ImageBindingOperationDefinition =>
+        Some(x.imageBinding)
+      case _ =>
+        component.operationDefinitions
+          .find(definition => NamingConventions.equivalentByNormalized(definition.name, operation.name))
+          .flatMap(_.imageBinding)
+    }
 
   private def _operation_selector_candidates(
     component: Component,
@@ -1164,9 +1303,10 @@ object StaticFormAppRenderer {
 
   private def _form_definition_json(
     webSchema: WebSchemaResolver.ResolvedWebSchema,
-    navigation: FormDefinitionNavigation
-  ): Page =
-    Page(Json.obj(
+    navigation: FormDefinitionNavigation,
+    operationBindings: Option[OperationWebSchemaContext] = None
+  ): Page = {
+    val base = Vector(
       "selector" -> Json.fromString(webSchema.selector),
       "surface" -> Json.fromString(webSchema.surface.name),
       "source" -> Json.fromString(webSchema.source.toString),
@@ -1175,8 +1315,11 @@ object StaticFormAppRenderer {
       "submitPath" -> Json.fromString(navigation.submitPath),
       "htmlPath" -> Json.fromString(navigation.htmlPath),
       "actions" -> Json.arr(navigation.actions.map(_form_definition_action_json)*),
-      "fields" -> Json.arr(webSchema.fields.map(_web_field_json)*)
-    ).noSpaces)
+      "fields" -> Json.arr((webSchema.fields.map(_web_field_json) ++ operationBindings.toVector.flatMap(_operation_binding_field_jsons))*)
+    )
+    val bindings = operationBindings.toVector.map(context => "bindings" -> _operation_bindings_json(context))
+    Page(Json.obj((base ++ bindings)*).noSpaces)
+  }
 
   private def _form_definition_action_json(
     action: FormDefinitionAction
@@ -1203,6 +1346,143 @@ object StaticFormAppRenderer {
       }
     FormValidationResult(webSchema, values, errors, warnings)
   }
+
+  private def _validate_operation_form(
+    context: OperationWebSchemaContext,
+    values: Map[String, String]
+  ): FormValidationResult =
+    _validate_form(
+      context.webSchema,
+      values.filterNot { case (key, _) => _is_operation_binding_only_field(context, key) }
+    )
+
+  private def _is_operation_binding_only_field(
+    context: OperationWebSchemaContext,
+    key: String
+  ): Boolean =
+    _is_operation_binding_field(context, key) &&
+      !context.webSchema.fields.exists(_.name == key)
+
+  private def _is_operation_binding_field(
+    context: OperationWebSchemaContext,
+    key: String
+  ): Boolean =
+    context.imageBinding.exists(_ => _is_image_binding_field(key)) ||
+      context.associationBinding.exists(binding => _is_association_binding_field(binding, key))
+
+  private def _is_image_binding_field(key: String): Boolean =
+    key.startsWith("imageAttachments.") ||
+      key.startsWith("blob.") ||
+      key.startsWith("blobId.")
+
+  private def _is_association_binding_field(
+    binding: CmlOperationAssociationBinding,
+    key: String
+  ): Boolean =
+    (binding.parameters ++
+      binding.sourceEntityIdParameters ++
+      binding.targetIdParameters ++
+      binding.sortOrderParameters).contains(key) ||
+      binding.targetIdParameters.exists(p => key == s"${p}.sortOrder")
+
+  private def _operation_binding_field_jsons(
+    context: OperationWebSchemaContext
+  ): Vector[Json] = {
+    val schemaFields = context.webSchema.fields.map(_.name).toSet
+    (context.imageBinding.filter(_.createsAttachment).toVector.flatMap(_operation_image_binding_field_jsons) ++
+      context.associationBinding.filter(_.isAutomaticCreate).toVector.flatMap(_operation_association_binding_field_jsons)).
+      filterNot(json => json.hcursor.downField("name").as[String].toOption.exists(schemaFields.contains))
+  }
+
+  private def _operation_image_binding_field_jsons(
+    binding: CmlOperationImageBinding
+  ): Vector[Json] = {
+    val roles = if (binding.roles.nonEmpty) binding.roles else Vector("primary", "cover", "thumbnail", "gallery", "inline")
+    (0 until 3).toVector.flatMap { index =>
+      val base = s"imageAttachments.${index}"
+      Vector(
+        Some(_binding_field_json(s"${base}.role", "Image role", "text", "image", "role", values = roles)),
+        Option.when(binding.acceptsExistingBlobId)(_binding_field_json(s"${base}.blobId", "Existing Blob id", "text", "image", "existingBlobId")),
+        Option.when(binding.acceptsUpload)(_binding_field_json(s"${base}.file", "Upload image", "file", "image", "upload")),
+        Some(_binding_field_json(s"${base}.sortOrder", "Sort order", "number", "image", "sortOrder"))
+      ).flatten
+    }
+  }
+
+  private def _operation_association_binding_field_jsons(
+    binding: CmlOperationAssociationBinding
+  ): Vector[Json] = {
+    val sourceFields =
+      if (binding.sourceEntityIdMode == CmlOperationAssociationBinding.SourceEntityIdModeParameter)
+        binding.sourceEntityIdParameters
+      else
+        Vector.empty
+    val targets = binding.targetIdParameters.map(name =>
+      _binding_field_json(name, _humanize_field_name(name), "text", "association", "targetEntityId")
+    )
+    val sources = sourceFields.map(name =>
+      _binding_field_json(name, _humanize_field_name(name), "text", "association", "sourceEntityId")
+    )
+    val sorts = binding.sortOrderParameters.map(name =>
+      _binding_field_json(name, _humanize_field_name(name), "number", "association", "sortOrder")
+    )
+    (sources ++ targets ++ sorts).distinct
+  }
+
+  private def _binding_field_json(
+    name: String,
+    label: String,
+    fieldType: String,
+    bindingKind: String,
+    bindingMode: String,
+    values: Vector[String] = Vector.empty
+  ): Json =
+    Json.obj(
+      "name" -> Json.fromString(name),
+      "label" -> Json.fromString(label),
+      "type" -> Json.fromString(fieldType),
+      "required" -> Json.fromBoolean(false),
+      "virtual" -> Json.fromBoolean(true),
+      "bindingKind" -> Json.fromString(bindingKind),
+      "bindingMode" -> Json.fromString(bindingMode),
+      "values" -> Json.arr(values.map(Json.fromString)*)
+    )
+
+  private def _operation_bindings_json(
+    context: OperationWebSchemaContext
+  ): Json =
+    Json.obj(
+      "imageBinding" -> context.imageBinding.map(_image_binding_json).getOrElse(Json.Null),
+      "associationBinding" -> context.associationBinding.map(_association_binding_json).getOrElse(Json.Null)
+    )
+
+  private def _image_binding_json(
+    binding: CmlOperationImageBinding
+  ): Json =
+    Json.obj(
+      "mediaKind" -> Json.fromString(binding.mediaKind),
+      "acceptsUpload" -> Json.fromBoolean(binding.acceptsUpload),
+      "acceptsExistingBlobId" -> Json.fromBoolean(binding.acceptsExistingBlobId),
+      "acceptsArchiveBlobId" -> Json.fromBoolean(binding.acceptsArchiveBlobId),
+      "createsAttachment" -> Json.fromBoolean(binding.createsAttachment),
+      "roles" -> Json.arr(binding.roles.map(Json.fromString)*),
+      "parameters" -> Json.arr(binding.parameters.map(Json.fromString)*)
+    )
+
+  private def _association_binding_json(
+    binding: CmlOperationAssociationBinding
+  ): Json =
+    Json.obj(
+      "domain" -> Json.fromString(binding.domain),
+      "targetKind" -> Json.fromString(binding.targetKind),
+      "createsAssociation" -> Json.fromBoolean(binding.createsAssociation),
+      "roles" -> Json.arr(binding.roles.map(Json.fromString)*),
+      "parameters" -> Json.arr(binding.parameters.map(Json.fromString)*),
+      "sourceEntityIdMode" -> Json.fromString(binding.sourceEntityIdMode),
+      "sourceEntityIdParameters" -> Json.arr(binding.sourceEntityIdParameters.map(Json.fromString)*),
+      "targetIdParameters" -> Json.arr(binding.targetIdParameters.map(Json.fromString)*),
+      "sortOrderParameters" -> Json.arr(binding.sortOrderParameters.map(Json.fromString)*)
+    )
 
   private def _validate_field(
     field: WebSchemaResolver.ResolvedWebField,

@@ -114,15 +114,19 @@ Resume hint:
   generation and executable specs validating the metadata. The current
   non-image Association admin/manual slice adds generic association list,
   attach, and detach surfaces plus Entity detail relationship sections for
-  association-record relationships outside BlobAttachment images. Continue with
-  remaining upload/register adapters outside Entity admin.
+  association-record relationships outside BlobAttachment images. The latest
+  operation form/API adapter slice exposes `imageBinding` and
+  `associationBinding` metadata on operation HTML forms and Form API
+  definitions, preserves multipart upload inputs, and keeps binding-only
+  fields out of operation business inputs while the post-operation binding
+  workflows consume the original request.
 
 ## 5. Development Items
 
 - [x] BI-01: Open Phase 19 and freeze BlogComponent image-use scope.
 - [x] BI-02: Validate BlogComponent image binding model against Blob/Association foundation.
 - [x] BI-03: Define Entity image binding usage contract.
-- [ ] BI-04: Implement CNCF runtime/Web/projection gaps discovered by the driver.
+- [x] BI-04: Implement CNCF runtime/Web/projection gaps discovered by the driver.
 - [ ] BI-05: Verification, documentation, and phase closure.
 
 Detailed task breakdown and progress tracking are recorded in

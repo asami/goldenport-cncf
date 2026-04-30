@@ -196,7 +196,11 @@ Implement CNCF gaps discovered by the `BlogComponent` driver.
       BlobAttachment Association relationship and `BlogPost.inlineImages` as
       child-parent-id-field composition, and executable specs verify the
       generated metadata.
-- [ ] Broader upload/register-and-attach adapters outside Entity admin.
+- [x] Broader upload/register-and-attach adapters outside Entity admin.
+      Operation HTML forms and Form API definitions now expose
+      `imageBinding` and `associationBinding` controls/metadata; submit paths
+      preserve multipart inputs for the existing post-operation binding
+      workflows.
 - [x] Non-image Association binding Web/manual surfaces beyond the core
       operation metadata.
 - [x] Entity create/update support for Blob attachment requests.

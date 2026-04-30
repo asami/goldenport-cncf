@@ -448,9 +448,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   `BlogPost.images` as BlobAttachment Association metadata and
   `BlogPost.inlineImages` as child-parent-id-field composition metadata. The
   latest BI-04 slice adds non-image Association admin/manual surfaces for
-  generic association list, attach, detach, and Entity detail rendering.
-- Remaining BI-04 work is limited to broader upload/register adapters outside
-  Entity admin.
+  generic association list, attach, detach, and Entity detail rendering, plus
+  operation HTML/Form API binding adapters for image upload/existing Blob
+  attachments and generic Association target id inputs outside Entity admin.
+- Remaining BI-04 work is phase closure validation rather than a known runtime
+  adapter gap.
 - Non-goals:
 - No new Blob payload storage backend in CNCF core.
 - No S3/S3-compatible BlobStore provider implementation in this phase.

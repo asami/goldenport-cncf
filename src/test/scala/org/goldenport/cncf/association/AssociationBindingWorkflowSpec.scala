@@ -291,6 +291,7 @@ final class AssociationBindingWorkflowSpec
       response match {
         case OperationResponse.RecordResponse(record) =>
           record.getString("entity_id") shouldBe Some("article-1")
+          record.getVector("requestKeys").getOrElse(Vector.empty).map(_.toString) should not contain ("targetEntityId")
         case other =>
           fail(s"unexpected response: $other")
       }
@@ -734,13 +735,17 @@ private final case class _CreateArticleAction(
   entityId: String
 ) extends Action {
   override def createCall(core: ActionCall.Core): ActionCall =
-    _CreateArticleActionCall(core, entityId)
+    _CreateArticleActionCall(core, request, entityId)
 }
 
 private final case class _CreateArticleActionCall(
   core: ActionCall.Core,
+  operationRequest: Request,
   entityId: String
 ) extends ProcedureActionCall {
   override def execute(): Consequence[OperationResponse] =
-    Consequence.success(OperationResponse.RecordResponse(Record.dataAuto("entity_id" -> entityId)))
+    Consequence.success(OperationResponse.RecordResponse(Record.dataAuto(
+      "entity_id" -> entityId,
+      "requestKeys" -> operationRequest.toRecord.asMap.keys.toVector.sorted
+    )))
 }
