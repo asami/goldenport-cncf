@@ -9,7 +9,7 @@ import scala.jdk.CollectionConverters.*
 import scala.util.Using
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall, QueryAction, ResourceAccess}
-import org.goldenport.cncf.association.{Association, AssociationFilter, AssociationRepository, AssociationStoragePolicy}
+import org.goldenport.cncf.association.{Association, AssociationBindingWorkflow, AssociationDomain, AssociationFilter, AssociationRecordCodec, AssociationRepository, AssociationStoragePolicy, AssociationTargetValidator}
 import org.goldenport.cncf.blob.{Blob, BlobAttachmentWorkflow, BlobPayloadSupport, BlobProjection, BlobRepository}
 import org.goldenport.cncf.component.{Component, ComponentInit, ComponentOrigin}
 import org.goldenport.cncf.component.ComponentOriginLabel
@@ -30,6 +30,7 @@ import org.goldenport.cncf.entity.{EntityPersistable, EntityPersistent, EntityQu
 import org.goldenport.cncf.entity.runtime.EntityCollection
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.observability.ObservabilityEngine
+import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, CmlOperationAssociationBinding}
 import org.goldenport.cncf.projection.{SecurityDeploymentMarkdownProjection, SecurityDeploymentProjection}
 import org.goldenport.cncf.security.{AdminAuthorizationPolicy, EntityAccessMode, OperationAuthorizationProvider, OperationAuthorizationRule}
 import org.goldenport.cncf.subsystem.{GenericSubsystemAssemblyDescriptorSource, Subsystem}
@@ -194,6 +195,21 @@ object AdminComponent {
         spec.ResponseDefinition(result = List(DataType.Named("Record"))),
         params.subsystem
       )
+      val opAssociationList = new AssociationListOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(DataType.Named("Record"))),
+        params.subsystem
+      )
+      val opAssociationAttach = new AssociationAttachOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(DataType.Named("Record"))),
+        params.subsystem
+      )
+      val opAssociationDetach = new AssociationDetachOperationDefinition(
+        request,
+        spec.ResponseDefinition(result = List(DataType.Named("Record"))),
+        params.subsystem
+      )
       val serviceSystem = spec.ServiceDefinition(
         name = "system",
         operations = spec.OperationDefinitionGroup(
@@ -291,6 +307,16 @@ object AdminComponent {
           operations = NonEmptyVector.of(opAggregateRead)
         )
       )
+      val serviceAssociation = spec.ServiceDefinition(
+        name = "association",
+        operations = spec.OperationDefinitionGroup(
+          operations = NonEmptyVector.of(
+            opAssociationList,
+            opAssociationAttach,
+            opAssociationDetach
+          )
+        )
+      )
       val services = spec.ServiceDefinitionGroup(
         services = Vector(
           serviceSystem,
@@ -304,7 +330,8 @@ object AdminComponent {
           serviceEntity,
           serviceData,
           serviceView,
-          serviceAggregate
+          serviceAggregate,
+          serviceAssociation
         )
       )
       val protocol = Protocol(
@@ -767,6 +794,79 @@ object AdminComponent {
       Consequence.success(AggregateReadAction(req, subsystem))
   }
 
+  private trait AdminAssociationOperationAuthorization extends OperationAuthorizationProvider {
+    def operationAuthorization(
+      runtimeConfig: RuntimeConfig
+    ): OperationAuthorizationRule =
+      AdminAuthorizationPolicy.operationRule("admin.entity", runtimeConfig)
+  }
+
+  private final class AssociationListOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition with AdminAssociationOperationAuthorization with AssociationBindingOperationDefinition {
+    val associationBinding: CmlOperationAssociationBinding =
+      CmlOperationAssociationBinding(
+        domain = "association",
+        targetKind = "entity",
+        parameters = Vector("domain", "sourceEntityId", "targetEntityId", "targetKind", "role")
+      )
+
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(name = "admin_list_associations", request = request, response = response)
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(AssociationListAction(req, subsystem))
+  }
+
+  private final class AssociationAttachOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition with AdminAssociationOperationAuthorization with AssociationBindingOperationDefinition {
+    val associationBinding: CmlOperationAssociationBinding =
+      CmlOperationAssociationBinding(
+        domain = "association",
+        targetKind = "entity",
+        createsAssociation = true,
+        roles = Vector("related"),
+        parameters = Vector("domain", "sourceEntityId", "targetEntityId", "targetKind", "role", "sortOrder"),
+        sourceEntityIdParameters = Vector("sourceEntityId"),
+        targetIdParameters = Vector("targetEntityId"),
+        sortOrderParameters = Vector("sortOrder")
+      )
+
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(name = "admin_attach_association", request = request, response = response)
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(AssociationAttachAction(req, subsystem))
+  }
+
+  private final class AssociationDetachOperationDefinition(
+    request: spec.RequestDefinition,
+    response: spec.ResponseDefinition,
+    subsystem: Subsystem
+  ) extends spec.OperationDefinition with AdminAssociationOperationAuthorization with AssociationBindingOperationDefinition {
+    val associationBinding: CmlOperationAssociationBinding =
+      CmlOperationAssociationBinding(
+        domain = "association",
+        targetKind = "entity",
+        detachesAssociation = true,
+        parameters = Vector("domain", "sourceEntityId", "targetEntityId", "targetKind", "role"),
+        sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeParameter,
+        sourceEntityIdParameters = Vector("sourceEntityId"),
+        targetIdParameters = Vector("targetEntityId")
+      )
+
+    val specification: spec.OperationDefinition.Specification =
+      spec.OperationDefinition.Specification(name = "admin_detach_association", request = request, response = response)
+
+    def createOperationRequest(req: Request): Consequence[OperationRequest] =
+      Consequence.success(AssociationDetachAction(req, subsystem))
+  }
+
   private final case class ComponentListAction(
     request: Request,
     subsystem: Subsystem
@@ -933,6 +1033,36 @@ object AdminComponent {
       AggregateReadActionCall(core, subsystem)
   }
 
+  private final case class AssociationListAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall =
+      AssociationListActionCall(core, subsystem)
+  }
+
+  private final case class AssociationAttachAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends CommandAction() {
+    override def commandExecutionMode: CommandExecutionMode =
+      CommandExecutionMode.SyncDirectNoJob
+
+    def createCall(core: ActionCall.Core): ActionCall =
+      AssociationAttachActionCall(core, subsystem)
+  }
+
+  private final case class AssociationDetachAction(
+    request: Request,
+    subsystem: Subsystem
+  ) extends CommandAction() {
+    override def commandExecutionMode: CommandExecutionMode =
+      CommandExecutionMode.SyncDirectNoJob
+
+    def createCall(core: ActionCall.Core): ActionCall =
+      AssociationDetachActionCall(core, subsystem)
+  }
+
   private final case class DataCreateActionCall(
     core: ActionCall.Core,
     subsystem: Subsystem
@@ -979,6 +1109,30 @@ object AdminComponent {
   ) extends ProcedureActionCall {
     def execute(): Consequence[OperationResponse] =
       _admin_aggregate_read(core, subsystem)
+  }
+
+  private final case class AssociationListActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _admin_association_list(core, subsystem)
+  }
+
+  private final case class AssociationAttachActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _admin_association_attach(core, subsystem)
+  }
+
+  private final case class AssociationDetachActionCall(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] =
+      _admin_association_detach(core, subsystem)
   }
 
   private final case class DeploymentSecurityMermaidAction(
@@ -1886,6 +2040,116 @@ object AdminComponent {
     )
   }
 
+  private def _admin_association_list(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ): Consequence[OperationResponse] = {
+    val _ = subsystem
+    given org.goldenport.cncf.context.ExecutionContext = core.executionContext
+    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    for {
+      domain <- _required_string(args, "domain")
+      paging <- _paging(args)
+      values <- AssociationRepository.entityStore(AssociationStoragePolicy.shared).list(
+        AssociationFilter(
+          domain = AssociationDomain(domain),
+          sourceEntityId = _optional_string(args, "sourceEntityId"),
+          targetEntityId = _optional_string(args, "targetEntityId"),
+          targetKind = _optional_string(args, "targetKind"),
+          role = _optional_string(args, "role")
+        ),
+        offset = paging.offset,
+        limit = Some(paging.fetchPageSize)
+      )
+      visible = values.take(paging.pageSize)
+      page = _Page(
+        visible.map(AssociationRecordCodec.toRecord),
+        values.size > paging.pageSize,
+        if (paging.wantsTotal) Some(paging.offset + values.size) else None,
+        None,
+        None
+      )
+    } yield OperationResponse.RecordResponse(
+      Record.dataAuto(
+        _with_optional_total(
+          Vector(
+            "kind" -> "association.list",
+            "domain" -> domain,
+            "data" -> page.values,
+            "ids" -> page.values.flatMap(_.getString("id")),
+            "page" -> paging.page,
+            "pageSize" -> paging.pageSize,
+            "hasNext" -> page.hasNext
+          ),
+          page
+        )*
+      )
+    )
+  }
+
+  private def _admin_association_attach(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ): Consequence[OperationResponse] = {
+    val _ = subsystem
+    given org.goldenport.cncf.context.ExecutionContext = core.executionContext
+    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    for {
+      domain <- _required_string(args, "domain")
+      source <- _required_string(args, "sourceEntityId")
+      target <- _required_string(args, "targetEntityId")
+      targetKind <- _required_string(args, "targetKind")
+      role <- _required_string(args, "role")
+      sourceId <- EntityId.parse(source)
+      targetId <- EntityId.parse(target)
+      _ <- _validate_admin_association_entity(subsystem, None, sourceId)
+      sortOrder <- _optional_int_arg(args, "sortOrder")
+      workflow = AssociationBindingWorkflow(
+        AssociationRepository.entityStore(AssociationStoragePolicy.shared),
+        AssociationStoragePolicy.shared,
+        _admin_association_target_validator(subsystem)
+      )
+      result <- workflow.attachExistingTargetResult(
+        sourceEntityId = source,
+        domain = AssociationDomain(domain),
+        targetKind = Some(targetKind),
+        targetEntityId = targetId,
+        role = role,
+        sortOrder = sortOrder
+      )
+    } yield OperationResponse.RecordResponse(
+      Record.create((AssociationRecordCodec.toRecord(result.association).asMap + ("created" -> result.created)).toVector)
+    )
+  }
+
+  private def _admin_association_detach(
+    core: ActionCall.Core,
+    subsystem: Subsystem
+  ): Consequence[OperationResponse] = {
+    val _ = subsystem
+    given org.goldenport.cncf.context.ExecutionContext = core.executionContext
+    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    for {
+      domain <- _required_string(args, "domain")
+      source <- _required_string(args, "sourceEntityId")
+      target <- _required_string(args, "targetEntityId")
+      targetKind <- _required_string(args, "targetKind")
+      role <- _required_string(args, "role")
+      repository = AssociationRepository.entityStore(AssociationStoragePolicy.shared)
+      values <- repository.list(AssociationFilter(
+        domain = AssociationDomain(domain),
+        sourceEntityId = Some(source),
+        targetEntityId = Some(target),
+        targetKind = Some(targetKind),
+        role = Some(role)
+      ))
+      _ <- values match {
+        case Vector() => Consequence.operationNotFound(s"association:${domain}:${source}:${target}:${role}")
+        case xs => xs.foldLeft(Consequence.unit)((z, association) => z.flatMap(_ => repository.delete(association)))
+      }
+    } yield OperationResponse.RecordResponse(Record.dataAuto("detachedCount" -> values.size))
+  }
+
   private def _admin_data_update(
     core: ActionCall.Core,
     subsystem: Subsystem
@@ -2164,6 +2428,12 @@ object AdminComponent {
       case None => Consequence.argumentMissing(key)
     }
 
+  private def _optional_string(
+    args: Map[String, Any],
+    key: String
+  ): Option[String] =
+    args.get(key).map(_.toString.trim).filter(_.nonEmpty)
+
   private def _optional_entity_id(
     args: Map[String, Any],
     key: String,
@@ -2278,6 +2548,67 @@ object AdminComponent {
       case None =>
         Consequence.success(default)
     }
+
+  private def _optional_int_arg(
+    args: Map[String, Any],
+    key: String
+  ): Consequence[Option[Int]] =
+    args.get(key).map(_.toString.trim).filter(_.nonEmpty) match {
+      case Some(value) =>
+        value.toIntOption match {
+          case Some(n) => Consequence.success(Some(n))
+          case None => Consequence.argumentInvalid(s"${key} must be an integer")
+        }
+      case None =>
+        Consequence.success(None)
+    }
+
+  private def _admin_association_target_validator(
+    subsystem: Subsystem
+  ): AssociationTargetValidator =
+    new AssociationTargetValidator {
+      def validate(
+        targetKind: Option[String],
+        id: EntityId
+      )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Unit] =
+        _validate_admin_association_entity(subsystem, targetKind, id)
+    }
+
+  private def _validate_admin_association_entity(
+    subsystem: Subsystem,
+    targetKind: Option[String],
+    id: EntityId
+  )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Unit] =
+    AssociationTargetValidator.entityStoreRecordExists.validate(targetKind, id).recoverWith { conclusion =>
+      if (_admin_association_entity_exists(subsystem, targetKind, id))
+        Consequence.unit
+      else
+        Consequence.Failure(conclusion)
+    }
+
+  private def _admin_association_entity_exists(
+    subsystem: Subsystem,
+    targetKind: Option[String],
+    id: EntityId
+  ): Boolean = {
+    val idvalue = id.value
+    subsystem.components.exists { component =>
+      val names = targetKind match {
+        case Some(kind) =>
+          component.entitySpace.entityNames.filter(NamingConventions.equivalentByNormalized(_, kind))
+        case None =>
+          component.entitySpace.entityNames
+      }
+      names.exists { name =>
+        component.entitySpace.entityOption[Any](name).exists { collection =>
+          collection.storage.storeRealm.values.exists { entity =>
+            val entityid = collection.descriptor.persistent.id(entity)
+            entityid.value == idvalue || entityid.print == idvalue
+          }
+        }
+      }
+    }
+  }
 
   private def _boolean_arg(
     args: Map[String, Any],

@@ -164,6 +164,12 @@ final class Http4sHttpServer(
         if (_is_web_authorized("blob", "admin.associations", "detach", Some(req), Some("admin.entity.update"))) _blob_admin_association_detach(req) else _forbidden_web(req, Some("blob"), Some("admin.associations"), Some("detach"))
       case req @ GET -> Root / "web" / "blob" / "admin" / "store" =>
         if (_is_web_authorized("blob", "admin.store", "index", Some(req))) _blob_admin_store(req) else _forbidden_web(req, Some("blob"), Some("admin.store"), Some("index"))
+      case req @ GET -> Root / "web" / "admin" / "associations" =>
+        if (_is_web_authorized("admin", "associations", "index", Some(req), Some("admin.entity.read"))) _admin_associations(req) else _forbidden_web(req, Some("admin"), Some("associations"), Some("index"))
+      case req @ POST -> Root / "web" / "admin" / "associations" / "attach" =>
+        if (_is_web_authorized("admin", "associations", "attach", Some(req), Some("admin.entity.update"))) _admin_association_attach(req) else _forbidden_web(req, Some("admin"), Some("associations"), Some("attach"))
+      case req @ POST -> Root / "web" / "admin" / "associations" / "detach" =>
+        if (_is_web_authorized("admin", "associations", "detach", Some(req), Some("admin.entity.update"))) _admin_association_detach(req) else _forbidden_web(req, Some("admin"), Some("associations"), Some("detach"))
       case GET -> Root / "web" / app / "dashboard" / "state" =>
         _dashboard_state(Some(app))
       case req @ GET -> Root / "web" / app / "admin" =>
@@ -461,6 +467,36 @@ final class Http4sHttpServer(
       )
     } yield response
 
+  private def _admin_associations(req: HRequest[IO]): IO[HResponse[IO]] =
+    _admin_page(
+      req,
+      StaticFormAppRenderer.renderAdminAssociations(engine.runtimeSubsystem, req.uri.query.params.toMap, _admin_request_properties(req)),
+      Some("associations"),
+      Some("index")
+    )
+
+  private def _admin_association_attach(req: HRequest[IO]): IO[HResponse[IO]] =
+    for {
+      form <- _to_form_record(req)
+      response <- _admin_page(
+        req,
+        StaticFormAppRenderer.renderAdminAssociationAttachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
+        Some("associations"),
+        Some("attach")
+      )
+    } yield response
+
+  private def _admin_association_detach(req: HRequest[IO]): IO[HResponse[IO]] =
+    for {
+      form <- _to_form_record(req)
+      response <- _admin_page(
+        req,
+        StaticFormAppRenderer.renderAdminAssociationDetachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
+        Some("associations"),
+        Some("detach")
+      )
+    } yield response
+
   private def _blob_admin_store(req: HRequest[IO]): IO[HResponse[IO]] =
     _blob_admin_page(
       req,
@@ -598,6 +634,35 @@ final class Http4sHttpServer(
         )
         _web_error_response(Some("blob"), status, error)
     }
+
+  private def _admin_page(
+    req: HRequest[IO],
+    page: org.goldenport.Consequence[StaticFormAppRenderer.Page],
+    service: Option[String],
+    operation: Option[String]
+  ): IO[HResponse[IO]] =
+    page match {
+      case org.goldenport.Consequence.Success(p) =>
+        _html(p, Some("admin"))
+      case org.goldenport.Consequence.Failure(conclusion) =>
+        val status = HStatus.fromInt(conclusion.status.webCode.code).getOrElse(HStatus.InternalServerError)
+        val error = StructuredHttpError.fromConclusion(
+          conclusion,
+          status.code,
+          req.uri.path.renderString,
+          req.method.name,
+          _operation_mode,
+          component = Some("admin"),
+          service = service,
+          operation = operation
+        )
+        _web_error_response(Some("admin"), status, error)
+    }
+
+  private def _admin_request_properties(
+    req: HRequest[IO]
+  ): Vector[(String, String)] =
+    _session_id_(req).map("x-textus-session" -> _).toVector
 
   private def _blob_admin_request_properties(
     req: HRequest[IO]

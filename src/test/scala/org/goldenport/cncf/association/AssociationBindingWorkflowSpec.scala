@@ -12,7 +12,7 @@ import org.goldenport.cncf.operation.{CmlOperationAssociationBinding, CmlOperati
 import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.datatype.{ContentType, MimeBody}
-import org.goldenport.protocol.{Protocol, Property, Request}
+import org.goldenport.protocol.{Argument, Protocol, Property, Request}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec
 import org.goldenport.record.Record
@@ -432,6 +432,109 @@ final class AssociationBindingWorkflowSpec
     }
   }
 
+  "AdminComponent generic Association operations" should {
+    "attach, reuse, list, and detach non-image Associations" in {
+      Given("existing source and target Entity records")
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val admin = subsystem.findComponent("admin").getOrElse(fail("admin component missing"))
+      given ExecutionContext = admin.logic.executionContext()
+      val source = _article_id("admin_source_1")
+      val target = _article_id("admin_target_1")
+      _seed_entity(source)
+      _seed_entity(target)
+      val attach = Request.of(
+        component = "admin",
+        service = "association",
+        operation = "admin_attach_association",
+        arguments = List(
+          Argument("domain", "related_entity"),
+          Argument("sourceEntityId", source.value),
+          Argument("targetEntityId", target.value),
+          Argument("targetKind", "article"),
+          Argument("role", "related"),
+          Argument("sortOrder", "3")
+        )
+      )
+
+      When("the same Association is attached twice")
+      val first = _record(_success(subsystem.executeOperationResponse(attach)))
+      val second = _record(_success(subsystem.executeOperationResponse(attach)))
+
+      Then("the second call reuses the existing Association")
+      first.getBoolean("created") shouldBe Some(true)
+      second.getBoolean("created") shouldBe Some(false)
+      val listed = _record(_success(subsystem.executeOperationResponse(Request.of(
+        component = "admin",
+        service = "association",
+        operation = "admin_list_associations",
+        arguments = List(
+          Argument("domain", "related_entity"),
+          Argument("sourceEntityId", source.value),
+          Argument("targetKind", "article"),
+          Argument("role", "related")
+        )
+      ))))
+      listed.getInt("pageSize") shouldBe Some(20)
+      listed.getVector("data").getOrElse(Vector.empty) should have size 1
+
+      When("the Association is detached")
+      val detached = _record(_success(subsystem.executeOperationResponse(Request.of(
+        component = "admin",
+        service = "association",
+        operation = "admin_detach_association",
+        arguments = List(
+          Argument("domain", "related_entity"),
+          Argument("sourceEntityId", source.value),
+          Argument("targetEntityId", target.value),
+          Argument("targetKind", "article"),
+          Argument("role", "related")
+        )
+      ))))
+
+      Then("only the Association row is removed")
+      detached.getInt("detachedCount") shouldBe Some(1)
+      _success(AssociationRepository.entityStore().list(AssociationFilter(
+        domain = AssociationDomain("related_entity"),
+        sourceEntityId = Some(source.value),
+        targetEntityId = Some(target.value),
+        targetKind = Some("article"),
+        role = Some("related")
+      ))) shouldBe Vector.empty
+      _success(AssociationTargetValidator.entityStoreRecordExists.validate(None, source))
+      _success(AssociationTargetValidator.entityStoreRecordExists.validate(None, target))
+    }
+
+    "reject missing source, missing target, and targetKind mismatch" in {
+      Given("an admin Association attach request")
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val admin = subsystem.findComponent("admin").getOrElse(fail("admin component missing"))
+      given ExecutionContext = admin.logic.executionContext()
+      val source = _article_id("admin_source_2")
+      val target = _article_id("admin_target_2")
+      val comment = _comment_id("admin_comment_2")
+      _seed_entity(source)
+      _seed_entity(target)
+      _seed_entity(comment)
+      def attach(sourceId: EntityId, targetId: EntityId, targetKind: String) =
+        subsystem.executeOperationResponse(Request.of(
+          component = "admin",
+          service = "association",
+          operation = "admin_attach_association",
+          arguments = List(
+            Argument("domain", "related_entity"),
+            Argument("sourceEntityId", sourceId.value),
+            Argument("targetEntityId", targetId.value),
+            Argument("targetKind", targetKind),
+            Argument("role", "related")
+          )
+        ))
+
+      attach(_article_id("missing_admin_source"), target, "article") shouldBe a[Consequence.Failure[_]]
+      attach(source, _article_id("missing_admin_target"), "article") shouldBe a[Consequence.Failure[_]]
+      _failure_message(attach(source, comment, "article")) should include ("target kind mismatch")
+    }
+  }
+
   private def _component(subsystem: org.goldenport.cncf.subsystem.Subsystem): Component = {
     val protocol = Protocol(
       services = spec.ServiceDefinitionGroup(
@@ -551,6 +654,12 @@ final class AssociationBindingWorkflowSpec
     result match {
       case Consequence.Success(value) => value
       case Consequence.Failure(conclusion) => fail(conclusion.show)
+    }
+
+  private def _record(response: OperationResponse): Record =
+    response match {
+      case OperationResponse.RecordResponse(record) => record
+      case other => fail(s"unexpected response: $other")
     }
 
   private def _failure_message[A](result: Consequence[A]): String =

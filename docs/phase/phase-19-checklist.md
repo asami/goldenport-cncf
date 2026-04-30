@@ -197,7 +197,7 @@ Implement CNCF gaps discovered by the `BlogComponent` driver.
       child-parent-id-field composition, and executable specs verify the
       generated metadata.
 - [ ] Broader upload/register-and-attach adapters outside Entity admin.
-- [ ] Non-image Association binding Web/manual surfaces beyond the core
+- [x] Non-image Association binding Web/manual surfaces beyond the core
       operation metadata.
 - [x] Entity create/update support for Blob attachment requests.
 - [x] Projection helper expansion for `images` and `representativeImage`

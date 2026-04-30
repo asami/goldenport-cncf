@@ -446,9 +446,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   embedded value object composition stored in parent Entity fields. The
   `textus-blog` driver validates those generated definitions with
   `BlogPost.images` as BlobAttachment Association metadata and
-  `BlogPost.inlineImages` as child-parent-id-field composition metadata.
+  `BlogPost.inlineImages` as child-parent-id-field composition metadata. The
+  latest BI-04 slice adds non-image Association admin/manual surfaces for
+  generic association list, attach, detach, and Entity detail rendering.
 - Remaining BI-04 work is limited to broader upload/register adapters outside
-  Entity admin and additional non-image Association binding surfaces.
+  Entity admin.
 - Non-goals:
 - No new Blob payload storage backend in CNCF core.
 - No S3/S3-compatible BlobStore provider implementation in this phase.

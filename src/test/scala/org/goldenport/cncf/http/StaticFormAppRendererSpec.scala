@@ -44,7 +44,7 @@ import org.goldenport.cncf.entity.{EntityPersistent, EntityStoreSpace}
 import org.goldenport.cncf.entity.aggregate.{AggregateBuilder, AggregateCollection, AggregateCommandDefinition, AggregateCreateDefinition, AggregateDefinition, AggregateMemberDefinition}
 import org.goldenport.cncf.entity.runtime.*
 import org.goldenport.cncf.entity.view.{Browser, ViewBuilder, ViewCollection, ViewDefinition, ViewQueryDefinition}
-import org.goldenport.cncf.operation.{CmlOperationDefinition, CmlOperationField}
+import org.goldenport.cncf.operation.{CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationDefinition, CmlOperationField}
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobPersistencePolicy, JobRunMode, JobSubmitOption}
 import org.goldenport.cncf.path.AliasResolver
 import org.goldenport.cncf.subsystem.Subsystem
@@ -949,6 +949,12 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       blobAttachHtml should include ("primary, cover, thumbnail, gallery, inline")
       blobAttachHtml should include ("sourceEntityId")
       blobAttachHtml should include ("sortOrder")
+      val associationAttachHtml = StaticFormAppRenderer.renderComponentManualOperation(blobSubsystem, "admin", "association", "admin-attach-association").map(_.body).getOrElse(fail("association attach manual is missing"))
+      associationAttachHtml should include ("Association Binding")
+      associationAttachHtml should include ("create")
+      associationAttachHtml should include ("sourceEntityId")
+      associationAttachHtml should include ("targetEntityId")
+      associationAttachHtml should include ("sortOrder")
     }
 
     "preserve real componentlet path in rendered manual admin and form links" in {
@@ -1154,6 +1160,96 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       edit should include ("name=\"title\"")
       edit should include ("value=\"board update\"")
       edit should include (s"/form/${componentPath}/admin/entities/${entityPath}/${recordShortid}/update")
+    }
+
+    "render generic non-image Associations on entity detail pages" in {
+      val relationships = Vector(
+        CmlEntityRelationshipDefinition(
+          name = "Notice.related",
+          kind = CmlEntityRelationshipDefinition.KindAssociation,
+          sourceEntityName = "notice",
+          targetEntityName = "notice",
+          multiplicity = Some("one-to-many"),
+          storageMode = CmlEntityRelationshipDefinition.StorageAssociationRecord,
+          associationDomain = Some("related_entity"),
+          targetKind = Some("notice"),
+          targetRole = Some("related"),
+          lifecyclePolicy = Some(CmlEntityRelationshipDefinition.LifecycleIndependent)
+        ),
+        CmlEntityRelationshipDefinition(
+          name = "Notice.readOnly",
+          kind = CmlEntityRelationshipDefinition.KindAssociation,
+          sourceEntityName = "notice",
+          targetEntityName = "notice",
+          storageMode = CmlEntityRelationshipDefinition.StorageAssociationRecord
+        ),
+        CmlEntityRelationshipDefinition(
+          name = "Notice.images",
+          kind = CmlEntityRelationshipDefinition.KindAssociation,
+          sourceEntityName = "notice",
+          targetEntityName = "Blob",
+          storageMode = CmlEntityRelationshipDefinition.StorageAssociationRecord,
+          associationDomain = Some("blob_attachment"),
+          targetKind = Some("blob")
+        )
+      )
+      val subsystem = _management_console_fixture_subsystem(relationships = relationships)
+      val component = _notice_fixture_component(subsystem)
+      val notices = component.entitySpace.entity[_NoticeEntity]("notice").storage.storeRealm.values.toVector
+      given EntityPersistent[_NoticeEntity] = _notice_persistent
+      given ExecutionContext = subsystem.components.find(_.name == "admin").getOrElse(fail("admin component is missing")).logic.executionContext()
+      notices.foreach { notice =>
+        org.goldenport.cncf.entity.EntityStore.standard().save(notice)
+          .getOrElse(fail(s"admin notice fixture seed failed: ${notice.id.print}"))
+      }
+      val source = notices.find(_.title == "board update").getOrElse(fail("source notice missing")).id
+      val target = notices.find(_.title == "board followup").getOrElse(fail("target notice missing")).id
+      _admin_record_response(
+        subsystem,
+        "association",
+        "admin_attach_association",
+        "domain" -> "related_entity",
+        "sourceEntityId" -> source.value,
+        "targetEntityId" -> target.value,
+        "targetKind" -> "notice",
+        "role" -> "related",
+        "sortOrder" -> "1"
+      )
+      _admin_record_response(
+        subsystem,
+        "association",
+        "admin_attach_association",
+        "domain" -> "related_entity",
+        "sourceEntityId" -> source.value,
+        "targetEntityId" -> source.value,
+        "targetKind" -> "notice",
+        "role" -> "self",
+        "sortOrder" -> "2"
+      )
+
+      val detail = StaticFormAppRenderer.renderComponentAdminEntityDetail(subsystem, "notice_board", "notice", source.value).map(_.body).getOrElse(fail("component entity detail admin is missing"))
+      val manual = StaticFormAppRenderer.renderComponentManual(subsystem, "notice_board").map(_.body).getOrElse(fail("component manual is missing"))
+      val associationPage = StaticFormAppRenderer.renderAdminAssociations(subsystem, Map("domain" -> "related_entity", "sourceEntityId" -> source.value, "pageSize" -> "1")).map(_.body).getOrElse(fail("association admin page is missing"))
+
+      detail should include ("Associations")
+      detail should include ("Notice.related")
+      detail should include ("Notice.readOnly")
+      detail should include ("related_entity")
+      detail should include (target.value)
+      detail should include ("action=\"/web/admin/associations/attach\"")
+      detail should include ("action=\"/web/admin/associations/detach\"")
+      detail should include ("metadata-only")
+      detail should not include ("domain=&amp;sourceEntityId")
+      detail should not include ("Notice.images")
+      manual should include ("Relationships")
+      manual should include ("related_entity")
+      manual should include ("Target kind")
+      manual should include ("Lifecycle")
+      associationPage should include ("Association Administration")
+      associationPage should include ("Attach Association")
+      associationPage should include ("page 1, page size 1")
+      associationPage should include ("page=2")
+      associationPage should include (target.value)
     }
 
     "render component admin storage shape from projection metadata without legacy containers" in {
@@ -7878,9 +7974,10 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
     operation: String,
     args: (String, String)*
   ): Record = {
-    _admin_response(subsystem, service, operation, args*).toOption.collect {
+    val response = _admin_response(subsystem, service, operation, args*)
+    response.toOption.collect {
       case OperationResponse.RecordResponse(record) => record
-    }.getOrElse(fail(s"admin.${service}.${operation} did not return RecordResponse"))
+    }.getOrElse(fail(s"admin.${service}.${operation} did not return RecordResponse: ${response}"))
   }
 
   private def _admin_response(
@@ -8217,7 +8314,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
   private def _management_console_fixture_subsystem(
     configuration: Configuration = Configuration.empty,
     schema: Schema = _schema("id", "title", "author"),
-    viewFields: Map[String, Vector[String]] = Map.empty
+    viewFields: Map[String, Vector[String]] = Map.empty,
+    relationships: Vector[CmlEntityRelationshipDefinition] = Vector.empty
   ): Subsystem = {
     val resolvedConfiguration = ResolvedConfiguration(configuration, ConfigurationTrace.empty)
     val runtimeConfig = RuntimeConfig.default.copy(
@@ -8248,7 +8346,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       )
     )
     val component =
-      if (viewFields.isEmpty) {
+      if (viewFields.isEmpty && relationships.isEmpty) {
         TestComponentFactory.create("notice_board", Protocol.empty)
       } else {
         val c = new org.goldenport.cncf.component.Component() {
@@ -8261,6 +8359,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
                 viewFields = viewFields
               )
             )
+          override def relationshipDefinitions: Vector[CmlEntityRelationshipDefinition] =
+            relationships
         }
         _initialize_component("notice_board", c, Protocol.empty)
       }

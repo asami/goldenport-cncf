@@ -10,6 +10,7 @@ import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.job.JobQueryReadModel
 import org.goldenport.cncf.CncfVersion
 import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.operation.CmlEntityRelationshipDefinition
 import org.goldenport.cncf.projection.{AuthorizationPolicyProjection, DescribeProjection, HelpProjection, SchemaProjection}
 import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
 import org.goldenport.protocol.{Argument, Property, Request as ProtocolRequest}
@@ -2236,6 +2237,82 @@ object StaticFormAppRenderer {
       ))
     }
 
+  def renderAdminAssociations(
+    subsystem: Subsystem,
+    params: Map[String, String] = Map.empty,
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    _admin_association_record(subsystem, "admin_list_associations", _admin_association_args(params), requestProperties).map { record =>
+      val rows = _record_seq(record.asMap.get("data"))
+      val table =
+        if (rows.isEmpty)
+          s"""<tbody>${_admin_empty_table_cell(8, "No Association rows are available for this filter.")}</tbody>"""
+        else
+          s"""<tbody>${rows.map(row => _admin_association_row(row, includeDetach = true)).mkString("\n")}</tbody>"""
+      val filters = _admin_association_filter_form(params)
+      val attach = _admin_association_attach_form(params)
+      val paging = _admin_association_paging("/web/admin/associations", params, record)
+      Page(_simple_page(
+        title = "Association Administration",
+        subtitle = "Generic Entity-to-Entity Association inventory",
+        body =
+          s"""${_admin_nav_card(Vector("System admin" -> "/web/system/admin", "Blob associations" -> "/web/blob/admin/associations"))}
+             |<article>
+             |  <h2>Attach Association</h2>
+             |  ${attach}
+             |</article>
+             |<article>
+             |  <h2>Filters</h2>
+             |  ${filters}
+             |</article>
+             |<article>
+             |  <h2>Associations</h2>
+             |  <div class="table-responsive mt-3">
+             |    <table class="table table-sm align-middle">
+             |      <thead><tr><th>Association</th><th>Source Entity</th><th>Target Entity</th><th>Target kind</th><th>Role</th><th>Sort</th><th>Domain</th><th>Actions</th></tr></thead>
+             |      ${table}
+             |    </table>
+             |  </div>
+             |  ${paging}
+             |</article>
+             |${_manual_raw_details("Raw association list", record)}""".stripMargin
+      ))
+    }
+
+  def renderAdminAssociationAttachResult(
+    subsystem: Subsystem,
+    form: Map[String, String],
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    _admin_association_record(subsystem, "admin_attach_association", _admin_association_mutation_args(form, includeSortOrder = true), requestProperties).map { record =>
+      Page(_simple_page(
+        title = "Association Attached",
+        subtitle = "Association was created or already existed",
+        body =
+          s"""${_admin_nav_card(Vector("Associations" -> "/web/admin/associations", "Blob associations" -> "/web/blob/admin/associations"))}
+             |${_admin_card("Attach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
+             |<p><a class="btn btn-primary" href="/web/admin/associations?domain=${_escape_query(form.getOrElse("domain", ""))}&amp;sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}">Back to Associations</a></p>
+             |${_manual_raw_details("Raw attach result", record)}""".stripMargin
+      ))
+    }
+
+  def renderAdminAssociationDetachResult(
+    subsystem: Subsystem,
+    form: Map[String, String],
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    _admin_association_record(subsystem, "admin_detach_association", _admin_association_mutation_args(form, includeSortOrder = false), requestProperties).map { record =>
+      Page(_simple_page(
+        title = "Association Detached",
+        subtitle = "Association was removed",
+        body =
+          s"""${_admin_nav_card(Vector("Associations" -> "/web/admin/associations", "Blob associations" -> "/web/blob/admin/associations"))}
+             |${_admin_card("Detach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
+             |<p><a class="btn btn-primary" href="/web/admin/associations?domain=${_escape_query(form.getOrElse("domain", ""))}&amp;sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}">Back to Associations</a></p>
+             |${_manual_raw_details("Raw detach result", record)}""".stripMargin
+      ))
+    }
+
   def renderBlobAdminStore(
     subsystem: Subsystem,
     requestProperties: Vector[(String, String)] = Vector.empty
@@ -2268,6 +2345,32 @@ object StaticFormAppRenderer {
       case other =>
         Consequence.operationInvalid(s"Blob admin operation did not return a record: ${operation} (${other.getClass.getSimpleName})")
     }
+
+  private def _admin_association_record(
+    subsystem: Subsystem,
+    operation: String,
+    args: Vector[(String, String)],
+    requestProperties: Vector[(String, String)]
+  ): Consequence[Record] =
+    subsystem.executeOperationResponse(_admin_association_request(operation, args, requestProperties)).flatMap {
+      case OperationResponse.RecordResponse(record) =>
+        Consequence.success(record)
+      case other =>
+        Consequence.operationInvalid(s"Association admin operation did not return a record: ${operation} (${other.getClass.getSimpleName})")
+    }
+
+  private def _admin_association_request(
+    operation: String,
+    args: Vector[(String, String)],
+    requestProperties: Vector[(String, String)]
+  ): ProtocolRequest =
+    ProtocolRequest.of(
+      component = "admin",
+      service = "association",
+      operation = operation,
+      arguments = args.map { case (key, value) => Argument(key, value) }.toList,
+      properties = requestProperties.map { case (key, value) => Property(key, value, None) }.toList
+    )
 
   private def _blob_admin_request(
     operation: String,
@@ -2302,6 +2405,31 @@ object StaticFormAppRenderer {
     includeSortOrder: Boolean
   ): Vector[(String, String)] = {
     val base = Vector("sourceEntityId", "id", "role").flatMap(key => values.get(key).filter(_.nonEmpty).map(key -> _))
+    if (includeSortOrder)
+      base ++ values.get("sortOrder").filter(_.nonEmpty).map("sortOrder" -> _).toVector
+    else
+      base
+  }
+
+  private def _admin_association_args(
+    params: Map[String, String]
+  ): Vector[(String, String)] = {
+    val pageSize = params.get("pageSize").orElse(params.get("limit")).flatMap(_.toIntOption).filter(_ > 0).getOrElse(100)
+    val page = params.get("page").flatMap(_.toIntOption).filter(_ > 0).getOrElse {
+      params.get("offset").flatMap(_.toIntOption).filter(_ >= 0).map(offset => offset / pageSize + 1).getOrElse(1)
+    }
+    Vector("page" -> page.toString, "pageSize" -> pageSize.toString) ++
+      Vector("domain" -> params.getOrElse("domain", "association")) ++
+      Vector("sourceEntityId", "targetEntityId", "targetKind", "role")
+        .flatMap(key => params.get(key).filter(_.nonEmpty).map(key -> _))
+  }
+
+  private def _admin_association_mutation_args(
+    values: Map[String, String],
+    includeSortOrder: Boolean
+  ): Vector[(String, String)] = {
+    val base = Vector("domain", "sourceEntityId", "targetEntityId", "targetKind", "role")
+      .flatMap(key => values.get(key).filter(_.nonEmpty).map(key -> _))
     if (includeSortOrder)
       base ++ values.get("sortOrder").filter(_.nonEmpty).map("sortOrder" -> _).toVector
     else
@@ -2378,6 +2506,41 @@ object StaticFormAppRenderer {
        |</form>""".stripMargin
   }
 
+  private def _admin_association_row(
+    record: Record,
+    includeDetach: Boolean
+  ): String = {
+    val detach = if (includeDetach) _admin_association_detach_form(record) else ""
+    s"""<tr>
+       |  <td><code>${_escape(record.getString("associationId").getOrElse(""))}</code></td>
+       |  <td><code>${_escape(record.getString("sourceEntityId").getOrElse(""))}</code></td>
+       |  <td><code>${_escape(record.getString("targetEntityId").getOrElse(""))}</code></td>
+       |  <td>${_escape(record.getString("targetKind").getOrElse(""))}</td>
+       |  <td>${_escape(record.getString("role").getOrElse(""))}</td>
+       |  <td>${_escape(record.getString("sortOrder").getOrElse(""))}</td>
+       |  <td>${_escape(record.getString("associationDomain").getOrElse(""))}</td>
+       |  <td>${detach}</td>
+       |</tr>""".stripMargin
+  }
+
+  private def _admin_association_detach_form(
+    record: Record
+  ): String = {
+    val domain = record.getString("associationDomain").getOrElse("")
+    val source = record.getString("sourceEntityId").getOrElse("")
+    val target = record.getString("targetEntityId").getOrElse("")
+    val targetKind = record.getString("targetKind").getOrElse("")
+    val role = record.getString("role").getOrElse("")
+    s"""<form method="post" action="/web/admin/associations/detach" class="d-inline">
+       |  <input type="hidden" name="domain" value="${_escape(domain)}">
+       |  <input type="hidden" name="sourceEntityId" value="${_escape(source)}">
+       |  <input type="hidden" name="targetEntityId" value="${_escape(target)}">
+       |  <input type="hidden" name="targetKind" value="${_escape(targetKind)}">
+       |  <input type="hidden" name="role" value="${_escape(role)}">
+       |  <button class="btn btn-outline-danger btn-sm" type="submit">Detach</button>
+       |</form>""".stripMargin
+  }
+
   private def _blob_admin_blob_fields(
     record: Record
   ): Vector[(String, String)] =
@@ -2426,6 +2589,40 @@ object StaticFormAppRenderer {
        |  <div class="col-md-2"><label class="form-label" for="blobAdminAttachRole">Role</label><input class="form-control" id="blobAdminAttachRole" name="role" value="${value("role")}" required></div>
        |  <div class="col-md-2"><label class="form-label" for="blobAdminAttachSortOrder">Sort</label><input class="form-control" id="blobAdminAttachSortOrder" name="sortOrder"></div>
        |  <div class="col-12"><button class="btn btn-primary" type="submit">Attach Blob</button></div>
+       |</form>""".stripMargin
+  }
+
+  private def _admin_association_filter_form(
+    params: Map[String, String]
+  ): String = {
+    def value(key: String): String =
+      _escape(params.getOrElse(key, ""))
+    val domainValue = _escape(params.getOrElse("domain", "association"))
+    s"""<form method="get" action="/web/admin/associations" class="row g-2 align-items-end">
+       |  <div class="col-md-2"><label class="form-label" for="associationAdminDomain">Domain</label><input class="form-control" id="associationAdminDomain" name="domain" value="${domainValue}" required></div>
+       |  <div class="col-md-3"><label class="form-label" for="associationAdminSourceEntityId">Source entity</label><input class="form-control" id="associationAdminSourceEntityId" name="sourceEntityId" value="${value("sourceEntityId")}"></div>
+       |  <div class="col-md-3"><label class="form-label" for="associationAdminTargetEntityId">Target entity</label><input class="form-control" id="associationAdminTargetEntityId" name="targetEntityId" value="${value("targetEntityId")}"></div>
+       |  <div class="col-md-2"><label class="form-label" for="associationAdminTargetKind">Target kind</label><input class="form-control" id="associationAdminTargetKind" name="targetKind" value="${value("targetKind")}"></div>
+       |  <div class="col-md-1"><label class="form-label" for="associationAdminRole">Role</label><input class="form-control" id="associationAdminRole" name="role" value="${value("role")}"></div>
+       |  <div class="col-md-1"><label class="form-label" for="associationAdminPageSize">Page size</label><input class="form-control" id="associationAdminPageSize" name="pageSize" value="${_escape(params.get("pageSize").orElse(params.get("limit")).getOrElse("100"))}"></div>
+       |  <div class="col-12"><button class="btn btn-primary" type="submit">Filter</button> <a class="btn btn-outline-secondary" href="/web/admin/associations">Clear</a></div>
+       |</form>""".stripMargin
+  }
+
+  private def _admin_association_attach_form(
+    params: Map[String, String]
+  ): String = {
+    def value(key: String): String =
+      _escape(params.getOrElse(key, ""))
+    val domainValue = _escape(params.getOrElse("domain", "association"))
+    s"""<form method="post" action="/web/admin/associations/attach" class="row g-2 align-items-end">
+       |  <div class="col-md-2"><label class="form-label" for="associationAttachDomain">Domain</label><input class="form-control" id="associationAttachDomain" name="domain" value="${domainValue}" required></div>
+       |  <div class="col-md-3"><label class="form-label" for="associationAttachSourceEntityId">Source entity</label><input class="form-control" id="associationAttachSourceEntityId" name="sourceEntityId" value="${value("sourceEntityId")}" required></div>
+       |  <div class="col-md-3"><label class="form-label" for="associationAttachTargetEntityId">Target entity</label><input class="form-control" id="associationAttachTargetEntityId" name="targetEntityId" value="${value("targetEntityId")}" required></div>
+       |  <div class="col-md-2"><label class="form-label" for="associationAttachTargetKind">Target kind</label><input class="form-control" id="associationAttachTargetKind" name="targetKind" value="${value("targetKind")}" required></div>
+       |  <div class="col-md-1"><label class="form-label" for="associationAttachRole">Role</label><input class="form-control" id="associationAttachRole" name="role" value="${value("role")}" required></div>
+       |  <div class="col-md-1"><label class="form-label" for="associationAttachSortOrder">Sort</label><input class="form-control" id="associationAttachSortOrder" name="sortOrder"></div>
+       |  <div class="col-12"><button class="btn btn-primary" type="submit">Attach Association</button></div>
        |</form>""".stripMargin
   }
 
@@ -2540,6 +2737,124 @@ object StaticFormAppRenderer {
        |</form>""".stripMargin
   }
 
+  private def _admin_entity_associations_section(
+    subsystem: Subsystem,
+    component: Component,
+    entityName: String,
+    record: Option[Record],
+    fallbackId: String
+  ): String = {
+    val relationships = _admin_entity_association_relationships(component, entityName)
+    if (relationships.isEmpty)
+      ""
+    else {
+      val sourceId = record.flatMap(_.getString("sourceEntityId")).orElse(record.flatMap(_.getString("id"))).getOrElse(fallbackId)
+      val sourceIds = Vector(
+        record.flatMap(_.getString("sourceEntityId")),
+        record.flatMap(_.getString("id")),
+        Some(fallbackId)
+      ).flatten.filter(_.nonEmpty).distinct
+      val sections = relationships.map { relationship =>
+        val rows = _deduplicate_association_rows(
+          sourceIds.flatMap(id => _admin_entity_association_rows(subsystem, relationship, id))
+        )
+        val table =
+          if (rows.isEmpty)
+            s"""<tbody>${_admin_empty_table_cell(8, "No Associations are currently linked for this relationship.")}</tbody>"""
+          else
+            s"""<tbody>${rows.map(row => _admin_association_row(row, includeDetach = true)).mkString("\n")}</tbody>"""
+        val attach = _admin_entity_association_attach_form(sourceId, relationship)
+        val openlink = relationship.associationDomain.filter(_.nonEmpty).map { domain =>
+          s"""<a class="btn btn-outline-secondary btn-sm" href="/web/admin/associations?domain=${_escape_query(domain)}&amp;sourceEntityId=${_escape_query(sourceId)}">Open Associations</a>"""
+        }.getOrElse("")
+        s"""<section class="mb-3">
+           |  <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+           |    <h3 class="h6 mb-0">${_escape(relationship.name)}</h3>
+           |    ${openlink}
+           |  </div>
+           |  ${attach}
+           |  <div class="table-responsive mt-2">
+           |    <table class="table table-sm align-middle">
+           |      <thead><tr><th>Association</th><th>Source Entity</th><th>Target Entity</th><th>Target kind</th><th>Role</th><th>Sort</th><th>Domain</th><th>Actions</th></tr></thead>
+           |      ${table}
+           |    </table>
+           |  </div>
+           |</section>""".stripMargin
+      }.mkString("\n")
+      s"""<article class="card admin-card mt-3">
+         |  <div class="card-body">
+         |    <h2 class="card-title">Associations</h2>
+         |    ${sections}
+         |  </div>
+         |</article>""".stripMargin
+    }
+  }
+
+  private def _deduplicate_association_rows(
+    rows: Vector[Record]
+  ): Vector[Record] =
+    rows.foldLeft(Vector.empty[Record]) { (acc, row) =>
+      val key = row.getString("id").getOrElse(row.toString)
+      if (acc.exists(existing => existing.getString("id").getOrElse(existing.toString) == key))
+        acc
+      else
+        acc :+ row
+    }
+
+  private def _admin_entity_association_relationships(
+    component: Component,
+    entityName: String
+  ): Vector[CmlEntityRelationshipDefinition] =
+    component.relationshipDefinitions.filter { relationship =>
+      NamingConventions.equivalentByNormalized(relationship.sourceEntityName, entityName) &&
+        relationship.storageMode == CmlEntityRelationshipDefinition.StorageAssociationRecord &&
+        !_is_blob_attachment_relationship(relationship)
+    }
+
+  private def _is_blob_attachment_relationship(
+    relationship: CmlEntityRelationshipDefinition
+  ): Boolean =
+    relationship.associationDomain.contains("blob_attachment") &&
+      relationship.targetKind.exists(NamingConventions.equivalentByNormalized(_, "blob"))
+
+  private def _admin_entity_association_rows(
+    subsystem: Subsystem,
+    relationship: CmlEntityRelationshipDefinition,
+    sourceId: String
+  ): Vector[Record] =
+    relationship.associationDomain.toVector.flatMap { domain =>
+      _admin_operation_record(
+        subsystem,
+        "/admin/association/admin_list_associations",
+        Record.data(
+          "domain" -> domain,
+          "sourceEntityId" -> sourceId,
+          "targetKind" -> relationship.targetKind.getOrElse(""),
+          "pageSize" -> 100
+        )
+      ).toVector.flatMap(record => _record_seq(record.asMap.get("data")))
+    }
+
+  private def _admin_entity_association_attach_form(
+    sourceId: String,
+    relationship: CmlEntityRelationshipDefinition
+  ): String =
+    (relationship.associationDomain, relationship.targetKind) match {
+      case (Some(domain), Some(targetKind)) if domain.nonEmpty && targetKind.nonEmpty =>
+        val role = relationship.targetRole.orElse(relationship.sourceRole).getOrElse(relationship.name.split("\\.").lastOption.getOrElse("related"))
+        s"""<form method="post" action="/web/admin/associations/attach" class="row g-2 align-items-end mt-2">
+           |  <input type="hidden" name="domain" value="${_escape(domain)}">
+           |  <input type="hidden" name="sourceEntityId" value="${_escape(sourceId)}">
+           |  <input type="hidden" name="targetKind" value="${_escape(targetKind)}">
+           |  <div class="col-md-5"><label class="form-label" for="associationTarget-${_escape(NamingConventions.toNormalizedSegment(relationship.name))}">Target entity</label><input class="form-control" id="associationTarget-${_escape(NamingConventions.toNormalizedSegment(relationship.name))}" name="targetEntityId" required></div>
+           |  <div class="col-md-3"><label class="form-label" for="associationRole-${_escape(NamingConventions.toNormalizedSegment(relationship.name))}">Role</label><input class="form-control" id="associationRole-${_escape(NamingConventions.toNormalizedSegment(relationship.name))}" name="role" value="${_escape(role)}" required></div>
+           |  <div class="col-md-2"><label class="form-label" for="associationSort-${_escape(NamingConventions.toNormalizedSegment(relationship.name))}">Sort</label><input class="form-control" id="associationSort-${_escape(NamingConventions.toNormalizedSegment(relationship.name))}" name="sortOrder"></div>
+           |  <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Attach</button></div>
+           |</form>""".stripMargin
+      case _ =>
+        _admin_empty_state("This relationship is metadata-only because associationDomain or targetKind is not defined.")
+    }
+
   private def _blob_admin_paging(
     basePath: String,
     params: Map[String, String],
@@ -2563,6 +2878,32 @@ object StaticFormAppRenderer {
         s"""<a class="btn btn-outline-secondary btn-sm" href="${basePath}?${nextquery}">Next</a>"""
       }
     s"""<div class="d-flex flex-wrap gap-2 align-items-center"><span class="text-secondary">offset ${offset}, limit ${limit}</span>${prev}${next}</div>"""
+  }
+
+  private def _admin_association_paging(
+    basePath: String,
+    params: Map[String, String],
+    record: Record
+  ): String = {
+    val page = record.getInt("page").getOrElse(1)
+    val pageSize = record.getInt("pageSize").getOrElse(100)
+    val hasnext = record.getBoolean("hasNext").getOrElse(false)
+    val cleanparams = params -- Set("offset", "limit", "page", "pageSize")
+    val querybase = cleanparams.toVector.sortBy(_._1).map { case (k, v) => s"${_escape_query(k)}=${_escape_query(v)}" } :+
+      s"pageSize=${pageSize}"
+    val prev =
+      if (page <= 1) ""
+      else {
+        val prevquery = (querybase :+ s"page=${page - 1}").mkString("&")
+        s"""<a class="btn btn-outline-secondary btn-sm" href="${basePath}?${prevquery}">Previous</a>"""
+      }
+    val next =
+      if (!hasnext) ""
+      else {
+        val nextquery = (querybase :+ s"page=${page + 1}").mkString("&")
+        s"""<a class="btn btn-outline-secondary btn-sm" href="${basePath}?${nextquery}">Next</a>"""
+      }
+    s"""<div class="d-flex flex-wrap gap-2 align-items-center"><span class="text-secondary">page ${page}, page size ${pageSize}</span>${prev}${next}</div>"""
   }
 
   private def _record_seq(
@@ -2996,6 +3337,7 @@ object StaticFormAppRenderer {
       val readRecord = _admin_entity_read_record(subsystem, componentPath, entityPath, id)
       val body = _admin_entity_record_table_from_record(subsystem, component, componentPath, entityPath, id, readRecord, webDescriptor)
       val images = _admin_entity_images_section(readRecord, id)
+      val associations = _admin_entity_associations_section(subsystem, component, entityPath, readRecord, id)
       val nav = _admin_nav_card(Vector(
         s"Back to ${entityLabel} records" -> s"${basePath}${querySuffix}",
         "Entity types" -> s"/web/${componentPath}/admin/entities"
@@ -3014,7 +3356,8 @@ object StaticFormAppRenderer {
              |    ${body}
              |  </div>
              |</article>
-             |${images}""".stripMargin
+             |${images}
+             |${associations}""".stripMargin
       ))
     }
 
@@ -6509,13 +6852,17 @@ object StaticFormAppRenderer {
         val storage = _escape(r.getString("storageMode").getOrElse(""))
         val parent = _escape(r.getString("parentIdField").getOrElse(""))
         val value = _escape(r.getString("valueField").getOrElse(""))
-        s"<tr><td>$name</td><td>$kind</td><td>$source</td><td>$target</td><td>$targetModel</td><td>$storage</td><td>$parent</td><td>$value</td></tr>"
+        val sort = _escape(r.getString("sortOrderField").getOrElse(""))
+        val domain = _escape(r.getString("associationDomain").getOrElse(""))
+        val targetKind = _escape(r.getString("targetKind").getOrElse(""))
+        val lifecycle = _escape(r.getString("lifecyclePolicy").getOrElse(""))
+        s"<tr><td>$name</td><td>$kind</td><td>$source</td><td>$target</td><td>$targetModel</td><td>$storage</td><td>$parent</td><td>$value</td><td>$sort</td><td>$domain</td><td>$targetKind</td><td>$lifecycle</td></tr>"
       }.mkString("\n")
       s"""<section class="mt-3">
          |  <h3 class="h6">Relationships</h3>
          |  <div class="table-responsive">
          |    <table class="table table-sm align-middle">
-         |      <thead><tr><th>Name</th><th>Kind</th><th>Source</th><th>Target</th><th>Target model</th><th>Storage</th><th>Parent field</th><th>Value field</th></tr></thead>
+         |      <thead><tr><th>Name</th><th>Kind</th><th>Source</th><th>Target</th><th>Target model</th><th>Storage</th><th>Parent field</th><th>Value field</th><th>Sort field</th><th>Domain</th><th>Target kind</th><th>Lifecycle</th></tr></thead>
          |      <tbody>${rows}</tbody>
          |    </table>
          |  </div>
@@ -6796,8 +7143,11 @@ object StaticFormAppRenderer {
         "Target kind" -> binding.get("targetKind").flatMap(_manual_scalar).getOrElse(""),
         "Behavior" -> behavior.mkString(", "),
         "Source id mode" -> binding.get("sourceEntityIdMode").flatMap(_manual_scalar).getOrElse(""),
+        "Parameters" -> _manual_seq_values(binding.get("parameters")).mkString(", "),
+        "Source id parameters" -> _manual_seq_values(binding.get("sourceEntityIdParameters")).mkString(", "),
         "Roles" -> _manual_seq_values(binding.get("roles")).mkString(", "),
-        "Target id parameters" -> _manual_seq_values(binding.get("targetIdParameters")).mkString(", ")
+        "Target id parameters" -> _manual_seq_values(binding.get("targetIdParameters")).mkString(", "),
+        "Sort order parameters" -> _manual_seq_values(binding.get("sortOrderParameters")).mkString(", ")
       ).filter { case (_, value) => value.nonEmpty }
       s"""<section class="mt-3">
          |  <h3 class="h6">Association Binding</h3>

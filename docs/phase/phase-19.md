@@ -111,9 +111,11 @@ Resume hint:
   is stored in a parent Entity field. The `textus-blog` driver now declares
   `BlogPost.images` as a BlobAttachment Association relationship and
   `BlogPost.inlineImages` as child-parent-id-field composition, with Cozy
-  generation and executable specs validating the metadata. Continue with
-  remaining upload/register adapters outside Entity admin and later non-image
-  Association binding surfaces.
+  generation and executable specs validating the metadata. The current
+  non-image Association admin/manual slice adds generic association list,
+  attach, and detach surfaces plus Entity detail relationship sections for
+  association-record relationships outside BlobAttachment images. Continue with
+  remaining upload/register adapters outside Entity admin.
 
 ## 5. Development Items
 
