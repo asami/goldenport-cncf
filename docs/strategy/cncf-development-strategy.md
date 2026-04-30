@@ -454,7 +454,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   It also standardizes `filebundle` as a core DataType so command execution can
   keep directory, single-file, and existing-ZIP inputs as path-preserving
   FileBundle values while client HTTP transport converts them to validated ZIP
-  payloads at the network boundary.
+  payloads at the network boundary. AF-01 adds reusable CNCF AtomFeed
+  model/projection/rendering support and applies it to BlogComponent as a
+  public `atomFeed` query for published active posts.
 - Remaining BI-04 work is phase closure validation rather than a known runtime
   adapter gap.
 - Non-goals:
@@ -657,6 +659,8 @@ Active in Phase 19.
     `images` plus derived `representativeImage`;
   - expose associated images on Entity admin detail pages and surface
     image-capable operation metadata in manual/help output;
+  - expose public Blog content through a CNCF-backed AtomFeed model and
+    `application/atom+xml` renderer;
   - keep image-specific metadata on top of a reusable `associationBinding`
     operation contract so non-image Entity associations can use the same
     source/target binding structure later;

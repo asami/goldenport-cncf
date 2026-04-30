@@ -69,6 +69,9 @@ Current semantic direction:
   payload bytes.
 - Web/admin surfaces should make image association visible without requiring
   every component to hand-code Blob administration.
+- CNCF should provide a reusable Atom feed model/projection/renderer so
+  published Blog posts can be exposed as standards-compliant Atom XML without
+  making Atom a Blog-only formatter.
 
 ## 3. Non-Goals
 
@@ -90,7 +93,8 @@ Current semantic direction:
 - B (DONE): BI-02 — Validate `BlogComponent` image binding model against the Blob/Association foundation.
 - C (DONE): BI-03 — Define Entity image binding usage contract for create/update/read/search/projection flows.
 - D (ACTIVE): BI-04 — Implement CNCF runtime/Web/projection gaps discovered by the BlogComponent driver.
-- E (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
+- E (DONE): AF-01 — Add CNCF AtomFeed support and apply it to BlogComponent.
+- F (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
 
 Resume hint:
 
@@ -124,6 +128,9 @@ Resume hint:
   directory, single-file, and existing-ZIP inputs as path-preserving
   `FileBundle` values, while client HTTP transport converts them to
   `application/zip` `MimeBody` payloads at the network boundary.
+  AF-01 adds a reusable CNCF Atom feed model, renderer, and Record projection
+  helper, then applies it to BlogComponent through a public `atomFeed` query
+  that emits published active posts as `application/atom+xml`.
 
 ## 5. Development Items
 
@@ -131,6 +138,7 @@ Resume hint:
 - [x] BI-02: Validate BlogComponent image binding model against Blob/Association foundation.
 - [x] BI-03: Define Entity image binding usage contract.
 - [x] BI-04: Implement CNCF runtime/Web/projection gaps discovered by the driver.
+- [x] AF-01: Add CNCF AtomFeed support and apply it to BlogComponent.
 - [ ] BI-05: Verification, documentation, and phase closure.
 
 Detailed task breakdown and progress tracking are recorded in
@@ -149,6 +157,8 @@ Phase 19 can close when:
 - Web/admin/manual/projection behavior for associated images is verified or
   explicitly deferred.
 - Regression tests cover the CNCF behavior added during this phase.
+- `textus-blog` exposes an Atom feed for published active posts using the CNCF
+  AtomFeed helper.
 
 ## 7. Notes
 

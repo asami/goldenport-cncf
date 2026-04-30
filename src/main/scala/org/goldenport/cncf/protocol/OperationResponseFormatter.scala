@@ -16,7 +16,7 @@ import scala.xml.{Elem, NodeSeq, Text}
 /*
  * @since   Mar. 13, 2026
  *  version Mar. 28, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 object OperationResponseFormatter {
@@ -39,6 +39,8 @@ object OperationResponseFormatter {
     val format = _resolve_format(request, mode)
     val shape = _resolve_shape(request)
     response match {
+      case OperationResponse.Http(http) =>
+        Response.Content(http.contentType, http.bag)
       case OperationResponse.RecordResponse(record) =>
         val data = _output_record(record)
         val payload =

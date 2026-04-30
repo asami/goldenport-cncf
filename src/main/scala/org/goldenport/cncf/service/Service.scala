@@ -23,7 +23,7 @@ import org.goldenport.cncf.protocol.OperationRequestValidationObserver
  *  version Jan. 21, 2026
  *  version Feb. 19, 2026
  *  version Mar. 28, 2026
- * @version Apr. 29, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Service extends ProtocolService with Service.CCore.Holder {
@@ -129,6 +129,14 @@ abstract class Service extends ProtocolService with Service.CCore.Holder {
     res: Response
   ): HttpResponse = {
     res match {
+      case Response.Content(contentType, bag) => bag match {
+        case text: org.goldenport.bag.TextBag =>
+          HttpResponse.Text(HttpStatus.Ok, contentType, text)
+        case binary: org.goldenport.bag.BinaryBag =>
+          HttpResponse.Binary(HttpStatus.Ok, contentType, binary)
+        case other =>
+          HttpResponse.Binary(HttpStatus.Ok, contentType, other.promoteToBinary())
+      }
       case Response.Json(json) =>
         _string_response(
           HttpStatus.Ok,

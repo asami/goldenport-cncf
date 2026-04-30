@@ -895,7 +895,7 @@ final class Subsystem(
   ): HttpExecutionResult = {
 //    _ensure_system_context(component)
     val _ = service
-    val r: Consequence[(Response, RuntimeContext.ExecutionMetadata)] = for {
+    val r: Consequence[(HttpResponse, RuntimeContext.ExecutionMetadata)] = for {
       ingress <- Consequence.fromOption(
         component.protocol.handler.ingresses
           .findByInput(classOf[HttpRequest]),
@@ -930,11 +930,14 @@ final class Subsystem(
       // request-derived execution mode, security, and other ingress context
       // are applied consistently with command/client execution.
       result <- executeWithMetadata(normalized)
-      response = _to_response(normalized, result.response, result.metadata)
+      response = result.response match {
+        case OperationResponse.Http(http) => http
+        case other => _egress(component).encode(operation, _to_response(normalized, other, result.metadata))
+      }
     } yield response -> result.metadata
     r match {
       case Consequence.Success((res, metadata)) =>
-        HttpExecutionResult(_egress(component).encode(operation, res), metadata)
+        HttpExecutionResult(res, metadata)
       case Consequence.Failure(c) =>
         HttpExecutionResult(_failure_response(c), RuntimeContext.ExecutionMetadata.empty)
     }

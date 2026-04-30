@@ -19,7 +19,7 @@ import org.goldenport.cncf.blob.BlobStoreConfig
  *  version Jan. 30, 2026
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
- * @version Apr. 28, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -77,6 +77,8 @@ object RuntimeConfig {
   val RuntimeForceExitKey = "textus.runtime.force-exit"
   val NoExitKey = "textus.no-exit"
   val RuntimeNoExitKey = "textus.runtime.no-exit"
+  val SiteBaseUrlKey = "textus.site.base-url"
+  val RuntimeSiteBaseUrlKey = "textus.runtime.site.base-url"
   val SubsystemNameKey = "textus.subsystem"
   val ComponentNameKey = "textus.component"
   val SubsystemDescriptorKey = "textus.subsystem.descriptor"
@@ -390,6 +392,7 @@ object RuntimeConfig {
         case WorkspaceKey => Vector(RuntimeWorkspaceKey)
         case ForceExitKey => Vector(RuntimeForceExitKey)
         case NoExitKey => Vector(RuntimeNoExitKey)
+        case SiteBaseUrlKey => Vector(RuntimeSiteBaseUrlKey)
         case SubsystemNameKey => Vector(RuntimeSubsystemNameKey)
         case ComponentNameKey => Vector(RuntimeComponentNameKey)
         case SubsystemDescriptorKey => Vector(RuntimeSubsystemDescriptorKey)

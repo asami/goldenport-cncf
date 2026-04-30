@@ -176,7 +176,7 @@ Contract baseline: `docs/design/entity-image-binding-usage-contract.md`.
 
 ## BI-04: Runtime/Web/Projection Gap Implementation
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -224,6 +224,36 @@ Implement CNCF gaps discovered by the `BlogComponent` driver.
 - Keep reusable behavior in CNCF runtime/Web/projection layers.
 - Keep blog-specific semantics in `textus-blog`.
 - Preserve Phase 18 Blob authorization and payload-storage boundaries.
+
+---
+
+## AF-01: CNCF AtomFeed and Blog Application
+
+Status: DONE
+
+### Objective
+
+Add a reusable CNCF Atom feed model/projection/renderer and use BlogComponent
+to validate public Atom feed output for published active posts.
+
+### Detailed Tasks
+
+- [x] Add CNCF `AtomFeed` / `AtomEntry` / `AtomLink` / `AtomPerson` model.
+- [x] Add an Atom 1.0 XML renderer with `application/atom+xml` HTTP response
+      support.
+- [x] Add a Record projection helper that maps title, slug, content,
+      created/updated timestamps, and base URL into Atom entries.
+- [x] Add BlogComponent `atomFeed` query operation.
+- [x] Verify `atomFeed` excludes drafts and inactive posts, respects text and
+      limit, and emits entry URLs as `baseUrl + /blog/{slug}`.
+- [x] Document the Blog Atom feed URL and required site base URL setting.
+
+### Decisions
+
+- Atom only; RSS remains outside this slice.
+- `BlogPost.content` is emitted as escaped `content type="html"` Atom content.
+- `textus.site.base-url` / `cncf.site.base-url` is required for feed output.
+- `canonicalPath` is not used because it is not a persisted BlogPost field.
 
 ---
 
