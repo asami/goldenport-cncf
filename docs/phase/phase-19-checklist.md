@@ -188,6 +188,10 @@ Implement CNCF gaps discovered by the `BlogComponent` driver.
       including `entity_id` Entity-create result handling.
 - [x] Operation child Entity binding for SalesOrder/SalesOrderLine-style
       same-request child creation.
+- [x] Generated relationship metadata for association/aggregation/composition,
+      including composition child-parent-id-field expansion from Cozy CML.
+- [x] Embedded value object composition metadata for parent-field `VALUE`
+      storage without child Entity or Association creation.
 - [ ] Broader upload/register-and-attach adapters outside Entity admin.
 - [ ] Non-image Association binding Web/manual surfaces beyond the core
       operation metadata.

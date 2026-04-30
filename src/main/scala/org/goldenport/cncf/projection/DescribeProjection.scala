@@ -65,6 +65,7 @@ object DescribeProjection {
             "imageBinding" -> x.imageBinding
           )
         }
+        val relationships = component.relationshipDefinitions.map(relationship_definition_record).sortBy(_.getString("name").getOrElse(""))
         val entitycollections = entityCollectionRecords(component)
         Record.data(
           "type" -> "component",
@@ -76,6 +77,7 @@ object DescribeProjection {
           "services" -> services.map(service_record),
           "aggregates" -> aggregates,
           "views" -> views,
+          "relationshipDefinitions" -> relationships,
           "entityCollections" -> entitycollections,
           "authorizationPolicies" -> AuthorizationPolicyProjection.project(Vector(component), component.subsystem.map(_.name).getOrElse(component.name)),
           "operationDefinitions" -> operationdefs

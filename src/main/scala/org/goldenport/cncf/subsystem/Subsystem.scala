@@ -19,7 +19,7 @@ import org.goldenport.cncf.component.ComponentFactory
 import org.goldenport.cncf.component.ComponentLocator.NameLocator
 import org.goldenport.cncf.component.builtin.admin.AdminComponent
 import org.goldenport.cncf.component.builtin.debug.DebugComponent
-import org.goldenport.cncf.association.{AssociationBindingWorkflow, AssociationDomain, AssociationRepository, AssociationStoragePolicy}
+import org.goldenport.cncf.association.{AssociationBindingAttachResult, AssociationBindingWorkflow, AssociationDomain, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.blob.{BlobAttachmentWorkflow, BlobPayloadSupport, BlobRepository}
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.entity.{ChildEntityBindingSummary, ChildEntityBindingWorkflow}
@@ -320,22 +320,34 @@ final class Subsystem(
           _apply_child_entity_binding(component, binding, request, response).map(summary => xs :+ (binding -> summary))
         }
       }
-      _ <- {
-        val result = for {
-          _ <- associationBindings.foldLeft(Consequence.unit) { (z, binding) =>
-            z.flatMap(_ => _apply_association_binding(binding, request, response))
-          }
-          _ <- imageBindings.foldLeft(Consequence.unit) { (z, binding) =>
-            z.flatMap(_ => _apply_image_binding(component, binding, request, response))
-          }
-        } yield ()
-        result.recoverWith { conclusion =>
-          _compensate_child_entity_bindings(component, childSummaries.reverse)
-            .flatMap(_ => Consequence.Failure[Unit](conclusion))
-        }
+      associationSummaries <- _apply_association_bindings(associationBindings, request, response).recoverWith { conclusion =>
+        _compensate_child_entity_bindings(component, childSummaries.reverse)
+          .flatMap(_ => Consequence.Failure[Vector[(CmlOperationAssociationBinding, Vector[AssociationBindingAttachResult])]](conclusion))
+      }
+      _ <- imageBindings.foldLeft(Consequence.unit) { (z, binding) =>
+        z.flatMap(_ => _apply_image_binding(component, binding, request, response))
+      }.recoverWith { conclusion =>
+        _compensate_association_bindings(associationSummaries.reverse)
+          .flatMap(_ => _compensate_child_entity_bindings(component, childSummaries.reverse))
+          .flatMap(_ => Consequence.Failure[Unit](conclusion))
       }
     } yield response
   }
+
+  private def _apply_association_bindings(
+    bindings: Vector[CmlOperationAssociationBinding],
+    request: Request,
+    response: OperationResponse
+  )(using ExecutionContext): Consequence[Vector[(CmlOperationAssociationBinding, Vector[AssociationBindingAttachResult])]] =
+    bindings.foldLeft(Consequence.success(Vector.empty[(CmlOperationAssociationBinding, Vector[AssociationBindingAttachResult])])) {
+      case (z, binding) =>
+        z.flatMap { xs =>
+          _apply_association_binding(binding, request, response).map(results => xs :+ (binding -> results))
+        }.recoverWith { conclusion =>
+          z.flatMap(xs => _compensate_association_bindings(xs.reverse))
+            .flatMap(_ => Consequence.Failure[Vector[(CmlOperationAssociationBinding, Vector[AssociationBindingAttachResult])]](conclusion))
+        }
+    }
 
   private def _apply_child_entity_binding(
     component: Component,
@@ -356,11 +368,25 @@ final class Subsystem(
     }
   }
 
+  private def _compensate_association_bindings(
+    summaries: Vector[(CmlOperationAssociationBinding, Vector[AssociationBindingAttachResult])]
+  )(using ExecutionContext): Consequence[Unit] =
+    summaries.foldLeft(Consequence.unit) {
+      case (z, (binding, results)) =>
+        z.flatMap { _ =>
+          val storagepolicy = _association_storage_policy(binding.domain)
+          AssociationBindingWorkflow(
+            AssociationRepository.entityStore(storagepolicy),
+            storagepolicy
+          ).compensate(results)
+        }
+    }
+
   private def _apply_association_binding(
     binding: CmlOperationAssociationBinding,
     request: Request,
     response: OperationResponse
-  )(using ExecutionContext): Consequence[Unit] = {
+  )(using ExecutionContext): Consequence[Vector[AssociationBindingAttachResult]] = {
     val storagepolicy = _association_storage_policy(binding.domain)
     val workflow = AssociationBindingWorkflow(
       AssociationRepository.entityStore(storagepolicy),
@@ -368,12 +394,12 @@ final class Subsystem(
     )
     AssociationBindingWorkflow.extract(binding, request).flatMap {
       case Vector() =>
-        Consequence.unit
+        Consequence.success(Vector.empty)
       case _ =>
         for {
           sourceid <- AssociationBindingWorkflow.resolveSourceEntityId(binding, request, response)
-          _ <- workflow.attachExistingTargets(sourceid, binding, request)
-        } yield ()
+          results <- workflow.attachExistingTargetResults(sourceid, binding, request)
+        } yield results
     }
   }
 

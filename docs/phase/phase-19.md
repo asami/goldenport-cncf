@@ -103,9 +103,14 @@ Resume hint:
   `associationBinding` metadata and `AssociationBindingWorkflow`, with
   `imageBinding` mapped to the same internal Association path. The child
   Entity binding slice adds SalesOrder/SalesOrderLine-style same-request child
-  creation using operation result `entity_id`. Continue with remaining
-  upload/register adapters outside Entity admin and later non-image Association
-  binding surfaces.
+  creation using operation result `entity_id`. The relationship metadata slice
+  adds generated `relationshipDefinitions` so Cozy SmartDox CML can define
+  association, aggregation, and composition and expand composition
+  child-parent-id-field storage into child Entity binding metadata. It also
+  recognizes embedded value object composition metadata where a target `VALUE`
+  is stored in a parent Entity field. Continue with remaining upload/register
+  adapters outside Entity admin and later non-image Association binding
+  surfaces.
 
 ## 5. Development Items
 

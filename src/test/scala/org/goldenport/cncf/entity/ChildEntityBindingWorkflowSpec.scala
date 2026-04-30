@@ -7,8 +7,9 @@ import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, Com
 import org.goldenport.cncf.component.entity.{Order as OrderEntity, OrderLine as OrderLineEntity}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
-import org.goldenport.cncf.operation.{ChildEntityBindingOperationDefinition, CmlOperationAssociationBinding, CmlOperationChildEntityBinding, CmlOperationDefinition}
+import org.goldenport.cncf.operation.{ChildEntityBindingOperationDefinition, CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationChildEntityBinding, CmlOperationDefinition}
 import org.goldenport.cncf.projection.{DescribeProjection, HelpProjection}
+import org.goldenport.cncf.http.StaticFormAppRenderer
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.protocol.{Protocol, Property, Request}
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
@@ -175,10 +176,23 @@ final class ChildEntityBindingWorkflowSpec
       When("projecting operation metadata")
       val help = HelpProjection.project(component, Some(s"${component.name}.order.createOrder"))
       val describe = DescribeProjection.project(component, Some(s"${component.name}.order.createOrder"))
+      val componentHelp = HelpProjection.project(component, Some(component.name))
+      val componentDescribe = DescribeProjection.project(component, Some(component.name))
+      val componentManual = StaticFormAppRenderer.renderComponentManual(component.subsystem.get, component.name).map(_.body).getOrElse(fail("component manual missing"))
 
       Then("both help and describe expose childEntityBindings")
       _records(help, "childEntityBindings").map(_.getString("entityName")) shouldBe Vector(Some("order_line"))
+      _records(help, "childEntityBindings").map(_.getString("relationshipName")) shouldBe Vector(Some("SalesOrder.lines"))
       _records(describe, "childEntityBindings").map(_.getString("inputParameter")) shouldBe Vector(Some("lines"))
+      _records(componentHelp, "relationshipDefinitions").map(_.getString("name")) should contain (Some("SalesOrder.lines"))
+      _records(componentDescribe, "relationshipDefinitions").map(_.getString("storageMode")) should contain (Some("child-parent-id-field"))
+      _records(componentDescribe, "relationshipDefinitions").map(_.getString("storageMode")) should contain (Some("embedded-value-object"))
+      _records(componentDescribe, "relationshipDefinitions").map(_.getString("targetModelKind")) should contain (Some("value"))
+      _records(componentDescribe, "relationshipDefinitions").map(_.getString("valueField")) should contain (Some("shippingAddress"))
+      componentManual should include ("Relationships")
+      componentManual should include ("SalesOrder.lines")
+      componentManual should include ("embedded-value-object")
+      componentManual should include ("shippingAddress")
     }
   }
 
@@ -227,6 +241,7 @@ final class ChildEntityBindingWorkflowSpec
               entityName = "order_line",
               inputParameter = "lines",
               parentIdField = "orderId",
+              relationshipName = Some("SalesOrder.lines"),
               sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
               sortOrderField = Some("sortOrder"),
               createsEntity = true
@@ -243,6 +258,7 @@ final class ChildEntityBindingWorkflowSpec
               entityName = "order_line",
               inputParameter = "lines",
               parentIdField = "orderId",
+              relationshipName = Some("SalesOrder.lines"),
               sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeParameter,
               sourceEntityIdParameters = Vector("orderId"),
               sortOrderField = Some("sortOrder"),
@@ -260,6 +276,7 @@ final class ChildEntityBindingWorkflowSpec
               entityName = "order_line",
               inputParameter = "lines",
               parentIdField = "orderId",
+              relationshipName = Some("SalesOrder.lines"),
               sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
               sortOrderField = Some("sortOrder"),
               createsEntity = true
@@ -272,6 +289,31 @@ final class ChildEntityBindingWorkflowSpec
               sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
               targetIdParameters = Vector("relatedOrderId")
             ))
+          )
+        )
+      override def relationshipDefinitions: Vector[CmlEntityRelationshipDefinition] =
+        Vector(
+          CmlEntityRelationshipDefinition(
+            name = "SalesOrder.lines",
+            kind = CmlEntityRelationshipDefinition.KindComposition,
+            sourceEntityName = "order",
+            targetEntityName = "order_line",
+            multiplicity = Some("one-to-many"),
+            storageMode = CmlEntityRelationshipDefinition.StorageChildParentIdField,
+            parentIdField = Some("orderId"),
+            sortOrderField = Some("sortOrder"),
+            lifecyclePolicy = Some(CmlEntityRelationshipDefinition.LifecycleDependent)
+          ),
+          CmlEntityRelationshipDefinition(
+            name = "SalesOrder.shippingAddress",
+            kind = CmlEntityRelationshipDefinition.KindComposition,
+            sourceEntityName = "order",
+            targetEntityName = "ShippingAddress",
+            targetModelKind = CmlEntityRelationshipDefinition.TargetModelKindValue,
+            multiplicity = Some("zero-or-one"),
+            storageMode = CmlEntityRelationshipDefinition.StorageEmbeddedValueObject,
+            valueField = Some("shippingAddress"),
+            lifecyclePolicy = Some(CmlEntityRelationshipDefinition.LifecycleDependent)
           )
         )
     }
@@ -394,6 +436,7 @@ private final case class _OrderOperation(
         entityName = "order_line",
         inputParameter = "lines",
         parentIdField = "orderId",
+        relationshipName = Some("SalesOrder.lines"),
         sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
         sortOrderField = Some("sortOrder"),
         createsEntity = true
@@ -404,6 +447,7 @@ private final case class _OrderOperation(
         entityName = "order_line",
         inputParameter = "lines",
         parentIdField = "orderId",
+        relationshipName = Some("SalesOrder.lines"),
         sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeParameter,
         sourceEntityIdParameters = Vector("orderId"),
         sortOrderField = Some("sortOrder"),

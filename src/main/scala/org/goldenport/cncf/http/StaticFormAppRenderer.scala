@@ -6473,6 +6473,7 @@ object StaticFormAppRenderer {
     val componentlets = _manual_record_seq(record.asMap.get("componentlets")).flatMap(_.getString("name"))
     val aggregates = _manual_record_seq(record.asMap.get("aggregates")).flatMap(_.getString("name"))
     val views = _manual_record_seq(record.asMap.get("views")).flatMap(_.getString("name"))
+    val relationships = _manual_record_seq(record.asMap.get("relationshipDefinitions"))
     val operationDefs = _manual_record_seq(record.asMap.get("operationDefinitions")).flatMap(_.getString("name"))
     val artifact = _manual_record_values(record.asMap.get("artifact"))
     s"""<p class="mb-3">${_escape(record.getString("summary").getOrElse(s"Component ${record.getString("name").getOrElse("")}"))}</p>
@@ -6485,11 +6486,41 @@ object StaticFormAppRenderer {
          "Componentlet count" -> componentlets.size.toString,
          "Aggregate count" -> aggregates.size.toString,
          "View count" -> views.size.toString,
+         "Relationship count" -> relationships.size.toString,
          "Operation definition count" -> operationDefs.size.toString
        ))}
        |${_manual_badges("Services", services)}
-       |${_manual_badges("Componentlets", componentlets)}""".stripMargin
+       |${_manual_badges("Componentlets", componentlets)}
+       |${_manual_relationship_table(relationships)}""".stripMargin
   }
+
+  private def _manual_relationship_table(
+    relationships: Vector[Record]
+  ): String =
+    if (relationships.isEmpty)
+      ""
+    else {
+      val rows = relationships.map { r =>
+        val name = _escape(r.getString("name").getOrElse(""))
+        val kind = _escape(r.getString("kind").getOrElse(""))
+        val source = _escape(r.getString("sourceEntityName").getOrElse(""))
+        val target = _escape(r.getString("targetEntityName").getOrElse(""))
+        val targetModel = _escape(r.getString("targetModelKind").getOrElse(""))
+        val storage = _escape(r.getString("storageMode").getOrElse(""))
+        val parent = _escape(r.getString("parentIdField").getOrElse(""))
+        val value = _escape(r.getString("valueField").getOrElse(""))
+        s"<tr><td>$name</td><td>$kind</td><td>$source</td><td>$target</td><td>$targetModel</td><td>$storage</td><td>$parent</td><td>$value</td></tr>"
+      }.mkString("\n")
+      s"""<section class="mt-3">
+         |  <h3 class="h6">Relationships</h3>
+         |  <div class="table-responsive">
+         |    <table class="table table-sm align-middle">
+         |      <thead><tr><th>Name</th><th>Kind</th><th>Source</th><th>Target</th><th>Target model</th><th>Storage</th><th>Parent field</th><th>Value field</th></tr></thead>
+         |      <tbody>${rows}</tbody>
+         |    </table>
+         |  </div>
+         |</section>""".stripMargin
+    }
 
   private def _manual_storage_shape_section(
     record: Record
@@ -6730,10 +6761,12 @@ object StaticFormAppRenderer {
         val entity = binding.getString("entityName").getOrElse("")
         val input = binding.getString("inputParameter").getOrElse("")
         val parent = binding.getString("parentIdField").getOrElse("")
+        val relationship = binding.getString("relationshipName").getOrElse("")
         val source = binding.getString("sourceEntityIdMode").getOrElse("")
         val policy = binding.getString("failurePolicy").getOrElse("")
         val title = Vector(name, entity).filter(_.nonEmpty).mkString(" / ")
         Vector(
+          s"${title} relationship" -> relationship,
           s"${title} input" -> input,
           s"${title} parent field" -> parent,
           s"${title} source id mode" -> source,

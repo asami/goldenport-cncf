@@ -15,6 +15,7 @@ final case class HelpModel(
   selector: Option[HelpSelectorModel] = None,
   children: Vector[String] = Vector.empty,
   details: Map[String, Vector[String]] = Map.empty,
+  relationshipDefinitions: Vector[org.goldenport.record.Record] = Vector.empty,
   childEntityBindings: Vector[org.goldenport.record.Record] = Vector.empty,
   associationBinding: Option[org.goldenport.record.Record] = None,
   imageBinding: Option[org.goldenport.record.Record] = None,

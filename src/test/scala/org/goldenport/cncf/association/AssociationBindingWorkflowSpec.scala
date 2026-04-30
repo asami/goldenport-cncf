@@ -76,6 +76,40 @@ final class AssociationBindingWorkflowSpec
       listed should have size 1
     }
 
+    "reject target ids whose collection does not match targetKind" in {
+      Given("a binding declared for articles and a target id from another Entity collection")
+      given ExecutionContext = ExecutionContext.test()
+      val repository = AssociationRepository.entityStore()
+      val workflow = AssociationBindingWorkflow(repository)
+      val target = _comment_id("comment_target_1")
+      _seed_entity(target)
+      val binding = CmlOperationAssociationBinding(
+        domain = "related_entity",
+        targetKind = "article",
+        createsAssociation = true,
+        roles = Vector("related"),
+        sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeParameter,
+        sourceEntityIdParameters = Vector("sourceEntityId"),
+        targetIdParameters = Vector("targetEntityId")
+      )
+      val request = Request.of(
+        component = "sample",
+        service = "article",
+        operation = "attach",
+        properties = List(
+          Property("sourceEntityId", "source-1", None),
+          Property("targetEntityId", target.value, None)
+        )
+      )
+
+      When("the helper validates the target")
+      val result = workflow.attachExistingTargets("source-1", binding, request)
+
+      Then("the association is rejected as a kind mismatch")
+      result shouldBe a[Consequence.Failure[_]]
+      _failure_message(result) should include ("target kind mismatch")
+    }
+
     "not delete pre-existing Associations when a later target fails" in {
       Given("an existing Association followed by a failing target binding")
       given ExecutionContext = ExecutionContext.test()
@@ -141,6 +175,56 @@ final class AssociationBindingWorkflowSpec
         role = Some("related")
       )))
       listed should have size 1
+    }
+
+    "propagate cleanup failures for newly created Associations" in {
+      Given("a newly created Association followed by a failing target and failing cleanup")
+      given ExecutionContext = ExecutionContext.test()
+      val delegate = AssociationRepository.entityStore()
+      val repository = _FailingDeleteAssociationRepository(delegate)
+      val source = "source-cleanup-failure"
+      val createdTarget = _article_id("created_target_cleanup_failure")
+      val rejectedTarget = _article_id("rejected_target_cleanup_failure")
+      _seed_entity(createdTarget)
+      val workflow = AssociationBindingWorkflow(
+        repository,
+        targetValidator = new AssociationTargetValidator {
+          def validate(
+            targetKind: Option[String],
+            id: EntityId
+          )(using ExecutionContext): Consequence[Unit] =
+            if (id == rejectedTarget)
+              Consequence.argumentInvalid("target rejected")
+            else
+              Consequence.unit
+        }
+      )
+      val binding = CmlOperationAssociationBinding(
+        domain = "related_entity",
+        targetKind = "article",
+        createsAssociation = true,
+        roles = Vector("related"),
+        sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeParameter,
+        sourceEntityIdParameters = Vector("sourceEntityId"),
+        targetIdParameters = Vector("targetEntityId", "rejectedTargetEntityId")
+      )
+      val request = Request.of(
+        component = "sample",
+        service = "article",
+        operation = "attach",
+        properties = List(
+          Property("sourceEntityId", source, None),
+          Property("targetEntityId", createdTarget.value, None),
+          Property("rejectedTargetEntityId", rejectedTarget.value, None)
+        )
+      )
+
+      When("the second target fails and cleanup also fails")
+      val result = workflow.attachExistingTargets(source, binding, request)
+
+      Then("the cleanup failure is returned instead of being hidden")
+      result shouldBe a[Consequence.Failure[_]]
+      _failure_message(result) should include ("association cleanup delete failed")
     }
 
     "resolve entity-create-result from standard entity_id response fields" in {
@@ -308,6 +392,44 @@ final class AssociationBindingWorkflowSpec
       )
       listed should have size 1
     }
+
+    "compensate Association bindings when later image binding fails" in {
+      Given("an operation that creates an Association before image binding fails")
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      val component = _component(subsystem)
+      subsystem.add(component)
+      val runtimeComponent =
+        subsystem.findComponent(component.name).getOrElse(fail("component missing"))
+      given ExecutionContext = runtimeComponent.logic.executionContext()
+      val target = _article_id("target_image_failure_cleanup")
+      _seed_entity(target)
+      val missingBlob = EntityId("cncf", "missing_blob_for_association_cleanup", org.goldenport.cncf.blob.BlobRepository.CollectionId)
+      val request = Request.of(
+        component = component.name,
+        service = "article",
+        operation = "createArticleWithAssociationAndBadImage",
+        properties = List(
+          Property("targetEntityId", target.value, None),
+          Property("blobId.primary", missingBlob.value, None)
+        )
+      )
+
+      When("the image binding fails after the Association binding succeeds")
+      val result = subsystem.executeOperationResponse(request)
+
+      Then("the operation fails and the earlier Association is compensated")
+      result shouldBe a[Consequence.Failure[_]]
+      val listed = _success(
+        AssociationRepository.entityStore().list(AssociationFilter(
+          domain = AssociationDomain("related_entity"),
+          sourceEntityId = Some("article-association-image-failure"),
+          targetEntityId = Some(target.value),
+          targetKind = Some("article"),
+          role = Some("related")
+        ))
+      )
+      listed shouldBe Vector.empty
+    }
   }
 
   private def _component(subsystem: org.goldenport.cncf.subsystem.Subsystem): Component = {
@@ -321,7 +443,8 @@ final class AssociationBindingWorkflowSpec
                 _CreateArticleOperation("createArticle", "article-1"),
                 _CreateArticleOperation("createArticleWithImage", "article-image-1"),
                 _CreateArticleOperation("createArticleBlobOnly", "article-blob-only"),
-                _CreateArticleOperation("createArticleUploadOnly", "article-upload-only")
+                _CreateArticleOperation("createArticleUploadOnly", "article-upload-only"),
+                _CreateArticleOperation("createArticleWithAssociationAndBadImage", "article-association-image-failure")
               )
             )
           )
@@ -389,6 +512,29 @@ final class AssociationBindingWorkflowSpec
               parameters = Vector("blob.primary"),
               sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult
             ))
+          ),
+          CmlOperationDefinition(
+            name = "createArticleWithAssociationAndBadImage",
+            kind = "QUERY",
+            inputType = "CreateArticle",
+            outputType = "CreateArticleResult",
+            inputValueKind = "COMMAND_VALUE",
+            associationBinding = Some(CmlOperationAssociationBinding(
+              domain = "related_entity",
+              targetKind = "article",
+              createsAssociation = true,
+              roles = Vector("related"),
+              sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
+              targetIdParameters = Vector("targetEntityId")
+            )),
+            imageBinding = Some(CmlOperationImageBinding(
+              acceptsExistingBlobId = true,
+              createsAttachment = true,
+              roles = Vector("primary"),
+              parameters = Vector("blobId.primary"),
+              sourceEntityIdMode = CmlOperationAssociationBinding.SourceEntityIdModeEntityCreateResult,
+              targetIdParameters = Vector("blobId.primary")
+            ))
           )
         )
     }
@@ -407,12 +553,27 @@ final class AssociationBindingWorkflowSpec
       case Consequence.Failure(conclusion) => fail(conclusion.show)
     }
 
+  private def _failure_message[A](result: Consequence[A]): String =
+    result match {
+      case Consequence.Failure(conclusion) => conclusion.show
+      case Consequence.Success(value) => fail(s"unexpected success: $value")
+    }
+
   private val ArticleCollectionId: EntityCollectionId =
     EntityCollectionId("cncf", "sample", "article")
 
   private def _article_id(value: String): EntityId =
     {
       val id = EntityId("cncf", value, ArticleCollectionId)
+      EntityId.parse(id.value).toOption.getOrElse(id)
+    }
+
+  private val CommentCollectionId: EntityCollectionId =
+    EntityCollectionId("cncf", "sample", "comment")
+
+  private def _comment_id(value: String): EntityId =
+    {
+      val id = EntityId("cncf", value, CommentCollectionId)
       EntityId.parse(id.value).toOption.getOrElse(id)
     }
 
@@ -425,6 +586,23 @@ final class AssociationBindingWorkflowSpec
     val record = Record.dataAuto("id" -> id.value)
     _success(ds.create(cid, dsid, record).recoverWith(_ => ds.save(cid, dsid, record)))
   }
+}
+
+private final case class _FailingDeleteAssociationRepository(
+  delegate: AssociationRepository
+) extends AssociationRepository {
+  def create(association: AssociationCreate)(using ExecutionContext): Consequence[Association] =
+    delegate.create(association)
+
+  def delete(association: Association)(using ExecutionContext): Consequence[Unit] =
+    Consequence.stateConflict("association cleanup delete failed")
+
+  def list(
+    filter: AssociationFilter,
+    offset: Int = 0,
+    limit: Option[Int] = None
+  )(using ExecutionContext): Consequence[Vector[Association]] =
+    delegate.list(filter, offset, limit)
 }
 
 private final case class _CreateArticleOperation(

@@ -112,7 +112,7 @@ final class BlobAttachmentWorkflow(
   )(using ExecutionContext): Consequence[(A, BlobAttachmentSummary)] =
     create.flatMap { entity =>
       attachToEntity(entityId(entity), request).map(entity -> _).recoverWith { conclusion =>
-        compensateEntity(entity).recover(_ => ()).flatMap(_ => Consequence.Failure[(A, BlobAttachmentSummary)](conclusion))
+        compensateEntity(entity).flatMap(_ => Consequence.Failure[(A, BlobAttachmentSummary)](conclusion))
       }
     }
 
@@ -164,7 +164,7 @@ final class BlobAttachmentWorkflow(
           accessUrl = _managed_blob_access_url(result)
         )
       ).recoverWith { conclusion =>
-        store.delete(result.storageRef).recover(_ => ()).flatMap(_ => Consequence.Failure[Blob](conclusion))
+        store.delete(result.storageRef).flatMap(_ => Consequence.Failure[Blob](conclusion))
       }
     }
   }
@@ -211,9 +211,9 @@ final class BlobAttachmentWorkflow(
   )(using ExecutionContext): Consequence[Unit] =
     blobs.foldLeft(Consequence.unit) { (z, blob) =>
       z.flatMap { _ =>
-        repository.delete(blob.id).recover(_ => ()).flatMap { _ =>
+        repository.delete(blob.id).flatMap { _ =>
           blob.storageRef match {
-            case Some(ref) => store.delete(ref).recover(_ => ())
+            case Some(ref) => store.delete(ref)
             case None => Consequence.unit
           }
         }
@@ -224,7 +224,7 @@ final class BlobAttachmentWorkflow(
     values: Vector[AssociationBindingAttachResult]
   )(using ExecutionContext): Consequence[Unit] =
     values.filter(_.created).map(_.association).foldLeft(Consequence.unit) { (z, association) =>
-      z.flatMap(_ => associations.delete(association).recover(_ => ()))
+      z.flatMap(_ => associations.delete(association))
     }
 }
 

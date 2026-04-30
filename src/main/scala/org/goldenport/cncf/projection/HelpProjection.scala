@@ -67,6 +67,7 @@ object HelpProjection {
         val aggregates = aggregateMetas(component).map(_.name)
         val views = viewMetas(component).map(_.name)
         val operations = operationMetas(component).map(_.name)
+        val relationships = component.relationshipDefinitions.map(relationship_definition_record).sortBy(_.getString("name").getOrElse(""))
         val useCaseModels = _component_use_case_models(component)
         val useCases = useCaseModels.flatMap(_render_use_case)
         val artifactName = component.artifactMetadata.map(_.name).toVector
@@ -81,11 +82,13 @@ object HelpProjection {
             "services" -> services.map(_.name),
             "aggregates" -> aggregates,
             "views" -> views,
+            "relationshipDefinitions" -> relationships.flatMap(_.getString("name")),
             "operationDefinitions" -> operations,
             "origin" -> Vector(user_origin_label(component.origin.label)),
             "artifactName" -> artifactName,
             "artifactVersion" -> artifactVersion
           ) ++ (if (useCases.nonEmpty) Map("useCases" -> useCases) else Map.empty),
+          relationshipDefinitions = relationships,
           usage = services.headOption.map(s => Vector(s"command help $componentName.${s.name}")).getOrElse(Vector.empty),
           useCases = useCaseModels,
         )
@@ -163,6 +166,7 @@ object HelpProjection {
       "children" -> model.children,
       "details" -> details,
       "usage" -> model.usage,
+      "relationshipDefinitions" -> model.relationshipDefinitions,
       "childEntityBindings" -> model.childEntityBindings,
       "associationBinding" -> model.associationBinding,
       "imageBinding" -> model.imageBinding,

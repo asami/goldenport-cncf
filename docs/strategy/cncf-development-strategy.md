@@ -441,7 +441,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   attachments, and the generic `associationBinding` core used by
   image-specific binding. It also now includes `childEntityBinding` for
   SalesOrder/SalesOrderLine-style same-request child Entity creation from an
-  operation result `entity_id`.
+  operation result `entity_id`, plus generated `relationshipDefinitions` for
+  Cozy-authored association/aggregation/composition metadata, including
+  embedded value object composition stored in parent Entity fields.
 - Remaining BI-04 work is limited to broader upload/register adapters outside
   Entity admin and additional non-image Association binding surfaces.
 - Non-goals:
@@ -649,6 +651,10 @@ Active in Phase 19.
     source/target binding structure later;
   - support operation child Entity binding for aggregate-like registration
     flows where the parent result id is injected into child records;
+  - consume generated relationship definitions for association, aggregation,
+    and composition, with composition child-parent-id-field storage feeding
+    operation child Entity binding and embedded value object storage documenting
+    parent-field `VALUE` ownership;
   - expose and fix CNCF runtime/Web/projection/generator gaps using a real
     component driver.
 - Scope boundary:

@@ -162,6 +162,34 @@ final class BlobAttachmentWorkflowSpec
         targetKind = Some("blob")
       ))) shouldBe Vector.empty
     }
+
+    "propagate create Entity compensation failures" in {
+      Given("an Entity create succeeds but attachment and compensation both fail")
+      given ExecutionContext = ExecutionContext.test()
+      val workflow = BlobAttachmentWorkflow(
+        InMemoryBlobStore(),
+        BlobRepository.entityStore(),
+        AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
+      )
+      val missing = _blob_entity_id("missing_create_reference")
+      val request = Request.of(
+        component = "sample",
+        service = "article",
+        operation = "create",
+        arguments = List(Argument("blobId.primary", missing.value, None))
+      )
+
+      When("the create helper tries to compensate the created Entity")
+      val result = workflow.createEntityWithBlobAttachments(request)(
+        create = Consequence.success("article-created"),
+        entityId = identity,
+        compensateEntity = _ => Consequence.stateConflict("entity compensation failed")
+      )
+
+      Then("the compensation failure is not hidden by the attachment failure")
+      result shouldBe a[Consequence.Failure[_]]
+      _failure_message(result) should include ("entity compensation failed")
+    }
   }
 
   private def _create_managed_blob(
@@ -200,5 +228,11 @@ final class BlobAttachmentWorkflowSpec
     result match {
       case Consequence.Success(value) => value
       case Consequence.Failure(conclusion) => fail(conclusion.show)
+    }
+
+  private def _failure_message[A](result: Consequence[A]): String =
+    result match {
+      case Consequence.Failure(conclusion) => conclusion.show
+      case Consequence.Success(value) => fail(s"unexpected success: $value")
     }
 }

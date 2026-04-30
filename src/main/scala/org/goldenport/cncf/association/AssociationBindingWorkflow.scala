@@ -3,6 +3,7 @@ package org.goldenport.cncf.association
 import java.util.UUID
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.operation.CmlOperationAssociationBinding
 import org.goldenport.id.UniversalId
 import org.goldenport.protocol.Request
@@ -56,6 +57,7 @@ object AssociationTargetValidator {
         id: EntityId
       )(using ctx: ExecutionContext): Consequence[Unit] =
         for {
+          _ <- _validate_target_kind(targetKind, id)
           cid <- ctx.entityStoreSpace.dataStoreCollection(id)
           dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
           ds <- ctx.dataStoreSpace.dataStore(cid)
@@ -65,6 +67,17 @@ object AssociationTargetValidator {
             case None => Consequence.entityNotFound(s"association target:${id.value}")
           }
         } yield ()
+
+      private def _validate_target_kind(
+        targetKind: Option[String],
+        id: EntityId
+      ): Consequence[Unit] =
+        targetKind match {
+          case Some(kind) if !NamingConventions.equivalentByNormalized(kind, id.collection.name) =>
+            Consequence.argumentInvalid(s"association target kind mismatch: expected $kind but was ${id.collection.name}")
+          case _ =>
+            Consequence.unit
+        }
     }
 
   val unchecked: AssociationTargetValidator =
@@ -89,11 +102,26 @@ final class AssociationBindingWorkflow(
   )(using ExecutionContext): Consequence[AssociationBindingSummary] =
     for {
       parts <- AssociationBindingWorkflow.extract(binding, request)
-      associations <- _attach_existing_targets(sourceEntityId, binding, parts)
+      results <- _attach_existing_targets(sourceEntityId, binding, parts)
     } yield AssociationBindingSummary(
       sourceEntityId = sourceEntityId,
-      associations = associations.map(AssociationRecordCodec.toRecord)
+      associations = results.map(_.association).map(AssociationRecordCodec.toRecord)
     )
+
+  def attachExistingTargetResults(
+    sourceEntityId: String,
+    binding: CmlOperationAssociationBinding,
+    request: Request
+  )(using ExecutionContext): Consequence[Vector[AssociationBindingAttachResult]] =
+    for {
+      parts <- AssociationBindingWorkflow.extract(binding, request)
+      results <- _attach_existing_targets(sourceEntityId, binding, parts)
+    } yield results
+
+  def compensate(
+    results: Vector[AssociationBindingAttachResult]
+  )(using ExecutionContext): Consequence[Unit] =
+    _cleanup(results.filter(_.created).map(_.association))
 
   def attachExistingTarget(
     sourceEntityId: String,
@@ -156,7 +184,7 @@ final class AssociationBindingWorkflow(
     sourceEntityId: String,
     binding: CmlOperationAssociationBinding,
     parts: Vector[AssociationBindingPart]
-  )(using ExecutionContext): Consequence[Vector[Association]] = {
+  )(using ExecutionContext): Consequence[Vector[AssociationBindingAttachResult]] = {
     val domain = AssociationDomain(binding.domain)
     val targetKind = Option(binding.targetKind).filter(_.nonEmpty)
     parts.foldLeft(Consequence.success(Vector.empty[AssociationBindingAttachResult])) { (z, part) =>
@@ -173,14 +201,14 @@ final class AssociationBindingWorkflow(
             .flatMap(_ => Consequence.Failure[Vector[AssociationBindingAttachResult]](conclusion))
         }
       }
-    }.map(_.map(_.association))
+    }
   }
 
   private def _cleanup(
     values: Vector[Association]
   )(using ExecutionContext): Consequence[Unit] =
     values.foldLeft(Consequence.unit) { (z, association) =>
-      z.flatMap(_ => repository.delete(association).recover(_ => ()))
+      z.flatMap(_ => repository.delete(association))
     }
 
   private def _association_entity_id(collection: EntityCollectionId): EntityId =

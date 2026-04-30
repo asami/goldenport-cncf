@@ -8,7 +8,7 @@ import org.goldenport.cncf.component.ComponentOriginLabel
 import org.goldenport.cncf.entity.SimpleEntityStorageShapePolicy
 import org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor
 import org.goldenport.cncf.naming.NamingConventions
-import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, ChildEntityBindingOperationDefinition, CmlOperationAssociationBinding, CmlOperationChildEntityBinding, CmlOperationImageBinding, ImageBindingOperationDefinition}
+import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, ChildEntityBindingOperationDefinition, CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationChildEntityBinding, CmlOperationImageBinding, ImageBindingOperationDefinition}
 
 /*
  * @since   Mar.  5, 2026
@@ -31,6 +31,16 @@ private[projection] object MetaProjectionSupport {
     queries: Vector[ViewQueryMeta],
     sourceEvents: Vector[String],
     rebuildable: Option[Boolean]
+  )
+  final case class RelationshipMeta(
+    name: String,
+    kind: String,
+    sourceEntityName: String,
+    targetEntityName: String,
+    storageMode: String,
+    parentIdField: Option[String],
+    sortOrderField: Option[String],
+    lifecyclePolicy: Option[String]
   )
   final case class OperationMeta(
     name: String,
@@ -284,6 +294,7 @@ private[projection] object MetaProjectionSupport {
       "entityName" -> value.entityName,
       "inputParameter" -> value.inputParameter,
       "parentIdField" -> value.parentIdField,
+      "relationshipName" -> value.relationshipName,
       "sourceEntityIdMode" -> value.sourceEntityIdMode,
       "sourceEntityIdParameters" -> value.sourceEntityIdParameters,
       "sourceEntityIdResultFields" -> value.sourceEntityIdResultFields,
@@ -291,6 +302,27 @@ private[projection] object MetaProjectionSupport {
       "sortOrderField" -> value.sortOrderField,
       "createsEntity" -> value.createsEntity,
       "failurePolicy" -> value.failurePolicy
+    )
+
+  def relationship_definition_record(
+    value: CmlEntityRelationshipDefinition
+  ): Record =
+    Record.dataAuto(
+      "name" -> value.name,
+      "kind" -> value.kind,
+      "sourceEntityName" -> value.sourceEntityName,
+      "targetEntityName" -> value.targetEntityName,
+      "targetModelKind" -> value.targetModelKind,
+      "sourceRole" -> value.sourceRole,
+      "targetRole" -> value.targetRole,
+      "multiplicity" -> value.multiplicity,
+      "storageMode" -> value.storageMode,
+      "parentIdField" -> value.parentIdField,
+      "valueField" -> value.valueField,
+      "sortOrderField" -> value.sortOrderField,
+      "associationDomain" -> value.associationDomain,
+      "targetKind" -> value.targetKind,
+      "lifecyclePolicy" -> value.lifecyclePolicy
     )
 
   def render_operation_returns(operation: OperationDefinition): String =
@@ -314,6 +346,22 @@ private[projection] object MetaProjectionSupport {
           x.queries.sortBy(_.name).map(q => ViewQueryMeta(q.name, q.expression)),
           x.sourceEvents.distinct.sorted,
           x.rebuildable
+        )
+      }
+
+  def relationshipMetas(component: Component): Vector[RelationshipMeta] =
+    component.relationshipDefinitions
+      .sortBy(_.name)
+      .map { x =>
+        RelationshipMeta(
+          x.name,
+          x.kind,
+          x.sourceEntityName,
+          x.targetEntityName,
+          x.storageMode,
+          x.parentIdField,
+          x.sortOrderField,
+          x.lifecyclePolicy
         )
       }
 

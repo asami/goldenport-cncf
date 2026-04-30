@@ -40,6 +40,7 @@ final case class CmlOperationChildEntityBinding(
   entityName: String,
   inputParameter: String,
   parentIdField: String,
+  relationshipName: Option[String] = None,
   sourceEntityIdMode: String = CmlOperationAssociationBinding.SourceEntityIdModeNone,
   sourceEntityIdParameters: Vector[String] = Vector.empty,
   sourceEntityIdResultFields: Vector[String] = CmlOperationAssociationBinding.defaultSourceEntityIdResultFields,
@@ -86,6 +87,40 @@ final case class CmlOperationImageBinding(
       targetIdParameters = targetIdParameters,
       sortOrderParameters = sortOrderParameters
     )
+}
+
+final case class CmlEntityRelationshipDefinition(
+  name: String,
+  kind: String,
+  sourceEntityName: String,
+  targetEntityName: String,
+  targetModelKind: String = CmlEntityRelationshipDefinition.TargetModelKindEntity,
+  sourceRole: Option[String] = None,
+  targetRole: Option[String] = None,
+  multiplicity: Option[String] = None,
+  storageMode: String = CmlEntityRelationshipDefinition.StorageAssociationRecord,
+  parentIdField: Option[String] = None,
+  valueField: Option[String] = None,
+  sortOrderField: Option[String] = None,
+  associationDomain: Option[String] = None,
+  targetKind: Option[String] = None,
+  lifecyclePolicy: Option[String] = None
+)
+
+object CmlEntityRelationshipDefinition {
+  val KindAssociation: String = "association"
+  val KindAggregation: String = "aggregation"
+  val KindComposition: String = "composition"
+
+  val StorageAssociationRecord: String = "association-record"
+  val StorageChildParentIdField: String = "child-parent-id-field"
+  val StorageEmbeddedValueObject: String = "embedded-value-object"
+
+  val TargetModelKindEntity: String = "entity"
+  val TargetModelKindValue: String = "value"
+
+  val LifecycleIndependent: String = "independent"
+  val LifecycleDependent: String = "dependent"
 }
 
 final case class CmlOperationField(

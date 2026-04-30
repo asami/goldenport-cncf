@@ -52,10 +52,13 @@ final class ChildEntityBindingWorkflow(
           created <- _create_children(collection, binding, sourceid, rows)
         } yield ChildEntityBindingSummary(sourceid, binding.entityName, created.map(_.value))
     }.recoverWith { conclusion =>
-      ChildEntityBindingWorkflow.resolveSourceEntityId(binding, request, response).flatMap { sourceid =>
-        _compensate_parent(binding, sourceid)
-          .flatMap(_ => Consequence.Failure[ChildEntityBindingSummary](conclusion))
-      }.recoverWith(_ => Consequence.Failure[ChildEntityBindingSummary](conclusion))
+      ChildEntityBindingWorkflow.resolveSourceEntityId(binding, request, response) match {
+        case Consequence.Success(sourceid) =>
+          _compensate_parent(binding, sourceid)
+            .flatMap(_ => Consequence.Failure[ChildEntityBindingSummary](conclusion))
+        case Consequence.Failure(_) =>
+          Consequence.Failure[ChildEntityBindingSummary](conclusion)
+      }
     }
 
   def compensate(

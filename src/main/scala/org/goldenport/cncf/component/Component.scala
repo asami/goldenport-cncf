@@ -30,7 +30,7 @@ import org.goldenport.cncf.cli.renderer.{CliTreeJsonRenderer, CliTreeYamlRendere
 import org.goldenport.cncf.entity.aggregate.{AggregateCollection, AggregateSpace, Repository, AggregateDefinition}
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntitySpace}
 import org.goldenport.cncf.entity.view.{Browser, ViewCollection, ViewSpace, ViewDefinition}
-import org.goldenport.cncf.operation.{CmlOperationAccess, CmlOperationDefinition}
+import org.goldenport.cncf.operation.{CmlEntityRelationshipDefinition, CmlOperationAccess, CmlOperationDefinition}
 import org.goldenport.cncf.statemachine.{CmlStateMachineDefinition, StateMachinePlannerProvider}
 import org.goldenport.cncf.event.{CmlEventDefinition, CmlRoutingDefinition, CmlSubscriptionDefinition, EventReception, EventReceptionRule, EventStore}
 import org.goldenport.cncf.security.AuthenticationProvider
@@ -50,7 +50,7 @@ import org.goldenport.schema.{DataType, XString}
  *  version Jan. 22, 2026
  *  version Feb. 17, 2026
  *  version Mar. 30, 2026
- * @version Apr. 25, 2026
+ * @version Apr. 30, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class Component() extends Component.Core.Holder {
@@ -271,6 +271,7 @@ abstract class Component() extends Component.Core.Holder {
   def workflowDefinitions: Vector[WorkflowDefinition] = Vector.empty
   def aggregateDefinitions: Vector[AggregateDefinition] = Vector.empty
   def viewDefinitions: Vector[ViewDefinition] = Vector.empty
+  def relationshipDefinitions: Vector[CmlEntityRelationshipDefinition] = Vector.empty
   def operationDefinitions: Vector[CmlOperationDefinition] = Vector.empty
   def componentDefinitionRecords: Vector[Record] = Vector.empty
   def subsystemDefinitionRecords: Vector[Record] = Vector.empty
