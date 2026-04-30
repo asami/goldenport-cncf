@@ -147,10 +147,20 @@ they are not embedded inside the application CAR.
   - canonical component-owned CAR-root resources
   - packaged into the CAR root by the build
   - used by `--component-dev-dir` without building a CAR first
+  - Web descriptor metadata belongs under `src/main/car/web`, for example
+    `src/main/car/web/web.yaml`
+  - `src/main/car/META-INF` is reserved for CAR-wide internal archive,
+    tooling, or runtime metadata; CNCF does not currently define a standard use
+    for it, so projects should not create it until a concrete need exists
 - `src/main/web`
   - component Web app resources
+  - HTML pages, CSS, JavaScript, and static Web assets live here
   - kept separate from CAR metadata because it is the Web surface, not the
     archive descriptor layer
+  - `src/main/web/WEB-INF` is reserved for future Web-app-internal metadata or
+    private resources; when used, it must not be served as a public Web resource
+  - `src/main/web/META-INF` is not used; Web-app-internal metadata should use
+    `WEB-INF` to stay aligned with Java Web application conventions
 - `car.d`
   - expanded CAR directory for loader/debug/inspection use
   - no longer a default active component source

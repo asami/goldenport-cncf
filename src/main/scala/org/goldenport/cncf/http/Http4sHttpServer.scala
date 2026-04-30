@@ -44,7 +44,8 @@ import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
  * @since   Jan.  7, 2026
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version May.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -795,11 +796,25 @@ final class Http4sHttpServer(
   ): IO[Option[HResponse[IO]]] =
     engine.webDescriptor.webRouteFor(path) match {
       case Some(route) =>
-        _component_web_app(
-          route.target.normalizedComponent,
-          route.target.normalizedApp,
-          route.remainingPath
-        ).map(Some(_))
+        engine.webDescriptor.appKind(route.target.normalizedApp).map(_.toLowerCase) match {
+          case Some("static-form") if route.remainingPath.isEmpty =>
+            if (_web_app_static_html_content(route.target.normalizedApp, Vector.empty).nonEmpty)
+              _component_web_app(
+                route.target.normalizedComponent,
+                route.target.normalizedApp,
+                Vector.empty
+              ).map(Some(_))
+            else
+              _static_form_app(route.target.normalizedApp, Vector.empty).map(Some(_))
+          case Some("static-form") =>
+            IO.pure(None)
+          case _ =>
+            _component_web_app(
+              route.target.normalizedComponent,
+              route.target.normalizedApp,
+              route.remainingPath
+            ).map(Some(_))
+        }
       case None =>
         IO.pure(None)
     }
@@ -2063,11 +2078,15 @@ final class Http4sHttpServer(
       .flatMap(_.artifactMetadata.flatMap(_.archivePath))
       .map(path => Paths.get(path).toAbsolutePath.normalize)
       .distinct
-      .map { path =>
+      .flatMap { path =>
         if (WebResourceRoot.isArchiveFile(path))
-          WebResourceRoot.archive(path)
+          Vector(WebResourceRoot.archive(path))
         else
-          WebResourceRoot.directory(path.resolve("web"))
+          Vector(
+            path.resolve("car.d").resolve("web"),
+            path.resolve("src").resolve("main").resolve("web"),
+            path.resolve("web")
+          ).filter(Files.isDirectory(_)).map(WebResourceRoot.directory)
       }
 
   private[http] def _web_app_asset_content(

@@ -96,6 +96,12 @@ final case class WebDescriptor(
         app.normalizedName == org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(name)
     ).map(_.assets).getOrElse(WebDescriptor.Assets())
 
+  def appKind(name: String): Option[String] =
+    apps.find(app =>
+      app.matches(name, Vector.empty) ||
+        app.normalizedName == org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(name)
+    ).map(_.effectiveKind)
+
   def themeFor(appName: Option[String] = None): WebDescriptor.Theme =
     appName
       .flatMap(name => apps.find(app =>
@@ -896,8 +902,8 @@ object WebDescriptor {
     Vector(
       root.resolve("car.d").resolve("web").resolve("web-descriptor.yaml"),
       root.resolve("car.d").resolve("web").resolve("web.yaml"),
-      root.resolve("src").resolve("main").resolve("web").resolve("web-descriptor.yaml"),
-      root.resolve("src").resolve("main").resolve("web").resolve("web.yaml"),
+      root.resolve("src").resolve("main").resolve("car").resolve("web").resolve("web-descriptor.yaml"),
+      root.resolve("src").resolve("main").resolve("car").resolve("web").resolve("web.yaml"),
       root.resolve("web").resolve("web-descriptor.yaml"),
       root.resolve("web").resolve("web.yaml")
     )

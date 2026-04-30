@@ -132,7 +132,9 @@ Resume hint:
   startup: `--component-dev-dir` and `--subsystem-dev-dir` are the normal
   selector-less edit/run routes, while expanded `car.d` and `sar.d` directories
   are explicit loader/debug inputs through `--component-car-dir` and
-  `--subsystem-sar-dir`.
+  `--subsystem-sar-dir`. CAR Web descriptor metadata is sourced from
+  `src/main/car/web`, Web application resources remain under `src/main/web`,
+  and any future non-public Web app metadata is reserved for `WEB-INF`.
   AF-01 adds a reusable CNCF Atom feed model, renderer, and Record projection
   helper, then applies it to BlogComponent through a public `atomFeed` query
   that emits published active posts as `application/atom+xml`.

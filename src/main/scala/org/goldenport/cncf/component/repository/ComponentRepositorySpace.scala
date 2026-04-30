@@ -429,6 +429,7 @@ object ComponentRepositorySpace {
     result match {
       case left @ Left(_) => left
       case Right(specs) if noDefault => Right(specs)
+      case Right(specs) if specs.nonEmpty => Right(specs)
       case Right(specs) =>
         val defaults = Vector(_default_component_dir(cwd), _default_component_target_dir(cwd)).flatten
         Right(defaults.foldLeft(specs) { (z, dir) =>

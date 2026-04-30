@@ -458,6 +458,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   `--component-dev-dir` and `--subsystem-dev-dir` are selector-less development
   startup routes, while expanded `car.d` and `sar.d` remain explicit
   loader/debug inputs via `--component-car-dir` and `--subsystem-sar-dir`.
+  CAR Web metadata is now sourced from `src/main/car/web`, Web application
+  resources remain under `src/main/web`, and future private Web-app metadata is
+  reserved for `WEB-INF` rather than `META-INF`.
   AF-01 adds reusable CNCF AtomFeed
   model/projection/rendering support and applies it to BlogComponent as a
   public `atomFeed` query for published active posts.

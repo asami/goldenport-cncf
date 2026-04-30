@@ -342,9 +342,9 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
     }
 
-    "discover src/main/web/web.yaml from a development project root" in {
+    "discover src/main/car/web/web.yaml from a development project root" in {
       val root = Files.createTempDirectory("cncf-web-descriptor-dev-root")
-      val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web"))
+      val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("car").resolve("web"))
       Files.writeString(
         web.resolve("web.yaml"),
         """web:
@@ -357,6 +357,23 @@ final class WebDescriptorSpec extends AnyWordSpec with Matchers {
       val descriptor = WebDescriptor.load(root).toOption.get
 
       descriptor.expose("notice-board.notice.search-notices") shouldBe WebDescriptor.Exposure.Public
+    }
+
+    "does not discover src/main/web/web.yaml as CAR metadata" in {
+      val root = Files.createTempDirectory("cncf-web-descriptor-web-app-root")
+      val web = Files.createDirectories(root.resolve("src").resolve("main").resolve("web"))
+      Files.writeString(
+        web.resolve("web.yaml"),
+        """web:
+          |  expose:
+          |    notice-board.notice.search-notices: public
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      val result = WebDescriptor.load(root)
+
+      result shouldBe a[org.goldenport.Consequence.Failure[_]]
     }
 
     "keep /web/web.yaml as the secondary directory descriptor name" in {

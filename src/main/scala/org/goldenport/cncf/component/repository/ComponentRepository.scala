@@ -1,6 +1,7 @@
 package org.goldenport.cncf.component.repository
 
 import java.net.URLClassLoader
+import java.io.File
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths}
 import java.lang.reflect.Modifier
@@ -327,21 +328,21 @@ object ComponentRepository extends GlobalObservable {
           log.warn(s"[component-dev-dir] runtime classpath contains no class directories: ${baseDir}")
           Vector.empty
         } else {
-          Using.resource(_class_loader_from_paths(classpath, getClass.getClassLoader)) { loader =>
-            _discover_components(
-              loader,
-              params,
-              classDirs,
-              packagePrefixes,
-              ComponentOrigin.Repository("component-dev-dir"),
-              log
-            ) match {
-              case Consequence.Success(components) =>
-                components.map(_.withArtifactMetadata(_dev_artifact_metadata(baseDir)))
-              case Consequence.Failure(conclusion) =>
-                log.warn(s"[component-dev-dir] discovery failed cause=${conclusion.show}")
-                Vector.empty
-            }
+          val loader = _class_loader_from_paths(classpath, getClass.getClassLoader)
+          _discover_components(
+            loader,
+            params,
+            classDirs,
+            packagePrefixes,
+            ComponentOrigin.Repository("component-dev-dir"),
+            log,
+            tolerant = true
+          ) match {
+            case Consequence.Success(components) =>
+              components.map(_.withArtifactMetadata(_dev_artifact_metadata(baseDir)))
+            case Consequence.Failure(conclusion) =>
+              log.warn(s"[component-dev-dir] discovery failed cause=${conclusion.show}")
+              Vector.empty
           }
         }
       }
@@ -353,6 +354,9 @@ object ComponentRepository extends GlobalObservable {
         Vector.empty
       } else {
         Files.readAllLines(file, StandardCharsets.UTF_8).asScala.toVector
+          .map(_.trim)
+          .filter(_.nonEmpty)
+          .flatMap(_.split(java.util.regex.Pattern.quote(File.pathSeparator)).toVector)
           .map(_.trim)
           .filter(_.nonEmpty)
           .map(p => Paths.get(p).toAbsolutePath.normalize)
@@ -1292,7 +1296,8 @@ object ComponentRepository extends GlobalObservable {
     classDirs: Seq[Path],
     packagePrefixes: Seq[String],
     origin: ComponentOrigin,
-    log: BootstrapLog
+    log: BootstrapLog,
+    tolerant: Boolean = false
   ): Consequence[Vector[Component]] = {
     val names = _discover_class_names(classDirs, packagePrefixes)
     _discover_components_with_names(
@@ -1301,7 +1306,7 @@ object ComponentRepository extends GlobalObservable {
       names,
       origin,
       log,
-      tolerant = false
+      tolerant = tolerant
     )
   }
 

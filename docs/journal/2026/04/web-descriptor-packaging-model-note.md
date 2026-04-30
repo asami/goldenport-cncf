@@ -113,7 +113,14 @@ The direction was refined after the admin field schema was introduced:
   wins because it is tied to the concrete Web Form endpoint.
 
 Cozy now has a raw CML `# WEB` metadata bridge for generating
-`src/main/web/web.yaml` in `car-sbt-project`. This is intentionally a bridge,
+`src/main/car/web/web.yaml` in `car-sbt-project`. This is intentionally a bridge,
 not a CML semantic extension. The Web Descriptor remains deployment/configuration
-data; the bridge just keeps sample projects convenient until the Dox/Kaleidox
-metadata contract is formalized.
+data under the CAR metadata tree; Web application HTML and assets remain under
+`src/main/web`. The bridge just keeps sample projects convenient until the
+Dox/Kaleidox metadata contract is formalized.
+
+If internal metadata is needed later, CAR-wide metadata should use
+`src/main/car/META-INF`, while Web-app-internal metadata or private resources
+should use `src/main/web/WEB-INF`. The `src/main/web/META-INF` layout is not
+adopted; `WEB-INF` better matches Java Web application conventions, and any
+future `WEB-INF` content must remain non-public in Web serving.

@@ -214,6 +214,10 @@ Implement CNCF gaps discovered by the `BlogComponent` driver.
       normal selector-less edit/run routes, while expanded `car.d` and `sar.d`
       remain explicit loader/debug inputs through `--component-car-dir` and
       `--subsystem-sar-dir`.
+- [x] CAR Web metadata and Web app resource layout.
+      `src/main/car/web` is the canonical Web descriptor metadata source,
+      `src/main/web` is the public Web app resource source, and future private
+      Web app metadata is reserved for `WEB-INF`.
 - [x] Non-image Association binding Web/manual surfaces beyond the core
       operation metadata.
 - [x] Entity create/update support for Blob attachment requests.

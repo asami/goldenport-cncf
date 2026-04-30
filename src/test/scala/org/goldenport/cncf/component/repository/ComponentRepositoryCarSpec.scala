@@ -266,6 +266,22 @@ class ComponentRepositoryCarSpec extends AnyWordSpec with Matchers with BeforeAn
       }
     }
 
+    "not append default component target when an explicit component development directory is active" in {
+      _with_temp_dir { cwd =>
+        val devdir = cwd.resolve("component")
+        Files.createDirectories(devdir)
+        Files.createDirectories(cwd.resolve("component").resolve("target"))
+
+        val resolved = ComponentRepositorySpace.appendDefaultActiveRepositories(
+          Right(Vector(ComponentRepository.ComponentDevDirRepository.Specification(devdir))),
+          cwd,
+          noDefault = false
+        ).toOption.get
+
+        resolved shouldBe Vector(ComponentRepository.ComponentDevDirRepository.Specification(devdir))
+      }
+    }
+
     "treat equals-form expanded CAR route as an explicit activation during name resolution" in {
       _with_temp_dir { componentdir =>
         val carpath = componentdir.resolve("testcomp.car")

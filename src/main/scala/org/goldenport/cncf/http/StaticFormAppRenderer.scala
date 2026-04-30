@@ -25,7 +25,8 @@ import io.circe.parser.parse
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version May.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -265,6 +266,8 @@ object StaticFormAppRenderer {
         Some(renderSystemConsole(subsystem))
       case Vector("dashboard") =>
         _find_component(subsystem, app).map(renderComponentDashboard(_, NamingConventions.toNormalizedSegment(app)))
+      case Vector() =>
+        renderFormIndex(subsystem, app, webDescriptor)
       case _ =>
         None
     }

@@ -468,16 +468,24 @@ descriptor because they describe the concrete Web Form endpoint directly.
 
 ## CML WEB Metadata Bridge
 
-Cozy `car-sbt-project` may generate `src/main/web/web.yaml` from a top-level CML
+Cozy `car-sbt-project` may generate `src/main/car/web/web.yaml` from a top-level CML
 `# WEB` section. The section body is treated as raw Web Descriptor YAML and is
 copied into the generated project. When the section is absent, Cozy generates a
 default sample descriptor scaffold.
 
 This bridge keeps Web deployment/configuration data outside the CML core model
 while still allowing a sample application or small CAR project to carry the
-initial Web Descriptor next to the model. The current implementation is a raw
-metadata bridge. A later pass may connect the same concept to Dox/Kaleidox AST
-metadata once the CML metadata contract is finalized.
+initial Web Descriptor next to the model. The descriptor is CAR metadata and
+therefore lives under `src/main/car/web`; Web application pages and assets live
+under `src/main/web`. The current implementation is a raw metadata bridge. A
+later pass may connect the same concept to Dox/Kaleidox AST metadata once the
+CML metadata contract is finalized.
+
+`src/main/web` is the public Web application resource tree. If a future Web app
+needs private bundle metadata or non-public resources, the reserved location is
+`src/main/web/WEB-INF`, and those resources must not be exposed by static Web
+serving. `src/main/web/META-INF` is not used; CAR-wide internal metadata, if it
+becomes necessary, belongs under `src/main/car/META-INF` instead.
 
 ## Application Hosting Entries
 
