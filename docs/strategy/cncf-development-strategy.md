@@ -465,8 +465,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   model/projection/rendering support and applies it to BlogComponent as a
   public `atomFeed` query for published active posts.
   BW-01 adds the component-owned `textus-blog` Web app so anonymous users can
-  list/read published active posts while authenticated users can save textarea
-  HTML fragments, upload Blog file bundles, and insert existing Blob images
+  list/read published active posts on `/web/blog`, while authenticated users
+  manage their own posts on `/web/blog/my`, edit or create posts on
+  `/web/blog/edit`, upload Blog file bundles, and insert existing Blob images
   through an editor picker.
 - Remaining BI-04 work is phase closure validation rather than a known runtime
   adapter gap.

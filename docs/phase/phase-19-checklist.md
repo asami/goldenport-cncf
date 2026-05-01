@@ -281,6 +281,11 @@ public read and authenticated authoring surface, not only command/API specs.
 - [x] Place Blog Web descriptor metadata under `src/main/car/web`.
 - [x] Place Blog Web app HTML/CSS/JavaScript under `src/main/web/blog`.
 - [x] Keep anonymous Blog list/detail reads limited to published active posts.
+- [x] Split public reader `/web/blog` from authenticated author dashboard
+      `/web/blog/my`.
+- [x] Add protected `searchMyPosts` / `getMyPost` for current-author drafts,
+      published posts, and inactive posts.
+- [x] Move editor/new post flow to protected `/web/blog/edit`.
 - [x] Add authenticated `saveEditorPost` textarea HTML fragment save.
 - [x] Add authenticated `importPostTree(fileBundle)` upload path for Blog file
       tree import.

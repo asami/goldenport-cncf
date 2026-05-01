@@ -140,10 +140,12 @@ Resume hint:
   helper, then applies it to BlogComponent through a public `atomFeed` query
   that emits published active posts as `application/atom+xml`.
   BW-01 adds the `textus-blog` component-owned Web app: anonymous users can
-  list/read published active posts, authenticated users can save textarea HTML
-  fragments through `saveEditorPost`, upload Blog file trees through
-  `importPostTree(fileBundle)`, and insert existing Blob images from an editor
-  picker that synchronizes inline BlobAttachment links.
+  list/read published active posts on `/web/blog`, authenticated users land on
+  `/web/blog/my` to manage only their own posts, and the editor/new post flow
+  runs on `/web/blog/edit`. The app can save textarea HTML fragments through
+  `saveEditorPost`, upload Blog file trees through `importPostTree(fileBundle)`,
+  and insert existing Blob images from an editor picker that synchronizes inline
+  BlobAttachment links.
 
 ## 5. Development Items
 
