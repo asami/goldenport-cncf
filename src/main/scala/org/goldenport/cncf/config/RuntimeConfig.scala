@@ -99,6 +99,7 @@ object RuntimeConfig {
   val AssemblyDescriptorKey = "textus.assembly.descriptor"
   val WebDescriptorKey = "textus.web.descriptor"
   val RepositoryDirKey = "textus.repository.dir"
+  val RepositoryComponentDevDirKey = "textus.repository.component.dev.dir"
   val ComponentDirKey = "textus.component.dir"
   val LogBackendKey = "textus.logging.backend"
   val RuntimeLogBackendKey = "textus.runtime.logging.backend"

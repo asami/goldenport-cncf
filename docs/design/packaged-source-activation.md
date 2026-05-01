@@ -71,6 +71,8 @@ The following are development-time execution paths:
 
 The standard component repository is also a packaged search source.
 
+- standard components published in the `simplemodeling.org` component
+  repository should require no project-local configuration
 - default local cache root: `~/.cncf/repository`
 - standard component layout:
   - `org/simplemodeling/car/<name>/<version>/<name>-<version>.car`
@@ -81,6 +83,34 @@ The standard component repository is also a packaged search source.
 - component CAR assembly defaults may also declare required components by
   `name + version`; the runtime resolves those provider/application
   dependencies from the same search sources
+
+### Development Override Search
+
+During component development, dependency resolution should follow this order of
+intent:
+
+1. Standard components
+   - resolve from the `simplemodeling.org` component repository or its local
+     cache
+   - require no project-local configuration in normal development
+2. Components available as CAR files
+   - place or symlink the CAR under `repository.d`
+   - use this for local fixed artifacts, artifacts received from another
+     developer, or temporary repository staging
+3. Components developed at the same time
+   - write the sibling component development directory in the local
+     `.textus.conf`
+   - keep `.textus.conf` out of git because it contains developer-local paths
+
+Example:
+
+```conf
+textus.repository.component.dev.dir = "../textus-user-account"
+```
+
+The development-directory override is for edit/run work against a sibling
+project. Packaged CAR staging remains the role of `repository.d`; standard
+published components should stay repository-resolved.
 
 ### Packaged activation
 
@@ -211,9 +241,12 @@ Cozy projects.
 The preferred operational model is:
 
 1. use subsystem name or component name for explicit startup
-2. use `repository.d` when packaged artifacts should be searchable but not automatically active
-3. use `component.d` when packaged artifacts should be active inputs
-4. use `--component-dev-dir`, `--component-car-dir`, `--subsystem-dev-dir`,
+2. rely on the standard component repository for published standard components
+3. use `repository.d` when packaged artifacts should be searchable but not automatically active
+4. use local `.textus.conf` component development-directory overrides for
+   sibling components being developed at the same time
+5. use `component.d` when packaged artifacts should be active inputs
+6. use `--component-dev-dir`, `--component-car-dir`, `--subsystem-dev-dir`,
    `--subsystem-sar-dir`, or `--discover=classes` for development-time workflows
 
 For a one-component application that depends on standard provider components,

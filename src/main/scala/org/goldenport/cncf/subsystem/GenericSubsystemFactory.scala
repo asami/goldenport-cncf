@@ -1,6 +1,6 @@
 package org.goldenport.cncf.subsystem
 
-import java.nio.file.{Path, Paths}
+import java.nio.file.{Files, Path, Paths}
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.assembly.AssemblyReport
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentDescriptorLoader, ComponentOrigin}
@@ -9,6 +9,7 @@ import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, Scop
 import org.goldenport.cncf.config.{ConfigurationAccess, RuntimeConfig}
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ResolvedConfiguration}
 import org.goldenport.cncf.path.AliasResolver
+import org.goldenport.Consequence
 
 /*
  * @since   Apr.  7, 2026
@@ -82,43 +83,74 @@ object GenericSubsystemFactory {
   def resolveDescriptor(
     configuration: ResolvedConfiguration
   ): Option[GenericSubsystemDescriptor] =
-    loadDescriptor(configuration).orElse {
-      subsystemName(configuration).flatMap { name =>
-        ComponentRepository.resolveSubsystemDescriptor(_repository_specs(configuration), name)
-          .map(_with_assembly_descriptor_override(_, configuration))
-      }
-    }.orElse {
-      componentArchivePath(configuration).flatMap { path =>
-        GenericSubsystemDescriptor.loadComponentArchive(path).toOption
-          .map(_with_assembly_descriptor_override(_, configuration))
-      }
-    }.orElse {
-      componentCarDirPath(configuration).flatMap { path =>
-        ComponentDescriptorLoader.loadArchive(path).toOption
-          .map(_component_descriptor_to_subsystem(path, _))
-          .map(_with_assembly_descriptor_override(_, configuration))
-      }
-    }.orElse {
-      componentDevDirPath(configuration).map { path =>
-        _component_descriptor_to_subsystem(
-          path,
-          _load_dev_component_descriptor(path)
-            .getOrElse(_fallback_component_descriptor(path))
-        )
-      }.map(_with_assembly_descriptor_override(_, configuration))
-    }.orElse {
-      RuntimeConfig
-        .getString(configuration, RuntimeConfig.ComponentNameKey)
-        .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeComponentNameKey))
-        .map(_.trim)
-        .filter(_.nonEmpty)
-        .map { name =>
-          GenericSubsystemDescriptor(
-            path = Paths.get(".").toAbsolutePath.normalize,
-            subsystemName = name,
-            componentBindings = Vector(GenericSubsystemComponentBinding(name))
-          )
+    resolveDescriptorC(configuration).toOption.flatten
+
+  def resolveDescriptorC(
+    configuration: ResolvedConfiguration
+  ): Consequence[Option[GenericSubsystemDescriptor]] =
+    _or_else(Consequence.success(loadDescriptor(configuration))) {
+      _or_else(Consequence.success(
+        subsystemName(configuration).flatMap { name =>
+          ComponentRepository.resolveSubsystemDescriptor(_repository_specs(configuration), name)
+            .map(_with_assembly_descriptor_override(_, configuration))
         }
+      )) {
+        _or_else(
+          componentArchivePath(configuration) match {
+            case Some(path) =>
+              GenericSubsystemDescriptor.loadComponentArchive(path)
+                .map(d => Some(_with_assembly_descriptor_override(d, configuration)))
+            case None => Consequence.success(None)
+          }
+        ) {
+          _or_else(
+            componentCarDirPath(configuration) match {
+              case Some(path) =>
+                for
+                  descriptor <- ComponentDescriptorLoader.loadArchive(path)
+                  subsystem <- _component_descriptor_to_subsystem_c(path, descriptor)
+                yield
+                  Some(_with_assembly_descriptor_override(subsystem, configuration))
+              case None => Consequence.success(None)
+            }
+          ) {
+            _or_else(
+              componentDevDirPath(configuration) match {
+                case Some(path) =>
+                  _component_descriptor_to_subsystem_c(
+                    _component_dev_car_root(path),
+                    _load_dev_component_descriptor(path)
+                      .getOrElse(_fallback_component_descriptor(path))
+                  ).map(d => Some(_with_assembly_descriptor_override(d, configuration)))
+                case None => Consequence.success(None)
+              }
+            ) {
+              Consequence.success(
+                RuntimeConfig
+                  .getString(configuration, RuntimeConfig.ComponentNameKey)
+                  .orElse(RuntimeConfig.getString(configuration, RuntimeConfig.RuntimeComponentNameKey))
+                  .map(_.trim)
+                  .filter(_.nonEmpty)
+                  .map { name =>
+                    GenericSubsystemDescriptor(
+                      path = Paths.get(".").toAbsolutePath.normalize,
+                      subsystemName = name,
+                      componentBindings = Vector(GenericSubsystemComponentBinding(name))
+                    )
+                  }
+              )
+            }
+          }
+        }
+      }
+    }
+
+  private def _or_else[A](
+    lhs: Consequence[Option[A]]
+  )(rhs: => Consequence[Option[A]]): Consequence[Option[A]] =
+    lhs.flatMap {
+      case s @ Some(_) => Consequence.success(s)
+      case None => rhs
     }
 
   private def _load_dev_component_descriptor(
@@ -140,7 +172,27 @@ object GenericSubsystemFactory {
       componentName = Some(path.getFileName.toString)
     )
 
+  private def _component_dev_car_root(
+    path: Path
+  ): Path =
+    Vector(
+      path.resolve("src").resolve("main").resolve("car"),
+      path.resolve("car.d")
+    ).find(Files.isDirectory(_)).getOrElse(path)
+
   private def _component_descriptor_to_subsystem(
+    path: Path,
+    descriptor: ComponentDescriptor
+  ): GenericSubsystemDescriptor =
+    _component_descriptor_to_subsystem_c(path, descriptor).TAKE
+
+  private def _component_descriptor_to_subsystem_c(
+    path: Path,
+    descriptor: ComponentDescriptor
+  ): Consequence[GenericSubsystemDescriptor] =
+    GenericSubsystemDescriptor.fromComponentDescriptor(path, descriptor)
+
+  private def _legacy_component_descriptor_to_subsystem(
     path: Path,
     descriptor: ComponentDescriptor
   ): GenericSubsystemDescriptor = {

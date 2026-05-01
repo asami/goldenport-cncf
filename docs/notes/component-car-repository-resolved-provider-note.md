@@ -27,22 +27,29 @@ and wiring defaults. It does not contain provider component artifacts.
 Provider component CAR artifacts such as `textus-user-account.car` are resolved
 from:
 
-1. the standard component repository
-2. `repository.d/` during local development before the standard repository is
-   populated
+1. the standard `simplemodeling.org` component repository for published
+   standard components
+2. `repository.d/` when a provider CAR has been obtained locally and should be
+   searchable without becoming an active component by itself
+3. local `.textus.conf` development-directory overrides when the provider
+   component is being developed at the same time as the application component
+
+`.textus.conf` is a local development file and must not be committed. Shared
+documentation should describe the expected keys; each developer keeps concrete
+paths in their own checkout.
 
 ## Runtime Shape
 
 The intended development startup is:
 
 ```bash
-cncf server --component-file target/cwitter.car
+cncf --component-dev-dir . server
 ```
 
-The selected component CAR is the active application component. Its
-component-local assembly metadata creates the synthetic subsystem descriptor.
-Additional component bindings are resolved by name from repository search
-sources.
+The selected component development directory is the active application
+component. Its component-local assembly metadata creates the synthetic subsystem
+descriptor. Additional component bindings are resolved by name from repository
+search sources or from `.textus.conf` development-directory overrides.
 
 ## SAR Boundary
 

@@ -4,7 +4,7 @@ import java.nio.file.Path
 
 /*
  * @since   Dec. 18, 2025
- * @version Dec. 18, 2025
+ * @version May.  1, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ConfigSources(
@@ -21,6 +21,7 @@ object ConfigSources {
     val home    = ConfigSource.home()
     val project = ConfigSource.project(cwd)
     val current = ConfigSource.cwd(cwd)
+    val currentTextus = ConfigSource.cwdTextus(cwd)
     val envSrc  = ConfigSource.env(env)
     val argSrc  = ConfigSource.args(args)
 
@@ -29,6 +30,7 @@ object ConfigSources {
         home,
         project,
         current,
+        currentTextus,
         envSrc,
         argSrc
       ).flatten

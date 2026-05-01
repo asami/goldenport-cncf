@@ -326,8 +326,8 @@ object ComponentRepositorySpace {
 
   private def _config_search_repository_specs(
     configuration: ResolvedConfiguration
-  ): Vector[String] =
-    configuration.get[String](RuntimeConfig.RepositoryDirKey) match {
+  ): Vector[String] = {
+    val repositories = configuration.get[String](RuntimeConfig.RepositoryDirKey) match {
       case Consequence.Success(Some(value)) =>
         value
           .split(",")
@@ -336,6 +336,17 @@ object ComponentRepositorySpace {
           .toVector
       case _ => Vector.empty
     }
+    val componentDevRepositories =
+      _config_values(configuration, Vector(
+        RuntimeConfig.RepositoryComponentDevDirKey,
+        "cncf.repository.component.dev.dir"
+      )).map(_component_dev_repository_spec)
+    (repositories ++ componentDevRepositories).distinct
+  }
+
+  private def _component_dev_repository_spec(value: String): String =
+    if (value.startsWith("component-dir:") || value.contains(":")) value
+    else s"component-dir:${value.stripSuffix("/")}/target"
 
   private def _config_active_repository_specs(
     configuration: ResolvedConfiguration

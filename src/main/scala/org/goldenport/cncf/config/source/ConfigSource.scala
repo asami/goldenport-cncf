@@ -88,6 +88,22 @@ object ConfigSource {
   }
 
   /**
+   * Current working directory Textus compatibility configuration source
+   * (./.textus.conf).
+   */
+  def cwdTextus(cwd: Path): Option[ConfigSource] = {
+    val path = cwd.resolve(".textus.conf")
+    Some(
+      File(
+        origin = ConfigOrigin.Cwd,
+        path   = path,
+        rank   = Rank.CwdTextus,
+        loader = new SimpleFileConfigLoader
+      )
+    )
+  }
+
+  /**
    * Environment variable configuration source.
    */
   def env(env: Map[String, String]): Option[ConfigSource] =
@@ -106,6 +122,7 @@ object ConfigSource {
     val Home: Int        = 10
     val Project: Int     = 20
     val Cwd: Int         = 30
+    val CwdTextus: Int   = 31
     val Environment: Int = 40
     val Arguments: Int   = 50
   }

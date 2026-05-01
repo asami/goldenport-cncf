@@ -824,14 +824,14 @@ object CncfRuntime extends GlobalObservable {
             )
             requestmode match {
               case Some(RunMode.Server) =>
-                val subsystem = buildSubsystem(extraComponents, Some(RunMode.Server), launch.actualArgs)
+                val subsystem = buildSubsystem(extraComponents, Some(RunMode.Server), args)
                 new CncfRuntime().startServer(subsystem, launch.domainArgs.drop(1))
                 0
               case Some(RunMode.Client) =>
-                val subsystem = buildSubsystem(extraComponents, Some(RunMode.Client), launch.actualArgs)
+                val subsystem = buildSubsystem(extraComponents, Some(RunMode.Client), args)
                 new CncfRuntime().executeClient(subsystem, launch.domainArgs.drop(1))
               case Some(RunMode.Command) =>
-                val subsystem = buildSubsystem(extraComponents, Some(RunMode.Command), launch.actualArgs)
+                val subsystem = buildSubsystem(extraComponents, Some(RunMode.Command), args)
                 new CncfRuntime().executeCommand(subsystem, launch.actualArgs.drop(1))
               case Some(RunMode.ServerEmulator) =>
                 executeServerEmulator(launch.domainArgs.drop(1), extraComponents)
@@ -875,17 +875,17 @@ object CncfRuntime extends GlobalObservable {
             }
             mode match {
               case Some(RunMode.Server) =>
-                val subsystem = buildSubsystem(mode = Some(RunMode.Server), args = launch.actualArgs)
+                val subsystem = buildSubsystem(mode = Some(RunMode.Server), args = args)
                 new CncfRuntime().startServer(subsystem, launch.domainArgs.drop(1))
                 0
               case Some(RunMode.Client) =>
                 observe_trace(
                   s"[client:trace] run dispatching to client mode args=${launch.domainArgs.drop(1).mkString(" ")}"
                 )
-                val subsystem = buildSubsystem(mode = Some(RunMode.Client), args = launch.actualArgs)
+                val subsystem = buildSubsystem(mode = Some(RunMode.Client), args = args)
                 new CncfRuntime().executeClient(subsystem, (launch.runtimeParse.consumed ++ launch.domainArgs.drop(1)).toArray)
               case Some(RunMode.Command) =>
-                val subsystem = buildSubsystem(mode = Some(RunMode.Command), args = launch.actualArgs)
+                val subsystem = buildSubsystem(mode = Some(RunMode.Command), args = args)
                 new CncfRuntime().executeCommand(subsystem, launch.actualArgs.drop(1))
               case Some(RunMode.ServerEmulator) =>
                 executeServerEmulator(launch.domainArgs.drop(1))
@@ -2491,9 +2491,16 @@ object CncfRuntime extends GlobalObservable {
         loader
       )
     }
+    val currentTextusCompat =
+      ConfigurationSource.File(
+        origin = ConfigurationOrigin.Cwd,
+        path = cwd.resolve(".textus.conf"),
+        rank = ConfigurationSource.Rank.Cwd,
+        loader = loader
+      )
     val envsource = ConfigurationSource.env(sys.env, applicationname).toVector
     val argsource = ConfigurationSource.args(args).toVector
-    ConfigurationSources(home ++ project ++ current ++ envsource ++ argsource)
+    ConfigurationSources(home ++ project ++ current ++ Vector(currentTextusCompat) ++ envsource ++ argsource)
   }
 
   private def _configuration_application_names(
