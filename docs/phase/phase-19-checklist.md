@@ -267,6 +267,40 @@ to validate public Atom feed output for published active posts.
 
 ---
 
+## BW-01: Blog Web App Driver Surface
+
+Status: DONE
+
+### Objective
+
+Add a `textus-blog` component-owned Web app so Phase 19 has an executable
+public read and authenticated authoring surface, not only command/API specs.
+
+### Detailed Tasks
+
+- [x] Place Blog Web descriptor metadata under `src/main/car/web`.
+- [x] Place Blog Web app HTML/CSS/JavaScript under `src/main/web/blog`.
+- [x] Keep anonymous Blog list/detail reads limited to published active posts.
+- [x] Add authenticated `saveEditorPost` textarea HTML fragment save.
+- [x] Add authenticated `importPostTree(fileBundle)` upload path for Blog file
+      tree import.
+- [x] Add authenticated Blob image picker support through `listImageBlobs`.
+- [x] Synchronize editor-inserted `/web/blob/content/{blobId}` images as
+      inline BlobAttachment Associations and `BlogInlineImage` occurrences.
+- [x] Verify Web app packaging and generated operation metadata in
+      `textus-blog` specs.
+
+### Decisions
+
+- Editor v1 is an HTML textarea, not a rich editor.
+- Client upload uses the CNCF `filebundle` DataType directly.
+- The image picker lists Blob images and inserts Blob content URLs into the
+  textarea; Blob + BlobAttachment remains the canonical image model.
+- Authenticated editor save derives the author from the current session and
+  ignores client-supplied author ids.
+
+---
+
 ## BI-05: Verification and Closure
 
 Status: SUSPENDED

@@ -92,9 +92,10 @@ Current semantic direction:
 - A (DONE): BI-01 — Open Phase 19 and freeze BlogComponent image-use scope.
 - B (DONE): BI-02 — Validate `BlogComponent` image binding model against the Blob/Association foundation.
 - C (DONE): BI-03 — Define Entity image binding usage contract for create/update/read/search/projection flows.
-- D (ACTIVE): BI-04 — Implement CNCF runtime/Web/projection gaps discovered by the BlogComponent driver.
+- D (DONE): BI-04 — Implement CNCF runtime/Web/projection gaps discovered by the BlogComponent driver.
 - E (DONE): AF-01 — Add CNCF AtomFeed support and apply it to BlogComponent.
-- F (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
+- F (DONE): BW-01 — Add the component-owned Blog Web app driver surface.
+- G (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
 
 Resume hint:
 
@@ -138,6 +139,11 @@ Resume hint:
   AF-01 adds a reusable CNCF Atom feed model, renderer, and Record projection
   helper, then applies it to BlogComponent through a public `atomFeed` query
   that emits published active posts as `application/atom+xml`.
+  BW-01 adds the `textus-blog` component-owned Web app: anonymous users can
+  list/read published active posts, authenticated users can save textarea HTML
+  fragments through `saveEditorPost`, upload Blog file trees through
+  `importPostTree(fileBundle)`, and insert existing Blob images from an editor
+  picker that synchronizes inline BlobAttachment links.
 
 ## 5. Development Items
 
@@ -146,6 +152,7 @@ Resume hint:
 - [x] BI-03: Define Entity image binding usage contract.
 - [x] BI-04: Implement CNCF runtime/Web/projection gaps discovered by the driver.
 - [x] AF-01: Add CNCF AtomFeed support and apply it to BlogComponent.
+- [x] BW-01: Add the component-owned Blog Web app driver surface.
 - [ ] BI-05: Verification, documentation, and phase closure.
 
 Detailed task breakdown and progress tracking are recorded in
@@ -166,6 +173,9 @@ Phase 19 can close when:
 - Regression tests cover the CNCF behavior added during this phase.
 - `textus-blog` exposes an Atom feed for published active posts using the CNCF
   AtomFeed helper.
+- `textus-blog` exposes a component-owned Blog Web app that exercises public
+  read, authenticated editor save, filebundle upload import, and Blob image
+  picker flows.
 
 ## 7. Notes
 

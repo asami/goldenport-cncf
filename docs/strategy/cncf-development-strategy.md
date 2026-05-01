@@ -464,6 +464,10 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   AF-01 adds reusable CNCF AtomFeed
   model/projection/rendering support and applies it to BlogComponent as a
   public `atomFeed` query for published active posts.
+  BW-01 adds the component-owned `textus-blog` Web app so anonymous users can
+  list/read published active posts while authenticated users can save textarea
+  HTML fragments, upload Blog file bundles, and insert existing Blob images
+  through an editor picker.
 - Remaining BI-04 work is phase closure validation rather than a known runtime
   adapter gap.
 - Non-goals:
@@ -668,6 +672,9 @@ Active in Phase 19.
     image-capable operation metadata in manual/help output;
   - expose public Blog content through a CNCF-backed AtomFeed model and
     `application/atom+xml` renderer;
+  - expose a component-owned Blog Web app that validates anonymous read,
+    authenticated editor save, filebundle upload import, and Blob image picker
+    flows;
   - keep image-specific metadata on top of a reusable `associationBinding`
     operation contract so non-image Entity associations can use the same
     source/target binding structure later;
