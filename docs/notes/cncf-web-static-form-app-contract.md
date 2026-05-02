@@ -262,6 +262,11 @@ The stable JSON response contract for the definition endpoints is maintained in
 Static Form App may use JSON Form API when it needs schema-driven forms, but
 plain HTML pages can submit directly through `/form/...`.
 
+Static Form App pages should be usable without JavaScript. The baseline pattern
+is static HTML forms that submit to `/form/...`, result templates rendered with
+Textus widgets, and JavaScript only as progressive enhancement for interactions
+such as dialogs, picker insertion, or in-place refresh.
+
 ## Bootstrap 5 Assets
 
 Static Form App HTML uses Bootstrap 5 by default.
@@ -293,6 +298,24 @@ A Static Form App is a web app instance made from CML metadata, static HTML
 pages, and convention based result resolution. Its value is that demo
 applications and internal tools can be built in the CML+HTML range without
 writing Web framework code.
+
+Static Form App routing is file-layout based. A component may register one app
+and one route alias in `web.yaml`; it does not need to enumerate every page.
+For an app mounted at `/web/blog`, the runtime resolves pages from the component
+Web root:
+
+```text
+src/main/web/index.html          -> /web/blog
+src/main/web/publicblogs.html    -> /web/blog/publicblogs
+src/main/web/userblogs.html      -> /web/blog/userblogs
+src/main/web/new.html            -> /web/blog/new
+src/main/web/update.html         -> /web/blog/update
+src/main/web/assets/blog.css     -> /web/blog/assets/blog.css
+```
+
+The extensionless URL is canonical, but `.html` URLs are accepted. The older
+`src/main/web/{app}/...` layout remains a fallback for existing samples; new
+component-owned Static Form Apps should prefer the flat Web root layout.
 
 The Static Form App boundary is intentionally conservative. The preferred
 approach is to use static pages and filename conventions as far as practical,
@@ -438,6 +461,9 @@ The first widget contracts are:
 ```html
 <textus-result-view source="result.body"></textus-result-view>
 <textus-result-table source="result.body" page="paging.page" page-size="paging.pageSize" total="paging.total" href="paging.href"></textus-result-table>
+<textus:card-list source="result.body" columns="title,updated_at"></textus:card-list>
+<textus:record-card source="result.body" columns="title,updated_at"></textus:record-card>
+<textus:html-field source="result.body" field="content"></textus:html-field>
 <textus-property-list source="result"></textus-property-list>
 <textus-property-list source="form"></textus-property-list>
 <textus-error-panel source="result"></textus-error-panel>
@@ -457,6 +483,20 @@ rendering action widgets include standard hidden page context by default so a
 result page can submit an await/retry/update action without losing paging,
 origin, version, or CSRF context. `context="false"` suppresses the hidden
 context when an action must be isolated.
+
+When a static form includes a hidden `textus.form.page` value, result template
+lookup first tries page-local templates before operation-name templates:
+
+```html
+<input type="hidden" name="textus.form.page" value="new">
+```
+
+For a successful submission this prefers `new__200.html` and
+`new__success.html`; for a failed submission it prefers `new__400.html` and
+`new__error.html` before falling back to the existing operation and common
+template conventions. This allows `new.html` and `update.html` to share one
+operation such as `saveEditorPost` while still using page-specific result
+screens.
 
 These widgets are the Phase 12 baseline. The widget set is expected to grow
 through the Textus widget design described in

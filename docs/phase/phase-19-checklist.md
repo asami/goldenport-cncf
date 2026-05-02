@@ -279,13 +279,17 @@ public read and authenticated authoring surface, not only command/API specs.
 ### Detailed Tasks
 
 - [x] Place Blog Web descriptor metadata under `src/main/car/web`.
-- [x] Place Blog Web app HTML/CSS/JavaScript under `src/main/web/blog`.
+- [x] Place Blog Web app HTML/CSS/JavaScript under the flat `src/main/web`
+      Static Form file-layout root.
 - [x] Keep anonymous Blog list/detail reads limited to published active posts.
-- [x] Split public reader `/web/blog` from authenticated author dashboard
-      `/web/blog/my`.
+- [x] Split public reader `/web/blog/publicblogs` from authenticated author
+      dashboard `/web/blog/userblogs`.
 - [x] Add protected `searchMyPosts` / `getMyPost` for current-author drafts,
       published posts, and inactive posts.
-- [x] Move editor/new post flow to protected `/web/blog/edit`.
+- [x] Move editor/new post flow to static pages `/web/blog/new` and
+      `/web/blog/update`.
+- [x] Use page-local result templates such as `new__success.html` and
+      `update__error.html` without page entries in `web.yaml`.
 - [x] Add authenticated `saveEditorPost` textarea HTML fragment save.
 - [x] Add authenticated `importPostTree(fileBundle)` upload path for Blog file
       tree import.
@@ -323,6 +327,9 @@ Entity image binding usage and the reusable CNCF behavior is verified.
 - [x] Verify Web/admin/manual behavior.
 - [x] Verify BlogComponent relationship metadata generation for image
       Association and inline-image composition.
+- [ ] Resolve or explicitly defer the `EntityId` `major` / `minor` runtime
+      namespace operating policy recorded in
+      `docs/notes/id-major-minor-operation-note.md`.
 - [ ] Update strategy history and close phase documents.
 
 ---

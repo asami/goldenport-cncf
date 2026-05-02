@@ -45,7 +45,7 @@ import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
- * @version May.  1, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -807,7 +807,11 @@ final class Http4sHttpServer(
             else
               _static_form_app(route.target.normalizedApp, Vector.empty).map(Some(_))
           case Some("static-form") =>
-            IO.pure(None)
+            _component_web_app(
+              route.target.normalizedComponent,
+              route.target.normalizedApp,
+              route.remainingPath
+            ).map(Some(_))
           case _ =>
             _component_web_app(
               route.target.normalizedComponent,
@@ -1343,10 +1347,11 @@ final class Http4sHttpServer(
             )
           else
             _continuation_values(continuation)
-        val values = continuationValues ++ pagingValues.map { case (k, v) => s"paging.${k}" -> v }
+        val pageValues = _form_result_page_values(continuation.form)
+        val values = continuationValues ++ pageValues ++ pagingValues.map { case (k, v) => s"paging.${k}" -> v }
         val page = StaticFormAppRenderer.renderFormResult(
           _form_result_properties(app, service, operation, res, values),
-          _form_result_static_template(app, service, operation, res.code)
+          _form_result_static_template(app, service, operation, res.code, values)
             .orElse(_form_descriptor(app, service, operation).flatMap(_.resultTemplate))
         )
         _html(page, Some(app)).map { html =>
@@ -1792,7 +1797,7 @@ final class Http4sHttpServer(
     )
     val page = StaticFormAppRenderer.renderFormResult(
       _form_result_properties(app, service, operation, res, values),
-      _form_result_static_template(app, service, operation, res.code)
+      _form_result_static_template(app, service, operation, res.code, values)
         .orElse(_form_descriptor(app, service, operation).flatMap(_.resultTemplate))
     )
     _html(page, Some(app)).map { html =>
@@ -1842,7 +1847,7 @@ final class Http4sHttpServer(
         )
         page = StaticFormAppRenderer.renderFormResult(
           _form_result_properties(app, service, operation, res, values),
-          _form_result_static_template(app, service, operation, res.code)
+          _form_result_static_template(app, service, operation, res.code, values)
             .orElse(_form_descriptor(app, service, operation).flatMap(_.resultTemplate))
         )
         html <- _html(page, Some(app))
@@ -1990,7 +1995,7 @@ final class Http4sHttpServer(
         else
           _html(StaticFormAppRenderer.renderFormResult(
             properties,
-            _form_result_static_template(app, service, operation, response.code).orElse(descriptor.flatMap(_.resultTemplate))
+            _form_result_static_template(app, service, operation, response.code, properties.page.values).orElse(descriptor.flatMap(_.resultTemplate))
           ), Some(app))
     }
   }
@@ -1999,10 +2004,11 @@ final class Http4sHttpServer(
     app: String,
     service: String,
     operation: String,
-    status: Int
+    status: Int,
+    values: Map[String, String] = Map.empty
   ): Option[String] =
     _web_resource_roots().view.flatMap { root =>
-      _form_result_template_candidates(app, service, operation, status).flatMap { candidate =>
+      _form_result_template_candidates(app, service, operation, status, values).flatMap { candidate =>
         root.readText(candidate)
       }
     }.headOption
@@ -2011,7 +2017,8 @@ final class Http4sHttpServer(
     app: String,
     service: String,
     operation: String,
-    status: Int
+    status: Int,
+    values: Map[String, String] = Map.empty
   ): Vector[Path] = {
     val operationPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(operation)
     val servicePath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(service)
@@ -2035,6 +2042,14 @@ final class Http4sHttpServer(
         Paths.get(appPath, common)
       )
     }
+    val pageLocal = _form_result_page(values).toVector.flatMap { page =>
+      suffixes.flatMap { suffix =>
+        Vector(
+          Paths.get(appPath, s"${page}__${suffix}.html"),
+          Paths.get(s"${page}__${suffix}.html")
+        )
+      }
+    }
     val common = suffixes.flatMap { suffix =>
       val filename = s"${operationPath}__${suffix}.html"
       val common = s"__${suffix}.html"
@@ -2043,8 +2058,33 @@ final class Http4sHttpServer(
         Paths.get(common)
       )
     }
-    routeLocalOperation ++ routeLocalCommon ++ common
+    pageLocal ++ routeLocalOperation ++ routeLocalCommon ++ common
   }
+
+  private def _form_result_page(
+    values: Map[String, String]
+  ): Option[String] =
+    values.get("textus.form.page")
+      .orElse(values.get("cncf.form.page"))
+      .map(_.trim)
+      .filter(_.nonEmpty)
+      .map(_.stripSuffix(".html"))
+      .filter(_safe_form_result_page_name)
+      .map(org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment)
+
+  private def _safe_form_result_page_name(
+    name: String
+  ): Boolean =
+    name.forall { c =>
+      c.isLetterOrDigit || c == '-' || c == '_' || c == '.'
+    }
+
+  private def _form_result_page_values(
+    form: Record
+  ): Map[String, String] =
+    _form_values(form).filter { case (k, _) =>
+      k == "textus.form.page" || k == "cncf.form.page"
+    }
 
   private[http] def _web_error_template(
     app: Option[String],
@@ -2099,14 +2139,24 @@ final class Http4sHttpServer(
     webAppName: String,
     assetPath: Vector[String]
   ): Option[(BinaryBag, MediaType)] =
-    _web_resource_roots().view.flatMap { root =>
-      val path = _relative_path(
-        org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName) +:
-          "assets" +:
-          assetPath
-      )
-      root.readBinary(path).map(_ -> _asset_media_type(assetPath.lastOption.getOrElse("")))
+    _web_app_asset_candidates(webAppName, assetPath).view.flatMap { path =>
+      _web_resource_roots().view.flatMap { root =>
+        root.readBinary(path).map(_ -> _asset_media_type(assetPath.lastOption.getOrElse("")))
+      }
     }.headOption
+
+  private def _web_app_asset_candidates(
+    webAppName: String,
+    assetPath: Vector[String]
+  ): Vector[Path] = {
+    val webAppPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName)
+    val flat = Vector(
+      _relative_path("assets" +: assetPath),
+      _relative_path(webAppPath +: "assets" +: assetPath)
+    )
+    val appNamed = flat.reverse
+    if (_is_flat_web_root_app(webAppName)) flat else appNamed
+  }
 
   private[http] def _web_global_asset_content(
     assetName: String
@@ -2128,8 +2178,8 @@ final class Http4sHttpServer(
     if (!_safe_web_page_path(page))
       None
     else
-      _web_resource_roots().view.flatMap { root =>
-        _web_app_static_html_candidates(webAppName, page).flatMap(root.readText)
+      _web_app_static_html_candidates(webAppName, page).view.flatMap { path =>
+        _web_resource_roots().view.flatMap(_.readText(path))
       }.headOption
 
   private[http] def _web_app_static_html_candidates(
@@ -2138,12 +2188,18 @@ final class Http4sHttpServer(
   ): Vector[Path] = {
     val webAppPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName)
     if (page.isEmpty)
-      Vector(Paths.get(webAppPath, "index.html"))
+      _flat_or_app_named_candidates(webAppName, Vector(
+        Paths.get("index.html"),
+        Paths.get(webAppPath, "index.html")
+      ))
     else {
-      val normalized = page.map(org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment)
+      val normalized = page.map(_normalize_web_page_segment)
       val exact =
         if (normalized.last.endsWith(".html"))
-          Vector(Paths.get(webAppPath, normalized*))
+          _flat_or_app_named_candidates(webAppName, Vector(
+            _relative_path(normalized),
+            _relative_path(webAppPath +: normalized)
+          ))
         else
           Vector.empty
       val html =
@@ -2151,12 +2207,40 @@ final class Http4sHttpServer(
           Vector.empty
         else {
           val withHtml = normalized.init :+ s"${normalized.last}.html"
-          Vector(Paths.get(webAppPath, withHtml*))
+          _flat_or_app_named_candidates(webAppName, Vector(
+            _relative_path(withHtml),
+            _relative_path(webAppPath +: withHtml)
+          ))
         }
-      val index = Vector(Paths.get(webAppPath, (normalized :+ "index.html")*))
+      val index = _flat_or_app_named_candidates(webAppName, Vector(
+        _relative_path(normalized :+ "index.html"),
+        _relative_path(webAppPath +: (normalized :+ "index.html"))
+      ))
       exact ++ html ++ index
     }
   }
+
+  private def _flat_or_app_named_candidates(
+    webAppName: String,
+    flatFirst: Vector[Path]
+  ): Vector[Path] =
+    if (_is_flat_web_root_app(webAppName)) flatFirst else flatFirst.reverse
+
+  private def _is_flat_web_root_app(
+    webAppName: String
+  ): Boolean = {
+    val normalized = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName)
+    val staticApps = engine.webDescriptor.apps.filter(app => app.effectiveKind.equalsIgnoreCase("static-form"))
+    staticApps.size == 1 && staticApps.head.normalizedName == normalized
+  }
+
+  private def _normalize_web_page_segment(
+    segment: String
+  ): String =
+    if (segment.endsWith(".html"))
+      s"${org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(segment.stripSuffix(".html"))}.html"
+    else
+      org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(segment)
 
   private def _safe_web_page_path(
     page: Vector[String]

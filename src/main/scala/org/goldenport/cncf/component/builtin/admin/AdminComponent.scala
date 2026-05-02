@@ -52,7 +52,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
- * @version Apr. 30, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -1858,7 +1858,7 @@ object AdminComponent {
     core: ActionCall.Core,
     subsystem: Subsystem
   ): Consequence[OperationResponse] = {
-    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    val args = _action_values(core)
     for {
       componentName <- _required_string(args, "component")
       entityName <- _required_string(args, "entity")
@@ -1954,7 +1954,7 @@ object AdminComponent {
     core: ActionCall.Core,
     subsystem: Subsystem
   ): Consequence[OperationResponse] = {
-    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    val args = _action_values(core)
     for {
       componentName <- _required_string(args, "component")
       entityName <- _required_string(args, "entity")
@@ -2007,7 +2007,7 @@ object AdminComponent {
     core: ActionCall.Core,
     subsystem: Subsystem
   ): Consequence[OperationResponse] = {
-    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    val args = _action_values(core)
     for {
       componentName <- _required_string(args, "component")
       entityName <- _required_string(args, "entity")
@@ -2046,7 +2046,7 @@ object AdminComponent {
   ): Consequence[OperationResponse] = {
     val _ = subsystem
     given org.goldenport.cncf.context.ExecutionContext = core.executionContext
-    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    val args = _action_values(core)
     for {
       domain <- _required_string(args, "domain")
       paging <- _paging(args)
@@ -2093,7 +2093,7 @@ object AdminComponent {
   ): Consequence[OperationResponse] = {
     val _ = subsystem
     given org.goldenport.cncf.context.ExecutionContext = core.executionContext
-    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    val args = _action_values(core)
     for {
       domain <- _required_string(args, "domain")
       source <- _required_string(args, "sourceEntityId")
@@ -2128,7 +2128,7 @@ object AdminComponent {
   ): Consequence[OperationResponse] = {
     val _ = subsystem
     given org.goldenport.cncf.context.ExecutionContext = core.executionContext
-    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    val args = _action_values(core)
     for {
       domain <- _required_string(args, "domain")
       source <- _required_string(args, "sourceEntityId")
@@ -2155,7 +2155,7 @@ object AdminComponent {
     subsystem: Subsystem
   ): Consequence[OperationResponse] = {
     given org.goldenport.cncf.context.ExecutionContext = core.executionContext
-    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    val args = _action_values(core)
     for {
       dataName <- _required_string(args, "data")
       id <- _required_string(args, "id")
@@ -2170,7 +2170,7 @@ object AdminComponent {
     subsystem: Subsystem
   ): Consequence[OperationResponse] = {
     given org.goldenport.cncf.context.ExecutionContext = core.executionContext
-    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    val args = _action_values(core)
     for {
       dataName <- _required_string(args, "data")
       paging <- _paging(args)
@@ -2205,7 +2205,7 @@ object AdminComponent {
     subsystem: Subsystem
   ): Consequence[OperationResponse] = {
     given org.goldenport.cncf.context.ExecutionContext = core.executionContext
-    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    val args = _action_values(core)
     for {
       dataName <- _required_string(args, "data")
       id <- _required_string(args, "id")
@@ -2230,7 +2230,7 @@ object AdminComponent {
     core: ActionCall.Core,
     subsystem: Subsystem
   ): Consequence[OperationResponse] = {
-    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    val args = _action_values(core)
     for {
       componentName <- _required_string(args, "component")
       viewName <- _required_string(args, "view")
@@ -2287,7 +2287,7 @@ object AdminComponent {
     core: ActionCall.Core,
     subsystem: Subsystem
   ): Consequence[OperationResponse] = {
-    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    val args = _action_values(core)
     for {
       componentName <- _required_string(args, "component")
       aggregateName <- _required_string(args, "aggregate")
@@ -2409,7 +2409,7 @@ object AdminComponent {
     subsystem: Subsystem
   ): Consequence[OperationResponse] = {
     given org.goldenport.cncf.context.ExecutionContext = core.executionContext
-    val args = core.action.arguments.map(x => x.name -> x.value).toMap
+    val args = _action_values(core)
     for {
       dataName <- _required_string(args, "data")
       id <- _required_string(args, "id")
@@ -2418,6 +2418,12 @@ object AdminComponent {
       _ <- ds.create(DataStore.CollectionId(dataName), entry, _admin_data_record(args))
     } yield OperationResponse.Scalar("Data record was applied.")
   }
+
+  private def _action_values(
+    core: ActionCall.Core
+  ): Map[String, Any] =
+    (core.action.properties.map(x => x.name -> x.value) ++
+      core.action.arguments.map(x => x.name -> x.value)).toMap
 
   private def _required_string(
     args: Map[String, Any],
@@ -2923,7 +2929,10 @@ object AdminComponent {
     value: Any,
     record: Record
   ): String =
-    _read_item_id(value).filter(_.nonEmpty)
+    (value match {
+      case _: String => None
+      case _ => _read_item_id(value).filter(_.nonEmpty)
+    })
       .orElse(record.getString("sourceEntityId").filter(_.nonEmpty))
       .orElse(record.getString("id").filter(_.nonEmpty))
       .getOrElse(routeId)
@@ -2946,23 +2955,11 @@ object AdminComponent {
   ): Consequence[Vector[Association]] = {
     given org.goldenport.cncf.context.ExecutionContext = core.executionContext
     import org.goldenport.cncf.association.AssociationRepository.given
+    val repository = AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault)
     val collection = AssociationStoragePolicy.blobAttachmentDefault.collection(filter.domain)
-    val query = org.goldenport.cncf.directive.Query.plan(
-      Record.dataAuto(
-        "associationDomain" -> filter.domain.value,
-        "sourceEntityId" -> filter.sourceEntityId,
-        "targetEntityId" -> filter.targetEntityId,
-        "targetKind" -> filter.targetKind,
-        "role" -> filter.role
-      )
-    )
-    _exec_uow(core,
-      UnitOfWorkOp.EntityStoreSearch[Association](
-        StoreEntityQuery(collection, query, EntitySearchScope.Store),
-        summon[EntityPersistent[Association]],
-        Some(_blob_projection_authorization(core, collection, None))
-      )
-    ).map(_.data.sortBy(x => (x.sortOrder.getOrElse(Int.MaxValue), x.associationId)))
+    _exec_uow(core, UnitOfWorkOp.Authorize(_blob_projection_authorization(core, collection, None))).flatMap { _ =>
+      repository.list(filter).map(_.sortBy(x => (x.sortOrder.getOrElse(Int.MaxValue), x.associationId)))
+    }
   }
 
   private def _blob_projection_blob_load(

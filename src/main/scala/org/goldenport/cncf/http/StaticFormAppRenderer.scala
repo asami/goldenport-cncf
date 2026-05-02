@@ -26,7 +26,7 @@ import io.circe.parser.parse
 /*
  * @since   Apr. 12, 2026
  *  version Apr. 30, 2026
- * @version May.  1, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -726,6 +726,8 @@ object StaticFormAppRenderer {
       "paging.href",
       "continuation.id",
       "return.href",
+      "textus.form.page",
+      "cncf.form.page",
       "textus.admin.principalId",
       "textus.admin.subjectId",
       "version",
@@ -7894,7 +7896,13 @@ object StaticFormAppRenderer {
     properties: FormPageProperties
   ): String =
     """\$\{([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(template, m =>
-      java.util.regex.Matcher.quoteReplacement(_escape(properties.value(m.group(1))))
+      java.util.regex.Matcher.quoteReplacement(
+        _escape(
+          properties.values.get(m.group(1))
+            .orElse(_source_json(m.group(1), properties).map(_json_cell))
+            .getOrElse("")
+        )
+      )
     )
 
   private def _render_widgets(
@@ -7924,6 +7932,7 @@ object StaticFormAppRenderer {
     val actionForm = """<textus(?::action-form|-action-form)\b([^>]*)></textus(?::action-form|-action-form)>""".r
     val hiddenContext = """<textus(?::hidden-context|-hidden-context)\b([^>]*)></textus(?::hidden-context|-hidden-context)>""".r
     val descriptionList = """<textus(?::description-list|-description-list)\b([^>]*)></textus(?::description-list|-description-list)>""".r
+    val htmlField = """<textus(?::html-field|-html-field)\b([^>]*)></textus(?::html-field|-html-field)>""".r
     val propertyList = """<textus-property-list\s+source="([^"]+)"\s*></textus-property-list>""".r
     val errorPanel = """<textus-error-panel\s+source="([^"]+)"\s*></textus-error-panel>""".r
     val a = resultView.replaceAllIn(template, m =>
@@ -8008,7 +8017,11 @@ object StaticFormAppRenderer {
       val attrs = _widget_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(_render_description_list(attrs, properties, tableColumns, defaultTableView))
     })
-    val n = propertyList.replaceAllIn(l1, m =>
+    val l2 = htmlField.replaceAllIn(l1, m => {
+      val attrs = _widget_attrs(m.group(1))
+      java.util.regex.Matcher.quoteReplacement(_render_html_field(attrs, properties))
+    })
+    val n = propertyList.replaceAllIn(l2, m =>
       java.util.regex.Matcher.quoteReplacement(_render_property_list(m.group(1), properties))
     )
     errorPanel.replaceAllIn(n, m =>
@@ -8697,6 +8710,24 @@ object StaticFormAppRenderer {
       else
         s"""<dl class="row textus-description-list">${rows}</dl>"""
     }.getOrElse(_empty_state(attrs.getOrElse("empty", "No details")))
+  }
+
+  private def _render_html_field(
+    attrs: Map[String, String],
+    properties: FormPageProperties
+  ): String = {
+    val source = attrs.getOrElse("source", "result.body")
+    val field = attrs.getOrElse("field", "content")
+    val css = attrs.getOrElse("class", "textus-html-field")
+    val html = _source_json(source, properties)
+      .flatMap(_record_json)
+      .flatMap(json => _json_at(json, field.split('.').toVector))
+      .flatMap(_.asString)
+      .getOrElse("")
+    if (html.isEmpty)
+      ""
+    else
+      s"""<div class="${_escape(css)}">${html}</div>"""
   }
 
   private def _render_error_panel(

@@ -21,7 +21,7 @@ import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
  *  version Jan. 10, 2026
  *  version Feb. 26, 2026
  *  version Mar. 30, 2026
- * @version Apr. 26, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -57,6 +57,27 @@ abstract class EntityStore {
   def search[T](
     query: EntityQuery[T]
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]]
+
+  def searchInternal[T](
+    query: EntityQuery[T]
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]]
+
+  def uniqueValueExists[T](
+    collection: EntityCollectionId,
+    fieldName: String,
+    value: String,
+    excludeId: Option[EntityId],
+    scope: EntityIdentityScope,
+    includeEntityIdEntropy: Boolean
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Boolean]
+
+  def resolveIdentity[T](
+    collection: EntityCollectionId,
+    value: String,
+    fieldNames: Vector[String],
+    includeEntityIdEntropy: Boolean,
+    scope: EntityIdentityScope
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntityId]]
 }
 
 object EntityStore {
@@ -132,6 +153,9 @@ class NoopEntityStore() extends EntityStore {
   def delete(id: EntityId)(using ctx: ExecutionContext): Consequence[Unit] = ???
   def deleteHard(id: EntityId)(using ctx: ExecutionContext): Consequence[Unit] = ???
   def search[T](query: EntityQuery[T])(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] = ???
+  def searchInternal[T](query: EntityQuery[T])(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] = ???
+  def uniqueValueExists[T](collection: EntityCollectionId, fieldName: String, value: String, excludeId: Option[EntityId], scope: EntityIdentityScope, includeEntityIdEntropy: Boolean)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Boolean] = ???
+  def resolveIdentity[T](collection: EntityCollectionId, value: String, fieldNames: Vector[String], includeEntityIdEntropy: Boolean, scope: EntityIdentityScope)(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntityId]] = ???
 }
 
 class StandardEntityStore(
@@ -143,7 +167,7 @@ class StandardEntityStore(
   def createId[T](entity: T)(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): EntityId =
     {
       val collection = tc.collection(entity)
-      EntityId(collection.major, collection.minor, collection)
+      ctx.idGeneration.entityId(collection)
     }
 
   def create[T](
@@ -168,7 +192,10 @@ class StandardEntityStore(
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
       o <- ds.load(cid, dsid)
-      visible = o.filterNot(_is_logically_deleted_record)
+      // Normal get uses the same access-scope hook as search. Today this means
+      // deletedAt exclusion; tenant scope is a prepared NOP hook tied to
+      // ExecutionContext.
+      visible = o.filter(EntityAccessScopePolicy.normalRecordVisible(id.collection, _))
       _ = _emit_entity_access(
         "entity.load.hit.data-store",
         Record.dataAuto(
@@ -192,6 +219,7 @@ class StandardEntityStore(
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
       existing <- ds.load(cid, dsid)
+      _ <- _reject_logically_deleted_existing(id, existing)
       rec = _complement_save_record(tc.toStoreRecord(entity), id, existing)
       r <- ds.save(cid, dsid, rec)
     } yield r
@@ -210,6 +238,7 @@ class StandardEntityStore(
         case Some(record) => Consequence.success(record)
         case None => Consequence.DataStoreNotFound(dsid.print)
       }
+      _ <- _reject_logically_deleted_existing(id, Some(base))
       rec = _merge_update_record(base, _complement_update_record(tc.toStoreRecord(changes), id))
       r <- ds.save(cid, dsid, rec)
     } yield r
@@ -239,7 +268,7 @@ class StandardEntityStore(
     id: EntityId
   )(using ctx: ExecutionContext): Consequence[Unit] = {
     for {
-      cid <- ctx.entityStoreSpace.dataStoreCollection(id)
+      cid <- ctx.entityStoreSpace.dataStoreCollection(id.collection)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
       r <- ds.delete(cid, dsid)
@@ -250,44 +279,65 @@ class StandardEntityStore(
     query: EntityQuery[T]
   )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] = {
     val storequery = EntityDirectiveQuery.mapPaths(query.query)(tc.storeFieldName)
+    // Push normal entity access scope into the datastore query where possible.
+    // The same scope is post-filtered below so in-memory/SQL/direct stores keep
+    // identical deletedAt and future tenant semantics.
+    val scopedexpr = EntityAccessScopePolicy.normalSearchExpr(
+      query.collection,
+      EntityDirectiveQuery.whereOf(storequery),
+      tc.storeFieldName("deletedAt")
+    )
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(query.collection)
       directive = QueryDirective(
-        query = DataStoreQuery.Expr(EntityDirectiveQuery.whereOf(storequery)),
+        query = DataStoreQuery.Expr(scopedexpr),
         order = _to_datastore_order(EntityDirectiveQuery.sortOf(storequery)),
-        limit = _to_datastore_limit(query.query),
-        offset = query.query.offset.getOrElse(0)
+        limit = QueryLimit.Unbounded,
+        offset = 0
       )
       raw <- ctx.dataStoreSpace.search(
         cid,
         directive
       )
-      count <- if (query.query.includeTotal)
-        ctx.dataStoreSpace.count(cid, directive.copy(limit = QueryLimit.Unbounded, offset = 0)).map(Some(_))
-      else
-        Consequence.success(None)
-      notdeleted = raw.records.toVector.filterNot(_is_logically_deleted_record)
-      visible = _filter_visibility(notdeleted, query.query)
+      // Safety filter paired with the query predicate above. This is important
+      // for logical delete and for future ExecutionContext tenant scoping.
+      scoped = EntityAccessScopePolicy.filterNormalRecords(query.collection, raw.records.toVector)
+      accessscoped = scoped.filter(record =>
+        EntityAccessScopePolicy.visibilityRecordVisible(query.collection, record, query.visibilityScope)
+      )
+      visible = query.visibilityScope match {
+        case Some(EntityVisibilityScope.Owner) | Some(EntityVisibilityScope.Admin) =>
+          accessscoped
+        case _ =>
+          _filter_visibility(accessscoped, query.query)
+      }
       _ = _emit_entity_access(
         "entity.search.hit.data-store",
         Record.dataAuto(
           "entity" -> query.collection.name,
           "source" -> "data-store",
           "raw-count" -> raw.records.size,
-          "notdeleted-count" -> notdeleted.size,
+          "scoped-count" -> scoped.size,
+          "access-scoped-count" -> accessscoped.size,
           "visible-count" -> visible.size
         )
       )
       _ = _emit_visibility_filtered(
         query.collection.name,
         raw.records.size,
-        notdeleted.size,
+        accessscoped.size,
         visible.size
       )
-      decoded <- visible.traverse(tc.fromStoreRecord)
-      filtered = decoded.filter(x => EntityDirectiveQuery.matches(query.query, x))
-      sorted = EntityDirectiveQuery.sortValues(filtered, query.query.sort)
-      values = EntityDirectiveQuery.sliceValues(sorted, None, query.query.limit)
+      // Apply the original entity query against store records before decoding.
+      // Some entity codecs intentionally expose richer value objects after
+      // decode (for example AssociationDomain), while request/query values stay
+      // in their wire/store shape. Filtering here keeps in-memory stores and
+      // SQL stores consistent without imposing entity-value equality quirks.
+      recordmatched = visible.filter(record => EntityDirectiveQuery.matches(storequery, record))
+      decoded <- recordmatched.traverse(tc.fromStoreRecord)
+      sorted = EntityDirectiveQuery.sortValues(decoded, query.query.sort)
+      values = EntityDirectiveQuery.sliceValues(sorted, query.query.offset, query.query.limit)
+      count = if (query.query.includeTotal) Some(recordmatched.size) else None
     } yield SearchResult(
       query = query.query,
       data = values,
@@ -297,6 +347,95 @@ class StandardEntityStore(
       fetchedCount = values.size
     )
   }
+
+  def searchInternal[T](
+    query: EntityQuery[T]
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[SearchResult[T]] =
+    for {
+      cid <- ctx.entityStoreSpace.dataStoreCollection(query.collection)
+      raw <- ctx.dataStoreSpace.search(
+        cid,
+        QueryDirective(DataStoreQuery.Empty)
+      )
+      scoped = EntityAccessScopePolicy.filterNormalRecords(query.collection, raw.records.toVector)
+      decoded <- scoped.foldLeft(Consequence.success(Vector.empty[T])) { (z, record) =>
+        z.flatMap(xs => tc.fromStoreRecord(record).map(xs :+ _))
+      }
+      matched = decoded.filter(value => EntityDirectiveQuery.matches(query.query, value))
+      sorted = EntityDirectiveQuery.sortValues(matched, query.query.sort)
+      values = EntityDirectiveQuery.sliceValues(sorted, query.query.offset, query.query.limit)
+    } yield SearchResult(
+      query = query.query,
+      data = values,
+      totalCount = if (query.query.includeTotal) Some(matched.size) else None,
+      offset = query.query.offset,
+      limit = query.query.limit,
+      fetchedCount = values.size
+    )
+
+  def uniqueValueExists[T](
+    collection: EntityCollectionId,
+    fieldName: String,
+    value: String,
+    excludeId: Option[EntityId],
+    scope: EntityIdentityScope,
+    includeEntityIdEntropy: Boolean
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Boolean] =
+    _identity_records(collection).map { candidates =>
+      candidates.exists { case (record, id) =>
+        !excludeId.exists(_.value == id.value) &&
+          scope.matches(record) &&
+          (
+            SimpleEntityStorageShapePolicy.stringValue(record, fieldName).contains(value) ||
+              (includeEntityIdEntropy && id.parts.entropy == value)
+          )
+      }
+    }
+
+  def resolveIdentity[T](
+    collection: EntityCollectionId,
+    value: String,
+    fieldNames: Vector[String],
+    includeEntityIdEntropy: Boolean,
+    scope: EntityIdentityScope
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Option[EntityId]] =
+    _identity_records(collection).map { candidates =>
+      candidates.collectFirst {
+        case (record, id) if scope.matches(record) && _identity_matches(id, record, value, fieldNames, includeEntityIdEntropy) =>
+          id
+    }
+  }
+
+  private def _identity_records[T](
+    collection: EntityCollectionId
+  )(using tc: EntityPersistent[T], ctx: ExecutionContext): Consequence[Vector[(Record, EntityId)]] =
+    for {
+      cid <- ctx.entityStoreSpace.dataStoreCollection(collection)
+      raw <- ctx.dataStoreSpace.search(
+        cid,
+        QueryDirective(DataStoreQuery.Empty)
+      )
+      notdeleted = EntityLifecycleRecordPolicy.filterNotLogicallyDeleted(raw.records.toVector)
+      decoded <- notdeleted.foldLeft(Consequence.success(Vector.empty[(Record, EntityId)])) { (z, record) =>
+        z.flatMap { xs =>
+          tc.fromStoreRecord(record).map { entity =>
+            xs :+ (record -> tc.id(entity))
+          }
+        }
+      }
+    } yield decoded
+
+  private def _identity_matches(
+    id: EntityId,
+    record: Record,
+    value: String,
+    fieldNames: Vector[String],
+    includeEntityIdEntropy: Boolean
+  ): Boolean =
+    id.value == value ||
+      id.print == value ||
+      fieldNames.exists(name => SimpleEntityStorageShapePolicy.stringValue(record, name).contains(value)) ||
+      (includeEntityIdEntropy && id.parts.entropy == value)
 
   private def _to_datastore_limit(
     query: EntityDirectiveQuery[?]
@@ -421,7 +560,7 @@ class StandardEntityStore(
     val postok = policy.postStatuses match {
       case Some(allowed) =>
         _record_value(record, Vector("postStatus"))
-          .flatMap(_post_status_token)
+          .flatMap(EntityLifecycleRecordPolicy.postStatusToken)
           .forall(allowed.contains)
       case None =>
         true
@@ -429,7 +568,7 @@ class StandardEntityStore(
     val aliveok = policy.alivenesses match {
       case Some(allowed) =>
         _record_value(record, Vector("aliveness"))
-          .flatMap(_aliveness_token)
+          .flatMap(EntityLifecycleRecordPolicy.alivenessToken)
           .forall(allowed.contains)
       case None =>
         true
@@ -465,11 +604,11 @@ class StandardEntityStore(
 
   private def _post_statuses_for_manager()(using ctx: ExecutionContext): Set[String] = {
     val configured = _attribute_tokens("search_poststatus", "search.poststatus", "poststatus", "post_status")
-      .flatMap(_post_status_token)
+      .flatMap(EntityLifecycleRecordPolicy.postStatusToken)
     if (configured.nonEmpty)
       configured
     else {
-      val frompurpose = _attribute_tokens("purpose").flatMap(_post_status_token)
+      val frompurpose = _attribute_tokens("purpose").flatMap(EntityLifecycleRecordPolicy.postStatusToken)
       if (frompurpose.nonEmpty)
         frompurpose
       else
@@ -481,11 +620,11 @@ class StandardEntityStore(
     poststatuses: Set[String]
   )(using ctx: ExecutionContext): Set[String] = {
     val configured = _attribute_tokens("search_aliveness", "search.aliveness", "aliveness")
-      .flatMap(_aliveness_token)
+      .flatMap(EntityLifecycleRecordPolicy.alivenessToken)
     if (configured.nonEmpty)
       configured
     else {
-      val frompurpose = _attribute_tokens("purpose").flatMap(_aliveness_token)
+      val frompurpose = _attribute_tokens("purpose").flatMap(EntityLifecycleRecordPolicy.alivenessToken)
       if (frompurpose.nonEmpty)
         frompurpose
       else if (poststatuses.contains("archived"))
@@ -513,29 +652,11 @@ class StandardEntityStore(
   private def _normalize_alias(p: String): String =
     p.toLowerCase.replace("_", "").replace("-", "")
 
-  private def _post_status_token(p: Any): Option[String] = {
-    val s = p.toString.toLowerCase
-    if (s.contains("published"))
-      Some("published")
-    else if (s.contains("draft"))
-      Some("draft")
-    else if (s.contains("archived"))
-      Some("archived")
-    else
-      None
-  }
+  private def _post_status_token(p: Any): Option[String] =
+    EntityLifecycleRecordPolicy.postStatusToken(p)
 
-  private def _aliveness_token(p: Any): Option[String] = {
-    val s = p.toString.toLowerCase
-    if (s.contains("alive"))
-      Some("alive")
-    else if (s.contains("suspended"))
-      Some("suspended")
-    else if (s.contains("dead"))
-      Some("dead")
-    else
-      None
-  }
+  private def _aliveness_token(p: Any): Option[String] =
+    EntityLifecycleRecordPolicy.alivenessToken(p)
 
   private def _to_datastore_order(
     sort: Vector[EntityDirectiveQuery.SortKey]
@@ -624,6 +745,17 @@ class StandardEntityStore(
     Record.dataAuto(fields*)
   }
 
+  private def _reject_logically_deleted_existing(
+    id: EntityId,
+    existing: Option[Record]
+  ): Consequence[Unit] =
+    existing match {
+      case Some(record) if EntityLifecycleRecordPolicy.isLogicallyDeleted(record) =>
+        Consequence.entityNotFound(s"entity is logically deleted: ${id.value}")
+      case _ =>
+        Consequence.unit
+    }
+
   private def _complement_record(
     record: Record,
     id: EntityId,
@@ -654,7 +786,7 @@ class StandardEntityStore(
       existing.flatMap(SimpleEntityStorageShapePolicy.value(_, canonical))
 
     if (includesCreationDefaults) {
-      add_if_missing("id", existing_value("id").orElse(Some(id.print)))
+      add_if_missing("id", existing_value("id").orElse(Some(id.value)))
       add_if_missing("shortid", existing_value("shortid").orElse(Some(id.parts.entropy)))
       add_if_missing("name", existing_value("name").orElse(Some(principalid)))
       add_if_missing("createdAt", existing_value("createdAt").orElse(Some(now)))
@@ -667,15 +799,21 @@ class StandardEntityStore(
       add_if_missing("postStatus", existing_value("postStatus").orElse(Some(_default_post_status(createOptions))))
       add_if_missing("aliveness", existing_value("aliveness").orElse(Some(Aliveness.default)))
     }
-    if (includesCreationDefaults && createOptions.hasDefaultProfile("publication")) {
-      add_if_missing("publishAt", existing_value("publishAt").orElse(Some(zonednow)))
-      add_if_missing("publicAt", existing_value("publicAt").orElse(Some(zonednow)))
-      add_if_missing("publishedBy", existing_value("publishedBy").orElse(Some(principal)))
-      val security = org.simplemodeling.model.value.SecurityAttributes.publicOwnedBy(principal)
+    if (includesCreationDefaults) {
+      val security =
+        if (createOptions.hasDefaultProfile("publication"))
+          org.simplemodeling.model.value.SecurityAttributes.publicOwnedBy(principal)
+        else
+          org.simplemodeling.model.value.SecurityAttributes.privateOwnedBy(principal)
       add_if_missing("ownerId", existing_value("ownerId").orElse(Some(security.ownerId.id.value)))
       add_if_missing("groupId", existing_value("groupId").orElse(Some(security.groupId.id.value)))
       add_if_missing("privilegeId", existing_value("privilegeId").orElse(Some(security.privilegeId.id.value)))
       add_if_missing("permission", Some(SimpleEntityStorageShapePolicy.permissionJson(security.rights)))
+    }
+    if (includesCreationDefaults && createOptions.hasDefaultProfile("publication")) {
+      add_if_missing("publishAt", existing_value("publishAt").orElse(Some(zonednow)))
+      add_if_missing("publicAt", existing_value("publicAt").orElse(Some(zonednow)))
+      add_if_missing("publishedBy", existing_value("publishedBy").orElse(Some(principal)))
     }
     add_if_missing("traceId", Some(ctx.observability.traceId.value))
     add_if_missing("correlationId", ctx.observability.correlationId.map(_.value))
@@ -719,14 +857,8 @@ class StandardEntityStore(
 
   private def _is_logically_deleted_record(
     record: Record
-  ): Boolean = {
-    val keyset = record.keySet
-    val propertyname = org.goldenport.cncf.context.RuntimeContext.Context.default.propertyName
-    val hasdeletedat = propertyname.aliases("deletedAt").exists(keyset.contains)
-    val poststatus = _record_value(record, Vector("postStatus")).flatMap(_post_status_token)
-    val aliveness = _record_value(record, Vector("aliveness")).flatMap(_aliveness_token)
-    hasdeletedat || poststatus.contains("archived") || aliveness.contains("dead")
-  }
+  ): Boolean =
+    EntityLifecycleRecordPolicy.isLogicallyDeleted(record)
 
   private def _emit_entity_access(
     name: String,

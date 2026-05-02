@@ -20,7 +20,7 @@ import org.goldenport.cncf.directive.*
  * @since   Jan. 10, 2026
  *  version Feb. 25, 2026
  *  version Mar. 24, 2026
- * @version Apr. 29, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -93,7 +93,8 @@ object UnitOfWorkOp {
   final case class EntityStoreLoad[T](
     id: EntityId,
     tc: EntityPersistent[T],
-    authorization: Option[UnitOfWorkAuthorization] = None
+    authorization: Option[UnitOfWorkAuthorization] = None,
+    visibilityScope: Option[EntityVisibilityScope] = None
   ) extends UnitOfWorkOp[Option[T]]
 
   // Special-use direct path to EntityStoreSpace (bypasses EntitySpace/MemoryRealm).
@@ -143,4 +144,28 @@ object UnitOfWorkOp {
     tc: EntityPersistent[T],
     authorization: Option[UnitOfWorkAuthorization] = None
   ) extends UnitOfWorkOp[SearchResult[T]]
+
+  final case class EntityStoreSearchInternal[T](
+    query: EntityQuery[T],
+    tc: EntityPersistent[T]
+  ) extends UnitOfWorkOp[SearchResult[T]]
+
+  final case class EntityStoreUniqueValueExists[T](
+    collection: EntityCollectionId,
+    fieldName: String,
+    value: String,
+    excludeId: Option[EntityId] = None,
+    scope: EntityIdentityScope = EntityIdentityScope.CurrentContext,
+    includeEntityIdEntropy: Boolean = false,
+    tc: EntityPersistent[T]
+  ) extends UnitOfWorkOp[Boolean]
+
+  final case class EntityStoreResolveIdentity[T](
+    collection: EntityCollectionId,
+    value: String,
+    fieldNames: Vector[String],
+    includeEntityIdEntropy: Boolean = true,
+    scope: EntityIdentityScope = EntityIdentityScope.CurrentContext,
+    tc: EntityPersistent[T]
+  ) extends UnitOfWorkOp[Option[EntityId]]
 }

@@ -5,7 +5,7 @@ import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.text.Presentable
 import org.goldenport.id.UniversalId
-import org.goldenport.record.Record
+import org.goldenport.record.{Field, Record}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.unitofwork.{CommitParticipant, CommitRecorder, PrepareResult, TransactionContext}
 import org.simplemodeling.model.datatype.EntityCollectionId
@@ -15,7 +15,7 @@ import scala.util.control.NonFatal
  * @since   Jan.  6, 2026
  *  version Jan. 10, 2026
  *  version Feb. 25, 2026
- * @version Apr. 19, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 trait DataStore extends CommitParticipant {
@@ -318,8 +318,10 @@ object DataStore {
           _ <- {
             _entries.get(key) match {
               case Some(existing) => Consequence {
+                val changedkeys = changes.fields.map(_.key).toSet
+                val effectivechanges = changes.fields.filterNot(_is_set_null_marker)
                 val merged = Record(
-                  existing.fields.filterNot(f => changes.keySet.contains(f.key)) ++ changes.fields
+                  existing.fields.filterNot(f => changedkeys.contains(f.key)) ++ effectivechanges
                 )
                 _entries = _entries.updated(key, merged)
               }
@@ -329,6 +331,12 @@ object DataStore {
           }
         } yield ()
       }
+
+      private def _is_set_null_marker(field: Field): Boolean =
+        field.value.single match {
+          case org.simplemodeling.model.directive.Update.SetNull => true
+          case _ => false
+        }
 
       def delete(id: EntryId): Consequence[Unit] = {
         for {

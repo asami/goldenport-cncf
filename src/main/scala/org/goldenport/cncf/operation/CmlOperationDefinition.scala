@@ -5,7 +5,7 @@ import org.goldenport.cncf.security.OperationAuthorizationRule
 /*
  * @since   Mar. 22, 2026
  *  version Mar. 28, 2026
- * @version Apr. 30, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CmlOperationAssociationBinding(
@@ -162,6 +162,7 @@ final case class CmlOperationDefinition(
   outputSummary: Option[String] = None,
   outputDescription: Option[String] = None,
   inputValueKind: String,
+  visibility: Option[String] = None,
   access: Option[CmlOperationAccess] = None,
   parameters: Vector[CmlOperationField] = Vector.empty,
   operationAuthorization: Option[OperationAuthorizationRule] = None,

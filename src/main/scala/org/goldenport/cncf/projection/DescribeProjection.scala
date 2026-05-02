@@ -5,7 +5,7 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version Apr. 30, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 object DescribeProjection {
@@ -59,6 +59,7 @@ object DescribeProjection {
             "inputType" -> x.inputType,
             "outputType" -> x.outputType,
             "inputValueKind" -> x.inputValueKind,
+            "visibility" -> x.visibility,
             "parameters" -> x.parameters,
             "childEntityBindings" -> x.childEntityBindings,
             "associationBinding" -> x.associationBinding,

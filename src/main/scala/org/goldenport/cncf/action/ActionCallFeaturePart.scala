@@ -24,6 +24,8 @@ import org.goldenport.cncf.entity.EntityPersistentCreate
 import org.goldenport.cncf.entity.EntityPersistentUpdate
 import org.goldenport.cncf.entity.EntityQuery
 import org.goldenport.cncf.entity.EntitySearchScope
+import org.goldenport.cncf.entity.EntityIdentityScope
+import org.goldenport.cncf.entity.EntityVisibilityScope
 import org.goldenport.cncf.entity.EntityCreateOptions
 import org.goldenport.cncf.entity.CreateResult
 import org.goldenport.cncf.entity.EntityStore
@@ -40,7 +42,7 @@ import org.goldenport.configuration.ConfigurationValue
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 30, 2026
- * @version Apr. 29, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -825,7 +827,8 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       val op = UnitOfWorkOp.EntityStoreLoad(
         id,
         effectivetc,
-        _entity_uow_authorization(Some(id.collection.name), Some(id), "read")
+        _entity_uow_authorization(Some(id.collection.name), Some(id), "read"),
+        _declared_visibility_scope
       )
       return ConsequenceT.liftF(Free.liftF(op))
     }
@@ -841,7 +844,8 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
             val op = UnitOfWorkOp.EntityStoreLoad(
               id,
               effectivetc,
-              _entity_uow_authorization(Some(id.collection.name), Some(id), "read")
+              _entity_uow_authorization(Some(id.collection.name), Some(id), "read"),
+              _declared_visibility_scope
             )
             ConsequenceT.liftF(Free.liftF(op))
           case Consequence.Failure(conclusion) =>
@@ -852,7 +856,8 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         val op = UnitOfWorkOp.EntityStoreLoad(
           id,
           effectivetc,
-          _entity_uow_authorization(Some(id.collection.name), Some(id), "read")
+          _entity_uow_authorization(Some(id.collection.name), Some(id), "read"),
+          _declared_visibility_scope
         )
         ConsequenceT.liftF(Free.liftF(op))
     }
@@ -864,6 +869,8 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     tc: EntityPersistent[T]
   ): Consequence[Option[T]] = {
     given ExecutionContext = execution_context
+    if (!org.goldenport.cncf.entity.EntityAccessScopePolicy.visibilityRecordVisible(id.collection, tc.toRecord(entity), _declared_visibility_scope))
+      return Consequence.success(None)
     _entity_uow_authorization(Some(id.collection.name), Some(id), "read") match {
       case Some(authorization) =>
         OperationAccessPolicy.authorizeUnitOfWorkDefault(
@@ -898,6 +905,21 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       exec_from(r)
     }
   }
+
+  protected final def entity_load_internal[T](
+    id: EntityId
+  )(using tc: EntityPersistent[T]): ExecUowM[T] =
+    entity_load_option_internal(id).flatMap { x =>
+      exec_from(Consequence.successOrEntityNotFound(x)(id))
+    }
+
+  protected final def entity_load_option_internal[T](
+    id: EntityId
+  )(using tc: EntityPersistent[T]): ExecUowM[Option[T]] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EntityStoreLoadDirect(
+      id,
+      _effective_entity_persistent(id.collection, tc)
+    )))
 
   protected final def entity_save[T](
     entity: T
@@ -954,27 +976,28 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
   protected final def entity_search[T](
     query: EntityQuery[T]
   )(using tc: EntityPersistent[T]): ExecUowM[SearchResult[T]] = {
-    _emit_entity_access("entity.search.start", _entity_search_attributes(query, "unknown", "start"))
-    val effectivetc = _effective_entity_persistent(query.collection, tc)
-    if (query.scope == EntitySearchScope.Store)
-      return _entity_store_search_direct(query, effectivetc)
+    val effectivequery = _with_declared_visibility(query)
+    _emit_entity_access("entity.search.start", _entity_search_attributes(effectivequery, "unknown", "start"))
+    val effectivetc = _effective_entity_persistent(effectivequery.collection, tc)
+    if (effectivequery.scope == EntitySearchScope.Store)
+      return _entity_store_search_direct(effectivequery, effectivetc)
     if (!_working_set_enabled) {
-      _emit_entity_access("entity.search.bypass.entity-space", _entity_search_attributes(query, "entity-space", "bypass"))
-      return _entity_store_search_direct(query, effectivetc)
+      _emit_entity_access("entity.search.bypass.entity-space", _entity_search_attributes(effectivequery, "entity-space", "bypass"))
+      return _entity_store_search_direct(effectivequery, effectivetc)
     }
-    component.flatMap(_.entitySpace.entityOption(query.collection).map(_.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]])) match {
+    component.flatMap(_.entitySpace.entityOption(effectivequery.collection).map(_.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]])) match {
       case Some(collection) =>
         if (_bypass_entity_space_resident_search) {
-          _emit_entity_access("entity.search.bypass.entity-space", _entity_search_attributes(query, "entity-space", "bypass"))
-          _entity_store_search_direct(query, tc)
+          _emit_entity_access("entity.search.bypass.entity-space", _entity_search_attributes(effectivequery, "entity-space", "bypass"))
+          _entity_store_search_direct(effectivequery, tc)
         } else {
-          _emit_entity_access("entity.search.try.entity-space", _entity_search_attributes(query, "entity-space", "try"))
-          if (collection.shouldFallbackToStoreForWorkingSet(query)) {
+          _emit_entity_access("entity.search.try.entity-space", _entity_search_attributes(effectivequery, "entity-space", "try"))
+          if (collection.shouldFallbackToStoreForWorkingSet(effectivequery)) {
             val state = collection.workingSetStatus.state
-            _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(query, "entity-store", "fallback"))
+            _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(effectivequery, "entity-store", "fallback"))
             if (collection.workingSetStatus.isInitializing)
-              _emit_entity_access("entity.search.fallback.working-set-loading", _entity_search_working_set_loading_attributes(query, state))
-            return _entity_store_search_direct(query, effectivetc)
+              _emit_entity_access("entity.search.fallback.working-set-loading", _entity_search_working_set_loading_attributes(effectivequery, state))
+            return _entity_store_search_direct(effectivequery, effectivetc)
           }
           val hasworkingsetpolicy =
             collection.descriptor.plan.workingSetPolicy match {
@@ -982,7 +1005,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
               case Some(_) => true
             }
           val hasresident =
-            query.scope match {
+            effectivequery.scope match {
               case EntitySearchScope.WorkingSet =>
                 hasworkingsetpolicy && collection.workingSetSearchAvailable
               case EntitySearchScope.Store =>
@@ -990,32 +1013,81 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
                   collection.storage.memoryRealm.exists(_.values.nonEmpty)
             }
           if (hasresident) {
-            _emit_entity_access("entity.search.hit.entity-space", _entity_search_attributes(query, "entity-space", "hit"))
-            val authorization = _entity_uow_authorization(Some(query.collection.name), None, "search/list")
+            _emit_entity_access("entity.search.hit.entity-space", _entity_search_attributes(effectivequery, "entity-space", "hit"))
+            val authorization = _entity_uow_authorization(Some(effectivequery.collection.name), None, "search/list")
             exec_from(
-              collection.search(query)(using execution_context).flatMap { result =>
+              collection.search(effectivequery)(using execution_context).flatMap { result =>
                 authorization
                   .map(OperationAccessPolicy.filterVisibleSearchResult(_, result, tc)(using execution_context))
                   .getOrElse(Consequence.success(result))
               }
             )
           } else {
-            _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(query, "entity-store", "fallback"))
-            _entity_store_search_direct(query, effectivetc)
+            _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(effectivequery, "entity-store", "fallback"))
+            _entity_store_search_direct(effectivequery, effectivetc)
           }
         }
       case None =>
-        _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(query, "entity-store", "fallback"))
-        _entity_store_search_direct(query, effectivetc)
+        _emit_entity_access("entity.search.fallback.entity-store", _entity_search_attributes(effectivequery, "entity-store", "fallback"))
+        _entity_store_search_direct(effectivequery, effectivetc)
     }
   }
+
+  protected final def entity_search_internal[T](
+    query: EntityQuery[T]
+  )(using tc: EntityPersistent[T]): ExecUowM[SearchResult[T]] = {
+    val effectivetc = _effective_entity_persistent(query.collection, tc)
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.EntityStoreSearchInternal(query, effectivetc)))
+  }
+
+  protected final def entity_unique_value_exists[T](
+    collection: EntityCollectionId,
+    fieldName: String,
+    value: String,
+    excludeId: Option[EntityId] = None,
+    scope: EntityIdentityScope = EntityIdentityScope.CurrentContext,
+    includeEntityIdEntropy: Boolean = false
+  )(using tc: EntityPersistent[T]): ExecUowM[Boolean] =
+    ConsequenceT.liftF(
+      Free.liftF(
+        UnitOfWorkOp.EntityStoreUniqueValueExists(
+          collection,
+          fieldName,
+          value,
+          excludeId,
+          scope,
+          includeEntityIdEntropy,
+          tc
+        )
+      )
+    )
+
+  protected final def entity_resolve_identity[T](
+    collection: EntityCollectionId,
+    value: String,
+    fieldNames: Vector[String],
+    includeEntityIdEntropy: Boolean = true,
+    scope: EntityIdentityScope = EntityIdentityScope.CurrentContext
+  )(using tc: EntityPersistent[T]): ExecUowM[Option[EntityId]] =
+    ConsequenceT.liftF(
+      Free.liftF(
+        UnitOfWorkOp.EntityStoreResolveIdentity(
+          collection,
+          value,
+          fieldNames,
+          includeEntityIdEntropy,
+          scope,
+          tc
+        )
+      )
+    )
 
   private def _entity_store_search[T](
     query: EntityQuery[T],
     tc: EntityPersistent[T]
   ): ExecUowM[SearchResult[T]] = {
     val op = UnitOfWorkOp.EntityStoreSearch(
-      query,
+      _with_declared_visibility(query),
       tc,
       _entity_uow_authorization(Some(query.collection.name), None, "search/list")
     )
@@ -1036,7 +1108,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
     tc: EntityPersistent[T]
   ): ExecUowM[SearchResult[T]] = {
     val op = UnitOfWorkOp.EntityStoreSearchDirect(
-      query,
+      _with_declared_visibility(query),
       tc,
       _entity_uow_authorization(Some(query.collection.name), None, "search/list")
     )
@@ -1256,12 +1328,26 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       val actionname = _normalize_name(action.name)
       c.operationDefinitions.find { op =>
         val opname = _normalize_name(op.name)
-        actionname == opname || actionname.endsWith(opname)
+        val inputname = _normalize_name(op.inputType)
+        actionname == opname ||
+          actionname.endsWith(opname) ||
+          (inputname.nonEmpty && actionname == inputname)
       }
     }
 
   private def _declared_access =
     _declared_operation_definition.flatMap(_.access)
+
+  private def _declared_visibility_scope: Option[EntityVisibilityScope] =
+    _declared_operation_definition.flatMap(_.visibility.flatMap(EntityVisibilityScope.parseOption))
+
+  private def _with_declared_visibility[T](
+    query: EntityQuery[T]
+  ): EntityQuery[T] =
+    if (query.visibilityScope.nonEmpty)
+      query
+    else
+      query.copy(visibilityScope = _declared_visibility_scope)
 
   private def _declared_entities =
     _declared_operation_definition.map { op =>
@@ -1343,6 +1429,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
         operationModel = Some(operationmodel),
         entityOperationKind = Some(entityoperationkind),
         entityApplicationDomain = Some(entityapplicationdomain),
+        visibilityScope = _declared_visibility_scope,
         relationRules = derivedprofile.relationRules,
         naturalConditions = naturalconditions
       )

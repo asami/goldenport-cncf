@@ -4,7 +4,7 @@ import java.nio.file.Files
 import java.time.Instant
 import cats.~>
 import org.goldenport.Consequence
-import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, TraceId}
+import org.goldenport.cncf.context.{Capability, CorrelationId, DataStoreContext, EntityStoreContext, ExecutionContext, IdGenerationContext, ObservabilityContext, Principal, PrincipalId, RuntimeContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel, TraceId}
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace}
 import org.goldenport.cncf.datastore.sql.SqlDataStore
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Apr. 26, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -397,7 +397,7 @@ final class EntityStoreQueryRouteSpec
       result.map(_.totalCount) shouldBe Consequence.success(None)
     }
 
-    "exclude logically deleted records even for content manager default filters" in {
+    "exclude deletedAt records even for content manager default filters" in {
       Given("content manager with configured lifecycle scope")
       val datastorespace = DataStoreSpace.default()
       val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
@@ -414,6 +414,7 @@ final class EntityStoreQueryRouteSpec
       val p1 = PersonEntity(EntityId("test", "a1", _cid), "taro", 20)
       val p2 = PersonEntity(EntityId("test", "a2", _cid), "hanako", 30)
       val p3 = PersonEntity(EntityId("test", "a3", _cid), "jiro", 40)
+      val p4 = PersonEntity(EntityId("test", "a4", _cid), "saburo", 50)
       val _ = datastorespace.inject(
         DataStoreSpace.Seed(
           Vector(
@@ -428,6 +429,10 @@ final class EntityStoreQueryRouteSpec
             DataStoreSpace.SeedEntry(
               DataStore.CollectionId.EntityStore(_cid),
               p3.toRecord() ++ Record.dataAuto("postStatus" -> "Archived", "aliveness" -> "Dead")
+            ),
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(_cid),
+              p4.toRecord() ++ Record.dataAuto("postStatus" -> "Published", "aliveness" -> "Alive", "deletedAt" -> Instant.now())
             )
           )
         )
@@ -448,8 +453,8 @@ final class EntityStoreQueryRouteSpec
         )
       )
 
-      Then("archived records are excluded in normal search path")
-      result.map(_.data.map(_.id).toSet) shouldBe Consequence.success(Set(p1.id, p2.id))
+      Then("only deletedAt records are excluded in normal search path")
+      result.map(_.data.map(_.id).toSet) shouldBe Consequence.success(Set(p1.id, p2.id, p3.id))
       result.map(_.totalCount) shouldBe Consequence.success(None)
     }
 
@@ -564,7 +569,11 @@ final class EntityStoreQueryRouteSpec
 
       Then("id/name and context-derived metadata are complemented")
       created.map(_.id) shouldBe Consequence.success(created.TAKE.id)
+      created.map(_.id.major) shouldBe Consequence.success("sys")
+      created.map(_.id.minor) shouldBe Consequence.success("sys")
+      created.map(_.id.parts.entropy) shouldBe Consequence.success("test_000001")
       loaded.map(_.flatMap(_.getString("id"))) shouldBe Consequence.success(Some(created.TAKE.id.print))
+      loaded.map(_.flatMap(_.getString("short_id"))) shouldBe Consequence.success(Some("test_000001"))
       loaded.map(_.flatMap(_.getString("name"))) shouldBe Consequence.success(Some("test-principal"))
       loaded.map(_.flatMap(_.getAny("age"))) shouldBe Consequence.success(Some(18))
       loaded.map(_.flatMap(_.getString("created_by"))) shouldBe Consequence.success(Some("test_principal"))
@@ -636,6 +645,76 @@ final class EntityStoreQueryRouteSpec
       loaded.map(_.flatMap(_.getString("correlation_id")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
     }
 
+    "reject normal save on logically deleted existing records" in {
+      Given("an existing record with deletedAt")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistent[SaveCandidate] = _save_candidate_persistent
+
+      val collectionid = EntityCollectionId("test", "a", "save_candidate")
+      val id = EntityId("test", "deleted_save", collectionid)
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(collectionid),
+              Record.dataAuto(
+                "id" -> id.print,
+                "name" -> "deleted",
+                "age" -> 20,
+                "deletedAt" -> Instant.now()
+              )
+            )
+          )
+        )
+      )
+
+      When("saving through the normal EntityStore route")
+      val saved = entitystorespace.save(
+        UnitOfWorkOp.EntityStoreSave(
+          entity = SaveCandidate(
+            id = id,
+            name = Some("resurrected"),
+            age = Some(21)
+          ),
+          tc = summon[EntityPersistent[SaveCandidate]]
+        )
+      )
+      val loaded = entitystorespace.load(UnitOfWorkOp.EntityStoreLoad(id, summon[EntityPersistent[SaveCandidate]]))
+
+      Then("the save fails and the record remains hidden")
+      saved shouldBe a[Consequence.Failure[_]]
+      loaded shouldBe Consequence.success(None)
+    }
+
+    "generate deterministic but unique ids from ExecutionContext in tests" in {
+      Given("two create requests without explicit ids")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistentCreate[CreateCandidate] = _create_candidate_persistent
+
+      When("creating them through the entity store")
+      val first = entitystorespace.create(
+        UnitOfWorkOp.EntityStoreCreate(
+          entity = CreateCandidate(None, Some("first"), Some(1)),
+          tc = summon[EntityPersistentCreate[CreateCandidate]]
+        )
+      )
+      val second = entitystorespace.create(
+        UnitOfWorkOp.EntityStoreCreate(
+          entity = CreateCandidate(None, Some("second"), Some(2)),
+          tc = summon[EntityPersistentCreate[CreateCandidate]]
+        )
+      )
+
+      Then("the test generator is deterministic and still unique")
+      first.map(_.id.parts.entropy) shouldBe Consequence.success("test_000001")
+      second.map(_.id.parts.entropy) shouldBe Consequence.success("test_000002")
+      first.map(_.id.value) should not be second.map(_.id.value)
+    }
+
     "auto-complement update defaults from ExecutionContext on entity-store route" in {
       Given("an existing record and update payload")
       val datastorespace = DataStoreSpace.default()
@@ -693,6 +772,48 @@ final class EntityStoreQueryRouteSpec
       loaded.map(_.flatMap(_.getAny("updatedAt"))) shouldBe Consequence.success(None)
       loaded.map(_.flatMap(_.getString("trace_id")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
       loaded.map(_.flatMap(_.getString("correlation_id")).exists(_.nonEmpty)) shouldBe Consequence.success(true)
+    }
+
+    "reject normal update on logically deleted existing records" in {
+      Given("an existing record with deletedAt")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistent[UpdateCandidate] = _update_candidate_persistent
+
+      val collectionid = EntityCollectionId("test", "a", "update_candidate")
+      val id = EntityId("test", "deleted_update", collectionid)
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(collectionid),
+              Record.dataAuto(
+                "id" -> id.print,
+                "name" -> "deleted",
+                "age" -> 30,
+                "deletedAt" -> Instant.now()
+              )
+            )
+          )
+        )
+      )
+
+      When("updating through the normal EntityStore route")
+      val updated = entitystorespace.update(
+        UnitOfWorkOp.EntityStoreUpdate(
+          entity = UpdateCandidate(
+            id = id,
+            age = Some(31)
+          ),
+          tc = summon[EntityPersistent[UpdateCandidate]]
+        )
+      )
+      val loaded = entitystorespace.load(UnitOfWorkOp.EntityStoreLoad(id, summon[EntityPersistent[UpdateCandidate]]))
+
+      Then("the update fails and the record remains hidden")
+      updated shouldBe a[Consequence.Failure[_]]
+      loaded shouldBe Consequence.success(None)
     }
 
     "overwrite caller-supplied update audit fields on entity-store route" in {
@@ -918,7 +1039,8 @@ final class EntityStoreQueryRouteSpec
               principal = principal,
               capabilities = capabilities,
               level = SecurityLevel("test")
-            )
+            ),
+            idGeneration = IdGenerationContext.deterministic(IdGenerationContext.IdNamespace("sys", "sys"))
           )
         )
       case _ =>

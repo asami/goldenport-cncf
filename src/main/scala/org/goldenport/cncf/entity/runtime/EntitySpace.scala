@@ -1,12 +1,14 @@
 package org.goldenport.cncf.entity.runtime
 
 import scala.collection.mutable
-import org.simplemodeling.model.datatype.EntityCollectionId
+import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.entity.EntityIdentityScope
+import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Mar. 14, 2026
  *  version Mar. 27, 2026
- * @version Apr. 25, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 // Component-local container for entity collections.
@@ -38,8 +40,31 @@ class EntitySpace {
   def resolveEntityId(
     name: String,
     idOrShortid: String
-  ): Option[org.simplemodeling.model.datatype.EntityId] =
+  ): Option[EntityId] =
     entityOption[Any](name).flatMap(_.resolveEntityId(idOrShortid))
+
+  def uniqueValueExists[E](
+    collectionId: EntityCollectionId,
+    fieldName: String,
+    value: String,
+    excludeId: Option[EntityId],
+    scope: EntityIdentityScope,
+    includeEntityIdEntropy: Boolean
+  )(using ExecutionContext): Boolean =
+    entityOption[E](collectionId.name)
+      .orElse(entityOption(collectionId).map(_.asInstanceOf[EntityCollection[E]]))
+      .exists(_.uniqueValueExists(fieldName, value, excludeId, scope, includeEntityIdEntropy))
+
+  def resolveIdentity[E](
+    collectionId: EntityCollectionId,
+    value: String,
+    fieldNames: Vector[String],
+    includeEntityIdEntropy: Boolean,
+    scope: EntityIdentityScope
+  )(using ExecutionContext): Option[EntityId] =
+    entityOption[E](collectionId.name)
+      .orElse(entityOption(collectionId).map(_.asInstanceOf[EntityCollection[E]]))
+      .flatMap(_.resolveIdentity(value, fieldNames, includeEntityIdEntropy, scope))
 
   def entityOption(
     collectionId: EntityCollectionId

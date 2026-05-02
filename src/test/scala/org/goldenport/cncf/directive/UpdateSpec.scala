@@ -9,7 +9,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version Apr. 10, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UpdateSpec
@@ -59,7 +59,7 @@ final class UpdateSpec
 
       changes.asMap.get("name") shouldBe Some(Name("hanako"))
       changes.asMap.contains("age") shouldBe false
-      changes.asMap.get("nickname") shouldBe Some(null)
+      changes.fields.find(_.key == "nickname").map(_.value.single) shouldBe Some(Update.setNull[Nothing])
     }
   }
 }

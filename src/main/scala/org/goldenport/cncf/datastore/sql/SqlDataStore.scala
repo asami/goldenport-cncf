@@ -31,7 +31,7 @@ import org.goldenport.cncf.directive.{Query as EntityQuery}
  * @since   Mar. 12, 2026
  *  version Mar. 19, 2026
  *  version Mar. 31, 2026
- * @version Apr. 15, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 class SqlDataStore(
@@ -172,8 +172,10 @@ class SqlDataStore(
   private def _record_columns(
     record: Record
   ): Vector[(String, Any)] =
-    record.asMap.toVector.collect {
-      case (k, v) if k != "id" =>
+    record.fields.collect {
+      case field if field.key != "id" =>
+        val k = field.key
+        val v = field.value.single
         val key = if (config.normalizeColumnNames) _to_column_name(k) else k
         key -> _column_value(v)
     }
@@ -188,6 +190,8 @@ class SqlDataStore(
     value: Any
   ): Any =
     value match {
+      case org.simplemodeling.model.directive.Update.SetNull =>
+        null
       case m: StringEncodable =>
         given org.goldenport.context.ExecutionContext = org.goldenport.convert.StringEncoder.storageExecutionContext
         m.encode
@@ -433,7 +437,7 @@ class SqlDataStore(
             val values = (1 to count).toVector.map { i =>
               val rawname = md.getColumnLabel(i)
               val name = if (config.normalizeColumnNames) _to_property_name(rawname) else rawname
-              val value = _decode_column_value(Option(rs.getObject(i)).getOrElse(""))
+              val value = _decode_column_value(rs.getObject(i))
               name -> value
             }
             Some(Record.create(values))
@@ -453,7 +457,9 @@ class SqlDataStore(
     collection: CollectionId,
     directive: QueryDirective
   ): Consequence[SearchResult] =
-    Consequence {
+    for {
+      _ <- _ensure_query_columns(conn, collection, directive.query)
+      r <- Consequence {
       val sql = _search_sql(collection, directive)
       val stmt = conn.prepareStatement(sql.sql)
       try {
@@ -476,7 +482,8 @@ class SqlDataStore(
       } finally {
         stmt.close()
       }
-    }
+      }
+    } yield r
 
   private def _search_sql(
     collection: CollectionId,
@@ -524,7 +531,9 @@ class SqlDataStore(
     collection: CollectionId,
     directive: QueryDirective
   ): Consequence[Int] =
-    Consequence {
+    for {
+      _ <- _ensure_query_columns(conn, collection, directive.query)
+      r <- Consequence {
       val sql = _count_sql(collection, directive)
       val stmt = conn.prepareStatement(sql.sql)
       try {
@@ -538,6 +547,54 @@ class SqlDataStore(
       } finally {
         stmt.close()
       }
+      }
+    } yield r
+
+  private def _ensure_query_columns(
+    conn: Connection,
+    collection: CollectionId,
+    query: Query
+  ): Consequence[Unit] = {
+    val columns = _query_columns(query)
+      .map(_column_name)
+      .distinct
+      .filterNot(_ == "id")
+      .map(_ -> "")
+    if (columns.isEmpty)
+      Consequence.unit
+    else
+      _ensure_table(conn, collection, columns)
+  }
+
+  private def _query_columns(
+    query: Query
+  ): Vector[String] =
+    query match {
+      case Query.Empty => Vector.empty
+      case Query.Expr(expr) => _expr_columns(expr)
+    }
+
+  private def _expr_columns(
+    expr: EntityQuery.Expr
+  ): Vector[String] =
+    expr match {
+      case EntityQuery.True | EntityQuery.False => Vector.empty
+      case EntityQuery.And(items) => items.flatMap(_expr_columns)
+      case EntityQuery.Or(items) => items.flatMap(_expr_columns)
+      case EntityQuery.Not(item) => _expr_columns(item)
+      case EntityQuery.Eq(path, _) => Vector(path)
+      case EntityQuery.Ne(path, _) => Vector(path)
+      case EntityQuery.Gt(path, _) => Vector(path)
+      case EntityQuery.Gte(path, _) => Vector(path)
+      case EntityQuery.Lt(path, _) => Vector(path)
+      case EntityQuery.Lte(path, _) => Vector(path)
+      case EntityQuery.Contains(path, _, _) => Vector(path)
+      case EntityQuery.StartsWith(path, _, _) => Vector(path)
+      case EntityQuery.EndsWith(path, _, _) => Vector(path)
+      case EntityQuery.Like(path, _, _) => Vector(path)
+      case EntityQuery.IsNull(path) => Vector(path)
+      case EntityQuery.IsNotNull(path) => Vector(path)
+      case _ => Vector.empty
     }
 
   private def _count_sql(
@@ -642,7 +699,7 @@ class SqlDataStore(
     val values = (1 to count).toVector.map { i =>
       val rawname = md.getColumnLabel(i)
       val name = if (config.normalizeColumnNames) _to_property_name(rawname) else rawname
-      val value = _decode_column_value(Option(rs.getObject(i)).getOrElse(""))
+      val value = _decode_column_value(rs.getObject(i))
       name -> value
     }
     Record.create(values)

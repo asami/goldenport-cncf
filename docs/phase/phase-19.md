@@ -139,10 +139,11 @@ Resume hint:
   AF-01 adds a reusable CNCF Atom feed model, renderer, and Record projection
   helper, then applies it to BlogComponent through a public `atomFeed` query
   that emits published active posts as `application/atom+xml`.
-  BW-01 adds the `textus-blog` component-owned Web app: anonymous users can
-  list/read published active posts on `/web/blog`, authenticated users land on
-  `/web/blog/my` to manage only their own posts, and the editor/new post flow
-  runs on `/web/blog/edit`. The app can save textarea HTML fragments through
+  BW-01 adds the `textus-blog` component-owned Web app using the Static Form
+  file-layout model: `/web/blog` serves `src/main/web/index.html`,
+  `/web/blog/publicblogs` serves `publicblogs.html`, `/web/blog/userblogs`
+  serves the author dashboard, and `/web/blog/new` / `/web/blog/update` serve
+  separate static form pages. The app can save textarea HTML fragments through
   `saveEditorPost`, upload Blog file trees through `importPostTree(fileBundle)`,
   and insert existing Blob images from an editor picker that synchronizes inline
   BlobAttachment links.
@@ -176,8 +177,8 @@ Phase 19 can close when:
 - `textus-blog` exposes an Atom feed for published active posts using the CNCF
   AtomFeed helper.
 - `textus-blog` exposes a component-owned Blog Web app that exercises public
-  read, authenticated editor save, filebundle upload import, and Blob image
-  picker flows.
+  read, authenticated editor save, filebundle upload import, Blob image picker
+  flows, and Static Form file-layout routing.
 
 ## 7. Notes
 

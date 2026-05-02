@@ -4,7 +4,7 @@ import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
-import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore}
+import org.goldenport.cncf.entity.{EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityStore, EntityVisibilityScope}
 import org.goldenport.record.Record
 import org.goldenport.text.Presentable
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
@@ -13,7 +13,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Generic entity-to-entity association runtime foundation.
  *
  * @since   Apr. 27, 2026
- * @version Apr. 30, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AssociationDomain(value: String) extends Presentable {
@@ -121,7 +121,7 @@ final class EntityStoreAssociationRepository(
       result <- EntityStore.standard().create(association)
       loaded <- EntityStore.standard().load[Association](result.id)
       created <- loaded match {
-        case Some(value) => Consequence.success(value)
+        case Some(value) => Consequence.success(_normalize_association_id(value))
         case None => Consequence.operationNotFound(s"association entity:${result.id.print}")
       }
     } yield created
@@ -139,12 +139,24 @@ final class EntityStoreAssociationRepository(
   )(using ctx: ExecutionContext): Consequence[Vector[Association]] = {
     val collection = storagepolicy.collection(filter.domain)
     EntityStore.standard()
-      .search[Association](EntityQuery(collection, Query.plan(Record.empty), EntitySearchScope.Store))
+      .search[Association](EntityQuery(collection, Query.plan(Record.empty), EntitySearchScope.Store, Some(EntityVisibilityScope.Admin)))
       .map { values =>
-        val sorted = values.data.filter(_matches(filter)).sortBy(x => (x.sortOrder.getOrElse(Int.MaxValue), x.createdAt.toString, x.associationId))
+        val sorted = values.data.map(_normalize_association_id).filter(_matches(filter)).sortBy(x => (x.sortOrder.getOrElse(Int.MaxValue), x.createdAt.toString, x.associationId))
         Query.sliceValues(sorted, Some(offset), limit)
       }
   }
+
+  private def _normalize_association_id(association: Association): Association =
+    association.copy(id = _with_collection(association.id, storagepolicy.collection(association.associationDomain)))
+
+  private def _with_collection(
+    id: EntityId,
+    collection: EntityCollectionId
+  ): EntityId =
+    if (id.collection == collection)
+      id
+    else
+      EntityId(id.major, id.minor, collection, id.timestamp, id.entropy)
 
   private def _matches(filter: AssociationFilter)(association: Association): Boolean =
     association.associationDomain == filter.domain &&

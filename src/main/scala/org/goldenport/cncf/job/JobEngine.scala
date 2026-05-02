@@ -2,7 +2,7 @@ package org.goldenport.cncf.job
 
 import java.time.Instant
 import java.util.concurrent.{ConcurrentHashMap, Executors, PriorityBlockingQueue, ScheduledExecutorService, TimeUnit, ExecutorService}
-import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import scala.concurrent.ExecutionContext as ScalaExecutionContext
 import org.goldenport.{Conclusion, Consequence}
 import org.goldenport.consequence.Failures
@@ -22,7 +22,7 @@ import org.goldenport.cncf.observability.ObservabilityEngine
 /*
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
- * @version Apr. 22, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -514,9 +514,8 @@ final class InMemoryJobEngine(
   )
   private val _worker_pool: ExecutorService =
     Executors.newFixedThreadPool(math.max(1, schedulerConfig.workerCount))
+  private val _workers_started = new AtomicBoolean(false)
   @volatile private var _shutdown_requested = false
-
-  _start_scheduler_workers_()
 
   _rehydrate_delayed_starts_()
   _rehydrate_delayed_retries_()
@@ -738,6 +737,10 @@ final class InMemoryJobEngine(
       )
     }
 
+  private def _ensure_scheduler_workers_(): Unit =
+    if (!_shutdown_requested && _workers_started.compareAndSet(false, true))
+      _start_scheduler_workers_()
+
   private def _scheduler_worker_loop_(): Unit =
     while (!_shutdown_requested && !Thread.currentThread().isInterrupted) {
       try {
@@ -816,7 +819,10 @@ final class InMemoryJobEngine(
   }
 
   private def _enqueue_work_(work: SchedulerWorkItem): Unit =
-    _work_queue.put(work)
+    {
+      _ensure_scheduler_workers_()
+      _work_queue.put(work)
+    }
 
   private def _next_sequence_(): Long =
     _work_sequence.incrementAndGet()

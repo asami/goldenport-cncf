@@ -8,14 +8,14 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Dec. 23, 2025
- * @version Mar. 22, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 class ConfigSourcesSpec extends AnyWordSpec with Matchers with GivenWhenThen {
 
   "ConfigSources" should {
 
-    "build standard sources in documented precedence order HOME < PROJECT < CWD < ENV < ARGS" in {
+    "build standard sources in documented precedence order HOME < PROJECT < CWD < TEXTUS-CWD < ENV < ARGS" in {
       Given("standard source assembly input")
       val cwd = Files.createTempDirectory("cncf-configsources-standard")
       val env = Map("cncf.env.key" -> "from-env")
@@ -29,6 +29,7 @@ class ConfigSourcesSpec extends AnyWordSpec with Matchers with GivenWhenThen {
         ConfigOrigin.Home,
         ConfigOrigin.Project,
         ConfigOrigin.Cwd,
+        ConfigOrigin.Cwd,
         ConfigOrigin.Environment,
         ConfigOrigin.Arguments
       )
@@ -36,6 +37,7 @@ class ConfigSourcesSpec extends AnyWordSpec with Matchers with GivenWhenThen {
         ConfigSource.Rank.Home,
         ConfigSource.Rank.Project,
         ConfigSource.Rank.Cwd,
+        ConfigSource.Rank.CwdTextus,
         ConfigSource.Rank.Environment,
         ConfigSource.Rank.Arguments
       )

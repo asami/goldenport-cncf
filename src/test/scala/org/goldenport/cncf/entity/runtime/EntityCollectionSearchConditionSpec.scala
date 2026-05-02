@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 16, 2026
  *  version Mar. 24, 2026
- * @version Apr. 25, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityCollectionSearchConditionSpec
@@ -378,7 +378,8 @@ final class EntityCollectionSearchConditionSpec
         EntityId("m", "d", _cid),
         java.time.Instant.now().minusSeconds(3600),
         "deleted",
-        "dead"
+        "alive",
+        deletedAt = Some(java.time.Instant.now())
       )
       val storerealm = new EntityRealm[TimedLifecyclePostEntity](
         entityName = "person",
@@ -633,15 +634,16 @@ private final case class TimedLifecyclePostEntity(
   id: EntityId,
   postedAt: java.time.Instant,
   body: String,
-  aliveness: String
+  aliveness: String,
+  deletedAt: Option[java.time.Instant] = None
 ) extends EntityPersistable {
   def toRecord(): Record =
-    Record.dataAuto(
+    Record.create(Record.dataAuto(
       "id" -> id,
       "postedAt" -> postedAt.toString,
       "body" -> body,
       "aliveness" -> aliveness
-    )
+    ).asMap.toVector ++ deletedAt.map(x => "deletedAt" -> x.toString).toVector)
 }
 
 private final case class GeneratedTimedPostEntity(

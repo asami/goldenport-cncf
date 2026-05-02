@@ -40,7 +40,7 @@ import org.scalatest.wordspec.AnyWordSpec
  *  version Feb. 15, 2026
  *  version Mar. 29, 2026
  *  version Apr. 11, 2026
- * @version Apr. 14, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 class ClientAdminSystemPingSpec
@@ -313,6 +313,15 @@ class ClientAdminSystemPingSpec
       response
     }
 
+    override def postBag(
+      path: String,
+      body: Option[Bag],
+      headers: Map[String, String]
+    ): HttpResponse = {
+      buffer += HttpCall("POST", path, body.map(_bag_to_string), headers)
+      response
+    }
+
     def put(
       path: String,
       body: Option[String],
@@ -320,6 +329,17 @@ class ClientAdminSystemPingSpec
     ): HttpResponse = {
       buffer += HttpCall("PUT", path, body, headers)
       response
+    }
+
+    private def _bag_to_string(
+      bag: Bag
+    ): String = {
+      val in = bag.openInputStream()
+      try {
+        new String(in.readAllBytes(), StandardCharsets.UTF_8)
+      } finally {
+        in.close()
+      }
     }
   }
 

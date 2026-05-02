@@ -57,7 +57,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version Apr. 30, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -2064,6 +2064,99 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       missingComponent.status.code shouldBe 404
     }
 
+    "serve flat Static Form Web App pages from the Web root before app-named fallback" in {
+      val root = Files.createTempDirectory("cncf-web-flat-root-")
+      Files.writeString(
+        root.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: notice-board
+          |  routes:
+          |    - path: /web/board
+          |      kind: alias
+          |      target:
+          |        component: notice-board
+          |        app: notice-board
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.createDirectories(root.resolve("assets"))
+      Files.createDirectories(root.resolve("notice-board"))
+      Files.writeString(root.resolve("index.html"), "<h1>Flat Notice Board</h1>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("publicblogs.html"), "<h1>Flat Public Blogs</h1>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("assets").resolve("app.css"), ".flat-notice-board { color: #14532d; }\n", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("notice-board").resolve("index.html"), "<h1>Fallback Notice Board</h1>", StandardCharsets.UTF_8)
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val index = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board"))).unsafeRunSync()
+      val page = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs"))).unsafeRunSync()
+      val pageHtml = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs.html"))).unsafeRunSync()
+      val asset = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/assets/app.css"))).unsafeRunSync()
+
+      index.status.code shouldBe 200
+      index.as[String].unsafeRunSync() should include ("Flat Notice Board")
+      page.status.code shouldBe 200
+      page.as[String].unsafeRunSync() should include ("Flat Public Blogs")
+      pageHtml.status.code shouldBe 200
+      pageHtml.as[String].unsafeRunSync() should include ("Flat Public Blogs")
+      asset.status.code shouldBe 200
+      asset.as[String].unsafeRunSync() should include ("flat-notice-board")
+    }
+
+    "prefer app-named pages when multiple static-form apps are declared" in {
+      val root = Files.createTempDirectory("cncf-web-multi-app-root-")
+      Files.writeString(
+        root.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: app-a
+          |    - name: app-b
+          |  routes:
+          |    - path: /web/a
+          |      kind: alias
+          |      target:
+          |        component: notice-board
+          |        app: app-a
+          |    - path: /web/b
+          |      kind: alias
+          |      target:
+          |        component: notice-board
+          |        app: app-b
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.createDirectories(root.resolve("app-a").resolve("assets"))
+      Files.createDirectories(root.resolve("app-b").resolve("assets"))
+      Files.createDirectories(root.resolve("assets"))
+      Files.writeString(root.resolve("index.html"), "<h1>Flat Root</h1>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("assets").resolve("app.css"), ".flat-root { color: red; }\n", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("app-b").resolve("index.html"), "<h1>App B</h1>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("app-b").resolve("assets").resolve("app.css"), ".app-b { color: blue; }\n", StandardCharsets.UTF_8)
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val appB = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/b"))).unsafeRunSync()
+      val assetB = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/b/assets/app.css"))).unsafeRunSync()
+      val appBHtml = appB.as[String].unsafeRunSync()
+      val assetBCss = assetB.as[String].unsafeRunSync()
+
+      appB.status.code shouldBe 200
+      appBHtml should include ("App B")
+      appBHtml should not include "Flat Root"
+      assetB.status.code shouldBe 200
+      assetBCss should include ("app-b")
+      assetBCss should not include "flat-root"
+    }
+
     "serve static Web app HTML and assets through descriptor route aliases" in {
       val root = Files.createTempDirectory("cncf-web-alias-root-")
       Files.writeString(
@@ -3174,13 +3267,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       val entityRead = entityEngine.execute(HttpRequest.fromPath(HttpRequest.POST, "/admin/entity/read", form = Record.data("component" -> "notice-board", "entity" -> "notice", "id" -> entityId)))
 
       entityList.code shouldBe 200
-      entityList.getString.getOrElse("") should include ("notice_1")
+      entityList.getString.getOrElse("") should include (entityId)
       entityRead.code shouldBe 200
       entityRead.getString.getOrElse("") should include ("title=board update")
       val entityListRecord = _admin_record_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice")
       entityListRecord.getString("kind") shouldBe Some("entity.list")
-      entityListRecord.getAny("ids").map(_.toString).getOrElse("") should include ("notice_1")
-      entityListRecord.getAny("items").map(_.toString).getOrElse("") should include ("notice_1")
+      entityListRecord.getAny("ids").map(_.toString).getOrElse("") should include (entityId)
+      entityListRecord.getAny("items").map(_.toString).getOrElse("") should include (entityId)
       entityListRecord.getAny("items").map(_.toString).getOrElse("") should include ("board update")
       entityListRecord.getInt("page") shouldBe Some(1)
       entityListRecord.getInt("pageSize") shouldBe Some(20)
@@ -3199,10 +3292,13 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       pagedEntityListRecord.getInt("page") shouldBe Some(2)
       pagedEntityListRecord.getInt("pageSize") shouldBe Some(5)
       val firstEntityPage = _admin_record_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "pageSize" -> "1")
-      firstEntityPage.getAny("ids").map(_.toString).getOrElse("") should include ("notice_1")
+      val firstEntityPageIds = firstEntityPage.getAny("ids").map(_.toString).getOrElse("")
+      firstEntityPageIds should not be empty
       firstEntityPage.getBoolean("hasNext") shouldBe Some(true)
       val secondEntityPage = _admin_record_response(entitySubsystem, "entity", "list", "component" -> "notice-board", "entity" -> "notice", "page" -> "2", "pageSize" -> "1")
-      secondEntityPage.getAny("ids").map(_.toString).getOrElse("") should not include (entityId)
+      val secondEntityPageIds = secondEntityPage.getAny("ids").map(_.toString).getOrElse("")
+      secondEntityPageIds should not be empty
+      secondEntityPageIds should not be firstEntityPageIds
       secondEntityPage.getBoolean("hasNext") shouldBe Some(false)
       val entityReadRecord = _admin_record_response(entitySubsystem, "entity", "read", "component" -> "notice-board", "entity" -> "notice", "id" -> entityId)
       entityReadRecord.getString("kind") shouldBe Some("entity.read")
@@ -5838,6 +5934,76 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus-result-view")
     }
 
+    "prefer page-local static result template when textus form page is submitted" in {
+      val subsystem = _aggregate_http_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(_web_template_fixture_root(
+            "new__success.html",
+            """<!doctype html>
+              |<html>
+              |<body>
+              |  <h1>New Page Success</h1>
+              |  <textus-result-view source="result.body"></textus-result-view>
+              |</body>
+              |</html>""".stripMargin
+          ).resolve("web.yaml").toString)
+        ))
+      )
+      val descriptor = WebDescriptor(
+        expose = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Exposure.Protected
+        ),
+        form = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Form(
+            resultTemplate = Some("<article><h2>Descriptor Result</h2></article>")
+          )
+        )
+      )
+      val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
+      val dispatcher = new RecordingWebOperationDispatcher(WebOperationDispatcher.Local(engine))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+
+      val html = server
+        ._submit_operation_form(
+          _post_form_request(
+            "/form/notice-board/notice-aggregate/approve-notice-aggregate",
+            "id=notice_1&textus.form.page=new"
+          ),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      html should include ("New Page Success")
+      html should include ("aggregate-updated:notice_1")
+      html should not include ("Descriptor Result")
+      dispatcher.forms.lastOption.flatMap(_.getString("textus.form.page")) shouldBe None
+    }
+
+    "expand result body JSON paths in static result templates" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties("blog", "blog", "get-my-post"),
+        200,
+        "application/json",
+        """{"entity_id":"major-post-1","title":"Hello <Blog>","content":"<article><p>Body</p></article>"}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<form action="/form/blog-component/blog/save-editor-post" method="post">
+          |  <input name="id" value="${result.body.entity_id}">
+          |  <input name="title" value="${result.body.title}">
+          |  <textarea name="content">${result.body.content}</textarea>
+          |</form>""".stripMargin
+      ).body
+
+      html should include ("value=\"major-post-1\"")
+      html should include ("value=\"Hello &lt;Blog&gt;\"")
+      html should include ("&lt;article&gt;&lt;p&gt;Body&lt;/p&gt;&lt;/article&gt;")
+    }
+
     "prefer exact static status result template over static success template" in {
       val root = Files.createTempDirectory("cncf-web-template-")
       Files.writeString(root.resolve("web.yaml"), "form: {}\n", StandardCharsets.UTF_8)
@@ -6021,6 +6187,75 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       page2 should not include ("Content-Type application/json")
       page2 should not include ("Submitted Values")
       page2 should not include ("<textus-result-table")
+    }
+
+    "preserve page-local result template on form continuation" in {
+      val rows = (1 to 21).map { i =>
+        f"""{"title":"Page Local Notice $i%02d","recipient_name":"PagingBob"}"""
+      }.mkString("[", ",", "]")
+      val responseBody = s"""{"data":${rows},"fetched_count":21}"""
+      val root = Files.createTempDirectory("cncf-web-page-local-continuation-")
+      Files.writeString(root.resolve("web.yaml"), "form: {}\n", StandardCharsets.UTF_8)
+      Files.writeString(
+        root.resolve("publicblogs__success.html"),
+        """<article>
+          |  <h2>Page Local Search</h2>
+          |  <textus-result-table source="result.body" page="paging.page" page-size="paging.pageSize" href="paging.href"></textus-result-table>
+          |</article>""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val subsystem = _aggregate_http_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web.yaml").toString)
+        ))
+      )
+      val descriptor = WebDescriptor(
+        expose = Map(
+          "notice-board.notice-aggregate.approve-notice-aggregate" -> WebDescriptor.Exposure.Protected
+        )
+      )
+      val dispatcher = new StaticWebOperationDispatcher(
+        HttpResponse.Text(
+          HttpStatus.Ok,
+          ContentType(MimeType("application/json"), Some(StandardCharsets.UTF_8)),
+          Bag.text(responseBody, StandardCharsets.UTF_8)
+        )
+      )
+      val engine = new HttpExecutionEngine(subsystem, Some(descriptor))
+      val server = new Http4sHttpServer(engine, operationDispatcherOption = Some(dispatcher))
+
+      val page1 = server
+        ._submit_operation_form(
+          _post_form_request(
+            "/form/notice-board/notice-aggregate/approve-notice-aggregate",
+            "id=notice_1&textus.form.page=publicblogs"
+          ),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate"
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+      val continueHref = """href="([^"]*page=2&amp;pageSize=20)""".r
+        .findFirstMatchIn(page1)
+        .map(_.group(1).replace("&amp;", "&"))
+        .getOrElse(fail("page-local continuation link is missing"))
+      val page2 = server
+        ._operation_form_continue(
+          _get_request(continueHref),
+          "notice-board",
+          "notice-aggregate",
+          "approve-notice-aggregate",
+          continueHref.split("/continue/")(1).takeWhile(_ != '?')
+        )
+        .flatMap(_.as[String])
+        .unsafeRunSync()
+
+      page1 should include ("Page Local Search")
+      page1 should include ("Page Local Notice 01")
+      page2 should include ("Page Local Search")
+      page2 should include ("Page Local Notice 21")
+      page2 should not include ("Content-Type application/json")
     }
 
     "render form continuation with explicit total-count paging" in {
@@ -7275,6 +7510,26 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should not include ("<textus:alert")
       html should not include ("<textus:status-badge")
       html should not include ("<textus-pagination")
+    }
+
+    "render html field widgets for trusted HTML fragments" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties("blog", "blog", "get-post"),
+        200,
+        "application/json",
+        """{"title":"Blog","content":"<article><p>Hello <strong>HTML</strong></p></article>"}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article>
+          |  <textus:html-field source="result.body" field="content" class="article-body"></textus:html-field>
+          |</article>""".stripMargin
+      ).body
+
+      html should include ("class=\"article-body\"")
+      html should include ("<article><p>Hello <strong>HTML</strong></p></article>")
+      html should not include ("<textus:html-field")
     }
 
     "render nav-list widgets in button and list-group styles" in {

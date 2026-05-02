@@ -13,7 +13,7 @@ import org.goldenport.datatype.{Identifier, ObjectId}
  * This is CNCF runtime policy, not a simplemodeling-model concern.
  *
  * @since   Apr. 13, 2026
- * @version Apr. 26, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 trait EntityCreateDefaultsPolicy {
@@ -179,8 +179,12 @@ object EntityCreateDefaultsPolicy {
         isGeneratedDefault: Any => Boolean
       ): Unit = {
         val current = SimpleEntityStorageShapePolicy.value(record, canonical)
-        if (current.forall(isGeneratedDefault))
-          value.foreach(v => defaults += (SimpleEntityStorageShapePolicy.targetName(canonical) -> v))
+        current match {
+          case Some(existing) if !isGeneratedDefault(existing) =>
+            defaults += (SimpleEntityStorageShapePolicy.targetName(canonical) -> existing)
+          case _ =>
+            value.foreach(v => defaults += (SimpleEntityStorageShapePolicy.targetName(canonical) -> v))
+        }
       }
 
       def add_or_replace(canonical: String, value: => Option[Any]): Unit =
@@ -193,7 +197,7 @@ object EntityCreateDefaultsPolicy {
       add_or_replace("createdBy", Some(principal))
       add_or_replace("updatedAt", Some(now))
       add_or_replace("updatedBy", Some(principal))
-      add_or_replace("postStatus", Some(PostStatus.Published))
+      add_if_missing("postStatus", Some(_default_post_status(options)))
       add_if_missing("aliveness", Some(Aliveness.default))
       val security = _default_security_attributes(ownerid, groupid, options)
       val generatedsecuritydefault = _has_generated_security_default(record)
@@ -248,6 +252,11 @@ object EntityCreateDefaultsPolicy {
       )
     }
 
+    private def _default_post_status(
+      options: EntityCreateOptions
+    ): PostStatus =
+      PostStatus.Published
+
     private def _has_generated_security_default(
       record: Record
     ): Boolean = {
@@ -262,7 +271,10 @@ object EntityCreateDefaultsPolicy {
       ObjectId(Identifier(_identifier_text(text)))
 
     private def _is_system_or_unknown(p: Any): Boolean =
-      _is_system(p) || Option(p).exists(_.toString.equalsIgnoreCase("unknown"))
+      _is_system(p) || Option(p).exists { x =>
+        val s = x.toString.trim
+        s.isEmpty || s.equalsIgnoreCase("unknown")
+      }
 
     private def _is_generated_name_default(p: Any): Boolean =
       _is_system_or_unknown(p) || Option(p).exists(_.toString.equalsIgnoreCase("anonymous"))

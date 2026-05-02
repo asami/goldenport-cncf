@@ -22,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  9, 2026
  *  version Jan. 18, 2026
- * @version Apr. 11, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
@@ -640,13 +640,18 @@ class CommandExecuteComponentSpec extends AnyWordSpec with Matchers {
   }
 
   private def _capture_stdout(body: => Int): (Int, String) = {
-    val baos = new ByteArrayOutputStream()
-    val ps = new PrintStream(baos)
+    val out = new ByteArrayOutputStream()
+    val err = new ByteArrayOutputStream()
+    val outps = new PrintStream(out)
+    val errps = new PrintStream(err)
     val code =
-      Console.withOut(ps) {
-        body
+      Console.withOut(outps) {
+        Console.withErr(errps) {
+          body
+        }
       }
-    ps.flush()
-    (code, baos.toString("UTF-8"))
+    outps.flush()
+    errps.flush()
+    (code, out.toString("UTF-8"))
   }
 }

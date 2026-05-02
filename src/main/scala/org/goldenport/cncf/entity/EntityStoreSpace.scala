@@ -17,7 +17,7 @@ import org.goldenport.cncf.unitofwork.UnitOfWorkOp.*
  *  version Mar. 27, 2026
  *  version Apr. 13, 2026
  *  version Apr. 14, 2026
- * @version Apr. 26, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 class EntityStoreSpace {
@@ -137,6 +137,47 @@ class EntityStoreSpace {
     for {
       entitystore <- _by_collection(op.query.collection)
       r <- entitystore.search(op.query)
+    } yield r
+  }
+
+  def searchInternal[T](op: EntityStoreSearchInternal[T])(using ctx: ExecutionContext): Consequence[SearchResult[T]] = {
+    given EntityPersistent[T] = op.tc
+    for {
+      entitystore <- _by_collection(op.query.collection)
+      r <- entitystore.searchInternal(op.query)
+    } yield r
+  }
+
+  def uniqueValueExists[T](
+    op: EntityStoreUniqueValueExists[T]
+  )(using ctx: ExecutionContext): Consequence[Boolean] = {
+    given EntityPersistent[T] = op.tc
+    for {
+      entitystore <- _by_collection(op.collection)
+      r <- entitystore.uniqueValueExists(
+        op.collection,
+        op.fieldName,
+        op.value,
+        op.excludeId,
+        op.scope,
+        op.includeEntityIdEntropy
+      )
+    } yield r
+  }
+
+  def resolveIdentity[T](
+    op: EntityStoreResolveIdentity[T]
+  )(using ctx: ExecutionContext): Consequence[Option[EntityId]] = {
+    given EntityPersistent[T] = op.tc
+    for {
+      entitystore <- _by_collection(op.collection)
+      r <- entitystore.resolveIdentity(
+        op.collection,
+        op.value,
+        op.fieldNames,
+        op.includeEntityIdEntropy,
+        op.scope
+      )
     } yield r
   }
 }

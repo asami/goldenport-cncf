@@ -11,7 +11,7 @@ import org.goldenport.cncf.entity.EntityPersistableQuery
 /*
  * @since   Feb. 19, 2026
  *  version Mar. 30, 2026
- * @version Apr. 24, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 case class Query[T](query: T) extends RecordPresentable {
@@ -435,7 +435,8 @@ object Query {
       case Condition.In(candidates) => candidates.toVector.map(_value)
       case m: Iterable[?] => m.iterator.map(_value).toVector
       case m: Array[?] => m.toVector.map(_value)
-      case m: Option[?] => m.map(_value)
+      case Some(v) => _value(v)
+      case None => null
       case m: Presentable => m.print
       case other => other
     }
@@ -447,6 +448,7 @@ object Query {
       record.asMap.flatMap {
         case (_, null) => None
         case (_, Condition.Any) => None
+        case (_, None) => None
         case (k, v) => Some(k -> _value(v))
       }
     )
@@ -484,9 +486,9 @@ object Query {
       case FieldCondition(path, cond) =>
         _extract(value, path).exists(cond.accepts)
       case Eq(path, expected) =>
-        _extract(value, path).contains(expected)
+        _extract(value, path).contains(_normalize_match_value(expected))
       case Ne(path, expected) =>
-        !_extract(value, path).contains(expected)
+        !_extract(value, path).contains(_normalize_match_value(expected))
       case Gt(path, expected) =>
         _compare(path, value, expected).exists(_ > 0)
       case Gte(path, expected) =>
@@ -496,9 +498,11 @@ object Query {
       case Lte(path, expected) =>
         _compare(path, value, expected).exists(_ <= 0)
       case In(path, candidates) =>
-        _extract(value, path).exists(candidates.contains)
+        val normalized = candidates.map(_normalize_match_value)
+        _extract(value, path).exists(normalized.contains)
       case NotIn(path, candidates) =>
-        _extract(value, path).forall(v => !candidates.contains(v))
+        val normalized = candidates.map(_normalize_match_value)
+        _extract(value, path).forall(v => !normalized.contains(v))
       case IsNull(path) =>
         _extract(value, path).isEmpty
       case IsNotNull(path) =>
@@ -592,6 +596,10 @@ object Query {
       case (name, _) if _is_framework_parameter(name) => None
       case (name, _) if _is_query_control_parameter(name) => None
       case (name, _) if _is_visibility_control_parameter(name) => None
+      case (_, null) => None
+      case (_, None) => None
+      case (_, Condition.Any) => None
+      case (name, Some(value)) => Some(Eq(name, value))
       case (name, value) =>
       Some(Eq(name, value))
     }
@@ -677,6 +685,13 @@ object Query {
       case Some(v) => _normalize_extracted(v)
       case v: org.goldenport.text.Presentable => Some(v.print)
       case v => Some(v)
+    }
+
+  private def _normalize_match_value(value: Any): Any =
+    value match {
+      case Some(v) => _normalize_match_value(v)
+      case v: org.goldenport.text.Presentable => v.print
+      case v => v
     }
 
   private def _normalize_name(name: String): String =

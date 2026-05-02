@@ -17,7 +17,7 @@ import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentId, ComponentInit, ComponentInstanceId}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
-import org.goldenport.cncf.entity.{EntityCreateOptions, EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope}
+import org.goldenport.cncf.entity.{EntityCreateOptions, EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityVisibilityScope}
 import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.observability.{ConclusionDiagnostics, ValidationDiagnostics}
@@ -42,7 +42,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Builtin Blob user-facing component.
  *
  * @since   Apr. 26, 2026
- * @version Apr. 30, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponent() extends Component {
@@ -1369,7 +1369,8 @@ object BlobComponent {
       val op = UnitOfWorkOp.EntityStoreLoad(
         id,
         summon[EntityPersistent[Association]],
-        Some(_association_authorization(AssociationDomain.BlobAttachment, id.collection, Some(id), "read", system))
+        Some(_association_authorization(AssociationDomain.BlobAttachment, id.collection, Some(id), "read", system)),
+        Some(EntityVisibilityScope.Admin)
       )
       _exec_uow(op).flatMap(x => exec_from(Consequence.successOrEntityNotFound(x)(id)))
     }
@@ -1398,7 +1399,8 @@ object BlobComponent {
       val query = EntityQuery[Association](
         collection,
         Query.plan(_association_query_record(filter)),
-        EntitySearchScope.Store
+        EntitySearchScope.Store,
+        Some(EntityVisibilityScope.Admin)
       )
       val op = UnitOfWorkOp.EntityStoreSearch(
         query,
@@ -1412,10 +1414,17 @@ object BlobComponent {
     }
 
     private def _association_delete(association: Association, system: Boolean): ExecUowM[Unit] = {
-      _exec_uow(UnitOfWorkOp.EntityStoreDelete(
-        association.id,
-        Some(_association_authorization(association.associationDomain, association.id.collection, Some(association.id), "delete", system))
-      ))
+      val collection = AssociationStoragePolicy.blobAttachmentDefault.collection(association.associationDomain)
+      val id = EntityId(
+        association.id.major,
+        association.id.minor,
+        collection,
+        association.id.timestamp,
+        association.id.entropy
+      )
+      _exec_uow(UnitOfWorkOp.Authorize(
+        _association_authorization(association.associationDomain, collection, Some(id), "delete", system)
+      )).flatMap(_ => _exec_uow(UnitOfWorkOp.EntityStoreDeleteHard(id)))
     }
 
     private def _authorize_blob_create(

@@ -8,3 +8,7 @@ Follow the lifecycle laid out in docs/rules/document-lifecycle.md before promoti
 Current security/authorization implementation notes:
 
 - `entity-authorization-implementation-note.md`
+
+Open issue index:
+
+- `open-issue-list.md`

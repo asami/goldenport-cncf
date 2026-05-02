@@ -78,7 +78,8 @@ object ExecutionContext {
     observability: ObservabilityContext,
     runtime: RuntimeContext,
     jobContext: org.goldenport.cncf.job.JobContext,
-    framework: FrameworkParameter = FrameworkParameter()
+    framework: FrameworkParameter = FrameworkParameter(),
+    idGeneration: IdGenerationContext = IdGenerationContext.default(IdGenerationContext.IdNamespace("sys", "sys"))
   ) {
     def major = "sys"
     def minor = "sys"
@@ -96,6 +97,7 @@ object ExecutionContext {
       def unitOfWork: org.goldenport.cncf.unitofwork.UnitOfWork = runtime.unitOfWork
       def jobContext: org.goldenport.cncf.job.JobContext = cncfCore.jobContext
       def framework: FrameworkParameter = cncfCore.framework
+      def idGeneration: IdGenerationContext = cncfCore.idGeneration
       def major = cncfCore.major
       def minor = cncfCore.minor
     }
@@ -218,6 +220,20 @@ object ExecutionContext {
     case i: Instance =>
       i.copy(
         cncfCore = i.cncfCore.copy(runtime = runtime)
+      )
+    case _ =>
+      ctx
+  }
+
+  def withIdGenerationContext(
+    ctx: ExecutionContext,
+    idGeneration: IdGenerationContext
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(
+        cncfCore = i.cncfCore.copy(
+          idGeneration = idGeneration
+        )
       )
     case _ =>
       ctx

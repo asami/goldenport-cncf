@@ -12,7 +12,7 @@ import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, Chi
 
 /*
  * @since   Mar.  5, 2026
- * @version Apr. 30, 2026
+ * @version May.  2, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -48,6 +48,7 @@ private[projection] object MetaProjectionSupport {
     inputType: String,
     outputType: String,
     inputValueKind: String,
+    visibility: Option[String],
     parameters: Vector[Record],
     childEntityBindings: Vector[Record] = Vector.empty,
     associationBinding: Option[Record] = None,
@@ -378,6 +379,7 @@ private[projection] object MetaProjectionSupport {
           inputType = x.inputType,
           outputType = x.outputType,
           inputValueKind = x.inputValueKind,
+          visibility = x.visibility,
           parameters = x.parameters.map { p =>
             Record.data(
               "name" -> p.name,

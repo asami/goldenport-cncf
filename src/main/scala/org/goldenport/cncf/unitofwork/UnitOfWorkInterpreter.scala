@@ -130,10 +130,18 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     case m: (UnitOfWorkOp.EntityStoreLoad[t] @unchecked) =>
       withCallTree("uow:entityspace:load") {
         _authorize(m.authorization, Some(() => _load_record(m.id))).flatMap { _ =>
-          if (_working_set_enabled)
-            _entity_space_load(m)
-          else
-            _entity_store_space.load(m)
+          val loaded =
+            if (_working_set_enabled)
+              _entity_space_load(m)
+            else
+              _entity_store_space.load(m)
+          loaded.map(_.filter(entity =>
+            org.goldenport.cncf.entity.EntityAccessScopePolicy.visibilityRecordVisible(
+              m.id.collection,
+              m.tc.toRecord(entity),
+              m.visibilityScope
+            )
+          ))
         }
       }
 
@@ -144,11 +152,14 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreSave[t] @unchecked) =>
       withCallTree("uow:entitystore:save") {
-        _authorize(m.authorization, Some(() => Consequence.success(Some(m.tc.authorizationRecord(m.entity))))).flatMap(_ =>
+        val loadrecord = () =>
+          _load_record(m.tc.id(m.entity)).map(_.orElse(Some(m.tc.authorizationRecord(m.entity))))
+        _authorize(m.authorization, Some(loadrecord)).flatMap(_ =>
           _transition_validation_hook
             .beforeSave[t](m.entity, m.tc)
             .flatMap(_ => _entity_store_space.save(m))
             .map { r =>
+              _entity_space_evict(m.tc.id(m.entity))
               _view_space_invalidate_all()
               r
             }
@@ -157,11 +168,14 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
 
     case m: (UnitOfWorkOp.EntityStoreUpdate[t] @unchecked) =>
       withCallTree("uow:entitystore:update") {
-        _authorize(m.authorization, Some(() => Consequence.success(Some(m.tc.authorizationRecord(m.entity))))).flatMap(_ =>
+        val loadrecord = () =>
+          _load_record(m.tc.id(m.entity)).map(_.orElse(Some(m.tc.authorizationRecord(m.entity))))
+        _authorize(m.authorization, Some(loadrecord)).flatMap(_ =>
           _transition_validation_hook
             .beforeUpdate[t](m.entity, m.tc)
             .flatMap(_ => _entity_store_space.update(m))
             .map { r =>
+              _entity_space_evict(m.tc.id(m.entity))
               _view_space_invalidate_all()
               r
             }
@@ -219,6 +233,27 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         }
       }
 
+    case m: (UnitOfWorkOp.EntityStoreSearchInternal[t] @unchecked) =>
+      withCallTree("uow:entitystore:search:internal") {
+        _entity_store_space.searchInternal(m)
+      }
+
+    case m: (UnitOfWorkOp.EntityStoreUniqueValueExists[t] @unchecked) =>
+      withCallTree("uow:entitystore:unique-value-exists") {
+        _entity_space_unique_value_exists(m).flatMap {
+          case true => Consequence.success(true)
+          case false => _entity_store_space.uniqueValueExists(m)
+        }
+      }
+
+    case m: (UnitOfWorkOp.EntityStoreResolveIdentity[t] @unchecked) =>
+      withCallTree("uow:entitystore:resolve-identity") {
+        _entity_space_resolve_identity(m).flatMap {
+          case Some(id) => Consequence.success(Some(id))
+          case None => _entity_store_space.resolveIdentity(m)
+        }
+      }
+
     case UnitOfWorkOp.ShellCommandExec(command) =>
       withCallTree("uow:shell:exec") {
         _shell_command_executor.execute(command)
@@ -246,7 +281,7 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     _component_option
       .flatMap(_.entitySpace.entityOption[T](name)) match {
       case Some(collection) =>
-        collection.resolve(op.id) match {
+        collection.resolveScoped(op.id) match {
           case Consequence.Success(entity) =>
             Consequence.success(Some(entity))
           case Consequence.Failure(conclusion) if _is_entity_not_found(conclusion) =>
@@ -294,6 +329,37 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         _entity_store_space.search(op).flatMap(_filter_search_result(op, _))
     }
   }
+
+  private def _entity_space_unique_value_exists[T](
+    op: UnitOfWorkOp.EntityStoreUniqueValueExists[T]
+  ): Consequence[Boolean] =
+    Consequence.success(
+      _component_option.exists { component =>
+        component.entitySpace.uniqueValueExists[T](
+          op.collection,
+          op.fieldName,
+          op.value,
+          op.excludeId,
+          op.scope,
+          op.includeEntityIdEntropy
+        )
+      }
+    )
+
+  private def _entity_space_resolve_identity[T](
+    op: UnitOfWorkOp.EntityStoreResolveIdentity[T]
+  ): Consequence[Option[EntityId]] =
+    Consequence.success(
+      _component_option.flatMap { component =>
+        component.entitySpace.resolveIdentity[T](
+          op.collection,
+          op.value,
+          op.fieldNames,
+          op.includeEntityIdEntropy,
+          op.scope
+        )
+      }
+    )
 
   private def _working_set_enabled: Boolean =
     uow.executionContext.framework.workingSetEnabled &&
@@ -345,7 +411,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
   ): Unit = {
     val name = id.collection.name
     _component_option
-      .flatMap(_.entitySpace.entityOption[Any](name))
+      .flatMap { component =>
+        component.entitySpace.entityOption[Any](name).orElse(
+          component.entitySpace.entityOption(id.collection).map(_.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[Any]])
+        )
+      }
       .foreach(_.evict(id))
   }
 
@@ -353,9 +423,14 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     entity: T,
     tc: org.goldenport.cncf.entity.EntityPersistent[T]
   ): Unit = {
-    val name = tc.id(entity).collection.name
+    val id = tc.id(entity)
+    val name = id.collection.name
     _component_option
-      .flatMap(_.entitySpace.entityOption[T](name))
+      .flatMap { component =>
+        component.entitySpace.entityOption[T](name).orElse(
+          component.entitySpace.entityOption(id.collection).map(_.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[T]])
+        )
+      }
       .foreach(_.put(entity))
   }
 
@@ -366,7 +441,11 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
     val name = id.collection.name
     (for {
       r <- record
-      collection <- _component_option.flatMap(_.entitySpace.entityOption[Any](name))
+      collection <- _component_option.flatMap { component =>
+        component.entitySpace.entityOption[Any](name).orElse(
+          component.entitySpace.entityOption(id.collection).map(_.asInstanceOf[org.goldenport.cncf.entity.runtime.EntityCollection[Any]])
+        )
+      }
       if collection.storage.memoryRealm.isDefined
     } yield collection.putRecord(r).recoverWith {
       case c if _is_not_implemented(c) => Consequence.unit
