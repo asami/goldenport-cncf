@@ -14,7 +14,8 @@ import org.simplemodeling.model.datatype.EntityId
  *
  * @since   Apr. 26, 2026
  *  version Apr. 28, 2026
- * @version Apr. 29, 2026
+ *  version Apr. 29, 2026
+ * @version May.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 enum BlobKind(val value: String) {
@@ -241,7 +242,7 @@ trait BlobStore {
 
 object BlobUrl {
   def cncfRoute(id: EntityId): BlobAccessUrl = {
-    val base = s"/web/blob/content/${_encode(id.value)}"
+    val base = s"/web/blob/content/${_encode(id.parts.entropy)}"
     BlobAccessUrl(
       displayUrl = base,
       downloadUrl = s"$base?download=true",

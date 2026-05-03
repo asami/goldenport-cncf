@@ -3,6 +3,7 @@ package org.goldenport.cncf.association
 import java.util.UUID
 import org.goldenport.Consequence
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.entity.EntityAccessScopePolicy
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.operation.CmlOperationAssociationBinding
 import org.goldenport.id.UniversalId
@@ -16,7 +17,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * target Entity ids.
  *
  * @since   Apr. 30, 2026
- * @version Apr. 30, 2026
+ * @version May.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AssociationBindingPart(
@@ -63,7 +64,10 @@ object AssociationTargetValidator {
           ds <- ctx.dataStoreSpace.dataStore(cid)
           record <- ds.load(cid, dsid)
           _ <- record match {
-            case Some(_) => Consequence.unit
+            case Some(value) if EntityAccessScopePolicy.normalRecordVisible(id.collection, value) =>
+              Consequence.unit
+            case Some(_) =>
+              Consequence.entityNotFound(s"association target:${id.value}")
             case None => Consequence.entityNotFound(s"association target:${id.value}")
           }
         } yield ()

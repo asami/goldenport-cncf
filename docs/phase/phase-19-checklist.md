@@ -310,6 +310,50 @@ public read and authenticated authoring surface, not only command/API specs.
 
 ---
 
+## BI-04B: CNCF Textus URN and Blob Inline Image Workflow
+
+Status: DONE
+
+### Objective
+
+Move Blog inline image mechanics into reusable CNCF core behavior so content
+applications can normalize document image references through UoW operations
+instead of hand-coding Blob lookup, Blob registration, and inline attachment
+logic.
+
+### Detailed Tasks
+
+- [x] Add `TextusUrn` as the canonical `urn:textus:{kind}:{value}` document
+      reference form.
+- [x] Add `UrnRepository` and Blob URN resolution for
+      `urn:textus:blob:{entropy}`.
+- [x] Change Blob content routes to expose entropy-based document URLs while
+      still resolving full EntityId inputs.
+- [x] Add `BlobInlineImageWorkflow` for HTML fragment image normalization.
+- [x] Register relative filebundle images as managed Blobs and rewrite persisted
+      content to Blob URNs.
+- [x] Preserve external image URLs when requested, or capture them as
+      metadata-only external-url Blob rows.
+- [x] Add ActionCall/UoW operations for inline-image normalization and
+      attachment.
+- [x] Validate inline Blob attachment targets without bypassing normal
+      Entity access scope.
+- [x] Compensate Blob rows created during inline normalization when a later
+      validation step fails.
+- [x] Apply the reusable workflow from `textus-blog` import/editor paths.
+
+### Decisions
+
+- Persisted content uses `urn:textus:blob:{entropy}` for Blob image references.
+- HTML fragment is the only implemented markup in this slice; Markdown and
+  SmartDox remain reserved for a later content-format slice.
+- External URL payload fetching is not implemented in v1. Metadata-only capture
+  and preserve are the supported external policies.
+- Blob URN resolution uses normal EntityStore/EntitySpace access scope so
+  deletedAt and future tenant filtering are not bypassed.
+
+---
+
 ## BI-05: Verification and Closure
 
 Status: SUSPENDED

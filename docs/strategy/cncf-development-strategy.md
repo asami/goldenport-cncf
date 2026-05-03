@@ -470,6 +470,13 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   `/web/blog/userblogs`, and create/update use `/web/blog/new` and
   `/web/blog/update` with page-local result templates. Authors can upload Blog
   file bundles and insert existing Blob images through an editor picker.
+  The latest inline-image core slice adds Textus URN parsing/resolution,
+  Blob URN resolution, and reusable Blob inline-image normalization/attachment
+  UoW operations. HTML fragment image references are normalized to
+  `urn:textus:blob:{entropy}` for persisted content, relative filebundle images
+  can be registered as managed Blobs, external URLs can be preserved or captured
+  as metadata-only Blob rows, and public rendering expands Blob URNs back to the
+  CNCF Blob content route.
 - Remaining BI-04 work is phase closure validation rather than a known runtime
   adapter gap.
 - Non-goals:

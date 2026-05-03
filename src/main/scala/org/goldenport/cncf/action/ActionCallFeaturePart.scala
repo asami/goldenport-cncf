@@ -29,6 +29,7 @@ import org.goldenport.cncf.entity.EntityVisibilityScope
 import org.goldenport.cncf.entity.EntityCreateOptions
 import org.goldenport.cncf.entity.CreateResult
 import org.goldenport.cncf.entity.EntityStore
+import org.goldenport.cncf.blob.{InlineImageAttachResult, InlineImageContent, InlineImageNormalizeResult, InlineImageOccurrence}
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
@@ -42,7 +43,7 @@ import org.goldenport.configuration.ConfigurationValue
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 30, 2026
- * @version May.  2, 2026
+ * @version May.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -745,6 +746,19 @@ trait ActionCallHttpPart extends ActionCallFeaturePart { self: ActionCall.Core.H
     headers: Map[String, String]
   ): UnitOfWorkOp[HttpResponse] =
     UnitOfWorkOp.HttpPut(path, body, headers)
+}
+
+trait ActionCallBlobPart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>
+  protected final def blob_normalize_inline_images(
+    content: InlineImageContent
+  ): ExecUowM[InlineImageNormalizeResult] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.BlobNormalizeInlineImages(content)))
+
+  protected final def blob_attach_inline_images(
+    sourceEntityId: String,
+    occurrences: Vector[InlineImageOccurrence]
+  ): ExecUowM[InlineImageAttachResult] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.BlobAttachInlineImages(sourceEntityId, occurrences)))
 }
 
 trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>

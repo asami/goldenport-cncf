@@ -17,7 +17,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the reusable Blob payload helper.
  *
  * @since   Apr. 29, 2026
- * @version Apr. 29, 2026
+ * @version May.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobPayloadSupportSpec
@@ -46,7 +46,7 @@ final class BlobPayloadSupportSpec
       created.id shouldBe id
       created.sourceMode shouldBe BlobSourceMode.Managed
       created.storageRef should not be empty
-      created.accessUrl.displayUrl shouldBe s"/web/blob/content/${id.value}"
+      created.accessUrl.displayUrl shouldBe s"/web/blob/content/${id.parts.entropy}"
 
       When("reading the payload through the same helper")
       val read = _success(BlobPayloadSupport.readManagedPayload(component, id))

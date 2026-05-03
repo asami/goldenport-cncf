@@ -95,7 +95,8 @@ Current semantic direction:
 - D (DONE): BI-04 — Implement CNCF runtime/Web/projection gaps discovered by the BlogComponent driver.
 - E (DONE): AF-01 — Add CNCF AtomFeed support and apply it to BlogComponent.
 - F (DONE): BW-01 — Add the component-owned Blog Web app driver surface.
-- G (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
+- G (DONE): BI-04B — Add CNCF Textus URN and Blob inline-image workflow.
+- H (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
 
 Resume hint:
 
@@ -147,6 +148,13 @@ Resume hint:
   `saveEditorPost`, upload Blog file trees through `importPostTree(fileBundle)`,
   and insert existing Blob images from an editor picker that synchronizes inline
   BlobAttachment links.
+  BI-04B adds the reusable CNCF inline image core behind that Blog driver:
+  `TextusUrn` and `UrnRepository` provide `urn:textus:{kind}:{value}`
+  resolution, Blob registers `urn:textus:blob:{entropy}`, and UoW-backed
+  Blob inline-image operations normalize HTML fragment `img` references,
+  register relative filebundle images as managed Blobs, preserve or metadata-
+  capture external URLs, attach inline Blob Associations, and render persisted
+  Blob URNs back to public Blob content URLs.
 
 ## 5. Development Items
 
@@ -156,6 +164,7 @@ Resume hint:
 - [x] BI-04: Implement CNCF runtime/Web/projection gaps discovered by the driver.
 - [x] AF-01: Add CNCF AtomFeed support and apply it to BlogComponent.
 - [x] BW-01: Add the component-owned Blog Web app driver surface.
+- [x] BI-04B: Add CNCF Textus URN and Blob inline-image workflow.
 - [ ] BI-05: Verification, documentation, and phase closure.
 
 Detailed task breakdown and progress tracking are recorded in

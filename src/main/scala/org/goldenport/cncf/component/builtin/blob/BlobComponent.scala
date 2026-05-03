@@ -10,7 +10,7 @@ import cats.data.NonEmptyVector
 import cats.syntax.all.*
 import org.goldenport.{Consequence, ConsequenceException, ConsequenceT, Conclusion}
 import org.goldenport.bag.{Bag, BinaryBag}
-import org.goldenport.cncf.action.{ActionCall, ActionCallFeaturePart, CommandAction, CommandExecutionMode, FunctionalActionCall, QueryAction}
+import org.goldenport.cncf.action.{ActionCall, ActionCallEntityStorePart, ActionCallFeaturePart, CommandAction, CommandExecutionMode, FunctionalActionCall, QueryAction}
 import org.goldenport.cncf.association.{Association, AssociationCreate, AssociationDomain, AssociationFilter, AssociationRecordCodec, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.blob.*
 import org.goldenport.cncf.config.RuntimeConfig
@@ -42,7 +42,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Builtin Blob user-facing component.
  *
  * @since   Apr. 26, 2026
- * @version May.  2, 2026
+ * @version May.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponent() extends Component {
@@ -382,7 +382,7 @@ object BlobComponent {
       )
 
     def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      _id(req).map(ReadBlobAction(req, _))
+      _id_ref(req).map(ReadBlobAction(req, _))
   }
 
   private final class ResolveBlobUrlOperationDefinition(
@@ -397,7 +397,7 @@ object BlobComponent {
       )
 
     def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      _id(req).map(ResolveBlobUrlAction(req, _))
+      _id_ref(req).map(ResolveBlobUrlAction(req, _))
   }
 
   private final class GetBlobMetadataOperationDefinition(
@@ -412,7 +412,7 @@ object BlobComponent {
       )
 
     def createOperationRequest(req: Request): Consequence[OperationRequest] =
-      _id(req).map(GetBlobMetadataAction(req, _))
+      _id_ref(req).map(GetBlobMetadataAction(req, _))
   }
 
   private final class AttachBlobToEntityOperationDefinition(
@@ -631,26 +631,26 @@ object BlobComponent {
 
   private final case class ReadBlobAction(
     request: Request,
-    id: EntityId
+    idRef: String
   ) extends QueryAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      ReadBlobActionCall(core, id)
+      ReadBlobActionCall(core, idRef)
   }
 
   private final case class ResolveBlobUrlAction(
     request: Request,
-    id: EntityId
+    idRef: String
   ) extends QueryAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      ResolveBlobUrlActionCall(core, id)
+      ResolveBlobUrlActionCall(core, idRef)
   }
 
   private final case class GetBlobMetadataAction(
     request: Request,
-    id: EntityId
+    idRef: String
   ) extends QueryAction {
     def createCall(core: ActionCall.Core): ActionCall =
-      GetBlobMetadataActionCall(core, id)
+      GetBlobMetadataActionCall(core, idRef)
   }
 
   private final case class AttachBlobToEntityAction(
@@ -761,11 +761,12 @@ object BlobComponent {
 
   private final case class ReadBlobActionCall(
     core: ActionCall.Core,
-    id: EntityId
+    idRef: String
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
       _observe_blob("read_blob") {
         for {
+          id <- _blob_resolve_id(idRef)
           blob <- _blob_load(id)
           result <- blob.sourceMode match {
             case BlobSourceMode.Managed =>
@@ -795,22 +796,25 @@ object BlobComponent {
 
   private final case class ResolveBlobUrlActionCall(
     core: ActionCall.Core,
-    id: EntityId
+    idRef: String
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _blob_load(id).flatMap(blob => exec_from(_blob_access_url_record(blob.metadata))).map { record =>
-        OperationResponse.RecordResponse(record)
-      }
+      for {
+        id <- _blob_resolve_id(idRef)
+        blob <- _blob_load(id)
+        record <- exec_from(_blob_access_url_record(blob.metadata))
+      } yield OperationResponse.RecordResponse(record)
   }
 
   private final case class GetBlobMetadataActionCall(
     core: ActionCall.Core,
-    id: EntityId
+    idRef: String
   ) extends FunctionalActionCall with ActionCall.Core.Holder with BlobActionCallSupport {
     protected def build_Program: ExecUowM[OperationResponse] =
-      _blob_load(id).map { blob =>
-        OperationResponse.RecordResponse(blob.metadata.toRecord)
-      }
+      for {
+        id <- _blob_resolve_id(idRef)
+        blob <- _blob_load(id)
+      } yield OperationResponse.RecordResponse(blob.metadata.toRecord)
   }
 
   private final case class AttachBlobToEntityActionCall(
@@ -941,7 +945,7 @@ object BlobComponent {
       }
   }
 
-  private trait BlobActionCallSupport extends ActionCallFeaturePart { self: FunctionalActionCall & ActionCall.Core.Holder =>
+  private trait BlobActionCallSupport extends ActionCallEntityStorePart { self: FunctionalActionCall & ActionCall.Core.Holder =>
     protected final def _observe_blob[A](
       operation: String,
       kind: Option[BlobKind] = None,
@@ -1155,6 +1159,23 @@ object BlobComponent {
         Some(_authorization(id.collection, Some(id), "read", system))
       )
       _exec_uow(op).flatMap(x => exec_from(Consequence.successOrEntityNotFound(x)(id)))
+    }
+
+    protected final def _blob_resolve_id(value: String): ExecUowM[EntityId] = {
+      import BlobRepository.given
+      EntityId.parse(value).toOption.filter(_.collection == BlobRepository.CollectionId) match {
+        case Some(id) => exec_pure(id)
+        case None =>
+          entity_resolve_identity[Blob](
+            BlobRepository.CollectionId,
+            value,
+            Vector("shortid"),
+            includeEntityIdEntropy = true
+          ).flatMap {
+            case Some(id) => exec_pure(id)
+            case None => exec_from(Consequence.Failure(Conclusion.notFound(org.goldenport.provisional.observation.Observation.resourceNotFound(s"blob:${value}"))))
+          }
+      }
     }
 
     protected final def _blob_create(create: BlobCreate, system: Boolean = false): ExecUowM[Blob] = {
@@ -1785,6 +1806,9 @@ object BlobComponent {
 
   private def _id(req: Request): Consequence[EntityId] =
     _string(req, "id").map(EntityId.parse).getOrElse(Consequence.argumentMissing("id"))
+
+  private def _id_ref(req: Request): Consequence[String] =
+    _string(req, "id").map(Consequence.success).getOrElse(Consequence.argumentMissing("id"))
 
   private def _attach_blob_request(req: Request): Consequence[AttachBlobRequest] =
     for {

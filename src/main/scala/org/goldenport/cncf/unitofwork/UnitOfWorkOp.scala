@@ -7,6 +7,7 @@ import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.*
 import org.goldenport.cncf.entity.*
 import org.goldenport.cncf.directive.*
+import org.goldenport.cncf.blob.{InlineImageAttachResult, InlineImageContent, InlineImageNormalizeResult, InlineImageOccurrence}
 
 /*
  * UnitOfWork operation algebra.
@@ -20,7 +21,7 @@ import org.goldenport.cncf.directive.*
  * @since   Jan. 10, 2026
  *  version Feb. 25, 2026
  *  version Mar. 24, 2026
- * @version May.  2, 2026
+ * @version May.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -168,4 +169,16 @@ object UnitOfWorkOp {
     scope: EntityIdentityScope = EntityIdentityScope.CurrentContext,
     tc: EntityPersistent[T]
   ) extends UnitOfWorkOp[Option[EntityId]]
+
+  // ------------------------------------------------------------
+  // Blob operations
+  // ------------------------------------------------------------
+  final case class BlobNormalizeInlineImages(
+    content: InlineImageContent
+  ) extends UnitOfWorkOp[InlineImageNormalizeResult]
+
+  final case class BlobAttachInlineImages(
+    sourceEntityId: String,
+    occurrences: Vector[InlineImageOccurrence]
+  ) extends UnitOfWorkOp[InlineImageAttachResult]
 }

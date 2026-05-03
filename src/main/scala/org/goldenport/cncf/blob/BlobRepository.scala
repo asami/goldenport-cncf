@@ -13,7 +13,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Entity-backed repository for Blob metadata.
  *
  * @since   Apr. 27, 2026
- * @version Apr. 28, 2026
+ *  version Apr. 28, 2026
+ * @version May.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BlobRepository {
@@ -98,7 +99,8 @@ object BlobRecordCodec {
 
   def fromStoreRecord(record: Record): Consequence[Blob] =
     for {
-      id <- EntityId.createC(record)
+      rawid <- EntityId.createC(record)
+      id = EntityId(rawid.major, rawid.minor, BlobRepository.CollectionId, rawid.timestamp, rawid.entropy)
       kind <- _string(record, "kind").map(BlobKind.parse).getOrElse(Consequence.argumentMissing("kind"))
       sourcemode <- _string(record, "sourceMode", "source_mode").map(BlobSourceMode.parse).getOrElse(Consequence.argumentMissing("sourceMode"))
       access <- _access_url(record)
