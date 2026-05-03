@@ -84,8 +84,9 @@ Current semantic direction:
 - No general digital asset management product surface.
 - No change to SimpleEntity storage-shape rules that would embed Blob payloads
   or repeated image payloads in ordinary entity records.
-- No CML primitive datatype for HTML in this phase; HTML tree support is
-  introduced as CNCF standard values first.
+- No finalized CML primitive datatype lock-in for HTML/Markdown/SmartDox in
+  this phase; Phase 19 defines the reusable content/mimetype and document
+  reference operating model first.
 
 ## 4. Current Work Stack
 
@@ -96,7 +97,11 @@ Current semantic direction:
 - E (DONE): AF-01 — Add CNCF AtomFeed support and apply it to BlogComponent.
 - F (DONE): BW-01 — Add the component-owned Blog Web app driver surface.
 - G (DONE): BI-04B — Add CNCF Textus URN and Blob inline-image workflow.
-- H (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
+- H (PLANNED): CR-01 — Add SimpleEntity content reference occurrence support.
+- I (PLANNED): MB-01 — Split Blob document references into image, video, attachment, and blob kinds.
+- J (PLANNED): CT-01 — Define content/mimetype operation support for HTML, Markdown, and SmartDox.
+- K (PLANNED): SD-01 — Add SmartDox and GFM-compatible Markdown support.
+- L (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
 
 Resume hint:
 
@@ -155,6 +160,23 @@ Resume hint:
   register relative filebundle images as managed Blobs, preserve or metadata-
   capture external URLs, attach inline Blob Associations, and render persisted
   Blob URNs back to public Blob content URLs.
+  The next content-reference slice generalizes this from image-only handling
+  to SimpleEntity content references: `ContentReferenceOccurrence` records
+  where a reference appears inside content, including `img/src`, `a/href`,
+  video/media sources, attachments, Textus URNs, external URLs, and future
+  Markdown/SmartDox references. BlobAttachment remains the Entity-to-Blob
+  relationship; content occurrence data is the content-derived reference index.
+  The media-kind slice splits the document-facing URN vocabulary into
+  `urn:textus:image:{value}`, `urn:textus:video:{value}`,
+  `urn:textus:attachment:{value}`, and `urn:textus:blob:{value}`. `attachment`
+  is for CNCF-opaque formats such as Excel or Word attached as supporting
+  entity material, while image/video can carry media-specific metadata as the
+  applications deepen. The content/mimetype slice defines how SimpleEntity
+  content stores HTML, Markdown, and SmartDox with a content mimetype/format
+  contract. The SmartDox/Markdown slice makes GFM-compatible Markdown the user
+  facing Markdown baseline and introduces the SmartDox Textus profile; long
+  descriptive text that currently looks like localized prose should move away
+  from `I18NString` and use SmartDox's own i18n model.
 
 ## 5. Development Items
 
@@ -165,6 +187,10 @@ Resume hint:
 - [x] AF-01: Add CNCF AtomFeed support and apply it to BlogComponent.
 - [x] BW-01: Add the component-owned Blog Web app driver surface.
 - [x] BI-04B: Add CNCF Textus URN and Blob inline-image workflow.
+- [ ] CR-01: Add SimpleEntity content reference occurrence support.
+- [ ] MB-01: Split Blob document references into image, video, attachment, and blob kinds.
+- [ ] CT-01: Define content/mimetype operation support for HTML, Markdown, and SmartDox.
+- [ ] SD-01: Add SmartDox and GFM-compatible Markdown support.
 - [ ] BI-05: Verification, documentation, and phase closure.
 
 Detailed task breakdown and progress tracking are recorded in
@@ -188,6 +214,14 @@ Phase 19 can close when:
 - `textus-blog` exposes a component-owned Blog Web app that exercises public
   read, authenticated editor save, filebundle upload import, Blob image picker
   flows, and Static Form file-layout routing.
+- SimpleEntity content reference occurrence behavior is documented and
+  exercised beyond image-only `img/src` handling.
+- Textus URN media/document kinds distinguish image, video, attachment, and
+  generic blob references.
+- SimpleEntity content format/mimetype behavior covers HTML, Markdown, and
+  SmartDox as planned content formats.
+- SmartDox Textus profile and GFM-compatible Markdown support are either
+  implemented or explicitly deferred with remaining scope recorded.
 
 ## 7. Notes
 

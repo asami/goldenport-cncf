@@ -477,14 +477,30 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   can be registered as managed Blobs, external URLs can be preserved or captured
   as metadata-only Blob rows, and public rendering expands Blob URNs back to the
   CNCF Blob content route.
-- Remaining BI-04 work is phase closure validation rather than a known runtime
-  adapter gap.
+  New Phase 19 work generalizes that image-only slice into SimpleEntity
+  content reference occurrences that cover `img/src`, `a/href`, video/media
+  sources, attachments, Textus URNs, external URLs, and future Markdown/SmartDox
+  references. `BlobAttachment` remains the Entity-to-Blob relationship, while
+  occurrence data becomes the content-derived reference index. The Textus URN
+  vocabulary also splits document references into `image`, `video`,
+  `attachment`, and generic `blob` kinds, for example
+  `urn:textus:image:{value}` and `urn:textus:attachment:{value}`. `attachment`
+  is reserved for CNCF-opaque formats such as Excel or Word attached as
+  supporting Entity material. Content format/mimetype handling is now an
+  explicit SimpleEntity content concern for HTML, GFM-compatible Markdown, and
+  SmartDox. The SmartDox/Markdown slice selects GFM for practical Markdown
+  expectations, including tables, and introduces the SmartDox Textus profile so
+  descriptive prose can use SmartDox i18n rather than `I18NString`.
+- Remaining Phase 19 work is content/reference model implementation plus phase
+  closure validation.
 - Non-goals:
 - No new Blob payload storage backend in CNCF core.
 - No S3/S3-compatible BlobStore provider implementation in this phase.
 - No thumbnail generation, image transformation, virus scanning, or resumable
   upload implementation.
 - No payload embedding in ordinary Entity records.
+- No finalized CML primitive datatype lock-in for HTML, Markdown, or SmartDox
+  until the SimpleEntity content operation model is proven.
 - Artifact (work): `docs/phase/phase-19.md`.
 
 ## 4. Relationship Between Phases

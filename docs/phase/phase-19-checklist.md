@@ -354,6 +354,141 @@ logic.
 
 ---
 
+## CR-01: SimpleEntity Content Reference Occurrence
+
+Status: PLANNED
+
+### Objective
+
+Generalize the Blog inline image occurrence model into a SimpleEntity content
+feature. Content reference occurrence data records where references appear
+inside content; it is not the canonical content body itself.
+
+### Detailed Tasks
+
+- [ ] Define `ContentReferenceOccurrence` as a SimpleEntity/CNCF content
+      capability rather than a Blog-only entity.
+- [ ] Cover HTML references beyond images, including `img/src`, `a/href`,
+      `video/src`, `source/src`, `iframe/src`, and attachment/download links.
+- [ ] Keep `BlobAttachment` Association as the Entity-to-Blob relationship and
+      use content occurrences as the content-derived reference index.
+- [ ] Store occurrence fields for source entity, content field, markup,
+      element/attribute, occurrence index, original reference, normalized
+      reference, Textus URN, target Entity id, label/alt/title, and sort order.
+- [ ] Extend the internal DSL/UoW workflow so applications call CNCF content
+      reference normalization/synchronization instead of hand-writing lookup
+      and cleanup code.
+- [ ] Replace or deprecate Blog-specific `BlogInlineImage` usage once the
+      generic occurrence model is available.
+
+### Decisions
+
+- The canonical content remains the SimpleEntity content field; occurrence rows
+  are derived/index data.
+- Occurrence support applies to all content references, not just images.
+- Normal reference resolution must use EntityStore/EntitySpace access scope so
+  logical delete and future tenant filtering remain effective.
+
+---
+
+## MB-01: Media and Attachment Reference Kinds
+
+Status: PLANNED
+
+### Objective
+
+Split document-facing Blob references into clearer Textus URN kinds for image,
+video, attachment, and generic blob usage.
+
+### Detailed Tasks
+
+- [ ] Define Textus URN kinds for `image`, `video`, `attachment`, and `blob`.
+- [ ] Use forms such as `urn:textus:image:{value}`,
+      `urn:textus:video:{value}`, `urn:textus:attachment:{value}`, and
+      `urn:textus:blob:{value}`.
+- [ ] Define how each URN kind maps to Blob-backed Entity ids and how the
+      resolver preserves normal Entity access scope.
+- [ ] Keep `attachment` for CNCF-opaque formats such as Excel, Word, PDF, or
+      other files attached as supporting Entity material.
+- [ ] Leave room for image/video specific metadata as applications deepen
+      without forcing those fields into generic Blob metadata too early.
+- [ ] Update Blog and Blob display/rendering helpers to emit the appropriate
+      kind where a specific kind is known.
+
+### Decisions
+
+- `blob` remains the generic fallback kind.
+- `attachment` means attached supporting material, not inline prose content.
+- Image/video are separate document reference kinds because their metadata and
+  rendering requirements can diverge.
+
+---
+
+## CT-01: Content Format and Mimetype Operations
+
+Status: PLANNED
+
+### Objective
+
+Define the SimpleEntity content operating model for storing and rendering HTML,
+GFM-compatible Markdown, and SmartDox with explicit content format/mimetype
+behavior.
+
+### Detailed Tasks
+
+- [ ] Define where content format/mimetype is stored for SimpleEntity content.
+- [ ] Support HTML fragment content as the current implemented baseline.
+- [ ] Reserve Markdown as GFM-compatible Markdown for user-facing authoring.
+- [ ] Reserve SmartDox for structured document content and richer i18n.
+- [ ] Define render-time conversion rules from persisted content to public HTML.
+- [ ] Define how content reference normalization sees the markup type and
+      dispatches to HTML, Markdown, or SmartDox parsers.
+- [ ] Keep content payloads out of Blob; Blob remains for referenced binary or
+      opaque attached material.
+
+### Decisions
+
+- Content format/mimetype is a SimpleEntity content concern, not a Blob payload
+  concern.
+- Phase 19 should avoid prematurely locking a CML primitive datatype before the
+  operation model is proven.
+- HTML, Markdown, and SmartDox are the planned content formats for this family
+  of features.
+
+---
+
+## SD-01: SmartDox and GFM Markdown Support
+
+Status: PLANNED
+
+### Objective
+
+Add document-format support for GFM-compatible Markdown and the SmartDox Textus
+profile, and make SmartDox the preferred model for descriptive prose that
+needs i18n.
+
+### Detailed Tasks
+
+- [ ] Select GFM-compatible Markdown as the Markdown baseline for user
+      expectations, including tables and image/link syntax.
+- [ ] Define the SmartDox Textus profile for CNCF/Textus content authoring.
+- [ ] Implement or specify Markdown image/link reference extraction so it can
+      feed `ContentReferenceOccurrence`.
+- [ ] Implement or specify SmartDox reference extraction and rendering hooks.
+- [ ] Define migration guidance for prose fields currently modeled as
+      `I18NString`.
+- [ ] Use SmartDox i18n features for descriptive text where the value is a
+      document/prose body rather than a short localized label.
+
+### Decisions
+
+- `I18NString` remains appropriate for short localized labels and names.
+- Descriptive prose belongs to SmartDox when i18n and rich document structure
+  are required.
+- GFM support is chosen for practical user expectations, especially tables.
+
+---
+
 ## BI-05: Verification and Closure
 
 Status: SUSPENDED
@@ -382,7 +517,7 @@ Entity image binding usage and the reusable CNCF behavior is verified.
 
 Phase 19 is complete when:
 
-- All BI items are marked DONE in this checklist.
+- All Phase 19 items are marked DONE in this checklist.
 - Corresponding checkboxes in `phase-19.md` are marked `[x]`.
 - No item remains ACTIVE or SUSPENDED.
 - Any remaining work is explicitly deferred to future strategy items.
