@@ -356,7 +356,7 @@ logic.
 
 ## CR-01: SimpleEntity Content Reference Occurrence
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -366,28 +366,68 @@ inside content; it is not the canonical content body itself.
 
 ### Detailed Tasks
 
-- [ ] Define `ContentReferenceOccurrence` as a SimpleEntity/CNCF content
+- [x] Define `ContentReferenceOccurrence` as a SimpleEntity/CNCF content
       capability rather than a Blog-only entity.
-- [ ] Cover HTML references beyond images, including `img/src`, `a/href`,
-      `video/src`, `source/src`, `iframe/src`, and attachment/download links.
-- [ ] Keep `BlobAttachment` Association as the Entity-to-Blob relationship and
+- [x] Cover HTML references beyond images for the v1 implemented surface:
+      `img/src` and `a/href`.
+- [ ] Extend the same model to `video/src`, `source/src`, `iframe/src`, and
+      attachment/download links.
+- [x] Keep `BlobAttachment` Association as the Entity-to-Blob relationship and
       use content occurrences as the content-derived reference index.
-- [ ] Store occurrence fields for source entity, content field, markup,
+- [x] Store occurrence fields for content field, markup,
       element/attribute, occurrence index, original reference, normalized
       reference, Textus URN, target Entity id, label/alt/title, and sort order.
-- [ ] Extend the internal DSL/UoW workflow so applications call CNCF content
+- [x] Extend the internal DSL/UoW workflow so applications call CNCF content
       reference normalization/synchronization instead of hand-writing lookup
       and cleanup code.
-- [ ] Replace or deprecate Blog-specific `BlogInlineImage` usage once the
+- [x] Replace or deprecate Blog-specific `BlogInlineImage` usage once the
       generic occurrence model is available.
 
 ### Decisions
 
 - The canonical content remains the SimpleEntity content field; occurrence rows
   are derived/index data.
+- `ContentReferenceOccurrence` is server-derived metadata, not operation input.
 - Occurrence support applies to all content references, not just images.
 - Normal reference resolution must use EntityStore/EntitySpace access scope so
   logical delete and future tenant filtering remain effective.
+
+---
+
+## CR-02: BlogInlineImage Retirement and ContentReference Consolidation
+
+Status: DONE
+
+### Objective
+
+Make `BlogPost.contentAttributes.references` the canonical Blog content
+reference occurrence store and remove the Blog-specific inline image Entity
+from the runtime path.
+
+### Detailed Tasks
+
+- [x] Remove `BlogInlineImage` from the Blog CML runtime model.
+- [x] Normalize editor and import HTML content through CNCF
+      `content_normalize_references`.
+- [x] Persist normalized content and generated `ContentReferenceOccurrence`
+      values in `BlogPost.contentAttributes`.
+- [x] Synchronize inline BlobAttachment Associations from generated references
+      through UoW-backed `content_sync_inline_references`.
+- [x] Aggregate duplicate inline references so the same Blob produces multiple
+      occurrences but one inline BlobAttachment Association.
+- [x] Reject `contentReferences` / `content_references` as external operation
+      input.
+- [x] Keep `a/href` Blob links as content references without attaching them as
+      inline image Associations.
+
+### Decisions
+
+- Blog no longer owns a separate persistent inline-image occurrence Entity.
+- `BlogPost.contentAttributes.references` is the canonical occurrence index.
+- BlobAttachment remains the Entity-to-Blob relationship and is Blob-distinct,
+  not occurrence-distinct.
+- Operation callers provide content and optional filebundle context; they do
+  not provide reference metadata.
 
 ---
 

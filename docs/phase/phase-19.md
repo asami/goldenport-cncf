@@ -97,11 +97,12 @@ Current semantic direction:
 - E (DONE): AF-01 — Add CNCF AtomFeed support and apply it to BlogComponent.
 - F (DONE): BW-01 — Add the component-owned Blog Web app driver surface.
 - G (DONE): BI-04B — Add CNCF Textus URN and Blob inline-image workflow.
-- H (PLANNED): CR-01 — Add SimpleEntity content reference occurrence support.
-- I (PLANNED): MB-01 — Split Blob document references into image, video, attachment, and blob kinds.
-- J (PLANNED): CT-01 — Define content/mimetype operation support for HTML, Markdown, and SmartDox.
-- K (PLANNED): SD-01 — Add SmartDox and GFM-compatible Markdown support.
-- L (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
+- H (DONE): CR-01 — Add SimpleEntity content reference occurrence support.
+- I (DONE): CR-02 — Retire BlogInlineImage and consolidate Blog content references.
+- J (PLANNED): MB-01 — Split Blob document references into image, video, attachment, and blob kinds.
+- K (PLANNED): CT-01 — Define content/mimetype operation support for HTML, Markdown, and SmartDox.
+- L (PLANNED): SD-01 — Add SmartDox and GFM-compatible Markdown support.
+- M (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
 
 Resume hint:
 
@@ -160,12 +161,17 @@ Resume hint:
   register relative filebundle images as managed Blobs, preserve or metadata-
   capture external URLs, attach inline Blob Associations, and render persisted
   Blob URNs back to public Blob content URLs.
-  The next content-reference slice generalizes this from image-only handling
-  to SimpleEntity content references: `ContentReferenceOccurrence` records
-  where a reference appears inside content, including `img/src`, `a/href`,
-  video/media sources, attachments, Textus URNs, external URLs, and future
-  Markdown/SmartDox references. BlobAttachment remains the Entity-to-Blob
-  relationship; content occurrence data is the content-derived reference index.
+  CR-01 generalizes this from image-only handling to SimpleEntity content
+  references: `ContentReferenceOccurrence` records where a reference appears
+  inside content, including implemented HTML `img/src` and `a/href` references
+  plus planned video/media sources, attachments, Textus URNs, external URLs,
+  and future Markdown/SmartDox references. BlobAttachment remains the
+  Entity-to-Blob relationship; content occurrence data is the content-derived
+  reference index. CR-02 applies that model to `textus-blog`: BlogInlineImage is
+  retired from the application runtime, `BlogPost.contentAttributes.references`
+  becomes the canonical occurrence store, and inline BlobAttachment
+  Associations are synchronized Blob-distinct from server-derived references.
+  `contentReferences` is not accepted as operation input.
   The media-kind slice splits the document-facing URN vocabulary into
   `urn:textus:image:{value}`, `urn:textus:video:{value}`,
   `urn:textus:attachment:{value}`, and `urn:textus:blob:{value}`. `attachment`
@@ -187,7 +193,8 @@ Resume hint:
 - [x] AF-01: Add CNCF AtomFeed support and apply it to BlogComponent.
 - [x] BW-01: Add the component-owned Blog Web app driver surface.
 - [x] BI-04B: Add CNCF Textus URN and Blob inline-image workflow.
-- [ ] CR-01: Add SimpleEntity content reference occurrence support.
+- [x] CR-01: Add SimpleEntity content reference occurrence support.
+- [x] CR-02: Retire BlogInlineImage and consolidate Blog content references.
 - [ ] MB-01: Split Blob document references into image, video, attachment, and blob kinds.
 - [ ] CT-01: Define content/mimetype operation support for HTML, Markdown, and SmartDox.
 - [ ] SD-01: Add SmartDox and GFM-compatible Markdown support.

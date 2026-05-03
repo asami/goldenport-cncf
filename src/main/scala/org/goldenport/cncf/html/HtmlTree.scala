@@ -8,7 +8,7 @@ import org.goldenport.Consequence
 
 /*
  * @since   Apr. 29, 2026
- * @version Apr. 29, 2026
+ * @version May.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait HtmlNode {
@@ -77,6 +77,21 @@ final case class HtmlFragment(nodes: Vector[HtmlNode]) {
     }
   }
 
+  def links: Vector[HtmlLinkOccurrence] = {
+    var index = -1
+    elements.collect {
+      case e if e.name == "a" && e.attr("href").exists(_.nonEmpty) =>
+        index = index + 1
+        HtmlLinkOccurrence(
+          index,
+          e.attr("href").getOrElse(""),
+          Some(e.textContent).map(_.trim).filter(_.nonEmpty),
+          e.attr("title"),
+          e.attr("rel")
+        )
+    }
+  }
+
   def rewriteImageSources(f: HtmlImageOccurrence => Option[String]): HtmlFragment = {
     var index = -1
     def rewrite(node: HtmlNode): HtmlNode = node match {
@@ -111,6 +126,14 @@ final case class HtmlImageOccurrence(
   src: String,
   alt: Option[String],
   title: Option[String]
+)
+
+final case class HtmlLinkOccurrence(
+  index: Int,
+  href: String,
+  label: Option[String],
+  title: Option[String],
+  rel: Option[String]
 )
 
 final case class HtmlElement(

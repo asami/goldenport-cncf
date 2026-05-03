@@ -477,11 +477,16 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   can be registered as managed Blobs, external URLs can be preserved or captured
   as metadata-only Blob rows, and public rendering expands Blob URNs back to the
   CNCF Blob content route.
-  New Phase 19 work generalizes that image-only slice into SimpleEntity
-  content reference occurrences that cover `img/src`, `a/href`, video/media
-  sources, attachments, Textus URNs, external URLs, and future Markdown/SmartDox
-  references. `BlobAttachment` remains the Entity-to-Blob relationship, while
-  occurrence data becomes the content-derived reference index. The Textus URN
+  Phase 19 now generalizes that image-only slice into SimpleEntity content
+  reference occurrences. The implemented v1 surface covers HTML `img/src` and
+  `a/href`, while video/media sources, attachments, Textus URNs, external URLs,
+  and future Markdown/SmartDox references remain planned extensions.
+  `BlobAttachment` remains the Entity-to-Blob relationship, while occurrence
+  data becomes the content-derived reference index. `textus-blog` now stores
+  generated occurrences in `BlogPost.contentAttributes.references`, retires the
+  Blog-specific inline image Entity from the runtime path, rejects
+  `contentReferences` as external operation input, and synchronizes inline
+  BlobAttachment Associations from server-derived references. The Textus URN
   vocabulary also splits document references into `image`, `video`,
   `attachment`, and generic `blob` kinds, for example
   `urn:textus:image:{value}` and `urn:textus:attachment:{value}`. `attachment`
@@ -491,8 +496,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   SmartDox. The SmartDox/Markdown slice selects GFM for practical Markdown
   expectations, including tables, and introduces the SmartDox Textus profile so
   descriptive prose can use SmartDox i18n rather than `I18NString`.
-- Remaining Phase 19 work is content/reference model implementation plus phase
-  closure validation.
+- Remaining Phase 19 work is media/document URN kind separation,
+  content/mimetype operation support, SmartDox/GFM support, and phase closure
+  validation.
 - Non-goals:
 - No new Blob payload storage backend in CNCF core.
 - No S3/S3-compatible BlobStore provider implementation in this phase.

@@ -337,7 +337,14 @@ final class BlobInlineImageWorkflow(
   private def _resolve_blob_value(
     value: String
   )(using ExecutionContext): Consequence[Option[Blob]] = {
-    _resolve_blob_urn(TextusUrn.blob(value))
+    EntityId.parse(value).toOption match {
+      case Some(id) if id.collection.name == BlobRepository.CollectionId.name =>
+        repository.get(_blob_entity_id(id)).map(Some(_))
+      case Some(_) =>
+        Consequence.success(None)
+      case None =>
+        _resolve_blob_urn(TextusUrn.blob(value))
+    }
   }
 
   private def _existing_kind(src: String): InlineImageSourceKind =
@@ -348,6 +355,12 @@ final class BlobInlineImageWorkflow(
 
   private def _blob_urn(id: EntityId): TextusUrn =
     TextusUrn.blob(id.parts.entropy)
+
+  private def _blob_entity_id(id: EntityId): EntityId =
+    if (id.collection == BlobRepository.CollectionId)
+      id
+    else
+      id.copy(collection = BlobRepository.CollectionId)
 
   private def _display_url(blob: Blob): String =
     blob.sourceMode match {

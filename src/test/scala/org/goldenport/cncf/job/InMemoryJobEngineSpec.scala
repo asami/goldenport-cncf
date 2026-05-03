@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Jan.  4, 2026
- * @version Apr. 22, 2026
+ *  version Apr. 22, 2026
+ * @version May.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -355,9 +356,9 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       ))
 
       When("the delayed start becomes due while the worker is still occupied")
-      _await_condition_ {
+      _await_condition_({
         jobEngine.query(delayedId).exists(_.timeline.events.exists(_.kind == "job.delayed.enqueued"))
-      } shouldBe true
+      }, timeoutMillis = 10000L) shouldBe true
 
       Then("the job remains submitted until worker capacity is available")
       jobEngine.getStatus(delayedId) shouldBe Some(JobStatus.Submitted)

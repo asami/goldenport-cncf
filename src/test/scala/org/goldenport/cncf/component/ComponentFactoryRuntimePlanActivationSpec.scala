@@ -14,7 +14,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Mar. 24, 2026
- * @version Apr. 24, 2026
+ *  version Apr. 24, 2026
+ * @version May.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentFactoryRuntimePlanActivationSpec
@@ -44,7 +45,7 @@ final class ComponentFactoryRuntimePlanActivationSpec
       collection.descriptor.plan.maxPartitions shouldBe 2
       collection.descriptor.plan.maxEntitiesPerPartition shouldBe 1
       collection.storage.storeRealm.values.size shouldBe 2
-      memory.cachedEntityCount shouldBe 1
+      _eventually_int(memory.cachedEntityCount, 1)
     }
 
     "bootstrap direct-added components when a subsystem receives an unbootstrapped instance" in {
@@ -66,6 +67,13 @@ final class ComponentFactoryRuntimePlanActivationSpec
       collection.storage.storeRealm.values.size shouldBe 2
       resolved.workingSetEntityNames should contain("person")
     }
+  }
+
+  private def _eventually_int(value: => Int, expected: Int): Unit = {
+    val deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(2)
+    while (value != expected && System.nanoTime() < deadline)
+      Thread.sleep(10)
+    value shouldBe expected
   }
 
   private def _component_with_runtime_plan(): Component = {

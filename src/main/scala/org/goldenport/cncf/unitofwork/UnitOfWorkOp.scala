@@ -7,7 +7,8 @@ import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.*
 import org.goldenport.cncf.entity.*
 import org.goldenport.cncf.directive.*
-import org.goldenport.cncf.blob.{InlineImageAttachResult, InlineImageContent, InlineImageNormalizeResult, InlineImageOccurrence}
+import org.goldenport.cncf.blob.{ContentReferenceAttachResult, ContentReferenceContent, ContentReferenceNormalizeResult, InlineImageAttachResult, InlineImageContent, InlineImageNormalizeResult, InlineImageOccurrence}
+import org.goldenport.value.ContentReferenceOccurrence
 
 /*
  * UnitOfWork operation algebra.
@@ -181,4 +182,18 @@ object UnitOfWorkOp {
     sourceEntityId: String,
     occurrences: Vector[InlineImageOccurrence]
   ) extends UnitOfWorkOp[InlineImageAttachResult]
+
+  final case class ContentNormalizeReferences(
+    content: ContentReferenceContent
+  ) extends UnitOfWorkOp[ContentReferenceNormalizeResult]
+
+  final case class ContentAttachReferences(
+    sourceEntityId: String,
+    references: Vector[ContentReferenceOccurrence]
+  ) extends UnitOfWorkOp[ContentReferenceAttachResult]
+
+  final case class ContentSyncInlineReferences(
+    sourceEntityId: String,
+    references: Vector[ContentReferenceOccurrence]
+  ) extends UnitOfWorkOp[ContentReferenceAttachResult]
 }

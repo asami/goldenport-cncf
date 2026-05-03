@@ -5,7 +5,7 @@ import cats.~>
 import org.goldenport.{Consequence, Conclusion, ConsequenceT}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.blob.BlobInlineImageWorkflow
+import org.goldenport.cncf.blob.{BlobInlineImageWorkflow, ContentReferenceWorkflow}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.datastore.*
 import org.goldenport.cncf.entity.*
@@ -267,6 +267,33 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
       withCallTree("uow:blob:inline-image:attach") {
         _component_required.flatMap { component =>
           BlobInlineImageWorkflow(component).attachInlineImages(source, occurrences).map { result =>
+            _view_space_invalidate_all()
+            result
+          }
+        }
+      }
+
+    case UnitOfWorkOp.ContentNormalizeReferences(content) =>
+      withCallTree("uow:content:references:normalize") {
+        _component_required.flatMap { component =>
+          ContentReferenceWorkflow(component).normalize(content)
+        }
+      }
+
+    case UnitOfWorkOp.ContentAttachReferences(source, references) =>
+      withCallTree("uow:content:references:attach") {
+        _component_required.flatMap { component =>
+          ContentReferenceWorkflow(component).attachReferences(source, references).map { result =>
+            _view_space_invalidate_all()
+            result
+          }
+        }
+      }
+
+    case UnitOfWorkOp.ContentSyncInlineReferences(source, references) =>
+      withCallTree("uow:content:references:sync-inline") {
+        _component_required.flatMap { component =>
+          ContentReferenceWorkflow(component).syncInlineReferences(source, references).map { result =>
             _view_space_invalidate_all()
             result
           }
