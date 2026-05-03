@@ -99,7 +99,7 @@ Current semantic direction:
 - G (DONE): BI-04B — Add CNCF Textus URN and Blob inline-image workflow.
 - H (DONE): CR-01 — Add SimpleEntity content reference occurrence support.
 - I (DONE): CR-02 — Retire BlogInlineImage and consolidate Blog content references.
-- J (PLANNED): MB-01 — Split Blob document references into image, video, attachment, and blob kinds.
+- J (DONE): MB-01 — Split Blob document references into image, video, audio, attachment, and blob kinds.
 - K (PLANNED): CT-01 — Define content/mimetype operation support for HTML, Markdown, and SmartDox.
 - L (PLANNED): SD-01 — Add SmartDox and GFM-compatible Markdown support.
 - M (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
@@ -159,25 +159,30 @@ Resume hint:
   resolution, Blob registers `urn:textus:blob:{entropy}`, and UoW-backed
   Blob inline-image operations normalize HTML fragment `img` references,
   register relative filebundle images as managed Blobs, preserve or metadata-
-  capture external URLs, attach inline Blob Associations, and render persisted
-  Blob URNs back to public Blob content URLs.
+  capture external URLs, attach inline media/blob Associations, and render
+  persisted URNs back to public Blob content URLs.
   CR-01 generalizes this from image-only handling to SimpleEntity content
   references: `ContentReferenceOccurrence` records where a reference appears
   inside content, including implemented HTML `img/src` and `a/href` references
   plus planned video/media sources, attachments, Textus URNs, external URLs,
-  and future Markdown/SmartDox references. BlobAttachment remains the
-  Entity-to-Blob relationship; content occurrence data is the content-derived
+  and future Markdown/SmartDox references. Entity-to-media/blob relationships
+  are separate from content occurrence data, which remains the content-derived
   reference index. CR-02 applies that model to `textus-blog`: BlogInlineImage is
   retired from the application runtime, `BlogPost.contentAttributes.references`
-  becomes the canonical occurrence store, and inline BlobAttachment
-  Associations are synchronized Blob-distinct from server-derived references.
+  becomes the canonical occurrence store, and inline Associations are
+  synchronized target-distinct from server-derived references.
   `contentReferences` is not accepted as operation input.
-  The media-kind slice splits the document-facing URN vocabulary into
-  `urn:textus:image:{value}`, `urn:textus:video:{value}`,
-  `urn:textus:attachment:{value}`, and `urn:textus:blob:{value}`. `attachment`
-  is for CNCF-opaque formats such as Excel or Word attached as supporting
-  entity material, while image/video can carry media-specific metadata as the
-  applications deepen. The content/mimetype slice defines how SimpleEntity
+  MB-01 turns document-facing media references into CNCF builtin media
+  Entities layered over BlobStore Blob metadata. `Image`, `Video`, `Audio`,
+  and `Attachment` each point at a Blob with `blobId`; `Blob` remains the
+  generic fallback Entity for storage-level access, compatibility, and payloads
+  that do not fit one of the media kinds. Textus URNs now include
+  `urn:textus:image:{entropy}`, `urn:textus:video:{entropy}`,
+  `urn:textus:audio:{entropy}`, `urn:textus:attachment:{entropy}`, and the
+  compatibility/fallback `urn:textus:blob:{entropy}` form. Blog inline image
+  content is normalized to image URNs and synchronized through
+  `MediaAttachment`, while `BlobAttachment` remains available for low-level
+  Blob links and compatibility. The content/mimetype slice defines how SimpleEntity
   content stores HTML, Markdown, and SmartDox with a content mimetype/format
   contract. The SmartDox/Markdown slice makes GFM-compatible Markdown the user
   facing Markdown baseline and introduces the SmartDox Textus profile; long
@@ -195,7 +200,7 @@ Resume hint:
 - [x] BI-04B: Add CNCF Textus URN and Blob inline-image workflow.
 - [x] CR-01: Add SimpleEntity content reference occurrence support.
 - [x] CR-02: Retire BlogInlineImage and consolidate Blog content references.
-- [ ] MB-01: Split Blob document references into image, video, attachment, and blob kinds.
+- [x] MB-01: Split Blob document references into image, video, audio, attachment, and blob kinds.
 - [ ] CT-01: Define content/mimetype operation support for HTML, Markdown, and SmartDox.
 - [ ] SD-01: Add SmartDox and GFM-compatible Markdown support.
 - [ ] BI-05: Verification, documentation, and phase closure.
@@ -223,8 +228,8 @@ Phase 19 can close when:
   flows, and Static Form file-layout routing.
 - SimpleEntity content reference occurrence behavior is documented and
   exercised beyond image-only `img/src` handling.
-- Textus URN media/document kinds distinguish image, video, attachment, and
-  generic blob references.
+- Textus URN media/document kinds distinguish image, video, audio, attachment,
+  and generic blob references.
 - SimpleEntity content format/mimetype behavior covers HTML, Markdown, and
   SmartDox as planned content formats.
 - SmartDox Textus profile and GFM-compatible Markdown support are either

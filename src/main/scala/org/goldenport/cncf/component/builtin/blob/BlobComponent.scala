@@ -42,7 +42,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Builtin Blob user-facing component.
  *
  * @since   Apr. 26, 2026
- * @version May.  3, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobComponent() extends Component {
@@ -1700,6 +1700,8 @@ object BlobComponent {
         Consequence.argumentPolicyViolation("contentType", "mime-kind", "image/*", contentType.header)
       case BlobKind.Video if !_is_mime_kind_compatible(kind, contentType) =>
         Consequence.argumentPolicyViolation("contentType", "mime-kind", "video/*", contentType.header)
+      case BlobKind.Audio if !_is_mime_kind_compatible(kind, contentType) =>
+        Consequence.argumentPolicyViolation("contentType", "mime-kind", "audio/*", contentType.header)
       case _ =>
         Consequence.unit
     }
@@ -1783,6 +1785,7 @@ object BlobComponent {
     kind match {
       case BlobKind.Image => mime.startsWith("image/")
       case BlobKind.Video => mime.startsWith("video/")
+      case BlobKind.Audio => mime.startsWith("audio/")
       case _ => true
     }
   }

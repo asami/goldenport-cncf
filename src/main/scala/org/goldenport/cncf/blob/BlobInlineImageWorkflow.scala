@@ -22,7 +22,7 @@ import org.simplemodeling.model.datatype.EntityId
  * markup values for the next content-format slice.
  *
  * @since   May.  3, 2026
- * @version May.  3, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 enum InlineImageMarkup {
@@ -55,12 +55,14 @@ final case class InlineImageOccurrence(
   index: Int,
   originalSrc: String,
   normalizedSrc: String,
+  imageId: EntityId,
   blobId: EntityId,
   alt: Option[String],
   title: Option[String],
   sortOrder: Int,
   sourceKind: InlineImageSourceKind,
-  createdBlob: Boolean
+  createdBlob: Boolean,
+  createdMedia: Boolean
 )
 
 final case class InlineImageNormalizeResult(
@@ -79,12 +81,14 @@ final case class InlineImageNormalizeResult(
           "index" -> x.index,
           "originalSrc" -> x.originalSrc,
           "normalizedSrc" -> x.normalizedSrc,
+          "imageId" -> x.imageId,
           "blobId" -> x.blobId,
           "alt" -> x.alt,
           "title" -> x.title,
           "sortOrder" -> x.sortOrder,
           "sourceKind" -> x.sourceKind.toString,
-          "createdBlob" -> x.createdBlob
+          "createdBlob" -> x.createdBlob,
+          "createdMedia" -> x.createdMedia
         )
       }
     )
@@ -105,8 +109,9 @@ final case class InlineImageAttachResult(
 final class BlobInlineImageWorkflow(
   component: Component,
   repository: BlobRepository = BlobRepository.entityStore(),
+  mediaRepository: MediaRepository = MediaRepository.entityStore(),
   associations: AssociationRepository = AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault),
-  urnRepository: UrnRepository = UrnRepository(new BlobUrnResolver)
+  urnRepository: UrnRepository = UrnRepository.from(MediaUrnResolver.all :+ new BlobUrnResolver)
 ) {
   private val associationWorkflow =
     AssociationBindingWorkflow(
@@ -185,9 +190,9 @@ final class BlobInlineImageWorkflow(
     externalPolicy: InlineImageExternalPolicy
   )(using ExecutionContext): Consequence[Option[InlineImageOccurrence]] = {
     val source = src.trim
-    _resolve_existing_blob(source).flatMap {
-      case Some(id) =>
-        Consequence.success(Some(InlineImageOccurrence(index, src, _blob_urn(id).print, id, alt, title, index, _existing_kind(source), createdBlob = false)))
+    _resolve_existing_image(source, alt, title).flatMap {
+      case Some((media, blob, createdMedia)) =>
+        Consequence.success(Some(InlineImageOccurrence(index, src, _image_urn(media.id).print, media.id, blob.id, alt, title, index, _existing_kind(source), createdBlob = false, createdMedia = createdMedia)))
       case None =>
         if (_is_local_relative(source))
           _register_local_blob(index, src, alt, title, fileView).map(Some(_))
@@ -237,7 +242,8 @@ final class BlobInlineImageWorkflow(
             payload = file.content.promoteToBinary(),
             attributes = Map("sourcePath" -> src)
           )
-        } yield InlineImageOccurrence(index, src, _blob_urn(blob.id).print, blob.id, alt, title, index, InlineImageSourceKind.LocalRelative, createdBlob = true)
+          media <- _ensure_image_for_created_blob(blob, alt, title)
+        } yield InlineImageOccurrence(index, src, _image_urn(media.media.id).print, media.media.id, blob.id, alt, title, index, InlineImageSourceKind.LocalRelative, createdBlob = true, createdMedia = media.created)
       case None =>
         Consequence.argumentMissing(s"fileBundle for inline image source: ${src}")
     }
@@ -275,17 +281,90 @@ final class BlobInlineImageWorkflow(
             ),
             attributes = Map("sourceUrl" -> normalized)
           ))
-        } yield Some(InlineImageOccurrence(index, src, _blob_urn(blob.id).print, blob.id, alt, title, index, InlineImageSourceKind.ExternalUrl, createdBlob = true))
+          media <- _ensure_image_for_created_blob(blob, alt, title)
+        } yield Some(InlineImageOccurrence(index, src, _image_urn(media.media.id).print, media.media.id, blob.id, alt, title, index, InlineImageSourceKind.ExternalUrl, createdBlob = true, createdMedia = media.created))
     }
+
+  private def _ensure_image_for_created_blob(
+    blob: Blob,
+    alt: Option[String],
+    title: Option[String]
+  )(using ExecutionContext): Consequence[MediaEnsureResult] =
+    _ensure_image_for_blob(blob, alt, title).recoverWith { conclusion =>
+      _delete_created_blob(blob.id).flatMap { _ =>
+        Consequence.Failure[MediaEnsureResult](conclusion)
+      }
+    }
+
+  private def _ensure_image_for_blob(
+    blob: Blob,
+    alt: Option[String],
+    title: Option[String]
+  )(using ExecutionContext): Consequence[MediaEnsureResult] =
+    _validate_image_blob(blob).flatMap { _ =>
+      mediaRepository.ensureImageForBlobResult(blob, alt, title)
+    }
+
+  private def _validate_image_blob(
+    blob: Blob
+  ): Consequence[Unit] =
+    if (blob.kind != BlobKind.Image)
+      Consequence.argumentPolicyViolation("inlineImage.blobKind", "blob-kind", BlobKind.Image.print, blob.kind.print)
+    else
+      blob.contentType match {
+        case Some(contentType) if !_is_image_content_type(contentType) =>
+          Consequence.argumentPolicyViolation("inlineImage.contentType", "mime-kind", "image/*", contentType.header)
+        case _ =>
+          Consequence.unit
+      }
 
   private def _cleanup_created_blobs(
     occurrences: Vector[InlineImageOccurrence]
   )(using ExecutionContext): Consequence[Unit] =
-    occurrences.filter(_.createdBlob).foldLeft(Consequence.unit) { (z, occurrence) =>
+    occurrences.foldLeft(Consequence.unit) { (z, occurrence) =>
       z.flatMap { _ =>
-        repository.delete(occurrence.blobId).recover(_ => ())
+        val cleanupMedia =
+          if (occurrence.createdMedia)
+            mediaRepository.delete(MediaEntity(
+              id = occurrence.imageId,
+              kind = MediaKind.Image,
+              blobId = occurrence.blobId,
+              name = None,
+              title = None,
+              contentType = None,
+              filename = None,
+              byteSize = None,
+              digest = None,
+              accessUrl = None,
+              createdAt = Instant.EPOCH,
+              updatedAt = Instant.EPOCH
+            )).recover(_ => ())
+          else
+            Consequence.unit
+        cleanupMedia.flatMap { _ =>
+          if (occurrence.createdBlob)
+            _delete_created_blob(occurrence.blobId)
+          else
+            Consequence.unit
+        }
       }
     }
+
+  private def _delete_created_blob(
+    id: EntityId
+  )(using ExecutionContext): Consequence[Unit] =
+    repository.get(id).flatMap { blob =>
+      repository.delete(id).recover(_ => ()).flatMap { _ =>
+        blob.sourceMode match {
+          case BlobSourceMode.Managed =>
+            blob.storageRef
+              .map(ref => BlobPayloadSupport.service(component).flatMap(_.blobStore.delete(ref)).recover(_ => ()))
+              .getOrElse(Consequence.unit)
+          case BlobSourceMode.ExternalUrl =>
+            Consequence.unit
+        }
+      }
+    }.recover(_ => ())
 
   private def _render_textus_blob_urns(
     fragment: HtmlFragment
@@ -294,6 +373,11 @@ final class BlobInlineImageWorkflow(
       case (z, image) =>
         z.flatMap { map =>
           TextusUrn.parseOption(image.src.trim) match {
+            case Some(urn) if urn.kind == TextusUrn.ImageKind =>
+              _resolve_image_urn(urn).flatMap {
+                case Some((_, blob)) => Consequence.success(map + (image.index -> _display_url(blob)))
+                case None => Consequence.argumentInvalid(s"Image URN does not resolve: ${urn.print}")
+              }
             case Some(urn) if urn.kind == TextusUrn.BlobKind =>
               _resolve_blob_urn(urn).flatMap {
                 case Some(blob) => Consequence.success(map + (image.index -> _display_url(blob)))
@@ -307,19 +391,44 @@ final class BlobInlineImageWorkflow(
       fragment.rewriteImageSources(img => byIndex.get(img.index))
     }
 
-  private def _resolve_existing_blob(
-    src: String
-  )(using ExecutionContext): Consequence[Option[EntityId]] =
+  private def _resolve_existing_image(
+    src: String,
+    alt: Option[String],
+    title: Option[String]
+  )(using ExecutionContext): Consequence[Option[(MediaEntity, Blob, Boolean)]] =
     TextusUrn.parseOption(src) match {
+      case Some(urn) if urn.kind == TextusUrn.ImageKind =>
+        _resolve_image_urn(urn).map(_.map { case (media, blob) => (media, blob, false) })
       case Some(urn) if urn.kind == TextusUrn.BlobKind =>
-        _resolve_blob_urn(urn).map(_.map(_.id))
+        _resolve_blob_urn(urn).flatMap {
+          case Some(blob) => _ensure_image_for_blob(blob, alt, title).map(x => Some((x.media, blob, x.created)))
+          case None => Consequence.success(None)
+        }
       case Some(_) =>
         Consequence.success(None)
       case None =>
         _blob_content_value(src) match {
-          case Some(value) => _resolve_blob_value(value).map(_.map(_.id))
+          case Some(value) =>
+            _resolve_blob_value(value).flatMap {
+              case Some(blob) => _ensure_image_for_blob(blob, alt, title).map(x => Some((x.media, blob, x.created)))
+              case None => Consequence.success(None)
+            }
           case None => Consequence.success(None)
         }
+    }
+
+  private def _resolve_image_urn(
+    urn: TextusUrn
+  )(using ExecutionContext): Consequence[Option[(MediaEntity, Blob)]] =
+    urnRepository.resolve(urn).flatMap {
+      case Some(resolution) if resolution.collection == MediaEntityCollections.Image =>
+        mediaRepository.get(MediaKind.Image, resolution.entityId).flatMap { media =>
+          repository.get(media.blobId).map(blob => Some(media -> blob))
+        }
+      case Some(_) =>
+        Consequence.argumentInvalid(s"Textus URN is not an Image URN: ${urn.print}")
+      case None =>
+        Consequence.success(None)
     }
 
   private def _resolve_blob_urn(
@@ -348,10 +457,13 @@ final class BlobInlineImageWorkflow(
   }
 
   private def _existing_kind(src: String): InlineImageSourceKind =
-    if (TextusUrn.parseOption(src).exists(_.kind == TextusUrn.BlobKind))
+    if (TextusUrn.parseOption(src).exists(urn => urn.kind == TextusUrn.BlobKind || urn.kind == TextusUrn.ImageKind))
       InlineImageSourceKind.TextusUrn
     else
       InlineImageSourceKind.BlobContentUrl
+
+  private def _image_urn(id: EntityId): TextusUrn =
+    TextusUrn.image(id.parts.entropy)
 
   private def _blob_urn(id: EntityId): TextusUrn =
     TextusUrn.blob(id.parts.entropy)
@@ -387,11 +499,14 @@ final class BlobInlineImageWorkflow(
   ): Consequence[ContentType] = {
     val ct = mimeType.map(ContentType(_, None)).orElse(_content_type_from_filename(filename))
       .getOrElse(ContentType.APPLICATION_OCTET_STREAM)
-    if (ct.mimeType.print.toLowerCase(java.util.Locale.ROOT).startsWith("image/"))
+    if (_is_image_content_type(ct))
       Consequence.success(ct)
     else
       Consequence.argumentPolicyViolation("inlineImage.contentType", "mime-kind", "image/*", ct.header)
   }
+
+  private def _is_image_content_type(contentType: ContentType): Boolean =
+    contentType.mimeType.print.toLowerCase(java.util.Locale.ROOT).startsWith("image/")
 
   private def _content_type_from_filename(filename: String): Option[ContentType] = {
     val lower = filename.toLowerCase(java.util.Locale.ROOT)

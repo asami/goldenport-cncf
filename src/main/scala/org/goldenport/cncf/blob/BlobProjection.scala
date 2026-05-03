@@ -10,7 +10,8 @@ import org.simplemodeling.model.datatype.EntityId
  * Projection helper for adding Blob metadata to entity-oriented records.
  *
  * @since   Apr. 27, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 object BlobProjection {
@@ -46,19 +47,29 @@ object BlobProjection {
   )(
     loaders: BlobProjection.Loaders
   ): Consequence[Vector[BlobProjectionRow]] =
-    loaders.listAssociations(
+    val blobRows = loaders.listAssociations(
       AssociationFilter(
         domain = AssociationDomain.BlobAttachment,
         sourceEntityId = Some(sourceEntityId),
         targetKind = Some("blob")
       )
-    ).flatMap { rows =>
-      val ordered = rows.sortBy(x => (x.sortOrder.getOrElse(Int.MaxValue), x.associationId))
-      ordered.foldLeft(Consequence.success(Vector.empty[BlobProjectionRow])) { (z, association) =>
-        z.flatMap { acc =>
-          _blob_entity_id(association.targetEntityId)
-            .flatMap(loaders.loadBlob)
-            .map(blob => acc :+ BlobProjectionRow(blob.metadata, association))
+    )
+    val mediaRows = loaders.listAssociations(
+      AssociationFilter(
+        domain = AssociationDomain.MediaAttachment,
+        sourceEntityId = Some(sourceEntityId),
+        targetKind = Some("image")
+      )
+    )
+    blobRows.flatMap { blobs =>
+      mediaRows.flatMap { media =>
+        val ordered = (blobs ++ media).sortBy(x => (x.sortOrder.getOrElse(Int.MaxValue), x.associationId))
+        ordered.foldLeft(Consequence.success(Vector.empty[BlobProjectionRow])) { (z, association) =>
+          z.flatMap { acc =>
+            _association_blob_id(association, loaders)
+              .flatMap(loaders.loadBlob)
+              .map(blob => acc :+ BlobProjectionRow(blob.metadata, association))
+          }
         }
       }
     }
@@ -79,7 +90,8 @@ object BlobProjection {
 
   final case class Loaders(
     listAssociations: AssociationFilter => Consequence[Vector[Association]],
-    loadBlob: EntityId => Consequence[Blob]
+    loadBlob: EntityId => Consequence[Blob],
+    loadMedia: EntityId => Consequence[MediaEntity] = id => Consequence.operationNotFound(s"media entity:${id.value}")
   )
 
   private def _normalize_role(role: String): String =
@@ -94,6 +106,38 @@ object BlobProjection {
         timestamp = Some(parts.timestamp),
         entropy = Some(parts.entropy)
       )
+    }
+
+  private def _association_blob_id(
+    association: Association,
+    loaders: Loaders
+  ): Consequence[EntityId] =
+    association.associationDomain match {
+      case AssociationDomain.BlobAttachment =>
+        _blob_entity_id(association.targetEntityId)
+      case AssociationDomain.MediaAttachment =>
+        _media_entity_id(association.targetEntityId, association.targetKind)
+          .flatMap(loaders.loadMedia)
+          .map(_.blobId)
+      case other =>
+        Consequence.argumentInvalid(s"unsupported projection association domain: ${other.value}")
+    }
+
+  private def _media_entity_id(
+    value: String,
+    targetKind: Option[String]
+  ): Consequence[EntityId] =
+    UniversalId.parseParts(value, "entity").flatMap { parts =>
+      val kind = targetKind.getOrElse("image")
+      MediaKind.parse(kind).map { mediaKind =>
+        EntityId(
+          major = parts.major,
+          minor = parts.minor,
+          collection = MediaEntityCollections.collection(mediaKind),
+          timestamp = Some(parts.timestamp),
+          entropy = Some(parts.entropy)
+        )
+      }
     }
 }
 

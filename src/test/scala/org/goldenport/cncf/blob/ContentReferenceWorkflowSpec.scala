@@ -18,7 +18,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for SimpleEntity content reference handling.
  *
  * @since   May.  3, 2026
- * @version May.  3, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ContentReferenceWorkflowSpec
@@ -48,12 +48,12 @@ final class ContentReferenceWorkflowSpec
       )))
 
       Then("the image is rewritten to Textus URN and both references are indexed")
-      result.normalizedText should include (s"""src="urn:textus:blob:${blobId.parts.entropy}"""")
+      result.normalizedText should include ("""src="urn:textus:image:""")
       result.references.map(x => (x.elementKind, x.attributeName, x.referenceKind)) shouldBe Vector(
-        (Some("img"), Some("src"), Some("blob")),
+        (Some("img"), Some("src"), Some("image")),
         (Some("a"), Some("href"), Some("external-url"))
       )
-      result.references.head.targetEntityId shouldBe Some(blobId.value)
+      result.references.head.targetEntityId.flatMap(EntityId.parse(_).toOption).map(_.collection.name) shouldBe Some("image")
       result.references(1).label shouldBe Some("Doc")
     }
 
@@ -79,10 +79,10 @@ final class ContentReferenceWorkflowSpec
       When("attaching references")
       val result = _success(workflow.attachReferences("article-content-ref-attach", normalized.references))
 
-      Then("occurrences remain duplicated but Association is Blob-distinct")
-      normalized.references.map(_.targetEntityId).flatten shouldBe Vector(blobId.value, blobId.value)
+      Then("occurrences remain duplicated but Association is Image-distinct")
+      normalized.references.map(_.targetEntityId).flatten.distinct.size shouldBe 1
       result.associations.size shouldBe 1
-      _associations("article-content-ref-attach").map(_.targetEntityId) shouldBe Vector(blobId.value)
+      _associations("article-content-ref-attach").map(_.targetEntityId) shouldBe normalized.references.map(_.targetEntityId).flatten.distinct
     }
 
     "not attach Blob links as inline image Associations" in {
@@ -117,12 +117,60 @@ final class ContentReferenceWorkflowSpec
       val result = _success(workflow.attachReferences("article-content-ref-link", normalized.references))
 
       Then("only the img/src Blob becomes an inline image association")
-      normalized.references.map(x => (x.elementKind, x.attributeName, x.targetEntityId)) shouldBe Vector(
-        (Some("img"), Some("src"), Some(imageId.value)),
-        (Some("a"), Some("href"), Some(attachmentId.value))
+      normalized.references.map(x => (x.elementKind, x.attributeName, x.referenceKind)) shouldBe Vector(
+        (Some("img"), Some("src"), Some("image")),
+        (Some("a"), Some("href"), Some("blob"))
       )
       result.associations.size shouldBe 1
-      _associations("article-content-ref-link").map(_.targetEntityId) shouldBe Vector(imageId.value)
+      _associations("article-content-ref-link").map(_.targetEntityId) shouldBe normalized.references.head.targetEntityId.toVector
+    }
+
+    "reject non-image Blob refs in img/src without promoting them to Image media" in {
+      Given("an attachment Blob referenced from img/src")
+      given ExecutionContext = ExecutionContext.create()
+      val component = _blob_component(InMemoryBlobStore())
+      val attachmentId = _blob_id("content_ref_img_attachment")
+      _success(BlobPayloadSupport.putManagedPayload(
+        component = component,
+        id = attachmentId,
+        kind = BlobKind.Attachment,
+        filename = Some("document.pdf"),
+        contentType = ContentType.APPLICATION_PDF,
+        payload = Bag.binary("pdf".getBytes(StandardCharsets.UTF_8))
+      ))
+      val workflow = ContentReferenceWorkflow(component)
+
+      When("normalizing an HTML image reference")
+      val result = workflow.normalize(ContentReferenceContent(
+        InlineImageMarkup.HtmlFragment,
+        s"""<article><img src="/web/blob/content/${attachmentId.value}"></article>"""
+      ))
+
+      Then("normalization fails and no Image media entity is created")
+      result shouldBe a[Consequence.Failure[_]]
+      _success(MediaRepository.entityStore().list(MediaKind.Image)) shouldBe Vector.empty
+    }
+
+    "compensate external Blob metadata when Image media creation fails" in {
+      Given("a workflow whose media repository rejects Image creation")
+      given ExecutionContext = ExecutionContext.create()
+      val component = _blob_component(InMemoryBlobStore())
+      val repository = BlobRepository.entityStore()
+      val workflow = BlobInlineImageWorkflow(
+        component,
+        repository = repository,
+        mediaRepository = new _FailingMediaRepository
+      )
+
+      When("normalizing an external image")
+      val result = workflow.normalize(InlineImageContent(
+        InlineImageMarkup.HtmlFragment,
+        """<article><img src="https://example.com/inline.png"></article>"""
+      ))
+
+      Then("the operation fails and the just-created Blob metadata is removed")
+      result shouldBe a[Consequence.Failure[_]]
+      _success(repository.list()) shouldBe Vector.empty
     }
 
     "validate inline image references before source mutation" in {
@@ -153,11 +201,11 @@ final class ContentReferenceWorkflowSpec
 
   private def _associations(source: String)(using ExecutionContext) =
     _success(
-      AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault).list(
+      AssociationRepository.entityStore(AssociationStoragePolicy.mediaAttachmentDefault).list(
         AssociationFilter(
-          domain = AssociationDomain.BlobAttachment,
+          domain = AssociationDomain.MediaAttachment,
           sourceEntityId = Some(source),
-          targetKind = Some("blob"),
+          targetKind = Some("image"),
           role = Some("inline")
         )
       )
@@ -179,6 +227,29 @@ final class ContentReferenceWorkflowSpec
   ) extends BlobComponent.BlobService {
     def blobStore: BlobStore = store
     def maxByteSize: Long = maxsize
+  }
+
+  private final class _FailingMediaRepository extends MediaRepository {
+    def create(media: MediaCreate)(using ExecutionContext): Consequence[MediaEntity] =
+      Consequence.operationInvalid("media creation disabled")
+
+    def get(kind: MediaKind, id: EntityId)(using ExecutionContext): Consequence[MediaEntity] =
+      Consequence.operationNotFound(s"${kind.print} entity:${id.value}")
+
+    def list(kind: MediaKind)(using ExecutionContext): Consequence[Vector[MediaEntity]] =
+      Consequence.success(Vector.empty)
+
+    def findByBlob(kind: MediaKind, blobId: EntityId)(using ExecutionContext): Consequence[Option[MediaEntity]] =
+      Consequence.success(None)
+
+    def ensureImageForBlobResult(blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ExecutionContext): Consequence[MediaEnsureResult] =
+      Consequence.operationInvalid("media creation disabled")
+
+    def ensureImageForBlob(blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ExecutionContext): Consequence[MediaEntity] =
+      ensureImageForBlobResult(blob, alt, title).map(_.media)
+
+    def delete(media: MediaEntity)(using ExecutionContext): Consequence[Unit] =
+      Consequence.unit
   }
 
   private def _blob_id(value: String): EntityId =

@@ -14,7 +14,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  *
  * @since   Apr. 27, 2026
  *  version Apr. 28, 2026
- * @version May.  3, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 trait BlobRepository {
@@ -27,6 +27,12 @@ trait BlobRepository {
 object BlobRepository {
   val CollectionId: EntityCollectionId =
     EntityCollectionId("cncf", "builtin", "blob")
+
+  def canonicalId(id: EntityId): EntityId =
+    if (id.collection == CollectionId)
+      id
+    else
+      id.copy(collection = CollectionId)
 
   def entityStore(): BlobRepository =
     new EntityStoreBlobRepository()
@@ -62,7 +68,7 @@ final class EntityStoreBlobRepository extends BlobRepository {
     } yield blob
 
   def get(id: EntityId)(using ctx: ExecutionContext): Consequence[Blob] =
-    EntityStore.standard().load[Blob](id).flatMap {
+    EntityStore.standard().load[Blob](BlobRepository.canonicalId(id)).flatMap {
       case Some(value) => Consequence.success(value)
       case None => Consequence.operationNotFound(s"blob metadata:${id.value}")
     }
@@ -71,7 +77,7 @@ final class EntityStoreBlobRepository extends BlobRepository {
     _search(Query.plan(Record.empty, limit = limit, offset = Some(offset)))
 
   def delete(id: EntityId)(using ctx: ExecutionContext): Consequence[Unit] =
-    EntityStore.standard().delete(id)
+    EntityStore.standard().delete(BlobRepository.canonicalId(id))
 
   private def _search(
     query: Query[?]

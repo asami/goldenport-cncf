@@ -331,7 +331,7 @@ logic.
       still resolving full EntityId inputs.
 - [x] Add `BlobInlineImageWorkflow` for HTML fragment image normalization.
 - [x] Register relative filebundle images as managed Blobs and rewrite persisted
-      content to Blob URNs.
+      content to Textus URNs.
 - [x] Preserve external image URLs when requested, or capture them as
       metadata-only external-url Blob rows.
 - [x] Add ActionCall/UoW operations for inline-image normalization and
@@ -344,7 +344,10 @@ logic.
 
 ### Decisions
 
-- Persisted content uses `urn:textus:blob:{entropy}` for Blob image references.
+- BI-04B originally introduced `urn:textus:blob:{entropy}` for Blob image
+  references; MB-01 supersedes new inline image content to
+  `urn:textus:image:{entropy}` while retaining Blob URNs as compatibility and
+  low-level fallback.
 - HTML fragment is the only implemented markup in this slice; Markdown and
   SmartDox remain reserved for a later content-format slice.
 - External URL payload fetching is not implemented in v1. Metadata-only capture
@@ -411,10 +414,10 @@ from the runtime path.
       `content_normalize_references`.
 - [x] Persist normalized content and generated `ContentReferenceOccurrence`
       values in `BlogPost.contentAttributes`.
-- [x] Synchronize inline BlobAttachment Associations from generated references
+- [x] Synchronize inline MediaAttachment Associations from generated references
       through UoW-backed `content_sync_inline_references`.
-- [x] Aggregate duplicate inline references so the same Blob produces multiple
-      occurrences but one inline BlobAttachment Association.
+- [x] Aggregate duplicate inline references so the same Image produces multiple
+      occurrences but one inline MediaAttachment Association.
 - [x] Reject `contentReferences` / `content_references` as external operation
       input.
 - [x] Keep `a/href` Blob links as content references without attaching them as
@@ -424,43 +427,56 @@ from the runtime path.
 
 - Blog no longer owns a separate persistent inline-image occurrence Entity.
 - `BlogPost.contentAttributes.references` is the canonical occurrence index.
-- BlobAttachment remains the Entity-to-Blob relationship and is Blob-distinct,
-  not occurrence-distinct.
+- MediaAttachment is the Entity-to-media relationship and is media-distinct,
+  not occurrence-distinct. BlobAttachment remains available for lower-level
+  Blob compatibility links.
 - Operation callers provide content and optional filebundle context; they do
   not provide reference metadata.
 
 ---
 
-## MB-01: Media and Attachment Reference Kinds
+## MB-01: Built-in Media Entities and Attachment Reference Kinds
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
-Split document-facing Blob references into clearer Textus URN kinds for image,
-video, attachment, and generic blob usage.
+Split document-facing Blob references into CNCF builtin media Entity kinds for
+image, video, audio, attachment, and generic blob usage. Media Entities point
+to BlobStore Blob metadata with `blobId`; the existing Blob Entity remains the
+generic fallback for any payload that does not fit a specific media kind.
 
 ### Detailed Tasks
 
-- [ ] Define Textus URN kinds for `image`, `video`, `attachment`, and `blob`.
-- [ ] Use forms such as `urn:textus:image:{value}`,
-      `urn:textus:video:{value}`, `urn:textus:attachment:{value}`, and
-      `urn:textus:blob:{value}`.
-- [ ] Define how each URN kind maps to Blob-backed Entity ids and how the
+- [x] Define builtin media Entity collections for `Image`, `Video`, `Audio`,
+      and `Attachment` over Blob metadata.
+- [x] Define Textus URN kinds for `image`, `video`, `audio`, `attachment`, and
+      `blob`.
+- [x] Use forms such as `urn:textus:image:{value}`,
+      `urn:textus:video:{value}`, `urn:textus:audio:{value}`,
+      `urn:textus:attachment:{value}`, and `urn:textus:blob:{value}`.
+- [x] Define how each URN kind maps to Blob-backed Entity ids and how the
       resolver preserves normal Entity access scope.
-- [ ] Keep `attachment` for CNCF-opaque formats such as Excel, Word, PDF, or
+- [x] Keep `attachment` for CNCF-opaque formats such as Excel, Word, PDF, or
       other files attached as supporting Entity material.
-- [ ] Leave room for image/video specific metadata as applications deepen
+- [x] Leave room for image/video/audio specific metadata as applications deepen
       without forcing those fields into generic Blob metadata too early.
-- [ ] Update Blog and Blob display/rendering helpers to emit the appropriate
-      kind where a specific kind is known.
+- [x] Add `MediaAttachment` as the canonical Entity-to-media Association while
+      retaining `BlobAttachment` for low-level Blob links and compatibility.
+- [x] Update Blog and Blob display/rendering helpers to emit image URNs where
+      a specific image media Entity is known.
 
 ### Decisions
 
-- `blob` remains the generic fallback kind.
+- `Image`, `Video`, `Audio`, and `Attachment` are independent CNCF builtin
+  Entities. They reference BlobStore Blob metadata with `blobId`.
+- `blob` remains the generic fallback kind and the place for Blob payloads that
+  do not match image, video, audio, or attachment semantics.
 - `attachment` means attached supporting material, not inline prose content.
-- Image/video are separate document reference kinds because their metadata and
-  rendering requirements can diverge.
+- Image/video/audio/attachment are separate document reference kinds because
+  their metadata and rendering requirements can diverge.
+- `urn:textus:blob:{entropy}` remains a compatibility and low-level fallback
+  form; new inline image content uses `urn:textus:image:{entropy}`.
 
 ---
 

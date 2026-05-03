@@ -8,7 +8,7 @@ import org.goldenport.text.Presentable
  * UniversalId and shortid. Persistent storage keys remain EntityId values.
  *
  * @since   May.  3, 2026
- * @version May.  3, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class TextusUrn(
@@ -20,7 +20,23 @@ final case class TextusUrn(
 }
 
 object TextusUrn {
+  val ImageKind: String = "image"
+  val VideoKind: String = "video"
+  val AudioKind: String = "audio"
+  val AttachmentKind: String = "attachment"
   val BlobKind: String = "blob"
+
+  def image(value: String): TextusUrn =
+    TextusUrn(ImageKind, value)
+
+  def video(value: String): TextusUrn =
+    TextusUrn(VideoKind, value)
+
+  def audio(value: String): TextusUrn =
+    TextusUrn(AudioKind, value)
+
+  def attachment(value: String): TextusUrn =
+    TextusUrn(AttachmentKind, value)
 
   def blob(value: String): TextusUrn =
     TextusUrn(BlobKind, value)

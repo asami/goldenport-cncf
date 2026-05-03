@@ -16,7 +16,7 @@ import org.simplemodeling.model.datatype.EntityId
  * SimpleEntity content reference normalization and attachment workflow.
  *
  * @since   May.  3, 2026
- * @version May.  3, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ContentReferenceContent(
@@ -64,17 +64,18 @@ final class ContentReferenceWorkflow(
   component: Component,
   blobWorkflow: Option[BlobInlineImageWorkflow] = None,
   repository: BlobRepository = BlobRepository.entityStore(),
-  associations: AssociationRepository = AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault),
-  urnRepository: UrnRepository = UrnRepository(new BlobUrnResolver)
+  mediaRepository: MediaRepository = MediaRepository.entityStore(),
+  associations: AssociationRepository = AssociationRepository.entityStore(AssociationStoragePolicy.mediaAttachmentDefault),
+  urnRepository: UrnRepository = UrnRepository.from(MediaUrnResolver.all :+ new BlobUrnResolver)
 ) {
   private lazy val _blob_workflow =
-    blobWorkflow.getOrElse(BlobInlineImageWorkflow(component, repository, associations, urnRepository))
+    blobWorkflow.getOrElse(BlobInlineImageWorkflow(component, repository, mediaRepository, AssociationRepository.entityStore(AssociationStoragePolicy.blobAttachmentDefault), urnRepository))
 
   private val _association_workflow =
     AssociationBindingWorkflow(
       associations,
-      AssociationStoragePolicy.blobAttachmentDefault,
-      BlobInlineImageWorkflow.blobTargetValidator(repository)
+      AssociationStoragePolicy.mediaAttachmentDefault,
+      ContentReferenceWorkflow.mediaTargetValidator(mediaRepository)
     )
 
   def normalize(
@@ -137,9 +138,9 @@ final class ContentReferenceWorkflow(
       occurrenceIndex = occurrence.index,
       originalRef = Some(occurrence.originalSrc),
       normalizedRef = Some(occurrence.normalizedSrc),
-      referenceKind = Some("blob"),
+      referenceKind = Some("image"),
       urn = Some(occurrence.normalizedSrc),
-      targetEntityId = Some(occurrence.blobId.value),
+      targetEntityId = Some(occurrence.imageId.value),
       alt = occurrence.alt,
       title = occurrence.title,
       mediaType = Some("image"),
@@ -158,8 +159,8 @@ final class ContentReferenceWorkflow(
     link: HtmlLinkOccurrence
   )(using ExecutionContext): Consequence[ContentReferenceOccurrence] = {
     val href = link.href.trim
-    _resolve_blob_ref(href).map {
-      case Some(id) =>
+    _resolve_reference_ref(href).map {
+      case Some((kind, id, urnText)) =>
         ContentReferenceOccurrence(
           contentField = Some("content"),
           markup = Some("html-fragment"),
@@ -168,8 +169,8 @@ final class ContentReferenceWorkflow(
           occurrenceIndex = link.index,
           originalRef = Some(link.href),
           normalizedRef = Some(link.href),
-          referenceKind = Some("blob"),
-          urn = Some(TextusUrn.blob(id.parts.entropy).print),
+          referenceKind = Some(kind),
+          urn = Some(urnText),
           targetEntityId = Some(id.value),
           label = link.label,
           title = link.title,
@@ -213,8 +214,8 @@ final class ContentReferenceWorkflow(
         z.flatMap { attached =>
           _association_workflow.attachExistingTargetResult(
             sourceEntityId = sourceEntityId,
-            domain = AssociationDomain.BlobAttachment,
-            targetKind = Some("blob"),
+            domain = AssociationDomain.MediaAttachment,
+            targetKind = Some("image"),
             targetEntityId = id,
             role = "inline",
             sortOrder = Some(index)
@@ -232,9 +233,9 @@ final class ContentReferenceWorkflow(
     created: Vector[org.goldenport.cncf.association.AssociationBindingAttachResult]
   )(using ExecutionContext): Consequence[Unit] =
     associations.list(org.goldenport.cncf.association.AssociationFilter(
-      domain = AssociationDomain.BlobAttachment,
+      domain = AssociationDomain.MediaAttachment,
       sourceEntityId = Some(sourceEntityId),
-      targetKind = Some("blob"),
+      targetKind = Some("image"),
       role = Some("inline")
     )).flatMap { existing =>
       val keep = desiredIds.map(_.value).toSet
@@ -266,19 +267,68 @@ final class ContentReferenceWorkflow(
       ref.targetEntityId match {
         case Some(value) =>
           EntityId.parse(value).flatMap { id =>
-            val blobId = _blob_entity_id(id)
-            repository.get(blobId).map(_ => Some(blobId))
+            val imageId = _media_entity_id(MediaKind.Image, id)
+            mediaRepository.get(MediaKind.Image, imageId).map(_ => Some(imageId))
           }
         case None =>
           ref.urn.orElse(ref.normalizedRef).orElse(ref.originalRef)
-            .map(_resolve_blob_ref)
+            .map(_resolve_image_ref)
             .getOrElse(Consequence.success(None))
       }
     else
       Consequence.success(None)
 
   private def _is_inline_image_reference(ref: ContentReferenceOccurrence): Boolean =
-    ref.elementKind.contains("img") && ref.attributeName.contains("src") && ref.referenceKind.contains("blob")
+    ref.elementKind.contains("img") && ref.attributeName.contains("src") &&
+      (ref.referenceKind.contains("image") || ref.referenceKind.contains("blob"))
+
+  private def _resolve_image_ref(
+    value: String
+  )(using ExecutionContext): Consequence[Option[EntityId]] =
+    TextusUrn.parseOption(value) match {
+      case Some(urn) if urn.kind == TextusUrn.ImageKind =>
+        urnRepository.resolve(urn).map(_.map(_.entityId))
+      case Some(urn) if urn.kind == TextusUrn.BlobKind =>
+        _resolve_blob_ref(value).flatMap {
+          case Some(blobId) =>
+            repository.get(blobId).flatMap(blob => mediaRepository.ensureImageForBlob(blob).map(media => Some(media.id)))
+          case None => Consequence.success(None)
+        }
+      case Some(_) =>
+        Consequence.success(None)
+      case None =>
+        _blob_content_value(value)
+          .map { _ =>
+            _resolve_blob_content_value(value).flatMap {
+              case Some(blobId) =>
+                repository.get(blobId).flatMap(blob => mediaRepository.ensureImageForBlob(blob).map(media => Some(media.id)))
+              case None => Consequence.success(None)
+            }
+          }.getOrElse(Consequence.success(None))
+    }
+
+  private def _resolve_reference_ref(
+    value: String
+  )(using ExecutionContext): Consequence[Option[(String, EntityId, String)]] =
+    TextusUrn.parseOption(value) match {
+      case Some(urn) if urn.kind == TextusUrn.ImageKind =>
+        urnRepository.resolve(urn).map(_.map(resolution => ("image", resolution.entityId, urn.print)))
+      case Some(urn) if urn.kind == TextusUrn.VideoKind =>
+        urnRepository.resolve(urn).map(_.map(resolution => ("video", resolution.entityId, urn.print)))
+      case Some(urn) if urn.kind == TextusUrn.AudioKind =>
+        urnRepository.resolve(urn).map(_.map(resolution => ("audio", resolution.entityId, urn.print)))
+      case Some(urn) if urn.kind == TextusUrn.AttachmentKind =>
+        urnRepository.resolve(urn).map(_.map(resolution => ("attachment", resolution.entityId, urn.print)))
+      case Some(urn) if urn.kind == TextusUrn.BlobKind =>
+        _resolve_blob_ref(value).map(_.map(id => ("blob", id, urn.print)))
+      case Some(_) =>
+        Consequence.success(None)
+      case None =>
+        _blob_content_value(value)
+          .map(_resolve_blob_content_value)
+          .getOrElse(Consequence.success(None))
+          .map(_.map(id => ("blob", id, TextusUrn.blob(id.parts.entropy).print)))
+    }
 
   private def _resolve_blob_ref(
     value: String
@@ -313,6 +363,14 @@ final class ContentReferenceWorkflow(
     else
       id.copy(collection = BlobRepository.CollectionId)
 
+  private def _media_entity_id(kind: MediaKind, id: EntityId): EntityId = {
+    val collection = MediaEntityCollections.collection(kind)
+    if (id.collection == collection)
+      id
+    else
+      id.copy(collection = collection)
+  }
+
   private def _reference_kind(value: String): String =
     if (_is_external_url(value))
       "external-url"
@@ -345,4 +403,30 @@ private final case class AttachedInlineReferences(
 private object AttachedInlineReferences {
   val empty: AttachedInlineReferences =
     AttachedInlineReferences(Vector.empty, Vector.empty)
+}
+
+object ContentReferenceWorkflow {
+  def mediaTargetValidator(
+    repository: MediaRepository
+  ): org.goldenport.cncf.association.AssociationTargetValidator =
+    new org.goldenport.cncf.association.AssociationTargetValidator {
+      def validate(
+        targetKind: Option[String],
+        id: EntityId
+      )(using ExecutionContext): Consequence[Unit] =
+        targetKind match {
+          case Some("image") =>
+            repository.get(MediaKind.Image, id).map(_ => ())
+          case Some("video") =>
+            repository.get(MediaKind.Video, id).map(_ => ())
+          case Some("audio") =>
+            repository.get(MediaKind.Audio, id).map(_ => ())
+          case Some("attachment") =>
+            repository.get(MediaKind.Attachment, id).map(_ => ())
+          case Some(other) =>
+            Consequence.argumentInvalid(s"unsupported media association target kind: $other")
+          case None =>
+            Consequence.argumentMissing("targetKind")
+        }
+    }
 }

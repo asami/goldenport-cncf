@@ -14,7 +14,8 @@ import org.simplemodeling.model.datatype.EntityId
  * entities in the same create/update request flow.
  *
  * @since   Apr. 27, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class BlobUploadPart(
@@ -466,6 +467,8 @@ object BlobAttachmentWorkflow {
       BlobKind.Image
     else if (mime.startsWith("video/"))
       BlobKind.Video
+    else if (mime.startsWith("audio/"))
+      BlobKind.Audio
     else if (mime == "application/octet-stream")
       BlobKind.Binary
     else

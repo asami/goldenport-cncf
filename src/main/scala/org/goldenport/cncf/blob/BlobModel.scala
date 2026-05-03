@@ -15,12 +15,13 @@ import org.simplemodeling.model.datatype.EntityId
  * @since   Apr. 26, 2026
  *  version Apr. 28, 2026
  *  version Apr. 29, 2026
- * @version May.  3, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 enum BlobKind(val value: String) {
   case Image extends BlobKind("image")
   case Video extends BlobKind("video")
+  case Audio extends BlobKind("audio")
   case Attachment extends BlobKind("attachment")
   case Binary extends BlobKind("binary")
 
@@ -32,6 +33,7 @@ object BlobKind {
     Option(value).map(_.trim.toLowerCase(Locale.ROOT)) match {
       case Some("image") => Consequence.success(BlobKind.Image)
       case Some("video") => Consequence.success(BlobKind.Video)
+      case Some("audio") => Consequence.success(BlobKind.Audio)
       case Some("attachment") => Consequence.success(BlobKind.Attachment)
       case Some("binary") => Consequence.success(BlobKind.Binary)
       case Some(other) if other.nonEmpty =>

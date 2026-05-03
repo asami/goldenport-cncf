@@ -14,7 +14,8 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for the Phase 18 BL-02 BlobStore SPI baseline.
  *
  * @since   Apr. 26, 2026
- * @version Apr. 29, 2026
+ *  version Apr. 29, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class BlobStoreSpec
@@ -27,6 +28,7 @@ final class BlobStoreSpec
       val examples = Vector(
         "image" -> BlobKind.Image,
         "video" -> BlobKind.Video,
+        "audio" -> BlobKind.Audio,
         "attachment" -> BlobKind.Attachment,
         "binary" -> BlobKind.Binary
       )
