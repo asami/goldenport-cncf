@@ -125,6 +125,23 @@ final class ContentReferenceWorkflowSpec
       _associations("article-content-ref-link").map(_.targetEntityId) shouldBe Vector(imageId.value)
     }
 
+    "validate inline image references before source mutation" in {
+      given ExecutionContext = ExecutionContext.create()
+      val workflow = ContentReferenceWorkflow(_blob_component(InMemoryBlobStore()))
+      val missing = _blob_id("content_ref_missing_blob")
+      val reference = org.goldenport.value.ContentReferenceOccurrence(
+        contentField = Some("content"),
+        markup = Some("html-fragment"),
+        elementKind = Some("img"),
+        attributeName = Some("src"),
+        occurrenceIndex = 0,
+        referenceKind = Some("blob"),
+        targetEntityId = Some(missing.value)
+      )
+
+      workflow.validateInlineReferences(Vector(reference)) shouldBe a[Consequence.Failure[_]]
+    }
+
     "reject Markdown and SmartDox normalization in v1" in {
       given ExecutionContext = ExecutionContext.create()
       val workflow = ContentReferenceWorkflow(_blob_component(InMemoryBlobStore()))

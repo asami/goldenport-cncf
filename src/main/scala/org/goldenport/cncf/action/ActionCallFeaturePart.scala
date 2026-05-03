@@ -772,6 +772,11 @@ trait ActionCallBlobPart extends ActionCallFeaturePart { self: ActionCall.Core.H
   ): ExecUowM[ContentReferenceAttachResult] =
     ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.ContentAttachReferences(sourceEntityId, references)))
 
+  protected final def content_validate_references(
+    references: Vector[ContentReferenceOccurrence]
+  ): ExecUowM[Unit] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.ContentValidateReferences(references)))
+
   protected final def content_sync_inline_references(
     sourceEntityId: String,
     references: Vector[ContentReferenceOccurrence]

@@ -290,6 +290,13 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
         }
       }
 
+    case UnitOfWorkOp.ContentValidateReferences(references) =>
+      withCallTree("uow:content:references:validate") {
+        _component_required.flatMap { component =>
+          ContentReferenceWorkflow(component).validateInlineReferences(references)
+        }
+      }
+
     case UnitOfWorkOp.ContentSyncInlineReferences(source, references) =>
       withCallTree("uow:content:references:sync-inline") {
         _component_required.flatMap { component =>

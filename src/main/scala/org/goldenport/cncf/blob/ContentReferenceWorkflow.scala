@@ -104,6 +104,11 @@ final class ContentReferenceWorkflow(
   )(using ExecutionContext): Consequence[ContentReferenceAttachResult] =
     _attach_inline_images(sourceEntityId, references)
 
+  def validateInlineReferences(
+    references: Vector[ContentReferenceOccurrence]
+  )(using ExecutionContext): Consequence[Unit] =
+    _inline_image_reference_ids(references).map(_ => ())
+
   def syncInlineReferences(
     sourceEntityId: String,
     references: Vector[ContentReferenceOccurrence]
@@ -260,7 +265,10 @@ final class ContentReferenceWorkflow(
     if (_is_inline_image_reference(ref))
       ref.targetEntityId match {
         case Some(value) =>
-          EntityId.parse(value).map(id => Some(_blob_entity_id(id)))
+          EntityId.parse(value).flatMap { id =>
+            val blobId = _blob_entity_id(id)
+            repository.get(blobId).map(_ => Some(blobId))
+          }
         case None =>
           ref.urn.orElse(ref.normalizedRef).orElse(ref.originalRef)
             .map(_resolve_blob_ref)

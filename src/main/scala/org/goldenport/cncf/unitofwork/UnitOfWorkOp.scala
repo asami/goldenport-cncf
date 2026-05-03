@@ -192,6 +192,10 @@ object UnitOfWorkOp {
     references: Vector[ContentReferenceOccurrence]
   ) extends UnitOfWorkOp[ContentReferenceAttachResult]
 
+  final case class ContentValidateReferences(
+    references: Vector[ContentReferenceOccurrence]
+  ) extends UnitOfWorkOp[Unit]
+
   final case class ContentSyncInlineReferences(
     sourceEntityId: String,
     references: Vector[ContentReferenceOccurrence]

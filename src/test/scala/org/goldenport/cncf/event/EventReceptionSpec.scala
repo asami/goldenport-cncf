@@ -16,7 +16,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Apr. 22, 2026
+ *  version Apr. 22, 2026
+ * @version May.  3, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventReceptionSpec
@@ -1137,7 +1138,9 @@ final class EventReceptionSpec
         )
       )
       EventAwaitSupport.awaitVisible(jobids.flatten.nonEmpty) shouldBe true
-      val child = jobengine.query(JobId.parse(jobids.flatten.head).toOption.get).get
+      val childJobId = JobId.parse(jobids.flatten.head).toOption.get
+      _await(() => jobengine.query(childJobId).exists(_.status == JobStatus.Failed))
+      val child = jobengine.query(childJobId).get
 
       Then("the resulting lineage is retryable")
       result shouldBe Consequence.success(
@@ -1408,7 +1411,9 @@ final class EventReceptionSpec
         )
       )
       EventAwaitSupport.awaitVisible(jobids.flatten.nonEmpty) shouldBe true
-      val child = jobengine.query(JobId.parse(jobids.flatten.head).toOption.get).get
+      val childJobId = JobId.parse(jobids.flatten.head).toOption.get
+      _await(() => jobengine.query(childJobId).exists(_.status == JobStatus.Failed))
+      val child = jobengine.query(childJobId).get
 
       Then("the resulting lineage is terminal")
       result shouldBe Consequence.success(
