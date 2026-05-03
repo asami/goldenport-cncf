@@ -52,15 +52,20 @@ final class ContentRenderWorkflowSpec extends AnyWordSpec with Matchers {
       result.html should include ("<td>1</td>")
     }
 
-    "fail SmartDox rendering in CT-01" in {
+    "render SmartDox content through the simplemodeling-lib parser" in {
       given ExecutionContext = ExecutionContext.create()
       val workflow = ContentRenderWorkflow(_blob_component(InMemoryBlobStore()))
       val content = ContentAttributes(
-        content = Some(ContentBody("= title")),
+        content = Some(ContentBody("# Title\n\nSmartDox *bold* text.")),
         markup = Some(ContentMarkup.SmartDox)
       )
 
-      workflow.renderHtml(content) shouldBe a[Consequence.Failure[_]]
+      val result = _success(workflow.renderHtml(content))
+
+      result.markup shouldBe ContentMarkup.SmartDox
+      result.html should include ("""<article class="textus-content">""")
+      result.html should include ("<h1>Title</h1>")
+      result.html should include ("<strong>bold</strong>")
     }
   }
 

@@ -101,7 +101,7 @@ Current semantic direction:
 - I (DONE): CR-02 — Retire BlogInlineImage and consolidate Blog content references.
 - J (DONE): MB-01 — Split Blob document references into image, video, audio, attachment, and blob kinds.
 - K (DONE): CT-01 — Define content/mimetype operation support for HTML, Markdown, and SmartDox.
-- L (PLANNED): SD-01 — Add SmartDox and GFM-compatible Markdown support.
+- L (ACTIVE): SD-01 — Add SmartDox and GFM-compatible Markdown support.
 - M (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
 
 Resume hint:
@@ -185,14 +185,21 @@ Resume hint:
   Blob links and compatibility. CT-01 defines SimpleEntity content storage and
   rendering with `ContentBody`, `mimeType`, `charset`, and `ContentMarkup`.
   HTML fragments are stored as single-body content and rendered inside an
-  article wrapper; GFM-compatible Markdown renders to HTML, including tables;
-  SmartDox rendering remains explicitly unsupported for this slice. Content
-  body storage uses charset-aware byte sizing to keep small bodies inline and
-  overflow larger bodies to content side storage without exposing DB storage
-  choices to application models. Binary/opaque payloads remain outside ordinary
-  content bodies and belong under Blob/media/attachment boundaries. The
-  `textus-blog` Web driver now resolves CNCF and SimpleModeling versions from
-  project-local `versions/` files rather than a `cncf-samples` root.
+  article wrapper; GFM-compatible Markdown renders to HTML, including tables.
+  SD-01 adds the first SmartDox content core in `simplemodeling-lib`: a Scala 3
+  parser/AST, safe HTML renderer, and reference extractor used by CNCF content
+  rendering and normalization. The port covers the content subset needed for
+  CNCF, including headings, paragraphs, lists, pipe tables, links, images,
+  source blocks, comments, and XML/JSON structured tokens. SmartDox source
+  text is not rewritten yet; normalized image/media identity is kept in
+  `ContentReferenceOccurrence` metadata until source-span-aware rewriting is
+  available. Content body storage uses charset-aware byte sizing to keep small
+  bodies inline and overflow larger bodies to content side storage without
+  exposing DB storage choices to application models. Binary/opaque payloads
+  remain outside ordinary content bodies and belong under Blob/media/attachment
+  boundaries. The `textus-blog` Web driver now resolves CNCF and
+  SimpleModeling versions from project-local `versions/` files rather than a
+  `cncf-samples` root.
 
 ## 5. Development Items
 

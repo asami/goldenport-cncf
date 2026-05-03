@@ -14,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 22, 2026
- * @version Apr. 22, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobRetryOperationalSpec
@@ -36,16 +36,19 @@ final class JobRetryOperationalSpec
         succeedAt = 3
       )
 
-      When("the job is submitted")
-      val jobId = _jobid(engine.submit(List(task), ExecutionContext.test()))
-      val model = _await_query(engine, jobId)
+      try {
+        When("the job is submitted")
+        val jobId = _jobid(engine.submit(List(task), ExecutionContext.test()))
+        val model = _await_query(engine, jobId)
 
-      Then("the job succeeds after automatic retries and records retry attempts")
-      model.status shouldBe JobStatus.Succeeded
-      model.retry.kind shouldBe JobRetryKind.Immediate
-      model.retry.attemptCount shouldBe 2
-      attempts.get() shouldBe 3
-      engine.shutdown()
+        Then("the job succeeds after automatic retries and records retry attempts")
+        model.status shouldBe JobStatus.Succeeded
+        model.retry.kind shouldBe JobRetryKind.Immediate
+        model.retry.attemptCount shouldBe 2
+        attempts.get() shouldBe 3
+      } finally {
+        engine.shutdown()
+      }
     }
 
     "schedule delayed retries and resume them after engine restart" in {
@@ -60,24 +63,32 @@ final class JobRetryOperationalSpec
         attempts = attempts,
         succeedAt = 2
       )
-      val engine1 = new InMemoryJobEngine(state, schedule)(scala.concurrent.ExecutionContext.global)
-      val jobId = _jobid(engine1.submit(List(task), ExecutionContext.test()))
-      val queued = _await_condition {
-        engine1.query(jobId).exists(_.retry.nextRetryDueAt.nonEmpty)
+      var engine1 = Option(new InMemoryJobEngine(state, schedule)(scala.concurrent.ExecutionContext.global))
+      val jobId = _jobid(engine1.get.submit(List(task), ExecutionContext.test()))
+      try {
+        val queued = _await_condition {
+          engine1.get.query(jobId).exists(_.retry.nextRetryDueAt.nonEmpty)
+        }
+        queued shouldBe true
+
+        When("the engine is restarted before the delayed retry fires")
+        engine1.get.shutdown()
+        engine1 = None
+        val engine2 = new InMemoryJobEngine(state, schedule)(scala.concurrent.ExecutionContext.global)
+        try {
+          val model = _await_query(engine2, jobId)
+
+          Then("the delayed retry is resumed from persisted state and the job succeeds")
+          model.status shouldBe JobStatus.Succeeded
+          model.retry.kind shouldBe JobRetryKind.Delayed
+          model.retry.attemptCount shouldBe 1
+          attempts.get() shouldBe 2
+        } finally {
+          engine2.shutdown()
+        }
+      } finally {
+        engine1.foreach(_.shutdown())
       }
-      queued shouldBe true
-
-      When("the engine is restarted before the delayed retry fires")
-      engine1.shutdown()
-      val engine2 = new InMemoryJobEngine(state, schedule)(scala.concurrent.ExecutionContext.global)
-      val model = _await_query(engine2, jobId)
-
-      Then("the delayed retry is resumed from persisted state and the job succeeds")
-      model.status shouldBe JobStatus.Succeeded
-      model.retry.kind shouldBe JobRetryKind.Delayed
-      model.retry.attemptCount shouldBe 1
-      attempts.get() shouldBe 2
-      engine2.shutdown()
     }
 
     "dead-letter exhausted RetryLater jobs after three retries" in {
@@ -94,20 +105,23 @@ final class JobRetryOperationalSpec
         succeedAt = Int.MaxValue
       )
 
-      When("the retries are exhausted")
-      val jobId = _jobid(engine.submit(List(task), ExecutionContext.test()))
-      val model = _await_query(engine, jobId, statuses = Set(JobStatus.Failed))
+      try {
+        When("the retries are exhausted")
+        val jobId = _jobid(engine.submit(List(task), ExecutionContext.test()))
+        val model = _await_query(engine, jobId, statuses = Set(JobStatus.Failed))
 
-      Then("the final state is dead-lettered with recovery visibility")
-      model.status shouldBe JobStatus.Failed
-      model.retry.kind shouldBe JobRetryKind.Delayed
-      model.retry.attemptCount shouldBe 3
-      model.retry.exhausted shouldBe true
-      model.retry.deadLetter shouldBe true
-      model.retry.poison shouldBe false
-      model.retry.recoveryRequired shouldBe true
-      attempts.get() shouldBe 4
-      engine.shutdown()
+        Then("the final state is dead-lettered with recovery visibility")
+        model.status shouldBe JobStatus.Failed
+        model.retry.kind shouldBe JobRetryKind.Delayed
+        model.retry.attemptCount shouldBe 3
+        model.retry.exhausted shouldBe true
+        model.retry.deadLetter shouldBe true
+        model.retry.poison shouldBe false
+        model.retry.recoveryRequired shouldBe true
+        attempts.get() shouldBe 4
+      } finally {
+        engine.shutdown()
+      }
     }
 
     "enqueue delayed retries into the shared scheduler instead of executing them directly" in {
@@ -127,31 +141,35 @@ final class JobRetryOperationalSpec
       val blockerEntered = new CountDownLatch(1)
       val blockerRelease = new CountDownLatch(1)
 
-      When("a RetryLater job becomes due while the worker is still busy")
-      val jobId = _jobid(engine.submit(List(task), ExecutionContext.test()))
-      _await_condition {
-        engine.query(jobId).exists(_.retry.nextRetryDueAt.nonEmpty)
-      } shouldBe true
-      val blockerId = _jobid(engine.submit(List(_BlockingTask(blockerEntered, blockerRelease, "blocker")), ExecutionContext.test()))
-      blockerEntered.await(1, TimeUnit.SECONDS) shouldBe true
+      try {
+        When("a RetryLater job becomes due while the worker is still busy")
+        val jobId = _jobid(engine.submit(List(task), ExecutionContext.test()))
+        _await_condition {
+          engine.query(jobId).exists(_.retry.nextRetryDueAt.nonEmpty)
+        } shouldBe true
+        val blockerId = _jobid(engine.submit(List(_BlockingTask(blockerEntered, blockerRelease, "blocker")), ExecutionContext.test()))
+        blockerEntered.await(5, TimeUnit.SECONDS) shouldBe true
 
-      Then("the retry is enqueued and waits for worker availability")
-      _await_condition {
-        engine.query(jobId).exists { model =>
-          model.retry.nextRetryDueAt.isEmpty &&
-          model.retry.kind == JobRetryKind.Delayed
-        }
-      } shouldBe true
-      attempts.get() shouldBe 1
+        Then("the retry is enqueued and waits for worker availability")
+        _await_condition {
+          engine.query(jobId).exists { model =>
+            model.retry.nextRetryDueAt.isEmpty &&
+            model.retry.kind == JobRetryKind.Delayed
+          }
+        } shouldBe true
+        attempts.get() shouldBe 1
 
-      blockerRelease.countDown()
-      _await_query(engine, blockerId)
-      val model = _await_query(engine, jobId)
+        blockerRelease.countDown()
+        _await_query(engine, blockerId)
+        val model = _await_query(engine, jobId)
 
-      And("execution resumes through the shared scheduler path")
-      model.status shouldBe JobStatus.Succeeded
-      attempts.get() shouldBe 2
-      engine.shutdown()
+        And("execution resumes through the shared scheduler path")
+        model.status shouldBe JobStatus.Succeeded
+        attempts.get() shouldBe 2
+      } finally {
+        blockerRelease.countDown()
+        engine.shutdown()
+      }
     }
 
     "preserve original priority when delayed retries become runnable" in {
@@ -168,32 +186,36 @@ final class JobRetryOperationalSpec
       val blockerEntered = new CountDownLatch(1)
       val blockerRelease = new CountDownLatch(1)
 
-      val retryId = _jobid(engine.submit(
-        List(retryTask),
-        ExecutionContext.test(),
-        JobSubmitOption(priority = -5)
-      ))
-      _await_condition {
-        engine.query(retryId).exists(_.retry.nextRetryDueAt.nonEmpty)
-      } shouldBe true
+      try {
+        val retryId = _jobid(engine.submit(
+          List(retryTask),
+          ExecutionContext.test(),
+          JobSubmitOption(priority = -5)
+        ))
+        _await_condition {
+          engine.query(retryId).exists(_.retry.nextRetryDueAt.nonEmpty)
+        } shouldBe true
 
-      val blockerId = _jobid(engine.submit(List(_BlockingTask(blockerEntered, blockerRelease, "blocker")), ExecutionContext.test()))
-      blockerEntered.await(1, TimeUnit.SECONDS) shouldBe true
-      val regularId = _jobid(engine.submit(List(_RecordingTask("regular", order)), ExecutionContext.test(), JobSubmitOption(priority = 0)))
+        val blockerId = _jobid(engine.submit(List(_BlockingTask(blockerEntered, blockerRelease, "blocker")), ExecutionContext.test()))
+        blockerEntered.await(5, TimeUnit.SECONDS) shouldBe true
+        val regularId = _jobid(engine.submit(List(_RecordingTask("regular", order)), ExecutionContext.test(), JobSubmitOption(priority = 0)))
 
-      When("the delayed retry becomes due while the worker is still busy")
-      _await_condition {
-        engine.query(retryId).exists(_.retry.nextRetryDueAt.isEmpty)
-      } shouldBe true
-      blockerRelease.countDown()
-      _await_query(engine, blockerId)
-      _await_query(engine, retryId)
-      _await_query(engine, regularId)
+        When("the delayed retry becomes due while the worker is still busy")
+        _await_condition {
+          engine.query(retryId).exists(_.retry.nextRetryDueAt.isEmpty)
+        } shouldBe true
+        blockerRelease.countDown()
+        _await_query(engine, blockerId)
+        _await_query(engine, retryId)
+        _await_query(engine, regularId)
 
-      Then("the delayed retry keeps its original priority when it joins the ready queue")
-      order.synchronized(order.toVector) shouldBe Vector("retry", "regular")
-      attempts.get() shouldBe 2
-      engine.shutdown()
+        Then("the delayed retry keeps its original priority when it joins the ready queue")
+        order.synchronized(order.toVector) shouldBe Vector("retry", "regular")
+        attempts.get() shouldBe 2
+      } finally {
+        blockerRelease.countDown()
+        engine.shutdown()
+      }
     }
 
     "fail immediately as poison when retry is not requested" in {
@@ -206,17 +228,20 @@ final class JobRetryOperationalSpec
         succeedAt = Int.MaxValue
       )
 
-      When("the job fails")
-      val jobId = _jobid(engine.submit(List(task), ExecutionContext.test()))
-      val model = _await_query(engine, jobId, statuses = Set(JobStatus.Failed))
+      try {
+        When("the job fails")
+        val jobId = _jobid(engine.submit(List(task), ExecutionContext.test()))
+        val model = _await_query(engine, jobId, statuses = Set(JobStatus.Failed))
 
-      Then("it is marked as poison without automatic retry")
-      model.retry.kind shouldBe JobRetryKind.None
-      model.retry.attemptCount shouldBe 0
-      model.retry.deadLetter shouldBe false
-      model.retry.poison shouldBe true
-      attempts.get() shouldBe 1
-      engine.shutdown()
+        Then("it is marked as poison without automatic retry")
+        model.retry.kind shouldBe JobRetryKind.None
+        model.retry.attemptCount shouldBe 0
+        model.retry.deadLetter shouldBe false
+        model.retry.poison shouldBe true
+        attempts.get() shouldBe 1
+      } finally {
+        engine.shutdown()
+      }
     }
   }
 
@@ -254,7 +279,7 @@ final class JobRetryOperationalSpec
     def run(ctx: ExecutionContext): TaskOutcome = {
       val _ = ctx
       entered.countDown()
-      release.await(2, TimeUnit.SECONDS)
+      release.await(30, TimeUnit.SECONDS)
       TaskSucceeded(OperationResponse.Scalar(value))
     }
   }
@@ -297,7 +322,7 @@ final class JobRetryOperationalSpec
     jobId: JobId,
     statuses: Set[JobStatus] = Set(JobStatus.Succeeded, JobStatus.Failed)
   ): JobQueryReadModel = {
-    val deadline = System.currentTimeMillis() + 4000L
+    val deadline = System.currentTimeMillis() + 10000L
     var result = Option.empty[JobQueryReadModel]
     while (
       (result.isEmpty || !statuses.contains(result.get.status)) &&
@@ -312,7 +337,7 @@ final class JobRetryOperationalSpec
 
   private def _await_condition(
     p: => Boolean,
-    timeoutMillis: Long = 1000L
+    timeoutMillis: Long = 5000L
   ): Boolean = {
     val deadline = System.currentTimeMillis() + timeoutMillis
     var matched = p

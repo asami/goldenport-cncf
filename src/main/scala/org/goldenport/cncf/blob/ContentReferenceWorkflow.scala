@@ -11,6 +11,9 @@ import org.goldenport.datatype.FileBundle
 import org.goldenport.record.Record
 import org.goldenport.value.ContentReferenceOccurrence
 import org.simplemodeling.model.datatype.EntityId
+import org.smartdox.{DoxReference, DoxReferenceExtractor}
+import org.smartdox.parser.Dox2Parser
+import org.smartdox.renderer.DoxHtmlRenderer
 
 /*
  * SimpleEntity content reference normalization and attachment workflow.
@@ -96,7 +99,7 @@ final class ContentReferenceWorkflow(
       case InlineImageMarkup.Markdown =>
         Consequence.operationInvalid("GFM-compatible Markdown content reference normalization is reserved for the next content-format slice")
       case InlineImageMarkup.SmartDox =>
-        Consequence.operationInvalid("SmartDox content reference normalization is reserved for the next content-format slice")
+        _normalize_smartdox(content)
     }
 
   def attachReferences(
@@ -192,6 +195,72 @@ final class ContentReferenceWorkflow(
           title = link.title,
           rel = link.rel,
           sortOrder = Some(link.index)
+        )
+    }
+  }
+
+  private def _normalize_smartdox(
+    content: ContentReferenceContent
+  )(using ExecutionContext): Consequence[ContentReferenceNormalizeResult] =
+    Dox2Parser.parseC(content.text).flatMap { document =>
+      val html = DoxHtmlRenderer.renderFragment(document)
+      val linkRefs = DoxReferenceExtractor.extract(document)
+        .filterNot(ref => ref.elementKind == "img" && ref.attributeName == "src")
+      for {
+        inline <- _blob_workflow.normalize(InlineImageContent(
+          InlineImageMarkup.HtmlFragment,
+          html,
+          content.fileBundle,
+          content.externalPolicy
+        ))
+        links <- linkRefs.foldLeft(Consequence.success(Vector.empty[ContentReferenceOccurrence])) {
+          case (z, ref) =>
+            z.flatMap(xs => _smartdox_link_reference(ref).map(xs :+ _))
+        }
+        imageRefs = inline.occurrences.map(x => _image_reference(x).copy(markup = Some("smartdox")))
+      } yield ContentReferenceNormalizeResult(
+        markup = content.markup,
+        originalText = content.text,
+        normalizedText = content.text,
+        references = imageRefs ++ links
+      )
+    }
+
+  private def _smartdox_link_reference(
+    ref: DoxReference
+  )(using ExecutionContext): Consequence[ContentReferenceOccurrence] = {
+    val href = ref.ref.trim
+    _resolve_reference_ref(href).map {
+      case Some((kind, id, urnText)) =>
+        ContentReferenceOccurrence(
+          contentField = Some("content"),
+          markup = Some("smartdox"),
+          elementKind = Some("a"),
+          attributeName = Some("href"),
+          occurrenceIndex = ref.occurrenceIndex,
+          originalRef = Some(ref.ref),
+          normalizedRef = Some(ref.ref),
+          referenceKind = Some(kind),
+          urn = Some(urnText),
+          targetEntityId = Some(id.value),
+          label = ref.label,
+          title = ref.title,
+          sortOrder = Some(ref.occurrenceIndex)
+        )
+      case None =>
+        ContentReferenceOccurrence(
+          contentField = Some("content"),
+          markup = Some("smartdox"),
+          elementKind = Some("a"),
+          attributeName = Some("href"),
+          occurrenceIndex = ref.occurrenceIndex,
+          originalRef = Some(ref.ref),
+          normalizedRef = Some(ref.ref),
+          referenceKind = Some(ref.referenceKind),
+          urn = TextusUrn.parseOption(href).map(_.print),
+          label = ref.label,
+          title = ref.title,
+          sortOrder = Some(ref.occurrenceIndex)
         )
     }
   }

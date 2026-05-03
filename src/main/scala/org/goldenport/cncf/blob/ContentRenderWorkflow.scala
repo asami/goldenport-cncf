@@ -11,12 +11,14 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.value.{ContentAttributes, ContentMarkup}
+import org.smartdox.parser.Dox2Parser
+import org.smartdox.renderer.DoxHtmlRenderer
 
 /*
  * Render SimpleEntity ContentAttributes to browser-facing HTML.
  *
- * CT-01 supports stored HTML fragments and GFM-compatible Markdown. SmartDox is
- * reserved for the later SmartDox Textus profile slice.
+ * CT-01 supports stored HTML fragments and GFM-compatible Markdown. SD-01
+ * renders the safe SmartDox parser/AST subset from simplemodeling-lib.
  *
  * @since   May.  4, 2026
  * @version May.  4, 2026
@@ -45,7 +47,7 @@ final class ContentRenderWorkflow(
       case ContentMarkup.MarkdownGfm =>
         _render_markdown(text).flatMap(_render_fragment).map(ContentRenderResult(_, markup))
       case ContentMarkup.SmartDox =>
-        Consequence.operationInvalid("SmartDox content rendering is reserved for the SmartDox Textus profile slice")
+        _render_smartdox(text).flatMap(_render_fragment).map(ContentRenderResult(_, markup))
     }
   }
 
@@ -60,6 +62,11 @@ final class ContentRenderWorkflow(
     markdown: String
   ): Consequence[String] =
     Consequence.success(ContentRenderWorkflow.markdownToHtml(markdown))
+
+  private def _render_smartdox(
+    smartdox: String
+  ): Consequence[String] =
+    Dox2Parser.parseC(smartdox).map(DoxHtmlRenderer.renderFragment)
 
   private def _markup(content: ContentAttributes): ContentMarkup =
     content.markup.orElse {

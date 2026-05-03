@@ -523,7 +523,7 @@ behavior.
 
 ## SD-01: SmartDox and GFM Markdown Support
 
-Status: PLANNED
+Status: ACTIVE
 
 ### Objective
 
@@ -533,12 +533,13 @@ needs i18n.
 
 ### Detailed Tasks
 
-- [ ] Select GFM-compatible Markdown as the Markdown baseline for user
+- [x] Select GFM-compatible Markdown as the Markdown baseline for user
       expectations, including tables and image/link syntax.
 - [ ] Define the SmartDox Textus profile for CNCF/Textus content authoring.
 - [ ] Implement or specify Markdown image/link reference extraction so it can
       feed `ContentReferenceOccurrence`.
-- [ ] Implement or specify SmartDox reference extraction and rendering hooks.
+- [x] Implement SmartDox parser/AST/rendering hooks for the CNCF content subset.
+- [x] Implement SmartDox image/link reference extraction hooks.
 - [ ] Define migration guidance for prose fields currently modeled as
       `I18NString`.
 - [ ] Use SmartDox i18n features for descriptive text where the value is a
@@ -550,6 +551,18 @@ needs i18n.
 - Descriptive prose belongs to SmartDox when i18n and rich document structure
   are required.
 - GFM support is chosen for practical user expectations, especially tables.
+- The SD-01 SmartDox port lives in `simplemodeling-lib` under `org.smartdox`.
+  CNCF uses it directly instead of depending on the legacy Scala 2.12
+  SmartDox artifact.
+- The implemented SmartDox subset preserves XML/JSON structured tokens as
+  logical tokens, renders them safely, and does not execute include/macros/site
+  features.
+- SmartDox image normalization records normalized media identity in
+  `ContentReferenceOccurrence`; it does not rewrite SmartDox source text until
+  source-span-aware rewriting is available.
+- Plain path image classification may use suffix hints in v1, but CNCF
+  semantic validation must come from Textus URN, Media Entity, Blob Entity, or
+  filebundle MIME information.
 
 ---
 

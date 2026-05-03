@@ -190,12 +190,34 @@ final class ContentReferenceWorkflowSpec
       workflow.validateInlineReferences(Vector(reference)) shouldBe a[Consequence.Failure[_]]
     }
 
-    "reject Markdown and SmartDox normalization in v1" in {
+    "extract SmartDox image and link references" in {
       given ExecutionContext = ExecutionContext.create()
-      val workflow = ContentReferenceWorkflow(_blob_component(InMemoryBlobStore()))
+      val component = _blob_component(InMemoryBlobStore())
+      val blobId = _blob_id("content_ref_smartdox_image")
+      _success(BlobPayloadSupport.putManagedPayload(
+        component = component,
+        id = blobId,
+        kind = BlobKind.Image,
+        filename = Some("inline.png"),
+        contentType = ContentType.IMAGE_PNG,
+        payload = Bag.binary("inline".getBytes(StandardCharsets.UTF_8))
+      ))
+      val workflow = ContentReferenceWorkflow(component)
 
       workflow.normalize(ContentReferenceContent(InlineImageMarkup.Markdown, "![x](a.png)")) shouldBe a[Consequence.Failure[_]]
-      workflow.normalize(ContentReferenceContent(InlineImageMarkup.SmartDox, "image::a.png")) shouldBe a[Consequence.Failure[_]]
+
+      val result = _success(workflow.normalize(ContentReferenceContent(
+        InlineImageMarkup.SmartDox,
+        s"""Intro [[/web/blob/content/${blobId.value}]] and [[https://example.com][external]]."""
+      )))
+
+      result.normalizedText should include (s"[[/web/blob/content/${blobId.value}]]")
+      result.references.map(x => (x.markup, x.elementKind, x.attributeName, x.referenceKind)) shouldBe Vector(
+        (Some("smartdox"), Some("img"), Some("src"), Some("image")),
+        (Some("smartdox"), Some("a"), Some("href"), Some("external-url"))
+      )
+      result.references.head.normalizedRef.getOrElse("") should startWith ("urn:textus:image:")
+      result.references.head.targetEntityId.flatMap(EntityId.parse(_).toOption).map(_.collection.name) shouldBe Some("image")
     }
   }
 

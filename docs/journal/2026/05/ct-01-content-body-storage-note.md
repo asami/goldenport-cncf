@@ -26,8 +26,8 @@ The CNCF content rendering workflow produces browser-facing HTML from
   `<article class="textus-content">...</article>`.
 - `markdown-gfm` stores GFM-compatible Markdown and renders it to HTML before
   the same article wrapper is applied.
-- `smartdox` is intentionally unsupported in CT-01. SmartDox rendering and
-  SmartDox i18n are separate work.
+- `smartdox` is rendered by the safe parser/AST subset introduced in SD-01.
+  SmartDox i18n profile details remain separate work.
 
 Textus URNs are expanded during render. The stored content remains canonical
 content, not browser URL output.
