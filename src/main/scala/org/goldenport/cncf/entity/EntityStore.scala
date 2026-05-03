@@ -21,7 +21,8 @@ import org.simplemodeling.model.statemachine.{Aliveness, PostStatus}
  *  version Jan. 10, 2026
  *  version Feb. 26, 2026
  *  version Mar. 30, 2026
- * @version May.  2, 2026
+ *  version Apr. 26, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class EntityStore {
@@ -175,11 +176,11 @@ class StandardEntityStore(
     options: EntityCreateOptions = EntityCreateOptions.default
   )(using tc: EntityPersistentCreate[T], ctx: ExecutionContext): Consequence[CreateResult[T]] = {
     val id = tc.id(entity) getOrElse createId(entity)
-    val rec = _complement_create_record(tc.toStoreRecord(entity), id, options)
     for {
       cid <- ctx.entityStoreSpace.dataStoreCollection(id)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
+      rec <- ContentBodyStoragePolicy.prepareForSave(id, _complement_create_record(tc.toStoreRecord(entity), id, options))
       _ <- ds.create(cid, dsid, rec)
     } yield CreateResult(id, Some(rec))
   }
@@ -206,7 +207,8 @@ class StandardEntityStore(
           "visible-count" -> visible.size
         )
       )
-      r <- visible.traverse(tc.fromStoreRecord)
+      hydrated <- visible.traverse(ContentBodyStoragePolicy.hydrate(id, _))
+      r <- hydrated.traverse(tc.fromStoreRecord)
     } yield r
   }
 
@@ -220,7 +222,8 @@ class StandardEntityStore(
       ds <- ctx.dataStoreSpace.dataStore(cid)
       existing <- ds.load(cid, dsid)
       _ <- _reject_logically_deleted_existing(id, existing)
-      rec = _complement_save_record(tc.toStoreRecord(entity), id, existing)
+      rec0 = _complement_save_record(tc.toStoreRecord(entity), id, existing)
+      rec <- ContentBodyStoragePolicy.prepareForSave(id, rec0)
       r <- ds.save(cid, dsid, rec)
     } yield r
   }
@@ -239,7 +242,12 @@ class StandardEntityStore(
         case None => Consequence.DataStoreNotFound(dsid.print)
       }
       _ <- _reject_logically_deleted_existing(id, Some(base))
-      rec = _merge_update_record(base, _complement_update_record(tc.toStoreRecord(changes), id))
+      rec0 = _merge_update_record(base, _complement_update_record(tc.toStoreRecord(changes), id))
+      rec <- ContentBodyStoragePolicy.prepareForSave(
+        id,
+        rec0,
+        preserveExistingOverflowOnMissingContent = true
+      )
       r <- ds.save(cid, dsid, rec)
     } yield r
   }
@@ -257,7 +265,7 @@ class StandardEntityStore(
           if (_is_soft_delete_target(rec))
             ds.save(cid, dsid, _merge_update_record(rec, _soft_delete_record(rec)))
           else
-            ds.delete(cid, dsid)
+            ContentBodyStoragePolicy.deleteOverflow(id).flatMap(_ => ds.delete(cid, dsid))
         case None =>
           Consequence.unit
       }
@@ -271,6 +279,7 @@ class StandardEntityStore(
       cid <- ctx.entityStoreSpace.dataStoreCollection(id.collection)
       dsid <- ctx.entityStoreSpace.dataStoreEntryId(id)
       ds <- ctx.dataStoreSpace.dataStore(cid)
+      _ <- ContentBodyStoragePolicy.deleteOverflow(id)
       r <- ds.delete(cid, dsid)
     } yield r
   }
@@ -334,7 +343,8 @@ class StandardEntityStore(
       // in their wire/store shape. Filtering here keeps in-memory stores and
       // SQL stores consistent without imposing entity-value equality quirks.
       recordmatched = visible.filter(record => EntityDirectiveQuery.matches(storequery, record))
-      decoded <- recordmatched.traverse(tc.fromStoreRecord)
+      hydrated <- ContentBodyStoragePolicy.hydrateAll(query.collection, recordmatched)
+      decoded <- hydrated.traverse(tc.fromStoreRecord)
       sorted = EntityDirectiveQuery.sortValues(decoded, query.query.sort)
       values = EntityDirectiveQuery.sliceValues(sorted, query.query.offset, query.query.limit)
       count = if (query.query.includeTotal) Some(recordmatched.size) else None
@@ -358,7 +368,8 @@ class StandardEntityStore(
         QueryDirective(DataStoreQuery.Empty)
       )
       scoped = EntityAccessScopePolicy.filterNormalRecords(query.collection, raw.records.toVector)
-      decoded <- scoped.foldLeft(Consequence.success(Vector.empty[T])) { (z, record) =>
+      hydrated <- ContentBodyStoragePolicy.hydrateAll(query.collection, scoped)
+      decoded <- hydrated.foldLeft(Consequence.success(Vector.empty[T])) { (z, record) =>
         z.flatMap(xs => tc.fromStoreRecord(record).map(xs :+ _))
       }
       matched = decoded.filter(value => EntityDirectiveQuery.matches(query.query, value))

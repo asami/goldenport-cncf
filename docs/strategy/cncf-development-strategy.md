@@ -494,13 +494,18 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   `MediaAttachment`; Blob remains the generic fallback Entity for storage-level
   access, compatibility, and payloads outside the media kinds. `attachment` is
   reserved for CNCF-opaque formats such as Excel or Word attached as
-  supporting Entity material. Content format/mimetype handling is now an
-  explicit SimpleEntity content concern for HTML, GFM-compatible Markdown, and
-  SmartDox. The SmartDox/Markdown slice selects GFM for practical Markdown
-  expectations, including tables, and introduces the SmartDox Textus profile so
-  descriptive prose can use SmartDox i18n rather than `I18NString`.
-- Remaining Phase 19 work is content/mimetype operation support,
-  SmartDox/GFM support, and phase closure validation.
+  supporting Entity material. CT-01 makes content format/mimetype handling an
+  explicit SimpleEntity content concern: `ContentAttributes.content` now uses
+  `ContentBody`, `mimeType`, `charset`, and `ContentMarkup`; HTML fragments
+  render through an article wrapper, GFM-compatible Markdown renders to HTML
+  including table support, and SmartDox remains an unsupported future rendering
+  target. The content storage policy keeps small text inline and overflows
+  larger bodies through charset-aware byte sizing, leaving binary/opaque
+  referenced payloads under Blob/media boundaries. The `textus-blog` driver
+  now uses project-local version files rather than any `cncf-samples` version
+  root when running its Web app against local CNCF snapshots.
+- Remaining Phase 19 work is SmartDox support, Markdown/SmartDox reference
+  extraction beyond CT-01 rendering, and phase closure validation.
 - Non-goals:
 - No new Blob payload storage backend in CNCF core.
 - No S3/S3-compatible BlobStore provider implementation in this phase.

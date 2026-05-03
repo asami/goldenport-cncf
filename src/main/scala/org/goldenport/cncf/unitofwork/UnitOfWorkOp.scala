@@ -7,8 +7,8 @@ import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.*
 import org.goldenport.cncf.entity.*
 import org.goldenport.cncf.directive.*
-import org.goldenport.cncf.blob.{ContentReferenceAttachResult, ContentReferenceContent, ContentReferenceNormalizeResult, InlineImageAttachResult, InlineImageContent, InlineImageNormalizeResult, InlineImageOccurrence}
-import org.goldenport.value.ContentReferenceOccurrence
+import org.goldenport.cncf.blob.{ContentReferenceAttachResult, ContentReferenceContent, ContentReferenceNormalizeResult, ContentRenderResult, InlineImageAttachResult, InlineImageContent, InlineImageNormalizeResult, InlineImageOccurrence}
+import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
 
 /*
  * UnitOfWork operation algebra.
@@ -22,7 +22,8 @@ import org.goldenport.value.ContentReferenceOccurrence
  * @since   Jan. 10, 2026
  *  version Feb. 25, 2026
  *  version Mar. 24, 2026
- * @version May.  3, 2026
+ *  version Apr. 29, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait UnitOfWorkOp[A]
@@ -200,4 +201,8 @@ object UnitOfWorkOp {
     sourceEntityId: String,
     references: Vector[ContentReferenceOccurrence]
   ) extends UnitOfWorkOp[ContentReferenceAttachResult]
+
+  final case class ContentRenderHtml(
+    content: ContentAttributes
+  ) extends UnitOfWorkOp[ContentRenderResult]
 }

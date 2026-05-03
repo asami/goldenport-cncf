@@ -5,7 +5,7 @@ import cats.~>
 import org.goldenport.{Consequence, Conclusion, ConsequenceT}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.blob.{BlobInlineImageWorkflow, ContentReferenceWorkflow}
+import org.goldenport.cncf.blob.{BlobInlineImageWorkflow, ContentReferenceWorkflow, ContentRenderWorkflow}
 import org.goldenport.cncf.http.HttpDriver
 import org.goldenport.cncf.datastore.*
 import org.goldenport.cncf.entity.*
@@ -30,7 +30,7 @@ import org.goldenport.record.Record
  *  version Feb. 25, 2026
  *  version Mar. 29, 2026
  *  version Apr. 29, 2026
- * @version May.  3, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class UnitOfWorkInterpreter(uow: UnitOfWork) {
@@ -304,6 +304,13 @@ final class UnitOfWorkInterpreter(uow: UnitOfWork) {
             _view_space_invalidate_all()
             result
           }
+        }
+      }
+
+    case UnitOfWorkOp.ContentRenderHtml(content) =>
+      withCallTree("uow:content:render:html") {
+        _component_required.flatMap { component =>
+          ContentRenderWorkflow(component).renderHtml(content)
         }
       }
 

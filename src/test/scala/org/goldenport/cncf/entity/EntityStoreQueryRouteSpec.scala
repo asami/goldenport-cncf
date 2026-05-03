@@ -19,7 +19,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 16, 2026
- * @version May.  2, 2026
+ *  version Apr. 26, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -688,6 +689,64 @@ final class EntityStoreQueryRouteSpec
       loaded shouldBe Consequence.success(None)
     }
 
+    "clear overflow content when a full save omits content" in {
+      Given("an existing record with overflow content")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistent[SaveCandidate] = _save_candidate_persistent
+
+      val collectionid = EntityCollectionId("test", "a", "save_candidate")
+      val id = EntityId("test", "overflow_save", collectionid)
+      val stored = _success(ContentBodyStoragePolicy.prepareForSave(
+        id,
+        Record.dataAuto(
+          "id" -> id.print,
+          "name" -> "old",
+          "age" -> 20,
+          "content" -> "日本語",
+          "content_charset" -> "UTF-8"
+        ),
+        ContentBodyStoragePolicy.Config(inlineByteThreshold = 5)
+      ))
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(collectionid),
+              stored
+            )
+          )
+        )
+      )
+
+      When("saving a replacement entity without content")
+      val saved = entitystorespace.save(
+        UnitOfWorkOp.EntityStoreSave(
+          entity = SaveCandidate(
+            id = id,
+            name = Some("saved"),
+            age = Some(21)
+          ),
+          tc = summon[EntityPersistent[SaveCandidate]]
+        )
+      )
+      val hydrated = for {
+        _ <- saved
+        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
+        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec <- ds.load(cid, dsid)
+        hydrated <- rec.map(ContentBodyStoragePolicy.hydrate(id, _)).getOrElse(Consequence.success(Record.empty))
+      } yield hydrated
+
+      Then("the omitted content is cleared instead of preserved")
+      saved shouldBe Consequence.unit
+      hydrated.map(_.getString("name")) shouldBe Consequence.success(Some("saved"))
+      hydrated.map(_.getString("content")) shouldBe Consequence.success(None)
+      hydrated.map(_.getString("content_storage")) shouldBe Consequence.success(None)
+    }
+
     "generate deterministic but unique ids from ExecutionContext in tests" in {
       Given("two create requests without explicit ids")
       val datastorespace = DataStoreSpace.default()
@@ -814,6 +873,63 @@ final class EntityStoreQueryRouteSpec
       Then("the update fails and the record remains hidden")
       updated shouldBe a[Consequence.Failure[_]]
       loaded shouldBe Consequence.success(None)
+    }
+
+    "preserve overflow content when a partial update omits content" in {
+      Given("an existing record with overflow content")
+      val datastorespace = DataStoreSpace.default()
+      val entitystorespace = new EntityStoreSpace().addEntityStore(EntityStore.standard())
+      given ExecutionContext = _execution_context(datastorespace, entitystorespace)
+      given EntityPersistent[UpdateCandidate] = _update_candidate_persistent
+
+      val collectionid = EntityCollectionId("test", "a", "update_candidate")
+      val id = EntityId("test", "overflow_update", collectionid)
+      val stored = _success(ContentBodyStoragePolicy.prepareForSave(
+        id,
+        Record.dataAuto(
+          "id" -> id.print,
+          "name" -> "hanako",
+          "age" -> 30,
+          "content" -> "日本語",
+          "content_charset" -> "UTF-8"
+        ),
+        ContentBodyStoragePolicy.Config(inlineByteThreshold = 5)
+      ))
+      val _ = datastorespace.inject(
+        DataStoreSpace.Seed(
+          Vector(
+            DataStoreSpace.SeedEntry(
+              DataStore.CollectionId.EntityStore(collectionid),
+              stored
+            )
+          )
+        )
+      )
+
+      When("updating another field without content")
+      val updated = entitystorespace.update(
+        UnitOfWorkOp.EntityStoreUpdate(
+          entity = UpdateCandidate(
+            id = id,
+            age = Some(31)
+          ),
+          tc = summon[EntityPersistent[UpdateCandidate]]
+        )
+      )
+      val hydrated = for {
+        _ <- updated
+        cid <- summon[ExecutionContext].entityStoreSpace.dataStoreCollection(id)
+        dsid <- summon[ExecutionContext].entityStoreSpace.dataStoreEntryId(id)
+        ds <- summon[ExecutionContext].dataStoreSpace.dataStore(cid)
+        rec <- ds.load(cid, dsid)
+        hydrated <- rec.map(ContentBodyStoragePolicy.hydrate(id, _)).getOrElse(Consequence.success(Record.empty))
+      } yield hydrated
+
+      Then("the existing overflow content remains attached to the entity")
+      updated shouldBe Consequence.unit
+      hydrated.map(_.getString("content")) shouldBe Consequence.success(Some("日本語"))
+      hydrated.map(_.getString("content_storage")) shouldBe Consequence.success(Some("overflow"))
+      hydrated.map(_.getInt("age")) shouldBe Consequence.success(Some(31))
     }
 
     "overwrite caller-supplied update audit fields on entity-store route" in {
@@ -1441,4 +1557,10 @@ private def _posted_persistent: EntityPersistent[PostedEntity] =
           Consequence.argumentInvalid("invalid posted record")
       }
     }
+  }
+
+private def _success[A](result: Consequence[A]): A =
+  result match {
+    case Consequence.Success(value) => value
+    case Consequence.Failure(c) => throw new AssertionError(c.toString)
   }

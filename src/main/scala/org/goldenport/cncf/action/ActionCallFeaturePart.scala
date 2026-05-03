@@ -29,8 +29,8 @@ import org.goldenport.cncf.entity.EntityVisibilityScope
 import org.goldenport.cncf.entity.EntityCreateOptions
 import org.goldenport.cncf.entity.CreateResult
 import org.goldenport.cncf.entity.EntityStore
-import org.goldenport.cncf.blob.{ContentReferenceAttachResult, ContentReferenceContent, ContentReferenceNormalizeResult, InlineImageAttachResult, InlineImageContent, InlineImageNormalizeResult, InlineImageOccurrence}
-import org.goldenport.value.ContentReferenceOccurrence
+import org.goldenport.cncf.blob.{ContentReferenceAttachResult, ContentReferenceContent, ContentReferenceNormalizeResult, ContentRenderResult, InlineImageAttachResult, InlineImageContent, InlineImageNormalizeResult, InlineImageOccurrence}
+import org.goldenport.value.{ContentAttributes, ContentReferenceOccurrence}
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.directive.SearchResult
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
@@ -44,7 +44,8 @@ import org.goldenport.configuration.ConfigurationValue
  *  version Jan. 21, 2026
  *  version Feb. 25, 2026
  *  version Mar. 30, 2026
- * @version May.  3, 2026
+ *  version Apr. 29, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ActionCallFeaturePart { self: ActionCall.Core.Holder =>
@@ -782,6 +783,11 @@ trait ActionCallBlobPart extends ActionCallFeaturePart { self: ActionCall.Core.H
     references: Vector[ContentReferenceOccurrence]
   ): ExecUowM[ContentReferenceAttachResult] =
     ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.ContentSyncInlineReferences(sourceEntityId, references)))
+
+  protected final def content_render_html(
+    content: ContentAttributes
+  ): ExecUowM[ContentRenderResult] =
+    ConsequenceT.liftF(Free.liftF(UnitOfWorkOp.ContentRenderHtml(content)))
 }
 
 trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall.Core.Holder =>

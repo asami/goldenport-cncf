@@ -100,7 +100,7 @@ Current semantic direction:
 - H (DONE): CR-01 — Add SimpleEntity content reference occurrence support.
 - I (DONE): CR-02 — Retire BlogInlineImage and consolidate Blog content references.
 - J (DONE): MB-01 — Split Blob document references into image, video, audio, attachment, and blob kinds.
-- K (PLANNED): CT-01 — Define content/mimetype operation support for HTML, Markdown, and SmartDox.
+- K (DONE): CT-01 — Define content/mimetype operation support for HTML, Markdown, and SmartDox.
 - L (PLANNED): SD-01 — Add SmartDox and GFM-compatible Markdown support.
 - M (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
 
@@ -182,12 +182,17 @@ Resume hint:
   compatibility/fallback `urn:textus:blob:{entropy}` form. Blog inline image
   content is normalized to image URNs and synchronized through
   `MediaAttachment`, while `BlobAttachment` remains available for low-level
-  Blob links and compatibility. The content/mimetype slice defines how SimpleEntity
-  content stores HTML, Markdown, and SmartDox with a content mimetype/format
-  contract. The SmartDox/Markdown slice makes GFM-compatible Markdown the user
-  facing Markdown baseline and introduces the SmartDox Textus profile; long
-  descriptive text that currently looks like localized prose should move away
-  from `I18NString` and use SmartDox's own i18n model.
+  Blob links and compatibility. CT-01 defines SimpleEntity content storage and
+  rendering with `ContentBody`, `mimeType`, `charset`, and `ContentMarkup`.
+  HTML fragments are stored as single-body content and rendered inside an
+  article wrapper; GFM-compatible Markdown renders to HTML, including tables;
+  SmartDox rendering remains explicitly unsupported for this slice. Content
+  body storage uses charset-aware byte sizing to keep small bodies inline and
+  overflow larger bodies to content side storage without exposing DB storage
+  choices to application models. Binary/opaque payloads remain outside ordinary
+  content bodies and belong under Blob/media/attachment boundaries. The
+  `textus-blog` Web driver now resolves CNCF and SimpleModeling versions from
+  project-local `versions/` files rather than a `cncf-samples` root.
 
 ## 5. Development Items
 
@@ -201,7 +206,7 @@ Resume hint:
 - [x] CR-01: Add SimpleEntity content reference occurrence support.
 - [x] CR-02: Retire BlogInlineImage and consolidate Blog content references.
 - [x] MB-01: Split Blob document references into image, video, audio, attachment, and blob kinds.
-- [ ] CT-01: Define content/mimetype operation support for HTML, Markdown, and SmartDox.
+- [x] CT-01: Define content/mimetype operation support for HTML, Markdown, and SmartDox.
 - [ ] SD-01: Add SmartDox and GFM-compatible Markdown support.
 - [ ] BI-05: Verification, documentation, and phase closure.
 

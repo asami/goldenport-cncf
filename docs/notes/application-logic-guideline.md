@@ -47,6 +47,27 @@ by hand. Tenant and organization scope should come from `ExecutionContext` and
 be interpreted by the internal DSL / `UnitOfWork` layer. In a context without
 tenant data, the same application call naturally behaves as global scope.
 
+## Domain Value Types
+
+Raw primitive attributes in domain objects are a bad smell. A CML model or
+handwritten domain value should prefer CNCF/goldenport standard data types and
+value objects over raw `String`, `Int`, `Long`, or `Boolean` when the value has
+domain meaning.
+
+Examples:
+
+- use `MimeType` for content type values, not `String`;
+- use `Charset` for text charset values, not `String`;
+- use `ContentBody` for persisted content bodies, not a raw text column;
+- use explicit value objects or schema data types for identifiers, amounts,
+  state tokens, and policies.
+
+Raw primitives are acceptable at boundaries such as JSON/Record parsing,
+storage adapters, generated convenience methods, or low-level schema encoding,
+but they should be normalized before they become application/domain attributes.
+This keeps validation, rendering, storage policy, and future migrations in one
+framework-owned place.
+
 ## Standard Entity Names
 
 `SimpleEntity.name` is an application-logic name. It is appropriate for stable
@@ -92,6 +113,8 @@ When reviewing application logic, check:
 - Are uniqueness and identity checks using internal DSL helpers instead of
   generic search or raw store access?
 - Is tenant scoping delegated to `ExecutionContext`-aware framework helpers?
+- Do domain attributes use standard value/data types instead of raw primitives
+  where the value has meaning?
 - If low-level access seems necessary, should a missing internal DSL helper be
   added instead?
 

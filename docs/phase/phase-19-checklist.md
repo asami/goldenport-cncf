@@ -482,7 +482,7 @@ generic fallback for any payload that does not fit a specific media kind.
 
 ## CT-01: Content Format and Mimetype Operations
 
-Status: PLANNED
+Status: DONE
 
 ### Objective
 
@@ -492,24 +492,32 @@ behavior.
 
 ### Detailed Tasks
 
-- [ ] Define where content format/mimetype is stored for SimpleEntity content.
-- [ ] Support HTML fragment content as the current implemented baseline.
-- [ ] Reserve Markdown as GFM-compatible Markdown for user-facing authoring.
-- [ ] Reserve SmartDox for structured document content and richer i18n.
-- [ ] Define render-time conversion rules from persisted content to public HTML.
-- [ ] Define how content reference normalization sees the markup type and
+- [x] Define where content format/mimetype is stored for SimpleEntity content.
+- [x] Support HTML fragment content as the current implemented baseline.
+- [x] Reserve Markdown as GFM-compatible Markdown for user-facing authoring.
+- [x] Reserve SmartDox for structured document content and richer i18n.
+- [x] Define render-time conversion rules from persisted content to public HTML.
+- [x] Define how content reference normalization sees the markup type and
       dispatches to HTML, Markdown, or SmartDox parsers.
-- [ ] Keep content payloads out of Blob; Blob remains for referenced binary or
+- [x] Keep content payloads out of Blob; Blob remains for referenced binary or
       opaque attached material.
 
 ### Decisions
 
 - Content format/mimetype is a SimpleEntity content concern, not a Blob payload
   concern.
-- Phase 19 should avoid prematurely locking a CML primitive datatype before the
-  operation model is proven.
+- CT-01 introduces `ContentBody`, `ContentMarkup`, MIME type, and charset value
+  handling for SimpleEntity content; SmartDox rendering remains a later slice.
 - HTML, Markdown, and SmartDox are the planned content formats for this family
   of features.
+- HTML fragments render inside an article wrapper. GFM-compatible Markdown
+  renders to HTML, including tables. SmartDox rendering fails deterministically
+  until the SmartDox slice lands.
+- `ContentBodyStoragePolicy` keeps small text content inline and overflows
+  larger text bodies using charset-aware byte length so DB character limits and
+  multibyte text do not leak into application models.
+- Binary/opaque payloads are not embedded in ordinary Entity records; referenced
+  binary content remains under Blob/media/attachment boundaries.
 
 ---
 
