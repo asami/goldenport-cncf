@@ -561,6 +561,33 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   until the SimpleEntity content operation model is proven.
 - Artifact (work): `docs/phase/phase-19.md`.
 
+### Phase 20: Hierarchical Tagging and Knowledge Structure
+- Goal: add CNCF builtin hierarchical Tags and validate them through CNCF
+  admin/runtime and `textus-blog`.
+- Status: open.
+- Scope:
+- Add `Tag` as a `SimpleEntity`-backed builtin master Entity.
+- Treat the Tag hierarchy as a strict tree in this phase.
+- Keep canonical Tag records store-backed while making the runtime Tag tree a
+  resident Working Set candidate.
+- Store Entity-to-Tag links through Association records, not embedded fields
+  on ordinary domain Entities.
+- Support parent Tag search with descendant expansion by default and explicit
+  direct-only matching when needed.
+- Support both lightweight CMS-style tagging and powertype-like external
+  classification.
+- Use CNCF admin/runtime as the generic driver for Tag tree management,
+  arbitrary Entity tag attach/detach, and tag-expanded Entity search.
+- Use `textus-blog` as the application driver for BlogPost tags, public tag
+  navigation, and parent-tag descendant search.
+- Non-goals:
+- No RDF store, RDF import/export, or external knowledge graph integration in
+  this phase.
+- No DAG/polyhierarchy Tag graph.
+- No compile-time CML type generation from powertype-like Tags.
+- No full-text or embedding search backend implementation.
+- Artifact (work): `docs/phase/phase-20.md`.
+
 ## 4. Relationship Between Phases
 - Later phases depend on earlier phases.
 - Phase 1.5 constrains Phase 2 and Phase 3.
@@ -575,9 +602,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: none after Phase 19 closure.
-- Latest active phase dashboard: none.
-- Latest active phase checklist: none.
+- Current phase selection: Phase 20 — Hierarchical Tagging and Knowledge Structure.
+- Latest active phase dashboard: `docs/phase/phase-20.md`
+- Latest active phase checklist: `docs/phase/phase-20-checklist.md`
 - Latest closed phase dashboard: `docs/phase/phase-19.md`
 - Latest closed phase checklist: `docs/phase/phase-19-checklist.md`
 - Candidate next phase areas: AwsComponent/S3 BlobStore provider; Error Model / Consequence-Conclusion Realignment; Search/index planning; DB migration tooling.
@@ -607,6 +634,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 17: closed (`docs/phase/phase-17.md`)
 - Phase 18: closed (`docs/phase/phase-18.md`)
 - Phase 19: closed (`docs/phase/phase-19.md`)
+- Phase 20: open (`docs/phase/phase-20.md`)
 
 ## 8. Development Item Status
 
@@ -661,6 +689,16 @@ Closed in Phase 13. This remains a reference area for Phase 14+ extensions and r
   - richer event classification beyond name/kind/selectors
   - source component/componentlet specific policy overrides
   - finalized saga-id propagation contract
+  - transaction outcome event lanes:
+    - transaction-success domain events for committed domain changes,
+      projections, read-side updates, and downstream actions;
+    - transaction-failure / rollback events for operational failure and
+      rollback facts that must not be projected as committed domain changes;
+    - compensation / recovery-required events for cleanup and human recovery
+      signals.
+  - align transaction outcome events with EventStore/EventBus lanes,
+    ActionCall / UoW transaction boundaries, Job lifecycle records, and
+    existing non-transactional / error event concepts.
 - Source references:
   - `docs/phase/phase-13.md`
   - `docs/phase/phase-13-checklist.md`
@@ -691,8 +729,19 @@ Closed in Phase 13. This remains a reference area for Phase 14+ extensions and r
   - OpenTelemetry support
 
 ### 8.5 Tagging and Knowledge Structure
-- Hierarchical tagging model
-- Classification and navigation support
+Active in Phase 20.
+
+- Phase 20 work documents:
+  - dashboard: `docs/phase/phase-20.md`
+  - checklist: `docs/phase/phase-20-checklist.md`
+- Add a CNCF builtin hierarchical `Tag` model.
+- Treat Tags as `SimpleEntity`-backed master data with resident tree lookup.
+- Support Entity-to-Tag links through Associations.
+- Support parent Tag search with descendant expansion.
+- Validate generic Tag management through CNCF admin/runtime.
+- Validate CMS-style Tags through `textus-blog` BlogPost navigation/search.
+- Keep RDF and external knowledge graph integration under the separate RDF
+  development item.
 
 ### 8.6 RDF Integration
 - RDF-based data representation
@@ -846,23 +895,7 @@ Future platform development item.
   payload metadata, representative image projection, and future thumbnail /
   derived rendition work.
 
-### 8.12 Transaction Outcome Event Policy
-Future platform development item.
-
-- Add a first-class event emission policy that distinguishes events emitted
-  when a transaction succeeds from events emitted when a transaction fails.
-- Successful transaction events should represent committed domain changes and
-  drive ordinary projections, read-side updates, and downstream actions.
-- Failed transaction events should represent operational failure, rollback,
-  compensation, or recovery-required facts without pretending that the domain
-  mutation committed.
-- The policy should separate at least three lanes: transaction-success domain
-  events, transaction-failure/rollback events, and compensation/recovery events.
-- Align the policy with EventStore/EventBus lanes, ActionCall/UoW transaction
-  boundaries, Job lifecycle records, and existing non-transactional/error event
-  concepts.
-
-### 8.13 ServiceCall Fallback
+### 8.12 ServiceCall Fallback
 Future platform development item.
 
 - Add fallback behavior for `ServiceCall` failures.
@@ -878,7 +911,7 @@ Future platform development item.
 - Align this with the broader error model cleanup and event/job continuation
   policy.
 
-### 8.14 Compensation Recovery Events
+### 8.13 Compensation Recovery Events
 Future platform development item.
 
 - Introduce a recovery-required event for cases where compensation itself
@@ -897,7 +930,7 @@ Future platform development item.
   should publish to a recovery-required lane rather than to ordinary committed
   domain-event projection flow.
 
-### 8.15 Workflow Active-State Working Set Policy
+### 8.14 Workflow Active-State Working Set Policy
 Future platform development item.
 
 - Add an explicit Working Set policy for `entityKind = workflow` Entities whose
@@ -910,7 +943,7 @@ Future platform development item.
 - Completed, cancelled, archived, or otherwise inactive workflow records should
   be evicted from the Working Set when their state changes.
 
-### 8.16 Entity and Aggregate Version Conflict Policy
+### 8.15 Entity and Aggregate Version Conflict Policy
 Future platform development item.
 
 - Add a first-class optimistic locking / version conflict policy for Entity and
@@ -924,7 +957,7 @@ Future platform development item.
 - Intentional overwrite or repair should require an explicit force/repair API
   rather than ordinary save/update behavior.
 
-### 8.17 Distributed Component Runtime
+### 8.16 Distributed Component Runtime
 Future distributed-system development item.
 
 - Defer distributed scheduler, distributed cache coherence, and clustered
@@ -939,7 +972,7 @@ Future distributed-system development item.
   distributed implementation can replace or extend the in-process `JobEngine`,
   Working Set, and View cache behavior.
 
-### 8.18 Inter-Component Cluster Saga
+### 8.17 Inter-Component Cluster Saga
 Future distributed-collaboration development item.
 
 - Add support for long-running process sharing across components or component
@@ -950,7 +983,7 @@ Future distributed-collaboration development item.
 - This is separate from the current in-process event/job baseline and from the
   local `WorkflowEngine` baseline.
 
-### 8.19 Persistent Materialized View Store
+### 8.18 Persistent Materialized View Store
 Future scalability development item.
 
 - Consider persistent materialized view storage only after CNCF has enough
@@ -963,7 +996,7 @@ Future scalability development item.
 - Blog/CMS list, slug index, feed, and author dashboard projections are
   candidate drivers when runtime memory cache becomes insufficient.
 
-### 8.20 Runtime Namespace Descriptor Defaults
+### 8.19 Runtime Namespace Descriptor Defaults
 Future platform hardening item.
 
 - Continue the runtime namespace policy after the initial `single/global`
