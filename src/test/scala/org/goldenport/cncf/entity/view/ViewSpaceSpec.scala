@@ -3,6 +3,7 @@ package org.goldenport.cncf.entity.view
 import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
+import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 import org.scalatest.GivenWhenThen
@@ -12,7 +13,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 17, 2026
  *  version Mar. 24, 2026
- * @version Apr. 10, 2026
+ *  version Apr. 10, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ViewSpaceSpec
@@ -178,6 +180,33 @@ final class ViewSpaceSpec
       metrics.find(_.name == "view.query.small.bypass").map(_.count) shouldBe Some(2L)
     }
 
+    "bypass query cache when maxQueries is zero" in {
+      var queryCount = 0
+      EntityAccessMetricsRegistry.shared.clear()
+      val viewspace = new ViewSpace
+      val collection = new ViewCollection[String](
+        new ViewBuilder[String] {
+          def build(id: EntityId): Consequence[String] =
+            Consequence.success(id.minor)
+        },
+        maxQueries = 0
+      )
+      val browser = Browser.from(
+        collection,
+        _ => {
+          queryCount += 1
+          Consequence.success(Vector(s"result-$queryCount"))
+        }
+      )
+      viewspace.register("user", collection, browser)
+
+      viewspace.browser[String]("user").query(Query("tokyo")) shouldBe Consequence.success(Vector("result-1"))
+      viewspace.browser[String]("user").query(Query("tokyo")) shouldBe Consequence.success(Vector("result-2"))
+      queryCount shouldBe 2
+      val metrics = EntityAccessMetricsRegistry.shared.snapshot()
+      metrics.find(_.name == "view.query.small.bypass").map(_.count) shouldBe Some(2L)
+    }
+
     "read query controls from nested request records" in {
       val request = Record.create(Vector(
         "city" -> "Tokyo",
@@ -207,6 +236,30 @@ final class ViewSpaceSpec
       resolved.limit shouldBe Some(2)
       resolved.offset shouldBe Some(1)
       Query.whereOf(resolved) shouldBe Query.Eq("city", "Tokyo")
+    }
+
+    "provide context-aware helper methods for application read-side code" in {
+      given ExecutionContext = ExecutionContext.test()
+      val viewspace = new ViewSpace
+      val collectionid = EntityCollectionId("test", "a", "user")
+      val targetid = EntityId("test", "u4", collectionid)
+      val collection = new ViewCollection[String](
+        new ContextualViewBuilder[String] {
+          def build_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[String] =
+            Consequence.success(s"${ctx.major}-${id.minor}")
+        }
+      )
+      val browser = Browser.from(
+        collection,
+        new ContextualBrowserQuery[String] {
+          def query_with_context(q: Query[_])(using ctx: ExecutionContext): Consequence[Vector[String]] =
+            Consequence.success(Vector(s"${ctx.major}-query"))
+        }
+      )
+      viewspace.register("user", collection, browser)
+
+      viewspace.findWithContext[String]("user", targetid) shouldBe Consequence.success("sys-u4")
+      viewspace.queryWithContext[String]("user", Query("active")) shouldBe Consequence.success(Vector("sys-query"))
     }
   }
 }

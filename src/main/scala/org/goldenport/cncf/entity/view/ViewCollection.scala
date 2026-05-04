@@ -12,7 +12,8 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 /*
  * @since   Mar. 14, 2026
  *  version Mar. 24, 2026
- * @version Apr. 15, 2026
+ *  version Apr. 15, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 trait ViewBuilder[V] {
@@ -163,6 +164,16 @@ final class ViewCollection[V](
   )(
     queryfn: Query[_] => Consequence[Vector[V]]
   ): Consequence[Vector[V]] = {
+    if (maxQueries <= 0)
+      return queryfn(q).map { v =>
+        _emit_metric("view.query.small.bypass", Record.dataAuto(
+          "entity" -> metricsName,
+          "source" -> "view-cache",
+          "outcome" -> "disabled",
+          "fetchedCount" -> v.size
+        ))
+        v
+      }
     val key = _query_small_result_key(q)
     _queryChunkCache.get(key) match {
       case Some(v) =>
@@ -199,6 +210,18 @@ final class ViewCollection[V](
   )(
     queryfn: Query[_] => Consequence[Vector[V]]
   ): Consequence[Vector[V]] = {
+    if (maxQueries <= 0)
+      return queryfn(_query_chunk_query(q, start, queryChunkSize)).map { v =>
+        _emit_metric("view.query.chunk.bypass", Record.dataAuto(
+          "entity" -> metricsName,
+          "source" -> "view-cache",
+          "outcome" -> "disabled",
+          "offset" -> start,
+          "limit" -> queryChunkSize,
+          "fetchedCount" -> v.size
+        ))
+        v
+      }
     val chunkkey = _query_chunk_key(basekey, start)
     _queryChunkCache.get(chunkkey) match {
       case Some(v) =>

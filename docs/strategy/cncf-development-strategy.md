@@ -530,8 +530,14 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   `sbt test`. Entity kind and Working Set runtime policy is documented outside
   the authorization model: `BlogPost` is a CMS public-content resource with a
   store-backed canonical record, Working Set disabled by default, and
-  view/index/cache projections as the read-optimization path.
-- Remaining Phase 19 work is phase closure validation.
+  view/index/cache projections as the read-optimization path. The first
+  runtime application of that policy is now in place: CNCF `ViewSpace` has
+  context-aware helper calls, `ViewCollection` can disable query caching for
+  subject-scoped views, and `textus-blog` reads list/search/feed/slug/author
+  dashboard surfaces through derived Blog view cache rows while detail content
+  still loads the canonical store-backed `BlogPost`.
+- Remaining Phase 19 work is the `EntityId` `major` / `minor` runtime
+  namespace policy and phase closure validation.
 - Non-goals:
 - No new Blob payload storage backend in CNCF core.
 - No S3/S3-compatible BlobStore provider implementation in this phase.

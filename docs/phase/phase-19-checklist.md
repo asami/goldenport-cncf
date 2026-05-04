@@ -621,6 +621,12 @@ Entity image binding usage and the reusable CNCF behavior is verified.
       authorization model. `BlogPost` is recorded as a CMS public-content
       resource whose canonical record is store-backed with Working Set disabled
       by default; Blog read optimization belongs in lightweight views/indexes.
+- [x] Implement the first Blog read-side View cache projection usage.
+      CNCF `ViewSpace` now exposes context-aware helper calls for application
+      code, `ViewCollection` can disable query caching for subject-scoped
+      views, and `textus-blog` uses `PublishedBlogView`, `BlogSlugIndex`,
+      `BlogFeedProjection`, and `BlogAuthorPostView` as runtime read-side
+      caches over canonical store-backed `BlogPost` records.
 - [ ] Resolve or explicitly defer the `EntityId` `major` / `minor` runtime
       namespace operating policy recorded in
       `docs/notes/id-major-minor-operation-note.md`.

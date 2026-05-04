@@ -1,12 +1,17 @@
 package org.goldenport.cncf.entity.view
 
 import scala.collection.mutable
+import org.goldenport.Consequence
+import org.simplemodeling.model.datatype.EntityId
+import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.view.Browser
 
 /*
  * @since   Mar. 16, 2026
  *  version Mar. 17, 2026
- * @version Apr.  4, 2026
+ *  version Apr.  4, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ViewSpace {
@@ -67,6 +72,45 @@ final class ViewSpace {
       browserOption(name)
     else
       _named_browsers.get(_view_key(name, viewname)).map(_.asInstanceOf[Browser[V]])
+
+  def findWithContext[V](
+    name: String,
+    id: EntityId
+  )(using ctx: ExecutionContext): Consequence[V] =
+    browser[V](name).find_with_context(id)
+
+  def findWithContext[V](
+    name: String,
+    viewname: String,
+    id: EntityId
+  )(using ctx: ExecutionContext): Consequence[V] =
+    browser[V](name, viewname).find_with_context(id)
+
+  def queryWithContext[V](
+    name: String,
+    q: Query[_]
+  )(using ctx: ExecutionContext): Consequence[Vector[V]] =
+    browser[V](name).query_with_context(q)
+
+  def queryWithContext[V](
+    name: String,
+    viewname: String,
+    q: Query[_]
+  )(using ctx: ExecutionContext): Consequence[Vector[V]] =
+    browser[V](name, viewname).query_with_context(q)
+
+  def countWithContext(
+    name: String,
+    q: Query[_]
+  )(using ctx: ExecutionContext): Consequence[Int] =
+    browser[Any](name).count_with_context(q)
+
+  def countWithContext(
+    name: String,
+    viewname: String,
+    q: Query[_]
+  )(using ctx: ExecutionContext): Consequence[Int] =
+    browser[Any](name, viewname).count_with_context(q)
 
   def invalidate(name: String): Unit =
     _collections.get(name).foreach(_.invalidateAll())
