@@ -8,7 +8,7 @@ import org.goldenport.Consequence
 
 /*
  * @since   Apr. 29, 2026
- * @version May.  4, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait HtmlNode {
@@ -62,6 +62,68 @@ final case class HtmlDocument(nodes: Vector[HtmlNode]) {
 final case class HtmlFragment(nodes: Vector[HtmlNode]) {
   def render: String =
     nodes.map(_.render).mkString
+
+  def references: Vector[HtmlAttributeReferenceOccurrence] = {
+    var index = -1
+    val builder = Vector.newBuilder[HtmlAttributeReferenceOccurrence]
+    def loop(node: HtmlNode, parent: Option[String]): Unit = node match {
+      case e: HtmlElement =>
+        e.name match {
+          case "img" if e.attr("src").exists(_.nonEmpty) =>
+            index = index + 1
+            builder += HtmlAttributeReferenceOccurrence(
+              index,
+              e.name,
+              "src",
+              e.attr("src").getOrElse(""),
+              parent,
+              alt = e.attr("alt"),
+              title = e.attr("title"),
+              mediaType = e.attr("type")
+            )
+          case "video" if e.attr("src").exists(_.nonEmpty) =>
+            index = index + 1
+            builder += HtmlAttributeReferenceOccurrence(
+              index,
+              e.name,
+              "src",
+              e.attr("src").getOrElse(""),
+              parent,
+              title = e.attr("title"),
+              mediaType = e.attr("type")
+            )
+          case "source" if e.attr("src").exists(_.nonEmpty) =>
+            index = index + 1
+            builder += HtmlAttributeReferenceOccurrence(
+              index,
+              e.name,
+              "src",
+              e.attr("src").getOrElse(""),
+              parent,
+              title = e.attr("title"),
+              mediaType = e.attr("type")
+            )
+          case "a" if e.attr("href").exists(_.nonEmpty) =>
+            index = index + 1
+            builder += HtmlAttributeReferenceOccurrence(
+              index,
+              e.name,
+              "href",
+              e.attr("href").getOrElse(""),
+              parent,
+              label = Some(e.textContent).map(_.trim).filter(_.nonEmpty),
+              title = e.attr("title"),
+              rel = e.attr("rel"),
+              download = e.attributes.get("download")
+            )
+          case _ =>
+        }
+        e.children.foreach(loop(_, Some(e.name)))
+      case _ =>
+    }
+    nodes.foreach(loop(_, None))
+    builder.result()
+  }
 
   def images: Vector[HtmlImageOccurrence] = {
     var index = -1
@@ -146,8 +208,54 @@ final case class HtmlFragment(nodes: Vector[HtmlNode]) {
     HtmlFragment(nodes.flatMap(rewrite))
   }
 
+  def rewriteAttributeReferencesWithComments(
+    f: HtmlAttributeReferenceOccurrence => HtmlAttributeReferenceRewrite
+  ): HtmlFragment = {
+    var index = -1
+    def rewrite(node: HtmlNode, parent: Option[String]): Vector[HtmlNode] = node match {
+      case e: HtmlElement =>
+        val maybeRewrite = _reference_attribute(e).map { attribute =>
+          index = index + 1
+          val occurrence = HtmlAttributeReferenceOccurrence(
+            index,
+            e.name,
+            attribute,
+            e.attr(attribute).getOrElse(""),
+            parent,
+            label = if (e.name == "a") Some(e.textContent).map(_.trim).filter(_.nonEmpty) else None,
+            alt = e.attr("alt"),
+            title = e.attr("title"),
+            rel = e.attr("rel"),
+            mediaType = e.attr("type"),
+            download = if (e.name == "a") e.attributes.get("download") else None
+          )
+          attribute -> f(occurrence)
+        }
+        val rewrittenSelf = maybeRewrite.flatMap { case (attribute, rewrite) =>
+          rewrite.value.map(attribute -> _)
+        }
+          .map { case (attribute, value) => e.copy(attributes = e.attributes + (attribute -> value)) }
+          .getOrElse(e)
+        val rewrittenChildren = rewrittenSelf.children.flatMap(rewrite(_, Some(rewrittenSelf.name)))
+        val element = rewrittenSelf.copy(children = rewrittenChildren)
+        element +: maybeRewrite.flatMap(_._2.comment).map(HtmlComment.apply).toVector
+      case other => Vector(other)
+    }
+    HtmlFragment(nodes.flatMap(rewrite(_, None)))
+  }
+
   def elements: Vector[HtmlElement] =
     nodes.flatMap(_.elements)
+
+  private def _reference_attribute(element: HtmlElement): Option[String] =
+    element.name match {
+      case "img" | "video" | "source" if element.attr("src").exists(_.nonEmpty) =>
+        Some("src")
+      case "a" if element.attr("href").exists(_.nonEmpty) =>
+        Some("href")
+      case _ =>
+        None
+    }
 }
 
 final case class HtmlImageOccurrence(
@@ -159,6 +267,25 @@ final case class HtmlImageOccurrence(
 
 final case class HtmlImageRewrite(
   src: Option[String],
+  comment: Option[String] = None
+)
+
+final case class HtmlAttributeReferenceOccurrence(
+  index: Int,
+  elementKind: String,
+  attributeName: String,
+  value: String,
+  parentElementKind: Option[String],
+  label: Option[String] = None,
+  alt: Option[String] = None,
+  title: Option[String] = None,
+  rel: Option[String] = None,
+  mediaType: Option[String] = None,
+  download: Option[String] = None
+)
+
+final case class HtmlAttributeReferenceRewrite(
+  value: Option[String],
   comment: Option[String] = None
 )
 

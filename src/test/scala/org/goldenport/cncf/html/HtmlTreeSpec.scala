@@ -8,7 +8,7 @@ import org.goldenport.Consequence
 
 /*
  * @since   Apr. 29, 2026
- * @version Apr. 29, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class HtmlTreeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
@@ -74,6 +74,69 @@ final class HtmlTreeSpec extends AnyWordSpec with Matchers with GivenWhenThen {
       rewritten.images.map(_.src) shouldBe Vector("/web/blob/content/0", "/web/blob/content/1")
       rewritten.render should include ("""alt="A"""")
       rewritten.render should include ("""title="B"""")
+    }
+
+    "extract and rewrite media and download references in document order" in {
+      Given("an article fragment with video, source, image, and download references")
+      val html =
+        """<html><body>
+          |  <article>
+          |    <video src="videos/a.mp4" title="Video"></video>
+          |    <video><source src="videos/b.webm" type="video/webm"></video>
+          |    <picture><source src="images/a.webp" type="image/webp"><img src="images/a.png" alt="A"></picture>
+          |    <a href="docs/a.pdf" download title="PDF">Download</a>
+          |  </article>
+          |</body></html>""".stripMargin
+      val fragment = _success(HtmlTree.parse(html).flatMap(_.articleFragment))
+
+      When("extracting generalized attribute references")
+      val refs = fragment.references
+      val rewritten = fragment.rewriteAttributeReferencesWithComments { ref =>
+        if (ref.elementKind == "a")
+          HtmlAttributeReferenceRewrite(Some("urn:textus:attachment:pdf"))
+        else
+          HtmlAttributeReferenceRewrite(Some(s"urn:textus:${ref.elementKind}:${ref.index}"))
+      }
+
+      Then("references preserve element metadata and can be rewritten")
+      refs.map(x => (x.elementKind, x.attributeName, x.value, x.parentElementKind, x.mediaType, x.download.isDefined)) shouldBe Vector(
+        ("video", "src", "videos/a.mp4", None, None, false),
+        ("source", "src", "videos/b.webm", Some("video"), Some("video/webm"), false),
+        ("source", "src", "images/a.webp", Some("picture"), Some("image/webp"), false),
+        ("img", "src", "images/a.png", Some("picture"), None, false),
+        ("a", "href", "docs/a.pdf", None, None, true)
+      )
+      refs.last.label shouldBe Some("Download")
+      rewritten.render should include ("""src="urn:textus:video:0"""")
+      rewritten.render should include ("""src="urn:textus:source:1"""")
+      rewritten.render should include ("""href="urn:textus:attachment:pdf"""")
+    }
+
+    "rewrite nested references using the same pre-order indexes as extraction" in {
+      Given("an anchor wrapping an inline image")
+      val html =
+        """<html><body>
+          |  <article><a href="docs/a.pdf"><img src="images/a.png" alt="A">Download</a></article>
+          |</body></html>""".stripMargin
+      val fragment = _success(HtmlTree.parse(html).flatMap(_.articleFragment))
+
+      When("extracting and rewriting generalized references")
+      val refs = fragment.references
+      val rewritten = fragment.rewriteAttributeReferencesWithComments { ref =>
+        ref.elementKind match {
+          case "a" => HtmlAttributeReferenceRewrite(Some(s"urn:textus:attachment:${ref.index}"))
+          case "img" => HtmlAttributeReferenceRewrite(Some(s"urn:textus:image:${ref.index}"))
+          case _ => HtmlAttributeReferenceRewrite(None)
+        }
+      }
+
+      Then("the parent link and child image keep their extracted indexes")
+      refs.map(x => (x.index, x.elementKind, x.attributeName, x.value, x.parentElementKind)) shouldBe Vector(
+        (0, "a", "href", "docs/a.pdf", None),
+        (1, "img", "src", "images/a.png", Some("a"))
+      )
+      rewritten.render should include ("""href="urn:textus:attachment:0"""")
+      rewritten.render should include ("""src="urn:textus:image:1"""")
     }
 
     "decode common HTML entities and render them once" in {

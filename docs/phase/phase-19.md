@@ -163,9 +163,9 @@ Resume hint:
   persisted URNs back to public Blob content URLs.
   CR-01 generalizes this from image-only handling to SimpleEntity content
   references: `ContentReferenceOccurrence` records where a reference appears
-  inside content, including implemented HTML `img/src` and `a/href` references
-  plus planned video/media sources, attachments, Textus URNs, external URLs,
-  and future Markdown/SmartDox references. Entity-to-media/blob relationships
+  inside content, including HTML `img/src`, `video/src`, media `source/src`,
+  `a/href`, and `a[download]/href` attachment references. `iframe/src` remains
+  deferred because it needs a separate embed/sandbox policy. Entity-to-media/blob relationships
   are separate from content occurrence data, which remains the content-derived
   reference index. CR-02 applies that model to `textus-blog`: BlogInlineImage is
   retired from the application runtime, `BlogPost.contentAttributes.references`

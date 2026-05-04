@@ -477,9 +477,10 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   managed Blobs, external URLs can be preserved or captured as metadata-only
   Blob rows, and public rendering expands URNs back to CNCF Blob content URLs.
   Phase 19 now generalizes that image-only slice into SimpleEntity content
-  reference occurrences. The implemented v1 surface covers HTML `img/src` and
-  `a/href`, while video/media sources, attachments, Textus URNs, external URLs,
-  and future Markdown/SmartDox references remain planned extensions.
+  reference occurrences. The implemented HTML surface covers `img/src`,
+  `video/src`, media `source/src`, `a/href`, and `a[download]/href`
+  attachment references. `iframe/src` is deferred until an embed/sandbox
+  policy exists.
   Entity-to-media/blob relationships are separate from occurrence data, which
   becomes the content-derived reference index. `textus-blog` now stores
   generated occurrences in `BlogPost.contentAttributes.references`, retires the

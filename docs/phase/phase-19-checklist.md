@@ -373,8 +373,10 @@ inside content; it is not the canonical content body itself.
       capability rather than a Blog-only entity.
 - [x] Cover HTML references beyond images for the v1 implemented surface:
       `img/src` and `a/href`.
-- [ ] Extend the same model to `video/src`, `source/src`, `iframe/src`, and
-      attachment/download links.
+- [x] Extend the same model to HTML `video/src`, `source/src`, and
+      `a[download]/href` attachment links.
+- [x] Record `iframe/src` deferral; it needs an embed/sandbox policy separate
+      from media and downloadable attachment normalization.
 - [x] Keep `BlobAttachment` Association as the Entity-to-Blob relationship and
       use content occurrences as the content-derived reference index.
 - [x] Store occurrence fields for content field, markup,
@@ -392,6 +394,9 @@ inside content; it is not the canonical content body itself.
   are derived/index data.
 - `ContentReferenceOccurrence` is server-derived metadata, not operation input.
 - Occurrence support applies to all content references, not just images.
+- HTML media/download normalization rewrites canonical references to
+  `urn:textus:image|video|audio|attachment:{entropy}`. Plain `a/href` remains
+  index-only.
 - Normal reference resolution must use EntityStore/EntitySpace access scope so
   logical delete and future tenant filtering remain effective.
 

@@ -19,7 +19,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * Executable specification for SimpleEntity content reference handling.
  *
  * @since   May.  3, 2026
- * @version May.  4, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ContentReferenceWorkflowSpec
@@ -124,6 +124,126 @@ final class ContentReferenceWorkflowSpec
       )
       result.associations.size shouldBe 1
       _associations("article-content-ref-link").map(_.targetEntityId) shouldBe normalized.references.head.targetEntityId.toVector
+    }
+
+    "normalize HTML video and source references to media URNs" in {
+      Given("a filebundle with video, audio, and picture source files")
+      given ExecutionContext = ExecutionContext.create()
+      val component = _blob_component(InMemoryBlobStore())
+      val root = Files.createTempDirectory("cncf-html-media-ref")
+      val videos = Files.createDirectories(root.resolve("videos"))
+      val audio = Files.createDirectories(root.resolve("audio"))
+      val images = Files.createDirectories(root.resolve("images"))
+      Files.write(videos.resolve("a.mp4"), "mp4".getBytes(StandardCharsets.UTF_8))
+      Files.write(videos.resolve("b.webm"), "webm".getBytes(StandardCharsets.UTF_8))
+      Files.write(audio.resolve("a.mp3"), "mp3".getBytes(StandardCharsets.UTF_8))
+      Files.write(images.resolve("a.webp"), "webp".getBytes(StandardCharsets.UTF_8))
+      val workflow = ContentReferenceWorkflow(component)
+
+      When("normalizing HTML media references")
+      val normalized = _success(workflow.normalize(ContentReferenceContent(
+        InlineImageMarkup.HtmlFragment,
+        """<article>
+          |  <video src="videos/a.mp4"></video>
+          |  <video><source src="videos/b.webm" type="video/webm"></video>
+          |  <audio><source src="audio/a.mp3"></audio>
+          |  <picture><source src="images/a.webp" type="image/webp"></picture>
+          |</article>""".stripMargin,
+        fileBundle = Some(FileBundle.Directory(root))
+      )))
+
+      Then("each reference is rewritten to the inferred Textus media URN")
+      normalized.normalizedText should include ("""<video src="urn:textus:video:""")
+      normalized.normalizedText should include ("""src="urn:textus:video:""")
+      normalized.normalizedText should include ("""type="video/webm"""")
+      normalized.normalizedText should include ("""<source src="urn:textus:audio:""")
+      normalized.normalizedText should include ("""src="urn:textus:image:""")
+      normalized.normalizedText should include ("""type="image/webp"""")
+      normalized.references.map(x => (x.elementKind, x.attributeName, x.referenceKind)) shouldBe Vector(
+        (Some("video"), Some("src"), Some("video")),
+        (Some("source"), Some("src"), Some("video")),
+        (Some("source"), Some("src"), Some("audio")),
+        (Some("source"), Some("src"), Some("image"))
+      )
+      normalized.references.map(_.targetEntityId.flatMap(EntityId.parse(_).toOption).map(_.collection.name)) shouldBe Vector(
+        Some("video"),
+        Some("video"),
+        Some("audio"),
+        Some("image")
+      )
+    }
+
+    "normalize HTML download links to Attachment URNs and associations" in {
+      Given("a downloadable local file in a filebundle")
+      given ExecutionContext = ExecutionContext.create()
+      val component = _blob_component(InMemoryBlobStore())
+      val root = Files.createTempDirectory("cncf-html-download-ref")
+      val docs = Files.createDirectories(root.resolve("docs"))
+      Files.write(docs.resolve("a.pdf"), "pdf".getBytes(StandardCharsets.UTF_8))
+      val workflow = ContentReferenceWorkflow(component)
+
+      When("normalizing and attaching a download link")
+      val normalized = _success(workflow.normalize(ContentReferenceContent(
+        InlineImageMarkup.HtmlFragment,
+        """<article><a href="docs/a.pdf" download title="PDF">Download PDF</a></article>""",
+        fileBundle = Some(FileBundle.Directory(root))
+      )))
+      val result = _success(workflow.attachReferences("article-content-ref-download", normalized.references))
+
+      Then("the href is rewritten to an Attachment URN and attached with attachment role")
+      normalized.normalizedText should include ("""href="urn:textus:attachment:""")
+      normalized.references.map(x => (x.elementKind, x.attributeName, x.referenceKind, x.label, x.title)) shouldBe Vector(
+        (Some("a"), Some("href"), Some("attachment"), Some("Download PDF"), Some("PDF"))
+      )
+      normalized.references.head.targetEntityId.flatMap(EntityId.parse(_).toOption).map(_.collection.name) shouldBe Some("attachment")
+      result.associations.size shouldBe 1
+      _associations("article-content-ref-download", "attachment", "attachment").map(_.targetEntityId) shouldBe normalized.references.head.targetEntityId.toVector
+    }
+
+    "leave HTML source failure comments for ambiguous or conflicting source refs" in {
+      Given("source elements whose media kind cannot be safely inferred")
+      given ExecutionContext = ExecutionContext.create()
+      val component = _blob_component(InMemoryBlobStore())
+      val root = Files.createTempDirectory("cncf-html-source-failure")
+      val videos = Files.createDirectories(root.resolve("videos"))
+      Files.write(videos.resolve("a.mp4"), "mp4".getBytes(StandardCharsets.UTF_8))
+      val workflow = ContentReferenceWorkflow(component)
+
+      When("normalizing ambiguous and conflicting source references")
+      val normalized = _success(workflow.normalize(ContentReferenceContent(
+        InlineImageMarkup.HtmlFragment,
+        """<article>
+          |  <source src="videos/a.mp4">
+          |  <video><source src="videos/a.mp4" type="audio/mpeg"></video>
+          |</article>""".stripMargin,
+        fileBundle = Some(FileBundle.Directory(root))
+      )))
+
+      Then("original refs are preserved with deterministic failure comments")
+      normalized.normalizedText should include ("""src="videos/a.mp4"""")
+      normalized.normalizedText should include ("textus:media-normalization-failed")
+      normalized.references shouldBe Vector.empty
+    }
+
+    "leave HTML failure comments for external media without validating MIME" in {
+      Given("an external image URL whose suffix is not an image MIME hint")
+      given ExecutionContext = ExecutionContext.create()
+      val component = _blob_component(InMemoryBlobStore())
+      val repository = BlobRepository.entityStore()
+      val workflow = ContentReferenceWorkflow(component, repository = repository)
+
+      When("normalizing the external image")
+      val normalized = _success(workflow.normalize(ContentReferenceContent(
+        InlineImageMarkup.HtmlFragment,
+        """<article><img src="https://example.com/file.txt"></article>"""
+      )))
+
+      Then("the original reference is preserved and no Blob/Image metadata is created")
+      normalized.normalizedText should include ("""src="https://example.com/file.txt"""")
+      normalized.normalizedText should include ("textus:image-normalization-failed")
+      normalized.references shouldBe Vector.empty
+      _success(repository.list()) shouldBe Vector.empty
+      _success(MediaRepository.entityStore().list(MediaKind.Image)) shouldBe Vector.empty
     }
 
     "leave HTML failure comment for non-image Blob refs in img/src without promoting them to Image media" in {
@@ -695,14 +815,23 @@ final class ContentReferenceWorkflowSpec
     }
   }
 
-  private def _associations(source: String)(using ExecutionContext) =
+  private def _associations(
+    source: String
+  )(using ExecutionContext): Vector[org.goldenport.cncf.association.Association] =
+    _associations(source, "image", "inline")
+
+  private def _associations(
+    source: String,
+    targetKind: String,
+    role: String
+  )(using ExecutionContext): Vector[org.goldenport.cncf.association.Association] =
     _success(
       AssociationRepository.entityStore(AssociationStoragePolicy.mediaAttachmentDefault).list(
         AssociationFilter(
           domain = AssociationDomain.MediaAttachment,
           sourceEntityId = Some(source),
-          targetKind = Some("image"),
-          role = Some("inline")
+          targetKind = Some(targetKind),
+          role = Some(role)
         )
       )
     )
@@ -738,10 +867,13 @@ final class ContentReferenceWorkflowSpec
     def findByBlob(kind: MediaKind, blobId: EntityId)(using ExecutionContext): Consequence[Option[MediaEntity]] =
       Consequence.success(None)
 
-    def ensureImageForBlobResult(blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ExecutionContext): Consequence[MediaEnsureResult] =
+    def ensureForBlobResult(kind: MediaKind, blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ExecutionContext): Consequence[MediaEnsureResult] =
       Consequence.operationInvalid("media creation disabled")
 
-    def ensureImageForBlob(blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ExecutionContext): Consequence[MediaEntity] =
+    override def ensureImageForBlobResult(blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ExecutionContext): Consequence[MediaEnsureResult] =
+      ensureForBlobResult(MediaKind.Image, blob, alt, title)
+
+    override def ensureImageForBlob(blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ExecutionContext): Consequence[MediaEntity] =
       ensureImageForBlobResult(blob, alt, title).map(_.media)
 
     def delete(media: MediaEntity)(using ExecutionContext): Consequence[Unit] =

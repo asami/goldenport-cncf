@@ -13,7 +13,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Built-in media entities layered above Blob storage metadata.
  *
  * @since   May.  3, 2026
- * @version May.  4, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 enum MediaKind(val value: String) {
@@ -120,8 +120,13 @@ trait MediaRepository {
   def get(kind: MediaKind, id: EntityId)(using ExecutionContext): Consequence[MediaEntity]
   def list(kind: MediaKind)(using ExecutionContext): Consequence[Vector[MediaEntity]]
   def findByBlob(kind: MediaKind, blobId: EntityId)(using ExecutionContext): Consequence[Option[MediaEntity]]
-  def ensureImageForBlobResult(blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ExecutionContext): Consequence[MediaEnsureResult]
-  def ensureImageForBlob(blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ExecutionContext): Consequence[MediaEntity]
+  def ensureForBlobResult(kind: MediaKind, blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ExecutionContext): Consequence[MediaEnsureResult]
+  def ensureForBlob(kind: MediaKind, blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ExecutionContext): Consequence[MediaEntity] =
+    ensureForBlobResult(kind, blob, alt, title).map(_.media)
+  def ensureImageForBlobResult(blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ExecutionContext): Consequence[MediaEnsureResult] =
+    ensureForBlobResult(MediaKind.Image, blob, alt, title)
+  def ensureImageForBlob(blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ExecutionContext): Consequence[MediaEntity] =
+    ensureImageForBlobResult(blob, alt, title).map(_.media)
   def delete(media: MediaEntity)(using ExecutionContext): Consequence[Unit]
 }
 
@@ -171,13 +176,13 @@ final class EntityStoreMediaRepository extends MediaRepository {
   def findByBlob(kind: MediaKind, blobId: EntityId)(using ctx: ExecutionContext): Consequence[Option[MediaEntity]] =
     list(kind).map(_.find(_.blobId.value == blobId.value))
 
-  def ensureImageForBlobResult(blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ctx: ExecutionContext): Consequence[MediaEnsureResult] =
-    findByBlob(MediaKind.Image, blob.id).flatMap {
+  def ensureForBlobResult(kind: MediaKind, blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ctx: ExecutionContext): Consequence[MediaEnsureResult] =
+    findByBlob(kind, blob.id).flatMap {
       case Some(value) => Consequence.success(MediaEnsureResult(value, created = false))
       case None =>
         create(MediaCreate(
-          id = ctx.idGeneration.entityId(MediaEntityCollections.Image),
-          kind = MediaKind.Image,
+          id = ctx.idGeneration.entityId(MediaEntityCollections.collection(kind)),
+          kind = kind,
           blobId = blob.id,
           name = blob.filename.orElse(Some(blob.id.parts.entropy)),
           title = title.orElse(blob.filename),
@@ -186,13 +191,10 @@ final class EntityStoreMediaRepository extends MediaRepository {
           byteSize = blob.byteSize,
           digest = blob.digest,
           accessUrl = Some(blob.accessUrl.displayUrl),
-          alt = alt,
+          alt = if (kind == MediaKind.Image) alt else None,
           attributes = Map("sourceBlobId" -> blob.id.value)
         )).map(MediaEnsureResult(_, created = true))
     }
-
-  def ensureImageForBlob(blob: Blob, alt: Option[String] = None, title: Option[String] = None)(using ctx: ExecutionContext): Consequence[MediaEntity] =
-    ensureImageForBlobResult(blob, alt, title).map(_.media)
 
   def delete(media: MediaEntity)(using ctx: ExecutionContext): Consequence[Unit] =
     EntityStore.standard().delete(media.id)
