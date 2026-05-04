@@ -12,7 +12,7 @@ import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, Chi
 
 /*
  * @since   Mar.  5, 2026
- * @version May.  2, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -410,8 +410,9 @@ private[projection] object MetaProjectionSupport {
       "entityName" -> descriptor.entityName,
       "collectionId" -> _collection_id_string(descriptor),
       "memoryPolicy" -> descriptor.memoryPolicy.toString,
-      "workingSetPolicy" -> descriptor.workingSetPolicy.map(_.label).getOrElse(""),
-      "workingSetPolicySource" -> descriptor.workingSetPolicySource.map(_.toString.toLowerCase).getOrElse(""),
+      "workingSetPolicy" -> descriptor.effectiveWorkingSetPolicy.map(_.label).getOrElse(""),
+      "workingSetPolicySource" -> descriptor.effectiveWorkingSetPolicySource.map(_.toString.toLowerCase).getOrElse(""),
+      "entityKind" -> descriptor.entityKind.toString,
       "usageKind" -> descriptor.usageKind.toString,
       "operationKind" -> descriptor.operationKind.toString,
       "applicationDomain" -> descriptor.applicationDomain.toString,

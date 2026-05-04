@@ -3,7 +3,7 @@ package org.goldenport.cncf.component
 import org.goldenport.record.Record
 import org.goldenport.record.RecordDecoder
 import org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor
-import org.goldenport.cncf.entity.runtime.{WorkingSetPolicy, WorkingSetPolicySource}
+import org.goldenport.cncf.entity.runtime.{EntityKind, WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.security.{EntityApplicationDomain, EntityOperationKind, EntityUsageKind}
 import org.goldenport.cncf.component.ComponentDescriptor.given
 import org.scalatest.matchers.should.Matchers
@@ -12,7 +12,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 13, 2026
  *  version Apr. 16, 2026
- * @version Apr. 24, 2026
+ *  version Apr. 24, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentDescriptorSpec extends AnyWordSpec with Matchers {
@@ -20,33 +21,131 @@ final class ComponentDescriptorSpec extends AnyWordSpec with Matchers {
     "decode entity classification fields in camelCase" in {
       val rec = Record.data(
         "entity" -> "Notice",
+        "entityKind" -> "document",
         "usageKind" -> "public-content",
-        "operationKind" -> "resource",
         "applicationDomain" -> "cms"
       )
 
       val descriptor = summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(rec).toOption.get
 
       descriptor.entityName shouldBe "Notice"
+      descriptor.entityKind shouldBe EntityKind.Document
       descriptor.usageKind shouldBe EntityUsageKind.PublicContent
       descriptor.operationKind shouldBe EntityOperationKind.Resource
       descriptor.applicationDomain shouldBe EntityApplicationDomain.Cms
+      descriptor.workingSetPolicy shouldBe None
+      descriptor.workingSetPolicySource shouldBe None
+      descriptor.effectiveWorkingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
+      descriptor.effectiveWorkingSetPolicySource shouldBe Some(WorkingSetPolicySource.Cml)
     }
 
     "decode entity classification fields in snake_case" in {
       val rec = Record.data(
         "entity" -> "SalesOrder",
+        "entity_kind" -> "workflow",
         "usage_kind" -> "business-object",
-        "operation_kind" -> "resource",
         "application_domain" -> "business"
       )
 
       val descriptor = summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(rec).toOption.get
 
       descriptor.entityName shouldBe "SalesOrder"
+      descriptor.entityKind shouldBe EntityKind.Workflow
       descriptor.usageKind shouldBe EntityUsageKind.BusinessRecord
-      descriptor.operationKind shouldBe EntityOperationKind.Resource
+      descriptor.operationKind shouldBe EntityOperationKind.Task
       descriptor.applicationDomain shouldBe EntityApplicationDomain.Business
+    }
+
+    "keep legacy operationKind descriptors compatible" in {
+      val rec = Record.data(
+        "entity" -> "LegacyJob",
+        "operationKind" -> "task"
+      )
+
+      val descriptor = summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(rec).toOption.get
+
+      descriptor.entityKind shouldBe EntityKind.Task
+      descriptor.operationKind shouldBe EntityOperationKind.Task
+      descriptor.workingSetPolicy shouldBe None
+      descriptor.entityKindExplicit shouldBe false
+    }
+
+    "parse all canonical entity kinds" in {
+      EntityKind.parse("master") shouldBe EntityKind.Master
+      EntityKind.parse("document") shouldBe EntityKind.Document
+      EntityKind.parse("workflow") shouldBe EntityKind.Workflow
+      EntityKind.parse("task") shouldBe EntityKind.Task
+      EntityKind.parse("actor") shouldBe EntityKind.Actor
+      EntityKind.parse("asset") shouldBe EntityKind.Asset
+    }
+
+    "reject unknown explicit entityKind" in {
+      val rec = Record.data(
+        "entity" -> "Bad",
+        "entityKind" -> "documnt"
+      )
+
+      summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(rec).toOption shouldBe None
+    }
+
+    "apply entity kind working-set defaults only when entityKind is explicit" in {
+      val product = summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(Record.data(
+        "entity" -> "Product",
+        "entityKind" -> "master"
+      )).toOption.get
+      val blogPost = summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(Record.data(
+        "entity" -> "BlogPost",
+        "entityKind" -> "document",
+        "applicationDomain" -> "cms",
+        "usageKind" -> "public-content"
+      )).toOption.get
+      val salesOrder = summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(Record.data(
+        "entity" -> "SalesOrder",
+        "entityKind" -> "workflow"
+      )).toOption.get
+      val task = summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(Record.data(
+        "entity" -> "ImportTask",
+        "entityKind" -> "task"
+      )).toOption.get
+      val actor = summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(Record.data(
+        "entity" -> "ExternalAccount",
+        "entityKind" -> "actor"
+      )).toOption.get
+      val asset = summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(Record.data(
+        "entity" -> "Image",
+        "entityKind" -> "asset"
+      )).toOption.get
+
+      product.toPlan.workingSetPolicy shouldBe Some(WorkingSetPolicy.ResidentAll)
+      blogPost.toPlan.workingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
+      salesOrder.toPlan.workingSetPolicy shouldBe None
+      task.toPlan.workingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
+      actor.toPlan.workingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
+      asset.toPlan.workingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
+    }
+
+    "derive entityKind from legacy constructor operation kind" in {
+      val descriptor = EntityRuntimeDescriptor(
+        entityName = "LegacyTask",
+        collectionId = org.simplemodeling.model.datatype.EntityCollectionId("sys", "sys", "LegacyTask"),
+        memoryPolicy = org.goldenport.cncf.entity.runtime.EntityMemoryPolicy.LoadToMemory,
+        partitionStrategy = org.goldenport.cncf.entity.runtime.PartitionStrategy.byOrganizationMonthUTC,
+        maxPartitions = 64,
+        maxEntitiesPerPartition = 10000,
+        workingSet = None,
+        workingSetPolicy = None,
+        workingSetPolicySource = None,
+        schema = None,
+        aggregateNames = Vector.empty,
+        viewNames = Vector.empty,
+        usageKind = EntityUsageKind.default,
+        operationKind = EntityOperationKind.Task,
+        applicationDomain = EntityApplicationDomain.default
+      )
+
+      descriptor.entityKind shouldBe EntityKind.Task
+      descriptor.entityKindExplicit shouldBe false
+      descriptor.toPlan.workingSetPolicy shouldBe None
     }
 
     "decode descriptor-first component root with componentlets" in {

@@ -26,7 +26,7 @@ import io.circe.parser.parse
 /*
  * @since   Apr. 12, 2026
  *  version Apr. 30, 2026
- * @version May.  2, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -3400,8 +3400,8 @@ object StaticFormAppRenderer {
       val componentPath = NamingConventions.toNormalizedSegment(componentName)
       val rows = component.componentDescriptors.flatMap(_.entityRuntimeDescriptors).map { descriptor =>
         val entityPath = NamingConventions.toNormalizedSegment(descriptor.entityName)
-        val workingsetpolicy = descriptor.workingSetPolicy.map(_.label).getOrElse("none")
-        val policysource = descriptor.workingSetPolicySource.map(_.toString.toLowerCase).getOrElse("none")
+        val workingsetpolicy = descriptor.effectiveWorkingSetPolicy.map(_.label).getOrElse("none")
+        val policysource = descriptor.effectiveWorkingSetPolicySource.map(_.toString.toLowerCase).getOrElse("none")
         val collection = component.entitySpace.entityOption[Any](descriptor.collectionId.name)
         val workingSetStatus = collection.map(_.workingSetStatus)
         val workingSetState = workingSetStatus.map(_.state.label).getOrElse("unknown")
@@ -3410,6 +3410,7 @@ object StaticFormAppRenderer {
         s"""<tr>
            |  <td><a href="/web/${componentPath}/admin/entities/${entityPath}">${_escape(descriptor.entityName)}</a></td>
            |  <td><code>${_escape(descriptor.collectionId.name)}</code></td>
+           |  <td>${_escape(descriptor.entityKind.toString)}</td>
            |  <td>${_escape(descriptor.usageKind.toString)}</td>
            |  <td>${_escape(descriptor.operationKind.toString)}</td>
            |  <td>${_escape(descriptor.applicationDomain.toString)}</td>
@@ -3426,7 +3427,7 @@ object StaticFormAppRenderer {
           _admin_empty_state("No entity runtime descriptors are registered for this component.")
         } else {
           s"""<div class="table-responsive"><table class="table table-sm table-hover align-middle">
-             |  <thead><tr><th>Entity</th><th>Collection</th><th>Usage</th><th>Operation</th><th>Domain</th><th>Working set</th><th>Policy</th><th>Source</th><th>Status</th><th>Resident</th><th>Error</th></tr></thead>
+             |  <thead><tr><th>Entity</th><th>Collection</th><th>Kind</th><th>Usage</th><th>Operation</th><th>Domain</th><th>Working set</th><th>Policy</th><th>Source</th><th>Status</th><th>Resident</th><th>Error</th></tr></thead>
              |  <tbody>${rows}</tbody>
              |</table></div>""".stripMargin
         }

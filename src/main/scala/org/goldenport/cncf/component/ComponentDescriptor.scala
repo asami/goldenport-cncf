@@ -4,7 +4,7 @@ import org.goldenport.Consequence
 import org.goldenport.record.Record
 import org.goldenport.record.RecordDecoder
 import org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor
-import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
+import org.goldenport.cncf.entity.runtime.{EntityKind, EntityMemoryPolicy, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.security.{EntityApplicationDomain, EntityOperationKind, EntityUsageKind}
 import org.simplemodeling.model.datatype.EntityCollectionId
 
@@ -13,7 +13,8 @@ import org.simplemodeling.model.datatype.EntityCollectionId
  * CAR-style local override.
  *
  * @since   Mar. 27, 2026
- * @version Apr. 24, 2026
+ *  version Apr. 24, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ComponentletDescriptor(
@@ -51,8 +52,16 @@ object ComponentDescriptor {
         partition = _partition_strategy(_string(rec, "partitionStrategy", "partition_strategy").getOrElse("byOrganizationMonthUTC"))
         maxPartitions = _int_value(rec, List("maxPartitions", "max_partitions"), 64)
         maxEntities = _int_value(rec, List("maxEntitiesPerPartition", "max_entities_per_partition"), 10000)
+        entityKindText = _string(rec, "entityKind", "entity_kind", "entityKindName", "entity_kind_name")
+        operationKindText = _string(rec, "operationKind", "operation_kind", "entityOperationKind", "entity_operation_kind")
+        entityKind <- entityKindText
+          .map(EntityKind.parseC)
+          .getOrElse(Consequence.success(operationKindText.map(x => EntityRuntimeDescriptor.legacyEntityKind(EntityOperationKind.parse(x))).getOrElse(EntityKind.default)))
         usageKind = _string(rec, "usageKind", "usage_kind", "entityUsage", "entity_usage").map(EntityUsageKind.parse).getOrElse(EntityUsageKind.default)
-        operationKind = _string(rec, "operationKind", "operation_kind", "entityOperationKind", "entity_operation_kind").map(EntityOperationKind.parse).getOrElse(EntityOperationKind.default)
+        operationKind = operationKindText
+          .map(EntityOperationKind.parse)
+          .orElse(entityKindText.map(_ => entityKind.legacyOperationKind))
+          .getOrElse(EntityOperationKind.default)
         applicationDomain = _string(rec, "applicationDomain", "application_domain", "entityApplicationDomain", "entity_application_domain").map(EntityApplicationDomain.parse).getOrElse(EntityApplicationDomain.default)
         workingsetpolicy <- _working_set_policy(rec)
       } yield EntityRuntimeDescriptor(
@@ -64,9 +73,11 @@ object ComponentDescriptor {
         maxEntitiesPerPartition = maxEntities,
         workingSetPolicy = workingsetpolicy,
         workingSetPolicySource = workingsetpolicy.map(_ => WorkingSetPolicySource.Cml),
+        entityKind = entityKind,
         usageKind = usageKind,
         operationKind = operationKind,
-        applicationDomain = applicationDomain
+        applicationDomain = applicationDomain,
+        entityKindExplicit = entityKindText.nonEmpty
       )
 
   given RecordDecoder[ComponentletDescriptor] with

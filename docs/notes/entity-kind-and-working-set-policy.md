@@ -3,73 +3,133 @@
 Date: 2026-05-04
 
 This note records the runtime classification boundary for CNCF Entities. It is
-not an authorization policy document. Authorization profiles may use the same
-classification terms, but Entity kind and Working Set policy are runtime and
-modeling concerns.
+not an authorization policy document. Authorization profiles may still use
+legacy `operationKind` terms, but `entityKind` is the canonical modeling and
+runtime classification.
 
 ## Entity Kinds
 
-`resource` is the default kind for durable domain objects that represent
-master data, reference data, or content resources. A resource Entity is the
-canonical stored record for its domain object.
+`master` is stable canonical master/reference data.
 
 Examples:
 
 - `Product`
 - `Customer`
 - `Catalog`
-- `BlogPost`
 
-`task` is the kind for active execution or business process objects. A task
-Entity may be resident while it is active, but should leave the Working Set
-after completion or inactivity.
+Default runtime policy: resident candidate. The store record remains canonical,
+but master data is usually small and stable enough to benefit from residency.
+
+`document` is authored content or document data. `cms` is not an Entity kind;
+CMS content should be modeled as `entityKind = document` with
+`applicationDomain = cms` and a suitable `usageKind`, such as
+`public-content`.
+
+Examples:
+
+- `BlogPost`
+- `NewsArticle`
+- `Notice`
+
+Default runtime policy: Working Set disabled. Optimize reads through derived
+views, indexes, and projections rather than resident full content bodies.
+
+`workflow` is a business entity with explicit state transitions.
 
 Examples:
 
 - `SalesOrder`
-- active workflow instance
-- running job
+- approval workflow instance
+- publication workflow instance
 
-`cms resource` is a resource specialization for public or author-owned content.
-It usually has lifecycle state, publication state, body content, media
-references, and public read/search surfaces.
+Default runtime policy: active-only resident candidate. The workflow state
+field and active-state policy should be configured by the application; completed
+or inactive workflow records should fall back to the store.
+
+`task` is an execution unit without a domain state machine.
 
 Examples:
 
-- `Notice`
-- `BlogPost`
-- article-like content Entity
+- import task
+- render task
+- one-shot job task
+
+Default runtime policy: Working Set disabled unless explicitly configured.
+
+`actor` is a proxy or representative of an external object or party.
+
+Examples:
+
+- external account
+- partner organization proxy
+- service account proxy
+
+Default runtime policy: private/security-sensitive and not resident unless the
+application explicitly enables residency.
+
+`asset` is media/blob-backed asset metadata.
+
+Examples:
+
+- `Image`
+- `Video`
+- `Audio`
+- `Attachment`
+- generic `Blob`
+
+Default runtime policy: Working Set disabled. Payloads remain in Blob/media
+storage, not in the main Entity record.
+
+## Compatibility Axes
+
+`entityKind` is separate from:
+
+- `operationKind`: legacy authorization/runtime compatibility axis.
+- `applicationDomain`: business, CMS, generic, or another application domain.
+- `usageKind`: public-content, business-object, executable, and other usage
+  labels.
+
+Legacy mapping:
+
+| `entityKind` | legacy `operationKind` |
+|--------------|------------------------|
+| `master` | `resource` |
+| `document` | `resource` |
+| `actor` | `resource` |
+| `asset` | `resource` |
+| `workflow` | `task` |
+| `task` | `task` |
+
+Existing descriptors that only declare `operationKind` remain valid. New
+descriptors should declare `entityKind` and let legacy `operationKind` be
+derived unless a compatibility override is required.
 
 ## Working Set Policy
 
-Working Set is not the same axis as `resource` or `task`. It is a runtime
-residency policy that decides whether Entity instances should be kept resident
-for domain execution.
+Working Set is not the same axis as Entity kind. It is a runtime residency
+policy that decides whether Entity instances should be kept resident for domain
+execution.
 
 Recommended defaults:
 
 | Entity shape | Classification | Working Set default |
 |--------------|----------------|---------------------|
-| Product | resource | resident candidate |
-| SalesOrder | task | active-only resident candidate |
-| BlogPost | cms resource | disabled |
+| Product | `master` | resident candidate |
+| BlogPost | `document` + CMS/public-content | disabled |
+| SalesOrder | `workflow` | active-only resident candidate |
+| ImportTask | `task` | disabled |
+| ExternalAccount | `actor` | disabled unless explicit |
+| Image | `asset` | disabled |
 
-`Product = resource + resident candidate` because master/reference data is
-small enough and stable enough to benefit from residency.
+`BlogPost = document + store-backed canonical + workingSet disabled default`
+because article bodies, references, media links, and publication history grow
+over time. Keeping the full content Entity resident turns Working Set into a
+broad CMS cache instead of an execution model.
 
-`SalesOrder = task + active-only resident candidate` because it is execution
-state. Active orders may benefit from resident aggregate behavior, but completed
-or inactive orders should fall back to datastore access.
+## Document Optimization
 
-`BlogPost = cms resource + store-backed canonical + workingSet disabled
-default` because article bodies, references, media links, and publication
-history grow over time. Keeping the full content Entity resident turns Working
-Set into a broad CMS cache instead of an execution model.
-
-## CMS Resource Optimization
-
-CMS resources should use store-backed canonical Entity records. Read
-optimization should be handled by smaller derived views, indexes, or caches.
+Document Entities should use store-backed canonical records. Read optimization
+should be handled by smaller derived views, indexes, or caches.
 
 For Blog-style content, suitable cache candidates are:
 
@@ -83,7 +143,7 @@ surfaces, such as id, slug, title, summary, published timestamp,
 representative image, author identity, and publication state. Full article
 content remains on the canonical `BlogPost`.
 
-Draft/edit state is a lifecycle state of the content resource, not a task
+Draft/edit state is a lifecycle state of the document Entity, not a task
 classification by itself. If the application needs review, approval, or
-publication workflow state, model that as a separate task Entity such as
-`BlogPublicationTask`.
+publication workflow state, model that as a separate `workflow` Entity such as
+`BlogPublicationWorkflow`.

@@ -18,7 +18,7 @@ import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescr
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.{EntityCreateOptions, EntityPersistent, EntityPersistentCreate, EntityQuery, EntitySearchScope, EntityVisibilityScope}
-import org.goldenport.cncf.entity.runtime.{EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
+import org.goldenport.cncf.entity.runtime.{EntityKind, EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.http.RuntimeDashboardMetrics
 import org.goldenport.cncf.observability.{ConclusionDiagnostics, ValidationDiagnostics}
 import org.goldenport.cncf.operation.{CmlOperationImageBinding, ImageBindingOperationDefinition}
@@ -132,6 +132,7 @@ object BlobComponent {
           partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
           maxPartitions = 4,
           maxEntitiesPerPartition = 1000,
+          entityKind = EntityKind.Asset,
           workingSetPolicy = Some(WorkingSetPolicy.Disabled),
           workingSetPolicySource = Some(WorkingSetPolicySource.Code),
           schema = Some(_blob_schema)

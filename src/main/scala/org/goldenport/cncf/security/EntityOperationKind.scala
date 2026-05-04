@@ -1,12 +1,12 @@
 package org.goldenport.cncf.security
 
 /*
- * Entity operational kind. This is orthogonal to the application domain:
- * e.g. a business application may have both resource entities and task
- * entities.
+ * Legacy entity operation kind used by authorization compatibility. Canonical
+ * runtime/modeling classification lives in entity.runtime.EntityKind.
  *
  * @since   Apr. 13, 2026
- * @version Apr. 13, 2026
+ *  version Apr. 13, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 enum EntityOperationKind {

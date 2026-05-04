@@ -618,9 +618,11 @@ Entity image binding usage and the reusable CNCF behavior is verified.
       observation-window scheduler checks live in timing-tagged
       `JobRetryTimingSpec`.
 - [x] Document Entity kind and Working Set runtime policy outside the security
-      authorization model. `BlogPost` is recorded as a CMS public-content
-      resource whose canonical record is store-backed with Working Set disabled
-      by default; Blog read optimization belongs in lightweight views/indexes.
+      authorization model. Canonical `entityKind` values are `master`,
+      `document`, `workflow`, `task`, `actor`, and `asset`; `BlogPost` is
+      recorded as a CMS public-content document whose canonical record is
+      store-backed with Working Set disabled by default; Blog read optimization
+      belongs in lightweight views/indexes.
 - [x] Implement the first Blog read-side View cache projection usage.
       CNCF `ViewSpace` now exposes application-facing read-side registration
       helpers, `ViewCollection` uses explicit `ViewCachePolicy` query scopes,

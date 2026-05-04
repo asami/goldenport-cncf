@@ -528,9 +528,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   lifecycle fixtures, while real scheduler observation-window assertions are
   isolated in the timing-tagged `JobRetryTimingSpec` instead of ordinary
   `sbt test`. Entity kind and Working Set runtime policy is documented outside
-  the authorization model: `BlogPost` is a CMS public-content resource with a
-  store-backed canonical record, Working Set disabled by default, and
-  view/index/cache projections as the read-optimization path. The first
+  the authorization model: canonical `entityKind` values are `master`,
+  `document`, `workflow`, `task`, `actor`, and `asset`; `BlogPost` is a CMS
+  public-content document with a store-backed canonical record, Working Set
+  disabled by default, and view/index/cache projections as the
+  read-optimization path. The first
   runtime application of that policy is now in place: CNCF `ViewSpace` has
   application-facing read-side registration helpers, `ViewCollection` has
   explicit shared/principal/disabled query cache scopes, and `textus-blog`
@@ -817,6 +819,63 @@ Future platform development item.
   `Status.detailCode` / `detailCodes` / `strategies` shape, possible
   `Cause.Kind` refinements beyond ordinary validation, and cross-component
   Observation semantics that are not required to complete Blob.
+
+### 8.11 Media Attributes Model Cleanup
+Future platform development item.
+
+- Revisit `MediaAttributes` after the Phase 19 media/entity work has enough
+  application feedback.
+- Clarify which metadata belongs on reusable media values versus concrete
+  media Entities such as Image, Video, Audio, Attachment, and generic Blob.
+- Keep media-specific attributes out of unrelated domain objects; domain
+  Entities should point to media through associations or content references
+  rather than embedding ad hoc media fields.
+- Align media metadata with Textus URN/media reference behavior, BlobStore
+  payload metadata, representative image projection, and future thumbnail /
+  derived rendition work.
+
+### 8.12 Transaction Outcome Event Policy
+Future platform development item.
+
+- Add a first-class event emission policy that distinguishes events emitted
+  when a transaction succeeds from events emitted when a transaction fails.
+- Successful transaction events should represent committed domain changes and
+  drive ordinary projections, read-side updates, and downstream actions.
+- Failed transaction events should represent operational failure, rollback,
+  compensation, or recovery-required facts without pretending that the domain
+  mutation committed.
+- Align the policy with EventStore/EventBus lanes, ActionCall/UoW transaction
+  boundaries, Job lifecycle records, and existing non-transactional/error event
+  concepts.
+
+### 8.13 ServiceCall Fallback
+Future platform development item.
+
+- Add fallback behavior for `ServiceCall` failures.
+- The fallback contract should be explicit about which failures are eligible
+  for fallback, whether fallback runs synchronously or as a Job/Event
+  continuation, and how fallback results are represented in `Consequence` /
+  `Conclusion` / observability output.
+- Avoid implicit retry-like behavior in ordinary service calls; fallback should
+  be declared by policy and visible in diagnostics.
+- Align this with the broader error model cleanup and event/job continuation
+  policy.
+
+### 8.14 Compensation Recovery Events
+Future platform development item.
+
+- Introduce a recovery-required event for cases where compensation itself
+  cannot fully clean up partial work.
+- Target examples include compensation-of-compensation situations where
+  in-progress Entities, associations, media links, side-storage records, or
+  other derived state can remain after automated compensation fails or becomes
+  ambiguous.
+- The event should carry enough structured context for human recovery:
+  source operation/job, affected Entity ids, attempted compensation steps,
+  remaining partial artifacts, failure cause, and suggested recovery surface.
+- This is a human-in-the-loop recovery signal, not a silent best-effort
+  cleanup. It should integrate with admin diagnostics, Job/Event history, and
+  future recovery dashboards.
 
 ## 9. Completed Development Item History
 

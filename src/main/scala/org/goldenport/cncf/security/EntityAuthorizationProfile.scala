@@ -1,11 +1,14 @@
 package org.goldenport.cncf.security
 
+import org.goldenport.cncf.entity.runtime.EntityKind
+
 /*
  * Derived authorization defaults from entity usage and service operation
  * model. This is the coarse policy layer above raw ACL/relation settings.
  *
  * @since   Apr. 13, 2026
- * @version Apr. 13, 2026
+ *  version Apr. 13, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityAuthorizationProfile(
@@ -26,6 +29,19 @@ object EntityAuthorizationProfile {
       applicationDomain = entityUsage match
         case EntityUsageKind.PublicContent => EntityApplicationDomain.Cms
         case _ => EntityApplicationDomain.Business,
+      operationModel = operationModel,
+      explicitRelations = explicitRelations
+    )
+
+  def derive(
+    entityKind: EntityKind,
+    applicationDomain: EntityApplicationDomain,
+    operationModel: ServiceOperationModel,
+    explicitRelations: Vector[EntityAccessRelation]
+  ): EntityAuthorizationProfile =
+    derive(
+      operationKind = entityKind.legacyOperationKind,
+      applicationDomain = applicationDomain,
       operationModel = operationModel,
       explicitRelations = explicitRelations
     )
