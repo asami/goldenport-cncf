@@ -414,7 +414,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 ### Phase 19: BlogComponent Entity Image Usage
 - Goal: use `textus-blog` `BlogComponent` as the concrete development driver
   for ordinary Entity-to-image binding usage.
-- Status: open.
+- Status: closed.
 - Scope:
 - Establish the recommended way for application components to bind images to
   Entity instances using the Phase 18 Blob and Association foundation.
@@ -547,7 +547,10 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   is `single/global`; runtime configuration keys are
   `textus.id.namespace.major` and `textus.id.namespace.minor`; `sys/sys` is
   migration debt.
-- Remaining Phase 19 work is phase closure validation.
+- Result: Phase 19 is closed. Remaining work is tracked as future platform,
+  distributed-system, scalability, media-model, transaction/event, fallback,
+  recovery, workflow-residency, optimistic-locking, and runtime-namespace
+  hardening items below.
 - Non-goals:
 - No new Blob payload storage backend in CNCF core.
 - No S3/S3-compatible BlobStore provider implementation in this phase.
@@ -572,11 +575,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: Phase 19 — BlogComponent Entity Image Usage.
-- Latest active phase dashboard: `docs/phase/phase-19.md`
-- Latest active phase checklist: `docs/phase/phase-19-checklist.md`
-- Latest closed phase dashboard: `docs/phase/phase-18.md`
-- Latest closed phase checklist: `docs/phase/phase-18-checklist.md`
+- Current phase selection: none after Phase 19 closure.
+- Latest active phase dashboard: none.
+- Latest active phase checklist: none.
+- Latest closed phase dashboard: `docs/phase/phase-19.md`
+- Latest closed phase checklist: `docs/phase/phase-19-checklist.md`
 - Candidate next phase areas: AwsComponent/S3 BlobStore provider; Error Model / Consequence-Conclusion Realignment; Search/index planning; DB migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
@@ -603,7 +606,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 16: closed (`docs/phase/phase-16.md`)
 - Phase 17: closed (`docs/phase/phase-17.md`)
 - Phase 18: closed (`docs/phase/phase-18.md`)
-- Phase 19: open (`docs/phase/phase-19.md`)
+- Phase 19: closed (`docs/phase/phase-19.md`)
 
 ## 8. Development Item Status
 
@@ -722,10 +725,12 @@ Future component development item.
   serve development and executable-spec use cases.
 
 ### 8.9 BlogComponent Entity Image Usage
-Active in Phase 19.
+Completed in Phase 19.
 
-- Active dashboard: `docs/phase/phase-19.md`
-- Active checklist: `docs/phase/phase-19-checklist.md`
+- Closed dashboard: `docs/phase/phase-19.md`
+- Closed checklist: `docs/phase/phase-19-checklist.md`
+- Completed scope is recorded in Completed Development Item History section
+  9.8.
 - Development driver: `textus-blog` `BlogComponent`
 - Purpose:
   - make the ordinary Entity-to-image binding usage concrete after Phase 18;
@@ -1129,3 +1134,63 @@ Completed in Phase 18.
   - Retention policy, signed URLs, configurable MIME allowlists, thumbnail
     generation, virus scanning, and resumable upload remain future Blob/AWS
     hardening work.
+
+### 9.8 BlogComponent Entity Image Usage
+Completed in Phase 19.
+
+- Closed dashboard: `docs/phase/phase-19.md`
+- Closed checklist: `docs/phase/phase-19-checklist.md`
+- Final implementation snapshot:
+  - CNCF: `0a57c64 Extend content references to HTML media`
+- Completed scope:
+  - application-driven Entity image binding contract using `textus-blog`
+    `BlogComponent`
+  - Blog authoring lifecycle driver covering draft, published, inactive,
+    public-read, author, and admin flows
+  - reusable CNCF HTML tree parsing and fragment rewriting support
+  - reusable Atom feed model/projection/rendering applied to Blog published
+    active posts
+  - component-owned Blog Web app driver over Static Form file-layout routing
+  - Textus URN and URN repository baseline for document-facing references
+  - SimpleEntity `ContentAttributes` / `ContentReferenceOccurrence` model for
+    content-derived reference metadata
+  - `BlogInlineImage` retirement in favor of
+    `BlogPost.contentAttributes.references`
+  - builtin Blob-backed media Entities for Image, Video, Audio, Attachment, and
+    generic Blob fallback
+  - media/document Textus URNs for image, video, audio, attachment, and blob
+  - `MediaAttachment` Association as Entity-to-media relationship, with
+    `BlobAttachment` retained for lower-level compatibility
+  - HTML reference normalization for `img/src`, `video/src`, media
+    `source/src`, plain `a/href` indexing, and `a[download]/href` attachment
+    normalization; `iframe/src` is deferred to a future embed/sandbox policy
+  - GFM-compatible Markdown rendering/reference normalization, including
+    inline, reference-style, collapsed, shortcut, and autolink support where
+    appropriate
+  - SmartDox parser/AST/rendering/reference extraction baseline in
+    `simplemodeling-lib`, plus Textus profile documentation and
+    source-span-aware image rewrite for safe parser-spanned targets
+  - `ContentBody`, `ContentMarkup`, MIME type, charset, and content
+    inline/overflow storage policy baseline
+  - Entity kind taxonomy and default runtime policy documentation with
+    `master`, `document`, `workflow`, `task`, `actor`, and `asset`
+  - BlogPost runtime classification as a CMS public-content document whose
+    canonical record stays store-backed with Working Set disabled by default
+  - first CNCF View cache projection usage for Blog public list/search/feed,
+    slug lookup, and author dashboards, including principal-scoped query cache
+  - `entityKind` default policy normalization and `operationKind` shrinkage to
+    compatibility / ABAC context labeling
+  - `EntityId.major/minor` operational namespace policy and initial
+    `single/global` default implementation
+  - job/subsystem lifecycle fixture hardening and separation of real scheduler
+    timing checks from ordinary `sbt test`
+- Deferred scope:
+  - S3/S3-compatible BlobStore provider remains under AwsComponent.
+  - `iframe/src` normalization requires a separate embed/sandbox policy.
+  - MediaAttributes cleanup remains a future platform item.
+  - Transaction outcome event lanes, ServiceCall fallback, compensation
+    recovery events, workflow active-state residency, Entity/Aggregate version
+    conflict policy, distributed component runtime, inter-component Saga, and
+    persistent materialized view storage remain future development items.
+  - Runtime namespace SAR/CAR descriptor defaults and remaining accidental
+    `sys/sys` cleanup remain under Runtime Namespace Descriptor Defaults.

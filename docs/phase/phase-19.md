@@ -1,12 +1,12 @@
 # Phase 19 — BlogComponent Entity Image Usage
 
-status = open
+status = closed
 
 ## 1. Purpose of This Document
 
-This work document records the active stack of work items for Phase 19.
-It is authoritative for current scope, active work, explicit deferrals, and
-closure status.
+This work document records the closed stack of work items for Phase 19.
+It is authoritative for completed scope, explicit deferrals, and closure
+status.
 
 This document is a phase dashboard, not a design journal.
 
@@ -43,7 +43,7 @@ This document is a phase dashboard, not a design journal.
   `BlogComponent` to expose gaps in CNCF runtime, Web, projection, and
   generated component behavior.
 
-Current semantic direction:
+Final semantic direction:
 
 - Blob metadata and payload storage remain owned by the CNCF Blob foundation.
 - Domain entities should avoid direct image fields by default; BlogComponent
@@ -88,7 +88,7 @@ Current semantic direction:
   this phase; Phase 19 defines the reusable content/mimetype and document
   reference operating model first.
 
-## 4. Current Work Stack
+## 4. Closed Work Stack
 
 - A (DONE): BI-01 — Open Phase 19 and freeze BlogComponent image-use scope.
 - B (DONE): BI-02 — Validate `BlogComponent` image binding model against the Blob/Association foundation.
@@ -102,7 +102,7 @@ Current semantic direction:
 - J (DONE): MB-01 — Split Blob document references into image, video, audio, attachment, and blob kinds.
 - K (DONE): CT-01 — Define content/mimetype operation support for HTML, Markdown, and SmartDox.
 - L (DONE): SD-01 — Add SmartDox and GFM-compatible Markdown support.
-- M (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
+- M (DONE): BI-05 — Verification, documentation, and phase closure.
 
 Resume hint:
 
@@ -111,7 +111,7 @@ Resume hint:
   Blob attach/detach affordances, and operation manual metadata for
   image-capable operations. The Entity create/update slice connects
   same-request upload and existing Blob id attachment through
-  `BlobAttachmentWorkflow`. The current binding-core slice adds generic
+  `BlobAttachmentWorkflow`. The binding-core slice adds generic
   `associationBinding` metadata and `AssociationBindingWorkflow`, with
   `imageBinding` mapped to the same internal Association path. The child
   Entity binding slice adds SalesOrder/SalesOrderLine-style same-request child
@@ -123,8 +123,8 @@ Resume hint:
   is stored in a parent Entity field. The `textus-blog` driver now declares
   `BlogPost.images` as a BlobAttachment Association relationship and
   `BlogPost.inlineImages` as child-parent-id-field composition, with Cozy
-  generation and executable specs validating the metadata. The current
-  non-image Association admin/manual slice adds generic association list,
+  generation and executable specs validating the metadata. The non-image
+  Association admin/manual slice adds generic association list,
   attach, and detach surfaces plus Entity detail relationship sections for
   association-record relationships outside BlobAttachment images. The latest
   operation form/API adapter slice exposes `imageBinding` and
@@ -233,7 +233,7 @@ Resume hint:
 - [x] MB-01: Split Blob document references into image, video, audio, attachment, and blob kinds.
 - [x] CT-01: Define content/mimetype operation support for HTML, Markdown, and SmartDox.
 - [x] SD-01: Add SmartDox and GFM-compatible Markdown support.
-- [ ] BI-05: Verification, documentation, and phase closure.
+- [x] BI-05: Verification, documentation, and phase closure.
 
 Detailed task breakdown and progress tracking are recorded in
 `phase-19-checklist.md`.
