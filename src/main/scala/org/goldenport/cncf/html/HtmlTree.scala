@@ -8,7 +8,7 @@ import org.goldenport.Consequence
 
 /*
  * @since   Apr. 29, 2026
- * @version May.  3, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 sealed trait HtmlNode {
@@ -117,6 +117,35 @@ final case class HtmlFragment(nodes: Vector[HtmlNode]) {
     HtmlFragment(nodes.map(rewrite))
   }
 
+  def rewriteImageSourcesWithComments(
+    f: HtmlImageOccurrence => HtmlImageRewrite
+  ): HtmlFragment = {
+    var index = -1
+    def rewrite(node: HtmlNode): Vector[HtmlNode] = node match {
+      case e: HtmlElement =>
+        val rewrittenChildren = e.children.flatMap(rewrite)
+        val withChildren = e.copy(children = rewrittenChildren)
+        if (withChildren.name == "img" && withChildren.attr("src").exists(_.nonEmpty)) {
+          index = index + 1
+          val occurrence = HtmlImageOccurrence(
+            index,
+            withChildren.attr("src").getOrElse(""),
+            withChildren.attr("alt"),
+            withChildren.attr("title")
+          )
+          val rewrite = f(occurrence)
+          val image = rewrite.src
+            .map(src => withChildren.copy(attributes = withChildren.attributes + ("src" -> src)))
+            .getOrElse(withChildren)
+          image +: rewrite.comment.map(HtmlComment.apply).toVector
+        } else {
+          Vector(withChildren)
+        }
+      case other => Vector(other)
+    }
+    HtmlFragment(nodes.flatMap(rewrite))
+  }
+
   def elements: Vector[HtmlElement] =
     nodes.flatMap(_.elements)
 }
@@ -126,6 +155,11 @@ final case class HtmlImageOccurrence(
   src: String,
   alt: Option[String],
   title: Option[String]
+)
+
+final case class HtmlImageRewrite(
+  src: Option[String],
+  comment: Option[String] = None
 )
 
 final case class HtmlLinkOccurrence(

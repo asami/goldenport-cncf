@@ -13,9 +13,9 @@ import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, E
 import org.goldenport.cncf.job.JobStatus
 import org.goldenport.cncf.job.JobBatchDefinition
 import org.goldenport.cncf.operation.CmlOperationDefinition
-import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.subsystem.resolver.OperationResolver.ResolutionResult
+import org.goldenport.cncf.testutil.SubsystemTestFixture
 import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.protocol.spec as spec
@@ -28,7 +28,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Apr. 22, 2026
- * @version Apr. 22, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JclJobControlComponentSpec
@@ -40,7 +40,7 @@ final class JclJobControlComponentSpec
   "JobControlComponent JCL surface" should {
     "describe a valid jobs[] YAML into normalized record form" in {
       Given("a valid action-only JCL definition")
-      val fixture = _fixture()
+      _with_fixture() { fixture =>
       val body =
         """jobs:
           |  - name: first
@@ -72,11 +72,12 @@ final class JclJobControlComponentSpec
       jobs.head.getRecord("target").flatMap(_.getString("action")) shouldBe Some("jcl_fixture.command.ok")
       jobs.head.getRecord("submit").flatMap(_.getString("persistence")) shouldBe Some("Ephemeral")
       jobs.head.getRecord("on-failure").flatMap(_.getString("action")) shouldBe Some("jcl_fixture.command.hook")
+      }
     }
 
     "reject invalid workflow-like or malformed YAML shapes" in {
       Given("invalid JCL payloads")
-      val fixture = _fixture()
+      _with_fixture() { fixture =>
       val missingJobs =
         """job:
           |  name: invalid
@@ -128,11 +129,12 @@ final class JclJobControlComponentSpec
         case Consequence.Failure(_) => succeed
         case other => fail(s"expected failure but got $other")
       }
+      }
     }
 
     "submit a single action job and a fail-fast batch with failure hook" in {
       Given("a fixture component with ok/fail/hook actions")
-      val fixture = _fixture()
+      _with_fixture() { fixture =>
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
 
       val single =
@@ -200,12 +202,13 @@ final class JclJobControlComponentSpec
         "fail:orderId=b",
         "hook:reason=after-fail"
       )
+      }
     }
 
     "describe and submit workflow-target JCL while preserving workflow and job surfaces" in {
       Given("a fixture component with workflow metadata and entity state")
       val entityid = _entity_id("workflow_submit")
-      val fixture = _fixture(
+      _with_fixture(
         definitions = Vector(
           WorkflowDefinition(
             name = "sales-order-approval",
@@ -223,7 +226,7 @@ final class JclJobControlComponentSpec
           )
         ),
         entities = Vector(_SalesOrder(entityid, "approved"))
-      )
+      ) { fixture =>
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
       val body =
         s"""jobs:
@@ -274,13 +277,14 @@ final class JclJobControlComponentSpec
       )
       _record(workflowInstance).getAny("related-job-ids").collect { case xs: Seq[?] => xs.map(_.toString).toVector }.getOrElse(Vector.empty) should contain (submittedIds.head)
       fixture.subsystem.jobEngine.queryVisible(org.goldenport.cncf.job.JobId.parse(submittedIds.head).toOption.get).toOption.flatten.map(_.jobId.value) shouldBe Some(submittedIds.head)
+      }
     }
 
     "submit mixed action and workflow batches sequentially and fail-fast on workflow non-progression" in {
       Given("a fixture component with one progressable and one non-progressable workflow target")
       val approvedId = _entity_id("workflow_batch_ok")
       val pendingId = _entity_id("workflow_batch_pending")
-      val fixture = _fixture(
+      _with_fixture(
         definitions = Vector(
           WorkflowDefinition(
             name = "sales-order-approval",
@@ -301,7 +305,7 @@ final class JclJobControlComponentSpec
           _SalesOrder(approvedId, "approved"),
           _SalesOrder(pendingId, "pending")
         )
-      )
+      ) { fixture =>
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
       val mixed =
         s"""jobs:
@@ -364,6 +368,7 @@ final class JclJobControlComponentSpec
         "hook:reason=workflow-no-progress"
       )
       fixture.subsystem.workflowEngine.instances.size shouldBe 2
+      }
     }
   }
 
@@ -378,12 +383,24 @@ final class JclJobControlComponentSpec
     entities: Vector[_SalesOrder] = Vector.empty
   ): _Fixture = {
     given EntityPersistent[_SalesOrder] = _persistent
-    val subsystem = DefaultSubsystemFactory.default(mode = Some("command"))
+    val subsystem = SubsystemTestFixture.Startup.Default(Some("command")).create(SubsystemTestFixture.Params())
     val trace = ArrayBuffer.empty[String]
     val component = _component(subsystem, trace, definitions, entities)
     val bootstrapped = new ComponentFactory().bootstrap(component)
     subsystem.add(bootstrapped)
     _Fixture(subsystem, bootstrapped, trace)
+  }
+
+  private def _with_fixture[A](
+    definitions: Vector[WorkflowDefinition] = Vector.empty,
+    entities: Vector[_SalesOrder] = Vector.empty
+  )(body: _Fixture => A): A = {
+    val fixture = _fixture(definitions, entities)
+    try {
+      body(fixture)
+    } finally {
+      fixture.subsystem.shutdown()
+    }
   }
 
   private def _component(

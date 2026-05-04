@@ -49,7 +49,8 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  * @since   Jan.  7, 2026
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -112,6 +113,9 @@ final class Subsystem(
   def serverEmulatorBaseUrl: String = globalRuntimeContext.serverEmulatorBaseUrl
   def descriptor: Option[GenericSubsystemDescriptor] = _descriptor
   def resolvedSecurityWiring: ResolvedSecurityWiring = _resolved_security_wiring
+
+  def shutdown(): Unit =
+    _job_engine.shutdown()
 
   def withDescriptor(descriptor: GenericSubsystemDescriptor): Subsystem = {
     _descriptor = Some(descriptor)

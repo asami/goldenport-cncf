@@ -1,11 +1,14 @@
 package org.goldenport.cncf.blob
 
 import scala.util.matching.Regex
+import com.vladsch.flexmark.ast.{Image as MarkdownImage, Link as MarkdownLink}
+import com.vladsch.flexmark.util.ast.Node as MarkdownNode
+import com.vladsch.flexmark.util.sequence.BasedSequence
 import org.goldenport.Consequence
 import org.goldenport.cncf.association.{AssociationBindingWorkflow, AssociationDomain, AssociationRecordCodec, AssociationRepository, AssociationStoragePolicy}
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.ExecutionContext
-import org.goldenport.cncf.html.{HtmlFragment, HtmlLinkOccurrence, HtmlTree}
+import org.goldenport.cncf.html.{HtmlFragment, HtmlImageOccurrence, HtmlImageRewrite, HtmlLinkOccurrence, HtmlTree}
 import org.goldenport.cncf.id.{TextusUrn, UrnRepository}
 import org.goldenport.datatype.FileBundle
 import org.goldenport.record.Record
@@ -86,18 +89,9 @@ final class ContentReferenceWorkflow(
   )(using ExecutionContext): Consequence[ContentReferenceNormalizeResult] =
     content.markup match {
       case InlineImageMarkup.HtmlFragment =>
-        for {
-          inline <- _blob_workflow.normalize(content.toInlineImageContent)
-          fragment <- _parse_html_fragment(inline.normalizedText)
-          linkRefs <- _link_references(fragment.links)
-        } yield ContentReferenceNormalizeResult(
-          markup = content.markup,
-          originalText = content.text,
-          normalizedText = inline.normalizedText,
-          references = inline.occurrences.map(_image_reference) ++ linkRefs
-        )
+        _normalize_html(content)
       case InlineImageMarkup.Markdown =>
-        Consequence.operationInvalid("GFM-compatible Markdown content reference normalization is reserved for the next content-format slice")
+        _normalize_markdown(content)
       case InlineImageMarkup.SmartDox =>
         _normalize_smartdox(content)
     }
@@ -129,6 +123,26 @@ final class ContentReferenceWorkflow(
     html: String
   ): Consequence[HtmlFragment] =
     HtmlTree.parse(html).map(document => HtmlFragment(document.nodes))
+
+  private def _normalize_html(
+    content: ContentReferenceContent
+  )(using ExecutionContext): Consequence[ContentReferenceNormalizeResult] =
+    for {
+      fragment <- _parse_html_fragment(content.text)
+      images <- _html_image_references(content, fragment.images)
+      linkRefs <- _link_references(fragment.links)
+      rewritten = fragment.rewriteImageSourcesWithComments { image =>
+        HtmlImageRewrite(
+          images.referencesByIndex.get(image.index).flatMap(_.normalizedRef),
+          images.failuresByIndex.get(image.index).map(ContentReferenceWorkflow.htmlFailureComment)
+        )
+      }
+    } yield ContentReferenceNormalizeResult(
+      markup = content.markup,
+      originalText = content.text,
+      normalizedText = rewritten.render,
+      references = images.referencesByIndex.toVector.sortBy(_._1).map(_._2) ++ linkRefs
+    )
 
   private def _image_reference(
     occurrence: InlineImageOccurrence
@@ -199,31 +213,321 @@ final class ContentReferenceWorkflow(
     }
   }
 
+  private def _html_image_references(
+    content: ContentReferenceContent,
+    images: Vector[HtmlImageOccurrence]
+  )(using ExecutionContext): Consequence[ImageReferenceNormalizeResult] =
+    images.foldLeft(Consequence.success(ImageReferenceNormalizeResult.empty)) {
+      case (z, image) =>
+        z.flatMap { state =>
+          _html_image_reference(content, image).map {
+            case Some(occurrence) =>
+              state.add(image.index, _image_reference(occurrence))
+            case None =>
+              state
+          }.recover { conclusion =>
+            state.addFailure(image.index, conclusion.show)
+          }
+        }
+    }
+
+  private def _html_image_reference(
+    content: ContentReferenceContent,
+    image: HtmlImageOccurrence
+  )(using ExecutionContext): Consequence[Option[InlineImageOccurrence]] =
+    _blob_workflow.normalize(InlineImageContent(
+      InlineImageMarkup.HtmlFragment,
+      _html_image_probe_html(image.src, image.alt, image.title),
+      content.fileBundle,
+      content.externalPolicy
+    )).map(_.occurrences.headOption)
+
+  private def _normalize_markdown(
+    content: ContentReferenceContent
+  )(using ExecutionContext): Consequence[ContentReferenceNormalizeResult] = {
+    val refs = _markdown_references(content.text)
+    val imageRefs = refs.filter(_.kind == MarkdownReferenceKind.Image)
+    val linkRefs = refs.filter(_.kind == MarkdownReferenceKind.Link)
+    for {
+      links <- _markdown_link_references(linkRefs)
+      images <- _markdown_image_references(content, imageRefs)
+    } yield {
+      val references = refs.flatMap { ref =>
+        ref.kind match {
+          case MarkdownReferenceKind.Image => images.referencesByIndex.get(ref.index)
+          case MarkdownReferenceKind.Link => links.get(ref.index)
+        }
+      }
+      ContentReferenceNormalizeResult(
+        markup = content.markup,
+        originalText = content.text,
+        normalizedText = _apply_markdown_rewrites(content.text, images.rewrites),
+        references = references
+      )
+    }
+  }
+
+  private def _markdown_link_references(
+    refs: Vector[MarkdownReference]
+  )(using ExecutionContext): Consequence[Map[Int, ContentReferenceOccurrence]] =
+    refs.foldLeft(Consequence.success(Map.empty[Int, ContentReferenceOccurrence])) {
+      case (z, ref) =>
+        z.flatMap { map =>
+          _markdown_link_reference(ref).map(reference => map + (ref.index -> reference))
+        }
+    }
+
+  private def _markdown_image_references(
+    content: ContentReferenceContent,
+    refs: Vector[MarkdownReference]
+  )(using ExecutionContext): Consequence[MarkdownImageNormalizeResult] =
+    refs.foldLeft(Consequence.success(MarkdownImageNormalizeResult.empty)) {
+      case (z, ref) =>
+        z.flatMap { state =>
+          _markdown_image_reference(content, ref).map {
+            case Some(occurrence) =>
+              state.add(
+                ref.index,
+                _markdown_image_occurrence(ref, occurrence),
+                MarkdownRewrite(ref.urlStart, ref.urlEnd, occurrence.normalizedSrc)
+              )
+            case None =>
+              state
+          }.recover { conclusion =>
+            state.addFailure(ref, conclusion.show)
+          }
+        }
+    }
+
+  private def _markdown_image_reference(
+    content: ContentReferenceContent,
+    ref: MarkdownReference
+  )(using ExecutionContext): Consequence[Option[InlineImageOccurrence]] =
+    _blob_workflow.normalize(InlineImageContent(
+        InlineImageMarkup.HtmlFragment,
+        _markdown_image_probe_html(ref),
+        content.fileBundle,
+        content.externalPolicy
+      )).map(_.occurrences.headOption)
+
+  private def _markdown_image_occurrence(
+    ref: MarkdownReference,
+    occurrence: InlineImageOccurrence
+  ): ContentReferenceOccurrence =
+    _image_reference(occurrence).copy(
+      markup = Some("markdown-gfm"),
+      occurrenceIndex = ref.index,
+      originalRef = Some(ref.ref),
+      alt = ref.label,
+      title = ref.title,
+      sortOrder = Some(ref.index)
+    )
+
+  private def _markdown_link_reference(
+    ref: MarkdownReference
+  )(using ExecutionContext): Consequence[ContentReferenceOccurrence] = {
+    val href = ref.ref.trim
+    _resolve_reference_ref(href).map {
+      case Some((kind, id, urnText)) =>
+        ContentReferenceOccurrence(
+          contentField = Some("content"),
+          markup = Some("markdown-gfm"),
+          elementKind = Some("a"),
+          attributeName = Some("href"),
+          occurrenceIndex = ref.index,
+          originalRef = Some(ref.ref),
+          normalizedRef = Some(ref.ref),
+          referenceKind = Some(kind),
+          urn = Some(urnText),
+          targetEntityId = Some(id.value),
+          label = ref.label,
+          title = ref.title,
+          sortOrder = Some(ref.index)
+        )
+      case None =>
+        ContentReferenceOccurrence(
+          contentField = Some("content"),
+          markup = Some("markdown-gfm"),
+          elementKind = Some("a"),
+          attributeName = Some("href"),
+          occurrenceIndex = ref.index,
+          originalRef = Some(ref.ref),
+          normalizedRef = Some(ref.ref),
+          referenceKind = Some(_reference_kind(href)),
+          urn = TextusUrn.parseOption(href).map(_.print),
+          label = ref.label,
+          title = ref.title,
+          sortOrder = Some(ref.index)
+        )
+    }
+  }
+
+  private def _markdown_references(
+    text: String
+  ): Vector[MarkdownReference] =
+    _markdown_nodes(ContentRenderWorkflow.parseMarkdown(text)).collect {
+      case image: MarkdownImage =>
+        _markdown_reference(MarkdownReferenceKind.Image, image.getUrl, image.getText, image.getTitle, image.getEndOffset)
+      case link: MarkdownLink =>
+        _markdown_reference(MarkdownReferenceKind.Link, link.getUrl, link.getText, link.getTitle, link.getEndOffset)
+    }.flatten.sortBy(_.urlStart).zipWithIndex.map {
+      case (ref, index) => ref.copy(index = index)
+    }
+
+  private def _markdown_nodes(
+    root: MarkdownNode
+  ): Vector[MarkdownNode] = {
+    val builder = Vector.newBuilder[MarkdownNode]
+    def loop(node: MarkdownNode): Unit = {
+      var child = node.getFirstChild
+      while (child != null) {
+        builder += child
+        loop(child)
+        child = child.getNext
+      }
+    }
+    loop(root)
+    builder.result()
+  }
+
+  private def _markdown_reference(
+    kind: MarkdownReferenceKind,
+    url: BasedSequence,
+    label: BasedSequence,
+    title: BasedSequence,
+    endOffset: Int
+  ): Option[MarkdownReference] =
+    _markdown_span(url).map {
+      case (start, end, raw) =>
+        MarkdownReference(
+          index = 0,
+          kind = kind,
+          ref = raw,
+          label = _markdown_text(label),
+          title = _markdown_text(title),
+          urlStart = start,
+          urlEnd = end,
+          endOffset = endOffset
+        )
+    }
+
+  private def _markdown_span(
+    value: BasedSequence
+  ): Option[(Int, Int, String)] =
+    Option(value).flatMap { seq =>
+      val start = seq.getStartOffset
+      val end = seq.getEndOffset
+      val raw = seq.unescape()
+      Option.when(start >= 0 && end >= start && raw.nonEmpty)((start, end, raw))
+    }
+
+  private def _markdown_text(
+    value: BasedSequence
+  ): Option[String] =
+    Option(value).map(_.unescape()).map(_.trim).filter(_.nonEmpty)
+
+  private def _markdown_image_probe_html(
+    ref: MarkdownReference
+  ): String =
+    _html_image_probe_html(ref.ref, ref.label, ref.title)
+
+  private def _html_image_probe_html(
+    src: String,
+    altText: Option[String],
+    titleText: Option[String]
+  ): String = {
+    val alt = altText.map(value => s""" alt="${_html_attr(value)}"""").getOrElse("")
+    val title = titleText.map(value => s""" title="${_html_attr(value)}"""").getOrElse("")
+    s"""<img src="${_html_attr(src)}"$alt$title>"""
+  }
+
+  private def _apply_markdown_rewrites(
+    text: String,
+    rewrites: Vector[MarkdownRewrite]
+  ): String =
+    rewrites.sortBy(_.start).reverse.foldLeft(text) {
+      case (z, rewrite) =>
+        if (rewrite.start >= 0 && rewrite.end >= rewrite.start && rewrite.end <= z.length)
+          z.substring(0, rewrite.start) + rewrite.value + z.substring(rewrite.end)
+        else
+          z
+    }
+
+  private def _html_attr(value: String): String =
+    value
+      .replace("&", "&amp;")
+      .replace("\"", "&quot;")
+      .replace("<", "&lt;")
+      .replace(">", "&gt;")
+
   private def _normalize_smartdox(
     content: ContentReferenceContent
   )(using ExecutionContext): Consequence[ContentReferenceNormalizeResult] =
     Dox2Parser.parseC(content.text).flatMap { document =>
-      val html = DoxHtmlRenderer.renderFragment(document)
-      val linkRefs = DoxReferenceExtractor.extract(document)
-        .filterNot(ref => ref.elementKind == "img" && ref.attributeName == "src")
+      val refs = DoxReferenceExtractor.extract(document)
+      val imageRefs = refs.filter(ref => ref.elementKind == "img" && ref.attributeName == "src")
+      val linkRefs = refs.filterNot(ref => ref.elementKind == "img" && ref.attributeName == "src")
       for {
-        inline <- _blob_workflow.normalize(InlineImageContent(
-          InlineImageMarkup.HtmlFragment,
-          html,
-          content.fileBundle,
-          content.externalPolicy
-        ))
+        images <- _smartdox_image_references(content, imageRefs)
         links <- linkRefs.foldLeft(Consequence.success(Vector.empty[ContentReferenceOccurrence])) {
           case (z, ref) =>
             z.flatMap(xs => _smartdox_link_reference(ref).map(xs :+ _))
         }
-        imageRefs = inline.occurrences.map(x => _image_reference(x).copy(markup = Some("smartdox")))
+        imageReferences = images.referencesByIndex.toVector.sortBy(_._1).map(_._2)
       } yield ContentReferenceNormalizeResult(
         markup = content.markup,
         originalText = content.text,
-        normalizedText = content.text,
-        references = imageRefs ++ links
+        normalizedText = _append_smartdox_failures(content.text, images.failuresByIndex.values.toVector),
+        references = imageReferences ++ links
       )
+    }
+
+  private def _smartdox_image_references(
+    content: ContentReferenceContent,
+    refs: Vector[DoxReference]
+  )(using ExecutionContext): Consequence[ImageReferenceNormalizeResult] =
+    refs.foldLeft(Consequence.success(ImageReferenceNormalizeResult.empty)) {
+      case (z, ref) =>
+        z.flatMap { state =>
+          _smartdox_image_reference(content, ref).map {
+            case Some(occurrence) =>
+              state.add(ref.occurrenceIndex, _image_reference(occurrence).copy(
+                markup = Some("smartdox"),
+                occurrenceIndex = ref.occurrenceIndex,
+                originalRef = Some(ref.ref),
+                alt = ref.alt.orElse(ref.label),
+                title = ref.title,
+                sortOrder = Some(ref.occurrenceIndex)
+              ))
+            case None =>
+              state
+          }.recover { conclusion =>
+            state.addFailure(ref.occurrenceIndex, s"${ref.ref}: ${conclusion.show}")
+          }
+        }
+    }
+
+  private def _smartdox_image_reference(
+    content: ContentReferenceContent,
+    ref: DoxReference
+  )(using ExecutionContext): Consequence[Option[InlineImageOccurrence]] =
+    _blob_workflow.normalize(InlineImageContent(
+      InlineImageMarkup.HtmlFragment,
+      _html_image_probe_html(ref.ref, ref.alt.orElse(ref.label), ref.title),
+      content.fileBundle,
+      content.externalPolicy
+    )).map(_.occurrences.headOption)
+
+  private def _append_smartdox_failures(
+    text: String,
+    failures: Vector[String]
+  ): String =
+    if (failures.isEmpty)
+      text
+    else {
+      val suffix = failures.map(ContentReferenceWorkflow.smartdoxFailureComment).mkString("\n")
+      val separator = if (text.endsWith("\n")) "" else "\n"
+      s"$text$separator$suffix"
     }
 
   private def _smartdox_link_reference(
@@ -474,7 +778,97 @@ private object AttachedInlineReferences {
     AttachedInlineReferences(Vector.empty, Vector.empty)
 }
 
+private final case class ImageReferenceNormalizeResult(
+  referencesByIndex: Map[Int, ContentReferenceOccurrence],
+  failuresByIndex: Map[Int, String]
+) {
+  def add(
+    index: Int,
+    reference: ContentReferenceOccurrence
+  ): ImageReferenceNormalizeResult =
+    copy(referencesByIndex = referencesByIndex + (index -> reference))
+
+  def addFailure(
+    index: Int,
+    message: String
+  ): ImageReferenceNormalizeResult =
+    copy(failuresByIndex = failuresByIndex + (index -> message))
+}
+
+private object ImageReferenceNormalizeResult {
+  val empty: ImageReferenceNormalizeResult =
+    ImageReferenceNormalizeResult(Map.empty, Map.empty)
+}
+
+private enum MarkdownReferenceKind {
+  case Image
+  case Link
+}
+
+private final case class MarkdownReference(
+  index: Int,
+  kind: MarkdownReferenceKind,
+  ref: String,
+  label: Option[String],
+  title: Option[String],
+  urlStart: Int,
+  urlEnd: Int,
+  endOffset: Int
+)
+
+private final case class MarkdownRewrite(
+  start: Int,
+  end: Int,
+  value: String
+)
+
+private final case class MarkdownImageNormalizeResult(
+  referencesByIndex: Map[Int, ContentReferenceOccurrence],
+  failuresByIndex: Map[Int, String],
+  rewrites: Vector[MarkdownRewrite]
+) {
+  def add(
+    index: Int,
+    reference: ContentReferenceOccurrence,
+    rewrite: MarkdownRewrite
+  ): MarkdownImageNormalizeResult =
+    copy(
+      referencesByIndex = referencesByIndex + (index -> reference),
+      rewrites = rewrites :+ rewrite
+    )
+
+  def addFailure(
+    ref: MarkdownReference,
+    message: String
+  ): MarkdownImageNormalizeResult =
+    copy(
+      failuresByIndex = failuresByIndex + (ref.index -> message),
+      rewrites = rewrites :+ MarkdownRewrite(ref.endOffset, ref.endOffset, ContentReferenceWorkflow.markdownFailureComment(message))
+    )
+}
+
+private object MarkdownImageNormalizeResult {
+  val empty: MarkdownImageNormalizeResult =
+    MarkdownImageNormalizeResult(Map.empty, Map.empty, Vector.empty)
+}
+
 object ContentReferenceWorkflow {
+  private[blob] def markdownFailureComment(message: String): String =
+    s" <!-- textus:image-normalization-failed: ${commentText(message)} -->"
+
+  private[blob] def htmlFailureComment(message: String): String =
+    s" textus:image-normalization-failed: ${commentText(message)} "
+
+  private[blob] def smartdoxFailureComment(message: String): String =
+    s"# textus:image-normalization-failed: ${commentText(message)}"
+
+  private[blob] def commentText(message: String): String =
+    message
+      .replace("--", "- -")
+      .replace("\r", " ")
+      .replace("\n", " ")
+      .trim
+
   def mediaTargetValidator(
     repository: MediaRepository
   ): org.goldenport.cncf.association.AssociationTargetValidator =

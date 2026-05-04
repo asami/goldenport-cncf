@@ -1,6 +1,6 @@
 package org.goldenport.cncf.job
 
-import java.time.Instant
+import java.time.{Duration, Instant}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
@@ -17,10 +17,10 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  4, 2026
  *  version Apr. 22, 2026
- * @version May.  3, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
-class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen {
+class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen with JobEngineTestFixture {
   "InMemoryJobEngine" should {
     "execute a Command as a Job and store the result" in {
       val action = new CommandAction() {
@@ -39,7 +39,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       }
 
       val actionEngine = ActionEngine.create()
-      val jobEngine = InMemoryJobEngine.create()
+      val jobEngine = createJobEngine()
       val ctx = ExecutionContext.test()
       val task = ActionTask(ActionId.generate(), action, actionEngine, None)
 
@@ -58,7 +58,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
 
     "queue async jobs before execution and expose queue timeline" in {
       Given("a single-worker scheduler with a blocking first job")
-      val jobEngine = InMemoryJobEngine.create(
+      val jobEngine = createJobEngine(
         InMemoryJobEngine.SchedulerConfig(workerCount = 1)
       )
       val entered = new CountDownLatch(1)
@@ -87,7 +87,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
 
     "serialize async execution when workerCount is one" in {
       Given("two blocking jobs and a single-worker scheduler")
-      val jobEngine = InMemoryJobEngine.create(
+      val jobEngine = createJobEngine(
         InMemoryJobEngine.SchedulerConfig(workerCount = 1)
       )
       val running = new AtomicInteger(0)
@@ -115,7 +115,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
 
     "allow parallel async execution up to workerCount" in {
       Given("two blocking jobs and a two-worker scheduler")
-      val jobEngine = InMemoryJobEngine.create(
+      val jobEngine = createJobEngine(
         InMemoryJobEngine.SchedulerConfig(workerCount = 2)
       )
       val running = new AtomicInteger(0)
@@ -141,7 +141,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
 
     "run lower numeric priority jobs before higher numeric priority jobs" in {
       Given("a busy single-worker scheduler and two queued jobs with different priorities")
-      val jobEngine = InMemoryJobEngine.create(
+      val jobEngine = createJobEngine(
         InMemoryJobEngine.SchedulerConfig(workerCount = 1)
       )
       val entered = new CountDownLatch(1)
@@ -166,7 +166,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
 
     "preserve FIFO order for same-priority queued jobs" in {
       Given("a busy single-worker scheduler and two queued jobs with the same priority")
-      val jobEngine = InMemoryJobEngine.create(
+      val jobEngine = createJobEngine(
         InMemoryJobEngine.SchedulerConfig(workerCount = 1)
       )
       val entered = new CountDownLatch(1)
@@ -191,7 +191,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
 
     "queue same-job async tasks before execution" in {
       Given("a completed parent job and a busy single-worker scheduler")
-      val jobEngine = InMemoryJobEngine.create(
+      val jobEngine = createJobEngine(
         InMemoryJobEngine.SchedulerConfig(workerCount = 1)
       )
       val parentId = _jobid(jobEngine.submit(List(_ValueTask("parent")), ExecutionContext.test()))
@@ -220,7 +220,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
 
     "inherit parent priority for same-job async tasks" in {
       Given("a completed high-priority parent job and a competing lower-priority job")
-      val jobEngine = InMemoryJobEngine.create(
+      val jobEngine = createJobEngine(
         InMemoryJobEngine.SchedulerConfig(workerCount = 1)
       )
       val order = ArrayBuffer.empty[String]
@@ -256,7 +256,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
 
     "keep delayed async submit in Submitted until its scheduled start time" in {
       Given("an async job with a one-shot delayed start")
-      val jobEngine = InMemoryJobEngine.create()
+      val jobEngine = createJobEngine()
       val scheduledAt = Instant.now().plusMillis(150L)
       val jobId = _jobid(jobEngine.submit(
         List(_ValueTask("delayed")),
@@ -281,7 +281,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
 
     "treat scheduledStartAt at or before now as immediate async execution" in {
       Given("an async job whose scheduled start is already due")
-      val jobEngine = InMemoryJobEngine.create()
+      val jobEngine = createJobEngine()
 
       When("the job is submitted")
       val jobId = _jobid(jobEngine.submit(
@@ -298,7 +298,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
 
     "reject delayed start beyond the built-in maximum window" in {
       Given("a delayed start request beyond the supported maximum")
-      val jobEngine = InMemoryJobEngine.create()
+      val jobEngine = createJobEngine()
 
       When("the job is submitted")
       val result = jobEngine.submit(
@@ -321,8 +321,11 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
     "rehydrate persistent delayed jobs after engine restart" in {
       Given("a persistent delayed-start job and shared durable state")
       val state = InMemoryJobEngine.State()
-      val scheduledAt = Instant.now().plusMillis(120L)
-      val engine1 = new InMemoryJobEngine(runtimeState = state)(scala.concurrent.ExecutionContext.global)
+      val schedule = InMemoryJobEngine.RetrySchedule.default
+      val clock = new ManualJobTimeSource(Instant.parse("2026-05-04T00:00:00Z"))
+      val timer1 = new InMemoryJobEngine.ManualJobTimer(clock)
+      val scheduledAt = clock.now().plusMillis(120L)
+      val engine1 = createManualInMemoryJobEngine(state, schedule, clock, timer1)
       val jobId = _jobid(engine1.submit(
         List(_ValueTask("rehydrated")),
         ExecutionContext.test(),
@@ -332,16 +335,20 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
 
       When("the engine is restarted before the delayed start fires")
       engine1.shutdown()
-      val engine2 = new InMemoryJobEngine(runtimeState = state)(scala.concurrent.ExecutionContext.global)
+      val timer2 = new InMemoryJobEngine.ManualJobTimer(clock)
+      val engine2 = createManualInMemoryJobEngine(state, schedule, clock, timer2)
 
       Then("the delayed job is rehydrated and eventually executes")
+      timer2.pendingCount shouldBe 1
+      timer2.advanceBy(Duration.ofMillis(120L)) shouldBe 1
+      engine2.drainAll()
       _await_result_(engine2, jobId) shouldBe a[Some[_]]
       engine2.shutdown()
     }
 
     "enqueue due delayed jobs into the shared queue under worker saturation" in {
       Given("a due delayed-start job and a busy single-worker scheduler")
-      val jobEngine = InMemoryJobEngine.create(
+      val jobEngine = createJobEngine(
         InMemoryJobEngine.SchedulerConfig(workerCount = 1)
       )
       val blockerEntered = new CountDownLatch(1)

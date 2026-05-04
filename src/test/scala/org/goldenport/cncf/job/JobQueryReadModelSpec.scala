@@ -12,17 +12,19 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Apr. 22, 2026
+ *  version Apr. 22, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobQueryReadModelSpec
   extends AnyWordSpec
   with Matchers
-  with GivenWhenThen {
+  with GivenWhenThen
+  with JobEngineTestFixture {
   "Job query read model" should {
     "return sync-equivalent result payload by JobId" in {
       Given("a command task submitted as a persistent job")
-      val engine = InMemoryJobEngine.create()
+      val engine = createJobEngine()
       val action = _success_action("createPerson", "ok-1")
       val task = ActionTask(ActionId.generate(), action, ActionEngine.create(), None)
       val ctx = ExecutionContext.test()
@@ -42,7 +44,7 @@ final class JobQueryReadModelSpec
 
     "project deterministic task/timeline order with pagination" in {
       Given("a job with two sequential tasks")
-      val engine = InMemoryJobEngine.create()
+      val engine = createJobEngine()
       val task1 = ActionTask(ActionId.generate(), _success_action("first", "1"), ActionEngine.create(), None)
       val task2 = ActionTask(ActionId.generate(), _success_action("second", "2"), ActionEngine.create(), None)
       val jobid = _jobid(engine.submit(List(task1, task2), ExecutionContext.test()))
@@ -63,7 +65,7 @@ final class JobQueryReadModelSpec
 
     "expose persistent vs ephemeral origin explicitly" in {
       Given("one persistent job and one ephemeral job")
-      val engine = InMemoryJobEngine.create()
+      val engine = createJobEngine()
       val persistentId = _jobid(engine.submit(
         List(ActionTask(ActionId.generate(), _success_action("persist", "ok"), ActionEngine.create(), None)),
         ExecutionContext.test()
@@ -90,7 +92,7 @@ final class JobQueryReadModelSpec
 
     "include task structure and debug/trace baseline fields" in {
       Given("a job with explicit submit debug metadata")
-      val engine = InMemoryJobEngine.create()
+      val engine = createJobEngine()
       val action = _success_action("debugAction", "done")
       val task = ActionTask(ActionId.generate(), action, ActionEngine.create(), None)
       val option = JobSubmitOption(
@@ -119,7 +121,7 @@ final class JobQueryReadModelSpec
 
     "expose scheduled start time for delayed job submission" in {
       Given("a delayed async job submission")
-      val engine = InMemoryJobEngine.create()
+      val engine = createJobEngine()
       val scheduledAt = Instant.now().plusMillis(120L)
       val task = ActionTask(ActionId.generate(), _success_action("delayedRead", "done"), ActionEngine.create(), None)
       val jobid = _jobid(engine.submit(
@@ -138,7 +140,7 @@ final class JobQueryReadModelSpec
 
     "expose event-triggered lineage explicitly in the read model" in {
       Given("an async job submitted from event reception metadata")
-      val engine = InMemoryJobEngine.create()
+      val engine = createJobEngine()
       val parentJobId = JobId.generate().print
       val task = ActionTask(ActionId.generate(), _success_action("dispatch", "done"), ActionEngine.create(), None)
       val option = JobSubmitOption(
@@ -188,7 +190,7 @@ final class JobQueryReadModelSpec
 
     "project retryable async failure disposition for failed child jobs" in {
       Given("an event-triggered async child job with retry policy")
-      val engine = InMemoryJobEngine.create()
+      val engine = createJobEngine()
       val task = _failed_task("dispatchRetry")
       val option = JobSubmitOption(
         persistence = JobPersistencePolicy.Ephemeral,
@@ -212,7 +214,7 @@ final class JobQueryReadModelSpec
 
     "project terminal async failure disposition for failed child jobs" in {
       Given("an event-triggered async child job with fail policy")
-      val engine = InMemoryJobEngine.create()
+      val engine = createJobEngine()
       val task = _failed_task("dispatchFail")
       val option = JobSubmitOption(
         persistence = JobPersistencePolicy.Ephemeral,
@@ -236,7 +238,7 @@ final class JobQueryReadModelSpec
 
     "enforce policy visibility on query surfaces" in {
       Given("a completed job")
-      val engine = InMemoryJobEngine.create()
+      val engine = createJobEngine()
       val task = ActionTask(ActionId.generate(), _success_action("visible", "ok"), ActionEngine.create(), None)
       val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
       val _ = _await_result(engine, jobid)

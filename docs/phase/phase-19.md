@@ -193,11 +193,20 @@ Resume hint:
   source blocks, comments, and XML/JSON structured tokens. SmartDox source
   text is not rewritten yet; normalized image/media identity is kept in
   `ContentReferenceOccurrence` metadata until source-span-aware rewriting is
-  available. Content body storage uses charset-aware byte sizing to keep small
-  bodies inline and overflow larger bodies to content side storage without
-  exposing DB storage choices to application models. Binary/opaque payloads
-  remain outside ordinary content bodies and belong under Blob/media/attachment
-  boundaries. The `textus-blog` Web driver now resolves CNCF and
+  available. GFM-compatible Markdown inline `![alt](src)` and `[label](href)`
+  references are parsed through the same flexmark configuration used for
+  rendering; image destinations are normalized to canonical image URNs while
+  link destinations are indexed without rewriting. HTML, Markdown, and SmartDox
+  image normalization keep successful image rewrites/metadata even when another
+  image fails; failed image references are left in the source with a
+  `textus:image-normalization-failed` comment so authors can fix only the
+  failed reference. Reference-style Markdown links/images remain deferred.
+  Content body storage uses charset-aware byte sizing to keep small bodies
+  inline and overflow larger bodies to content side storage without exposing DB
+  storage choices to application models.
+  Binary/opaque payloads remain outside ordinary content bodies and belong
+  under Blob/media/attachment boundaries. The `textus-blog` Web driver now
+  resolves CNCF and
   SimpleModeling versions from project-local `versions/` files rather than a
   `cncf-samples` root.
 

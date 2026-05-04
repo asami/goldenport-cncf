@@ -14,7 +14,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Apr. 22, 2026
+ *  version Apr. 22, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobCommandSyncAndTaskFirstSpec
@@ -25,7 +26,8 @@ final class JobCommandSyncAndTaskFirstSpec
   "Command Job execution path" should {
     "support explicit synchronous wait for command result via JobId" in {
       Given("a component and command action submitted as job")
-      val component = _component()
+      TestComponentFactory.withEmptySubsystem("job_command_sync_task_first_spec") { subsystem =>
+      val component = _component(subsystem)
       val ctx = ExecutionContext.test()
       val action = _command_action("sync", "Command(sync)")
       val task = ActionTask(ActionId.generate(), action, component.actionEngine, Some(component))
@@ -37,11 +39,13 @@ final class JobCommandSyncAndTaskFirstSpec
       Then("response is returned synchronously with succeeded status")
       result shouldBe Consequence.success(OperationResponse.Scalar("Command(sync)"))
       component.logic.getJobStatus(jobid) shouldBe Some(JobStatus.Succeeded)
+      }
     }
 
     "keep task-first invariant for command execution path" in {
       Given("a command action executed through component logic")
-      val component = _component()
+      TestComponentFactory.withEmptySubsystem("job_command_sync_task_first_spec") { subsystem =>
+      val component = _component(subsystem)
       val ctx = ExecutionContext.test()
       val executed = new AtomicBoolean(false)
       val action = new CommandAction() {
@@ -71,20 +75,24 @@ final class JobCommandSyncAndTaskFirstSpec
       Then("execution remains under Job lifecycle and is retrievable by JobId")
       jobid.value.nonEmpty shouldBe true
       executed.get() shouldBe true
+      }
     }
   }
 
-  private def _component(): Component = {
+  private def _component(
+    subsystem: org.goldenport.cncf.subsystem.Subsystem
+  ): Component = {
     val component = new Component() {}
     val id = ComponentId("job_command_sync_task_first_spec")
     val core = Component.Core.create(
       name = "job_command_sync_task_first_spec",
       componentid = id,
       instanceid = ComponentInstanceId.default(id),
-      protocol = Protocol.empty
+      protocol = Protocol.empty,
+      jobEngine = subsystem.jobEngine
     )
     val params = ComponentInit(
-      subsystem = TestComponentFactory.emptySubsystem("job_command_sync_task_first_spec"),
+      subsystem = subsystem,
       core = core,
       origin = ComponentOrigin.Builtin
     )

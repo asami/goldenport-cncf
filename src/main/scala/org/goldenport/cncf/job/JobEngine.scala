@@ -22,7 +22,7 @@ import org.goldenport.cncf.observability.ObservabilityEngine
 /*
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
- * @version May.  2, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -457,6 +457,7 @@ object JobQueryPolicy {
 trait JobEngine {
   def submit(tasks: List[JobTask], ctx: ExecutionContext): Consequence[JobId]
   def submit(tasks: List[JobTask], ctx: ExecutionContext, option: JobSubmitOption): Consequence[JobId]
+  def shutdown(): Unit = ()
   def getStatus(jobId: JobId): Option[JobStatus]
   def getResult(jobId: JobId): Option[JobResult]
   def control(
@@ -492,10 +493,46 @@ trait JobEngine {
     }
 }
 
+trait JobTimeSource {
+  def now(): Instant
+}
+
+object JobTimeSource {
+  val system: JobTimeSource = new JobTimeSource {
+    def now(): Instant = Instant.now()
+  }
+}
+
+final class ManualJobTimeSource(initial: Instant) extends JobTimeSource {
+  @volatile private var _current = initial
+
+  def now(): Instant = _current
+
+  def advanceBy(duration: java.time.Duration): Instant =
+    synchronized {
+      _current = _current.plus(duration)
+      _current
+    }
+
+  def advanceTo(instant: Instant): Instant =
+    synchronized {
+      if (instant.isAfter(_current))
+        _current = instant
+      _current
+    }
+}
+
+trait JobTimer {
+  def schedule(dueAt: Instant)(body: => Unit): Unit
+  def shutdown(): Unit = ()
+}
+
 final class InMemoryJobEngine(
   val runtimeState: InMemoryJobEngine.State = InMemoryJobEngine.State(),
   val retrySchedule: InMemoryJobEngine.RetrySchedule = InMemoryJobEngine.RetrySchedule.default,
-  val schedulerConfig: InMemoryJobEngine.SchedulerConfig = InMemoryJobEngine.SchedulerConfig.default
+  val schedulerConfig: InMemoryJobEngine.SchedulerConfig = InMemoryJobEngine.SchedulerConfig.default,
+  val timeSource: JobTimeSource = JobTimeSource.system,
+  timer: Option[JobTimer] = None
 )(
   implicit val executionContext: ScalaExecutionContext
 ) extends JobEngine {
@@ -503,8 +540,10 @@ final class InMemoryJobEngine(
   private val _durable_jobs = runtimeState.durableJobs
   private val _runtime_jobs = runtimeState.runtimeJobs
   private var _event_store: Option[EventStore] = None
-  private val _scheduler: ScheduledExecutorService =
-    Executors.newSingleThreadScheduledExecutor()
+  private val _scheduler: Option[ScheduledExecutorService] =
+    if (timer.isDefined) None else Some(Executors.newSingleThreadScheduledExecutor())
+  private val _timer: JobTimer =
+    timer.getOrElse(new ScheduledJobTimer(_scheduler.get, timeSource))
   private val _work_sequence = new AtomicLong(0L)
   private val _work_queue = new PriorityBlockingQueue[SchedulerWorkItem](
     11,
@@ -520,17 +559,36 @@ final class InMemoryJobEngine(
   _rehydrate_delayed_starts_()
   _rehydrate_delayed_retries_()
 
+  private def _now_(): Instant =
+    timeSource.now()
+
   def withEventStore(store: EventStore): InMemoryJobEngine = {
     _event_store = Some(store)
     this
   }
 
-  def shutdown(): Unit =
+  override def shutdown(): Unit =
     {
       _shutdown_requested = true
       _worker_pool.shutdownNow()
-      _scheduler.shutdownNow()
+      _timer.shutdown()
     }
+
+  def drainOne(): Boolean =
+    Option(_work_queue.poll()) match {
+      case Some(work) =>
+        _run_scheduler_work_(work)
+        true
+      case None =>
+        false
+    }
+
+  def drainAll(limit: Int = 1000): Int = {
+    var count = 0
+    while (count < limit && drainOne())
+      count += 1
+    count
+  }
 
   def submit(tasks: List[JobTask], ctx: ExecutionContext): Consequence[JobId] =
     submit(tasks, ctx, _default_submit_option(tasks))
@@ -542,7 +600,7 @@ final class InMemoryJobEngine(
   ): Consequence[JobId] =
     _validate_submit_option_(option).map { _ =>
     val jobid = JobId.generate()
-    val now = Instant.now()
+    val now = _now_()
     val initialdebug = JobDebugInfo(
       requestSummary = option.requestSummary.orElse(_request_summary(tasks)),
       parameters = if (option.parameters.nonEmpty) option.parameters else _request_parameters(tasks),
@@ -687,7 +745,7 @@ final class InMemoryJobEngine(
           parameters = record.debug.parameters ++ parameters,
           executionNotes = record.debug.executionNotes ++ executionNotes
         ),
-        updatedAt = Instant.now()
+        updatedAt = _now_()
       )
     }
 
@@ -820,7 +878,8 @@ final class InMemoryJobEngine(
 
   private def _enqueue_work_(work: SchedulerWorkItem): Unit =
     {
-      _ensure_scheduler_workers_()
+      if (schedulerConfig.autoStartWorkers)
+        _ensure_scheduler_workers_()
       _work_queue.put(work)
     }
 
@@ -860,7 +919,7 @@ final class InMemoryJobEngine(
           if (failure.isEmpty && _can_run_next_task(jobid)) {
             if (_await_if_suspended(jobid)) {
               val taskid = TaskId.generate()
-              val startedat = Instant.now()
+              val startedat = _now_()
               val jobcontext = JobContext(
                 jobId = Some(jobid),
                 taskId = Some(taskid),
@@ -885,7 +944,7 @@ final class InMemoryJobEngine(
                     previous,
                     JobTaskStatus.Succeeded,
                     JobTaskResultSummary(success = true, message = Some("ok")),
-                    Instant.now()
+                    _now_()
                   )
                   previous = Some(taskid)
                 case TaskFailed(c) =>
@@ -897,7 +956,7 @@ final class InMemoryJobEngine(
                     previous,
                     JobTaskStatus.Failed,
                     JobTaskResultSummary(success = false, message = c.observation.getEffectiveMessage),
-                    Instant.now()
+                    _now_()
                   )
               }
             }
@@ -921,7 +980,7 @@ final class InMemoryJobEngine(
   ): TaskOutcome = {
     val taskid = forcedTaskId.getOrElse(TaskId.generate())
     val parent = ctx.jobContext.currentTask
-    val startedat = Instant.now()
+    val startedat = _now_()
     val jobcontext = JobContext(
       jobId = Some(jobid),
       taskId = Some(taskid),
@@ -945,7 +1004,7 @@ final class InMemoryJobEngine(
           parent,
           JobTaskStatus.Succeeded,
           JobTaskResultSummary(success = true, message = Some("ok")),
-          Instant.now()
+          _now_()
         )
       case TaskFailed(c) =>
         _capture_calltree_if_needed_(jobid, executioncontext, failed = true, startedat)
@@ -955,7 +1014,7 @@ final class InMemoryJobEngine(
           parent,
           JobTaskStatus.Failed,
           JobTaskResultSummary(success = false, message = c.observation.getEffectiveMessage),
-          Instant.now()
+          _now_()
         )
         _update_deferred_result_(jobid, Some(JobResult.Failure(c)))
     }
@@ -984,7 +1043,7 @@ final class InMemoryJobEngine(
     startedat: Instant
   ): Unit =
     _get_record(jobid).foreach { record =>
-      val elapsedmillis = java.time.Duration.between(startedat, Instant.now()).toMillis
+      val elapsedmillis = java.time.Duration.between(startedat, _now_()).toMillis
       val save = record.persistence == JobPersistencePolicy.Persistent && (
         failed ||
         ctx.framework.saveCallTree ||
@@ -1076,7 +1135,7 @@ final class InMemoryJobEngine(
     }
 
   private def _retry_job_(jobid: JobId, record: JobRecord): Unit = {
-    val now = Instant.now()
+    val now = _now_()
     _put_record(
       record.copy(
         status = JobStatus.Submitted,
@@ -1282,7 +1341,7 @@ final class InMemoryJobEngine(
         activeTaskCount = record.activeTaskCount + 1,
         taskReadModels = record.taskReadModels :+ task,
         timeline = timeline,
-        updatedAt = Instant.now()
+        updatedAt = _now_()
       )
     }
 
@@ -1320,7 +1379,7 @@ final class InMemoryJobEngine(
         activeTaskCount = math.max(0, record.activeTaskCount - 1),
         taskReadModels = tasks,
         timeline = timeline,
-        updatedAt = Instant.now()
+        updatedAt = _now_()
       )
     }
 
@@ -1332,7 +1391,7 @@ final class InMemoryJobEngine(
       record.copy(
         baseTasksCompleted = true,
         deferredResult = result.orElse(record.deferredResult),
-        updatedAt = Instant.now()
+        updatedAt = _now_()
       )
     }
     _settle_if_ready_(jobid)
@@ -1345,7 +1404,7 @@ final class InMemoryJobEngine(
     _mutate_record(jobid) { record =>
       record.copy(
         deferredResult = result.orElse(record.deferredResult),
-        updatedAt = Instant.now()
+        updatedAt = _now_()
       )
     }
 
@@ -1380,7 +1439,7 @@ final class InMemoryJobEngine(
           case None =>
             ()
         }
-        _mutate_record(jobid)(_.copy(baseTasksCompleted = false, deferredResult = None, updatedAt = Instant.now()))
+        _mutate_record(jobid)(_.copy(baseTasksCompleted = false, deferredResult = None, updatedAt = _now_()))
       }
     }
 
@@ -1394,7 +1453,7 @@ final class InMemoryJobEngine(
     _mutate_record(jobid) { record =>
       record.copy(
         timeline = _next_timeline(record.timeline, kind, taskid, parent, note),
-        updatedAt = Instant.now()
+        updatedAt = _now_()
       )
     }
 
@@ -1408,7 +1467,7 @@ final class InMemoryJobEngine(
     val seq = current.lastOption.map(_.sequence + 1).getOrElse(1L)
     current :+ JobTimelineEvent(
       sequence = seq,
-      occurredAt = Instant.now(),
+      occurredAt = _now_(),
       kind = kind,
       taskId = taskid,
       parentTaskId = parent,
@@ -1573,7 +1632,7 @@ final class InMemoryJobEngine(
       record.copy(
         status = status,
         result = result.orElse(record.result),
-        updatedAt = Instant.now()
+        updatedAt = _now_()
       )
     }
 
@@ -1601,9 +1660,9 @@ final class InMemoryJobEngine(
 
   private def _validate_submit_option_(option: JobSubmitOption): Consequence[Unit] =
     option.scheduledStartAt match {
-      case Some(scheduledAt) if option.runMode == JobRunMode.Sync && scheduledAt.isAfter(Instant.now()) =>
+      case Some(scheduledAt) if option.runMode == JobRunMode.Sync && scheduledAt.isAfter(_now_()) =>
         Consequence.argumentInvalid("scheduledStartAt requires async runMode")
-      case Some(scheduledAt) if scheduledAt.isAfter(Instant.now().plus(InMemoryJobEngine.MaxNonRetryDelay)) =>
+      case Some(scheduledAt) if scheduledAt.isAfter(_now_().plus(InMemoryJobEngine.MaxNonRetryDelay)) =>
         Consequence.argumentInvalid(
           s"scheduledStartAt exceeds built-in max delay: ${InMemoryJobEngine.MaxNonRetryDelay.toMinutes} minutes"
         )
@@ -1643,7 +1702,7 @@ final class InMemoryJobEngine(
             kind = name,
             payload = payload,
             attributes = attributes,
-            createdAt = Instant.now(),
+            createdAt = _now_(),
             persistent = true,
             status = EventRecord.Status.Stored,
             lane = EventLane.NonTransactional
@@ -1732,7 +1791,7 @@ final class InMemoryJobEngine(
           lastFailureUserAction = _user_action_name_(conclusion),
           lastFailureMessage = conclusion.observation.getEffectiveMessage
         ),
-        updatedAt = Instant.now()
+        updatedAt = _now_()
       )
     )
 
@@ -1747,7 +1806,7 @@ final class InMemoryJobEngine(
         status = status,
         result = result.orElse(record.result),
         retry = retry,
-        updatedAt = Instant.now()
+        updatedAt = _now_()
       )
     }
 
@@ -1837,7 +1896,7 @@ final class InMemoryJobEngine(
       case Some(Disposition.UserAction.RetryLater) =>
         if (retryCount < max) {
           val nextAttempt = retryCount + 1
-          val dueAt = Instant.now().plusMillis(retrySchedule.delayedRetryDelays(nextAttempt - 1).toMillis)
+          val dueAt = _now_().plusMillis(retrySchedule.delayedRetryDelays(nextAttempt - 1).toMillis)
           RetryPolicy.Delayed(nextAttempt, dueAt, max)
         } else {
           RetryPolicy.Exhausted(JobRetryKind.Delayed, retryCount, max)
@@ -1853,24 +1912,17 @@ final class InMemoryJobEngine(
   private def _schedule_delayed_retry_(
     jobid: JobId,
     dueAt: Instant
-  ): Unit = {
-    val delayMillis = math.max(0L, dueAt.toEpochMilli - Instant.now().toEpochMilli)
-    _scheduler.schedule(
-      new Runnable {
-        override def run(): Unit =
-          _run_scheduled_retry_(jobid)
-      },
-      delayMillis,
-      TimeUnit.MILLISECONDS
-    )
-  }
+  ): Unit =
+    _timer.schedule(dueAt) {
+      _run_scheduled_retry_(jobid)
+    }
 
   private def _run_scheduled_retry_(jobid: JobId): Unit =
     _get_record(jobid).foreach { record =>
       if (
         record.status == JobStatus.Submitted &&
         record.retry.kind == JobRetryKind.Delayed &&
-        record.retry.nextRetryDueAt.exists(!_.isAfter(Instant.now()))
+        record.retry.nextRetryDueAt.exists(!_.isAfter(_now_()))
       ) {
         _append_timeline_(jobid, "job.retry.delayed.submitted", None, None, Some(s"${record.retry.attemptCount}/${record.retry.maxAttempts}"))
         _append_timeline_(jobid, "job.retry.delayed.enqueued", None, None, Some(s"${record.retry.attemptCount}/${record.retry.maxAttempts}"))
@@ -1885,7 +1937,7 @@ final class InMemoryJobEngine(
         _put_record(
           record.copy(
             retry = record.retry.copy(nextRetryDueAt = None),
-            updatedAt = Instant.now()
+            updatedAt = _now_()
           )
         )
         _enqueue_work_(SchedulerWorkItem.RetryRun(_next_sequence_(), record.priority, jobid))
@@ -1895,24 +1947,17 @@ final class InMemoryJobEngine(
   private def _schedule_delayed_start_(
     jobid: JobId,
     dueAt: Instant
-  ): Unit = {
-    val delayMillis = math.max(0L, dueAt.toEpochMilli - Instant.now().toEpochMilli)
-    _scheduler.schedule(
-      new Runnable {
-        override def run(): Unit =
-          _run_scheduled_start_(jobid)
-      },
-      delayMillis,
-      TimeUnit.MILLISECONDS
-    )
-  }
+  ): Unit =
+    _timer.schedule(dueAt) {
+      _run_scheduled_start_(jobid)
+    }
 
   private def _run_scheduled_start_(jobid: JobId): Unit =
     _get_record(jobid).foreach { record =>
       if (
         record.status == JobStatus.Submitted &&
         record.retry.kind == JobRetryKind.None &&
-        record.scheduledStartAt.exists(!_.isAfter(Instant.now()))
+        record.scheduledStartAt.exists(!_.isAfter(_now_()))
       ) {
         _append_timeline_(jobid, "job.delayed.enqueued", None, None, record.scheduledStartAt.map(_.toString))
         _append_timeline_(jobid, "job.async.queued", None, None, Some("delayed-start"))
@@ -1950,7 +1995,7 @@ final class InMemoryJobEngine(
         record.scheduledStartAt.nonEmpty
       ) {
         val scheduledAt = record.scheduledStartAt.get
-        if (scheduledAt.isAfter(Instant.now()))
+        if (scheduledAt.isAfter(_now_()))
           _schedule_delayed_start_(record.id, scheduledAt)
         else
           _run_scheduled_start_(record.id)
@@ -1967,7 +2012,8 @@ object InMemoryJobEngine {
     java.time.Duration.ofMinutes(15)
 
   final case class SchedulerConfig(
-    workerCount: Int = 1
+    workerCount: Int = 1,
+    autoStartWorkers: Boolean = true
   )
 
   object SchedulerConfig {
@@ -2030,6 +2076,77 @@ object InMemoryJobEngine {
       ctx: ExecutionContext,
       forcedTaskId: TaskId
     ) extends SchedulerWorkItem
+  }
+
+  final class ScheduledJobTimer(
+    scheduler: ScheduledExecutorService,
+    timeSource: JobTimeSource
+  ) extends JobTimer {
+    def schedule(dueAt: Instant)(body: => Unit): Unit = {
+      val delayMillis = math.max(0L, dueAt.toEpochMilli - timeSource.now().toEpochMilli)
+      val _ = scheduler.schedule(
+        new Runnable {
+          override def run(): Unit =
+            body
+        },
+        delayMillis,
+        TimeUnit.MILLISECONDS
+      )
+    }
+
+    override def shutdown(): Unit =
+      scheduler.shutdownNow()
+  }
+
+  final class ManualJobTimer(
+    timeSource: ManualJobTimeSource
+  ) extends JobTimer {
+    private final case class Entry(
+      sequence: Long,
+      dueAt: Instant,
+      run: () => Unit
+    )
+
+    private var _sequence = 0L
+    private var _entries = Vector.empty[Entry]
+
+    def schedule(dueAt: Instant)(body: => Unit): Unit =
+      synchronized {
+        _sequence += 1
+        _entries :+= Entry(_sequence, dueAt, () => body)
+      }
+
+    def fireDue(): Int = {
+      val due =
+        synchronized {
+          val now = timeSource.now()
+          val (ready, pending) = _entries.partition(_.dueAt.compareTo(now) <= 0)
+          _entries = pending
+          ready.sortBy(_.sequence)
+        }
+      due.foreach(_.run())
+      due.size
+    }
+
+    def advanceBy(duration: java.time.Duration): Int = {
+      val _ = timeSource.advanceBy(duration)
+      fireDue()
+    }
+
+    def advanceTo(instant: Instant): Int = {
+      val _ = timeSource.advanceTo(instant)
+      fireDue()
+    }
+
+    def pendingCount: Int =
+      synchronized {
+        _entries.size
+      }
+
+    override def shutdown(): Unit =
+      synchronized {
+        _entries = Vector.empty
+      }
   }
 
   def create(

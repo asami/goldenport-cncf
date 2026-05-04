@@ -24,13 +24,14 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 
 /*
  * @since   Apr. 22, 2026
- * @version Apr. 22, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class WorkflowEngineSpec
   extends AnyWordSpec
   with Matchers
-  with GivenWhenThen {
+  with GivenWhenThen
+  with WorkflowEngineTestFixture {
   private val _collection_id = EntityCollectionId("workflow", "sales", "salesOrder")
 
   "WorkflowEngine" should {
@@ -38,7 +39,7 @@ final class WorkflowEngineSpec
       Given("component metadata with workflow definition and resident entity")
       val trace = ArrayBuffer.empty[String]
       val entityid = _entity_id("approved_1")
-      val fixture = _fixture(
+      _with_fixture(
         workflowDefinitions = Vector(
           WorkflowDefinition(
             name = "sales-order-approval",
@@ -57,34 +58,34 @@ final class WorkflowEngineSpec
         ),
         trace = trace,
         entities = Vector(_SalesOrder(entityid, "approved"))
-      )
-
-      When("matching event is received")
-      val result = fixture.component.eventReception.get.receive(
-        ReceptionInput(
-          name = "sales-order.approved",
-          attributes = Map(
-            "entity" -> "salesOrder",
-            "orderId" -> entityid.value
+      ) { fixture =>
+        When("matching event is received")
+        val result = fixture.component.eventReception.get.receive(
+          ReceptionInput(
+            name = "sales-order.approved",
+            attributes = Map(
+              "entity" -> "salesOrder",
+              "orderId" -> entityid.value
+            )
           )
         )
-      )
 
-      Then("workflow creates one instance, submits one job, and runs through ActionCall")
-      result.toOption.get.outcome shouldBe ReceptionOutcome.Routed
-      val instance = fixture.subsystem.workflowEngine.instances.head
-      instance.registrationName shouldBe "approval"
-      instance.relatedJobIds.size shouldBe 1
-      _await_job_completion(fixture, instance.relatedJobIds.head)
-      trace.toVector shouldBe Vector("workflow.advanceOrder")
-      fixture.subsystem.jobEngine.query(instance.relatedJobIds.head).flatMap(_.tasks.tasks.headOption.flatMap(_.component)) shouldBe Some(fixture.component.name)
+        Then("workflow creates one instance, submits one job, and runs through ActionCall")
+        result.toOption.get.outcome shouldBe ReceptionOutcome.Routed
+        val instance = fixture.subsystem.workflowEngine.instances.head
+        instance.registrationName shouldBe "approval"
+        instance.relatedJobIds.size shouldBe 1
+        _await_job_completion(fixture, instance.relatedJobIds.head)
+        trace.toVector shouldBe Vector("workflow.advanceOrder")
+        fixture.subsystem.jobEngine.query(instance.relatedJobIds.head).flatMap(_.tasks.tasks.headOption.flatMap(_.component)) shouldBe Some(fixture.component.name)
+      }
     }
 
     "update existing workflow instance on later matching event for the same entity" in {
       Given("one workflow instance already created for the entity")
       val trace = ArrayBuffer.empty[String]
       val entityid = _entity_id("repeat_1")
-      val fixture = _fixture(
+      _with_fixture(
         workflowDefinitions = Vector(
           WorkflowDefinition(
             name = "sales-order-repeat",
@@ -103,31 +104,31 @@ final class WorkflowEngineSpec
         ),
         trace = trace,
         entities = Vector(_SalesOrder(entityid, "approved"))
-      )
-
-      val input = ReceptionInput(
-        name = "sales-order.changed",
-        attributes = Map(
-          "entity" -> "salesOrder",
-          "orderId" -> entityid.value
+      ) { fixture =>
+        val input = ReceptionInput(
+          name = "sales-order.changed",
+          attributes = Map(
+            "entity" -> "salesOrder",
+            "orderId" -> entityid.value
+          )
         )
-      )
 
-      When("the same entity triggers the workflow twice")
-      val _ = fixture.component.eventReception.get.receive(input)
-      val _ = fixture.component.eventReception.get.receive(input)
+        When("the same entity triggers the workflow twice")
+        val _ = fixture.component.eventReception.get.receive(input)
+        val _ = fixture.component.eventReception.get.receive(input)
 
-      Then("the same workflow instance is reused and accumulates related job ids")
-      val instances = fixture.subsystem.workflowEngine.instances
-      instances.size shouldBe 1
-      instances.head.relatedJobIds.size shouldBe 2
+        Then("the same workflow instance is reused and accumulates related job ids")
+        val instances = fixture.subsystem.workflowEngine.instances
+        instances.size shouldBe 1
+        instances.head.relatedJobIds.size shouldBe 2
+      }
     }
 
     "record deterministic non-progression when entity id, entity, or status cannot be resolved" in {
       Given("workflow registrations that do not progress")
       val trace = ArrayBuffer.empty[String]
       val entityid = _entity_id("missing_status_1")
-      val fixture = _fixture(
+      _with_fixture(
         workflowDefinitions = Vector(
           WorkflowDefinition(
             name = "sales-order-failures",
@@ -146,53 +147,53 @@ final class WorkflowEngineSpec
         ),
         trace = trace,
         entities = Vector(_SalesOrder(entityid, "approved"))
-      )
+      ) { fixture =>
+        When("entity id is missing")
+        val missingId = fixture.subsystem.workflowEngine.handle(
+          fixture.component.name,
+          ReceptionDomainEvent(
+            name = "sales-order.status-check",
+            kind = "domain-event",
+            payload = Map.empty,
+            attributes = Map("entity" -> "salesOrder")
+          )
+        )(using fixture.component.logic.executionContext()).toOption.get
 
-      When("entity id is missing")
-      val missingId = fixture.subsystem.workflowEngine.handle(
-        fixture.component.name,
-        ReceptionDomainEvent(
-          name = "sales-order.status-check",
-          kind = "domain-event",
-          payload = Map.empty,
-          attributes = Map("entity" -> "salesOrder")
+        When("entity is unresolved")
+        val missingEntity = fixture.subsystem.workflowEngine.handle(
+          fixture.component.name,
+          ReceptionDomainEvent(
+            name = "sales-order.status-check",
+            kind = "domain-event",
+            payload = Map.empty,
+            attributes = Map("entity" -> "salesOrder", "orderId" -> _entity_id("missing").value)
+          )
+        )(using fixture.component.logic.executionContext()).toOption.get
+
+        When("status field is missing")
+        val missingStatus = fixture.component.eventReception.get.receive(
+          ReceptionInput(
+            name = "sales-order.status-check",
+            attributes = Map("entity" -> "salesOrder", "orderId" -> entityid.value)
+          )
         )
-      )(using fixture.component.logic.executionContext()).toOption.get
 
-      When("entity is unresolved")
-      val missingEntity = fixture.subsystem.workflowEngine.handle(
-        fixture.component.name,
-        ReceptionDomainEvent(
-          name = "sales-order.status-check",
-          kind = "domain-event",
-          payload = Map.empty,
-          attributes = Map("entity" -> "salesOrder", "orderId" -> _entity_id("missing").value)
-        )
-      )(using fixture.component.logic.executionContext()).toOption.get
-
-      When("status field is missing")
-      val missingStatus = fixture.component.eventReception.get.receive(
-        ReceptionInput(
-          name = "sales-order.status-check",
-          attributes = Map("entity" -> "salesOrder", "orderId" -> entityid.value)
-        )
-      )
-
-      Then("workflow does not progress and no action is executed")
-      missingId.progressed shouldBe false
-      missingId.reason shouldBe Some("missing-entity-id")
-      missingEntity.progressed shouldBe false
-      missingEntity.reason shouldBe Some("entity-unresolved")
-      missingStatus.toOption.get.outcome shouldBe ReceptionOutcome.Routed
-      fixture.subsystem.workflowEngine.instances.head.status shouldBe WorkflowStatus.NoProgress
-      trace shouldBe empty
+        Then("workflow does not progress and no action is executed")
+        missingId.progressed shouldBe false
+        missingId.reason shouldBe Some("missing-entity-id")
+        missingEntity.progressed shouldBe false
+        missingEntity.reason shouldBe Some("entity-unresolved")
+        missingStatus.toOption.get.outcome shouldBe ReceptionOutcome.Routed
+        fixture.subsystem.workflowEngine.instances.head.status shouldBe WorkflowStatus.NoProgress
+        trace shouldBe empty
+      }
     }
 
     "use the smallest-priority registration and reject equal-priority ambiguity at bootstrap" in {
       Given("multiple workflow registrations for the same event and collection")
       val trace = ArrayBuffer.empty[String]
       val entityid = _entity_id("priority_1")
-      val fixture = _fixture(
+      _with_fixture(
         workflowDefinitions = Vector(
           WorkflowDefinition(
             name = "priority-winner",
@@ -220,61 +221,62 @@ final class WorkflowEngineSpec
         ),
         trace = trace,
         entities = Vector(_SalesOrder(entityid, "approved"))
-      )
-
-      When("the event matches multiple registrations")
-      val _ = fixture.component.eventReception.get.receive(
-        ReceptionInput(
-          name = "sales-order.priority",
-          attributes = Map(
-            "entity" -> "salesOrder",
-            "orderId" -> entityid.value
-          )
-        )
-      )
-      val instance = fixture.subsystem.workflowEngine.instances.head
-      _await_job_completion(fixture, instance.relatedJobIds.head)
-
-      Then("the smallest numeric priority registration wins")
-      trace.toVector shouldBe Vector("workflow.advanceOrderLow")
-
-      And("equal-priority ambiguity is rejected during bootstrap")
-      val subsystem = TestComponentFactory.emptySubsystem("workflow-ambiguous")
-      val component = _component(
-        subsystem = subsystem,
-        definitions = Vector(
-          WorkflowDefinition(
-            name = "ambiguous",
-            registrations = Vector(
-              WorkflowRegistration(
-                name = "a",
-                eventName = "sales-order.priority",
-                entityCollection = "salesOrder",
-                entityIdKey = "orderId",
-                statusField = "status",
-                statusRules = Vector(WorkflowStatusRule("approved", "workflow.advanceOrder")),
-                priority = WorkflowPriority(4)
-              ),
-              WorkflowRegistration(
-                name = "b",
-                eventName = "sales-order.priority",
-                entityCollection = "salesOrder",
-                entityIdKey = "orderId",
-                statusField = "status",
-                statusRules = Vector(WorkflowStatusRule("approved", "workflow.advanceOrderHigh")),
-                priority = WorkflowPriority(4)
-              )
+      ) { fixture =>
+        When("the event matches multiple registrations")
+        val _ = fixture.component.eventReception.get.receive(
+          ReceptionInput(
+            name = "sales-order.priority",
+            attributes = Map(
+              "entity" -> "salesOrder",
+              "orderId" -> entityid.value
             )
           )
-        ),
-        trace = ArrayBuffer.empty,
-        entities = Vector(_SalesOrder(_entity_id("priority_2"), "approved"))
-      )
+        )
+        val instance = fixture.subsystem.workflowEngine.instances.head
+        _await_job_completion(fixture, instance.relatedJobIds.head)
 
-      val ex = intercept[IllegalStateException] {
-        new ComponentFactory().bootstrap(component)
+        Then("the smallest numeric priority registration wins")
+        trace.toVector shouldBe Vector("workflow.advanceOrderLow")
+
+        And("equal-priority ambiguity is rejected during bootstrap")
+        withWorkflowSubsystem("workflow-ambiguous") { subsystem =>
+          val component = _component(
+            subsystem = subsystem,
+            definitions = Vector(
+              WorkflowDefinition(
+                name = "ambiguous",
+                registrations = Vector(
+                  WorkflowRegistration(
+                    name = "a",
+                    eventName = "sales-order.priority",
+                    entityCollection = "salesOrder",
+                    entityIdKey = "orderId",
+                    statusField = "status",
+                    statusRules = Vector(WorkflowStatusRule("approved", "workflow.advanceOrder")),
+                    priority = WorkflowPriority(4)
+                  ),
+                  WorkflowRegistration(
+                    name = "b",
+                    eventName = "sales-order.priority",
+                    entityCollection = "salesOrder",
+                    entityIdKey = "orderId",
+                    statusField = "status",
+                    statusRules = Vector(WorkflowStatusRule("approved", "workflow.advanceOrderHigh")),
+                    priority = WorkflowPriority(4)
+                  )
+                )
+              )
+            ),
+            trace = ArrayBuffer.empty,
+            entities = Vector(_SalesOrder(_entity_id("priority_2"), "approved"))
+          )
+
+          val ex = intercept[IllegalStateException] {
+            new ComponentFactory().bootstrap(component)
+          }
+          ex.getMessage should include ("ambiguous workflow registration")
+        }
       }
-      ex.getMessage should include ("ambiguous workflow registration")
     }
   }
 
@@ -283,18 +285,18 @@ final class WorkflowEngineSpec
     component: Component
   )
 
-  private def _fixture(
+  private def _with_fixture[A](
     workflowDefinitions: Vector[WorkflowDefinition],
     trace: ArrayBuffer[String],
     entities: Vector[_SalesOrder]
-  ): _Fixture = {
-    val subsystem = TestComponentFactory.emptySubsystem(s"workflow-spec-${_seed.incrementAndGet()}")
-    val component = _component(subsystem, workflowDefinitions, trace, entities)
-    val factory = new ComponentFactory()
-    val bootstrapped = factory.bootstrap(component)
-    subsystem.add(bootstrapped)
-    _Fixture(subsystem, bootstrapped)
-  }
+  )(body: _Fixture => A): A =
+    withWorkflowSubsystem(s"workflow-spec-${_seed.incrementAndGet()}") { subsystem =>
+      val component = _component(subsystem, workflowDefinitions, trace, entities)
+      val factory = new ComponentFactory()
+      val bootstrapped = factory.bootstrap(component)
+      subsystem.add(bootstrapped)
+      body(_Fixture(subsystem, bootstrapped))
+    }
 
   private def _component(
     subsystem: org.goldenport.cncf.subsystem.Subsystem,

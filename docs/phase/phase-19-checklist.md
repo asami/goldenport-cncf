@@ -511,8 +511,8 @@ behavior.
 - HTML, Markdown, and SmartDox are the planned content formats for this family
   of features.
 - HTML fragments render inside an article wrapper. GFM-compatible Markdown
-  renders to HTML, including tables. SmartDox rendering fails deterministically
-  until the SmartDox slice lands.
+  renders to HTML, including tables. SmartDox rendering is implemented by the
+  SD-01 safe parser/AST subset.
 - `ContentBodyStoragePolicy` keeps small text content inline and overflows
   larger text bodies using charset-aware byte length so DB character limits and
   multibyte text do not leak into application models.
@@ -536,7 +536,7 @@ needs i18n.
 - [x] Select GFM-compatible Markdown as the Markdown baseline for user
       expectations, including tables and image/link syntax.
 - [ ] Define the SmartDox Textus profile for CNCF/Textus content authoring.
-- [ ] Implement or specify Markdown image/link reference extraction so it can
+- [x] Implement or specify Markdown image/link reference extraction so it can
       feed `ContentReferenceOccurrence`.
 - [x] Implement SmartDox parser/AST/rendering hooks for the CNCF content subset.
 - [x] Implement SmartDox image/link reference extraction hooks.
@@ -560,6 +560,16 @@ needs i18n.
 - SmartDox image normalization records normalized media identity in
   `ContentReferenceOccurrence`; it does not rewrite SmartDox source text until
   source-span-aware rewriting is available.
+- GFM-compatible Markdown inline image/link references are supported for
+  `![alt](src)` and `[label](href)`. Image destinations are rewritten to
+  canonical Textus image URNs after safe media normalization; link destinations
+  are indexed as `ContentReferenceOccurrence` without rewriting.
+- HTML, Markdown, and SmartDox image normalization use partial-failure
+  handling: successful image references remain normalized/indexed, while failed
+  image references keep their original source plus a
+  `textus:image-normalization-failed` comment for author repair.
+- Reference-style Markdown links/images, shortcut references, collapsed
+  references, and autolinks remain deferred SD-01 work.
 - Plain path image classification may use suffix hints in v1, but CNCF
   semantic validation must come from Textus URN, Media Entity, Blob Entity, or
   filebundle MIME information.

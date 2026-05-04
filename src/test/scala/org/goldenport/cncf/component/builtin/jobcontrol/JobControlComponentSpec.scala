@@ -5,7 +5,7 @@ import org.goldenport.Consequence
 import org.goldenport.Conclusion
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobPersistencePolicy, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded, TaskFailed}
-import org.goldenport.cncf.subsystem.DefaultSubsystemFactory
+import org.goldenport.cncf.testutil.SubsystemTestFixture
 import org.goldenport.provisional.conclusion.Disposition
 import org.goldenport.protocol.operation.OperationResponse
 import org.scalatest.matchers.should.Matchers
@@ -13,13 +13,14 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 21, 2026
- * @version Apr. 22, 2026
+ *  version Apr. 22, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponentSpec extends AnyWordSpec with Matchers {
   "JobControlComponent" should {
     "expose event-triggered lineage and policy source on job inspection surfaces" in {
-      val subsystem = DefaultSubsystemFactory.default(mode = Some("command"))
+      SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
       val admin = subsystem.components.find(_.name == "admin").get
       val jobControl = subsystem.components.find(_.name == "job_control").get
       val service = jobControl.port.get[JobControlComponent.JobService].get
@@ -70,10 +71,11 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers {
         case Consequence.Failure(conclusion) =>
           fail(conclusion.show)
       }
+      }
     }
 
     "expose retry and recovery visibility on job inspection surfaces" in {
-      val subsystem = DefaultSubsystemFactory.default(mode = Some("command"))
+      SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
       val admin = subsystem.components.find(_.name == "admin").get
       val jobControl = subsystem.components.find(_.name == "job_control").get
       val service = jobControl.port.get[JobControlComponent.JobService].get
@@ -103,10 +105,11 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers {
         case Consequence.Failure(conclusion) =>
           fail(conclusion.show)
       }
+      }
     }
 
     "expose scheduled start visibility on job inspection surfaces" in {
-      val subsystem = DefaultSubsystemFactory.default(mode = Some("command"))
+      SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
       val admin = subsystem.components.find(_.name == "admin").get
       val jobControl = subsystem.components.find(_.name == "job_control").get
       val service = jobControl.port.get[JobControlComponent.JobService].get
@@ -127,6 +130,7 @@ final class JobControlComponentSpec extends AnyWordSpec with Matchers {
           model.scheduledStartAt shouldBe Some(scheduledAt)
         case Consequence.Failure(conclusion) =>
           fail(conclusion.show)
+      }
       }
     }
   }

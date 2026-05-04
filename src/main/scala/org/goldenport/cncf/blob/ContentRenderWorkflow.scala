@@ -6,6 +6,7 @@ import com.vladsch.flexmark.ext.gfm.tasklist.TaskListExtension
 import com.vladsch.flexmark.ext.tables.TablesExtension
 import com.vladsch.flexmark.html.HtmlRenderer
 import com.vladsch.flexmark.parser.Parser
+import com.vladsch.flexmark.util.ast.Node
 import com.vladsch.flexmark.util.data.MutableDataSet
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
@@ -98,6 +99,9 @@ object ContentRenderWorkflow {
   private lazy val _renderer =
     HtmlRenderer.builder(_markdown_options).build()
 
+  def parseMarkdown(markdown: String): Node =
+    _parser.parse(markdown)
+
   def markdownToHtml(markdown: String): String =
-    _renderer.render(_parser.parse(markdown))
+    _renderer.render(parseMarkdown(markdown))
 }

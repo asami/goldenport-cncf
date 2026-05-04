@@ -11,7 +11,8 @@ import org.goldenport.cncf.path.AliasResolver
  * @since   Jan.  8, 2026
  *  version Jan. 14, 2026
  *  version Feb. 15, 2026
- * @version Apr. 15, 2026
+ *  version Apr. 15, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 object TestComponentFactory {
@@ -47,6 +48,25 @@ object TestComponentFactory {
         ConfigurationTrace.empty
       )
     )
+
+  def withSubsystem[A](
+    startup: SubsystemTestFixture.Startup = SubsystemTestFixture.Startup.Empty,
+    params: SubsystemTestFixture.Params = SubsystemTestFixture.Params()
+  )(body: Subsystem => A): A =
+    SubsystemTestFixture.withSubsystem(startup, params)(body)
+
+  def withEmptySubsystem[A](
+    name: String = "test",
+    version: Option[String] = None,
+    configuration: ResolvedConfiguration = emptyConfiguration
+  )(body: Subsystem => A): A =
+    withSubsystem(
+      params = SubsystemTestFixture.Params(
+        name = name,
+        version = version,
+        configuration = configuration
+      )
+    )(body)
 
   def create(
     name: String,

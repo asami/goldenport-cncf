@@ -12,18 +12,20 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Apr. 22, 2026
+ *  version Apr. 22, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlCommandSpec
   extends AnyWordSpec
   with Matchers
-  with GivenWhenThen {
+  with GivenWhenThen
+  with JobEngineTestFixture {
 
   "Job control commands" should {
     "return async acknowledgment by default" in {
       Given("a running job and content-manager privilege")
-      val engine = InMemoryJobEngine.create()
+      val engine = createJobEngine()
       val task = ActionTask(ActionId.generate(), _sleep_action("slow", 300L, "ok"), ActionEngine.create(), None)
       val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
       _await_status(engine, jobid, Set(JobStatus.Running, JobStatus.Succeeded))
@@ -43,7 +45,7 @@ final class JobControlCommandSpec
 
     "reject invalid state transitions deterministically" in {
       Given("a succeeded job")
-      val engine = InMemoryJobEngine.create()
+      val engine = createJobEngine()
       val task = ActionTask(ActionId.generate(), _success_action("done", "ok"), ActionEngine.create(), None)
       val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
       _await_status(engine, jobid, Set(JobStatus.Succeeded))
@@ -66,7 +68,7 @@ final class JobControlCommandSpec
 
     "map sync timeout deterministically for retry" in {
       Given("a cancelled long-running job")
-      val engine = InMemoryJobEngine.create()
+      val engine = createJobEngine()
       val task = ActionTask(ActionId.generate(), _sleep_action("slow", 800L, "ok"), ActionEngine.create(), None)
       val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
       _await_status(engine, jobid, Set(JobStatus.Running, JobStatus.Succeeded))
@@ -97,7 +99,7 @@ final class JobControlCommandSpec
 
     "deny control command for user privilege" in {
       Given("a job and user privilege")
-      val engine = InMemoryJobEngine.create()
+      val engine = createJobEngine()
       val task = ActionTask(ActionId.generate(), _success_action("cmd", "ok"), ActionEngine.create(), None)
       val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
 

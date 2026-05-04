@@ -502,15 +502,18 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   core in `simplemodeling-lib` for CNCF content rendering and reference
   extraction. The SmartDox slice preserves XML/JSON structured tokens and
   records normalized media references as metadata rather than rewriting
-  SmartDox source text until source-span-aware rewriting exists. The content
-  storage policy keeps small text inline and overflows larger bodies through
-  charset-aware byte sizing, leaving binary/opaque referenced payloads under
-  Blob/media boundaries. The `textus-blog` driver now uses project-local
+  SmartDox source text until source-span-aware rewriting exists. Markdown
+  inline image/link references now feed the same content reference index:
+  `![alt](src)` image destinations are normalized to image URNs, while
+  `[label](href)` destinations are indexed without rewriting; reference-style
+  Markdown remains deferred. The content storage policy keeps small text inline
+  and overflows larger bodies through charset-aware byte sizing, leaving
+  binary/opaque referenced payloads under Blob/media boundaries. The
+  `textus-blog` driver now uses project-local
   version files rather than any `cncf-samples` version root when running its
   Web app against local CNCF snapshots.
 - Remaining Phase 19 work is the SmartDox Textus profile/i18n policy,
-  Markdown reference normalization beyond CT-01 rendering, and phase closure
-  validation.
+  reference-style Markdown support, and phase closure validation.
 - Non-goals:
 - No new Blob payload storage backend in CNCF core.
 - No S3/S3-compatible BlobStore provider implementation in this phase.

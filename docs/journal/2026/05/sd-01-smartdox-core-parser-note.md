@@ -59,6 +59,27 @@ stored in `ContentReferenceOccurrence.normalizedRef`, `urn`, and
 content should be represented by the future SmartDox Textus profile rather than
 by `I18nText` at the ContentBody layer.
 
+GFM-compatible Markdown reference normalization is implemented for inline
+`![alt](src)` and `[label](href)` syntax. Markdown is parsed with the same
+flexmark GFM configuration used by `ContentRenderWorkflow`. Inline image
+destinations are resolved through the CNCF media path and rewritten to
+canonical `urn:textus:image:{entropy}` values only after all image references
+validate. Inline links are indexed in `ContentReferenceOccurrence` and are not
+rewritten in this slice.
+
+HTML, Markdown, and SmartDox content reference normalization use partial
+failure handling for images. A successful image reference is kept as normalized
+metadata and, where the source format is span-aware enough, a rewritten source
+reference. A failed image reference keeps its original source and receives a
+`textus:image-normalization-failed` comment in the content. This keeps the
+authoring document repairable without discarding other successfully normalized
+images.
+
+Reference-style Markdown links/images, shortcut references, collapsed
+references, and autolinks remain deferred. Code blocks, fenced blocks, inline
+code, HTML blocks, and plain text that merely resembles Markdown syntax are not
+rewritten because only flexmark `Image` and `Link` AST nodes are processed.
+
 ## Ported Modules
 
 The first port is intentionally small and framework-facing:
@@ -150,14 +171,17 @@ actually usable as an image.
 ## Current Limitations
 
 - SmartDox source rewrite is not span-aware yet. SD-01 extracts normalized
-  references but keeps the original SmartDox source text.
+  references but keeps the original SmartDox source text, except for appended
+  failure comments for image references that could not be normalized.
 - XML and JSON structured tokens are preserved, escaped, and rendered as code;
   they are not schema-validated or converted into typed XML/JSON ASTs.
 - Image classification for plain paths still uses suffix hints in v1.
 - List nesting is shallow. The parser handles basic list blocks but does not
   fully reproduce the legacy SmartDox nested list engine.
 - Inline XML-style tag parsing is intentionally minimal and safe-rendered.
-- Markdown reference normalization remains a separate slice.
+- Markdown inline image/link normalization is implemented. Reference-style
+  Markdown links/images, shortcut references, collapsed references, and
+  autolinks remain a separate slice.
 - SmartDox Textus profile and SmartDox multilingual rendering are future work.
 
 ## Review Points
