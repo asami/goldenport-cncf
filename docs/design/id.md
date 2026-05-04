@@ -36,6 +36,58 @@ while remaining **non-semantic for program logic**.
 
 ---
 
+## EntityId Runtime Namespace
+
+`EntityId.major` and `EntityId.minor` are operational partition labels. They
+are not system, subsystem, or component layer names.
+
+The canonical interpretation is:
+
+- `major`: the largest operating scope, such as customer, tenant,
+  organization, or the default single operating scope.
+- `minor`: the operating segment inside `major`, such as region, district,
+  site, or the default global segment.
+
+The standard CNCF runtime namespace is:
+
+```text
+major = single
+minor = global
+```
+
+This `single/global` pair is valid for production systems that intentionally
+run as one operating partition. Deployments that separate customers, tenants,
+districts, regions, or sites must override the namespace in runtime
+configuration.
+
+The primary configuration keys are:
+
+```hocon
+textus.id.namespace.major = single
+textus.id.namespace.minor = global
+```
+
+Runtime namespace resolution uses this precedence:
+
+1. runtime configuration
+2. SAR descriptor default
+3. CAR deemed-subsystem default
+4. CNCF default `single/global`
+
+`public/global` may be used explicitly for public shared content, but it is not
+the CNCF default because `public` describes publication semantics rather than a
+neutral operating partition.
+
+The old `sys/sys` namespace is not part of new design. Existing implementation
+or fixture uses are compatibility debt and should be replaced by
+`single/global` or by an explicit runtime namespace.
+
+System, subsystem, and component identity belongs in descriptors, collection
+namespace, runtime metadata, and observability context. Application logic must
+not parse `EntityId.major` or `EntityId.minor` to recover component structure.
+
+---
+
 ## Anti-Patterns: Semantic ID / Smart ID
 
 ### Semantic ID (informal term)

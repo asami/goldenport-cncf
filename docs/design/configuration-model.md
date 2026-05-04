@@ -88,6 +88,8 @@ Primary keys:
 - `textus.subsystem.file`
 - `textus.subsystem.dev.dir`
 - `textus.subsystem.sar.dir`
+- `textus.id.namespace.major`
+- `textus.id.namespace.minor`
 
 Selector-less development startup uses the directory keys directly:
 
@@ -99,6 +101,10 @@ Selector-less development startup uses the directory keys directly:
     `--subsystem-dev-dir`
 - `textus.component.car.dir` and `textus.subsystem.sar.dir`
   - expanded archive directories for CAR/SAR loader debugging
+- `textus.id.namespace.major` and `textus.id.namespace.minor`
+  - operational runtime namespace for new `EntityId` generation
+  - default to `single` and `global`
+  - override for customer, tenant, district, region, or site partitioning
 
 The older `textus.runtime.*` forms are compatibility aliases only.
 The older `cncf.*` forms are also compatibility aliases while command lines and
@@ -723,6 +729,8 @@ Prefer a concrete semantic owner:
 - `textus.http.driver`
 - `textus.mode`
 - `textus.command.execution-mode`
+- `textus.id.namespace.major`
+- `textus.id.namespace.minor`
 - `textus.debug.calltree`
 - `textus.debug.trace-job`
 - `textus.debug.save-calltree`

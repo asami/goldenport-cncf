@@ -125,18 +125,30 @@ Where:
 
 ```text
 major-minor
-  organization / tenant boundary
+  operational partition boundary
 
 timestamp
   temporal boundary
 ```
 
+`major` is the largest operating scope, such as customer, tenant,
+organization, or the default `single` scope. `minor` is the operating segment
+inside that scope, such as region, district, site, or the default `global`
+segment. System, subsystem, and component layer information is not encoded in
+`major` / `minor`; it belongs in descriptors, collection namespace, runtime
+metadata, and observability context.
+
+The standard CNCF default is `single/global`. It is a valid production
+namespace for a deployment that intentionally runs as one operating partition.
+Deployments that shard by customer, tenant, region, district, or site should
+override it through the runtime namespace policy.
+
 Because of this structure, partition strategies such as:
 
 ```text
-organization
+operating scope
 time
-organization + time
+operating scope + time
 ```
 
 can be derived directly from EntityId without requiring additional routing metadata.

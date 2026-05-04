@@ -20,7 +20,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 16, 2026
  *  version Apr. 26, 2026
- * @version May.  4, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EntityStoreQueryRouteSpec
@@ -570,8 +570,8 @@ final class EntityStoreQueryRouteSpec
 
       Then("id/name and context-derived metadata are complemented")
       created.map(_.id) shouldBe Consequence.success(created.TAKE.id)
-      created.map(_.id.major) shouldBe Consequence.success("sys")
-      created.map(_.id.minor) shouldBe Consequence.success("sys")
+      created.map(_.id.major) shouldBe Consequence.success("single")
+      created.map(_.id.minor) shouldBe Consequence.success("global")
       created.map(_.id.parts.entropy) shouldBe Consequence.success("test_000001")
       loaded.map(_.flatMap(_.getString("id"))) shouldBe Consequence.success(Some(created.TAKE.id.print))
       loaded.map(_.flatMap(_.getString("short_id"))) shouldBe Consequence.success(Some("test_000001"))
@@ -1156,7 +1156,7 @@ final class EntityStoreQueryRouteSpec
               capabilities = capabilities,
               level = SecurityLevel("test")
             ),
-            idGeneration = IdGenerationContext.deterministic(IdGenerationContext.IdNamespace("sys", "sys"))
+            idGeneration = IdGenerationContext.deterministic(IdGenerationContext.DefaultNamespace)
           )
         )
       case _ =>

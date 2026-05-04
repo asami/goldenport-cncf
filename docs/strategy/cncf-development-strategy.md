@@ -540,9 +540,13 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   view cache rows while detail content still loads the canonical store-backed
   `BlogPost`. EK-02 normalized `entityKind` default runtime policy through a
   single CNCF policy source and documented `operationKind` as a shrinking
-  legacy `resource` / `task` bridge for compatibility and ABAC context.
-- Remaining Phase 19 work is the `EntityId` `major` / `minor` runtime
-  namespace policy and phase closure validation.
+  legacy `resource` / `task` bridge for compatibility and ABAC context. Phase
+  19 also decides the `EntityId` runtime namespace policy: `major` / `minor`
+  are operational partition keys, not layer identifiers; the default namespace
+  is `single/global`; runtime configuration keys are
+  `textus.id.namespace.major` and `textus.id.namespace.minor`; `sys/sys` is
+  migration debt.
+- Remaining Phase 19 work is phase closure validation.
 - Non-goals:
 - No new Blob payload storage backend in CNCF core.
 - No S3/S3-compatible BlobStore provider implementation in this phase.
@@ -952,6 +956,23 @@ Future scalability development item.
   query/index optimization.
 - Blog/CMS list, slug index, feed, and author dashboard projections are
   candidate drivers when runtime memory cache becomes insufficient.
+
+### 8.20 Runtime Namespace Descriptor Defaults
+Future platform hardening item.
+
+- Continue the runtime namespace policy after the initial `single/global`
+  implementation baseline.
+- Runtime configuration keys `textus.id.namespace.major` and
+  `textus.id.namespace.minor` are the primary override surface, and CNCF
+  default remains `single/global`.
+- Add SAR descriptor defaults and CAR deemed-subsystem defaults ahead of the
+  CNCF default when those descriptor fields are introduced.
+- Keep system, subsystem, and component identity outside `EntityId.major` /
+  `EntityId.minor`; those layer identifiers belong in descriptors, collection
+  namespace, runtime metadata, and observability context.
+- Remove or migrate remaining fixture and generated-code assumptions that still
+  use `sys/sys` where they are not deliberately testing legacy compatibility or
+  a different non-EntityId namespace axis.
 
 ## 9. Completed Development Item History
 

@@ -2,6 +2,7 @@ package org.goldenport.cncf.config
 
 import org.goldenport.cncf.cli.RunMode
 import org.goldenport.cncf.blob.{BlobStoreConfig, BlobStoreFactory}
+import org.goldenport.cncf.context.IdGenerationContext
 import org.goldenport.cncf.log.LogBackend
 import org.goldenport.configuration.{Configuration, ConfigurationTrace, ConfigurationValue, ResolvedConfiguration}
 import org.scalatest.matchers.should.Matchers
@@ -9,7 +10,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 18, 2026
- * @version Apr. 28, 2026
+ *  version Apr. 28, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
@@ -23,6 +25,36 @@ final class RuntimeConfigSpec extends AnyWordSpec with Matchers {
       config.webProductionAdminSystemRoles shouldBe Vector("system_admin")
       config.webProductionAdminComponentRoles shouldBe Vector("component_operator", "system_admin")
       config.webProductionAdminJobsRoles shouldBe Vector("system_admin", "audit_viewer")
+      config.idNamespace shouldBe IdGenerationContext.DefaultNamespace
+    }
+
+    "parse id namespace configuration and aliases" in {
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.RuntimeIdNamespaceMajorKey -> ConfigurationValue.StringValue("Customer-A"),
+          RuntimeConfig.RuntimeIdNamespaceMinorKey -> ConfigurationValue.StringValue("Tokyo.01")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      RuntimeConfig.getString(configuration, RuntimeConfig.IdNamespaceMajorKey) shouldBe Some("Customer-A")
+      RuntimeConfig.getString(configuration, RuntimeConfig.IdNamespaceMinorKey) shouldBe Some("Tokyo.01")
+      val config = RuntimeConfig.from(configuration)
+      config.idNamespace shouldBe IdGenerationContext.IdNamespace("customer_a", "tokyo_01")
+    }
+
+    "reject invalid id namespace configuration deterministically" in {
+      val configuration = ResolvedConfiguration(
+        Configuration(Map(
+          RuntimeConfig.IdNamespaceMajorKey -> ConfigurationValue.StringValue("!!!"),
+          RuntimeConfig.IdNamespaceMinorKey -> ConfigurationValue.StringValue("global")
+        )),
+        ConfigurationTrace.empty
+      )
+
+      an[IllegalArgumentException] should be thrownBy {
+        RuntimeConfig.from(configuration)
+      }
     }
 
     "parse production admin gate configuration and aliases" in {

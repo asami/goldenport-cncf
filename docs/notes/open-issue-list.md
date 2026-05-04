@@ -21,7 +21,7 @@ driver validation before they are promoted, deferred, or closed.
 
 | ID | Status | Topic | Note | Phase / Driver | Next Step |
 | --- | --- | --- | --- | --- | --- |
-| OI-2026-05-02-001 | ACTIVE | `ExecutionContext`-owned ID generation and `major` / `minor` runtime namespace policy | `id-major-minor-operation-note.md` | Phase 19 / Blog Web app | Implement EntityId generation through `ExecutionContext`, then decide production namespace derivation for dev-dir, CAR, SAR, command, test, and future tenant-aware execution. |
+| OI-2026-05-02-001 | CLOSED | `ExecutionContext`-owned ID generation and `major` / `minor` runtime namespace policy | `id-major-minor-operation-note.md` | Phase 19 / Blog Web app | Policy promoted to `docs/design/id.md`: `major` / `minor` are operational partition keys, default namespace is `single/global`, and remaining descriptor-default work is deferred to Runtime Namespace Descriptor Defaults. |
 
 ## Intake Rule
 

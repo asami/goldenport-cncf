@@ -16,7 +16,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @since   Mar. 17, 2026
  *  version Mar. 24, 2026
  *  version Apr. 10, 2026
- * @version May.  4, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ViewSpaceSpec
@@ -260,8 +260,8 @@ final class ViewSpaceSpec
       )
       viewspace.register("user", collection, browser)
 
-      viewspace.findWithContext[String]("user", targetid) shouldBe Consequence.success("sys-u4")
-      viewspace.queryWithContext[String]("user", Query("active")) shouldBe Consequence.success(Vector("sys-query"))
+      viewspace.findWithContext[String]("user", targetid) shouldBe Consequence.success("single-u4")
+      viewspace.queryWithContext[String]("user", Query("active")) shouldBe Consequence.success(Vector("single-query"))
     }
 
     "separate principal-scoped query cache entries by security subject" in {
@@ -356,9 +356,9 @@ final class ViewSpaceSpec
         TotalCountCapability.Supported
       )
 
-      viewspace.findWithContext[String]("helper-view", targetid) shouldBe Consequence.success("sys-u5")
-      viewspace.queryWithContext[String]("helper-view", Query("active")) shouldBe Consequence.success(Vector("sys-query-1"))
-      viewspace.queryWithContext[String]("helper-view", Query("active")) shouldBe Consequence.success(Vector("sys-query-1"))
+      viewspace.findWithContext[String]("helper-view", targetid) shouldBe Consequence.success("single-u5")
+      viewspace.queryWithContext[String]("helper-view", Query("active")) shouldBe Consequence.success(Vector("single-query-1"))
+      viewspace.queryWithContext[String]("helper-view", Query("active")) shouldBe Consequence.success(Vector("single-query-1"))
       viewspace.countWithContext("helper-view", Query("active")) shouldBe Consequence.success(7)
       buildCount shouldBe 1
       queryCount shouldBe 1

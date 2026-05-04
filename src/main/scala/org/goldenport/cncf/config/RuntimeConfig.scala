@@ -11,6 +11,7 @@ import org.goldenport.cncf.entity.{EntityStore, EntityStoreSpace}
 import org.goldenport.cncf.config.ConfigurationAccess
 import org.goldenport.cncf.config.RuntimeDefaults
 import org.goldenport.cncf.action.CommandExecutionMode
+import org.goldenport.cncf.context.IdGenerationContext
 import org.goldenport.cncf.observability.ObservabilityEngine
 import org.goldenport.cncf.blob.BlobStoreConfig
 
@@ -20,7 +21,7 @@ import org.goldenport.cncf.blob.BlobStoreConfig
  *  version Feb.  1, 2026
  *  version Mar. 28, 2026
  *  version Apr. 30, 2026
- * @version May.  1, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class RuntimeConfig(
@@ -42,7 +43,8 @@ final case class RuntimeConfig(
   commandExecutionMode: Option[CommandExecutionMode] = None,
   executionHistoryConfig: ObservabilityEngine.ExecutionHistoryConfig =
     ObservabilityEngine.ExecutionHistoryConfig(),
-  blobStoreConfig: BlobStoreConfig = BlobStoreConfig()
+  blobStoreConfig: BlobStoreConfig = BlobStoreConfig(),
+  idNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DefaultNamespace
 )
 
 object RuntimeConfig {
@@ -56,6 +58,10 @@ object RuntimeConfig {
   val RuntimeOperationModeKey = "textus.runtime.operation-mode"
   val CommandExecutionModeKey = "textus.command.execution-mode"
   val RuntimeCommandExecutionModeKey = "textus.runtime.command.execution-mode"
+  val IdNamespaceMajorKey = "textus.id.namespace.major"
+  val RuntimeIdNamespaceMajorKey = "textus.runtime.id.namespace.major"
+  val IdNamespaceMinorKey = "textus.id.namespace.minor"
+  val RuntimeIdNamespaceMinorKey = "textus.runtime.id.namespace.minor"
   val DebugCallTreeKey = "textus.debug.calltree"
   val RuntimeDebugCallTreeKey = "textus.runtime.debug.calltree"
   val DebugTraceJobKey = "textus.debug.trace-job"
@@ -147,6 +153,7 @@ object RuntimeConfig {
   val DefaultWebProductionAdminSystemRoles = Vector("system_admin")
   val DefaultWebProductionAdminComponentRoles = Vector("component_operator", "system_admin")
   val DefaultWebProductionAdminJobsRoles = Vector("system_admin", "audit_viewer")
+  val DefaultIdNamespace: IdGenerationContext.IdNamespace = IdGenerationContext.DefaultNamespace
 
   val default: RuntimeConfig =
     RuntimeConfig(
@@ -167,7 +174,8 @@ object RuntimeConfig {
       webProductionAdminJobsRoles = DefaultWebProductionAdminJobsRoles,
       commandExecutionMode = None,
       executionHistoryConfig = ObservabilityEngine.ExecutionHistoryConfig(),
-      blobStoreConfig = BlobStoreConfig()
+      blobStoreConfig = BlobStoreConfig(),
+      idNamespace = DefaultIdNamespace
     )
 
   def from(
@@ -230,6 +238,7 @@ object RuntimeConfig {
     val entitystorespace = EntityStoreSpace.create(configuration)
     val executionHistoryConfig = _execution_history_config(configuration)
     val blobStoreConfig = BlobStoreConfig.fromConfiguration(configuration)
+    val idNamespace = _id_namespace(configuration)
     val webOperationDispatcher =
       _get_string(configuration, WebOperationDispatcherKey)
         .map(_.trim.toLowerCase)
@@ -280,7 +289,8 @@ object RuntimeConfig {
       webProductionAdminJobsRoles = webProductionAdminJobsRoles,
       commandExecutionMode = commandExecutionMode,
       executionHistoryConfig = executionHistoryConfig,
-      blobStoreConfig = blobStoreConfig
+      blobStoreConfig = blobStoreConfig,
+      idNamespace = idNamespace
     )
   }
 
@@ -369,6 +379,16 @@ object RuntimeConfig {
     )
   }
 
+  private def _id_namespace(
+    configuration: ResolvedConfiguration
+  ): IdGenerationContext.IdNamespace = {
+    val major = _get_string(configuration, IdNamespaceMajorKey)
+      .getOrElse(DefaultIdNamespace.major)
+    val minor = _get_string(configuration, IdNamespaceMinorKey)
+      .getOrElse(DefaultIdNamespace.minor)
+    IdGenerationContext.IdNamespace.normalizeOrThrow(major, minor)
+  }
+
   private def _split_csv(
     value: Option[String]
   ): Vector[String] =
@@ -389,6 +409,8 @@ object RuntimeConfig {
         case ModeKey => Vector(RuntimeModeKey)
         case OperationModeKey => Vector(RuntimeOperationModeKey)
         case CommandExecutionModeKey => Vector(RuntimeCommandExecutionModeKey)
+        case IdNamespaceMajorKey => Vector(RuntimeIdNamespaceMajorKey)
+        case IdNamespaceMinorKey => Vector(RuntimeIdNamespaceMinorKey)
         case DebugCallTreeKey => Vector(RuntimeDebugCallTreeKey)
         case DebugTraceJobKey => Vector(RuntimeDebugTraceJobKey)
         case DebugSaveCallTreeKey => Vector(RuntimeDebugSaveCallTreeKey)

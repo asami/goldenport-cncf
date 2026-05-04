@@ -42,7 +42,8 @@ import cats.~>
  *  version Dec. 31, 2025
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 abstract class ExecutionContext
@@ -79,10 +80,10 @@ object ExecutionContext {
     runtime: RuntimeContext,
     jobContext: org.goldenport.cncf.job.JobContext,
     framework: FrameworkParameter = FrameworkParameter(),
-    idGeneration: IdGenerationContext = IdGenerationContext.default(IdGenerationContext.IdNamespace("sys", "sys"))
+    idGeneration: IdGenerationContext = IdGenerationContext.default(IdGenerationContext.DefaultNamespace)
   ) {
-    def major = "sys"
-    def minor = "sys"
+    def major: String = idGeneration.namespace.major
+    def minor: String = idGeneration.namespace.minor
     def withScope(p: ScopeContext): CncfCore = copy(scope = p)
   }
 
@@ -127,26 +128,23 @@ object ExecutionContext {
     }
   }
 
-  def create(): ExecutionContext = {
-    val core = _core()
-    val security = _security_context(SecurityContext.Privilege.User)
-    val observability = _observability_context(core)
-    lazy val runtime: RuntimeContext = _testRuntimeContext(() => context, observability) // TODO
-    lazy val context: ExecutionContext = Instance(
-      core = core,
-      cncfCore = CncfCore(
-        runtime,
-        security = security,
-        observability = observability,
-        runtime = runtime,
-        jobContext = org.goldenport.cncf.job.JobContext.empty
-      )
+  def create(): ExecutionContext =
+    _create(
+      SecurityContext.Privilege.User,
+      IdGenerationContext.default(IdGenerationContext.DefaultNamespace)
     )
-    context
-  }
 
   def create(
     privilege: SecurityContext.Privilege
+  ): ExecutionContext =
+    _create(
+      privilege,
+      IdGenerationContext.default(IdGenerationContext.DefaultNamespace)
+    )
+
+  private def _create(
+    privilege: SecurityContext.Privilege,
+    idGeneration: IdGenerationContext
   ): ExecutionContext = {
     val core = _core()
     val security = _security_context(privilege)
@@ -159,7 +157,8 @@ object ExecutionContext {
         security = security,
         observability = observability,
         runtime = runtime,
-        jobContext = org.goldenport.cncf.job.JobContext.empty
+        jobContext = org.goldenport.cncf.job.JobContext.empty,
+        idGeneration = idGeneration
       )
     )
     context
@@ -172,6 +171,7 @@ object ExecutionContext {
     val core = _core()
     val security = _security_context(SecurityContext.Privilege.User)
     val observability = _observability_context(core)
+    val idgeneration = _id_generation_context(scope)
     lazy val context: ExecutionContext = Instance(
       core = core,
       cncfCore = CncfCore(
@@ -179,11 +179,20 @@ object ExecutionContext {
         security = security,
         observability = observability,
         runtime = runtime,
-        jobContext = org.goldenport.cncf.job.JobContext.empty
+        jobContext = org.goldenport.cncf.job.JobContext.empty,
+        idGeneration = idgeneration
       )
     )
     context
   }
+
+  def create(
+    namespace: IdGenerationContext.IdNamespace
+  ): ExecutionContext =
+    _create(
+      SecurityContext.Privilege.User,
+      IdGenerationContext.default(namespace)
+    )
 
   /**
     * Test and Executable Spec ExecutionContext.
@@ -218,8 +227,28 @@ object ExecutionContext {
     runtime: RuntimeContext
   ): ExecutionContext = ctx match {
     case i: Instance =>
+      val idgeneration = _id_generation_context_for_rebound(i.cncfCore.idGeneration, runtime)
       i.copy(
-        cncfCore = i.cncfCore.copy(runtime = runtime)
+        cncfCore = i.cncfCore.copy(
+          scope = runtime,
+          runtime = runtime,
+          idGeneration = idgeneration
+        )
+      )
+    case _ =>
+      ctx
+  }
+
+  def withRuntimeContextPreservingIdGeneration(
+    ctx: ExecutionContext,
+    runtime: RuntimeContext
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(
+        cncfCore = i.cncfCore.copy(
+          scope = runtime,
+          runtime = runtime
+        )
       )
     case _ =>
       ctx
@@ -411,6 +440,34 @@ object ExecutionContext {
     case _ =>
       ctx
   }
+
+  private def _id_generation_context(
+    scope: ScopeContext
+  ): IdGenerationContext =
+    IdGenerationContext.default(_id_namespace(scope))
+
+  private def _id_namespace(
+    scope: ScopeContext
+  ): IdGenerationContext.IdNamespace =
+    _global_runtime_context(scope)
+      .map(_.config.idNamespace)
+      .getOrElse(IdGenerationContext.DefaultNamespace)
+
+  private def _id_generation_context_for_rebound(
+    current: IdGenerationContext,
+    runtime: RuntimeContext
+  ): IdGenerationContext =
+    _global_runtime_context(runtime)
+      .map(global => IdGenerationContext.default(global.config.idNamespace))
+      .getOrElse(current)
+
+  private def _global_runtime_context(
+    scope: ScopeContext
+  ): Option[GlobalRuntimeContext] =
+    scope match {
+      case x: GlobalRuntimeContext => Some(x)
+      case other => other.parent.flatMap(_global_runtime_context)
+    }
 
   private def _core(): CoreExecutionContext.Core =
     CoreExecutionContext.Core(

@@ -633,9 +633,15 @@ Entity image binding usage and the reusable CNCF behavior is verified.
       policy source. `operationKind` remains only as a legacy `resource` /
       `task` compatibility and ABAC context label, with future reuse left open
       if a real operation-specific meaning emerges.
-- [ ] Resolve or explicitly defer the `EntityId` `major` / `minor` runtime
+- [x] Resolve the `EntityId` `major` / `minor` runtime
       namespace operating policy recorded in
-      `docs/notes/id-major-minor-operation-note.md`.
+      `docs/notes/id-major-minor-operation-note.md`. `major` / `minor` are
+      operational partition keys, not system/subsystem/component layer names;
+      the CNCF default is `single/global`; production may use that default for
+      intentional single-scope deployments; customer/tenant/district/region
+      deployments override it with `textus.id.namespace.major` and
+      `textus.id.namespace.minor`; `sys/sys` is migration debt and not a new
+      design default.
 - [ ] Update strategy history and close phase documents.
 
 ---

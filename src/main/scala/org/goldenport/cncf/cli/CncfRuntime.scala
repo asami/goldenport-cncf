@@ -62,7 +62,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Apr. 30, 2026
- * @version May.  1, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -134,7 +134,7 @@ object CncfRuntime extends GlobalObservable {
     configuration: ResolvedConfiguration,
     aliasResolver: AliasResolver
   ): GlobalRuntimeContext = {
-    val execution = ExecutionContext.create()
+    val execution = ExecutionContext.create(runconfig.idNamespace)
     val context = GlobalRuntimeContext.create(
       name = "runtime",
       runconfig,
@@ -2900,7 +2900,7 @@ class CncfRuntime() extends GlobalObservable {
     configuration: ResolvedConfiguration,
     aliasResolver: AliasResolver
   ): GlobalRuntimeContext = {
-    val execution = ExecutionContext.create()
+    val execution = ExecutionContext.create(runconfig.idNamespace)
     val context = GlobalRuntimeContext.create(
       name = "runtime",
       runconfig,
