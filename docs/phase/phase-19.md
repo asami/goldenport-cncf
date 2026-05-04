@@ -266,9 +266,9 @@ Phase 19 can close when:
 - Blog read optimization uses CNCF View cache projections rather than making
   `BlogPost` resident: public list/search/feed use lightweight
   `PublishedBlogView` / `BlogFeedProjection` rows, slug/id lookup uses
-  `BlogSlugIndex`, and author dashboards use subject-scoped
-  `BlogAuthorPostView` with query caching disabled to avoid cross-author
-  leakage.
+  `BlogSlugIndex`, and author dashboards use `BlogAuthorPostView` with the
+  standard CNCF `ViewCachePolicy` `Principal` query scope to avoid
+  cross-author cache reuse.
 - SimpleEntity content format/mimetype behavior covers HTML, Markdown, and
   SmartDox as planned content formats.
 - SmartDox Textus profile and GFM-compatible Markdown support are either

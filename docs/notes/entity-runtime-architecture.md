@@ -208,8 +208,46 @@ ViewCollection
 - constructs read projections
 - may join multiple entities
 - optimized for query and presentation
+- uses an explicit runtime cache policy when application code needs a
+  store-backed read-side cache
 
 All collection types implement the common `Collection[A]` interface.
+
+---
+
+# View Cache Policy
+
+`ViewCollection` cache is a derived runtime memory cache. It is not
+canonical data, and every view row must be reconstructable from canonical
+EntityStore / repository state.
+
+Applications should register read-side views through `ViewSpace`
+application-facing helpers and declare a `ViewCachePolicy`:
+
+- `maxEntities`: entity/materialized row cache size
+- `maxQueries`: query cache size
+- `queryChunkSize`: page chunk size for paged query caching
+- `queryScope`: query cache key scope
+- `metricsName`: value used in existing `view.load.*` and `view.query.*`
+  metrics
+
+`ViewQueryCacheScope` defines how query cache keys are scoped:
+
+- `Shared`: the query itself is the cache key. This is for public or
+  globally scoped views such as public CMS lists, slug indexes, and feeds.
+- `Principal`: the query key includes the current security subject,
+  normalized privileges, and execution context major/minor. This is for
+  owner/author scoped dashboards where the same logical query can produce
+  different rows for different principals.
+- `Disabled`: query results are not cached. Use this for highly volatile or
+  security-sensitive views where cache correctness would be harder to prove.
+
+`Principal` scope prevents cross-subject cache reuse. It is not an
+authorization mechanism; authorization and access-scope filtering still belong
+to EntityStore, UoW, and repository paths.
+
+Persistent materialized view storage and incremental per-row synchronization
+are separate concerns and are not part of the runtime memory cache policy.
 
 ---
 

@@ -532,10 +532,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   store-backed canonical record, Working Set disabled by default, and
   view/index/cache projections as the read-optimization path. The first
   runtime application of that policy is now in place: CNCF `ViewSpace` has
-  context-aware helper calls, `ViewCollection` can disable query caching for
-  subject-scoped views, and `textus-blog` reads list/search/feed/slug/author
-  dashboard surfaces through derived Blog view cache rows while detail content
-  still loads the canonical store-backed `BlogPost`.
+  application-facing read-side registration helpers, `ViewCollection` has
+  explicit shared/principal/disabled query cache scopes, and `textus-blog`
+  reads list/search/feed/slug/author dashboard surfaces through derived Blog
+  view cache rows while detail content still loads the canonical store-backed
+  `BlogPost`.
 - Remaining Phase 19 work is the `EntityId` `major` / `minor` runtime
   namespace policy and phase closure validation.
 - Non-goals:

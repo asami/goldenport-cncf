@@ -4,6 +4,7 @@ import scala.collection.mutable
 import org.goldenport.Consequence
 import org.simplemodeling.model.datatype.EntityId
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.datastore.TotalCountCapability
 import org.goldenport.cncf.directive.Query
 import org.goldenport.cncf.entity.view.Browser
 
@@ -16,6 +17,7 @@ import org.goldenport.cncf.entity.view.Browser
  */
 final class ViewSpace {
   private val _collections: mutable.Map[String, ViewCollection[_]] = mutable.Map.empty
+  private val _named_collections: mutable.Map[(String, String), ViewCollection[_]] = mutable.Map.empty
   private val _browsers: mutable.Map[String, Browser[_]] = mutable.Map.empty
   private val _named_browsers: mutable.Map[(String, String), Browser[_]] = mutable.Map.empty
 
@@ -37,6 +39,51 @@ final class ViewSpace {
 
   def register[V](name: String, viewname: String, browser: Browser[V]): Unit =
     registerView(name, viewname, browser)
+
+  def registerReadSideView[V](
+    name: String,
+    policy: ViewCachePolicy
+  )(
+    builder: ViewBuilder[V],
+    query: ContextualBrowserQuery[V],
+    count: Option[ContextualBrowserCount] = None,
+    totalCountCapabilityValue: TotalCountCapability = TotalCountCapability.Unsupported
+  ): Unit = {
+    val collection = new ViewCollection[V](
+      builder,
+      cachePolicy = Some(policy)
+    )
+    register(
+      name,
+      collection,
+      Browser.from(collection, query, count, totalCountCapabilityValue)
+    )
+  }
+
+  def registerNamedReadSideView[V](
+    name: String,
+    viewname: String,
+    policy: ViewCachePolicy
+  )(
+    query: ContextualBrowserQuery[V],
+    find: Option[ContextualBrowserFind[V]] = None,
+    count: Option[ContextualBrowserCount] = None,
+    totalCountCapabilityValue: TotalCountCapability = TotalCountCapability.Unsupported
+  ): Unit = {
+    val key = _view_key(name, viewname)
+    if (_named_browsers.contains(key) || _named_collections.contains(key))
+      throw new IllegalStateException(s"Browser already registered: ${name}:${viewname}")
+    val collection = new ViewCollection[V](
+      _contextual_builder(name, viewname, find),
+      cachePolicy = Some(policy)
+    )
+    val browser = find match {
+      case Some(f) => Browser.from(f, collection, query, count, totalCountCapabilityValue)
+      case None => Browser.from(collection, query, count, totalCountCapabilityValue)
+    }
+    _named_collections.update(key, collection)
+    _named_browsers.update(key, browser)
+  }
 
   def registerView[V](name: String, viewname: String, browser: Browser[V]): Unit = {
     if (_collections.contains(name) == false)
@@ -114,15 +161,38 @@ final class ViewSpace {
 
   def invalidate(name: String): Unit =
     _collections.get(name).foreach(_.invalidateAll())
+    _named_collections.foreach {
+      case ((n, _), collection) if n == name => collection.invalidateAll()
+      case _ =>
+    }
 
   def invalidateAll(): Unit =
     _collections.values.foreach(_.invalidateAll())
+    _named_collections.values.foreach(_.invalidateAll())
 
   private def _view_key(name: String, viewname: String): (String, String) =
     (name, Option(viewname).map(_.trim).getOrElse(""))
 
   private def _is_default_view_name(name: String): Boolean =
     Option(name).map(_.trim).forall(_.isEmpty)
+
+  private def _contextual_builder[V](
+    name: String,
+    viewname: String,
+    find: Option[ContextualBrowserFind[V]]
+  ): ViewBuilder[V] =
+    find match {
+      case Some(f) =>
+        new ContextualViewBuilder[V] {
+          def build_with_context(id: EntityId)(using ctx: ExecutionContext): Consequence[V] =
+            f.find_with_context(id)
+        }
+      case None =>
+        new ViewBuilder[V] {
+          def build(id: EntityId): Consequence[V] =
+            Consequence.operationInvalid(s"${name}:${viewname} does not support direct materialization by id")
+        }
+    }
 
   private def _resolve[K, A](
     map: mutable.Map[K, _],
