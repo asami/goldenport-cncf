@@ -593,6 +593,12 @@ Entity image binding usage and the reusable CNCF behavior is verified.
 - [x] Verify Web/admin/manual behavior.
 - [x] Verify BlogComponent relationship metadata generation for image
       Association and inline-image composition.
+- [x] Harden job-adjacent verification fixtures so ordinary `sbt test` does
+      not depend on fragile real scheduler timing checks. `JobEngineTestFixture`
+      owns shared polling helpers, `SubsystemTestFixture`/managed lifecycle
+      paths are used by jobcontrol/workflow/job scenario specs, and
+      observation-window scheduler checks live in timing-tagged
+      `JobRetryTimingSpec`.
 - [ ] Resolve or explicitly defer the `EntityId` `major` / `minor` runtime
       namespace operating policy recorded in
       `docs/notes/id-major-minor-operation-note.md`.

@@ -4,7 +4,6 @@ import org.goldenport.Consequence
 import org.goldenport.protocol.{Argument, Request}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.testutil.SubsystemTestFixture
-import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
@@ -14,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
  * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
-final class SubsystemSharedJobEngineSpec extends AnyWordSpec with Matchers with Eventually {
+final class SubsystemSharedJobEngineSpec extends AnyWordSpec with Matchers with JobEngineTestFixture {
   "Subsystem shared JobEngine" should {
     "shared-engine" in {
       SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
@@ -30,15 +29,11 @@ final class SubsystemSharedJobEngineSpec extends AnyWordSpec with Matchers with 
           JobSubmitOption(runMode = JobRunMode.Async, requestSummary = Some("shared-job-engine"))
         ).toOption.get
 
-        eventually {
-          jobControl.jobEngine.query(jobId).isDefined shouldBe true
-        }
+        awaitCondition(jobControl.jobEngine.query(jobId).isDefined) shouldBe true
 
         jobControl.logic.controlJob(jobId, JobControlRequest(JobControlCommand.Cancel))(using controlCtx).TAKE
 
-        eventually {
-          jobControl.jobEngine.getStatus(jobId) shouldBe Some(JobStatus.Cancelled)
-        }
+        awaitStatus(jobControl.jobEngine, jobId, Set(JobStatus.Cancelled)) shouldBe Some(JobStatus.Cancelled)
       }
     }
 
@@ -55,9 +50,7 @@ final class SubsystemSharedJobEngineSpec extends AnyWordSpec with Matchers with 
           JobSubmitOption(runMode = JobRunMode.Async, requestSummary = Some("subsystem-execute-job-control"))
         ).toOption.get
 
-        eventually {
-          admin.jobEngine.getStatus(jobId) should (be (Some(JobStatus.Submitted)) or be (Some(JobStatus.Running)))
-        }
+        awaitStatus(admin.jobEngine, jobId, Set(JobStatus.Submitted, JobStatus.Running)).nonEmpty shouldBe true
 
         val request = Request.of(
           component = "job_control",
@@ -71,9 +64,7 @@ final class SubsystemSharedJobEngineSpec extends AnyWordSpec with Matchers with 
 
         val result = subsystem.execute(request)
         result shouldBe a[Consequence.Success[_]]
-        eventually {
-          jobControl.jobEngine.getStatus(jobId) shouldBe Some(JobStatus.Suspended)
-        }
+        awaitStatus(jobControl.jobEngine, jobId, Set(JobStatus.Suspended)) shouldBe Some(JobStatus.Suspended)
       }
     }
   }

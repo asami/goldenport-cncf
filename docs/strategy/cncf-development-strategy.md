@@ -511,7 +511,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   binary/opaque referenced payloads under Blob/media boundaries. The
   `textus-blog` driver now uses project-local
   version files rather than any `cncf-samples` version root when running its
-  Web app against local CNCF snapshots.
+  Web app against local CNCF snapshots. Job-adjacent verification now uses
+  shared `JobEngineTestFixture` polling helpers and managed subsystem/job
+  lifecycle fixtures, while real scheduler observation-window assertions are
+  isolated in the timing-tagged `JobRetryTimingSpec` instead of ordinary
+  `sbt test`.
 - Remaining Phase 19 work is the SmartDox Textus profile/i18n policy,
   reference-style Markdown support, and phase closure validation.
 - Non-goals:

@@ -28,7 +28,7 @@ final class JobControlCommandSpec
       val engine = createJobEngine()
       val task = ActionTask(ActionId.generate(), _sleep_action("slow", 300L, "ok"), ActionEngine.create(), None)
       val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
-      _await_status(engine, jobid, Set(JobStatus.Running, JobStatus.Succeeded))
+      awaitStatus(engine, jobid, Set(JobStatus.Running, JobStatus.Succeeded))
 
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
 
@@ -48,7 +48,7 @@ final class JobControlCommandSpec
       val engine = createJobEngine()
       val task = ActionTask(ActionId.generate(), _success_action("done", "ok"), ActionEngine.create(), None)
       val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
-      _await_status(engine, jobid, Set(JobStatus.Succeeded))
+      awaitStatus(engine, jobid, Set(JobStatus.Succeeded))
 
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
 
@@ -71,11 +71,11 @@ final class JobControlCommandSpec
       val engine = createJobEngine()
       val task = ActionTask(ActionId.generate(), _sleep_action("slow", 800L, "ok"), ActionEngine.create(), None)
       val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
-      _await_status(engine, jobid, Set(JobStatus.Running, JobStatus.Succeeded))
+      awaitStatus(engine, jobid, Set(JobStatus.Running, JobStatus.Succeeded))
 
       given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
       val _ = engine.control(jobid, JobControlRequest(JobControlCommand.Cancel))
-      _await_status(engine, jobid, Set(JobStatus.Cancelled))
+      awaitStatus(engine, jobid, Set(JobStatus.Cancelled))
 
       When("retry is requested in sync mode with short timeout")
       val result = engine.control(
@@ -155,19 +155,4 @@ final class JobControlCommandSpec
       }
     }
 
-  private def _await_status(
-    engine: JobEngine,
-    jobid: JobId,
-    statuses: Set[JobStatus],
-    timeoutMillis: Long = 3000L
-  ): Option[JobStatus] = {
-    val deadline = System.currentTimeMillis() + timeoutMillis
-    var result: Option[JobStatus] = None
-    while (result.forall(s => !statuses.contains(s)) && System.currentTimeMillis() < deadline) {
-      result = engine.getStatus(jobid)
-      if (result.forall(s => !statuses.contains(s)))
-        Thread.sleep(10L)
-    }
-    result
-  }
 }

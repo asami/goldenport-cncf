@@ -1,6 +1,6 @@
 package org.goldenport.cncf.job
 
-import java.time.Duration
+import java.time.{Duration, Instant}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import org.goldenport.{Conclusion, Consequence}
@@ -38,7 +38,12 @@ final class JobRetryTimingSpec
 
       try {
         val jobId = _jobid(engine.submit(List(task), ExecutionContext.test()))
-        val model = _await_query(engine, jobId)
+        val model = awaitQuery(
+          engine,
+          jobId,
+          Set(JobStatus.Succeeded, JobStatus.Failed),
+          timeoutMillis = 10000L
+        ).getOrElse(fail(s"job query timeout: ${jobId.value}"))
 
         model.status shouldBe JobStatus.Succeeded
         model.retry.kind shouldBe JobRetryKind.Delayed
@@ -65,23 +70,33 @@ final class JobRetryTimingSpec
 
       try {
         val jobId = _jobid(engine.submit(List(task), ExecutionContext.test()))
-        _await_condition {
+        awaitCondition({
           engine.query(jobId).exists(_.retry.nextRetryDueAt.nonEmpty)
-        } shouldBe true
+        }, timeoutMillis = 5000L) shouldBe true
         val blockerId = _jobid(engine.submit(List(_BlockingTask(blockerEntered, blockerRelease, "blocker")), ExecutionContext.test()))
         blockerEntered.await(5, TimeUnit.SECONDS) shouldBe true
 
-        _await_condition {
+        awaitCondition({
           engine.query(jobId).exists { model =>
             model.retry.nextRetryDueAt.isEmpty &&
             model.retry.kind == JobRetryKind.Delayed
           }
-        } shouldBe true
+        }, timeoutMillis = 5000L) shouldBe true
         attempts.get() shouldBe 1
 
         blockerRelease.countDown()
-        _await_query(engine, blockerId)
-        val model = _await_query(engine, jobId)
+        awaitQuery(
+          engine,
+          blockerId,
+          Set(JobStatus.Succeeded, JobStatus.Failed),
+          timeoutMillis = 10000L
+        ).getOrElse(fail(s"job query timeout: ${blockerId.value}"))
+        val model = awaitQuery(
+          engine,
+          jobId,
+          Set(JobStatus.Succeeded, JobStatus.Failed),
+          timeoutMillis = 10000L
+        ).getOrElse(fail(s"job query timeout: ${jobId.value}"))
 
         model.status shouldBe JobStatus.Succeeded
         attempts.get() shouldBe 2
@@ -103,15 +118,20 @@ final class JobRetryTimingSpec
       var engine1 = Option(createInMemoryJobEngine(runtimeState = state, retrySchedule = schedule))
       val jobId = _jobid(engine1.get.submit(List(task), ExecutionContext.test()))
       try {
-        _await_condition {
+        awaitCondition({
           engine1.get.query(jobId).exists(_.retry.nextRetryDueAt.nonEmpty)
-        } shouldBe true
+        }, timeoutMillis = 5000L) shouldBe true
 
         engine1.get.shutdown()
         engine1 = None
         val engine2 = createInMemoryJobEngine(runtimeState = state, retrySchedule = schedule)
         try {
-          val model = _await_query(engine2, jobId)
+          val model = awaitQuery(
+            engine2,
+            jobId,
+            Set(JobStatus.Succeeded, JobStatus.Failed),
+            timeoutMillis = 10000L
+          ).getOrElse(fail(s"job query timeout: ${jobId.value}"))
 
           model.status shouldBe JobStatus.Succeeded
           model.retry.kind shouldBe JobRetryKind.Delayed
@@ -122,6 +142,93 @@ final class JobRetryTimingSpec
         }
       } finally {
         engine1.foreach(_.shutdown())
+      }
+    }
+
+    "run delayed start after real scheduler delay" taggedAs TimingTag in {
+      val engine = createJobEngine()
+      val scheduledAt = Instant.now().plusMillis(150L)
+      val jobId = _jobid(engine.submit(
+        List(_ValueTask("delayed")),
+        ExecutionContext.test(),
+        JobSubmitOption(scheduledStartAt = Some(scheduledAt))
+      ))
+
+      try {
+        val beforeDue = engine.query(jobId).get
+        beforeDue.status shouldBe JobStatus.Submitted
+        beforeDue.scheduledStartAt shouldBe Some(scheduledAt)
+        beforeDue.timeline.events.exists(_.kind == "job.delayed.scheduled") shouldBe true
+
+        awaitResult(engine, jobId, timeoutMillis = 10000L) shouldBe a[Some[_]]
+        engine.query(jobId).get.timeline.events.exists(_.kind == "job.delayed.enqueued") shouldBe true
+      } finally {
+        engine.shutdown()
+      }
+    }
+
+    "enqueue due delayed start into the shared scheduler under worker saturation" taggedAs TimingTag in {
+      val engine = createJobEngine(
+        InMemoryJobEngine.SchedulerConfig(workerCount = 1)
+      )
+      val blockerEntered = new CountDownLatch(1)
+      val blockerRelease = new CountDownLatch(1)
+
+      try {
+        val blockerId = _jobid(engine.submit(List(_BlockingTask(blockerEntered, blockerRelease, "blocker")), ExecutionContext.test()))
+        blockerEntered.await(1, TimeUnit.SECONDS) shouldBe true
+        val scheduledAt = Instant.now().plusMillis(100L)
+        val delayedId = _jobid(engine.submit(
+          List(_ValueTask("queued-after-due")),
+          ExecutionContext.test(),
+          JobSubmitOption(scheduledStartAt = Some(scheduledAt))
+        ))
+
+        awaitCondition({
+          engine.query(delayedId).exists(_.timeline.events.exists(_.kind == "job.delayed.enqueued"))
+        }, timeoutMillis = 10000L) shouldBe true
+
+        engine.getStatus(delayedId) shouldBe Some(JobStatus.Submitted)
+        blockerRelease.countDown()
+        awaitResult(engine, blockerId, timeoutMillis = 10000L)
+        awaitResult(engine, delayedId, timeoutMillis = 10000L) shouldBe a[Some[_]]
+      } finally {
+        blockerRelease.countDown()
+        engine.shutdown()
+      }
+    }
+
+    "keep single-worker execution serialized over an observation window" taggedAs TimingTag in {
+      val engine = createJobEngine(
+        InMemoryJobEngine.SchedulerConfig(workerCount = 1)
+      )
+      val running = new AtomicInteger(0)
+      val maxRunning = new AtomicInteger(0)
+      val firstEntered = new CountDownLatch(1)
+      val secondEntered = new CountDownLatch(1)
+      val release = new CountDownLatch(1)
+
+      try {
+        val firstId = _jobid(engine.submit(
+          List(_ConcurrencyTask("first", running, maxRunning, firstEntered, release)),
+          ExecutionContext.test()
+        ))
+        firstEntered.await(1, TimeUnit.SECONDS) shouldBe true
+        val secondId = _jobid(engine.submit(
+          List(_ConcurrencyTask("second", running, maxRunning, secondEntered, release)),
+          ExecutionContext.test()
+        ))
+
+        secondEntered.await(150L, TimeUnit.MILLISECONDS) shouldBe false
+        maxRunning.get() shouldBe 1
+        engine.getStatus(secondId) shouldBe Some(JobStatus.Submitted)
+
+        release.countDown()
+        awaitResult(engine, firstId, timeoutMillis = 10000L)
+        awaitResult(engine, secondId, timeoutMillis = 10000L) shouldBe a[Some[_]]
+      } finally {
+        release.countDown()
+        engine.shutdown()
       }
     }
   }
@@ -169,34 +276,44 @@ object JobRetryTimingSpec {
     }
   }
 
-  private def _await_query(
-    engine: JobEngine,
-    jobId: JobId,
-    statuses: Set[JobStatus] = Set(JobStatus.Succeeded, JobStatus.Failed)
-  ): JobQueryReadModel = {
-    val deadline = System.currentTimeMillis() + 10000L
-    var result = Option.empty[JobQueryReadModel]
-    while (
-      (result.isEmpty || !statuses.contains(result.get.status)) &&
-      System.currentTimeMillis() < deadline
-    ) {
-      result = engine.query(jobId)
-      if (result.isEmpty || !statuses.contains(result.get.status))
-        Thread.sleep(10L)
+  private final case class _ValueTask(
+    value: String,
+    actionId: ActionId = ActionId.generate()
+  ) extends JobTask {
+    def run(ctx: ExecutionContext): TaskOutcome = {
+      val _ = ctx
+      TaskSucceeded(OperationResponse.Scalar(value))
     }
-    result.getOrElse(fail(s"job query timeout: ${jobId.value}"))
   }
 
-  private def _await_condition(
-    p: => Boolean,
-    timeoutMillis: Long = 5000L
-  ): Boolean = {
-    val deadline = System.currentTimeMillis() + timeoutMillis
-    var matched = p
-    while (!matched && System.currentTimeMillis() < deadline) {
-      Thread.sleep(10L)
-      matched = p
+  private final case class _ConcurrencyTask(
+    value: String,
+    running: AtomicInteger,
+    maxRunning: AtomicInteger,
+    entered: CountDownLatch,
+    release: CountDownLatch,
+    actionId: ActionId = ActionId.generate()
+  ) extends JobTask {
+    def run(ctx: ExecutionContext): TaskOutcome = {
+      val _ = ctx
+      val current = running.incrementAndGet()
+      _update_max(maxRunning, current)
+      entered.countDown()
+      release.await(30, TimeUnit.SECONDS)
+      running.decrementAndGet()
+      TaskSucceeded(OperationResponse.Scalar(value))
     }
-    matched
   }
+
+  private def _update_max(maxRunning: AtomicInteger, current: Int): Unit = {
+    var updated = false
+    while (!updated) {
+      val previous = maxRunning.get()
+      if (current <= previous)
+        updated = true
+      else
+        updated = maxRunning.compareAndSet(previous, current)
+    }
+  }
+
 }

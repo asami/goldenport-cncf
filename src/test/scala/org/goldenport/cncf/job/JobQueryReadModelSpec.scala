@@ -31,8 +31,8 @@ final class JobQueryReadModelSpec
 
       When("job completes")
       val jobid = _jobid(engine.submit(List(task), ctx))
-      val result = _await_result(engine, jobid)
-      val read = _await_query(engine, jobid)
+      val result = awaitResult(engine, jobid)
+      val read = awaitQuery(engine, jobid)
 
       Then("read model and getResponse expose the same OperationResponse shape")
       result shouldBe a[Some[_]]
@@ -48,7 +48,7 @@ final class JobQueryReadModelSpec
       val task1 = ActionTask(ActionId.generate(), _success_action("first", "1"), ActionEngine.create(), None)
       val task2 = ActionTask(ActionId.generate(), _success_action("second", "2"), ActionEngine.create(), None)
       val jobid = _jobid(engine.submit(List(task1, task2), ExecutionContext.test()))
-      val _ = _await_result(engine, jobid)
+      val _ = awaitResult(engine, jobid)
 
       When("querying tasks/timeline with same pagination twice")
       val p1a = engine.queryTasks(jobid, offset = 0, limit = 1).get
@@ -76,8 +76,8 @@ final class JobQueryReadModelSpec
         JobSubmitOption(persistence = JobPersistencePolicy.Ephemeral)
       ))
 
-      val _ = _await_result(engine, persistentId)
-      val _ = _await_result(engine, ephemeralId)
+      val _ = awaitResult(engine, persistentId)
+      val _ = awaitResult(engine, ephemeralId)
 
       When("querying read models")
       val persistentRead = engine.query(persistentId).get
@@ -102,7 +102,7 @@ final class JobQueryReadModelSpec
         executionNotes = Vector("note-1")
       )
       val jobid = _jobid(engine.submit(List(task), ExecutionContext.test(), option))
-      val _ = _await_result(engine, jobid)
+      val _ = awaitResult(engine, jobid)
 
       When("querying read model")
       val read = engine.query(jobid).get
@@ -135,7 +135,7 @@ final class JobQueryReadModelSpec
 
       Then("the scheduled start time is projected explicitly")
       read.scheduledStartAt shouldBe Some(scheduledAt)
-      _await_result(engine, jobid)
+      awaitResult(engine, jobid)
     }
 
     "expose event-triggered lineage explicitly in the read model" in {
@@ -169,7 +169,7 @@ final class JobQueryReadModelSpec
 
       When("querying the completed job")
       val jobid = _jobid(engine.submit(List(task), ExecutionContext.test(), option))
-      val _ = _await_result(engine, jobid)
+      val _ = awaitResult(engine, jobid)
       val read = engine.query(jobid).get
 
       Then("lineage fields are materialized as structured metadata")
@@ -204,7 +204,7 @@ final class JobQueryReadModelSpec
 
       When("the job fails")
       val jobid = _jobid(engine.submit(List(task), ExecutionContext.test(), option))
-      val _ = _await_result(engine, jobid)
+      val _ = awaitResult(engine, jobid)
       val read = engine.query(jobid).get
 
       Then("the read model classifies it as retryable")
@@ -228,7 +228,7 @@ final class JobQueryReadModelSpec
 
       When("the job fails")
       val jobid = _jobid(engine.submit(List(task), ExecutionContext.test(), option))
-      val _ = _await_result(engine, jobid)
+      val _ = awaitResult(engine, jobid)
       val read = engine.query(jobid).get
 
       Then("the read model classifies it as terminal")
@@ -241,7 +241,7 @@ final class JobQueryReadModelSpec
       val engine = createJobEngine()
       val task = ActionTask(ActionId.generate(), _success_action("visible", "ok"), ActionEngine.create(), None)
       val jobid = _jobid(engine.submit(List(task), ExecutionContext.test()))
-      val _ = _await_result(engine, jobid)
+      val _ = awaitResult(engine, jobid)
 
       When("queryVisible is called as the submitting user")
       val ownerAllowed = {
@@ -307,25 +307,4 @@ final class JobQueryReadModelSpec
       case Consequence.Failure(conclusion) => conclusion
     }
 
-  private def _await_result(engine: JobEngine, jobid: JobId): Option[JobResult] = {
-    val deadline = System.currentTimeMillis() + 3000L
-    var result: Option[JobResult] = None
-    while (result.isEmpty && System.currentTimeMillis() < deadline) {
-      result = engine.getResult(jobid)
-      if (result.isEmpty)
-        Thread.sleep(10)
-    }
-    result
-  }
-
-  private def _await_query(engine: JobEngine, jobid: JobId): Option[JobQueryReadModel] = {
-    val deadline = System.currentTimeMillis() + 3000L
-    var result: Option[JobQueryReadModel] = None
-    while (result.isEmpty && System.currentTimeMillis() < deadline) {
-      result = engine.query(jobid)
-      if (result.isEmpty)
-        Thread.sleep(10)
-    }
-    result
-  }
 }

@@ -44,7 +44,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       val task = ActionTask(ActionId.generate(), action, actionEngine, None)
 
       val jobid = _jobid(jobEngine.submit(List(task), ctx))
-      val result = _await_result_(jobEngine, jobid)
+      val result = awaitResult(jobEngine, jobid)
 
       result.isDefined shouldBe true
       result.get match {
@@ -72,7 +72,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       val second = _jobid(jobEngine.submit(List(queued), ExecutionContext.test()))
 
       Then("the second job remains submitted with an async queued timeline event")
-      _await_condition_ {
+      awaitCondition {
         jobEngine.query(second).exists { model =>
           model.status == JobStatus.Submitted &&
           model.timeline.events.exists(_.kind == "job.async.queued")
@@ -80,8 +80,8 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       } shouldBe true
 
       release.countDown()
-      _await_result_(jobEngine, first)
-      _await_result_(jobEngine, second)
+      awaitResult(jobEngine, first)
+      awaitResult(jobEngine, second)
       jobEngine.shutdown()
     }
 
@@ -101,15 +101,16 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       val firstId = _jobid(jobEngine.submit(List(first), ExecutionContext.test()))
       firstEntered.await(1, TimeUnit.SECONDS) shouldBe true
       val secondId = _jobid(jobEngine.submit(List(second), ExecutionContext.test()))
-      Thread.sleep(100L)
+      val queued = jobEngine.query(secondId).get
 
       Then("only one job is running at a time")
       maxRunning.get() shouldBe 1
-      jobEngine.getStatus(secondId) shouldBe Some(JobStatus.Submitted)
+      queued.status shouldBe JobStatus.Submitted
+      queued.timeline.events.exists(_.kind == "job.async.queued") shouldBe true
 
       release.countDown()
-      _await_result_(jobEngine, firstId)
-      _await_result_(jobEngine, secondId)
+      awaitResult(jobEngine, firstId)
+      awaitResult(jobEngine, secondId)
       jobEngine.shutdown()
     }
 
@@ -134,8 +135,8 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       maxRunning.get() shouldBe 2
 
       release.countDown()
-      _await_result_(jobEngine, firstId)
-      _await_result_(jobEngine, secondId)
+      awaitResult(jobEngine, firstId)
+      awaitResult(jobEngine, secondId)
       jobEngine.shutdown()
     }
 
@@ -155,9 +156,9 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
 
       When("worker capacity becomes available")
       release.countDown()
-      _await_result_(jobEngine, blockerId)
-      _await_result_(jobEngine, lowId)
-      _await_result_(jobEngine, highId)
+      awaitResult(jobEngine, blockerId)
+      awaitResult(jobEngine, lowId)
+      awaitResult(jobEngine, highId)
 
       Then("the lower numeric priority runs first")
       order.toVector shouldBe Vector("high", "low")
@@ -180,9 +181,9 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
 
       When("worker capacity becomes available")
       release.countDown()
-      _await_result_(jobEngine, blockerId)
-      _await_result_(jobEngine, firstId)
-      _await_result_(jobEngine, secondId)
+      awaitResult(jobEngine, blockerId)
+      awaitResult(jobEngine, firstId)
+      awaitResult(jobEngine, secondId)
 
       Then("queue order remains FIFO within the same priority")
       order.toVector shouldBe Vector("first", "second")
@@ -195,7 +196,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
         InMemoryJobEngine.SchedulerConfig(workerCount = 1)
       )
       val parentId = _jobid(jobEngine.submit(List(_ValueTask("parent")), ExecutionContext.test()))
-      _await_result_(jobEngine, parentId)
+      awaitResult(jobEngine, parentId)
 
       val entered = new CountDownLatch(1)
       val release = new CountDownLatch(1)
@@ -206,13 +207,13 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       val taskId = jobEngine.enqueueTaskInJob(parentId, _ValueTask("child"), ExecutionContext.test()).toOption.get
 
       Then("the task is queued and not started until worker capacity is available")
-      _await_condition_ {
+      awaitCondition {
         jobEngine.query(parentId).exists(_.timeline.events.exists(e => e.kind == "job.same-job-async.queued" && e.taskId.contains(taskId)))
       } shouldBe true
 
       release.countDown()
-      _await_result_(jobEngine, blockerId)
-      _await_condition_ {
+      awaitResult(jobEngine, blockerId)
+      awaitCondition {
         jobEngine.query(parentId).exists(_.tasks.tasks.exists(_.taskId == taskId))
       } shouldBe true
       jobEngine.shutdown()
@@ -229,7 +230,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
         ExecutionContext.test(),
         JobSubmitOption(priority = -5)
       ))
-      _await_result_(jobEngine, parentId)
+      awaitResult(jobEngine, parentId)
 
       val entered = new CountDownLatch(1)
       val release = new CountDownLatch(1)
@@ -245,37 +246,12 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       When("a same-job async task is enqueued after the lower-priority job")
       val _ = jobEngine.enqueueTaskInJob(parentId, _RecordingTask("same-job", order), ExecutionContext.test()).toOption.get
       release.countDown()
-      _await_result_(jobEngine, blockerId)
-      _await_result_(jobEngine, regularId)
+      awaitResult(jobEngine, blockerId)
+      awaitResult(jobEngine, regularId)
 
       Then("the same-job task inherits the parent priority and runs first")
-      _await_condition_(order.synchronized(order.size == 2)) shouldBe true
+      awaitCondition(order.synchronized(order.size == 2)) shouldBe true
       order.synchronized(order.toVector) shouldBe Vector("same-job", "regular")
-      jobEngine.shutdown()
-    }
-
-    "keep delayed async submit in Submitted until its scheduled start time" in {
-      Given("an async job with a one-shot delayed start")
-      val jobEngine = createJobEngine()
-      val scheduledAt = Instant.now().plusMillis(150L)
-      val jobId = _jobid(jobEngine.submit(
-        List(_ValueTask("delayed")),
-        ExecutionContext.test(),
-        JobSubmitOption(scheduledStartAt = Some(scheduledAt))
-      ))
-
-      When("the job is queried before the due time")
-      val beforeDue = jobEngine.query(jobId).get
-
-      Then("it remains submitted and records delayed scheduling")
-      beforeDue.status shouldBe JobStatus.Submitted
-      beforeDue.scheduledStartAt shouldBe Some(scheduledAt)
-      beforeDue.timeline.events.exists(_.kind == "job.delayed.scheduled") shouldBe true
-
-      And("it executes after the due time through the shared scheduler")
-      val result = _await_result_(jobEngine, jobId)
-      result shouldBe a[Some[_]]
-      jobEngine.query(jobId).get.timeline.events.exists(_.kind == "job.delayed.enqueued") shouldBe true
       jobEngine.shutdown()
     }
 
@@ -291,7 +267,7 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       ))
 
       Then("it behaves like an immediate async submit")
-      _await_result_(jobEngine, jobId) shouldBe a[Some[_]]
+      awaitResult(jobEngine, jobId) shouldBe a[Some[_]]
       jobEngine.query(jobId).get.timeline.events.exists(_.kind == "job.async.queued") shouldBe true
       jobEngine.shutdown()
     }
@@ -338,42 +314,14 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       val timer2 = new InMemoryJobEngine.ManualJobTimer(clock)
       val engine2 = createManualInMemoryJobEngine(state, schedule, clock, timer2)
 
-      Then("the delayed job is rehydrated and eventually executes")
+      Then("the delayed job is rehydrated and executes after manual clock advance")
       timer2.pendingCount shouldBe 1
       timer2.advanceBy(Duration.ofMillis(120L)) shouldBe 1
       engine2.drainAll()
-      _await_result_(engine2, jobId) shouldBe a[Some[_]]
+      awaitResult(engine2, jobId) shouldBe a[Some[_]]
       engine2.shutdown()
     }
 
-    "enqueue due delayed jobs into the shared queue under worker saturation" in {
-      Given("a due delayed-start job and a busy single-worker scheduler")
-      val jobEngine = createJobEngine(
-        InMemoryJobEngine.SchedulerConfig(workerCount = 1)
-      )
-      val blockerEntered = new CountDownLatch(1)
-      val blockerRelease = new CountDownLatch(1)
-      val blockerId = _jobid(jobEngine.submit(List(_BlockingTask(blockerEntered, blockerRelease, "blocker")), ExecutionContext.test()))
-      blockerEntered.await(1, TimeUnit.SECONDS) shouldBe true
-      val scheduledAt = Instant.now().plusMillis(100L)
-      val delayedId = _jobid(jobEngine.submit(
-        List(_ValueTask("queued-after-due")),
-        ExecutionContext.test(),
-        JobSubmitOption(scheduledStartAt = Some(scheduledAt))
-      ))
-
-      When("the delayed start becomes due while the worker is still occupied")
-      _await_condition_({
-        jobEngine.query(delayedId).exists(_.timeline.events.exists(_.kind == "job.delayed.enqueued"))
-      }, timeoutMillis = 10000L) shouldBe true
-
-      Then("the job remains submitted until worker capacity is available")
-      jobEngine.getStatus(delayedId) shouldBe Some(JobStatus.Submitted)
-      blockerRelease.countDown()
-      _await_result_(jobEngine, blockerId)
-      _await_result_(jobEngine, delayedId) shouldBe a[Some[_]]
-      jobEngine.shutdown()
-    }
   }
 
   private def _jobid(p: Consequence[JobId]): JobId =
@@ -447,31 +395,4 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
     }
   }
 
-  private def _await_result_(
-    engine: JobEngine,
-    jobid: JobId
-  ): Option[JobResult] = {
-    val deadline = System.currentTimeMillis() + 2000L
-    var result: Option[JobResult] = None
-    while (result.isEmpty && System.currentTimeMillis() < deadline) {
-      result = engine.getResult(jobid)
-      if (result.isEmpty) {
-        Thread.sleep(10)
-      }
-    }
-    result
-  }
-
-  private def _await_condition_(
-    p: => Boolean,
-    timeoutMillis: Long = 2000L
-  ): Boolean = {
-    val deadline = System.currentTimeMillis() + timeoutMillis
-    var result = p
-    while (!result && System.currentTimeMillis() < deadline) {
-      Thread.sleep(10L)
-      result = p
-    }
-    result
-  }
 }

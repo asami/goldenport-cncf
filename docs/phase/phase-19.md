@@ -208,7 +208,11 @@ Resume hint:
   under Blob/media/attachment boundaries. The `textus-blog` Web driver now
   resolves CNCF and
   SimpleModeling versions from project-local `versions/` files rather than a
-  `cncf-samples` root.
+  `cncf-samples` root. Job-adjacent verification has been hardened by moving
+  shared polling helpers into `JobEngineTestFixture`, applying managed
+  `Subsystem` / `JobEngine` lifecycle fixtures to jobcontrol, workflow, and
+  job scenario specs, and keeping real scheduler observation-window checks in
+  the timing-tagged `JobRetryTimingSpec` instead of ordinary `sbt test`.
 
 ## 5. Development Items
 
@@ -247,6 +251,9 @@ Phase 19 can close when:
 - `textus-blog` exposes a component-owned Blog Web app that exercises public
   read, authenticated editor save, filebundle upload import, Blob image picker
   flows, and Static Form file-layout routing.
+- Job/subsystem lifecycle fixtures cover the job-adjacent specs touched during
+  Phase 19 verification, and normal `sbt test` excludes fragile real scheduler
+  timing checks while leaving `JobRetryTimingSpec` explicitly runnable.
 - SimpleEntity content reference occurrence behavior is documented and
   exercised beyond image-only `img/src` handling.
 - Textus URN media/document kinds distinguish image, video, audio, attachment,

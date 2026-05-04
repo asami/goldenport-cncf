@@ -12,7 +12,7 @@ import org.goldenport.cncf.component.{Component, ComponentFactory, ComponentId, 
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimePlan, EntityStorage, PartitionStrategy}
 import org.goldenport.cncf.event.{ReceptionDomainEvent, ReceptionInput, ReceptionOutcome}
-import org.goldenport.cncf.job.JobStatus
+import org.goldenport.cncf.job.{JobEngineTestFixture, JobStatus}
 import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.scalatest.GivenWhenThen
@@ -31,7 +31,8 @@ final class WorkflowEngineSpec
   extends AnyWordSpec
   with Matchers
   with GivenWhenThen
-  with WorkflowEngineTestFixture {
+  with WorkflowEngineTestFixture
+  with JobEngineTestFixture {
   private val _collection_id = EntityCollectionId("workflow", "sales", "salesOrder")
 
   "WorkflowEngine" should {
@@ -75,7 +76,7 @@ final class WorkflowEngineSpec
         val instance = fixture.subsystem.workflowEngine.instances.head
         instance.registrationName shouldBe "approval"
         instance.relatedJobIds.size shouldBe 1
-        _await_job_completion(fixture, instance.relatedJobIds.head)
+        awaitJobCompletion(fixture, instance.relatedJobIds.head)
         trace.toVector shouldBe Vector("workflow.advanceOrder")
         fixture.subsystem.jobEngine.query(instance.relatedJobIds.head).flatMap(_.tasks.tasks.headOption.flatMap(_.component)) shouldBe Some(fixture.component.name)
       }
@@ -233,7 +234,7 @@ final class WorkflowEngineSpec
           )
         )
         val instance = fixture.subsystem.workflowEngine.instances.head
-        _await_job_completion(fixture, instance.relatedJobIds.head)
+        awaitJobCompletion(fixture, instance.relatedJobIds.head)
 
         Then("the smallest numeric priority registration wins")
         trace.toVector shouldBe Vector("workflow.advanceOrderLow")
@@ -374,17 +375,15 @@ final class WorkflowEngineSpec
     )
   }
 
-  private def _await_job_completion(
+  private def awaitJobCompletion(
     fixture: _Fixture,
     jobId: org.goldenport.cncf.job.JobId
   ): Unit = {
-    val deadline = System.currentTimeMillis() + 3000L
-    while ({
-      fixture.subsystem.jobEngine.query(jobId).exists(m => m.status == JobStatus.Submitted || m.status == JobStatus.Running) &&
-      System.currentTimeMillis() < deadline
-    }) {
-      Thread.sleep(10L)
-    }
+    awaitCondition {
+      fixture.subsystem.jobEngine.query(jobId).exists { m =>
+        m.status != JobStatus.Submitted && m.status != JobStatus.Running
+      }
+    } shouldBe true
   }
 
   private def _entity_id(

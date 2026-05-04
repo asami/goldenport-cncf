@@ -10,7 +10,7 @@ import org.goldenport.cncf.component.{Component, ComponentFactory, ComponentId, 
 import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
 import org.goldenport.cncf.entity.EntityPersistent
 import org.goldenport.cncf.entity.runtime.{EntityCollection, EntityDescriptor, EntityLoader, EntityMemoryPolicy, EntityRealm, EntityRealmState, EntityRuntimePlan, EntityStorage, PartitionStrategy}
-import org.goldenport.cncf.job.JobStatus
+import org.goldenport.cncf.job.{JobEngineTestFixture, JobStatus}
 import org.goldenport.cncf.job.JobBatchDefinition
 import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
@@ -34,7 +34,8 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
 final class JclJobControlComponentSpec
   extends AnyWordSpec
   with Matchers
-  with GivenWhenThen {
+  with GivenWhenThen
+  with JobEngineTestFixture {
   private val _collection_id = EntityCollectionId("jcl", "sales", "salesOrder")
 
   "JobControlComponent JCL surface" should {
@@ -261,7 +262,7 @@ final class JclJobControlComponentSpec
       record.getBoolean("success") shouldBe Some(true)
       val submittedIds = _strings(record, "submitted-job-ids")
       submittedIds.size shouldBe 1
-      _await_condition {
+      awaitCondition {
         fixture.trace.contains("workflow.advanceOrder")
       } shouldBe true
       fixture.trace should contain ("workflow.advanceOrder")
@@ -355,7 +356,7 @@ final class JclJobControlComponentSpec
       record.getString("failure-hook-job-id").exists(_.nonEmpty) shouldBe true
 
       And("the failure hook runs and later jobs are not executed")
-      _await_condition {
+      awaitCondition {
         fixture.trace.toVector == Vector(
           "ok:orderId=direct-1",
           "workflow.advanceOrder",
@@ -378,30 +379,18 @@ final class JclJobControlComponentSpec
     trace: ArrayBuffer[String]
   )
 
-  private def _fixture(
-    definitions: Vector[WorkflowDefinition] = Vector.empty,
-    entities: Vector[_SalesOrder] = Vector.empty
-  ): _Fixture = {
-    given EntityPersistent[_SalesOrder] = _persistent
-    val subsystem = SubsystemTestFixture.Startup.Default(Some("command")).create(SubsystemTestFixture.Params())
-    val trace = ArrayBuffer.empty[String]
-    val component = _component(subsystem, trace, definitions, entities)
-    val bootstrapped = new ComponentFactory().bootstrap(component)
-    subsystem.add(bootstrapped)
-    _Fixture(subsystem, bootstrapped, trace)
-  }
-
   private def _with_fixture[A](
     definitions: Vector[WorkflowDefinition] = Vector.empty,
     entities: Vector[_SalesOrder] = Vector.empty
-  )(body: _Fixture => A): A = {
-    val fixture = _fixture(definitions, entities)
-    try {
-      body(fixture)
-    } finally {
-      fixture.subsystem.shutdown()
+  )(body: _Fixture => A): A =
+    SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
+      given EntityPersistent[_SalesOrder] = _persistent
+      val trace = ArrayBuffer.empty[String]
+      val component = _component(subsystem, trace, definitions, entities)
+      val bootstrapped = new ComponentFactory().bootstrap(component)
+      subsystem.add(bootstrapped)
+      body(_Fixture(subsystem, bootstrapped, trace))
     }
-  }
 
   private def _component(
     subsystem: org.goldenport.cncf.subsystem.Subsystem,
@@ -557,19 +546,6 @@ final class JclJobControlComponentSpec
 
   private def _strings(record: Record, key: String): Vector[String] =
     record.getAny(key).collect { case xs: Seq[?] => xs.map(_.toString).toVector }.getOrElse(Vector.empty)
-
-  private def _await_condition(
-    p: => Boolean,
-    timeoutMillis: Long = 2000L
-  ): Boolean = {
-    val deadline = System.currentTimeMillis() + timeoutMillis
-    var matched = p
-    while (!matched && System.currentTimeMillis() < deadline) {
-      Thread.sleep(10L)
-      matched = p
-    }
-    matched
-  }
 
   private def _entity_id(
     entropy: String

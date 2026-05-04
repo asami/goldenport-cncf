@@ -21,60 +21,61 @@ import org.scalatest.wordspec.AnyWordSpec
 final class JobCommandSyncAndTaskFirstSpec
   extends AnyWordSpec
   with Matchers
-  with GivenWhenThen {
+  with GivenWhenThen
+  with JobEngineTestFixture {
 
   "Command Job execution path" should {
     "support explicit synchronous wait for command result via JobId" in {
       Given("a component and command action submitted as job")
       TestComponentFactory.withEmptySubsystem("job_command_sync_task_first_spec") { subsystem =>
-      val component = _component(subsystem)
-      val ctx = ExecutionContext.test()
-      val action = _command_action("sync", "Command(sync)")
-      val task = ActionTask(ActionId.generate(), action, component.actionEngine, Some(component))
-      val jobid = component.logic.submitJob(List(task), ctx).toOption.get
+        val component = _component(subsystem)
+        val ctx = ExecutionContext.test()
+        val action = _command_action("sync", "Command(sync)")
+        val task = ActionTask(ActionId.generate(), action, component.actionEngine, Some(component))
+        val jobid = component.logic.submitJob(List(task), ctx).toOption.get
 
-      When("awaiting command result explicitly")
-      val result = component.logic.awaitJobResult(jobid)
+        When("awaiting command result explicitly")
+        val result = component.logic.awaitJobResult(jobid)
 
-      Then("response is returned synchronously with succeeded status")
-      result shouldBe Consequence.success(OperationResponse.Scalar("Command(sync)"))
-      component.logic.getJobStatus(jobid) shouldBe Some(JobStatus.Succeeded)
+        Then("response is returned synchronously with succeeded status")
+        result shouldBe Consequence.success(OperationResponse.Scalar("Command(sync)"))
+        component.logic.getJobStatus(jobid) shouldBe Some(JobStatus.Succeeded)
       }
     }
 
     "keep task-first invariant for command execution path" in {
       Given("a command action executed through component logic")
       TestComponentFactory.withEmptySubsystem("job_command_sync_task_first_spec") { subsystem =>
-      val component = _component(subsystem)
-      val ctx = ExecutionContext.test()
-      val executed = new AtomicBoolean(false)
-      val action = new CommandAction() {
-        val request = org.goldenport.protocol.Request.ofOperation("taskfirst")
-        override def createCall(core: ActionCall.Core): ActionCall = {
-          val self = this
-          val c = core
-          new ActionCall {
-            override val core: ActionCall.Core = c
-            override def action: Action = self
-            def execute(): Consequence[OperationResponse] = {
-              executed.set(true)
-              Consequence.success(OperationResponse.Scalar("ok"))
+        val component = _component(subsystem)
+        val ctx = ExecutionContext.test()
+        val executed = new AtomicBoolean(false)
+        val action = new CommandAction() {
+          val request = org.goldenport.protocol.Request.ofOperation("taskfirst")
+          override def createCall(core: ActionCall.Core): ActionCall = {
+            val self = this
+            val c = core
+            new ActionCall {
+              override val core: ActionCall.Core = c
+              override def action: Action = self
+              def execute(): Consequence[OperationResponse] = {
+                executed.set(true)
+                Consequence.success(OperationResponse.Scalar("ok"))
+              }
             }
           }
         }
-      }
-      val response = component.logic.executeAction(action, ctx)
+        val response = component.logic.executeAction(action, ctx)
 
-      When("resolving returned job id and waiting task completion")
-      val jobid = response.toOption.flatMap {
-        case OperationResponse.Scalar(v) => JobId.parse(v.toString).toOption
-        case _ => None
-      }.getOrElse(fail("command response should be a JobId scalar"))
-      _await(executed)
+        When("resolving returned job id and waiting task completion")
+        val jobid = response.toOption.flatMap {
+          case OperationResponse.Scalar(v) => JobId.parse(v.toString).toOption
+          case _ => None
+        }.getOrElse(fail("command response should be a JobId scalar"))
+        awaitCondition(executed.get()) shouldBe true
 
-      Then("execution remains under Job lifecycle and is retrievable by JobId")
-      jobid.value.nonEmpty shouldBe true
-      executed.get() shouldBe true
+        Then("execution remains under Job lifecycle and is retrievable by JobId")
+        jobid.value.nonEmpty shouldBe true
+        executed.get() shouldBe true
       }
     }
   }
@@ -114,14 +115,4 @@ final class JobCommandSyncAndTaskFirstSpec
       }
     }
 
-  private def _await(
-    predicate: AtomicBoolean,
-    timeoutMillis: Long = 3000L
-  ): Unit = {
-    val deadline = System.currentTimeMillis() + timeoutMillis
-    while (!predicate.get() && System.currentTimeMillis() < deadline) {
-      Thread.sleep(10L)
-    }
-    predicate.get() shouldBe true
-  }
 }

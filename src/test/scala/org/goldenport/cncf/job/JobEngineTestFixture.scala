@@ -10,6 +10,9 @@ import org.scalatest.{BeforeAndAfterEach, Suite}
  * @author  ASAMI, Tomoharu
  */
 trait JobEngineTestFixture extends BeforeAndAfterEach { this: Suite =>
+  protected val DefaultAwaitTimeoutMillis: Long = 3000L
+  protected val DefaultAwaitPollMillis: Long = 10L
+
   private val _job_engines = ListBuffer.empty[JobEngine]
 
   protected def registerJobEngine[A <: JobEngine](engine: A): A =
@@ -65,6 +68,74 @@ trait JobEngineTestFixture extends BeforeAndAfterEach { this: Suite =>
   )(body: InMemoryJobEngine => A): A = {
     val engine = createJobEngine(schedulerConfig)
     body(engine)
+  }
+
+  protected def awaitCondition(
+    condition: => Boolean,
+    timeoutMillis: Long = DefaultAwaitTimeoutMillis,
+    pollMillis: Long = DefaultAwaitPollMillis
+  ): Boolean = {
+    val deadline = System.currentTimeMillis() + timeoutMillis
+    var matched = condition
+    while (!matched && System.currentTimeMillis() < deadline) {
+      Thread.sleep(pollMillis)
+      matched = condition
+    }
+    matched
+  }
+
+  protected def awaitResult(
+    engine: JobEngine,
+    jobId: JobId,
+    timeoutMillis: Long = DefaultAwaitTimeoutMillis,
+    pollMillis: Long = DefaultAwaitPollMillis
+  ): Option[JobResult] = {
+    val deadline = System.currentTimeMillis() + timeoutMillis
+    var result = Option.empty[JobResult]
+    while (result.isEmpty && System.currentTimeMillis() < deadline) {
+      result = engine.getResult(jobId)
+      if (result.isEmpty)
+        Thread.sleep(pollMillis)
+    }
+    result
+  }
+
+  protected def awaitQuery(
+    engine: JobEngine,
+    jobId: JobId,
+    statuses: Set[JobStatus] = Set.empty,
+    timeoutMillis: Long = DefaultAwaitTimeoutMillis,
+    pollMillis: Long = DefaultAwaitPollMillis
+  ): Option[JobQueryReadModel] = {
+    val deadline = System.currentTimeMillis() + timeoutMillis
+    var result = Option.empty[JobQueryReadModel]
+    def ready: Boolean =
+      result.exists(x => statuses.isEmpty || statuses.contains(x.status))
+    while (!ready && System.currentTimeMillis() < deadline) {
+      result = engine.query(jobId)
+      if (!ready)
+        Thread.sleep(pollMillis)
+    }
+    result.filter(x => statuses.isEmpty || statuses.contains(x.status))
+  }
+
+  protected def awaitStatus(
+    engine: JobEngine,
+    jobId: JobId,
+    statuses: Set[JobStatus],
+    timeoutMillis: Long = DefaultAwaitTimeoutMillis,
+    pollMillis: Long = DefaultAwaitPollMillis
+  ): Option[JobStatus] = {
+    val deadline = System.currentTimeMillis() + timeoutMillis
+    var result = Option.empty[JobStatus]
+    def ready: Boolean =
+      result.exists(statuses.contains)
+    while (!ready && System.currentTimeMillis() < deadline) {
+      result = engine.getStatus(jobId)
+      if (!ready)
+        Thread.sleep(pollMillis)
+    }
+    result.filter(statuses.contains)
   }
 
   protected def shutdownRegisteredJobEngines(): Unit = {

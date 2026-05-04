@@ -15,15 +15,14 @@ import org.goldenport.value.BaseContent
 import org.goldenport.test.matchers.ConsequenceMatchers
 import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, QueryAction, ResourceAccess}
 import org.goldenport.cncf.component.Component
-import org.goldenport.cncf.job.{ActionId, ActionTask, JobId, JobResult, JobStatus}
+import org.goldenport.cncf.job.{ActionId, ActionTask, JobEngineTestFixture, JobId, JobResult, JobStatus}
 import org.goldenport.cncf.service.Service
+import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.testutil.TestComponentFactory
 import org.goldenport.protocol.service.{Service as ProtocolService}
 import org.scalatest.GivenWhenThen
 import org.scalatest.Assertions.{fail, succeed}
-import org.scalatest.concurrent.Eventually
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.time.{Millis, Seconds, Span}
 import org.scalatest.wordspec.AnyWordSpec
 
 /*
@@ -35,42 +34,39 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  4, 2026
  *  version Feb. 27, 2026
- * @version Apr. 22, 2026
+ *  version Apr. 22, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
-    with Matchers with Eventually with ConsequenceMatchers {
-
-  implicit override val patienceConfig: PatienceConfig =
-    PatienceConfig(timeout = Span(3, Seconds), interval = Span(50, Millis))
-
+    with Matchers with ConsequenceMatchers with JobEngineTestFixture {
   "Job lifecycle scenario" should {
     "execute Command asynchronously as a Job (success)" in {
-      Given("a valid Command invocation through the public boundary")
-      val args = Array("command", "hello")
+      TestComponentFactory.withEmptySubsystem("job_lifecycle_scenario_success") { subsystem =>
+        val adapter = new ScenarioAdapter(subsystem)
+        Given("a valid Command invocation through the public boundary")
+        val args = Array("command", "hello")
 
-      When("the command is submitted")
-      val result = ScenarioAdapter.invokeCli(args)
+        When("the command is submitted")
+        val result = adapter.invokeCli(args)
 
-      Then("a JobId is returned immediately")
-      result should be_success
-      val jobIdValue = result.toOption.get
-      jobIdValue should not be empty
+        Then("a JobId is returned immediately")
+        result should be_success
+        val jobIdValue = result.toOption.get
+        jobIdValue should not be empty
 
-      val jobId = ScenarioAdapter.lastJobId
-      jobId.isDefined shouldBe true
-      jobIdValue shouldBe jobId.get.value
+        val jobId = adapter.lastJobId
+        jobId.isDefined shouldBe true
+        jobIdValue shouldBe jobId.get.value
 
-      Then("eventually JobStatus becomes Succeeded")
-      eventually {
-        ScenarioAdapter.jobStatus(jobId.get) shouldBe Some(JobStatus.Succeeded)
-      }
+        Then("JobStatus becomes Succeeded")
+        awaitCondition(adapter.jobStatus(jobId.get).contains(JobStatus.Succeeded)) shouldBe true
 
-      Then("result is retrievable by JobId and matches scalar output")
-      eventually {
-        ScenarioAdapter.jobResult(jobId.get) match {
+        Then("result is retrievable by JobId and matches scalar output")
+        awaitCondition(adapter.jobResult(jobId.get).nonEmpty) shouldBe true
+        adapter.jobResult(jobId.get) match {
           case Some(JobResult.Success(response)) =>
-            ScenarioAdapter.toStringResponse(response) should be_success("Command(hello)")
+            adapter.toStringResponse(response) should be_success("Command(hello)")
           case Some(JobResult.Failure(_)) =>
             fail("expected success result")
           case None =>
@@ -80,29 +76,29 @@ class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
     }
 
     "execute Command asynchronously as a Job (failure)" in {
-      Given("a Command that fails through the public boundary")
-      val args = Array("command-fail", "boom")
+      TestComponentFactory.withEmptySubsystem("job_lifecycle_scenario_failure") { subsystem =>
+        val adapter = new ScenarioAdapter(subsystem)
+        Given("a Command that fails through the public boundary")
+        val args = Array("command-fail", "boom")
 
-      When("the command is submitted")
-      val result = ScenarioAdapter.invokeCli(args)
+        When("the command is submitted")
+        val result = adapter.invokeCli(args)
 
-      Then("a JobId is returned immediately")
-      result should be_success
-      val jobIdValue = result.toOption.get
-      jobIdValue should not be empty
+        Then("a JobId is returned immediately")
+        result should be_success
+        val jobIdValue = result.toOption.get
+        jobIdValue should not be empty
 
-      val jobId = ScenarioAdapter.lastJobId
-      jobId.isDefined shouldBe true
-      jobIdValue shouldBe jobId.get.value
+        val jobId = adapter.lastJobId
+        jobId.isDefined shouldBe true
+        jobIdValue shouldBe jobId.get.value
 
-      Then("eventually JobStatus becomes Failed")
-      eventually {
-        ScenarioAdapter.jobStatus(jobId.get) shouldBe Some(JobStatus.Failed)
-      }
+        Then("JobStatus becomes Failed")
+        awaitCondition(adapter.jobStatus(jobId.get).contains(JobStatus.Failed)) shouldBe true
 
-      Then("failure result is retrievable by JobId")
-      eventually {
-        ScenarioAdapter.jobResult(jobId.get) match {
+        Then("failure result is retrievable by JobId")
+        awaitCondition(adapter.jobResult(jobId.get).nonEmpty) shouldBe true
+        adapter.jobResult(jobId.get) match {
           case Some(JobResult.Failure(_)) => succeed
           case Some(JobResult.Success(_)) => fail("expected failure result")
           case None => fail("missing job result")
@@ -111,23 +107,26 @@ class JobLifecycleScenarioSpec extends AnyWordSpec with GivenWhenThen
     }
 
     "execute Query synchronously without JobId" in {
-      Given("a valid Query invocation through the public boundary")
-      val args = Array("query", "hello")
+      TestComponentFactory.withEmptySubsystem("job_lifecycle_scenario_query") { subsystem =>
+        val adapter = new ScenarioAdapter(subsystem)
+        Given("a valid Query invocation through the public boundary")
+        val args = Array("query", "hello")
 
-      When("the query is executed")
-      val result = ScenarioAdapter.invokeCli(args)
+        When("the query is executed")
+        val result = adapter.invokeCli(args)
 
-      Then("result is returned synchronously via protocol egress as a scalar")
-      result should be_success("Query(hello)")
-      result.toOption.get should not be JobId.generate().value
+        Then("result is returned synchronously via protocol egress as a scalar")
+        result should be_success("Query(hello)")
+        result.toOption.get should not be JobId.generate().value
+      }
     }
   }
 }
 
-private object ScenarioAdapter {
+private final class ScenarioAdapter(subsystem: Subsystem) {
   private val serviceFactory = new RecordingService.Factory()
   private val component: Component =
-    TestComponentFactory.create("test", TestProtocol.protocol, Some(serviceFactory))
+    TestComponentFactory.create("test", TestProtocol.protocol, Some(serviceFactory), subsystem)
 
   def invokeCli(args: Array[String]): Consequence[String] =
     component.service.invokeCli(args)
@@ -169,26 +168,12 @@ private case class RecordingService(
         _lastJobId = None
         val actionid = ActionId.generate()
         val task = ActionTask(actionid, action, logic.component.actionEngine, Some(logic.component))
-        logic.submitJob(List(task), executioncontext).flatMap(jobid => _await_job_result(jobid).map(_.toResponse))
+        logic.submitJob(List(task), executioncontext).flatMap(jobid => logic.awaitJobResult(jobid).map(_.toResponse))
       case _ =>
         Consequence.operationInvalid("OperationRequest must be Action")
     }
   }
 
-  private def _await_job_result(jobid: JobId): Consequence[OperationResponse] = {
-    val deadline = System.currentTimeMillis() + 3000L
-    var result: Option[JobResult] = None
-    while (result.isEmpty && System.currentTimeMillis() < deadline) {
-      result = logic.getJobResult(jobid)
-      if (result.isEmpty)
-        Thread.sleep(10L)
-    }
-    result match {
-      case Some(JobResult.Success(response)) => Consequence.success(response)
-      case Some(JobResult.Failure(conclusion)) => Consequence.Failure(conclusion)
-      case None => Consequence.stateConflict(s"query job timeout: ${jobid.value}")
-    }
-  }
 }
 
 private object RecordingService {
