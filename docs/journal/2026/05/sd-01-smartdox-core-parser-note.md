@@ -50,10 +50,11 @@ producing deterministic escaped HTML, then wrapping it in
 `ContentReferenceWorkflow` extracts SmartDox image/link references from the AST.
 SmartDox image references are converted through the existing HTML/media
 normalization path so Blob URLs and Textus Blob URNs can become canonical image
-URN occurrences. The stored SmartDox source is not rewritten in SD-01 because
-source-span-aware rewriting is not implemented yet; normalized media identity is
-stored in `ContentReferenceOccurrence.normalizedRef`, `urn`, and
-`targetEntityId`.
+URN occurrences. SD-02 adds source-span-aware rewrite for image references:
+parser nodes carry source spans for the syntactic reference and the target URI,
+so successful image normalization rewrites only the URI/path part to
+`urn:textus:image:{entropy}`. Normalized media identity is also stored in
+`ContentReferenceOccurrence.normalizedRef`, `urn`, and `targetEntityId`.
 
 `ContentAttributes.content` stays a single `ContentBody`. Multilingual rich
 content should be represented by the future SmartDox Textus profile rather than
@@ -172,11 +173,24 @@ content processing. Once a reference is resolved to Textus URN, Media Entity, or
 Blob Entity, the resolved kind/content type decides whether the reference is
 actually usable as an image.
 
+## SD-02 Source-Span-Aware Rewrite
+
+The SmartDox parser records source spans for reference nodes:
+
+- `node` is the whole syntactic reference, such as `[[images/a.png]]`;
+- `target` is only the URI/path part, such as `images/a.png`.
+
+CNCF SmartDox normalization uses `target` for successful image rewrites and
+uses `node.end` to place a `textus:image-normalization-failed` comment next to
+failed image references. Link references are indexed but are not rewritten.
+
+Source spans are deliberately attached only to parsed reference nodes. Source
+blocks, comments, and XML/JSON `StructuredToken` values do not produce
+references, so identical `[[...]]` text inside those inert regions is not
+rewritten.
+
 ## Current Limitations
 
-- SmartDox source rewrite is not span-aware yet. SD-01 extracts normalized
-  references but keeps the original SmartDox source text, except for appended
-  failure comments for image references that could not be normalized.
 - XML and JSON structured tokens are preserved, escaped, and rendered as code;
   they are not schema-validated or converted into typed XML/JSON ASTs.
 - Image classification for plain paths still uses suffix hints in v1.
@@ -196,7 +210,7 @@ When extending the port, keep these invariants:
 - do not execute include/macros/diagram/table data sources during content
   rendering;
 - escape rendered HTML by default;
-- do not rewrite source text unless parser nodes carry source spans;
+- rewrite source text only through parser-provided source spans;
 - preserve logical tokens for XML/JSON and similar structured text;
 - route media/blob reference resolution through CNCF normal Entity/Media/Blob
   paths so logical delete, tenant scope, and authorization assumptions remain

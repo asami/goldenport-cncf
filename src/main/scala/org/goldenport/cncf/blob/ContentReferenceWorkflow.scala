@@ -512,7 +512,7 @@ final class ContentReferenceWorkflow(
       } yield ContentReferenceNormalizeResult(
         markup = content.markup,
         originalText = content.text,
-        normalizedText = _append_smartdox_failures(content.text, images.failuresByIndex.values.toVector),
+        normalizedText = _apply_smartdox_rewrites(content.text, images.rewrites, images.trailingFailures),
         references = imageReferences ++ links
       )
     }
@@ -520,24 +520,26 @@ final class ContentReferenceWorkflow(
   private def _smartdox_image_references(
     content: ContentReferenceContent,
     refs: Vector[DoxReference]
-  )(using ExecutionContext): Consequence[ImageReferenceNormalizeResult] =
-    refs.foldLeft(Consequence.success(ImageReferenceNormalizeResult.empty)) {
+  )(using ExecutionContext): Consequence[SmartDoxImageNormalizeResult] =
+    refs.foldLeft(Consequence.success(SmartDoxImageNormalizeResult.empty)) {
       case (z, ref) =>
         z.flatMap { state =>
           _smartdox_image_reference(content, ref).map {
             case Some(occurrence) =>
-              state.add(ref.occurrenceIndex, _image_reference(occurrence).copy(
+              state.add(ref, _image_reference(occurrence).copy(
                 markup = Some("smartdox"),
                 occurrenceIndex = ref.occurrenceIndex,
                 originalRef = Some(ref.ref),
+                normalizedRef = Some(occurrence.normalizedSrc),
+                urn = Some(occurrence.normalizedSrc),
                 alt = ref.alt.orElse(ref.label),
                 title = ref.title,
                 sortOrder = Some(ref.occurrenceIndex)
-              ))
+              ), occurrence.normalizedSrc)
             case None =>
               state
           }.recover { conclusion =>
-            state.addFailure(ref.occurrenceIndex, s"${ref.ref}: ${conclusion.show}")
+            state.addFailure(ref, s"${ref.ref}: ${conclusion.show}")
           }
         }
     }
@@ -553,17 +555,20 @@ final class ContentReferenceWorkflow(
       content.externalPolicy
     )).map(_.occurrences.headOption)
 
-  private def _append_smartdox_failures(
+  private def _apply_smartdox_rewrites(
     text: String,
-    failures: Vector[String]
-  ): String =
-    if (failures.isEmpty)
-      text
+    rewrites: Vector[MarkdownRewrite],
+    trailingFailures: Vector[String]
+  ): String = {
+    val rewritten = _apply_markdown_rewrites(text, rewrites)
+    if (trailingFailures.isEmpty)
+      rewritten
     else {
-      val suffix = failures.map(ContentReferenceWorkflow.smartdoxFailureComment).mkString("\n")
-      val separator = if (text.endsWith("\n")) "" else "\n"
-      s"$text$separator$suffix"
+      val suffix = trailingFailures.map(ContentReferenceWorkflow.smartdoxFailureComment).mkString("\n")
+      val separator = if (rewritten.endsWith("\n")) "" else "\n"
+      s"$rewritten$separator$suffix"
     }
+  }
 
   private def _smartdox_link_reference(
     ref: DoxReference
@@ -886,6 +891,41 @@ private final case class MarkdownImageNormalizeResult(
 private object MarkdownImageNormalizeResult {
   val empty: MarkdownImageNormalizeResult =
     MarkdownImageNormalizeResult(Map.empty, Map.empty, Vector.empty)
+}
+
+private final case class SmartDoxImageNormalizeResult(
+  referencesByIndex: Map[Int, ContentReferenceOccurrence],
+  failuresByIndex: Map[Int, String],
+  rewrites: Vector[MarkdownRewrite],
+  trailingFailures: Vector[String]
+) {
+  def add(
+    ref: DoxReference,
+    reference: ContentReferenceOccurrence,
+    normalizedRef: String
+  ): SmartDoxImageNormalizeResult =
+    copy(
+      referencesByIndex = referencesByIndex + (ref.occurrenceIndex -> reference),
+      rewrites = ref.sourceSpan.map(_.target).map(span => rewrites :+ MarkdownRewrite(span.start, span.end, normalizedRef)).getOrElse(rewrites)
+    )
+
+  def addFailure(
+    ref: DoxReference,
+    message: String
+  ): SmartDoxImageNormalizeResult = {
+    val failure = ContentReferenceWorkflow.smartdoxFailureComment(message)
+    val rewrite = ref.sourceSpan.map(_.node.end).map(offset => MarkdownRewrite(offset, offset, s"\n$failure\n"))
+    copy(
+      failuresByIndex = failuresByIndex + (ref.occurrenceIndex -> message),
+      rewrites = rewrite.map(rewrites :+ _).getOrElse(rewrites),
+      trailingFailures = if (rewrite.isDefined) trailingFailures else trailingFailures :+ message
+    )
+  }
+}
+
+private object SmartDoxImageNormalizeResult {
+  val empty: SmartDoxImageNormalizeResult =
+    SmartDoxImageNormalizeResult(Map.empty, Map.empty, Vector.empty, Vector.empty)
 }
 
 object ContentReferenceWorkflow {

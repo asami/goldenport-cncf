@@ -567,8 +567,8 @@ needs i18n.
   logical tokens, renders them safely, and does not execute include/macros/site
   features.
 - SmartDox image normalization records normalized media identity in
-  `ContentReferenceOccurrence`; it does not rewrite SmartDox source text until
-  source-span-aware rewriting is available.
+  `ContentReferenceOccurrence` and rewrites only source-spanned image target
+  text to canonical Textus image URNs.
 - GFM-compatible Markdown inline image/link references are supported for
   `![alt](src)` and `[label](href)`. Image destinations are rewritten to
   canonical Textus image URNs after safe media normalization; link destinations
@@ -587,7 +587,7 @@ needs i18n.
 - The SmartDox Textus profile is recorded in
   `docs/design/smartdox-textus-profile.md`. It fixes the safe content subset,
   disabled executable/site features, XML/JSON structured token policy, and
-  source no-rewrite policy for SD-01.
+  source-span-aware image rewrite policy.
 
 ---
 

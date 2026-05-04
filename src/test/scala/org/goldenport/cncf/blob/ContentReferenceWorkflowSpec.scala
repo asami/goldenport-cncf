@@ -574,7 +574,8 @@ final class ContentReferenceWorkflowSpec
         s"""Intro [[/web/blob/content/${blobId.value}]] and [[https://example.com][external]]."""
       )))
 
-      result.normalizedText should include (s"[[/web/blob/content/${blobId.value}]]")
+      result.normalizedText should include ("[[urn:textus:image:")
+      result.normalizedText should include ("[[https://example.com][external]]")
       result.references.map(x => (x.markup, x.elementKind, x.attributeName, x.referenceKind)) shouldBe Vector(
         (Some("smartdox"), Some("img"), Some("src"), Some("image")),
         (Some("smartdox"), Some("a"), Some("href"), Some("external-url"))
@@ -597,11 +598,69 @@ final class ContentReferenceWorkflowSpec
         fileBundle = Some(FileBundle.Directory(root))
       )))
 
-      result.normalizedText should include ("[[images/a.png]]")
+      result.normalizedText should include ("[[urn:textus:image:")
+      result.normalizedText should include ("[[images/missing.png]]\n# textus:image-normalization-failed:")
       result.normalizedText should include ("# textus:image-normalization-failed:")
       result.references.map(x => (x.markup, x.elementKind, x.attributeName, x.referenceKind)) shouldBe Vector(
         (Some("smartdox"), Some("img"), Some("src"), Some("image"))
       )
+    }
+
+    "not rewrite SmartDox image syntax inside source blocks or structured tokens" in {
+      given ExecutionContext = ExecutionContext.create()
+      val component = _blob_component(InMemoryBlobStore())
+      val workflow = ContentReferenceWorkflow(component)
+
+      val result = _success(workflow.normalize(ContentReferenceContent(
+        InlineImageMarkup.SmartDox,
+        """#+begin_src text
+          |[[images/source.png]]
+          |#+end_src
+          |
+          |<a>
+          |  [[images/xml.png]]
+          |</a>
+          |
+          |{
+          |  "image": "[[images/json.png]]"
+          |}
+          |""".stripMargin
+      )))
+
+      result.normalizedText should include ("[[images/source.png]]")
+      result.normalizedText should include ("[[images/xml.png]]")
+      result.normalizedText should include ("[[images/json.png]]")
+      result.normalizedText should not include ("urn:textus:image:")
+      result.references shouldBe Vector.empty
+    }
+
+    "not rewrite SmartDox snippet-parsed image references without source spans" in {
+      given ExecutionContext = ExecutionContext.create()
+      val component = _blob_component(InMemoryBlobStore())
+      val blobId = _blob_id("content_ref_smartdox_list_image")
+      _success(BlobPayloadSupport.putManagedPayload(
+        component = component,
+        id = blobId,
+        kind = BlobKind.Image,
+        filename = Some("inline.png"),
+        contentType = ContentType.IMAGE_PNG,
+        payload = Bag.binary("inline".getBytes(StandardCharsets.UTF_8))
+      ))
+      val workflow = ContentReferenceWorkflow(component)
+      val source =
+        s"""AAAA
+           |
+           |- [[/web/blob/content/${blobId.value}]]
+           |""".stripMargin
+
+      val result = _success(workflow.normalize(ContentReferenceContent(
+        InlineImageMarkup.SmartDox,
+        source
+      )))
+
+      result.normalizedText shouldBe source
+      result.references.size shouldBe 1
+      result.references.head.normalizedRef.getOrElse("") should startWith ("urn:textus:image:")
     }
   }
 

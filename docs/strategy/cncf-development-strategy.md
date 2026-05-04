@@ -501,8 +501,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   including table support, and SmartDox now has a Scala 3 parser/AST/rendering
   core in `simplemodeling-lib` for CNCF content rendering and reference
   extraction. The SmartDox slice preserves XML/JSON structured tokens and
-  records normalized media references as metadata rather than rewriting
-  SmartDox source text until source-span-aware rewriting exists. Markdown
+  rewrites only parser source-spanned image target text to canonical Textus
+  image URNs, while link references remain indexed without rewriting. Markdown
   inline image/link references now feed the same content reference index:
   `![alt](src)` image destinations are normalized to image URNs, while
   `[label](href)` destinations are indexed without rewriting. Reference-style,
@@ -510,7 +510,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   destinations to image URNs; reference-style links and autolinks are indexed
   without rewriting. The SmartDox Textus profile records the safe
   CNCF/Textus authoring subset, disabled executable/site features, XML/JSON
-  structured token behavior, and source no-rewrite policy. The content storage
+  structured token behavior, and source-span-aware image rewrite policy. The content storage
   policy keeps small text inline
   and overflows larger bodies through charset-aware byte sizing, leaving
   binary/opaque referenced payloads under Blob/media boundaries. SD-01B fixes

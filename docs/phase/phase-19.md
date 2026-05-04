@@ -190,10 +190,10 @@ Resume hint:
   parser/AST, safe HTML renderer, and reference extractor used by CNCF content
   rendering and normalization. The port covers the content subset needed for
   CNCF, including headings, paragraphs, lists, pipe tables, links, images,
-  source blocks, comments, and XML/JSON structured tokens. SmartDox source
-  text is not rewritten yet; normalized image/media identity is kept in
-  `ContentReferenceOccurrence` metadata until source-span-aware rewriting is
-  available. GFM-compatible Markdown inline `![alt](src)` and `[label](href)`
+  source blocks, comments, and XML/JSON structured tokens. SmartDox image
+  references are normalized through source-span-aware rewrite when the parser
+  can identify the target URI/path span, and normalized image/media identity is
+  kept in `ContentReferenceOccurrence` metadata. GFM-compatible Markdown inline `![alt](src)` and `[label](href)`
   references are parsed through the same flexmark configuration used for
   rendering; image destinations are normalized to canonical image URNs while
   link destinations are indexed without rewriting. HTML, Markdown, and SmartDox
@@ -204,7 +204,8 @@ Resume hint:
   now normalize their definitions/destinations to image URNs; reference-style
   links and autolinks are indexed without rewriting. The SmartDox Textus
   profile records the safe CNCF/Textus authoring subset, disabled executable
-  features, XML/JSON structured token behavior, and source no-rewrite policy.
+  features, XML/JSON structured token behavior, and source-span-aware image
+  rewrite policy.
   Content body storage uses charset-aware byte sizing to keep small bodies
   inline and overflow larger bodies to content side storage without exposing DB
   storage choices to application models.
