@@ -617,6 +617,10 @@ Entity image binding usage and the reusable CNCF behavior is verified.
       paths are used by jobcontrol/workflow/job scenario specs, and
       observation-window scheduler checks live in timing-tagged
       `JobRetryTimingSpec`.
+- [x] Document Entity kind and Working Set runtime policy outside the security
+      authorization model. `BlogPost` is recorded as a CMS public-content
+      resource whose canonical record is store-backed with Working Set disabled
+      by default; Blog read optimization belongs in lightweight views/indexes.
 - [ ] Resolve or explicitly defer the `EntityId` `major` / `minor` runtime
       namespace operating policy recorded in
       `docs/notes/id-major-minor-operation-note.md`.

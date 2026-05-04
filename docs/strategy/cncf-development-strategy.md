@@ -527,7 +527,10 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   shared `JobEngineTestFixture` polling helpers and managed subsystem/job
   lifecycle fixtures, while real scheduler observation-window assertions are
   isolated in the timing-tagged `JobRetryTimingSpec` instead of ordinary
-  `sbt test`.
+  `sbt test`. Entity kind and Working Set runtime policy is documented outside
+  the authorization model: `BlogPost` is a CMS public-content resource with a
+  store-backed canonical record, Working Set disabled by default, and
+  view/index/cache projections as the read-optimization path.
 - Remaining Phase 19 work is phase closure validation.
 - Non-goals:
 - No new Blob payload storage backend in CNCF core.
