@@ -846,6 +846,8 @@ Future platform development item.
 - Failed transaction events should represent operational failure, rollback,
   compensation, or recovery-required facts without pretending that the domain
   mutation committed.
+- The policy should separate at least three lanes: transaction-success domain
+  events, transaction-failure/rollback events, and compensation/recovery events.
 - Align the policy with EventStore/EventBus lanes, ActionCall/UoW transaction
   boundaries, Job lifecycle records, and existing non-transactional/error event
   concepts.
@@ -858,6 +860,9 @@ Future platform development item.
   for fallback, whether fallback runs synchronously or as a Job/Event
   continuation, and how fallback results are represented in `Consequence` /
   `Conclusion` / observability output.
+- Fallback must be declared by policy. It should not become an implicit retry
+  or silent alternate path, and diagnostics should show the original failure,
+  selected fallback, and fallback result.
 - Avoid implicit retry-like behavior in ordinary service calls; fallback should
   be declared by policy and visible in diagnostics.
 - Align this with the broader error model cleanup and event/job continuation
@@ -878,6 +883,75 @@ Future platform development item.
 - This is a human-in-the-loop recovery signal, not a silent best-effort
   cleanup. It should integrate with admin diagnostics, Job/Event history, and
   future recovery dashboards.
+- This item is related to transaction outcome lanes: compensation failure
+  should publish to a recovery-required lane rather than to ordinary committed
+  domain-event projection flow.
+
+### 8.15 Workflow Active-State Working Set Policy
+Future platform development item.
+
+- Add an explicit Working Set policy for `entityKind = workflow` Entities whose
+  active state should be resident while completed or inactive records remain
+  store-backed.
+- The policy should define the state field, active values, inactive/completed
+  values, and transition/update-time residency re-evaluation.
+- `entityKind = workflow` remains only an active-residency candidate until this
+  policy is explicitly configured by an application.
+- Completed, cancelled, archived, or otherwise inactive workflow records should
+  be evicted from the Working Set when their state changes.
+
+### 8.16 Entity and Aggregate Version Conflict Policy
+Future platform development item.
+
+- Add a first-class optimistic locking / version conflict policy for Entity and
+  Aggregate updates.
+- Define a canonical concurrency token such as revision, version, or equivalent
+  store-backed metadata, and allow update paths to carry an expected token.
+- `entity_save`, `entity_update`, Aggregate update, and state transition paths
+  should reject stale updates deterministically when the stored token no longer
+  matches the expected token.
+- Resident Working Set values must not bypass the store-backed version check.
+- Intentional overwrite or repair should require an explicit force/repair API
+  rather than ordinary save/update behavior.
+
+### 8.17 Distributed Component Runtime
+Future distributed-system development item.
+
+- Defer distributed scheduler, distributed cache coherence, and clustered
+  Working Set behavior to the distributed-system phase.
+- The intended component clustering model is multiple component instances with
+  a master/slave structure: the master handles read/write, slaves handle read
+  only, and a slave may be promoted when the master fails.
+- This item owns master election/promotion, write ownership, slave cache refresh,
+  cross-instance View/Working Set coherence, and distributed Job/Event
+  ownership.
+- Current CNCF runtime hardening should preserve boundaries so a future
+  distributed implementation can replace or extend the in-process `JobEngine`,
+  Working Set, and View cache behavior.
+
+### 8.18 Inter-Component Cluster Saga
+Future distributed-collaboration development item.
+
+- Add support for long-running process sharing across components or component
+  clusters.
+- This item owns cross-component Saga coordination, correlation/causation/saga
+  identity propagation, remote retry, remote compensation, and failure
+  observability across cluster boundaries.
+- This is separate from the current in-process event/job baseline and from the
+  local `WorkflowEngine` baseline.
+
+### 8.19 Persistent Materialized View Store
+Future scalability development item.
+
+- Consider persistent materialized view storage only after CNCF has enough
+  adoption pressure to justify read-side scaling beyond runtime memory cache.
+- The current v1 model remains store-backed canonical Entities plus
+  `ViewCollection` runtime memory cache with invalidate-on-write.
+- A future materialized view store would own durable projection rows,
+  incremental synchronization, replay/rebuild, stale projection detection, and
+  query/index optimization.
+- Blog/CMS list, slug index, feed, and author dashboard projections are
+  candidate drivers when runtime memory cache becomes insufficient.
 
 ## 9. Completed Development Item History
 
