@@ -77,7 +77,8 @@ object ComponentDescriptor {
         usageKind = usageKind,
         operationKind = operationKind,
         applicationDomain = applicationDomain,
-        entityKindExplicit = entityKindText.nonEmpty
+        entityKindExplicit = entityKindText.nonEmpty,
+        operationKindExplicit = operationKindText.nonEmpty
       )
 
   given RecordDecoder[ComponentletDescriptor] with

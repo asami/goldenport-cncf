@@ -629,6 +629,10 @@ Entity image binding usage and the reusable CNCF behavior is verified.
       and `textus-blog` uses `PublishedBlogView`, `BlogSlugIndex`,
       `BlogFeedProjection`, and principal-scoped `BlogAuthorPostView` as
       runtime read-side caches over canonical store-backed `BlogPost` records.
+- [x] Normalize `entityKind` default runtime policy through a single CNCF
+      policy source. `operationKind` remains only as a legacy `resource` /
+      `task` compatibility and ABAC context label, with future reuse left open
+      if a real operation-specific meaning emerges.
 - [ ] Resolve or explicitly defer the `EntityId` `major` / `minor` runtime
       namespace operating policy recorded in
       `docs/notes/id-major-minor-operation-note.md`.

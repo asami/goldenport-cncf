@@ -1418,7 +1418,7 @@ trait ActionCallEntityStorePart extends ActionCallFeaturePart { self: ActionCall
       factory
         .flatMap(_.entity_operation_kind(action, entityname, core))
         .orElse(access.flatMap(_.entityOperationKind).map(EntityOperationKind.parse))
-        .orElse(runtimeentitydescriptor.map(_.operationKind))
+        .orElse(runtimeentitydescriptor.map(_.effectiveOperationKind))
         .getOrElse(
           entityusage match
             case EntityUsageKind.Executable => EntityOperationKind.Task

@@ -3,7 +3,7 @@ package org.goldenport.cncf.component
 import org.goldenport.record.Record
 import org.goldenport.record.RecordDecoder
 import org.goldenport.cncf.entity.runtime.EntityRuntimeDescriptor
-import org.goldenport.cncf.entity.runtime.{EntityKind, WorkingSetPolicy, WorkingSetPolicySource}
+import org.goldenport.cncf.entity.runtime.{EntityKind, EntityKindRuntimePolicy, WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.security.{EntityApplicationDomain, EntityOperationKind, EntityUsageKind}
 import org.goldenport.cncf.component.ComponentDescriptor.given
 import org.scalatest.matchers.should.Matchers
@@ -66,8 +66,10 @@ final class ComponentDescriptorSpec extends AnyWordSpec with Matchers {
 
       descriptor.entityKind shouldBe EntityKind.Task
       descriptor.operationKind shouldBe EntityOperationKind.Task
+      descriptor.effectiveOperationKind shouldBe EntityOperationKind.Task
       descriptor.workingSetPolicy shouldBe None
       descriptor.entityKindExplicit shouldBe false
+      descriptor.operationKindExplicit shouldBe true
     }
 
     "parse all canonical entity kinds" in {
@@ -77,6 +79,22 @@ final class ComponentDescriptorSpec extends AnyWordSpec with Matchers {
       EntityKind.parse("task") shouldBe EntityKind.Task
       EntityKind.parse("actor") shouldBe EntityKind.Actor
       EntityKind.parse("asset") shouldBe EntityKind.Asset
+    }
+
+    "centralize entity kind runtime policy defaults" in {
+      EntityKindRuntimePolicy.forKind(EntityKind.Master).legacyOperationKind shouldBe EntityOperationKind.Resource
+      EntityKindRuntimePolicy.forKind(EntityKind.Master).defaultWorkingSetPolicy shouldBe Some(WorkingSetPolicy.ResidentAll)
+      EntityKindRuntimePolicy.forKind(EntityKind.Document).legacyOperationKind shouldBe EntityOperationKind.Resource
+      EntityKindRuntimePolicy.forKind(EntityKind.Document).defaultWorkingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
+      EntityKindRuntimePolicy.forKind(EntityKind.Workflow).legacyOperationKind shouldBe EntityOperationKind.Task
+      EntityKindRuntimePolicy.forKind(EntityKind.Workflow).defaultWorkingSetPolicy shouldBe None
+      EntityKindRuntimePolicy.forKind(EntityKind.Workflow).workingSetDefaultNote should contain("active-only candidate; requires explicit state-field policy")
+      EntityKindRuntimePolicy.forKind(EntityKind.Task).legacyOperationKind shouldBe EntityOperationKind.Task
+      EntityKindRuntimePolicy.forKind(EntityKind.Task).defaultWorkingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
+      EntityKindRuntimePolicy.forKind(EntityKind.Actor).legacyOperationKind shouldBe EntityOperationKind.Resource
+      EntityKindRuntimePolicy.forKind(EntityKind.Actor).defaultWorkingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
+      EntityKindRuntimePolicy.forKind(EntityKind.Asset).legacyOperationKind shouldBe EntityOperationKind.Resource
+      EntityKindRuntimePolicy.forKind(EntityKind.Asset).defaultWorkingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
     }
 
     "reject unknown explicit entityKind" in {
@@ -122,6 +140,60 @@ final class ComponentDescriptorSpec extends AnyWordSpec with Matchers {
       task.toPlan.workingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
       actor.toPlan.workingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
       asset.toPlan.workingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
+      salesOrder.effectiveOperationKind shouldBe EntityOperationKind.Task
+    }
+
+    "prefer explicit working-set policy over entity kind default" in {
+      val descriptor = summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(Record.data(
+        "entity" -> "Product",
+        "entityKind" -> "master",
+        "workingSetPolicyKind" -> "disabled"
+      )).toOption.get
+
+      descriptor.workingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
+      descriptor.toPlan.workingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
+      descriptor.effectiveWorkingSetPolicySource shouldBe Some(WorkingSetPolicySource.Cml)
+    }
+
+    "allow explicit operationKind only as a legacy compatibility override" in {
+      val descriptor = summon[RecordDecoder[EntityRuntimeDescriptor]].fromRecord(Record.data(
+        "entity" -> "WorkflowProjection",
+        "entityKind" -> "workflow",
+        "operationKind" -> "resource"
+      )).toOption.get
+
+      descriptor.entityKind shouldBe EntityKind.Workflow
+      descriptor.operationKind shouldBe EntityOperationKind.Resource
+      descriptor.operationKindExplicit shouldBe true
+      descriptor.effectiveOperationKind shouldBe EntityOperationKind.Resource
+      descriptor.toPlan.workingSetPolicy shouldBe None
+    }
+
+    "preserve EK-01 constructor ABI without operationKindExplicit" in {
+      val descriptor = EntityRuntimeDescriptor(
+        entityName = "GeneratedWorkflow",
+        collectionId = org.simplemodeling.model.datatype.EntityCollectionId("sys", "sys", "GeneratedWorkflow"),
+        memoryPolicy = org.goldenport.cncf.entity.runtime.EntityMemoryPolicy.LoadToMemory,
+        partitionStrategy = org.goldenport.cncf.entity.runtime.PartitionStrategy.byOrganizationMonthUTC,
+        maxPartitions = 64,
+        maxEntitiesPerPartition = 10000,
+        workingSet = None,
+        workingSetPolicy = None,
+        workingSetPolicySource = None,
+        schema = None,
+        aggregateNames = Vector.empty,
+        viewNames = Vector.empty,
+        entityKind = EntityKind.Workflow,
+        usageKind = EntityUsageKind.default,
+        operationKind = EntityKind.Workflow.legacyOperationKind,
+        applicationDomain = EntityApplicationDomain.default,
+        entityKindExplicit = true
+      )
+
+      descriptor.entityKindExplicit shouldBe true
+      descriptor.operationKindExplicit shouldBe false
+      descriptor.effectiveOperationKind shouldBe EntityOperationKind.Task
+      descriptor.toPlan.workingSetPolicy shouldBe None
     }
 
     "derive entityKind from legacy constructor operation kind" in {
@@ -145,6 +217,7 @@ final class ComponentDescriptorSpec extends AnyWordSpec with Matchers {
 
       descriptor.entityKind shouldBe EntityKind.Task
       descriptor.entityKindExplicit shouldBe false
+      descriptor.operationKindExplicit shouldBe true
       descriptor.toPlan.workingSetPolicy shouldBe None
     }
 

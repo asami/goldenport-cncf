@@ -34,7 +34,8 @@ final case class EntityRuntimeDescriptor(
   usageKind: EntityUsageKind = EntityUsageKind.default,
   operationKind: EntityOperationKind = EntityOperationKind.default,
   applicationDomain: EntityApplicationDomain = EntityApplicationDomain.default,
-  entityKindExplicit: Boolean = false
+  entityKindExplicit: Boolean = false,
+  operationKindExplicit: Boolean = false
 ) {
   def withSchema(p: Schema): EntityRuntimeDescriptor =
     copy(schema = Some(p))
@@ -43,6 +44,14 @@ final case class EntityRuntimeDescriptor(
     workingSetPolicy.orElse {
       if (entityKindExplicit) entityKind.defaultWorkingSetPolicy else None
     }
+
+  def effectiveOperationKind: EntityOperationKind =
+    if (operationKindExplicit)
+      operationKind
+    else if (entityKindExplicit)
+      entityKind.runtimePolicy.legacyOperationKind
+    else
+      operationKind
 
   def effectiveWorkingSetPolicySource: Option[WorkingSetPolicySource] =
     workingSetPolicySource.orElse {
@@ -87,6 +96,46 @@ object EntityRuntimeDescriptor {
     schema: Option[Schema],
     aggregateNames: Vector[String],
     viewNames: Vector[String],
+    entityKind: EntityKind,
+    usageKind: EntityUsageKind,
+    operationKind: EntityOperationKind,
+    applicationDomain: EntityApplicationDomain,
+    entityKindExplicit: Boolean
+  ): EntityRuntimeDescriptor =
+    EntityRuntimeDescriptor(
+      entityName = entityName,
+      collectionId = collectionId,
+      memoryPolicy = memoryPolicy,
+      partitionStrategy = partitionStrategy,
+      maxPartitions = maxPartitions,
+      maxEntitiesPerPartition = maxEntitiesPerPartition,
+      workingSet = workingSet,
+      workingSetPolicy = workingSetPolicy,
+      workingSetPolicySource = workingSetPolicySource,
+      schema = schema,
+      aggregateNames = aggregateNames,
+      viewNames = viewNames,
+      entityKind = entityKind,
+      usageKind = usageKind,
+      operationKind = operationKind,
+      applicationDomain = applicationDomain,
+      entityKindExplicit = entityKindExplicit,
+      operationKindExplicit = !entityKindExplicit || operationKind != entityKind.legacyOperationKind
+    )
+
+  def apply(
+    entityName: String,
+    collectionId: EntityCollectionId,
+    memoryPolicy: EntityMemoryPolicy,
+    partitionStrategy: PartitionStrategy,
+    maxPartitions: Int,
+    maxEntitiesPerPartition: Int,
+    workingSet: Option[WorkingSetDescriptor],
+    workingSetPolicy: Option[WorkingSetPolicy],
+    workingSetPolicySource: Option[WorkingSetPolicySource],
+    schema: Option[Schema],
+    aggregateNames: Vector[String],
+    viewNames: Vector[String],
     usageKind: EntityUsageKind,
     operationKind: EntityOperationKind,
     applicationDomain: EntityApplicationDomain
@@ -108,7 +157,8 @@ object EntityRuntimeDescriptor {
       usageKind = usageKind,
       operationKind = operationKind,
       applicationDomain = applicationDomain,
-      entityKindExplicit = false
+      entityKindExplicit = false,
+      operationKindExplicit = true
     )
 
   def legacyEntityKind(

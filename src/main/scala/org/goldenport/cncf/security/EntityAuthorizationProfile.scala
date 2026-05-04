@@ -39,6 +39,8 @@ object EntityAuthorizationProfile {
     operationModel: ServiceOperationModel,
     explicitRelations: Vector[EntityAccessRelation]
   ): EntityAuthorizationProfile =
+    // EntityOperationKind is only the legacy resource/task bridge for the
+    // current authorization profile and ABAC context surface.
     derive(
       operationKind = entityKind.legacyOperationKind,
       applicationDomain = applicationDomain,

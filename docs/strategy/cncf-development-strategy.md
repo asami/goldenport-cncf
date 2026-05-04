@@ -538,7 +538,9 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   explicit shared/principal/disabled query cache scopes, and `textus-blog`
   reads list/search/feed/slug/author dashboard surfaces through derived Blog
   view cache rows while detail content still loads the canonical store-backed
-  `BlogPost`.
+  `BlogPost`. EK-02 normalized `entityKind` default runtime policy through a
+  single CNCF policy source and documented `operationKind` as a shrinking
+  legacy `resource` / `task` bridge for compatibility and ABAC context.
 - Remaining Phase 19 work is the `EntityId` `major` / `minor` runtime
   namespace policy and phase closure validation.
 - Non-goals:

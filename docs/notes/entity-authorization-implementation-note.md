@@ -412,8 +412,10 @@ ABAC evaluation. It exposes subject, entity, operation, application, and
 environment attributes in one structure. The current evaluator can now use
 subject/entity attributes and operation/application attributes such as
 `operation.operationModel`, `application.entityOperationKind`, and
-`application.entityApplicationDomain`. Environment-specific conditions remain
-future work.
+`application.entityApplicationDomain`. `application.entityOperationKind` is a
+legacy compatibility context key for the current `resource` / `task` bridge;
+canonical entity classification belongs to `entityKind`. Environment-specific
+conditions remain future work.
 
 The first practical ABAC natural evaluators should cover:
 

@@ -3412,7 +3412,7 @@ object StaticFormAppRenderer {
            |  <td><code>${_escape(descriptor.collectionId.name)}</code></td>
            |  <td>${_escape(descriptor.entityKind.toString)}</td>
            |  <td>${_escape(descriptor.usageKind.toString)}</td>
-           |  <td>${_escape(descriptor.operationKind.toString)}</td>
+           |  <td>${_escape(descriptor.effectiveOperationKind.toString)}</td>
            |  <td>${_escape(descriptor.applicationDomain.toString)}</td>
            |  <td>${descriptor.workingSet.map(_.entityIds.size.toString).getOrElse("none")}</td>
            |  <td><code>${_escape(workingsetpolicy)}</code></td>

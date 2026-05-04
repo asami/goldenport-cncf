@@ -42,9 +42,11 @@ Examples:
 - approval workflow instance
 - publication workflow instance
 
-Default runtime policy: active-only resident candidate. The workflow state
-field and active-state policy should be configured by the application; completed
-or inactive workflow records should fall back to the store.
+Default runtime policy: active-only resident candidate. CNCF records this as a
+kind default candidate, but does not enable residency from `entityKind` alone.
+The workflow state field and active-state policy should be configured by the
+application; completed or inactive workflow records should fall back to the
+store.
 
 `task` is an execution unit without a domain state machine.
 
@@ -89,6 +91,12 @@ storage, not in the main Entity record.
 - `usageKind`: public-content, business-object, executable, and other usage
   labels.
 
+`operationKind` is intentionally shrinking in current CNCF code. Its active use
+is a legacy `resource` / `task` bridge carried into authorization context and
+ABAC condition keys such as `application.entityOperationKind`. New runtime
+defaults should not be derived from it. Keep the type available because it may
+be reused if a real operation-specific classification emerges later.
+
 Legacy mapping:
 
 | `entityKind` | legacy `operationKind` |
@@ -103,6 +111,10 @@ Legacy mapping:
 Existing descriptors that only declare `operationKind` remain valid. New
 descriptors should declare `entityKind` and let legacy `operationKind` be
 derived unless a compatibility override is required.
+
+The policy implementation source is `EntityKindRuntimePolicy`. It owns the
+legacy `operationKind` projection and the default Working Set policy for each
+canonical `entityKind`.
 
 ## Working Set Policy
 

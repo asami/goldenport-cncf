@@ -570,7 +570,7 @@ Component factories can provide coarse and fine-grained entity authorization
 defaults through these variation points:
 
 - `entity_usage_kind`;
-- `entity_operation_kind`;
+- `entity_operation_kind` (legacy `resource` / `task` compatibility context);
 - `entity_application_domain`;
 - `service_operation_model`;
 - `entity_access_mode`;

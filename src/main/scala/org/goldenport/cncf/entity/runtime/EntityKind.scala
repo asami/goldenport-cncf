@@ -20,18 +20,14 @@ enum EntityKind(val label: String) {
 
   override def toString: String = label
 
+  def runtimePolicy: EntityKindRuntimePolicy =
+    EntityKindRuntimePolicy.forKind(this)
+
   def legacyOperationKind: EntityOperationKind =
-    this match {
-      case Workflow | Task => EntityOperationKind.Task
-      case Master | Document | Actor | Asset => EntityOperationKind.Resource
-    }
+    runtimePolicy.legacyOperationKind
 
   def defaultWorkingSetPolicy: Option[WorkingSetPolicy] =
-    this match {
-      case Master => Some(WorkingSetPolicy.ResidentAll)
-      case Document | Task | Actor | Asset => Some(WorkingSetPolicy.Disabled)
-      case Workflow => None
-    }
+    runtimePolicy.defaultWorkingSetPolicy
 }
 
 object EntityKind {

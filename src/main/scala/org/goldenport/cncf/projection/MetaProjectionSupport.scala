@@ -414,7 +414,7 @@ private[projection] object MetaProjectionSupport {
       "workingSetPolicySource" -> descriptor.effectiveWorkingSetPolicySource.map(_.toString.toLowerCase).getOrElse(""),
       "entityKind" -> descriptor.entityKind.toString,
       "usageKind" -> descriptor.usageKind.toString,
-      "operationKind" -> descriptor.operationKind.toString,
+      "operationKind" -> descriptor.effectiveOperationKind.toString,
       "applicationDomain" -> descriptor.applicationDomain.toString,
       "storageShape" -> storage_shape_record(component, descriptor)
     )

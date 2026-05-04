@@ -9,7 +9,7 @@ import org.goldenport.record.Record
  * Natural ABAC condition for entity authorization.
  *
  * @since   Apr. 13, 2026
- * @version Apr. 21, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class EntityAbacCondition(
@@ -294,6 +294,8 @@ object EntityAbacCondition {
         Some(_label(context.operation.accessMode))
       case "operation.operationmodel" | "operation.operation_model" =>
         context.operation.operationModel.map(_label)
+      // Legacy compatibility context key. Canonical taxonomy is EntityKind;
+      // this remains available for existing resource/task ABAC conditions.
       case "application.entityoperationkind" | "application.entity_operation_kind" =>
         context.operation.entityOperationKind.map(_label)
       case "application.entityapplicationdomain" | "application.entity_application_domain" =>
