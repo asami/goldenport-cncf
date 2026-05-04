@@ -101,7 +101,7 @@ Current semantic direction:
 - I (DONE): CR-02 — Retire BlogInlineImage and consolidate Blog content references.
 - J (DONE): MB-01 — Split Blob document references into image, video, audio, attachment, and blob kinds.
 - K (DONE): CT-01 — Define content/mimetype operation support for HTML, Markdown, and SmartDox.
-- L (ACTIVE): SD-01 — Add SmartDox and GFM-compatible Markdown support.
+- L (DONE): SD-01 — Add SmartDox and GFM-compatible Markdown support.
 - M (SUSPENDED): BI-05 — Verification, documentation, and phase closure.
 
 Resume hint:
@@ -200,7 +200,11 @@ Resume hint:
   image normalization keep successful image rewrites/metadata even when another
   image fails; failed image references are left in the source with a
   `textus:image-normalization-failed` comment so authors can fix only the
-  failed reference. Reference-style Markdown links/images remain deferred.
+  failed reference. Reference-style, collapsed, and shortcut Markdown images
+  now normalize their definitions/destinations to image URNs; reference-style
+  links and autolinks are indexed without rewriting. The SmartDox Textus
+  profile records the safe CNCF/Textus authoring subset, disabled executable
+  features, XML/JSON structured token behavior, and source no-rewrite policy.
   Content body storage uses charset-aware byte sizing to keep small bodies
   inline and overflow larger bodies to content side storage without exposing DB
   storage choices to application models.
@@ -227,7 +231,7 @@ Resume hint:
 - [x] CR-02: Retire BlogInlineImage and consolidate Blog content references.
 - [x] MB-01: Split Blob document references into image, video, audio, attachment, and blob kinds.
 - [x] CT-01: Define content/mimetype operation support for HTML, Markdown, and SmartDox.
-- [ ] SD-01: Add SmartDox and GFM-compatible Markdown support.
+- [x] SD-01: Add SmartDox and GFM-compatible Markdown support.
 - [ ] BI-05: Verification, documentation, and phase closure.
 
 Detailed task breakdown and progress tracking are recorded in

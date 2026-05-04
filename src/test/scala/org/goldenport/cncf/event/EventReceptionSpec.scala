@@ -6,7 +6,7 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.context.{ExecutionContext, ScopeContext, ScopeKind, SecurityContext, SecurityLevel}
 import org.goldenport.cncf.datastore.DataStore
 import org.goldenport.cncf.http.FakeHttpDriver
-import org.goldenport.cncf.job.{ActionId, JobContext, JobControlPolicy, JobControlRequest, JobControlResponse, JobEngine, JobPersistencePolicy, JobQueryReadModel, JobResult, JobStatus, JobSubmitOption, JobTask, JobTaskPage, JobTimelinePage, JobId, TaskId}
+import org.goldenport.cncf.job.{ActionId, InMemoryJobEngine, JobContext, JobControlPolicy, JobControlRequest, JobControlResponse, JobEngine, JobEngineTestFixture, JobPersistencePolicy, JobQueryReadModel, JobResult, JobStatus, JobSubmitOption, JobTask, JobTaskPage, JobTimelinePage, JobId, TaskId}
 import org.goldenport.cncf.security.IngressSecurityResolver
 import org.goldenport.cncf.unitofwork.{CommitRecorder, UnitOfWork, UnitOfWorkOp}
 import org.goldenport.provisional.observation.Taxonomy
@@ -17,13 +17,14 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 22, 2026
- * @version May.  3, 2026
+ * @version May.  4, 2026
  * @author  ASAMI, Tomoharu
  */
 final class EventReceptionSpec
   extends AnyWordSpec
   with Matchers
-  with GivenWhenThen {
+  with GivenWhenThen
+  with JobEngineTestFixture {
 
   "EventReception" should {
     "route target event to ActionCall dispatcher deterministically" in {
@@ -590,7 +591,7 @@ final class EventReceptionSpec
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
-      val jobengine = org.goldenport.cncf.job.InMemoryJobEngine.create()
+      val jobengine = _manual_job_engine()
       val calls = ArrayBuffer.empty[String]
       val parentjobs = ArrayBuffer.empty[Option[String]]
       val levels = ArrayBuffer.empty[SecurityLevel]
@@ -654,7 +655,7 @@ final class EventReceptionSpec
           )
         )
       )
-      EventAwaitSupport.awaitVisible(calls.nonEmpty) shouldBe true
+      jobengine.drainAll() should be >= 1
 
       Then("dispatch is executed through a new job task with selected policy metadata")
       result shouldBe Consequence.success(
@@ -910,7 +911,7 @@ final class EventReceptionSpec
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
-      val jobengine = org.goldenport.cncf.job.InMemoryJobEngine.create()
+      val jobengine = _manual_job_engine()
       val calls = ArrayBuffer.empty[String]
       val jobids = ArrayBuffer.empty[Option[String]]
       val parentids = ArrayBuffer.empty[Option[String]]
@@ -964,7 +965,7 @@ final class EventReceptionSpec
           persistent = true
         )
       )
-      EventAwaitSupport.awaitVisible(jobids.flatten.nonEmpty) shouldBe true
+      jobengine.drainAll() should be >= 1
 
       Then("async child job preserves explicit compatibility diagnostics")
       result shouldBe Consequence.success(
@@ -1010,7 +1011,7 @@ final class EventReceptionSpec
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
-      val jobengine = new _RecordingJobEngine
+      val jobengine = _recording_job_engine()
       val calls = ArrayBuffer.empty[String]
       val jobids = ArrayBuffer.empty[Option[String]]
       val parentids = ArrayBuffer.empty[Option[String]]
@@ -1098,7 +1099,7 @@ final class EventReceptionSpec
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
-      val jobengine = org.goldenport.cncf.job.InMemoryJobEngine.create()
+      val jobengine = _manual_job_engine()
       val jobids = ArrayBuffer.empty[Option[String]]
       val reception = EventReception.default(
         eventBus = bus,
@@ -1137,9 +1138,8 @@ final class EventReceptionSpec
           )
         )
       )
-      EventAwaitSupport.awaitVisible(jobids.flatten.nonEmpty) shouldBe true
+      jobengine.drainAll() should be >= 1
       val childJobId = JobId.parse(jobids.flatten.head).toOption.get
-      _await(() => jobengine.query(childJobId).exists(_.status == JobStatus.Failed))
       val child = jobengine.query(childJobId).get
 
       Then("the resulting lineage is retryable")
@@ -1160,7 +1160,7 @@ final class EventReceptionSpec
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
-      val jobengine = new _RecordingJobEngine
+      val jobengine = _recording_job_engine()
       val calls = ArrayBuffer.empty[String]
       val attrs = ArrayBuffer.empty[Map[String, String]]
       val reception = EventReception.default(
@@ -1220,7 +1220,7 @@ final class EventReceptionSpec
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
-      val jobengine = new _RecordingJobEngine
+      val jobengine = _recording_job_engine()
       val calls = ArrayBuffer.empty[String]
       val reception = EventReception.default(
         eventBus = bus,
@@ -1275,7 +1275,7 @@ final class EventReceptionSpec
       )
 
       result shouldBe Consequence.success(ReceptionResult(ReceptionOutcome.Routed, 1, persisted = false))
-      EventAwaitSupport.awaitVisible(jobengine.asyncEnqueues.nonEmpty) shouldBe true
+      jobengine.asyncEnqueues.nonEmpty shouldBe true
       jobengine.submissionCount shouldBe 1
       val record = jobengine.query(rootJobId).getOrElse(fail("root job missing"))
       record.lineage.receptionRule shouldBe Some("notice-async-samejob")
@@ -1288,7 +1288,7 @@ final class EventReceptionSpec
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
-      val jobengine = new _RecordingJobEngine
+      val jobengine = _recording_job_engine()
       val reception = EventReception.default(
         eventBus = bus,
         dispatcher = new _RecordingDispatcher(ArrayBuffer.empty),
@@ -1355,7 +1355,7 @@ final class EventReceptionSpec
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
-      val jobengine = org.goldenport.cncf.job.InMemoryJobEngine.create()
+      val jobengine = _manual_job_engine()
       val jobids = ArrayBuffer.empty[Option[String]]
       val reception = EventReception.default(
         eventBus = bus,
@@ -1410,9 +1410,8 @@ final class EventReceptionSpec
           )
         )
       )
-      EventAwaitSupport.awaitVisible(jobids.flatten.nonEmpty) shouldBe true
+      jobengine.drainAll() should be >= 1
       val childJobId = JobId.parse(jobids.flatten.head).toOption.get
-      _await(() => jobengine.query(childJobId).exists(_.status == JobStatus.Failed))
       val child = jobengine.query(childJobId).get
 
       Then("the resulting lineage is terminal")
@@ -1434,7 +1433,7 @@ final class EventReceptionSpec
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
-      val jobengine = org.goldenport.cncf.job.InMemoryJobEngine.create()
+      val jobengine = _manual_job_engine()
       val calls = ArrayBuffer.empty[String]
       val parentjobs = ArrayBuffer.empty[Option[String]]
       val attrs = ArrayBuffer.empty[Map[String, String]]
@@ -1497,7 +1496,7 @@ final class EventReceptionSpec
           )
         )
       )
-      EventAwaitSupport.awaitVisible(calls.nonEmpty) shouldBe true
+      jobengine.drainAll() should be >= 1
 
       Then("the more specific rule wins and new-saga metadata is recorded")
       result shouldBe Consequence.success(
@@ -1522,7 +1521,7 @@ final class EventReceptionSpec
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
-      val jobengine = new _RecordingJobEngine
+      val jobengine = _recording_job_engine()
       val calls = ArrayBuffer.empty[String]
       val jobids = ArrayBuffer.empty[Option[String]]
       val parentids = ArrayBuffer.empty[Option[String]]
@@ -1645,7 +1644,7 @@ final class EventReceptionSpec
           persisted = false
         )
       )
-      EventAwaitSupport.awaitVisible(jobengine.submissionCount >= missed._1) shouldBe true
+      jobengine.submissionCount should be >= missed._1
     }
 
     "persist same-subsystem sync event after inline dispatch with framework-owned history" in {
@@ -1873,7 +1872,7 @@ final class EventReceptionSpec
       val store = EventStore.inMemory
       val engine = EventEngine.noop(DataStore.noop(recorder), recorder, store)
       val bus = EventBus.default(engine)
-      val recordingengine = new _RecordingJobEngine
+      val recordingengine = _recording_job_engine()
       val reception = EventReception.default(
         eventBus = bus,
         dispatcher = new _RecordingDispatcher(ArrayBuffer.empty),
@@ -1971,14 +1970,11 @@ final class EventReceptionSpec
     }
   }
 
-  private def _await(
-    ready: () => Boolean,
-    timeoutMillis: Long = 3000L
-  ): Unit = {
-    if (!EventAwaitSupport.awaitVisible(ready(), timeoutMillis)) {
-      fail("timeout waiting async event dispatch")
-    }
-  }
+  private def _manual_job_engine(): InMemoryJobEngine =
+    createManualJobEngine().engine
+
+  private def _recording_job_engine(): _RecordingJobEngine =
+    registerJobEngine(new _RecordingJobEngine)
 
   private final class _InMemoryCommitRecorder extends CommitRecorder {
     private val _entries = ArrayBuffer.empty[String]
@@ -2148,6 +2144,7 @@ final class EventReceptionSpec
     def queryTasks(jobId: JobId, offset: Int, limit: Int): Option[JobTaskPage] = _delegate.queryTasks(jobId, offset, limit)
     def queryTimeline(jobId: JobId, offset: Int, limit: Int): Option[JobTimelinePage] = _delegate.queryTimeline(jobId, offset, limit)
     override def metrics = _delegate.metrics
+    override def shutdown(): Unit = _delegate.shutdown()
   }
 
   private def _jobid(p: Consequence[JobId]): JobId =

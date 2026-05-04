@@ -288,6 +288,138 @@ final class ContentReferenceWorkflowSpec
       _associations("article-content-ref-markdown-link") shouldBe Vector.empty
     }
 
+    "normalize Markdown reference-style images and index reference-style links" in {
+      Given("image and attachment Blobs referenced from Markdown reference definitions")
+      given ExecutionContext = ExecutionContext.create()
+      val component = _blob_component(InMemoryBlobStore())
+      val imageId = _blob_id("content_ref_markdown_ref_image")
+      val attachmentId = _blob_id("content_ref_markdown_ref_attachment")
+      _success(BlobPayloadSupport.putManagedPayload(
+        component = component,
+        id = imageId,
+        kind = BlobKind.Image,
+        filename = Some("inline.png"),
+        contentType = ContentType.IMAGE_PNG,
+        payload = Bag.binary("inline".getBytes(StandardCharsets.UTF_8))
+      ))
+      _success(BlobPayloadSupport.putManagedPayload(
+        component = component,
+        id = attachmentId,
+        kind = BlobKind.Attachment,
+        filename = Some("document.pdf"),
+        contentType = ContentType.APPLICATION_PDF,
+        payload = Bag.binary("pdf".getBytes(StandardCharsets.UTF_8))
+      ))
+      val workflow = ContentReferenceWorkflow(component)
+
+      When("normalizing reference-style Markdown")
+      val normalized = _success(workflow.normalize(ContentReferenceContent(
+        InlineImageMarkup.Markdown,
+        s"""![Inline][img] and [PDF][doc]
+           |
+           |[img]: /web/blob/content/${imageId.value} "Title"
+           |[doc]: /web/blob/content/${attachmentId.value}""".stripMargin
+      )))
+
+      Then("image definitions are rewritten and link definitions are only indexed")
+      normalized.normalizedText should include ("[img]: urn:textus:image:")
+      normalized.normalizedText should include (s"[doc]: /web/blob/content/${attachmentId.value}")
+      normalized.references.map(x => (x.elementKind, x.attributeName, x.referenceKind)) shouldBe Vector(
+        (Some("img"), Some("src"), Some("image")),
+        (Some("a"), Some("href"), Some("blob"))
+      )
+      normalized.references.head.alt shouldBe Some("Inline")
+      normalized.references.head.title shouldBe Some("Title")
+      normalized.references(1).label shouldBe Some("PDF")
+    }
+
+    "normalize collapsed and shortcut Markdown image references as one image association" in {
+      Given("collapsed, shortcut, and inline images pointing at the same Blob")
+      given ExecutionContext = ExecutionContext.create()
+      val component = _blob_component(InMemoryBlobStore())
+      val blobId = _blob_id("content_ref_markdown_shortcut_image")
+      _success(BlobPayloadSupport.putManagedPayload(
+        component = component,
+        id = blobId,
+        kind = BlobKind.Image,
+        filename = Some("inline.png"),
+        contentType = ContentType.IMAGE_PNG,
+        payload = Bag.binary("inline".getBytes(StandardCharsets.UTF_8))
+      ))
+      val workflow = ContentReferenceWorkflow(component)
+      val normalized = _success(workflow.normalize(ContentReferenceContent(
+        InlineImageMarkup.Markdown,
+        s"""![A][]
+           |
+           |![A]
+           |
+           |![B](/web/blob/content/${blobId.value})
+           |
+           |[A]: /web/blob/content/${blobId.value}""".stripMargin
+      )))
+
+      When("attaching normalized references")
+      val result = _success(workflow.attachReferences("article-content-ref-markdown-shortcut", normalized.references))
+
+      Then("occurrences are preserved while MediaAttachment is Image-distinct")
+      normalized.normalizedText should include ("[A]: urn:textus:image:")
+      normalized.normalizedText should include ("![B](urn:textus:image:")
+      normalized.references.size shouldBe 3
+      normalized.references.map(_.targetEntityId).flatten.distinct.size shouldBe 1
+      result.associations.size shouldBe 1
+      _associations("article-content-ref-markdown-shortcut").map(_.targetEntityId) shouldBe normalized.references.map(_.targetEntityId).flatten.distinct
+    }
+
+    "not rewrite a Markdown reference definition shared by an image and a link" in {
+      Given("one reference definition used by both image and link syntax")
+      given ExecutionContext = ExecutionContext.create()
+      val component = _blob_component(InMemoryBlobStore())
+      val blobId = _blob_id("content_ref_markdown_mixed_definition_image")
+      _success(BlobPayloadSupport.putManagedPayload(
+        component = component,
+        id = blobId,
+        kind = BlobKind.Image,
+        filename = Some("inline.png"),
+        contentType = ContentType.IMAGE_PNG,
+        payload = Bag.binary("inline".getBytes(StandardCharsets.UTF_8))
+      ))
+      val workflow = ContentReferenceWorkflow(component)
+
+      When("normalizing Markdown with mixed image/link reference use")
+      val normalized = _success(workflow.normalize(ContentReferenceContent(
+        InlineImageMarkup.Markdown,
+        s"""![Preview][asset] and [Download][asset]
+           |
+           |[asset]: /web/blob/content/${blobId.value}""".stripMargin
+      )))
+
+      Then("the shared definition is left unchanged and only the link occurrence is indexed")
+      normalized.normalizedText should include (s"[asset]: /web/blob/content/${blobId.value}")
+      normalized.normalizedText should include ("textus:image-normalization-failed")
+      normalized.normalizedText should not include "urn:textus:image:"
+      normalized.references.map(x => (x.elementKind, x.attributeName, x.referenceKind, x.label)) shouldBe Vector(
+        (Some("a"), Some("href"), Some("blob"), Some("Download"))
+      )
+    }
+
+    "index Markdown autolinks without rewriting them" in {
+      Given("a Markdown autolink")
+      given ExecutionContext = ExecutionContext.create()
+      val workflow = ContentReferenceWorkflow(_blob_component(InMemoryBlobStore()))
+
+      When("normalizing Markdown")
+      val normalized = _success(workflow.normalize(ContentReferenceContent(
+        InlineImageMarkup.Markdown,
+        """See <https://example.com/autolink>."""
+      )))
+
+      Then("the autolink is indexed and the Markdown source is preserved")
+      normalized.normalizedText shouldBe """See <https://example.com/autolink>."""
+      normalized.references.map(x => (x.elementKind, x.attributeName, x.referenceKind, x.originalRef)) shouldBe Vector(
+        (Some("a"), Some("href"), Some("external-url"), Some("https://example.com/autolink"))
+      )
+    }
+
     "register relative Markdown images from filebundle" in {
       Given("a filebundle with a relative image")
       given ExecutionContext = ExecutionContext.create()

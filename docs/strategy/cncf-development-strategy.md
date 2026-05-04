@@ -505,8 +505,13 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   SmartDox source text until source-span-aware rewriting exists. Markdown
   inline image/link references now feed the same content reference index:
   `![alt](src)` image destinations are normalized to image URNs, while
-  `[label](href)` destinations are indexed without rewriting; reference-style
-  Markdown remains deferred. The content storage policy keeps small text inline
+  `[label](href)` destinations are indexed without rewriting. Reference-style,
+  collapsed, and shortcut Markdown images now normalize definitions and
+  destinations to image URNs; reference-style links and autolinks are indexed
+  without rewriting. The SmartDox Textus profile records the safe
+  CNCF/Textus authoring subset, disabled executable/site features, XML/JSON
+  structured token behavior, and source no-rewrite policy. The content storage
+  policy keeps small text inline
   and overflows larger bodies through charset-aware byte sizing, leaving
   binary/opaque referenced payloads under Blob/media boundaries. SD-01B fixes
   the i18n/content boundary: existing `I18n*` values remain the standard for
@@ -520,8 +525,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   lifecycle fixtures, while real scheduler observation-window assertions are
   isolated in the timing-tagged `JobRetryTimingSpec` instead of ordinary
   `sbt test`.
-- Remaining Phase 19 work is the SmartDox Textus profile, reference-style
-  Markdown support, and phase closure validation.
+- Remaining Phase 19 work is phase closure validation.
 - Non-goals:
 - No new Blob payload storage backend in CNCF core.
 - No S3/S3-compatible BlobStore provider implementation in this phase.

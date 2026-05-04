@@ -523,7 +523,7 @@ behavior.
 
 ## SD-01: SmartDox and GFM Markdown Support
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -535,7 +535,7 @@ needs i18n.
 
 - [x] Select GFM-compatible Markdown as the Markdown baseline for user
       expectations, including tables and image/link syntax.
-- [ ] Define the SmartDox Textus profile for CNCF/Textus content authoring.
+- [x] Define the SmartDox Textus profile for CNCF/Textus content authoring.
 - [x] Implement or specify Markdown image/link reference extraction so it can
       feed `ContentReferenceOccurrence`.
 - [x] Implement SmartDox parser/AST/rendering hooks for the CNCF content subset.
@@ -578,10 +578,16 @@ needs i18n.
   image references keep their original source plus a
   `textus:image-normalization-failed` comment for author repair.
 - Reference-style Markdown links/images, shortcut references, collapsed
-  references, and autolinks remain deferred SD-01 work.
+  references, and autolinks are supported for reference extraction. Image
+  destinations are normalized to canonical image URNs; links and autolinks are
+  indexed without rewriting.
 - Plain path image classification may use suffix hints in v1, but CNCF
   semantic validation must come from Textus URN, Media Entity, Blob Entity, or
   filebundle MIME information.
+- The SmartDox Textus profile is recorded in
+  `docs/design/smartdox-textus-profile.md`. It fixes the safe content subset,
+  disabled executable/site features, XML/JSON structured token policy, and
+  source no-rewrite policy for SD-01.
 
 ---
 

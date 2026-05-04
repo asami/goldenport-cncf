@@ -76,9 +76,13 @@ authoring document repairable without discarding other successfully normalized
 images.
 
 Reference-style Markdown links/images, shortcut references, collapsed
-references, and autolinks remain deferred. Code blocks, fenced blocks, inline
-code, HTML blocks, and plain text that merely resembles Markdown syntax are not
-rewritten because only flexmark `Image` and `Link` AST nodes are processed.
+references, and autolinks are implemented as the SD-01 completion slice.
+Reference-style image definitions are rewritten to canonical image URNs after
+the same safe media validation as inline image references. Reference-style links
+and autolinks are indexed in `ContentReferenceOccurrence` but are not rewritten.
+Code blocks, fenced blocks, inline code, HTML blocks, and plain text that
+merely resembles Markdown syntax are not rewritten because only flexmark link
+and image AST nodes are processed.
 
 ## Ported Modules
 
@@ -179,10 +183,11 @@ actually usable as an image.
 - List nesting is shallow. The parser handles basic list blocks but does not
   fully reproduce the legacy SmartDox nested list engine.
 - Inline XML-style tag parsing is intentionally minimal and safe-rendered.
-- Markdown inline image/link normalization is implemented. Reference-style
-  Markdown links/images, shortcut references, collapsed references, and
-  autolinks remain a separate slice.
-- SmartDox Textus profile and SmartDox multilingual rendering are future work.
+- Markdown inline and reference-style image/link normalization is implemented,
+  including collapsed references, shortcut references, and autolinks.
+- The SmartDox Textus profile is documented in
+  `docs/design/smartdox-textus-profile.md`.
+- SmartDox multilingual rendering remains future work.
 
 ## Review Points
 

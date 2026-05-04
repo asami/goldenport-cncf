@@ -1,7 +1,7 @@
 package org.goldenport.cncf.blob
 
 import scala.util.matching.Regex
-import com.vladsch.flexmark.ast.{Image as MarkdownImage, Link as MarkdownLink}
+import com.vladsch.flexmark.ast.{AutoLink as MarkdownAutoLink, Image as MarkdownImage, ImageRef as MarkdownImageRef, Link as MarkdownLink, LinkRef as MarkdownLinkRef, Reference as MarkdownReferenceDefinition}
 import com.vladsch.flexmark.util.ast.Node as MarkdownNode
 import com.vladsch.flexmark.util.sequence.BasedSequence
 import org.goldenport.Consequence
@@ -248,9 +248,11 @@ final class ContentReferenceWorkflow(
     val refs = _markdown_references(content.text)
     val imageRefs = refs.filter(_.kind == MarkdownReferenceKind.Image)
     val linkRefs = refs.filter(_.kind == MarkdownReferenceKind.Link)
+    val linkDefinitionSpans = linkRefs.map(x => (x.urlStart, x.urlEnd)).toSet
+    val mixedDefinitionSpans = imageRefs.map(x => (x.urlStart, x.urlEnd)).toSet.intersect(linkDefinitionSpans)
     for {
       links <- _markdown_link_references(linkRefs)
-      images <- _markdown_image_references(content, imageRefs)
+      images <- _markdown_image_references(content, imageRefs, mixedDefinitionSpans)
     } yield {
       val references = refs.flatMap { ref =>
         ref.kind match {
@@ -279,23 +281,27 @@ final class ContentReferenceWorkflow(
 
   private def _markdown_image_references(
     content: ContentReferenceContent,
-    refs: Vector[MarkdownReference]
+    refs: Vector[MarkdownReference],
+    mixedDefinitionSpans: Set[(Int, Int)]
   )(using ExecutionContext): Consequence[MarkdownImageNormalizeResult] =
     refs.foldLeft(Consequence.success(MarkdownImageNormalizeResult.empty)) {
       case (z, ref) =>
         z.flatMap { state =>
-          _markdown_image_reference(content, ref).map {
-            case Some(occurrence) =>
-              state.add(
-                ref.index,
-                _markdown_image_occurrence(ref, occurrence),
-                MarkdownRewrite(ref.urlStart, ref.urlEnd, occurrence.normalizedSrc)
-              )
-            case None =>
-              state
-          }.recover { conclusion =>
-            state.addFailure(ref, conclusion.show)
-          }
+          if (mixedDefinitionSpans.contains((ref.urlStart, ref.urlEnd)))
+            Consequence.success(state.addFailure(ref, s"shared Markdown reference definition is used by image and link: ${ref.ref}"))
+          else
+            _markdown_image_reference(content, ref).map {
+              case Some(occurrence) =>
+                state.add(
+                  ref.index,
+                  _markdown_image_occurrence(ref, occurrence),
+                  MarkdownRewrite(ref.urlStart, ref.urlEnd, occurrence.normalizedSrc)
+                )
+              case None =>
+                state
+            }.recover { conclusion =>
+              state.addFailure(ref, conclusion.show)
+            }
         }
     }
 
@@ -368,9 +374,15 @@ final class ContentReferenceWorkflow(
     _markdown_nodes(ContentRenderWorkflow.parseMarkdown(text)).collect {
       case image: MarkdownImage =>
         _markdown_reference(MarkdownReferenceKind.Image, image.getUrl, image.getText, image.getTitle, image.getEndOffset)
+      case image: MarkdownImageRef =>
+        _markdown_reference_ref(MarkdownReferenceKind.Image, image, image.getReferenceNode(image.getDocument))
       case link: MarkdownLink =>
         _markdown_reference(MarkdownReferenceKind.Link, link.getUrl, link.getText, link.getTitle, link.getEndOffset)
-    }.flatten.sortBy(_.urlStart).zipWithIndex.map {
+      case link: MarkdownLinkRef =>
+        _markdown_reference_ref(MarkdownReferenceKind.Link, link, link.getReferenceNode(link.getDocument))
+      case autolink: MarkdownAutoLink =>
+        _markdown_reference(MarkdownReferenceKind.Link, autolink.getUrl, autolink.getText, BasedSequence.NULL, autolink.getEndOffset)
+    }.flatten.sortBy(_.occurrenceStart).zipWithIndex.map {
       case (ref, index) => ref.copy(index = index)
     }
 
@@ -407,8 +419,31 @@ final class ContentReferenceWorkflow(
           title = _markdown_text(title),
           urlStart = start,
           urlEnd = end,
+          occurrenceStart = start,
           endOffset = endOffset
         )
+    }
+
+  private def _markdown_reference_ref(
+    kind: MarkdownReferenceKind,
+    node: com.vladsch.flexmark.ast.RefNode,
+    definition: MarkdownReferenceDefinition
+  ): Option[MarkdownReference] =
+    Option(definition).flatMap { refdef =>
+      _markdown_span(refdef.getUrl).map {
+        case (start, end, raw) =>
+          MarkdownReference(
+            index = 0,
+            kind = kind,
+            ref = raw,
+            label = _markdown_text(node.getText),
+            title = _markdown_text(refdef.getTitle),
+            urlStart = start,
+            urlEnd = end,
+            occurrenceStart = node.getStartOffset,
+            endOffset = node.getEndOffset
+          )
+      }
     }
 
   private def _markdown_span(
@@ -445,7 +480,7 @@ final class ContentReferenceWorkflow(
     text: String,
     rewrites: Vector[MarkdownRewrite]
   ): String =
-    rewrites.sortBy(_.start).reverse.foldLeft(text) {
+    rewrites.distinctBy(x => (x.start, x.end, x.value)).sortBy(_.start).reverse.foldLeft(text) {
       case (z, rewrite) =>
         if (rewrite.start >= 0 && rewrite.end >= rewrite.start && rewrite.end <= z.length)
           z.substring(0, rewrite.start) + rewrite.value + z.substring(rewrite.end)
@@ -813,6 +848,7 @@ private final case class MarkdownReference(
   title: Option[String],
   urlStart: Int,
   urlEnd: Int,
+  occurrenceStart: Int,
   endOffset: Int
 )
 
