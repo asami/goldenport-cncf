@@ -540,16 +540,25 @@ needs i18n.
       feed `ContentReferenceOccurrence`.
 - [x] Implement SmartDox parser/AST/rendering hooks for the CNCF content subset.
 - [x] Implement SmartDox image/link reference extraction hooks.
-- [ ] Define migration guidance for prose fields currently modeled as
+- [x] Define migration guidance for prose fields currently modeled as
       `I18NString`.
-- [ ] Use SmartDox i18n features for descriptive text where the value is a
-      document/prose body rather than a short localized label.
+- [x] Define that SmartDox i18n features are the future rich document/prose
+      body path, while practical operation is deferred to the SmartDox Textus
+      profile.
 
 ### Decisions
 
-- `I18NString` remains appropriate for short localized labels and names.
-- Descriptive prose belongs to SmartDox when i18n and rich document structure
-  are required.
+- `I18nLabel`, `I18nTitle`, `I18nSummary`, `I18nDescription`, and `I18nText`
+  remain the standard values for short localized metadata, help text, and
+  bounded descriptive prose.
+- Blog, article, and document bodies belong in `ContentBody` through
+  `ContentAttributes.content`; they are not represented as `I18nText`.
+- HTML and Markdown content bodies are single-body content and do not provide
+  multilingual switching in CNCF.
+- Rich multilingual document bodies are reserved for the future SmartDox
+  Textus profile; Phase 19 records the policy but does not complete the profile.
+- Descriptive prose belongs to SmartDox only when it is a document/prose body
+  requiring rich structure or SmartDox-level multilingual behavior.
 - GFM support is chosen for practical user expectations, especially tables.
 - The SD-01 SmartDox port lives in `simplemodeling-lib` under `org.smartdox`.
   CNCF uses it directly instead of depending on the legacy Scala 2.12

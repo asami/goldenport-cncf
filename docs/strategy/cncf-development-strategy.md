@@ -508,7 +508,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   `[label](href)` destinations are indexed without rewriting; reference-style
   Markdown remains deferred. The content storage policy keeps small text inline
   and overflows larger bodies through charset-aware byte sizing, leaving
-  binary/opaque referenced payloads under Blob/media boundaries. The
+  binary/opaque referenced payloads under Blob/media boundaries. SD-01B fixes
+  the i18n/content boundary: existing `I18n*` values remain the standard for
+  short localized metadata and bounded help/descriptive prose, while
+  Blog/article/document bodies use `ContentBody`; rich multilingual document
+  bodies are reserved for the future SmartDox Textus profile. The
   `textus-blog` driver now uses project-local
   version files rather than any `cncf-samples` version root when running its
   Web app against local CNCF snapshots. Job-adjacent verification now uses
@@ -516,8 +520,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   lifecycle fixtures, while real scheduler observation-window assertions are
   isolated in the timing-tagged `JobRetryTimingSpec` instead of ordinary
   `sbt test`.
-- Remaining Phase 19 work is the SmartDox Textus profile/i18n policy,
-  reference-style Markdown support, and phase closure validation.
+- Remaining Phase 19 work is the SmartDox Textus profile, reference-style
+  Markdown support, and phase closure validation.
 - Non-goals:
 - No new Blob payload storage backend in CNCF core.
 - No S3/S3-compatible BlobStore provider implementation in this phase.

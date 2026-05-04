@@ -59,8 +59,19 @@ Examples:
 - use `MimeType` for content type values, not `String`;
 - use `Charset` for text charset values, not `String`;
 - use `ContentBody` for persisted content bodies, not a raw text column;
+- use `I18nLabel`, `I18nTitle`, `I18nSummary`, `I18nDescription`, or
+  `I18nText` for localized metadata and bounded help/descriptive prose, not
+  raw localized string maps;
 - use explicit value objects or schema data types for identifiers, amounts,
   state tokens, and policies.
+
+Localized metadata and content bodies are separate concerns. Short labels,
+titles, summaries, descriptions, help text, and other bounded metadata should
+stay in the existing `I18n*` value family. Blog/article/document bodies should
+use `ContentAttributes.content` as `ContentBody` with explicit `ContentMarkup`,
+`MimeType`, and `Charset`. HTML and Markdown content bodies are single-body
+content; rich multilingual document bodies are reserved for the SmartDox Textus
+profile rather than modeled as `I18nText`.
 
 Raw primitives are acceptable at boundaries such as JSON/Record parsing,
 storage adapters, generated convenience methods, or low-level schema encoding,
