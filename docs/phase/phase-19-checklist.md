@@ -568,7 +568,10 @@ needs i18n.
   features.
 - SmartDox image normalization records normalized media identity in
   `ContentReferenceOccurrence` and rewrites only source-spanned image target
-  text to canonical Textus image URNs.
+  text to canonical Textus image URNs. Source spans are the rewrite-candidate
+  marker and now cover headings, lists, definition lists, table cells,
+  captions, quote prose, and mapped inline markup in addition to ordinary
+  paragraphs and block image lines.
 - GFM-compatible Markdown inline image/link references are supported for
   `![alt](src)` and `[label](href)`. Image destinations are rewritten to
   canonical Textus image URNs after safe media normalization; link destinations

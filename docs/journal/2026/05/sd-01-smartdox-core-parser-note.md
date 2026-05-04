@@ -189,6 +189,20 @@ blocks, comments, and XML/JSON `StructuredToken` values do not produce
 references, so identical `[[...]]` text inside those inert regions is not
 rewritten.
 
+## SD-03 Source Span Coverage Expansion
+
+SD-03 widens source-span coverage beyond ordinary paragraphs and block image
+lines. Headings, unordered/ordered list items, definition list
+terms/descriptions, table cells, captions, quote prose, and mapped inline
+markup such as bold/italic/delete now carry original-source reference spans
+when they contain SmartDox image/link syntax.
+
+The purpose of these spans is to mark references that may need rewrite while
+keeping inert text unmarked. Quote parsing no longer relies on stripped buffer
+offsets for rewrite candidates; the stripped quote text is mapped back to the
+original source positions. Inline code/pre text, source/verbatim blocks,
+comments, and XML/JSON structured tokens remain outside the rewrite surface.
+
 ## Current Limitations
 
 - XML and JSON structured tokens are preserved, escaped, and rendered as code;

@@ -502,7 +502,10 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   core in `simplemodeling-lib` for CNCF content rendering and reference
   extraction. The SmartDox slice preserves XML/JSON structured tokens and
   rewrites only parser source-spanned image target text to canonical Textus
-  image URNs, while link references remain indexed without rewriting. Markdown
+  image URNs, while link references remain indexed without rewriting. Source
+  spans mark rewrite candidates and now cover headings, lists, definition
+  lists, table cells, captions, quote prose, and mapped inline markup in
+  addition to ordinary paragraphs and block image lines. Markdown
   inline image/link references now feed the same content reference index:
   `![alt](src)` image destinations are normalized to image URNs, while
   `[label](href)` destinations are indexed without rewriting. Reference-style,

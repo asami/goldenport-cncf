@@ -60,16 +60,23 @@ SmartDox image and link references are extracted into
 Image references are normalized through the CNCF media path and record canonical
 media identity in `normalizedRef`, `urn`, and `targetEntityId`.
 
-SmartDox source text is rewritten only when the parser provides a source span
-for a concrete reference node. Successful image references rewrite the target
-URI/path span to `urn:textus:image:{entropy}`. Link references are indexed but
-are not rewritten.
+SmartDox source spans are the marker for references that may need future
+rewrite. The parser attaches them only to concrete, parsed reference nodes
+whose source range is mapped back to the original document. Successful image
+references rewrite the target URI/path span to
+`urn:textus:image:{entropy}`. Link references are indexed but are not
+rewritten.
 
 Identical text inside source blocks, XML/JSON structured tokens, comments, or
 plain prose is not touched because those regions do not produce source-spanned
 reference nodes. If an image reference cannot be normalized, the original
 reference is kept and a deterministic `textus:image-normalization-failed`
 comment is inserted near that source node.
+
+The source-spanned rewrite surface includes ordinary paragraphs, block image
+lines, headings, list items, definition list terms/descriptions, table cells,
+captions, quote prose, and mapped inline markup such as bold/italic/delete.
+Inline code/pre text remains inert.
 
 ## Rendering Policy
 

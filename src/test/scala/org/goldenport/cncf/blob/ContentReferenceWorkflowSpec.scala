@@ -624,20 +624,35 @@ final class ContentReferenceWorkflowSpec
           |{
           |  "image": "[[images/json.png]]"
           |}
+          |
+          |> #+begin_src text
+          |> [[images/quoted-source.png]]
+          |> #+end_src
+          |
+          |> <a>
+          |>   [[images/quoted-xml.png]]
+          |> </a>
+          |
+          |> {
+          |>   "image": "[[images/quoted-json.png]]"
+          |> }
           |""".stripMargin
       )))
 
       result.normalizedText should include ("[[images/source.png]]")
       result.normalizedText should include ("[[images/xml.png]]")
       result.normalizedText should include ("[[images/json.png]]")
+      result.normalizedText should include ("[[images/quoted-source.png]]")
+      result.normalizedText should include ("[[images/quoted-xml.png]]")
+      result.normalizedText should include ("[[images/quoted-json.png]]")
       result.normalizedText should not include ("urn:textus:image:")
       result.references shouldBe Vector.empty
     }
 
-    "not rewrite SmartDox snippet-parsed image references without source spans" in {
+    "rewrite SmartDox structured prose image references with source spans" in {
       given ExecutionContext = ExecutionContext.create()
       val component = _blob_component(InMemoryBlobStore())
-      val blobId = _blob_id("content_ref_smartdox_list_image")
+      val blobId = _blob_id("content_ref_smartdox_structured_image")
       _success(BlobPayloadSupport.putManagedPayload(
         component = component,
         id = blobId,
@@ -648,9 +663,18 @@ final class ContentReferenceWorkflowSpec
       ))
       val workflow = ContentReferenceWorkflow(component)
       val source =
-        s"""AAAA
+        s"""# [[/web/blob/content/${blobId.value}]]
            |
            |- [[/web/blob/content/${blobId.value}]]
+           |
+           || [[/web/blob/content/${blobId.value}]] |
+           |
+           |#+CAPTION: [[/web/blob/content/${blobId.value}]]
+           |[[/web/blob/content/${blobId.value}]]
+           |
+           |> [[/web/blob/content/${blobId.value}]]
+           |
+           |Marked *[[/web/blob/content/${blobId.value}]]* but =[[/web/blob/content/${blobId.value}]]= stays inert.
            |""".stripMargin
 
       val result = _success(workflow.normalize(ContentReferenceContent(
@@ -658,9 +682,16 @@ final class ContentReferenceWorkflowSpec
         source
       )))
 
-      result.normalizedText shouldBe source
-      result.references.size shouldBe 1
-      result.references.head.normalizedRef.getOrElse("") should startWith ("urn:textus:image:")
+      result.normalizedText should not be source
+      result.normalizedText should include ("# [[urn:textus:image:")
+      result.normalizedText should include ("- [[urn:textus:image:")
+      result.normalizedText should include ("| [[urn:textus:image:")
+      result.normalizedText should include ("#+CAPTION: [[urn:textus:image:")
+      result.normalizedText should include ("> [[urn:textus:image:")
+      result.normalizedText should include ("Marked *[[urn:textus:image:")
+      result.normalizedText should include (s"=[[/web/blob/content/${blobId.value}]]=")
+      result.references.size shouldBe 7
+      result.references.foreach(_.normalizedRef.getOrElse("") should startWith ("urn:textus:image:"))
     }
   }
 
