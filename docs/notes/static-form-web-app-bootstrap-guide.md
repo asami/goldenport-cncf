@@ -106,6 +106,31 @@ Example:
 Keep navigation and mutation actions visually separate. A tab, nav pill, or
 breadcrumb should not look like a destructive command.
 
+## Job Results And Development Debugging
+
+Asynchronous Command results should use the framework job UX instead of custom
+status pages. A result template may include:
+
+```html
+<textus:job-panel actions="result,await,jobs"></textus:job-panel>
+```
+
+If a result page returns a job id and the template does not include any job
+widget, the framework appends the standard application job panel. The primary
+user-facing links are:
+
+- `/web/{app}/jobs/{jobId}` for the job result.
+- `/web/{app}/jobs` for the current user's jobs in that application.
+- `/form/{app}/{service}/{operation}/jobs/{jobId}/await` for the form-scoped
+  await action.
+
+In development mode, Form/HTML operation responses that carry execution
+metadata may include a collapsed execution debug panel at the bottom of the
+page. The panel is diagnostic only; production pages must not depend on it.
+CallTree capture for development HTML responses is separate from application
+job creation, so queries and synchronous commands are not turned into user
+jobs merely because the debug panel is enabled.
+
 ## Forms
 
 Static Form App forms should map schema fields to Bootstrap form controls:

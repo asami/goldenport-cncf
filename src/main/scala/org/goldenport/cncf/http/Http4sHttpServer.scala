@@ -36,7 +36,7 @@ import org.goldenport.cncf.job.JobId
 import org.goldenport.cncf.observability.{ConclusionDiagnostics, DslChokepointContext, DslChokepointPhase, DslChokepointRunner}
 import org.goldenport.cncf.mcp.McpJsonRpcAdapter
 import org.goldenport.cncf.openapi.OpenApiProjector
-import org.goldenport.cncf.security.AuthenticationRequest
+import org.goldenport.cncf.security.{AuthenticationRequest, IngressSecurityResolver}
 import org.goldenport.bag.{Bag, BinaryBag}
 import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
 
@@ -189,6 +189,10 @@ final class Http4sHttpServer(
         if (_is_web_authorized("admin", "tags", "detach", Some(req), Some("admin.entity.update"))) _admin_tag_detach(req) else _forbidden_web(req, Some("admin"), Some("tags"), Some("detach"))
       case GET -> Root / "web" / app / "dashboard" / "state" =>
         _dashboard_state(Some(app))
+      case req @ GET -> Root / "web" / app / "jobs" =>
+        if (_is_web_authorized(app, "jobs", "index", Some(req))) _application_jobs(req, app) else _forbidden_web(req, Some(app), Some("jobs"), Some("index"))
+      case req @ GET -> Root / "web" / app / "jobs" / jobId =>
+        if (_is_web_authorized(app, "jobs", jobId, Some(req))) _application_job(req, app, jobId) else _forbidden_web(req, Some(app), Some("jobs"), Some(jobId))
       case req @ GET -> Root / "web" / app / "admin" =>
         if (_is_web_authorized(app, "admin", "index", Some(req))) _component_admin(app) else _forbidden_web(req, Some(app), Some("admin"), Some("index"))
       case req @ GET -> Root / "web" / app / "admin" / "descriptor" =>
@@ -809,6 +813,92 @@ final class Http4sHttpServer(
     _html_status(StaticFormAppRenderer.renderSystemJobResult(jobId, res), HStatus.fromInt(res.code).getOrElse(HStatus.Ok))
   }
 
+  private def _application_jobs(
+    req: org.http4s.Request[IO],
+    app: String
+  ): IO[HResponse[IO]] =
+    _request_execution_context(req) match {
+      case Consequence.Success(ctx) =>
+        given ExecutionContext = ctx
+        val jobs = engine.runtimeSubsystem.jobEngine
+          .listJobs(limit = Int.MaxValue, persistentOnly = false)
+          .filter(_job_belongs_to_app(_, app))
+          .flatMap(model => engine.runtimeSubsystem.jobEngine.queryVisible(model.jobId).toOption.flatten)
+          .take(100)
+        _html(StaticFormAppRenderer.renderApplicationJobs(app, jobs), Some(app))
+      case Consequence.Failure(conclusion) =>
+        _html_status(StaticFormAppRenderer.renderStructuredErrorPage(Some(app), StructuredHttpError.fromConclusion(
+          conclusion,
+          HStatus.Forbidden.code,
+          req.uri.path.renderString,
+          req.method.name,
+          _operation_mode,
+          component = Some(app),
+          service = Some("jobs"),
+          operation = Some("index")
+        )), HStatus.Forbidden)
+    }
+
+  private def _application_job(
+    req: org.http4s.Request[IO],
+    app: String,
+    jobId: String
+  ): IO[HResponse[IO]] =
+    JobId.parse(jobId).toOption match {
+      case Some(id) =>
+        _request_execution_context(req) match {
+          case Consequence.Success(ctx) =>
+            given ExecutionContext = ctx
+            engine.runtimeSubsystem.jobEngine.queryVisible(id).toOption.flatten.filter(_job_belongs_to_app(_, app)) match {
+              case Some(model) =>
+                _html(StaticFormAppRenderer.renderApplicationJob(app, model), Some(app))
+              case None =>
+                _html_status(StaticFormAppRenderer.renderStructuredErrorPage(Some(app), StructuredHttpError.fromMessage(
+                  s"job not found: $jobId",
+                  HStatus.NotFound.code,
+                  req.uri.path.renderString,
+                  req.method.name,
+                  _operation_mode,
+                  component = Some(app),
+                  service = Some("jobs"),
+                  operation = Some(jobId)
+                )), HStatus.NotFound)
+            }
+          case Consequence.Failure(conclusion) =>
+            _html_status(StaticFormAppRenderer.renderStructuredErrorPage(Some(app), StructuredHttpError.fromConclusion(
+              conclusion,
+              HStatus.Forbidden.code,
+              req.uri.path.renderString,
+              req.method.name,
+              _operation_mode,
+              component = Some(app),
+              service = Some("jobs"),
+              operation = Some(jobId)
+            )), HStatus.Forbidden)
+        }
+      case None =>
+        _html_status(StaticFormAppRenderer.renderStructuredErrorPage(Some(app), StructuredHttpError.fromMessage(
+          s"invalid job id: $jobId",
+          HStatus.BadRequest.code,
+          req.uri.path.renderString,
+          req.method.name,
+          _operation_mode,
+          component = Some(app),
+          service = Some("jobs"),
+          operation = Some(jobId)
+        )), HStatus.BadRequest)
+    }
+
+  private def _job_belongs_to_app(
+    model: org.goldenport.cncf.job.JobQueryReadModel,
+    app: String
+  ): Boolean = {
+    val expected = NamingConventions.toNormalizedSegment(app)
+    val params = model.debug.parameters
+    params.get("web.application-job").contains("true") &&
+      params.get("web.app").exists(x => NamingConventions.toNormalizedSegment(x) == expected)
+  }
+
   private def _component_manual(app: String): IO[HResponse[IO]] =
     StaticFormAppRenderer.renderComponentManual(engine.runtimeSubsystem, app) match {
       case Some(p) => _html(p)
@@ -1307,20 +1397,23 @@ final class Http4sHttpServer(
     values: Map[String, String],
     started: Long
   ): IO[HResponse[IO]] = {
-    val res = _dispatch_operation(
+    val query = Record.create(req.uri.query.params.toVector)
+    val result = _dispatch_operation_result(
         app,
         service,
         operation,
         HttpRequest.fromPath(
           method = HttpRequest.POST,
           path = s"/${app}/${service}/${operation}",
-          query = Record.create(req.uri.query.params.toVector),
-          header = _request_header_record(req),
+          query = query,
+          header = _development_form_header_record(req, query, form),
           form = _operation_dispatch_form(form)
         )
       )
+    _annotate_application_job(result, app, service, operation)
+    val res = result.response
     val continuation = _create_form_continuation(app, service, operation, form, res, _form_chunk_size(form))
-    val properties = _form_result_properties(app, service, operation, res, values ++ _continuation_values(continuation))
+    val properties = _form_result_properties(app, service, operation, result, values ++ _continuation_values(continuation))
     _form_transition_response(app, service, operation, form, res, properties).map { response =>
       RuntimeDashboardMetrics.recordHtmlRequest(
         req.method.name,
@@ -1869,7 +1962,7 @@ final class Http4sHttpServer(
     val started = System.nanoTime()
     val query = _operation_dispatch_record(Record.create(req.uri.query.params.toVector))
     val values = req.uri.query.params.toMap
-    val res = _dispatch_operation(
+    val result = _dispatch_operation_result(
       app,
       service,
       operation,
@@ -1877,11 +1970,13 @@ final class Http4sHttpServer(
         method = HttpRequest.GET,
         path = s"/${app}/${service}/${operation}",
         query = query,
-        header = _request_header_record(req)
+        header = _development_form_header_record(req, query)
       )
     )
+    _annotate_application_job(result, app, service, operation)
+    val res = result.response
     val page = StaticFormAppRenderer.renderFormResult(
-      _form_result_properties(app, service, operation, res, values),
+      _form_result_properties(app, service, operation, result, values),
       _form_result_static_template(app, service, operation, res.code, values)
         .orElse(_form_descriptor(app, service, operation).flatMap(_.resultTemplate))
     )
@@ -1918,7 +2013,7 @@ final class Http4sHttpServer(
         dispatchForm = Record.create(
           (_operation_dispatch_form(form).asMap + ("id" -> jobId)).toVector
         )
-        res = _dispatch_operation(
+        result = _dispatch_operation_result(
           "job_control",
           "job",
           "await_job_result",
@@ -1926,12 +2021,13 @@ final class Http4sHttpServer(
             method = HttpRequest.POST,
             path = "/job_control/job/await_job_result",
             query = Record.empty,
-            header = _request_header_record(req),
+            header = _development_form_header_record(req, form = form),
             form = dispatchForm
           )
         )
+        res = result.response
         page = StaticFormAppRenderer.renderFormResult(
-          _form_result_properties(app, service, operation, res, values),
+          _form_result_properties(app, service, operation, result, values),
           _form_result_static_template(app, service, operation, res.code, values)
             .orElse(_form_descriptor(app, service, operation).flatMap(_.resultTemplate))
         )
@@ -1954,15 +2050,55 @@ final class Http4sHttpServer(
     response: HttpResponse,
     values: Map[String, String]
   ): StaticFormAppRenderer.FormResultProperties =
+    _form_result_properties(
+      app,
+      service,
+      operation,
+      HttpExecutionResult(response, RuntimeContext.ExecutionMetadata.empty),
+      values
+    )
+
+  private def _form_result_properties(
+    app: String,
+    service: String,
+    operation: String,
+    result: HttpExecutionResult,
+    values: Map[String, String]
+  ): StaticFormAppRenderer.FormResultProperties =
     StaticFormAppRenderer.FormResultProperties(
       StaticFormAppRenderer.FormPageProperties(app, service, operation, values),
-      response.code,
-      response.mime.value,
-      response.getString.getOrElse(""),
+      result.response.code,
+      result.response.mime.value,
+      result.response.getString.getOrElse(""),
       _form_result_table_columns(app, service, operation),
       engine.webDescriptor.defaultView,
-      _form_result_asset_completion_options(app, service, operation)
+      _form_result_asset_completion_options(app, service, operation),
+      result.metadata,
+      _operation_mode
     )
+
+  private def _annotate_application_job(
+    result: HttpExecutionResult,
+    app: String,
+    service: String,
+    operation: String
+  ): Unit = {
+    val resultJobId = FormResultMetadata.fromHttpResponse(result.response).jobId
+    result.metadata.responseJobId.filter(jobid => resultJobId.contains(jobid)).foreach { jobid =>
+      JobId.parse(jobid).toOption.foreach { id =>
+        engine.runtimeSubsystem.jobEngine.annotateJob(
+          id,
+          Map(
+            "web.app" -> app,
+            "web.service" -> service,
+            "web.operation" -> operation,
+            "web.application-job" -> "true"
+          ),
+          Vector(s"application job: ${app}.${service}.${operation}")
+        )
+      }
+    }
+  }
 
   private def _form_result_asset_completion_options(
     app: String,
@@ -2457,18 +2593,46 @@ final class Http4sHttpServer(
     form: Record,
     response: HttpResponse
   ): String = {
+    val formValues = _form_values(form)
+    val resultValues = _result_values(response)
+    val resultId = _redirect_result_id(response, formValues, resultValues)
     val values =
-      _form_values(form) ++ Map(
+      formValues ++ Map(
         "component" -> app,
         "service" -> service,
         "operation" -> operation,
         "result.status" -> response.code.toString,
         "result.body" -> response.getString.getOrElse("")
-      ) ++ _result_values(response)
+      ) ++ resultValues ++ resultId.map("result.id" -> _).toMap
     """\$\{([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(template, m =>
       java.util.regex.Matcher.quoteReplacement(values.getOrElse(m.group(1), ""))
     )
   }
+
+  private def _redirect_result_id(
+    response: HttpResponse,
+    formValues: Map[String, String],
+    resultValues: Map[String, String]
+  ): Option[String] =
+    resultValues.get("result.id") match {
+      case Some(id) if _response_body_is_json(response) =>
+        Some(id)
+      case Some(id) =>
+        Some(_normalize_redirect_result_id(id))
+      case None =>
+        formValues.get("id")
+    }
+
+  private def _normalize_redirect_result_id(id: String): String = {
+    val firstline = id.linesIterator.take(1).toVector.headOption.getOrElse(id).trim
+    firstline.split(":", 2).toList match {
+      case _ :: suffix :: Nil => suffix.trim
+      case _ => firstline
+    }
+  }
+
+  private def _response_body_is_json(response: HttpResponse): Boolean =
+    response.getString.exists(body => io.circe.parser.parse(body).toOption.exists(_.isObject))
 
   private def _error_values(response: HttpResponse): Map[String, String] =
     Map(
@@ -2730,6 +2894,48 @@ final class Http4sHttpServer(
       }
     Record.create(enriched)
   }
+
+  private def _request_execution_context(
+    req: org.http4s.Request[IO]
+  ): Consequence[ExecutionContext] = {
+    val attributes = _request_header_record(req).asMap.map { case (key, value) =>
+      key -> Option(value).map(_.toString).getOrElse("")
+    }
+    IngressSecurityResolver.resolve(ExecutionContext.create(), attributes).map(_.executionContext)
+  }
+
+  private def _development_form_header_record(
+    req: org.http4s.Request[IO],
+    query: Record = Record.empty,
+    form: Record = Record.empty
+  ): Record = {
+    val base = _request_header_record(req, query, form)
+    if (!_is_development_operation_mode(_operation_mode))
+      base
+    else {
+      val pairs = _with_header_if_absent(
+        _with_header_if_absent(base.asMap.toVector, "x-textus-debug-calltree", "true"),
+        "x-textus-debug-save-calltree",
+        "true"
+      )
+      Record.create(pairs)
+    }
+  }
+
+  private def _with_header_if_absent(
+    pairs: Vector[(String, Any)],
+    key: String,
+    value: String
+  ): Vector[(String, Any)] =
+    if (pairs.exists { case (k, _) => k.equalsIgnoreCase(key) })
+      pairs
+    else
+      pairs :+ (key -> value)
+
+  private def _is_development_operation_mode(
+    mode: OperationMode
+  ): Boolean =
+    mode == OperationMode.Develop || mode == OperationMode.Test
 
   private[http] def _session_id_(
     req: org.http4s.Request[IO],

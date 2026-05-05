@@ -6,10 +6,11 @@ import org.goldenport.Consequence
 import org.goldenport.cncf.subsystem.Subsystem
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentOrigin
+import org.goldenport.cncf.context.RuntimeContext
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.job.JobQueryReadModel
 import org.goldenport.cncf.CncfVersion
-import org.goldenport.cncf.config.RuntimeConfig
+import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
 import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, CmlEntityRelationshipDefinition, CmlOperationAssociationBinding, CmlOperationImageBinding, ImageBindingOperationDefinition}
 import org.goldenport.cncf.projection.{AuthorizationPolicyProjection, DescribeProjection, HelpProjection, SchemaProjection}
 import org.goldenport.configuration.{ConfigurationValue, ResolvedConfiguration}
@@ -91,7 +92,10 @@ object StaticFormAppRenderer {
     tableColumns: Map[String, Vector[TableColumn]] = Map.empty,
     defaultTableView: String = WebTableColumnResolver.defaultViewName,
     assetCompletion: StaticFormAppLayout.AssetCompletionOptions =
-      StaticFormAppLayout.AssetCompletionOptions()
+      StaticFormAppLayout.AssetCompletionOptions(),
+    executionMetadata: RuntimeContext.ExecutionMetadata =
+      RuntimeContext.ExecutionMetadata.empty,
+    operationMode: OperationMode = RuntimeConfig.DefaultOperationMode
   ) {
     def componentName: String = page.componentName
     def serviceName: String = page.serviceName
@@ -136,27 +140,43 @@ object StaticFormAppRenderer {
     private def _job_action_values(metadata: FormResultMetadata): Map[String, String] =
       metadata.jobId match {
         case Some(jobid) =>
-          val href = page.values.getOrElse("result.job.href", s"/form/${page.componentPath}/${page.servicePath}/${page.operationPath}/jobs/${jobid}/await")
+          val awaitHref = page.values.getOrElse("result.job.await.href", s"/form/${page.componentPath}/${page.servicePath}/${page.operationPath}/jobs/${jobid}/await")
+          val appJobHref = page.values.getOrElse("result.job.href", s"/web/${page.componentPath}/jobs/${jobid}")
+          val appJobsHref = page.values.getOrElse("result.jobs.href", s"/web/${page.componentPath}/jobs")
           val common = Map(
-            "result.job.href" -> href,
+            "result.job.href" -> appJobHref,
+            "result.job.await.href" -> awaitHref,
+            "result.jobs.href" -> appJobsHref,
             "result.job.status" -> metadata.jobStatus.getOrElse("accepted"),
             "result.job.message" -> metadata.message.getOrElse("Command accepted."),
+            "result.action.result.name" -> "result",
+            "result.action.result.label" -> "Open job result",
+            "result.action.result.href" -> appJobHref,
+            "result.action.result.method" -> "GET",
+            "result.action.jobs.name" -> "jobs",
+            "result.action.jobs.label" -> "My jobs",
+            "result.action.jobs.href" -> appJobsHref,
+            "result.action.jobs.method" -> "GET",
             "result.action.await.name" -> "await",
             "result.action.await.label" -> "Check result",
-            "result.action.await.href" -> href,
+            "result.action.await.href" -> awaitHref,
             "result.action.await.method" -> "POST"
           )
           if (metadata.actions.isEmpty)
             common ++ Map(
-              "result.actions.count" -> "1",
-              "result.action.0.name" -> "await",
-              "result.action.0.label" -> "Check result",
-              "result.action.0.href" -> href,
-              "result.action.0.method" -> "POST",
-              "result.action.primary.name" -> "await",
-              "result.action.primary.label" -> "Check result",
-              "result.action.primary.href" -> href,
-              "result.action.primary.method" -> "POST"
+              "result.actions.count" -> "2",
+              "result.action.0.name" -> "result",
+              "result.action.0.label" -> "Open job result",
+              "result.action.0.href" -> appJobHref,
+              "result.action.0.method" -> "GET",
+              "result.action.1.name" -> "await",
+              "result.action.1.label" -> "Check result",
+              "result.action.1.href" -> awaitHref,
+              "result.action.1.method" -> "POST",
+              "result.action.primary.name" -> "result",
+              "result.action.primary.label" -> "Open job result",
+              "result.action.primary.href" -> appJobHref,
+              "result.action.primary.method" -> "GET"
             )
           else
             common
@@ -1937,14 +1957,16 @@ object StaticFormAppRenderer {
       properties.tableColumns,
       properties.defaultTableView
     )
+    val withJobPanel = _append_default_job_panel(rendered, pageProperties)
+    val withDebug = _append_execution_debug_panel(withJobPanel, properties, pageProperties)
     if (_is_html_document(template))
-      Page(_complete_widget_assets(template, rendered, properties.assetCompletion))
+      Page(_complete_widget_assets(template, withDebug, properties.assetCompletion))
     else
       Page(StaticFormAppLayout.completeDeclaredAssets(
         _simple_page(
           title = s"${_escape(properties.operationLabel)} Result",
           subtitle = s"HTTP ${properties.status}",
-          body = rendered
+          body = withDebug
         ),
         properties.assetCompletion
       ))
@@ -2058,6 +2080,91 @@ object StaticFormAppRenderer {
       else
         html + panel
     }
+
+  private def _append_execution_debug_panel(
+    html: String,
+    properties: FormResultProperties,
+    pageProperties: FormPageProperties
+  ): String = {
+    val panel = _execution_debug_panel(properties, pageProperties)
+    if (panel.isEmpty || html.contains("textus-execution-debug-panel"))
+      html
+    else {
+      val marker = "</body>"
+      val index = html.toLowerCase(java.util.Locale.ROOT).lastIndexOf(marker)
+      if (index >= 0)
+        html.substring(0, index) + panel + html.substring(index)
+      else
+        html + panel
+    }
+  }
+
+  private def _append_default_job_panel(
+    html: String,
+    pageProperties: FormPageProperties
+  ): String =
+    if (pageProperties.value("result.job.id").isEmpty ||
+        html.contains("textus-job-ticket") ||
+        html.contains("textus-job-panel") ||
+        html.contains("textus-job-actions"))
+      html
+    else
+      html + _render_job_panel(Map("actions" -> "result,await,jobs"), pageProperties)
+
+  private def _execution_debug_panel(
+    properties: FormResultProperties,
+    pageProperties: FormPageProperties
+  ): String =
+    if (!_is_development_operation_mode(properties.operationMode) || _execution_metadata_empty(properties.executionMetadata))
+      ""
+    else {
+      val metadata = properties.executionMetadata
+      val calltree = metadata.inlineCallTree.map(_.show).getOrElse("")
+      val jobid = metadata.responseJobId.orElse(metadata.debugJobId)
+      val joblinks = jobid.map { id =>
+        val appHref = pageProperties.value("result.job.href")
+        val systemHref = s"/web/system/admin/jobs/${_escape_path_segment(id)}"
+        val app = if (appHref.nonEmpty) s"""<a class="btn btn-sm btn-outline-primary" href="${_escape(appHref)}">Application job</a>""" else ""
+        s"""<div class="d-flex flex-wrap gap-2 mt-2">${app}<a class="btn btn-sm btn-outline-secondary" href="${_escape(systemHref)}">System debug job</a></div>"""
+      }.getOrElse("")
+      val calltreeHtml =
+        if (calltree.nonEmpty)
+          s"""<pre class="bg-light border rounded p-3 mb-0"><code>${_escape(calltree)}</code></pre>"""
+        else
+          """<p class="text-secondary mb-0">CallTree was not captured for this response.</p>"""
+      val summary =
+        s"""<dl class="row mb-3">
+           |  <dt class="col-sm-3">Operation</dt><dd class="col-sm-9"><code>${_escape(properties.operationLabel)}</code></dd>
+           |  <dt class="col-sm-3">HTTP status</dt><dd class="col-sm-9">${properties.status}</dd>
+           |  <dt class="col-sm-3">Mode</dt><dd class="col-sm-9">${_escape(properties.operationMode.name)}</dd>
+           |  <dt class="col-sm-3">Job ID</dt><dd class="col-sm-9"><code>${_escape(jobid.getOrElse(""))}</code></dd>
+           |</dl>""".stripMargin
+      s"""<section class="container my-4 textus-execution-debug-panel">
+         |  <details class="border rounded bg-white">
+         |    <summary class="p-3 fw-semibold">Development execution result</summary>
+         |    <div class="border-top p-3">
+         |      ${summary}
+         |      ${joblinks}
+         |      <h3 class="h6 mt-3">Result body</h3>
+         |      <pre class="bg-light border rounded p-3"><code>${_escape(properties.body.take(12000))}</code></pre>
+         |      <h3 class="h6 mt-3">CallTree</h3>
+         |      ${calltreeHtml}
+         |    </div>
+         |  </details>
+         |</section>""".stripMargin
+    }
+
+  private def _is_development_operation_mode(
+    mode: OperationMode
+  ): Boolean =
+    mode == OperationMode.Develop || mode == OperationMode.Test
+
+  private def _execution_metadata_empty(
+    metadata: RuntimeContext.ExecutionMetadata
+  ): Boolean =
+    metadata.responseJobId.isEmpty &&
+      metadata.debugJobId.isEmpty &&
+      metadata.inlineCallTree.isEmpty
 
   def renderSystemJobTicket(
     jobId: String
@@ -2345,6 +2452,98 @@ object StaticFormAppRenderer {
            |  <div class="table-responsive"><table class="table table-sm"><thead><tr><th>#</th><th>Kind</th><th>At</th><th>Task</th><th>Note</th></tr></thead><tbody>${eventrows}</tbody></table></div>
            |</article>""".stripMargin
     ))
+  }
+
+  def renderApplicationJobs(
+    app: String,
+    jobs: Vector[JobQueryReadModel]
+  ): Page = {
+    val appPath = NamingConventions.toNormalizedSegment(app)
+    val rows =
+      if (jobs.isEmpty)
+        """<tr><td colspan="6" class="text-secondary">No jobs are available for this application user.</td></tr>"""
+      else
+        jobs.map(_application_job_row(appPath, _)).mkString("\n")
+    Page(_simple_page(
+      title = s"${_escape(app)} Jobs",
+      subtitle = "Your application jobs",
+      body =
+        s"""<article class="card">
+           |  <div class="card-body">
+           |    <div class="d-flex flex-wrap justify-content-between gap-2 align-items-start mb-3">
+           |      <div>
+           |        <h2 class="h5 card-title mb-1">My jobs</h2>
+           |        <p class="text-secondary mb-0">Jobs started from this application by the current user or session.</p>
+           |      </div>
+           |      <a class="btn btn-outline-secondary btn-sm" href="/web/${_escape(appPath)}">Back to application</a>
+           |    </div>
+           |    <div class="table-responsive">
+           |      <table class="table table-sm table-hover align-middle mb-0">
+           |        <thead><tr><th>Job</th><th>Status</th><th>Target</th><th>Result</th><th>Updated</th><th>Actions</th></tr></thead>
+           |        <tbody>${rows}</tbody>
+           |      </table>
+           |    </div>
+           |  </div>
+           |</article>""".stripMargin
+    ))
+  }
+
+  def renderApplicationJob(
+    app: String,
+    model: JobQueryReadModel
+  ): Page = {
+    val appPath = NamingConventions.toNormalizedSegment(app)
+    val target = _job_target(model)
+    val calltree = model.calltree.map(_job_calltree_panel).getOrElse(
+      """<p class="text-secondary">No CallTree was saved for this job yet.</p>"""
+    )
+    val result = model.result.map(_.print).getOrElse(model.resultSummary.message.getOrElse(""))
+    Page(_simple_page(
+      title = s"${_escape(app)} Job ${model.jobId.value}",
+      subtitle = "Application job result",
+      body =
+        s"""<article class="card mb-3">
+           |  <div class="card-body">
+           |    <div class="d-flex flex-wrap justify-content-between gap-2 align-items-start mb-3">
+           |      <div>
+           |        <h2 class="h5 card-title mb-1">Job result</h2>
+           |        <p class="text-secondary mb-0"><code>${_escape(target)}</code></p>
+           |      </div>
+           |      <a class="btn btn-outline-secondary btn-sm" href="/web/${_escape(appPath)}/jobs">My jobs</a>
+           |    </div>
+           |    <dl class="row mb-0">
+           |      <dt class="col-sm-3">Job ID</dt><dd class="col-sm-9"><code>${_escape(model.jobId.value)}</code></dd>
+           |      <dt class="col-sm-3">Status</dt><dd class="col-sm-9"><span class="badge text-bg-${_escape(_job_status_variant(model.status.toString))}">${_escape(model.status.toString)}</span></dd>
+           |      <dt class="col-sm-3">Result</dt><dd class="col-sm-9">${_escape(model.resultSummary.message.getOrElse(""))}</dd>
+           |      <dt class="col-sm-3">Updated</dt><dd class="col-sm-9">${_escape(model.updatedAt.toString)}</dd>
+           |    </dl>
+           |  </div>
+           |</article>
+           |<article class="card mb-3">
+           |  <div class="card-body">
+           |    <h2 class="h5 card-title">Response</h2>
+           |    <pre class="bg-light border rounded p-3 mb-0"><code>${_escape(result)}</code></pre>
+           |  </div>
+           |</article>
+           |<article class="card">
+           |  <div class="card-body">
+           |    <h2 class="h5 card-title">CallTree</h2>
+           |    ${calltree}
+           |    <div class="d-flex flex-wrap gap-2 mt-3">
+           |      <a class="btn btn-sm btn-outline-secondary" href="/web/system/admin/jobs/${_escape_path_segment(model.jobId.value)}">System debug detail</a>
+           |      <a class="btn btn-sm btn-outline-secondary" href="/form/admin/execution/history">Execution history</a>
+           |    </div>
+           |  </div>
+           |</article>""".stripMargin
+    ))
+  }
+
+  private def _application_job_row(
+    appPath: String,
+    model: JobQueryReadModel
+  ): String = {
+    val target = _job_target(model)
+    s"""<tr><td><code>${_escape(model.jobId.value)}</code></td><td>${_escape(model.status.toString)}</td><td><code>${_escape(target)}</code></td><td>${_escape(model.resultSummary.message.getOrElse(""))}</td><td>${_escape(model.updatedAt.toString)}</td><td><a href="/web/${_escape(appPath)}/jobs/${_escape_path_segment(model.jobId.value)}">Open</a></td></tr>"""
   }
 
   def renderBlobAdmin(): Page =
@@ -9074,9 +9273,15 @@ object StaticFormAppRenderer {
       val ticketAttrs = attrs + ("actions" -> "false")
       val ticket = _render_job_ticket(ticketAttrs, properties)
       val actions = _render_job_actions(attrs, properties)
+      val appHref = properties.value(s"${source}.href")
+      val appJobsHref = properties.value("result.jobs.href")
       val systemHref = s"/web/system/jobs/${_escape_path_segment(jobId)}"
       val adminHref = s"/web/system/admin/jobs/${_escape_path_segment(jobId)}"
-      s"""<section class="textus-job-panel border rounded p-3 mb-3 bg-light"><div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3"><div><h3 class="h5 mb-1">${_escape(title)}</h3><p class="text-secondary mb-0">${_escape(description)}</p></div><div class="d-flex gap-2"><a class="btn btn-outline-secondary btn-sm" href="${_escape(systemHref)}">Open job page</a><a class="btn btn-outline-secondary btn-sm" href="${_escape(adminHref)}">Debug detail</a></div></div>${ticket}${actions}</section>"""
+      val appLinks = Vector(
+        Option.when(appHref.nonEmpty)(s"""<a class="btn btn-outline-primary btn-sm" href="${_escape(appHref)}">Open job result</a>"""),
+        Option.when(appJobsHref.nonEmpty)(s"""<a class="btn btn-outline-secondary btn-sm" href="${_escape(appJobsHref)}">My jobs</a>""")
+      ).flatten.mkString
+      s"""<section class="textus-job-panel border rounded p-3 mb-3 bg-light"><div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3"><div><h3 class="h5 mb-1">${_escape(title)}</h3><p class="text-secondary mb-0">${_escape(description)}</p></div><div class="d-flex flex-wrap gap-2">${appLinks}<a class="btn btn-outline-secondary btn-sm" href="${_escape(systemHref)}">System job page</a><a class="btn btn-outline-secondary btn-sm" href="${_escape(adminHref)}">Debug detail</a></div></div>${ticket}${actions}</section>"""
     }
   }
 

@@ -368,8 +368,15 @@ Default job result properties:
 - `result.job.id`: submitted job id.
 - `result.job.status`: user-facing job status such as `accepted`, `running`,
   `completed`, or `failed`.
-- `result.job.href`: canonical result/await URL.
+- `result.job.href`: application job result URL, normally
+  `/web/{app}/jobs/{jobId}`.
+- `result.job.await.href`: form-scoped await URL, normally
+  `/form/{app}/{service}/{operation}/jobs/{jobId}/await`.
+- `result.jobs.href`: application job list URL, normally `/web/{app}/jobs`.
+- `result.action.result.*`: action metadata for opening the application job
+  result page.
 - `result.action.await.*`: action metadata for waiting on the job result.
+- `result.action.jobs.*`: action metadata for opening the application job list.
 - `result.action.detail.*`: optional action metadata for opening a resulting
   resource when available.
 
@@ -428,10 +435,27 @@ Required behavior:
 - embeds the same job ticket data used by `textus:job-ticket`.
 - embeds selected local job actions using the same action metadata as
   `textus:job-actions`.
-- provides a link to `/web/system/jobs/{jobId}` for applications that want to
-  hand off the job result UX to the system page.
+- provides application links to `/web/{app}/jobs/{jobId}` and `/web/{app}/jobs`
+  when the framework supplies those values.
+- keeps `/web/system/jobs/{jobId}` and `/web/system/admin/jobs/{jobId}` as
+  secondary system/debug links.
 - enforces job ownership through the underlying job routes; the widget only
   renders links/forms from framework-provided action metadata.
+
+### Application Job Pages
+
+Static Form results that produce an asynchronous Command job should guide users
+to the application-scoped job pages:
+
+```text
+/web/{app}/jobs
+/web/{app}/jobs/{jobId}
+```
+
+These pages show only jobs owned by the current subject/session in the current
+application. Debug trace jobs created for development inspection are not treated
+as ordinary application jobs unless the operation response itself returns the
+job id.
 
 ### System Job Page
 

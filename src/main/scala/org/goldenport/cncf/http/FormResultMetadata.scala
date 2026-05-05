@@ -9,7 +9,8 @@ import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Apr. 15, 2026
- * @version Apr. 21, 2026
+ *  version Apr. 21, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class FormResultMetadata(
@@ -96,13 +97,16 @@ object FormResultMetadata {
     }
 
   private def _scalar_id(body: String): Option[String] =
-    body.split(":", 2).toList match {
+    _first_line(body).split(":", 2).toList match {
       case _ :: id :: Nil => Some(id.trim).filter(_.nonEmpty)
       case _ => None
     }
 
   private def _scalar_job_id(body: String): Option[String] =
-    Some(body.trim).filter(_.startsWith("cncf-job-")).filter(_.nonEmpty)
+    Some(_first_line(body)).filter(_.startsWith("cncf-job-")).filter(_.nonEmpty)
+
+  private def _first_line(body: String): String =
+    body.linesIterator.take(1).toVector.headOption.getOrElse("").trim
 
   private def _first_string(
     cursor: HCursor,

@@ -655,7 +655,10 @@ completed, it moves to the completed development item history below.
 - Static Form Web App next step:
   - Island Architecture introduction on top of the convention-first static baseline
   - richer Textus widget families where concrete application pressure exists
-  - stronger application-level job UX and dialog-style reusable surfaces
+  - stronger dialog-style reusable surfaces
+  - application-level job UX baseline is implemented for Form-launched
+    asynchronous Command jobs through `/web/{app}/jobs` and
+    `/web/{app}/jobs/{jobId}`
 - Search:
   - full-text search planning layer
   - embedding / semantic search backend strategy
@@ -680,7 +683,9 @@ completed, it moves to the completed development item history below.
     local admin routes
 - SPA hosting and API gateway remain separate modes, not implicit extensions of
   the current Static Form baseline.
-- In develop mode, add obserbability and debugging information to the end of the web page.
+- In develop mode, Form/HTML operation result pages can show collapsed
+  observability and debugging information, including execution result metadata
+  and CallTree, at the end of the web page.
 - Source references:
   - `docs/phase/phase-12.md`
   - `docs/phase/phase-12-checklist.md`

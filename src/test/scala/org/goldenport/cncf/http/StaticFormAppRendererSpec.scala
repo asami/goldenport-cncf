@@ -37,7 +37,7 @@ import org.goldenport.cncf.blob.*
 import org.goldenport.cncf.component.builtin.auth.AuthComponent
 import org.goldenport.cncf.component.{Component, ComponentDescriptor, ComponentFactory, ComponentletDescriptor}
 import org.goldenport.cncf.config.{OperationMode, RuntimeConfig}
-import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext}
+import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, RuntimeContext}
 import org.goldenport.cncf.security.AuthenticationRequest
 import org.goldenport.cncf.datastore.{DataStore, DataStoreSpace, QueryDirective, SearchResult, SearchableDataStore, TotalCountCapability}
 import org.goldenport.cncf.entity.{EntityPersistent, EntityStoreSpace}
@@ -3150,9 +3150,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
     "extract structured result metadata for form redirect templates" in {
       FormResultMetadata.fromBody("""{"id":"notice_1"}""").toTemplateValues shouldBe Map("result.id" -> "notice_1")
+      FormResultMetadata.fromBody("""{"id":"urn:textus:image:abc"}""").toTemplateValues shouldBe Map("result.id" -> "urn:textus:image:abc")
       FormResultMetadata.fromBody("""{"result":{"id":"notice_2"}}""").toTemplateValues shouldBe Map("result.id" -> "notice_2")
       FormResultMetadata.fromBody("""{"item":{"id":"notice_3"}}""").toTemplateValues shouldBe Map("result.id" -> "notice_3")
       FormResultMetadata.fromBody("created:notice_4").toTemplateValues shouldBe Map("result.id" -> "notice_4")
+      FormResultMetadata.fromBody("created:notice_5\ndebug:\n  calltree: ...").toTemplateValues shouldBe Map("result.id" -> "notice_5")
       FormResultMetadata.fromBody("""{"message":"created"}""").toTemplateValues shouldBe Map("result.message" -> "created")
       FormResultMetadata.fromBody("""{"result":{"outcome":"created","message":"Notice created"}}""").toTemplateValues shouldBe Map(
         "result.outcome" -> "created",
@@ -7077,9 +7079,120 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("Notice command")
       html should include ("Queued")
       html should include ("textus-job-ticket")
+      html should include ("/web/notice-board/jobs/cncf-job-job-1")
+      html should include ("/web/notice-board/jobs")
       html should include ("/form/notice-board/notice/post-notice/jobs/cncf-job-job-1/await")
       html should include ("/web/system/jobs/cncf-job-job-1")
       html should not include ("<textus:job-panel")
+    }
+
+    "append standard application job panel when a result template omits job widgets" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice"
+        ),
+        200,
+        "application/json",
+        """{"jobId":"cncf-job-job-1","jobStatus":"accepted","message":"Queued"}"""
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><h2>Custom result</h2></article>"""
+      ).body
+
+      html should include ("Custom result")
+      html should include ("textus-job-panel")
+      html should include ("/web/notice-board/jobs/cncf-job-job-1")
+      html should include ("/web/notice-board/jobs")
+      html should include ("/form/notice-board/notice/post-notice/jobs/cncf-job-job-1/await")
+    }
+
+    "render development execution debug panel with inline calltree" in {
+      val calltree = Record.data("name" -> "notice.post-notice", "children" -> Vector.empty[String])
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice"
+        ),
+        200,
+        "application/json",
+        """{"id":"notice-1"}""",
+        executionMetadata = RuntimeContext.ExecutionMetadata(
+          debugJobId = Some("cncf-job-job-1"),
+          inlineCallTree = Some(calltree)
+        ),
+        operationMode = OperationMode.Develop
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><h2>Custom result</h2></article>"""
+      ).body
+
+      html should include ("textus-execution-debug-panel")
+      html should include ("Development execution result")
+      html should include ("notice.post-notice")
+      html should include ("/web/system/admin/jobs/cncf-job-job-1")
+    }
+
+    "hide development execution debug panel in production mode" in {
+      val properties = StaticFormAppRenderer.FormResultProperties(
+        StaticFormAppRenderer.FormPageProperties(
+          "notice-board",
+          "notice",
+          "post-notice"
+        ),
+        200,
+        "application/json",
+        """{"id":"notice-1"}""",
+        executionMetadata = RuntimeContext.ExecutionMetadata(
+          inlineCallTree = Some(Record.data("name" -> "notice.post-notice"))
+        ),
+        operationMode = OperationMode.Production
+      )
+
+      val html = StaticFormAppRenderer.renderFormResult(
+        properties,
+        """<article><h2>Custom result</h2></article>"""
+      ).body
+
+      html should not include ("textus-execution-debug-panel")
+    }
+
+    "render application user job list and detail pages" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("server"))
+      val action = _RendererJobAction(GRequest.of(
+        component = "notice-board",
+        service = "notice",
+        operation = "post-notice"
+      ))
+      val task = ActionTask(ActionId.generate(), action, ActionEngine.create(), None)
+      val jobid = subsystem.jobEngine.submit(
+        List(task),
+        ExecutionContext.withFrameworkCallTreeEnabled(ExecutionContext.test(), enabled = true),
+        JobSubmitOption(
+          persistence = JobPersistencePolicy.Persistent,
+          runMode = JobRunMode.Sync,
+          executionNotes = Vector("application job")
+        )
+      ).toOption.getOrElse(fail("job submission failed"))
+      subsystem.jobEngine.annotateJob(jobid, Map("web.app" -> "notice-board"))
+      val model = subsystem.jobEngine.query(jobid).getOrElse(fail("job read model missing"))
+
+      val list = StaticFormAppRenderer.renderApplicationJobs("notice-board", Vector(model)).body
+      val detail = StaticFormAppRenderer.renderApplicationJob("notice-board", model).body
+
+      list should include ("My jobs")
+      list should include (jobid.value)
+      list should include (s"/web/notice-board/jobs/${jobid.value}")
+      detail should include ("Application job result")
+      detail should include ("Response")
+      detail should include ("CallTree")
+      detail should include ("/web/notice-board/jobs")
     }
 
     "render system job ticket page with fixed system await link" in {
