@@ -57,7 +57,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version May.  5, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -95,7 +95,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       c.downField("links").get[String]("performance") shouldBe Right("/web/system/performance")
       c.downField("links").get[String]("manual") shouldBe Right("/web/system/manual")
       c.downField("links").get[String]("console") shouldBe Right("/web/console")
-      c.downField("links").get[String]("assemblyWarnings") shouldBe Right("/form/admin/assembly/warnings")
+      c.downField("links").get[String]("assemblyWarnings") shouldBe Right("/web/system/admin/assembly/warnings")
     }
 
     "render component dashboard state contract" in {
@@ -125,7 +125,20 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("CNCF Health")
       html should include ("class=\"card h-100 shadow-sm border-success\"")
       html should include ("class=\"badge text-bg-success\"")
+      html should include ("Recent failures")
+      html should include ("Recent failures are diagnostics; they do not change runtime Health.")
+      html should include ("id=\"httpRecentErrorsLink\"")
+      html should include ("/web/system/performance#recent-errors")
+      html should include ("/web/system/performance#authorization")
+      html should include ("/form/admin/execution/history")
+      html should include ("const health = data.status || \"UP\";")
+      html should not include ("const health = (failedJobs > 0 || recentFailures > 0 || recentDenials > 0) ? \"WARN\"")
       html should include ("table table-sm table-hover align-middle")
+      html should include ("class=\"list-group list-group-flush\"")
+      html should include ("class=\"progress\"")
+      html should include ("class=\"dashboard-spark\"")
+      html should not include (".bar { display: grid")
+      html should not include (".bars { display: grid")
       html should include ("/web/system/admin")
       html should include ("/web/system/performance")
       html should include ("/web/system/manual")
@@ -139,6 +152,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("System Admin Configuration")
       html should include ("/web/assets/bootstrap.min.css")
       html should not include ("cdn.jsdelivr")
+      html should include ("nav nav-pills")
       html should include ("CNCF version")
       html should include ("Subsystem")
       html should include ("/web/system/dashboard")
@@ -162,8 +176,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("/form/admin/execution/diagnostics")
       html should include ("Operational Details")
       html should include ("Assembly")
-      html should include ("/form/admin/assembly/warnings")
-      html should include ("/form/admin/assembly/report")
+      html should include ("/web/system/admin/assembly/warnings")
+      html should include ("/web/system/admin/assembly/report")
       html should include ("Execution")
       html should include ("/form/admin/execution/history")
       html should include ("/form/admin/execution/calltree")
@@ -793,7 +807,7 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("public-notice")
       html should include ("car-bundled")
       html should not include ("Operational Details")
-      html should not include ("/form/admin/assembly/warnings")
+      html should not include ("/web/system/admin/assembly/warnings")
       html should not include ("/form/admin/execution/history")
     }
 
@@ -1315,6 +1329,14 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
         "tagRef" -> rootPath,
         "role" -> "tag"
       )), "Tag search page")
+      val emptyTagPage = _page_body(StaticFormAppRenderer.renderAdminTags(subsystem, Map("tagSpace" -> "admin-empty-tag-space")), "empty Tag admin page")
+      val emptySearchPage = _page_body(StaticFormAppRenderer.renderAdminTags(subsystem, Map(
+        "tagSpace" -> "admin-tag-space",
+        "component" -> "tag",
+        "entity" -> "tag",
+        "tagRef" -> rootPath,
+        "role" -> "missing-role"
+      )), "empty Tag search page")
       val detail = StaticFormAppRenderer.renderComponentAdminEntityDetail(
         subsystem,
         "tag",
@@ -1329,15 +1351,24 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       tagPage should include ("action=\"/web/admin/tags/create\"")
       tagPage should include ("action=\"/web/admin/tags/update\"")
       tagPage should include ("action=\"/web/admin/tags/move\"")
+      tagPage should include ("action=\"/web/admin/tags\"")
+      tagPage should include ("name=\"tagSpace\" value=\"admin-tag-space\"")
+      tagPage should include ("<input type=\"hidden\" name=\"tagSpace\" value=\"admin-tag-space\">")
+      tagPage should include ("name=\"includeDescendants\"")
       tagPage should include ("admin-tag-root.child")
+      emptyTagPage should include ("No Tags are available for this TagSpace.")
       searchPage should include ("admin-tag-root.child")
       searchPage should include (childId)
       searchPage should include ("/web/tag/admin/entities/tag/")
+      emptySearchPage should include ("No visible Entities matched this Tag filter.")
       detail should include ("Tags")
       detail should include ("Attached Tags")
       detail should include ("action=\"/web/admin/tags/attach\"")
       detail should include ("action=\"/web/admin/tags/detach\"")
       detail should include ("admin-tag-root.child")
+      detail should include ("name=\"sourceEntityId\" value=\"" + childId + "\"")
+      detail should include ("name=\"tagSpace\" value=\"admin-tag-space\"")
+      detail should include ("name=\"role\" value=\"tag\"")
       detail should include ("name=\"role\" value=\"category\"")
       detail should include ("<td>category</td>")
     }
@@ -4166,10 +4197,16 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("System Performance")
       html should include ("/web/assets/bootstrap.min.css")
       html should not include ("cdn.jsdelivr")
+      html should include ("nav nav-pills")
+      html should include ("id=\"html-requests\"")
+      html should include ("id=\"recent-errors\"")
+      html should include ("id=\"authorization\"")
+      html should include ("id=\"jobs\"")
       html should include ("HTML request")
       html should include ("Latency")
       html should include ("Recent requests")
       html should include ("Recent errors")
+      html should include ("HTTP 4xx/5xx entries shown as Dashboard recent failures")
       html should include ("ActionCall")
       html should include ("DSL Chokepoints")
       html should include ("Authorization")
@@ -4177,8 +4214,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       html should include ("capability")
       html should include ("Jobs")
       html should include ("Assembly warnings")
-      html should include ("/form/admin/assembly/warnings")
-      html should include ("/form/admin/assembly/report")
+      html should include ("/web/system/admin/assembly/warnings")
+      html should include ("/web/system/admin/assembly/report")
       html should include ("/form/admin/execution/history")
       html should include ("/form/admin/execution/calltree")
       html should include ("/web/system/dashboard")

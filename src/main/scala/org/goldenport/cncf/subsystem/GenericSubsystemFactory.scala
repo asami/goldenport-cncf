@@ -15,7 +15,7 @@ import org.goldenport.Consequence
  * @since   Apr.  7, 2026
  *  version Apr. 23, 2026
  *  version Apr. 25, 2026
- * @version May.  1, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 object GenericSubsystemFactory {
@@ -464,16 +464,18 @@ object GenericSubsystemFactory {
         case Some(existing) =>
           val selection = AssemblyReport.selectPreferred(existing, component)
           seen.update(component.name, selection.selected)
-          GlobalRuntimeContext.current.foreach(
-            _.assemblyReport.addWarning(
-              AssemblyReport.duplicateComponentWarning(
-                componentName = component.name,
-                selected = selection.selected,
-                dropped = selection.dropped,
-                reason = selection.reason
+          if (!AssemblyReport.isSameAssemblySource(existing, component)) {
+            GlobalRuntimeContext.current.foreach(
+              _.assemblyReport.addWarning(
+                AssemblyReport.duplicateComponentWarning(
+                  componentName = component.name,
+                  selected = selection.selected,
+                  dropped = selection.dropped,
+                  reason = selection.reason
+                )
               )
             )
-          )
+          }
         case None =>
           seen += component.name -> component
       }

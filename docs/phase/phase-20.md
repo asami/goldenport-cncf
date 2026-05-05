@@ -1,6 +1,6 @@
 # Phase 20 — Hierarchical Tagging and Knowledge Structure
 
-status = open
+status = closed
 
 ## 1. Purpose of This Document
 
@@ -64,14 +64,14 @@ Final semantic direction:
 - C (DONE): TG-03 — Add TagAttachment Association and tag-expanded Entity search.
 - D (DONE): TG-04 — Add CNCF admin, manual, and projection surfaces.
 - E (DONE): TG-05 — Apply Tags to `textus-blog` CMS navigation and search.
-- F (ACTIVE): TG-06 — Verification, documentation, and phase closure.
+- F (DONE): TG-06 — Verification, documentation, and phase closure.
 
 Resume hint:
 
-- Continue with TG-06. The core Tag model, TagAttachment workflow, resident
-  TagSpace merge, `textus-blog` driver, and generic CNCF admin/manual surfaces
-  are implemented. Remaining Phase 20 work is closure validation and final
-  documentation cleanup.
+- Phase 20 is closed. The core Tag model, TagAttachment workflow, resident
+  TagSpace merge, `textus-blog` driver, generic CNCF admin/manual surfaces,
+  and closure verification are complete. Select the next phase before adding
+  new active scope.
 
 ## 5. Development Items
 
@@ -80,7 +80,7 @@ Resume hint:
 - [x] TG-03: Add TagAttachment Association and tag-expanded Entity search.
 - [x] TG-04: Add CNCF admin, manual, and projection surfaces.
 - [x] TG-05: Apply Tags to `textus-blog` CMS navigation and search.
-- [ ] TG-06: Verification, documentation, and phase closure.
+- [x] TG-06: Verification, documentation, and phase closure.
 
 Detailed task breakdown and progress tracking are recorded in
 `phase-20-checklist.md`.

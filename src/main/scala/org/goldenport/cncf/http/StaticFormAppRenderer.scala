@@ -26,7 +26,7 @@ import io.circe.parser.parse
 /*
  * @since   Apr. 12, 2026
  *  version Apr. 30, 2026
- * @version May.  5, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -2188,10 +2188,7 @@ object StaticFormAppRenderer {
       title = "System Web Descriptor",
       subtitle = "Management Console descriptor view",
       body =
-        s"""<article>
-           |  <h2>Navigation</h2>
-           |  <p><a href="/web/system/admin">System admin</a> · <a href="/web/system/dashboard">System dashboard</a></p>
-           |</article>
+        s"""${_admin_nav_card(Vector("System admin" -> "/web/system/admin", "System dashboard" -> "/web/system/dashboard"))}
            |${_web_descriptor_section_nav}
            |${_web_descriptor_control_tables(webDescriptor)}
            |${_web_descriptor_asset_composition_table(webDescriptor)}
@@ -2208,6 +2205,60 @@ object StaticFormAppRenderer {
              _web_descriptor_json(webDescriptor, completed = false)
            )}""".stripMargin
     ))
+
+  def renderSystemAdminAssemblyWarnings(
+    subsystem: Subsystem
+  ): Page = {
+    val report = _assembly_report(subsystem)
+    val rows =
+      if (report.warnings.isEmpty)
+        """<tr><td colspan="6" class="text-secondary">No assembly warnings.</td></tr>"""
+      else
+        report.warnings.map { warning =>
+          s"""<tr>
+             |  <td><code>${_escape(warning.kind)}</code></td>
+             |  <td>${_escape(warning.severity)}</td>
+             |  <td>${_escape(warning.componentName)}</td>
+             |  <td>${_escape(warning.message)}</td>
+             |  <td>${_escape(warning.selectedOrigin.getOrElse(""))}</td>
+             |  <td>${_escape(warning.droppedOrigins.mkString(", "))}</td>
+             |</tr>""".stripMargin
+        }.mkString("\n")
+    Page(_simple_page(
+      title = "Assembly Warnings",
+      subtitle = "Runtime assembly diagnostics",
+      body =
+        s"""${_admin_nav_card(Vector("System dashboard" -> "/web/system/dashboard", "System admin" -> "/web/system/admin", "Assembly report" -> "/web/system/admin/assembly/report"))}
+           |<article>
+           |  <h2>Warnings</h2>
+           |  <p>${report.warnings.size} warning(s). Assembly warnings are diagnostics, not health errors.</p>
+           |  <div class="table-responsive">
+           |    <table class="table table-sm table-hover align-middle">
+           |      <thead><tr><th>Kind</th><th>Severity</th><th>Component</th><th>Message</th><th>Selected</th><th>Dropped</th></tr></thead>
+           |      <tbody>${rows}</tbody>
+           |    </table>
+           |  </div>
+           |</article>""".stripMargin
+    ))
+  }
+
+  def renderSystemAdminAssemblyReport(
+    subsystem: Subsystem
+  ): Page = {
+    val record = _assembly_report(subsystem).toRecord
+    val json = _manual_raw_json(record).map(_.spaces2).getOrElse(_manual_raw_text(record))
+    val yaml = _manual_raw_json(record).map(_json_to_yaml).getOrElse(_manual_raw_text(record))
+    Page(_simple_page(
+      title = "Assembly Report",
+      subtitle = "Runtime assembly report",
+      body =
+        s"""${_admin_nav_card(Vector("System dashboard" -> "/web/system/dashboard", "System admin" -> "/web/system/admin", "Assembly warnings" -> "/web/system/admin/assembly/warnings"))}
+           |<article>
+           |  <h2>Report</h2>
+           |  ${_raw_format_tabs(json, yaml, "assembly-report")}
+           |</article>""".stripMargin
+    ))
+  }
 
   def renderSystemAdminJobs(
     subsystem: Subsystem
@@ -2896,7 +2947,7 @@ object StaticFormAppRenderer {
   private def _admin_tag_move_args(
     values: Map[String, String]
   ): Vector[(String, String)] =
-    Vector("tagRef", "newParentTagRef", "newKey")
+    Vector("tagRef", "tagSpace", "newParentTagRef", "newKey")
       .flatMap(key => values.get(key).filter(_.nonEmpty).map(key -> _))
 
   private def _admin_tag_attach_args(
@@ -2983,6 +3034,7 @@ object StaticFormAppRenderer {
   ): String =
     s"""<form method="post" action="/web/admin/tags/move" class="row g-1 align-items-end">
        |  <input type="hidden" name="tagRef" value="${_escape(record.getString("id").getOrElse(""))}">
+       |  <input type="hidden" name="tagSpace" value="${_escape(record.getString("tagSpace").getOrElse(""))}">
        |  <div class="col-12"><input class="form-control form-control-sm" name="newParentTagRef" value="${_escape(record.getString("parentTagId").getOrElse(""))}" placeholder="New parent ref, blank for root"></div>
        |  <div class="col-8"><input class="form-control form-control-sm" name="newKey" value="${_escape(record.getString("key").getOrElse(""))}" placeholder="New key"></div>
        |  <div class="col-4"><button class="btn btn-outline-primary btn-sm w-100" type="submit">Move</button></div>
@@ -4538,12 +4590,12 @@ object StaticFormAppRenderer {
     links: Vector[(String, String)]
   ): String = {
     val items = links.map { case (label, href) =>
-      s"""<a class="btn btn-outline-secondary btn-sm" href="${_escape(href)}">${_escape(label)}</a>"""
+      s"""<li class="nav-item"><a class="nav-link border" href="${_escape(href)}">${_escape(label)}</a></li>"""
     }.mkString("\n")
     s"""<article class="card admin-card admin-nav">
        |  <div class="card-body">
        |    <h2 class="card-title h5">Navigation</h2>
-       |    <div class="d-flex flex-wrap gap-2">${items}</div>
+       |    <ul class="nav nav-pills flex-column flex-sm-row gap-2">${items}</ul>
        |  </div>
        |</article>""".stripMargin
   }
@@ -5916,19 +5968,14 @@ object StaticFormAppRenderer {
       title = title,
       subtitle = subtitle,
       extraHead =
-        """|    .status { display: flex; align-items: center; gap: 10px; color: #4d5662; }
+       """|    .status { display: flex; align-items: center; gap: 10px; color: #4d5662; }
        |    .pulse { width: 10px; height: 10px; border-radius: 50%; background: #159947; box-shadow: 0 0 0 0 rgba(21,153,71,.55); animation: pulse 1s infinite; }
        |    .metric strong { display: block; font-size: 30px; margin-top: 6px; }
        |    .big { font-size: 34px; font-weight: 700; }
-       |    .bars { display: grid; gap: 10px; }
-       |    .bar { display: grid; grid-template-columns: minmax(120px, 220px) 1fr auto; gap: 10px; align-items: center; }
-       |    .track { height: 10px; background: #e6ebf0; border-radius: 6px; overflow: hidden; }
-       |    .fill { height: 100%; background: #2374ab; width: 0%; transition: width .25s ease; }
-       |    .spark { height: 120px; display: grid; grid-template-columns: repeat(60, 1fr); gap: 3px; align-items: end; border-bottom: 1px solid #d9dee5; }
-       |    .spark span { display: block; min-height: 2px; background: #2374ab; border-radius: 4px 4px 0 0; }
-       |    .spark span.error { background: #c65454; }
+       |    .dashboard-spark { height: 120px; display: flex; gap: .25rem; align-items: end; border-bottom: var(--bs-border-width) solid var(--bs-border-color); }
+       |    .dashboard-spark span { display: block; flex: 1 1 0; min-width: 2px; min-height: 2px; background: var(--bs-primary); border-radius: .25rem .25rem 0 0; }
+       |    .dashboard-spark span.error { background: var(--bs-danger); }
        |    @keyframes pulse { 70% { box-shadow: 0 0 0 12px rgba(21,153,71,0); } 100% { box-shadow: 0 0 0 0 rgba(21,153,71,0); } }
-       |    @media (max-width: 720px) { .bar { grid-template-columns: 1fr; } }
        |""".stripMargin,
       body =
         s"""|    <div class="status mb-3"><span class="pulse"></span><span id="statusText">Connecting</span></div>
@@ -5938,12 +5985,29 @@ object StaticFormAppRenderer {
        |      <div class="col-12 col-lg-4"><article class="card h-100 shadow-sm"><div class="card-body"><h2 class="h5 card-title">CNCF</h2><p class="mb-1"><strong id="cncfVersion">-</strong></p><p class="mb-0"><a id="detailsLink" href="/web/system/admin">Admin details</a> · <a id="performanceLink" href="/web/system/performance">Performance details</a> · <a id="manualLink" href="/web/system/manual">Manual</a> · <a id="consoleLink" href="/web/console">Console</a></p></div></article></div>
        |    </section>
        |    <section class="row g-3 mb-3">
+       |      <div class="col-12"><article class="card shadow-sm"><div class="card-body">
+       |        <div class="d-flex flex-column flex-lg-row justify-content-between gap-2 mb-3">
+       |          <div>
+       |            <h2 class="h5 card-title mb-1">Recent failures</h2>
+       |            <p class="text-secondary mb-0">Recent failures are diagnostics; they do not change runtime Health.</p>
+       |          </div>
+       |          <a class="btn btn-outline-primary btn-sm align-self-start" id="recentFailuresDetailLink" href="/web/system/performance#recent-errors">Failure details</a>
+       |        </div>
+       |        <div class="list-group list-group-horizontal-lg" id="recentFailuresList">
+       |          <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-3" id="httpRecentErrorsLink" href="/web/system/performance#recent-errors"><span>HTTP recent errors</span><span class="badge text-bg-secondary" id="httpRecentErrorsCount">0</span></a>
+       |          <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-3" id="authorizationDenialsLink" href="/web/system/performance#authorization"><span>Authorization denials</span><span class="badge text-bg-secondary" id="authorizationDenialsCount">0</span></a>
+       |          <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-3" id="failedJobsLink" href="/form/admin/execution/history"><span>Failed jobs</span><span class="badge text-bg-secondary" id="failedJobsCount">0</span></a>
+       |          <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center gap-3" id="assemblyWarningsDiagnosticLink" href="/web/system/admin/assembly/warnings"><span>Assembly warnings</span><span class="badge text-bg-secondary" id="assemblyWarningsDiagnosticCount">0</span></a>
+       |        </div>
+       |      </div></article></div>
+       |    </section>
+       |    <section class="row g-3 mb-3">
        |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100 shadow-sm"><div class="card-body"><span class="text-secondary">Components</span><strong id="componentCount">0</strong></div></div></div>
        |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100 shadow-sm"><div class="card-body"><span class="text-secondary">Services</span><strong id="serviceCount">0</strong></div></div></div>
        |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100 shadow-sm"><div class="card-body"><span class="text-secondary">Operations</span><strong id="operationCount">0</strong></div></div></div>
        |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100 shadow-sm"><div class="card-body"><span class="text-secondary">HTML requests</span><strong id="requestCount">0</strong><small class="text-secondary" id="requestErrors">errors 0</small></div></div></div>
        |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100 shadow-sm"><div class="card-body"><span class="text-secondary">Jobs</span><strong id="jobCount">0</strong><small class="text-secondary" id="jobErrors">errors 0</small></div></div></div>
-       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100 shadow-sm"><div class="card-body"><span class="text-secondary">Assembly warnings</span><strong id="assemblyWarningCount">0</strong><small><a id="assemblyWarningsLink" href="/form/admin/assembly/warnings">details</a></small></div></div></div>
+       |      <div class="col-12 col-sm-6 col-xl"><div class="card metric h-100 shadow-sm"><div class="card-body"><span class="text-secondary">Assembly warnings</span><strong id="assemblyWarningCount">0</strong><small><a id="assemblyWarningsLink" href="/web/system/admin/assembly/warnings">details</a></small></div></div></div>
        |    </section>
        |    <section class="row g-3 mb-3">
        |      <div class="col-12 col-xl-6"><article class="card h-100 shadow-sm"><div class="card-body">
@@ -5953,7 +6017,7 @@ object StaticFormAppRenderer {
        |          <button type="button" class="btn btn-primary btn-sm active" data-window="hour">1 hour</button>
        |          <button type="button" class="btn btn-outline-primary btn-sm" data-window="day">1 day</button>
        |        </div>
-       |        <div class="spark" id="requestSpark"></div>
+       |        <div class="dashboard-spark" id="requestSpark"></div>
        |      </div></article></div>
        |      <div class="col-12 col-xl-6"><article class="card h-100 shadow-sm"><div class="card-body">
        |        <h2 class="h5 card-title">Activity counts</h2>
@@ -5963,11 +6027,11 @@ object StaticFormAppRenderer {
        |    <section class="row g-3 mb-3">
        |      <div class="col-12 col-xl-6"><article class="card h-100 shadow-sm"><div class="card-body">
        |        <h2 class="h5 card-title">ActionCall jobs</h2>
-       |        <div class="bars" id="jobBars"></div>
+       |        <div class="list-group list-group-flush" id="jobBars"></div>
        |      </div></article></div>
        |      <div class="col-12 col-xl-6"><article class="card h-100 shadow-sm"><div class="card-body">
        |        <h2 class="h5 card-title">Components</h2>
-       |        <div class="bars" id="componentBars"></div>
+       |        <div class="list-group list-group-flush" id="componentBars"></div>
        |      </div></article></div>
        |    </section>
        |    <article class="card shadow-sm"><div class="card-body">
@@ -5998,6 +6062,15 @@ object StaticFormAppRenderer {
        |    const jobErrors = document.getElementById("jobErrors");
        |    const assemblyWarningCount = document.getElementById("assemblyWarningCount");
        |    const assemblyWarningsLink = document.getElementById("assemblyWarningsLink");
+       |    const recentFailuresDetailLink = document.getElementById("recentFailuresDetailLink");
+       |    const httpRecentErrorsLink = document.getElementById("httpRecentErrorsLink");
+       |    const httpRecentErrorsCount = document.getElementById("httpRecentErrorsCount");
+       |    const authorizationDenialsLink = document.getElementById("authorizationDenialsLink");
+       |    const authorizationDenialsCount = document.getElementById("authorizationDenialsCount");
+       |    const failedJobsLink = document.getElementById("failedJobsLink");
+       |    const failedJobsCount = document.getElementById("failedJobsCount");
+       |    const assemblyWarningsDiagnosticLink = document.getElementById("assemblyWarningsDiagnosticLink");
+       |    const assemblyWarningsDiagnosticCount = document.getElementById("assemblyWarningsDiagnosticCount");
        |    const requestSpark = document.getElementById("requestSpark");
        |    const activityCounts = document.getElementById("activityCounts");
        |    const jobBars = document.getElementById("jobBars");
@@ -6017,12 +6090,22 @@ object StaticFormAppRenderer {
        |      const recentFailures = data.html.requests.summary.minute.errors || 0;
        |      const recentDenials = data.authorization.decisions.summary.minute.errors || 0;
        |      const assemblyWarnings = data.assembly.warnings.count || 0;
-       |      const health = (failedJobs > 0 || recentFailures > 0 || recentDenials > 0 || assemblyWarnings > 0) ? "WARN" : data.status;
-       |      healthPanel.classList.toggle("border-success", health == "UP");
-       |      healthPanel.classList.toggle("border-warning", health != "UP");
-       |      healthText.className = health == "UP" ? "badge text-bg-success" : "badge text-bg-warning";
+       |      const health = data.status || "UP";
+       |      const healthVariant = health == "UP" ? "success" : (health == "DOWN" ? "danger" : "warning");
+       |      healthPanel.classList.remove("border-success", "border-warning", "border-danger");
+       |      healthPanel.classList.add("border-" + healthVariant);
+       |      healthText.className = "badge text-bg-" + healthVariant;
        |      healthText.textContent = health;
-       |      healthNote.textContent = `jobs failed: $${failedJobs}, recent failures: $${recentFailures}, recent denials: $${recentDenials}, assembly warnings: $${assemblyWarnings}`;
+       |      healthNote.textContent = `Runtime status: $${health}. Recent failures are listed separately.`;
+       |      recentFailuresDetailLink.href = data.links.performance + "#recent-errors";
+       |      httpRecentErrorsLink.href = data.links.performance + "#recent-errors";
+       |      authorizationDenialsLink.href = data.links.performance + "#authorization";
+       |      failedJobsLink.href = "/form/admin/execution/history";
+       |      assemblyWarningsDiagnosticLink.href = data.links.assemblyWarnings;
+       |      setDiagnosticBadge(httpRecentErrorsCount, recentFailures, "danger");
+       |      setDiagnosticBadge(authorizationDenialsCount, recentDenials, "warning");
+       |      setDiagnosticBadge(failedJobsCount, failedJobs, "danger");
+       |      setDiagnosticBadge(assemblyWarningsDiagnosticCount, assemblyWarnings, "warning");
        |      subsystemName.textContent = data.subsystem.name;
        |      subsystemVersion.textContent = "subsystem " + (data.subsystem.version || "unversioned");
        |      cncfVersion.textContent = data.cncf.version;
@@ -6039,11 +6122,11 @@ object StaticFormAppRenderer {
        |      jobErrors.textContent = "errors " + data.actions.jobs.failed;
        |      assemblyWarningCount.textContent = assemblyWarnings;
        |      assemblyWarningsLink.href = data.links.assemblyWarnings;
-       |      text.textContent = "UP · " + new Date(data.observedAt).toLocaleTimeString();
+       |      text.textContent = health + " · " + new Date(data.observedAt).toLocaleTimeString();
        |      const maxOps = Math.max(1, ...data.components.map(c => c.operationCount));
        |      componentBars.innerHTML = data.components.map(c => {
        |        const width = Math.round((c.operationCount / maxOps) * 100);
-       |        return `<div class="bar"><span>$${escapeHtml(c.name)} $${escapeHtml(c.version || "")}</span><div class="track"><div class="fill" style="width:$${width}%"></div></div><span>$${c.operationCount}</span></div>`;
+       |        return dashboardProgressRow(escapeHtml(c.name), escapeHtml(c.version || ""), c.operationCount, width, "primary");
        |      }).join("");
        |      renderGraph();
        |      activityCounts.innerHTML = countTable(data);
@@ -6051,9 +6134,28 @@ object StaticFormAppRenderer {
        |      jobBars.innerHTML = ["running","queued","completed","failed"].map(name => {
        |        const count = data.actions.jobs[name] || 0;
        |        const width = Math.round((count / jobTotal) * 100);
-       |        return `<div class="bar"><span>$${name}</span><div class="track"><div class="fill" style="width:$${width}%"></div></div><span>$${count}</span></div>`;
+       |        const variant = name === "failed" ? "danger" : (name === "running" ? "success" : "primary");
+       |        return dashboardProgressRow(name, "", count, width, variant);
        |      }).join("");
        |      configSummary.innerHTML = data.components.map(c => `<p><strong>$${escapeHtml(c.name)}</strong> $${escapeHtml(c.version || "unversioned")} · services $${c.serviceCount} · operations $${c.operationCount}</p>`).join("");
+       |    }
+       |
+       |    function setDiagnosticBadge(element, count, variant) {
+       |      element.textContent = count;
+       |      element.className = count > 0 ? `badge text-bg-$${variant}` : "badge text-bg-secondary";
+       |    }
+       |
+       |    function dashboardProgressRow(label, subtitle, count, width, variant) {
+       |      const note = subtitle ? `<small class="text-body-secondary">$${subtitle}</small>` : "";
+       |      return `<div class="list-group-item px-0">
+       |        <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-1">
+       |          <span><span class="fw-semibold">$${label}</span> $${note}</span>
+       |          <span class="badge text-bg-secondary">$${count}</span>
+       |        </div>
+       |        <div class="progress" role="progressbar" aria-valuenow="$${width}" aria-valuemin="0" aria-valuemax="100" style="height:.6rem">
+       |          <div class="progress-bar bg-$${variant}" style="width:$${width}%"></div>
+       |        </div>
+       |      </div>`;
        |    }
        |
        |    function countTable(data) {
@@ -6216,10 +6318,12 @@ object StaticFormAppRenderer {
            |    </tbody>
            |  </table></div>
            |</article>
-           |<article>
-           |  <h2>Navigation</h2>
-           |  <p><a href="${_escape(dashboardPath)}">Dashboard</a> · <a href="${_escape(performancePath)}">Performance details</a> · <a href="/web/system/manual">Manual</a> · <a href="/web/console">Console</a></p>
-           |</article>
+           |${_admin_nav_card(Vector(
+             "Dashboard" -> dashboardPath,
+             "Performance details" -> performancePath,
+             "Manual" -> "/web/system/manual",
+             "Console" -> "/web/console"
+           ))}
            |${componentInventory}
            |${_admin_operational_details(operationalDetails)}
            |${_component_admin_actions(componentFormsPath)}
@@ -6354,7 +6458,7 @@ object StaticFormAppRenderer {
       |  <div class="col-12 col-lg-6">
       |    <section>
       |      <h3>Assembly</h3>
-      |      <p><a href="/form/admin/assembly/warnings">Assembly warnings</a> · <a href="/form/admin/assembly/report">Assembly report</a></p>
+      |      <p><a href="/web/system/admin/assembly/warnings">Assembly warnings</a> · <a href="/web/system/admin/assembly/report">Assembly report</a></p>
       |    </section>
       |  </div>
       |  <div class="col-12 col-lg-6">
@@ -7302,15 +7406,20 @@ object StaticFormAppRenderer {
       title = "System Performance",
       subtitle = "HTML request, ActionCall, authorization, and Jobs detail",
       body =
-        s"""<article>
+        s"""<article id="performance-navigation">
            |  <h2>Navigation</h2>
-           |  <p><a href="/web/system/dashboard">System dashboard</a> · <a href="/web/system/admin">Admin configuration</a> · <a href="/web/system/manual">Manual</a> · <a href="/web/console">Console</a></p>
+           |  <nav class="nav nav-pills flex-column flex-sm-row gap-2">
+           |    <a class="nav-link" href="/web/system/dashboard">System dashboard</a>
+           |    <a class="nav-link" href="/web/system/admin">Admin configuration</a>
+           |    <a class="nav-link" href="/web/system/manual">Manual</a>
+           |    <a class="nav-link" href="/web/console">Console</a>
+           |  </nav>
            |</article>
            |<article>
            |  <h2>Assembly warnings</h2>
-           |  <p>${_assembly_warning_count(subsystem)} warning(s). <a href="/form/admin/assembly/warnings">Warning detail</a> · <a href="/form/admin/assembly/report">Assembly report</a></p>
+           |  <p>${_assembly_warning_count(subsystem)} warning(s). <a href="/web/system/admin/assembly/warnings">Warning detail</a> · <a href="/web/system/admin/assembly/report">Assembly report</a></p>
            |</article>
-           |<article>
+           |<article id="html-requests">
            |  <h2>HTML request</h2>
            |  ${_summary_table(htmlRequests.summary)}
            |</article>
@@ -7322,8 +7431,9 @@ object StaticFormAppRenderer {
            |  <h2>Recent requests</h2>
            |  ${_recent_requests_table(htmlRequests.recent)}
            |</article>
-           |<article>
+           |<article id="recent-errors">
            |  <h2>Recent errors</h2>
+           |  <p class="text-secondary">HTTP 4xx/5xx entries shown as Dashboard recent failures. They are diagnostics and do not change runtime Health.</p>
            |  ${_recent_errors_table(htmlRequests.recent)}
            |</article>
            |<article>
@@ -7331,7 +7441,7 @@ object StaticFormAppRenderer {
            |  ${_summary_table(actionCalls.summary)}
            |  <p class="mt-3"><a href="/form/admin/execution/history">Execution history</a> · <a href="/form/admin/execution/calltree">Latest calltree</a></p>
            |</article>
-           |<article>
+           |<article id="authorization">
            |  <h2>Authorization</h2>
            |  ${_summary_table(authorizationDecisions.summary)}
            |  <h3 class="h6 mt-3">Diagnostic</h3>
@@ -7359,7 +7469,7 @@ object StaticFormAppRenderer {
            |  <h3 class="h6 mt-3">Diagnostic</h3>
            |  ${_diagnostics_table(blobDiagnostics)}
            |</article>
-           |<article>
+           |<article id="jobs">
            |  <h2>Jobs</h2>
            |  ${_jobs_table(jobs)}
            |</article>""".stripMargin
@@ -9424,7 +9534,7 @@ object StaticFormAppRenderer {
     val manualPath =
       if (scope == "component") s"/web/${NamingConventions.toNormalizedSegment(name)}/manual"
       else "/web/system/manual"
-    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"dsl":{"chokepoints":${_snapshot_json(dslChokepoints, includeRecent = false)},"validation":${_snapshot_json(validation, includeRecent = false)},"validationDiagnostics":${_string_long_map_json(validationDiagnostics)},"operationRequestValidation":${_snapshot_json(operationRequestValidation, includeRecent = false)},"operationRequestValidationDiagnostics":${_string_long_map_json(operationRequestValidationDiagnostics)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)},"diagnostics":${_string_long_map_json(authorizationDiagnostics)}},"blob":{"operations":${_snapshot_json(blobOperations, includeRecent = false)},"diagnostics":${_string_long_map_json(blobDiagnostics)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance","manual":"${_json(manualPath)}","console":"/web/console","assemblyWarnings":"/form/admin/assembly/warnings"},"components":${componentJson}}"""
+    s"""{"scope":"${_json(scope)}","name":"${_json(name)}","version":${version.map(v => "\"" + _json(v) + "\"").getOrElse("null")},"observedAt":"${java.time.Instant.now.toString}","status":"UP","cncf":{"version":"${_json(CncfVersion.current)}"},"subsystem":{"name":"${_json(subsystemName)}","version":${subsystemVersion.map(v => "\"" + _json(v) + "\"").getOrElse("null")}},"componentCount":${components.size},"serviceCount":${serviceCount},"operationCount":${operationCount},"actions":{"actionCalls":${_snapshot_json(actionCalls, includeRecent = false)},"jobs":${_jobs_json(running, queued, completed, failed)}},"dsl":{"chokepoints":${_snapshot_json(dslChokepoints, includeRecent = false)},"validation":${_snapshot_json(validation, includeRecent = false)},"validationDiagnostics":${_string_long_map_json(validationDiagnostics)},"operationRequestValidation":${_snapshot_json(operationRequestValidation, includeRecent = false)},"operationRequestValidationDiagnostics":${_string_long_map_json(operationRequestValidationDiagnostics)}},"authorization":{"decisions":${_snapshot_json(authorizationDecisions, includeRecent = false)},"diagnostics":${_string_long_map_json(authorizationDiagnostics)}},"blob":{"operations":${_snapshot_json(blobOperations, includeRecent = false)},"diagnostics":${_string_long_map_json(blobDiagnostics)}},"assembly":{"warnings":{"count":${assemblyWarningCount}}},"html":{"requests":${_snapshot_json(htmlRequests, includeRecent = true, Some(avgMillis))}},"links":{"admin":"${_json(adminPath)}","performance":"/web/system/performance","manual":"${_json(manualPath)}","console":"/web/console","assemblyWarnings":"/web/system/admin/assembly/warnings"},"components":${componentJson}}"""
   }
 
   private def _snapshot_json(
@@ -9597,10 +9707,15 @@ object StaticFormAppRenderer {
     component.jobEngine.metrics.map(x => (x.running, x.queued, x.completed, x.failed)).getOrElse((0, 0, 0, 0))
 
   private def _assembly_warning_count(subsystem: Subsystem): Int =
+    _assembly_report(subsystem).warnings.size
+
+  private def _assembly_report(
+    subsystem: Subsystem
+  ): org.goldenport.cncf.assembly.AssemblyReport =
     org.goldenport.cncf.context.GlobalRuntimeContext.current
       .orElse(scala.util.Try(subsystem.globalRuntimeContext).toOption)
-      .map(_.assemblyReport.warnings.size)
-      .getOrElse(0)
+      .map(_.assemblyReport)
+      .getOrElse(new org.goldenport.cncf.assembly.AssemblyReport)
 
   private def _escape(value: String): String =
     value

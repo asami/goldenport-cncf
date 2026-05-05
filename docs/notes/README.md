@@ -9,6 +9,10 @@ Current security/authorization implementation notes:
 
 - `entity-authorization-implementation-note.md`
 
+Component developer entry point:
+
+- `component-developer-document-index.md`
+
 Open issue index:
 
 - `open-issue-list.md`

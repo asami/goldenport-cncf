@@ -1,13 +1,16 @@
 package org.goldenport.cncf.assembly
 
+import java.nio.file.Paths
 import scala.collection.mutable
 import org.goldenport.record.Record
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.component.ComponentOriginLabel
+import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Apr. 10, 2026
- * @version Apr. 11, 2026
+ *  version Apr. 11, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AssemblyWarning(
@@ -95,6 +98,15 @@ object AssemblyReport {
           s"selected=${ComponentOriginLabel.userLabel(selected.origin.label)}, dropped=${dropped.map(x => ComponentOriginLabel.userLabel(x.origin.label)).distinct.mkString(",")}, reason=${reason}"
     )
 
+  def isSameAssemblySource(
+    lhs: Component,
+    rhs: Component
+  ): Boolean =
+    _same_component_name(lhs, rhs) &&
+      lhs.origin.label == rhs.origin.label &&
+      _same_factory_class(lhs, rhs) &&
+      _same_artifact_source(lhs, rhs)
+
   private def _priority(component: Component): Int =
     _priority(component.origin.label)
 
@@ -119,4 +131,36 @@ object AssemblyReport {
     else
       s"higher-origin-priority:${existingOrigin}"
   }
+
+  private def _same_component_name(
+    lhs: Component,
+    rhs: Component
+  ): Boolean =
+    NamingConventions.toComparisonKey(lhs.core.name) ==
+      NamingConventions.toComparisonKey(rhs.core.name)
+
+  private def _same_factory_class(
+    lhs: Component,
+    rhs: Component
+  ): Boolean =
+    lhs.core.factory.map(_.getClass.getName) == rhs.core.factory.map(_.getClass.getName)
+
+  private def _same_artifact_source(
+    lhs: Component,
+    rhs: Component
+  ): Boolean =
+    (lhs.artifactMetadata, rhs.artifactMetadata) match {
+      case (Some(l), Some(r)) =>
+        l.sourceType == r.sourceType &&
+          l.name == r.name &&
+          l.component == r.component &&
+          l.archivePath.flatMap(_normalize_path) == r.archivePath.flatMap(_normalize_path)
+      case _ =>
+        false
+    }
+
+  private def _normalize_path(
+    path: String
+  ): Option[String] =
+    Option(path).map(p => Paths.get(p).toAbsolutePath.normalize.toString)
 }

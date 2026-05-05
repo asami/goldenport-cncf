@@ -25,7 +25,8 @@ import org.goldenport.cncf.http.RuntimeDashboardMetrics
  *  version Jan. 29, 2026
  *  version Feb.  6, 2026
  *  version Mar. 13, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 class ActionEngine(
@@ -335,7 +336,12 @@ class ActionEngine(
   private def _build_resolved_parameters(
     call: ActionCall
   ): ResolvedParameters = {
-    val parent = GlobalRuntimeContext.current.map(_.resolvedParameters)
+    val runtimeparams = call.executionContext.runtime.resolvedParameters
+    val parent =
+      if (runtimeparams.hasLocalFramework("http"))
+        Some(runtimeparams)
+      else
+        GlobalRuntimeContext.current.map(_.resolvedParameters)
     ResolvedParameters.forOperation(
       arguments = call.arguments,
       switches = call.switches,

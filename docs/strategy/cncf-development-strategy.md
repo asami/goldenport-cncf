@@ -564,8 +564,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 ### Phase 20: Hierarchical Tagging and Knowledge Structure
 - Goal: add CNCF builtin hierarchical Tags and validate them through CNCF
   admin/runtime and `textus-blog`.
-- Status: open; core Tag runtime, generic CNCF admin/manual surfacing, and
-  `textus-blog` driver implemented. Phase closure validation remains active.
+- Status: closed; core Tag runtime, generic CNCF admin/manual surfacing,
+  `textus-blog` driver, and closure verification are complete.
 - Scope:
 - Add `Tag` as a `SimpleEntity`-backed builtin master Entity.
 - Treat the Tag hierarchy as a strict tree in this phase.
@@ -584,9 +584,11 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Completed so far:
 - Runtime Tag model, TagSpace-scoped resident tree cache, effective
   Subsystem/Component/User/explicit TagSpace merge, TagAttachment Association,
-  generic tag operations, and `textus-blog` shared `blog` TagSpace integration.
+  generic tag operations, Tag admin/manual/projection surfaces, and
+  `textus-blog` shared `blog` TagSpace integration.
 - Remaining:
-- Phase closure validation and final documentation cleanup.
+- None for Phase 20. RDF/Knowledge Graph integration and DAG/polyhierarchy Tag
+  graphs remain future work outside Phase 20.
 - Non-goals:
 - No RDF store, RDF import/export, or external knowledge graph integration in
   this phase.
@@ -609,11 +611,12 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: Phase 20 — Hierarchical Tagging and Knowledge Structure.
-- Latest active phase dashboard: `docs/phase/phase-20.md`
-- Latest active phase checklist: `docs/phase/phase-20-checklist.md`
-- Latest closed phase dashboard: `docs/phase/phase-19.md`
-- Latest closed phase checklist: `docs/phase/phase-19-checklist.md`
+- Current phase selection: none; Phase 20 is closed and the next phase is not
+  selected yet.
+- Latest active phase dashboard: none
+- Latest active phase checklist: none
+- Latest closed phase dashboard: `docs/phase/phase-20.md`
+- Latest closed phase checklist: `docs/phase/phase-20-checklist.md`
 - Candidate next phase areas: AwsComponent/S3 BlobStore provider; Error Model / Consequence-Conclusion Realignment; Search/index planning; DB migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
@@ -641,7 +644,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 17: closed (`docs/phase/phase-17.md`)
 - Phase 18: closed (`docs/phase/phase-18.md`)
 - Phase 19: closed (`docs/phase/phase-19.md`)
-- Phase 20: open (`docs/phase/phase-20.md`)
+- Phase 20: closed (`docs/phase/phase-20.md`)
 
 ## 8. Development Item Status
 
@@ -664,6 +667,9 @@ completed, it moves to the completed development item history below.
     - header, footer, navigation, sidebar partials
     - layout
     - widget
+  - Bootstrap 5
+    - Polish the admin and app to align with Bootstrap standards
+    - Enhance the documentation for application developers
 - Web admin integration:
   - allow component CARs to provide component-owned Web admin pages
   - let the CNCF system admin console discover and integrate those component
@@ -674,6 +680,7 @@ completed, it moves to the completed development item history below.
     local admin routes
 - SPA hosting and API gateway remain separate modes, not implicit extensions of
   the current Static Form baseline.
+- In develop mode, add obserbability and debugging information to the end of the web page.
 - Source references:
   - `docs/phase/phase-12.md`
   - `docs/phase/phase-12-checklist.md`
@@ -740,7 +747,7 @@ Closed in Phase 13. This remains a reference area for Phase 14+ extensions and r
   - OpenTelemetry support
 
 ### 8.5 Tagging and Knowledge Structure
-Active in Phase 20.
+Completed in Phase 20.
 
 - Phase 20 work documents:
   - dashboard: `docs/phase/phase-20.md`
@@ -762,10 +769,9 @@ Active in Phase 20.
   TagTree cache use for effective TagSpaces, TagAttachment attach/detach/list,
   tag-expanded Entity search through EntityStore filtering, and shared Blog
   TagSpace navigation/search.
-- Remaining Phase 20 scope is closure validation and final documentation
-  cleanup.
-- Keep RDF and external knowledge graph integration under the separate RDF
-  development item.
+- Phase 20 is closed. Keep RDF and external knowledge graph integration under
+  the separate RDF development item. Keep DAG/polyhierarchy Tag graphs as
+  future scope outside Phase 20.
 
 ### 8.6 RDF Integration
 - RDF-based data representation

@@ -2,6 +2,8 @@ package org.goldenport.cncf.projection
 
 import org.goldenport.record.Record
 import org.goldenport.cncf.cli.renderer.{CliHelpJsonRenderer, CliHelpYamlRenderer}
+import org.goldenport.cncf.component.builtin.tag.TagComponent
+import org.goldenport.cncf.testutil.SubsystemTestFixture
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -9,7 +11,8 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 25, 2026
  *  version Mar. 28, 2026
- * @version Apr.  6, 2026
+ *  version Apr.  6, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class GeneratedHelpProjectionSpec
@@ -95,6 +98,48 @@ final class GeneratedHelpProjectionSpec
       subsystemYaml should include ("type: subsystem")
       subsystemYaml should include ("structuredDomainUseCases:")
       subsystemYaml should include ("name: postal_address_lifecycle")
+    }
+
+    "project builtin Tag component operation help" in {
+      Given("the builtin Tag component is installed in a default subsystem")
+      SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
+        val component = subsystem.findComponent(TagComponent.name).getOrElse(fail("Tag component is missing"))
+
+        When("projecting component, service, and operation help")
+        val componentHelp = HelpProjection.projectModel(component, Some("tag"))
+        val serviceHelp = HelpProjection.projectModel(component, Some("tag.tag"))
+        val createHelp = HelpProjection.projectModel(component, Some("tag.tag.tag_create"))
+        val searchHelp = HelpProjection.projectModel(component, Some("tag.tag.tag_search_entities"))
+
+        Then("the Tag operations are discoverable from service help")
+        serviceHelp.`type` shouldBe "service"
+        serviceHelp.name shouldBe "tag"
+        serviceHelp.children should contain allOf (
+          "tag_tree",
+          "tag_create",
+          "tag_update",
+          "tag_move",
+          "tag_attach",
+          "tag_detach",
+          "tag_list_entity_tags",
+          "tag_search_entities"
+        )
+
+        And("operation summaries and descriptions are projected")
+        createHelp.`type` shouldBe "operation"
+        createHelp.summary shouldBe "Create a Tag."
+        createHelp.details("description").mkString should include ("strict-tree Tag")
+        searchHelp.summary shouldBe "Search Entities by Tag."
+        searchHelp.details("description").mkString should include ("EntityStore-visible rows")
+
+        And("the CLI renderers expose the same operation names")
+        val yaml = CliHelpYamlRenderer.render(serviceHelp)
+        yaml should include ("tag_create")
+        yaml should include ("tag_search_entities")
+        val json = CliHelpJsonRenderer.render(componentHelp)
+        json should include ("\"name\":\"tag\"")
+        json should include ("\"services\":[\"meta\",\"system\",\"tag\"]")
+      }
     }
   }
 }

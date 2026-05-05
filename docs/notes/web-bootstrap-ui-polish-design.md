@@ -32,6 +32,9 @@ Out of scope:
 Textus widget design is covered separately in
 `docs/notes/web-textus-widget-design.md`.
 
+For implementation-level screen composition guidance, see
+`docs/notes/static-form-web-app-bootstrap-guide.md`.
+
 ## Bootstrap 5 Basis
 
 Bootstrap 5 is the default UI basis for framework-generated Web pages and

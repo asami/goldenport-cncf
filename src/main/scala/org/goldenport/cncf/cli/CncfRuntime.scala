@@ -62,7 +62,7 @@ import org.goldenport.cncf.subsystem.GenericSubsystemDescriptor
  *  version Jan. 31, 2026
  *  version Feb.  5, 2026
  *  version Apr. 30, 2026
- * @version May.  5, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 object CncfRuntime extends GlobalObservable {
@@ -1268,19 +1268,21 @@ object CncfRuntime extends GlobalObservable {
             case Some(existing) =>
               val selection = AssemblyReport.selectPreferred(existing, component)
               seen.update(key, selection.selected)
-              GlobalRuntimeContext.current.foreach(
-                _.assemblyReport.addWarning(
-                  AssemblyReport.duplicateComponentWarning(
-                    componentName = name,
-                    selected = selection.selected,
-                    dropped = selection.dropped,
-                    reason = selection.reason
+              if (!AssemblyReport.isSameAssemblySource(existing, component)) {
+                GlobalRuntimeContext.current.foreach(
+                  _.assemblyReport.addWarning(
+                    AssemblyReport.duplicateComponentWarning(
+                      componentName = name,
+                      selected = selection.selected,
+                      dropped = selection.dropped,
+                      reason = selection.reason
+                    )
                   )
                 )
-              )
-              observe_warn(
-                s"duplicate component collapsed name=${name} kept=${selection.selected.origin} dropped=${selection.dropped.map(_.origin).mkString(",")} reason=${selection.reason}"
-              )
+                observe_warn(
+                  s"duplicate component collapsed name=${name} kept=${selection.selected.origin} dropped=${selection.dropped.map(_.origin).mkString(",")} reason=${selection.reason}"
+                )
+              }
             case None =>
               seen += key -> component
           }
@@ -3216,22 +3218,7 @@ class CncfRuntime() extends GlobalObservable {
           if (selection.selected ne current) {
             seen.update(key, selection.selected)
           }
-          GlobalRuntimeContext.current.foreach(
-            _.assemblyReport.addWarning(
-              AssemblyReport.duplicateComponentWarning(
-                componentName = component.core.name,
-                selected = selection.selected,
-                dropped = selection.dropped,
-                reason = selection.reason
-              )
-            )
-          )
-        }
-      } else {
-        seen.get(key) match {
-          case Some(current) =>
-            val selection = AssemblyReport.selectPreferred(current, component)
-            seen.update(key, selection.selected)
+          if (!AssemblyReport.isSameAssemblySource(current, component)) {
             GlobalRuntimeContext.current.foreach(
               _.assemblyReport.addWarning(
                 AssemblyReport.duplicateComponentWarning(
@@ -3242,6 +3229,25 @@ class CncfRuntime() extends GlobalObservable {
                 )
               )
             )
+          }
+        }
+      } else {
+        seen.get(key) match {
+          case Some(current) =>
+            val selection = AssemblyReport.selectPreferred(current, component)
+            seen.update(key, selection.selected)
+            if (!AssemblyReport.isSameAssemblySource(current, component)) {
+              GlobalRuntimeContext.current.foreach(
+                _.assemblyReport.addWarning(
+                  AssemblyReport.duplicateComponentWarning(
+                    componentName = component.core.name,
+                    selected = selection.selected,
+                    dropped = selection.dropped,
+                    reason = selection.reason
+                  )
+                )
+              )
+            }
           case None =>
             seen += key -> component
         }

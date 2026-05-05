@@ -45,7 +45,7 @@ import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
- * @version May.  5, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -143,6 +143,10 @@ final class Http4sHttpServer(
         if (_is_web_authorized("system", "admin", "index", Some(req))) _system_admin() else _forbidden_web(req, Some("system"), Some("admin"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "admin" / "descriptor" =>
         if (_is_web_authorized("system", "admin", "descriptor", Some(req))) _system_admin_descriptor() else _forbidden_web(req, Some("system"), Some("admin"), Some("descriptor"))
+      case req @ GET -> Root / "web" / "system" / "admin" / "assembly" / "warnings" =>
+        if (_is_web_authorized("system", "admin.assembly", "warnings", Some(req))) _system_admin_assembly_warnings() else _forbidden_web(req, Some("system"), Some("admin.assembly"), Some("warnings"))
+      case req @ GET -> Root / "web" / "system" / "admin" / "assembly" / "report" =>
+        if (_is_web_authorized("system", "admin.assembly", "report", Some(req))) _system_admin_assembly_report() else _forbidden_web(req, Some("system"), Some("admin.assembly"), Some("report"))
       case req @ GET -> Root / "web" / "system" / "admin" / "jobs" =>
         if (_is_web_authorized("system", "admin.jobs", "index", Some(req))) _system_admin_jobs() else _forbidden_web(req, Some("system"), Some("admin.jobs"), Some("index"))
       case req @ GET -> Root / "web" / "system" / "admin" / "jobs" / jobId =>
@@ -397,6 +401,12 @@ final class Http4sHttpServer(
     val p = StaticFormAppRenderer.renderSystemAdminDescriptor(engine.webDescriptor)
     _html(p)
   }
+
+  private def _system_admin_assembly_warnings(): IO[HResponse[IO]] =
+    _html(StaticFormAppRenderer.renderSystemAdminAssemblyWarnings(engine.runtimeSubsystem))
+
+  private def _system_admin_assembly_report(): IO[HResponse[IO]] =
+    _html(StaticFormAppRenderer.renderSystemAdminAssemblyReport(engine.runtimeSubsystem))
 
   private def _system_admin_jobs(): IO[HResponse[IO]] =
     _html(StaticFormAppRenderer.renderSystemAdminJobs(engine.runtimeSubsystem))
@@ -3429,9 +3439,10 @@ final class Http4sHttpServer(
     }
     val query = Record.create(req.uri.query.params.toVector)
     val header = _request_header_record(req)
+    val origin = _request_origin(req)
     val context = HttpContext(
-      scheme = req.uri.scheme.map(_.value),
-      authority = req.uri.authority.map(_.renderString),
+      scheme = req.uri.scheme.map(_.value).orElse(origin.map(_._1)),
+      authority = req.uri.authority.map(_.renderString).orElse(origin.map(_._2)),
       originalUri = Some(req.uri.renderString)
     )
     val path = pathOverride.getOrElse(req.uri.path.renderString)
@@ -3448,6 +3459,33 @@ final class Http4sHttpServer(
       header.mediaType.mainType.equalsIgnoreCase("multipart") &&
         header.mediaType.subType.equalsIgnoreCase("form-data")
     }
+
+  private def _request_origin(
+    req: org.http4s.Request[IO]
+  ): Option[(String, String)] = {
+    val scheme =
+      req.uri.scheme.map(_.value)
+        .orElse(_header_value(req, "X-Forwarded-Proto").map(_.takeWhile(_ != ',').trim).filter(_.nonEmpty))
+        .orElse(Some("http"))
+    val authority =
+      req.uri.authority.map(_.renderString)
+        .orElse(_header_value(req, "X-Forwarded-Host").map(_.takeWhile(_ != ',').trim).filter(_.nonEmpty))
+        .orElse(_header_value(req, "Host").map(_.trim).filter(_.nonEmpty))
+    for {
+      s <- scheme
+      a <- authority
+    } yield s -> a
+  }
+
+  private def _header_value(
+    req: org.http4s.Request[IO],
+    name: String
+  ): Option[String] =
+    req.headers.headers
+      .find(_.name.toString.equalsIgnoreCase(name))
+      .map(_.value)
+      .map(_.trim)
+      .filter(_.nonEmpty)
 
   private def _to_regular_http_request(
     req: org.http4s.Request[IO],

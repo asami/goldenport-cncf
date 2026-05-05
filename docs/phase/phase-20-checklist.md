@@ -218,7 +218,7 @@ navigation.
 
 ## TG-06: Verification, Documentation, and Phase Closure
 
-Status: TODO
+Status: DONE
 
 ### Objective
 
@@ -227,12 +227,24 @@ Verify Phase 20 behavior, document decisions, and close the phase.
 ### Detailed Tasks
 
 - [x] Add CNCF specs for Tag model, tree, attachment, and search behavior.
-- [ ] Add CNCF specs for generic admin UI/projection behavior.
+- [x] Add CNCF specs for generic admin UI/projection behavior.
 - [x] Add `textus-blog` specs for BlogPost tag sync and public tag search.
 - [x] Run CNCF focused Tag specs.
 - [x] Run CNCF `sbt --batch test`.
 - [x] Run `textus-blog` focused `ComponentFactorySpec`.
 - [x] Run `textus-blog` `sbt --batch test`.
 - [x] Run `git diff --check` in touched repos.
-- [ ] Record deferred RDF/Knowledge Graph and DAG/polyhierarchy work.
-- [ ] Mark all Phase 20 items DONE or explicitly deferred before closure.
+- [x] Record deferred RDF/Knowledge Graph and DAG/polyhierarchy work.
+- [x] Mark all Phase 20 items DONE or explicitly deferred before closure.
+
+### Completion Notes
+
+- Added generic admin UI/projection coverage for Tag tree browse, create,
+  update, move, search forms, empty-state rendering, Entity detail
+  TagAttachment attach/detach, actual-role detach, and Tag operation help.
+- Fixed Tag admin move form and argument forwarding so requested TagSpace is
+  preserved through `tag_move`.
+- Deferred RDF/Knowledge Graph integration to the separate RDF development
+  item.
+- Deferred DAG/polyhierarchy Tag graphs; Phase 20 closes with strict tree
+  semantics.

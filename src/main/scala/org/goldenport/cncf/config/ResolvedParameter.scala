@@ -5,7 +5,7 @@ import org.goldenport.protocol.{Argument, Property, Switch}
 
 /*
  * @since   Mar. 13, 2026
- * @version Mar. 13, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ResolvedParameter(
@@ -94,6 +94,14 @@ final class ResolvedParameters private (
   def markAllLocalUsed(): Unit =
     _entries.values.foreach(_mark_used)
 
+  def hasLocalFramework(
+    kind: String
+  ): Boolean =
+    _entries.values.exists {
+      case ResolvedParameter(_, _, ResolvedParameter.Source.Framework(k)) => k == kind
+      case _ => false
+    }
+
   private def _mark_used(
     param: ResolvedParameter
   ): Unit =
@@ -157,6 +165,27 @@ object ResolvedParameters {
     val params =
       new ResolvedParameters(
         entries.result().toMap,
+        parent,
+        scala.collection.mutable.LinkedHashMap.empty
+      )
+    params.markAllLocalUsed()
+    params
+  }
+
+  def fromFrameworkProperties(
+    properties: List[Property],
+    kind: String,
+    parent: Option[ResolvedParameters]
+  ): ResolvedParameters = {
+    val entries = properties.map { prop =>
+      val key = prop.name
+      val value = ConfigurationValue.StringValue(Option(prop.value).map(_.toString).getOrElse(""))
+      val source = ResolvedParameter.Source.Framework(kind)
+      key -> ResolvedParameter(key, value, source)
+    }.toMap
+    val params =
+      new ResolvedParameters(
+        entries,
         parent,
         scala.collection.mutable.LinkedHashMap.empty
       )

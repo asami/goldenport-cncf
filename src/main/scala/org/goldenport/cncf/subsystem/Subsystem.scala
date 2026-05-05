@@ -42,6 +42,7 @@ import org.goldenport.cncf.protocol.OperationRequestValidationObserver
 import org.goldenport.cncf.naming.NamingConventions
 import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, ChildEntityBindingOperationDefinition, CmlOperationAssociationBinding, CmlOperationChildEntityBinding, CmlOperationImageBinding, ImageBindingOperationDefinition}
 import org.goldenport.cncf.security.{AdminAuthorizationPolicy, IngressSecurityResolver, OperationAuthorization, OperationAuthorizationProvider}
+import org.goldenport.cncf.config.{ResolvedParameter, ResolvedParameters}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
 
@@ -50,7 +51,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version May.  5, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -83,6 +84,12 @@ final class Subsystem(
   private lazy val _workflow_engine: WorkflowEngine = WorkflowEngine.inMemory(this)
   private val _event_receptions = mutable.LinkedHashMap.empty[String, EventReception]
   private val _entity_access_metrics: EntityAccessMetricsRegistry = EntityAccessMetricsRegistry.shared
+  private val _site_base_url_keys = Vector(
+    RuntimeConfig.SiteBaseUrlKey,
+    RuntimeConfig.RuntimeSiteBaseUrlKey,
+    "cncf.site.base-url",
+    "cncf.runtime.site.base-url"
+  )
   private var _descriptor: Option[GenericSubsystemDescriptor] = None
   private var _resolved_security_wiring: ResolvedSecurityWiring = ResolvedSecurityWiring.empty
 
@@ -266,6 +273,13 @@ final class Subsystem(
   }
 
   def executeWithMetadata(request: Request): Consequence[ExecutionResult] = {
+    _execute_with_metadata(request, None)
+  }
+
+  private def _execute_with_metadata(
+    request: Request,
+    httpRequest: Option[HttpRequest]
+  ): Consequence[ExecutionResult] = {
     val r: Consequence[ExecutionResult] = for {
       route <- _resolve_route(request) match {
         case Some(r) =>
@@ -278,21 +292,23 @@ final class Subsystem(
         val (component, _, _) = route
         val domainRequest = _domain_request(normalizedRequest)
         IngressSecurityResolver.resolve(component.logic.executionContext(), normalizedRequest).flatMap { security =>
-          given ExecutionContext = security.executionContext
-          _authorize_operation(route, security.executionContext).flatMap { _ =>
+          val executionContext =
+            _with_http_runtime_parameters(security.executionContext, httpRequest)
+          given ExecutionContext = executionContext
+          _authorize_operation(route, executionContext).flatMap { _ =>
             val operationDomainRequest = _operation_business_request(route, domainRequest)
             val oprequest = component.logic.makeOperationRequest(operationDomainRequest)
             _observe_operation_request_validation_failure(
               route,
               operationDomainRequest,
               oprequest,
-              security.executionContext
+              executionContext
             )
             oprequest.flatMap {
               case action: Action =>
-                component.logic.executeAction(action, security.executionContext).flatMap { response =>
-                  _apply_operation_association_bindings(route, domainRequest, response, security.executionContext).map { bound =>
-                    ExecutionResult(bound, security.executionContext.runtime.executionMetadata)
+                component.logic.executeAction(action, executionContext).flatMap { response =>
+                  _apply_operation_association_bindings(route, domainRequest, response, executionContext).map { bound =>
+                    ExecutionResult(bound, executionContext.runtime.executionMetadata)
                   }
                 }
               case _ =>
@@ -736,6 +752,46 @@ final class Subsystem(
       arguments = request.arguments.filterNot(p => _is_framework_or_security_argument(p.name))
     )
 
+  private def _with_http_runtime_parameters(
+    ctx: ExecutionContext,
+    req: Option[HttpRequest]
+  ): ExecutionContext =
+    _http_site_base_url_property(ctx, req) match {
+      case Some(prop) =>
+        val parent = Some(ctx.runtime.resolvedParameters)
+        ctx.runtime.setResolvedParameters(
+          ResolvedParameters.fromFrameworkProperties(
+            properties = List(prop),
+            kind = "http",
+            parent = parent
+          )
+        )
+        ctx
+      case None => ctx
+    }
+
+  private def _http_site_base_url_property(
+    ctx: ExecutionContext,
+    req: Option[HttpRequest]
+  ): Option[Property] =
+    if (_has_resolved_site_base_url(ctx))
+      None
+    else
+      for {
+        request <- req
+        scheme <- request.context.scheme.map(_.trim).filter(_.nonEmpty)
+        authority <- request.context.authority.map(_.trim).filter(_.nonEmpty)
+      } yield Property(RuntimeConfig.SiteBaseUrlKey, s"$scheme://$authority", None)
+
+  private def _has_resolved_site_base_url(
+    ctx: ExecutionContext
+  ): Boolean =
+    _site_base_url_keys.exists { key =>
+      ctx.runtime.resolvedParameters.get(key)
+        .map(param => ResolvedParameter.format_value(param.value).trim)
+        .exists(_.nonEmpty)
+    }
+
   private def _is_framework_or_query_property(
     name: String
   ): Boolean =
@@ -937,7 +993,7 @@ final class Subsystem(
       // Route HTTP ingress through the standard request execution path so
       // request-derived execution mode, security, and other ingress context
       // are applied consistently with command/client execution.
-      result <- executeWithMetadata(normalized)
+      result <- _execute_with_metadata(normalized, Some(req))
       response = result.response match {
         case OperationResponse.Http(http) => http
         case other => _egress(component).encode(operation, _to_response(normalized, other, result.metadata))
