@@ -1007,18 +1007,57 @@ Future distributed-system development item.
   distributed implementation can replace or extend the in-process `JobEngine`,
   Working Set, and View cache behavior.
 
-### 8.17 Inter-Component Cluster Saga
+### 8.17 Job Management
+Future platform development item.
+
+- Manage Job as a first-class Entity rather than only as an engine-local runtime
+  record. Job state, result, diagnostics, CallTree, tasks, and lifecycle should
+  be visible through ordinary Entity/admin/user-facing management surfaces where
+  appropriate.
+- Make Job behavior definable by JCL. A Job launch should be able to specify
+  the intended JCL profile, while the runtime records the actual Job behavior
+  profile for inspection.
+- JCL is not a complete direct-control script for all Job behavior. Some runtime
+  behavior is Event-driven or owned by external continuation points, so JCL
+  should describe intended control, state, tasks, compensation, and constraints
+  while the engine records any runtime deviations.
+- Add difference checking between declared JCL and observed execution:
+  - detect mismatches between intended and actual behavior;
+  - suggest JCL extensions when the observed profile contains legitimate
+    behavior not yet represented in JCL;
+  - allow operators or developers to reflect the difference into JCL, or treat
+    it as an error depending on policy.
+- Add a reconstruction path from actual Job execution profiles back into JCL.
+  This is intended to help evolve JCL from runtime evidence while keeping
+  contradiction handling explicit.
+- Jobs have state and state transitions. Job control operations should be
+  state-aware and should be able to allow, deny, suspend, resume, retry, cancel,
+  or repair behavior based on the current state.
+- Treat Task as the transaction unit inside a Job. Aggregate execution is a
+  Task, and Task boundaries are the natural place to define transactional
+  success/failure and compensation.
+- Support compensation between Tasks. Compensation should be explicit enough to
+  integrate with Job state, recovery-required events, and human recovery
+  diagnostics when automatic cleanup is incomplete.
+
+### 8.18 Saga Management
 Future distributed-collaboration development item.
 
-- Add support for long-running process sharing across components or component
-  clusters.
+- Manage Saga as a first-class Saga Entity.
+- Treat Saga as the distributed and long-running extension of Job management
+  across multiple Subsystems, multiple machines, and longer time horizons.
+- Add support for long-running process sharing across components, component
+  clusters, and remote runtimes.
 - This item owns cross-component Saga coordination, correlation/causation/saga
   identity propagation, remote retry, remote compensation, and failure
   observability across cluster boundaries.
+- Saga management should reuse the Job/JCL concepts where practical, but its
+  ownership, persistence, compensation, and observability boundaries are
+  distributed rather than local to one in-process JobEngine.
 - This is separate from the current in-process event/job baseline and from the
   local `WorkflowEngine` baseline.
 
-### 8.18 Persistent Materialized View Store
+### 8.19 Persistent Materialized View Store
 Future scalability development item.
 
 - Consider persistent materialized view storage only after CNCF has enough
@@ -1031,7 +1070,7 @@ Future scalability development item.
 - Blog/CMS list, slug index, feed, and author dashboard projections are
   candidate drivers when runtime memory cache becomes insufficient.
 
-### 8.19 Runtime Namespace Descriptor Defaults
+### 8.20 Runtime Namespace Descriptor Defaults
 Future platform hardening item.
 
 - Continue the runtime namespace policy after the initial `single/global`
