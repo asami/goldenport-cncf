@@ -11,6 +11,7 @@ import com.vladsch.flexmark.util.data.MutableDataSet
 import org.goldenport.Consequence
 import org.goldenport.cncf.component.Component
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.html.{HtmlElement, HtmlText, HtmlTree}
 import org.goldenport.value.{ContentAttributes, ContentMarkup}
 import org.smartdox.parser.Dox2Parser
 import org.smartdox.renderer.DoxHtmlRenderer
@@ -22,7 +23,7 @@ import org.smartdox.renderer.DoxHtmlRenderer
  * renders the safe SmartDox parser/AST subset from simplemodeling-lib.
  *
  * @since   May.  4, 2026
- * @version May.  4, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class ContentRenderResult(
@@ -56,8 +57,28 @@ final class ContentRenderWorkflow(
     html: String
   )(using ExecutionContext): Consequence[String] =
     _blob_workflow.renderTextusBlobUrns(html).map { rendered =>
-      s"""<article class="textus-content">$rendered</article>"""
+      if (_is_top_level_article(rendered))
+        rendered
+      else
+        s"""<article class="textus-content">$rendered</article>"""
     }
+
+  private def _is_top_level_article(html: String): Boolean =
+    _looks_like_top_level_article(html) || HtmlTree.parse(html).toOption.exists { document =>
+      val nodes = document.nodes.filter {
+        case HtmlText(text) => text.trim.nonEmpty
+        case _ => true
+      }
+      nodes match {
+        case Vector(e: HtmlElement) => e.name == "article"
+        case _ => false
+      }
+    }
+
+  private def _looks_like_top_level_article(html: String): Boolean = {
+    val trimmed = html.trim.toLowerCase(java.util.Locale.ROOT)
+    trimmed.startsWith("<article") && trimmed.endsWith("</article>")
+  }
 
   private def _render_markdown(
     markdown: String

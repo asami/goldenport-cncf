@@ -13,7 +13,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   May.  4, 2026
- * @version May.  4, 2026
+ * @version May.  6, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ContentRenderWorkflowSpec extends AnyWordSpec with Matchers {
@@ -32,6 +32,23 @@ final class ContentRenderWorkflowSpec extends AnyWordSpec with Matchers {
 
       result.markup shouldBe ContentMarkup.HtmlFragment
       result.html shouldBe """<article class="textus-content"><p>Hello</p></article>"""
+    }
+
+    "preserve a stored top-level HTML article without wrapping it again" in {
+      given ExecutionContext = ExecutionContext.create()
+      val workflow = ContentRenderWorkflow(_blob_component(InMemoryBlobStore()))
+      val content = ContentAttributes(
+        content = Some(ContentBody("""<article class="blog-article"><p>Hello</p></article>""")),
+        mimeType = Some(MimeType.TEXT_HTML),
+        charset = Some(StandardCharsets.UTF_8),
+        markup = Some(ContentMarkup.HtmlFragment)
+      )
+
+      val result = _success(workflow.renderHtml(content))
+
+      result.markup shouldBe ContentMarkup.HtmlFragment
+      result.html shouldBe """<article class="blog-article"><p>Hello</p></article>"""
+      result.html should not include ("<article class=\"textus-content\"><article")
     }
 
     "render GFM Markdown tables to HTML before wrapping" in {
