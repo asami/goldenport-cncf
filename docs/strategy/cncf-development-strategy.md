@@ -584,7 +584,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Completed so far:
 - Runtime Tag model, TagSpace-scoped resident tree cache, effective
   Subsystem/Component/User/explicit TagSpace merge, TagAttachment Association,
-  generic tag operations, Tag admin/manual/projection surfaces, and
+  generic tag operations, Bootstrap 5 Tag admin/manual/projection surfaces, and
   `textus-blog` shared `blog` TagSpace integration.
 - Remaining:
 - None for Phase 20. RDF/Knowledge Graph integration and DAG/polyhierarchy Tag

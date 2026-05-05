@@ -179,6 +179,8 @@ Expose Tag management and Entity tagging through CNCF admin/runtime surfaces.
 - Added backend `tag_update` and `tag_move` operations.
 - Added `/web/admin/tags` Tag tree, create, update, move, attach/detach, and
   search surfaces.
+- Polished `/web/admin/tags` as a Bootstrap 5 admin surface with TagSpace
+  selector, tree browse, search result, and empty-state layout.
 - Added Entity detail TagAttachment listing and attach/detach controls.
 - Tag update/move references are scoped by the requested TagSpace when one is
   supplied.

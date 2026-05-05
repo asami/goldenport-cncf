@@ -2625,37 +2625,68 @@ object StaticFormAppRenderer {
       search <- _admin_tag_search_record(subsystem, params, requestProperties)
     } yield {
       val tags = _record_seq(tree.asMap.get("data"))
+      val tagSpace = params.get("tagSpace").filter(_.nonEmpty).getOrElse("default")
       val table =
         if (tags.isEmpty)
           s"""<tbody>${_admin_empty_table_cell(9, "No Tags are available for this TagSpace.")}</tbody>"""
         else
           s"""<tbody>${tags.map(_admin_tag_row).mkString("\n")}</tbody>"""
       val searchHtml = search.map(_admin_tag_search_result(params, _)).getOrElse("")
+      val emptyAlert =
+        if (tags.isEmpty) _admin_tag_empty_alert("No Tags are available for this TagSpace.")
+        else ""
       Page(_simple_page(
         title = "Tag Administration",
         subtitle = "Hierarchical Tag tree and Entity-to-Tag management",
         body =
           s"""${_admin_nav_card(Vector("System admin" -> "/web/system/admin", "Associations" -> "/web/admin/associations"))}
-             |<article>
-             |  <h2>TagSpace</h2>
-             |  ${_admin_tag_filter_form(params)}
+             |<article class="card admin-card">
+             |  <div class="card-body">
+             |    <div class="d-flex flex-column flex-md-row justify-content-between gap-3 mb-3">
+             |      <div>
+             |        <h2 class="card-title h5 mb-1">TagSpace selector</h2>
+             |        <p class="text-body-secondary mb-0">Current TagSpace <span class="badge text-bg-secondary">${_escape(tagSpace)}</span></p>
+             |      </div>
+             |      <div class="text-body-secondary small">Tags are shared master data inside the selected TagSpace.</div>
+             |    </div>
+             |    ${_admin_tag_filter_form(params)}
+             |  </div>
              |</article>
-             |<article>
-             |  <h2>Create Tag</h2>
-             |  ${_admin_tag_create_form(params)}
-             |</article>
-             |<article>
-             |  <h2>Search Entities by Tag</h2>
-             |  ${_admin_tag_search_form(params)}
-             |  ${searchHtml}
-             |</article>
-             |<article>
-             |  <h2>Tags</h2>
-             |  <div class="table-responsive mt-3">
-             |    <table class="table table-sm align-middle">
+             |<div class="row g-3">
+             |  <div class="col-12 col-xl-6">
+             |    <article class="card admin-card h-100">
+             |      <div class="card-body">
+             |        <h2 class="card-title h5">Create Tag</h2>
+             |        ${_admin_tag_create_form(params)}
+             |      </div>
+             |    </article>
+             |  </div>
+             |  <div class="col-12 col-xl-6">
+             |    <article class="card admin-card h-100">
+             |      <div class="card-body">
+             |        <h2 class="card-title h5">Search Entities by Tag</h2>
+             |        ${_admin_tag_search_form(params)}
+             |      </div>
+             |    </article>
+             |  </div>
+             |</div>
+             |${searchHtml}
+             |<article class="card admin-card">
+             |  <div class="card-body">
+             |    <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-3">
+             |      <div>
+             |        <h2 class="card-title h5 mb-1">Tags</h2>
+             |        <p class="text-body-secondary mb-0">Browse, update, and move Tags in <span class="badge text-bg-secondary">${_escape(tagSpace)}</span>.</p>
+             |      </div>
+             |      <span class="badge text-bg-light border align-self-start">${tags.size} tags</span>
+             |    </div>
+             |    ${emptyAlert}
+             |    <div class="table-responsive">
+             |      <table class="table table-sm table-hover align-middle mb-0">
              |      <thead><tr><th>Path</th><th>Key</th><th>TagSpace</th><th>Usage</th><th>Sort</th><th>Title</th><th>Description</th><th>Update</th><th>Move</th></tr></thead>
              |      ${table}
              |    </table>
+             |  </div>
              |  </div>
              |</article>
              |${_manual_raw_details("Raw tag tree", tree)}""".stripMargin
@@ -2979,12 +3010,14 @@ object StaticFormAppRenderer {
     val id = record.getString("id").getOrElse("")
     val path = record.getString("path").getOrElse("")
     val tagSpace = record.getString("tagSpace").getOrElse("")
+    val usage = record.getString("usageKind").getOrElse("")
+    val sort = record.getString("sortOrder").getOrElse("")
     s"""<tr>
-       |  <td><code>${_escape(path)}</code><div class="small text-muted">${_escape(id)}</div></td>
-       |  <td>${_escape(record.getString("key").getOrElse(""))}</td>
-       |  <td>${_escape(tagSpace)}</td>
-       |  <td>${_escape(record.getString("usageKind").getOrElse(""))}</td>
-       |  <td>${_escape(record.getString("sortOrder").getOrElse(""))}</td>
+       |  <td><div><code class="fw-semibold">${_escape(path)}</code></div><div class="small text-body-secondary">${_escape(id)}</div></td>
+       |  <td><code>${_escape(record.getString("key").getOrElse(""))}</code></td>
+       |  <td><span class="badge text-bg-secondary">${_escape(tagSpace)}</span></td>
+       |  <td><span class="badge text-bg-light border">${_escape(usage)}</span></td>
+       |  <td>${if (sort.isEmpty) "" else s"""<span class="badge text-bg-light border">${_escape(sort)}</span>"""}</td>
        |  <td>${_escape(record.getString("title").getOrElse(""))}</td>
        |  <td>${_escape(record.getString("description").getOrElse(""))}</td>
        |  <td>${_admin_tag_update_form(record)}</td>
@@ -2996,48 +3029,45 @@ object StaticFormAppRenderer {
     params: Map[String, String]
   ): String =
     s"""<form method="get" action="/web/admin/tags" class="row g-2 align-items-end">
-       |  <div class="col-md-4"><label class="form-label" for="tagAdminTagSpace">TagSpace</label><input class="form-control" id="tagAdminTagSpace" name="tagSpace" value="${_escape(params.getOrElse("tagSpace", ""))}" placeholder="default"></div>
-       |  <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Open</button></div>
-       |  <div class="col-md-2"><a class="btn btn-outline-secondary w-100" href="/web/admin/tags">Default</a></div>
+       |  <div class="col-12 col-md-7"><label class="form-label" for="tagAdminTagSpace">TagSpace</label><input class="form-control" id="tagAdminTagSpace" name="tagSpace" value="${_escape(params.getOrElse("tagSpace", ""))}" placeholder="default"><div class="form-text">Use blank to open the default TagSpace.</div></div>
+       |  <div class="col-6 col-md-2"><button class="btn btn-primary w-100" type="submit">Open</button></div>
+       |  <div class="col-6 col-md-2"><a class="btn btn-outline-secondary w-100" href="/web/admin/tags">Default</a></div>
        |</form>""".stripMargin
 
   private def _admin_tag_create_form(
     params: Map[String, String]
   ): String =
     s"""<form method="post" action="/web/admin/tags/create" class="row g-2 align-items-end">
-       |  <div class="col-md-2"><label class="form-label" for="tagCreateSpace">TagSpace</label><input class="form-control" id="tagCreateSpace" name="tagSpace" value="${_escape(params.getOrElse("tagSpace", ""))}" placeholder="default"></div>
-       |  <div class="col-md-2"><label class="form-label" for="tagCreateKey">Key</label><input class="form-control" id="tagCreateKey" name="key" required></div>
-       |  <div class="col-md-3"><label class="form-label" for="tagCreateParent">Parent tag id/ref</label><input class="form-control" id="tagCreateParent" name="parentTagRef"></div>
-       |  <div class="col-md-2"><label class="form-label" for="tagCreateUsage">Usage</label><input class="form-control" id="tagCreateUsage" name="usageKind" list="tagUsageOptions" value="general"></div>
-       |  <div class="col-md-1"><label class="form-label" for="tagCreateSort">Sort</label><input class="form-control" id="tagCreateSort" name="sortOrder"></div>
-       |  <div class="col-md-2"><label class="form-label" for="tagCreateTitle">Title</label><input class="form-control" id="tagCreateTitle" name="title"></div>
-       |  <div class="col-md-10"><label class="form-label" for="tagCreateDescription">Description</label><input class="form-control" id="tagCreateDescription" name="description"></div>
-       |  <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Create Tag</button></div>
+       |  <div class="col-12 col-md-4"><label class="form-label" for="tagCreateSpace">TagSpace</label><input class="form-control" id="tagCreateSpace" name="tagSpace" value="${_escape(params.getOrElse("tagSpace", ""))}" placeholder="default"></div>
+       |  <div class="col-12 col-md-4"><label class="form-label" for="tagCreateKey">Key</label><input class="form-control" id="tagCreateKey" name="key" required></div>
+       |  <div class="col-12 col-md-4"><label class="form-label" for="tagCreateParent">Parent tag id/ref</label><input class="form-control" id="tagCreateParent" name="parentTagRef"></div>
+       |  <div class="col-12 col-md-4"><label class="form-label" for="tagCreateUsage">Usage</label><input class="form-control" id="tagCreateUsage" name="usageKind" list="tagUsageOptions" value="general"></div>
+       |  <div class="col-12 col-md-3"><label class="form-label" for="tagCreateSort">Sort</label><input class="form-control" id="tagCreateSort" name="sortOrder"></div>
+       |  <div class="col-12 col-md-5"><label class="form-label" for="tagCreateTitle">Title</label><input class="form-control" id="tagCreateTitle" name="title"></div>
+       |  <div class="col-12"><label class="form-label" for="tagCreateDescription">Description</label><input class="form-control" id="tagCreateDescription" name="description"></div>
+       |  <div class="col-12 d-flex justify-content-end"><button class="btn btn-primary" type="submit">Create Tag</button></div>
        |  <datalist id="tagUsageOptions"><option value="general"><option value="cms"><option value="navigation"><option value="powertype"></datalist>
        |</form>""".stripMargin
 
   private def _admin_tag_update_form(
     record: Record
   ): String =
-    s"""<form method="post" action="/web/admin/tags/update" class="row g-1 align-items-end">
+    s"""<form method="post" action="/web/admin/tags/update" class="vstack gap-1">
        |  <input type="hidden" name="tagRef" value="${_escape(record.getString("id").getOrElse(""))}">
        |  <input type="hidden" name="tagSpace" value="${_escape(record.getString("tagSpace").getOrElse(""))}">
-       |  <div class="col-12"><input class="form-control form-control-sm" name="title" value="${_escape(record.getString("title").getOrElse(""))}" placeholder="Title"></div>
-       |  <div class="col-12"><input class="form-control form-control-sm" name="description" value="${_escape(record.getString("description").getOrElse(""))}" placeholder="Description"></div>
-       |  <div class="col-6"><input class="form-control form-control-sm" name="usageKind" value="${_escape(record.getString("usageKind").getOrElse("general"))}" list="tagUsageOptions"></div>
-       |  <div class="col-4"><input class="form-control form-control-sm" name="sortOrder" value="${_escape(record.getString("sortOrder").getOrElse(""))}" placeholder="Sort"></div>
-       |  <div class="col-2"><button class="btn btn-outline-primary btn-sm w-100" type="submit">Save</button></div>
+       |  <div class="input-group input-group-sm"><span class="input-group-text">Title</span><input class="form-control form-control-sm" name="title" value="${_escape(record.getString("title").getOrElse(""))}" placeholder="Title"></div>
+       |  <div class="input-group input-group-sm"><span class="input-group-text">Description</span><input class="form-control form-control-sm" name="description" value="${_escape(record.getString("description").getOrElse(""))}" placeholder="Description"></div>
+       |  <div class="input-group input-group-sm"><span class="input-group-text">Usage</span><input class="form-control form-control-sm" name="usageKind" value="${_escape(record.getString("usageKind").getOrElse("general"))}" list="tagUsageOptions"><span class="input-group-text">Sort</span><input class="form-control form-control-sm" name="sortOrder" value="${_escape(record.getString("sortOrder").getOrElse(""))}" placeholder="Sort"><button class="btn btn-outline-primary btn-sm" type="submit">Save</button></div>
        |</form>""".stripMargin
 
   private def _admin_tag_move_form(
     record: Record
   ): String =
-    s"""<form method="post" action="/web/admin/tags/move" class="row g-1 align-items-end">
+    s"""<form method="post" action="/web/admin/tags/move" class="vstack gap-1">
        |  <input type="hidden" name="tagRef" value="${_escape(record.getString("id").getOrElse(""))}">
        |  <input type="hidden" name="tagSpace" value="${_escape(record.getString("tagSpace").getOrElse(""))}">
-       |  <div class="col-12"><input class="form-control form-control-sm" name="newParentTagRef" value="${_escape(record.getString("parentTagId").getOrElse(""))}" placeholder="New parent ref, blank for root"></div>
-       |  <div class="col-8"><input class="form-control form-control-sm" name="newKey" value="${_escape(record.getString("key").getOrElse(""))}" placeholder="New key"></div>
-       |  <div class="col-4"><button class="btn btn-outline-primary btn-sm w-100" type="submit">Move</button></div>
+       |  <div class="input-group input-group-sm"><span class="input-group-text">Parent</span><input class="form-control form-control-sm" name="newParentTagRef" value="${_escape(record.getString("parentTagId").getOrElse(""))}" placeholder="blank for root"></div>
+       |  <div class="input-group input-group-sm"><span class="input-group-text">Key</span><input class="form-control form-control-sm" name="newKey" value="${_escape(record.getString("key").getOrElse(""))}" placeholder="New key"><button class="btn btn-outline-primary btn-sm" type="submit">Move</button></div>
        |</form>""".stripMargin
 
   private def _admin_tag_search_form(
@@ -3059,19 +3089,42 @@ object StaticFormAppRenderer {
   ): String = {
     val component = params.getOrElse("component", "")
     val entity = params.getOrElse("entity", params.getOrElse("entityName", ""))
+    val tagRef = params.getOrElse("tagRef", params.getOrElse("tag", ""))
+    val tagSpace = params.get("tagSpace").filter(_.nonEmpty).getOrElse("default")
+    val role = params.getOrElse("role", "tag")
     val rows = _record_seq(record.asMap.get("data"))
+    val emptyAlert =
+      if (rows.isEmpty) _admin_tag_empty_alert("No visible Entities matched this Tag filter.")
+      else ""
     val body =
       if (rows.isEmpty)
         s"""<tbody>${_admin_empty_table_cell(3, "No visible Entities matched this Tag filter.")}</tbody>"""
       else
         s"""<tbody>${rows.map(row => _admin_tag_search_result_row(component, entity, row)).mkString("\n")}</tbody>"""
-    s"""<div class="table-responsive mt-3">
-       |  <table class="table table-sm align-middle">
-       |    <thead><tr><th>Entity</th><th>Title/Name</th><th>Raw</th></tr></thead>
-       |    ${body}
-       |  </table>
-       |</div>""".stripMargin
+    s"""<article class="card admin-card">
+       |  <div class="card-body">
+       |    <div class="d-flex flex-column flex-md-row justify-content-between gap-2 mb-3">
+       |      <div>
+       |        <h2 class="card-title h5 mb-1">Tag search result</h2>
+       |        <p class="text-body-secondary mb-0">Tag <code>${_escape(tagRef)}</code> in <span class="badge text-bg-secondary">${_escape(tagSpace)}</span>, role <span class="badge text-bg-light border">${_escape(role)}</span>.</p>
+       |      </div>
+       |      <span class="badge text-bg-light border align-self-start">${rows.size} entities</span>
+       |    </div>
+       |    ${emptyAlert}
+       |    <div class="table-responsive">
+       |      <table class="table table-sm table-hover align-middle mb-0">
+       |        <thead><tr><th>Entity</th><th>Title/Name</th><th>Raw</th></tr></thead>
+       |        ${body}
+       |      </table>
+       |    </div>
+       |  </div>
+       |</article>""".stripMargin
   }
+
+  private def _admin_tag_empty_alert(
+    message: String
+  ): String =
+    s"""<div class="alert alert-secondary mb-3" role="status">${_escape(message)}</div>"""
 
   private def _admin_tag_search_result_row(
     component: String,
