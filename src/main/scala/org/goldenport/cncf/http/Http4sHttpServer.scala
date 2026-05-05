@@ -45,7 +45,7 @@ import org.goldenport.datatype.{ContentType, MimeBody, MimeType}
  *  version Jan. 21, 2026
  *  version Mar. 29, 2026
  *  version Apr. 30, 2026
- * @version May.  2, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Http4sHttpServer(
@@ -171,6 +171,18 @@ final class Http4sHttpServer(
         if (_is_web_authorized("admin", "associations", "attach", Some(req), Some("admin.entity.update"))) _admin_association_attach(req) else _forbidden_web(req, Some("admin"), Some("associations"), Some("attach"))
       case req @ POST -> Root / "web" / "admin" / "associations" / "detach" =>
         if (_is_web_authorized("admin", "associations", "detach", Some(req), Some("admin.entity.update"))) _admin_association_detach(req) else _forbidden_web(req, Some("admin"), Some("associations"), Some("detach"))
+      case req @ GET -> Root / "web" / "admin" / "tags" =>
+        if (_is_web_authorized("admin", "tags", "index", Some(req), Some("admin.entity.read"))) _admin_tags(req) else _forbidden_web(req, Some("admin"), Some("tags"), Some("index"))
+      case req @ POST -> Root / "web" / "admin" / "tags" / "create" =>
+        if (_is_web_authorized("admin", "tags", "create", Some(req), Some("admin.entity.update"))) _admin_tag_create(req) else _forbidden_web(req, Some("admin"), Some("tags"), Some("create"))
+      case req @ POST -> Root / "web" / "admin" / "tags" / "update" =>
+        if (_is_web_authorized("admin", "tags", "update", Some(req), Some("admin.entity.update"))) _admin_tag_update(req) else _forbidden_web(req, Some("admin"), Some("tags"), Some("update"))
+      case req @ POST -> Root / "web" / "admin" / "tags" / "move" =>
+        if (_is_web_authorized("admin", "tags", "move", Some(req), Some("admin.entity.update"))) _admin_tag_move(req) else _forbidden_web(req, Some("admin"), Some("tags"), Some("move"))
+      case req @ POST -> Root / "web" / "admin" / "tags" / "attach" =>
+        if (_is_web_authorized("admin", "tags", "attach", Some(req), Some("admin.entity.update"))) _admin_tag_attach(req) else _forbidden_web(req, Some("admin"), Some("tags"), Some("attach"))
+      case req @ POST -> Root / "web" / "admin" / "tags" / "detach" =>
+        if (_is_web_authorized("admin", "tags", "detach", Some(req), Some("admin.entity.update"))) _admin_tag_detach(req) else _forbidden_web(req, Some("admin"), Some("tags"), Some("detach"))
       case GET -> Root / "web" / app / "dashboard" / "state" =>
         _dashboard_state(Some(app))
       case req @ GET -> Root / "web" / app / "admin" =>
@@ -494,6 +506,69 @@ final class Http4sHttpServer(
         req,
         StaticFormAppRenderer.renderAdminAssociationDetachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
         Some("associations"),
+        Some("detach")
+      )
+    } yield response
+
+  private def _admin_tags(req: HRequest[IO]): IO[HResponse[IO]] =
+    _admin_page(
+      req,
+      StaticFormAppRenderer.renderAdminTags(engine.runtimeSubsystem, req.uri.query.params.toMap, _admin_request_properties(req)),
+      Some("tags"),
+      Some("index")
+    )
+
+  private def _admin_tag_create(req: HRequest[IO]): IO[HResponse[IO]] =
+    for {
+      form <- _to_form_record(req)
+      response <- _admin_page(
+        req,
+        StaticFormAppRenderer.renderAdminTagCreateResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
+        Some("tags"),
+        Some("create")
+      )
+    } yield response
+
+  private def _admin_tag_update(req: HRequest[IO]): IO[HResponse[IO]] =
+    for {
+      form <- _to_form_record(req)
+      response <- _admin_page(
+        req,
+        StaticFormAppRenderer.renderAdminTagUpdateResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
+        Some("tags"),
+        Some("update")
+      )
+    } yield response
+
+  private def _admin_tag_move(req: HRequest[IO]): IO[HResponse[IO]] =
+    for {
+      form <- _to_form_record(req)
+      response <- _admin_page(
+        req,
+        StaticFormAppRenderer.renderAdminTagMoveResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
+        Some("tags"),
+        Some("move")
+      )
+    } yield response
+
+  private def _admin_tag_attach(req: HRequest[IO]): IO[HResponse[IO]] =
+    for {
+      form <- _to_form_record(req)
+      response <- _admin_page(
+        req,
+        StaticFormAppRenderer.renderAdminTagAttachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
+        Some("tags"),
+        Some("attach")
+      )
+    } yield response
+
+  private def _admin_tag_detach(req: HRequest[IO]): IO[HResponse[IO]] =
+    for {
+      form <- _to_form_record(req)
+      response <- _admin_page(
+        req,
+        StaticFormAppRenderer.renderAdminTagDetachResult(engine.runtimeSubsystem, form.asMap.map { case (k, v) => k -> v.toString }, _admin_request_properties(req)),
+        Some("tags"),
         Some("detach")
       )
     } yield response

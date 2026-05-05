@@ -150,7 +150,7 @@ expansion.
 
 ## TG-04: CNCF Admin, Manual, and Projection Surfaces
 
-Status: TODO
+Status: DONE
 
 ### Objective
 
@@ -160,12 +160,12 @@ Expose Tag management and Entity tagging through CNCF admin/runtime surfaces.
 
 - [x] Add runtime operations for Tag tree browse/create, attach/detach,
       list tags, and Entity search by Tag.
-- [ ] Add generic admin page/UI for Tag tree browse.
-- [ ] Add generic admin create/update/move UI for Tags.
-- [ ] Add Entity detail Tag section.
-- [ ] Add Entity tag attach/detach admin UI affordances.
-- [ ] Add Entity search by Tag admin surface.
-- [ ] Project Tag operation metadata in manual/help/meta output.
+- [x] Add generic admin page/UI for Tag tree browse.
+- [x] Add generic admin create/update/move UI for Tags.
+- [x] Add Entity detail Tag section.
+- [x] Add Entity tag attach/detach admin UI affordances.
+- [x] Add Entity search by Tag admin surface.
+- [x] Project Tag operation metadata in manual/help/meta output.
 - [x] Show attached Tag summaries in relevant projection records where the
       application driver uses Tags.
 
@@ -173,6 +173,16 @@ Expose Tag management and Entity tagging through CNCF admin/runtime surfaces.
 
 - CNCF admin can manage the Tag tree and attach Tags to arbitrary Entities.
 - Manual/meta surfaces make Tag-capable operations discoverable.
+
+### Completion Notes
+
+- Added backend `tag_update` and `tag_move` operations.
+- Added `/web/admin/tags` Tag tree, create, update, move, attach/detach, and
+  search surfaces.
+- Added Entity detail TagAttachment listing and attach/detach controls.
+- Tag update/move references are scoped by the requested TagSpace when one is
+  supplied.
+- Entity detail detach uses each TagAttachment association's actual role.
 
 ---
 

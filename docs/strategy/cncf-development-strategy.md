@@ -564,8 +564,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 ### Phase 20: Hierarchical Tagging and Knowledge Structure
 - Goal: add CNCF builtin hierarchical Tags and validate them through CNCF
   admin/runtime and `textus-blog`.
-- Status: open; core Tag runtime and `textus-blog` driver implemented,
-  generic admin/manual/projection surfacing remains active.
+- Status: open; core Tag runtime, generic CNCF admin/manual surfacing, and
+  `textus-blog` driver implemented. Phase closure validation remains active.
 - Scope:
 - Add `Tag` as a `SimpleEntity`-backed builtin master Entity.
 - Treat the Tag hierarchy as a strict tree in this phase.
@@ -586,8 +586,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   Subsystem/Component/User/explicit TagSpace merge, TagAttachment Association,
   generic tag operations, and `textus-blog` shared `blog` TagSpace integration.
 - Remaining:
-- Generic CNCF admin UI/manual/projection surfacing and phase closure
-  documentation.
+- Phase closure validation and final documentation cleanup.
 - Non-goals:
 - No RDF store, RDF import/export, or external knowledge graph integration in
   this phase.
@@ -661,6 +660,10 @@ completed, it moves to the completed development item history below.
 - Web/UI generation:
   - wireframe/UI generation strategy above Static Form primitives
   - clarify responsibility split between generated UI and hand-written static pages
+  - ui building
+    - header, footer, navigation, sidebar partials
+    - layout
+    - widget
 - Web admin integration:
   - allow component CARs to provide component-owned Web admin pages
   - let the CNCF system admin console discover and integrate those component
@@ -752,15 +755,15 @@ Active in Phase 20.
   `blog`, and user-editable TagSpaces for personal tagging use cases.
 - Support Entity-to-Tag links through Associations.
 - Support parent Tag search with descendant expansion.
-- Validate generic Tag management through CNCF runtime operations, then expose
-  it through admin/manual/projection surfaces.
+- Validate generic Tag management through CNCF runtime operations and expose it
+  through admin/manual/projection surfaces.
 - Validate CMS-style Tags through `textus-blog` BlogPost navigation/search.
 - Implemented core scope includes Tag tree creation/resolution, resident
   TagTree cache use for effective TagSpaces, TagAttachment attach/detach/list,
   tag-expanded Entity search through EntityStore filtering, and shared Blog
   TagSpace navigation/search.
-- Remaining Phase 20 scope is generic admin UI/manual/projection surfacing and
-  closure documentation.
+- Remaining Phase 20 scope is closure validation and final documentation
+  cleanup.
 - Keep RDF and external knowledge graph integration under the separate RDF
   development item.
 

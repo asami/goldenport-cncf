@@ -26,7 +26,7 @@ import io.circe.parser.parse
 /*
  * @since   Apr. 12, 2026
  *  version Apr. 30, 2026
- * @version May.  4, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 object StaticFormAppRenderer {
@@ -2564,6 +2564,114 @@ object StaticFormAppRenderer {
       ))
     }
 
+  def renderAdminTags(
+    subsystem: Subsystem,
+    params: Map[String, String] = Map.empty,
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    for {
+      tree <- _admin_tag_record(subsystem, "tag_tree", _admin_tag_tree_args(params), requestProperties)
+      search <- _admin_tag_search_record(subsystem, params, requestProperties)
+    } yield {
+      val tags = _record_seq(tree.asMap.get("data"))
+      val table =
+        if (tags.isEmpty)
+          s"""<tbody>${_admin_empty_table_cell(9, "No Tags are available for this TagSpace.")}</tbody>"""
+        else
+          s"""<tbody>${tags.map(_admin_tag_row).mkString("\n")}</tbody>"""
+      val searchHtml = search.map(_admin_tag_search_result(params, _)).getOrElse("")
+      Page(_simple_page(
+        title = "Tag Administration",
+        subtitle = "Hierarchical Tag tree and Entity-to-Tag management",
+        body =
+          s"""${_admin_nav_card(Vector("System admin" -> "/web/system/admin", "Associations" -> "/web/admin/associations"))}
+             |<article>
+             |  <h2>TagSpace</h2>
+             |  ${_admin_tag_filter_form(params)}
+             |</article>
+             |<article>
+             |  <h2>Create Tag</h2>
+             |  ${_admin_tag_create_form(params)}
+             |</article>
+             |<article>
+             |  <h2>Search Entities by Tag</h2>
+             |  ${_admin_tag_search_form(params)}
+             |  ${searchHtml}
+             |</article>
+             |<article>
+             |  <h2>Tags</h2>
+             |  <div class="table-responsive mt-3">
+             |    <table class="table table-sm align-middle">
+             |      <thead><tr><th>Path</th><th>Key</th><th>TagSpace</th><th>Usage</th><th>Sort</th><th>Title</th><th>Description</th><th>Update</th><th>Move</th></tr></thead>
+             |      ${table}
+             |    </table>
+             |  </div>
+             |</article>
+             |${_manual_raw_details("Raw tag tree", tree)}""".stripMargin
+      ))
+    }
+
+  def renderAdminTagCreateResult(
+    subsystem: Subsystem,
+    form: Map[String, String],
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    _admin_tag_record(subsystem, "tag_create", _admin_tag_mutation_args(form, includeParent = true), requestProperties).map { record =>
+      _admin_tag_result_page("Tag Created", "Tag was created", form, record)
+    }
+
+  def renderAdminTagUpdateResult(
+    subsystem: Subsystem,
+    form: Map[String, String],
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    _admin_tag_record(subsystem, "tag_update", _admin_tag_update_args(form), requestProperties).map { record =>
+      _admin_tag_result_page("Tag Updated", "Tag metadata was updated", form, record)
+    }
+
+  def renderAdminTagMoveResult(
+    subsystem: Subsystem,
+    form: Map[String, String],
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    _admin_tag_record(subsystem, "tag_move", _admin_tag_move_args(form), requestProperties).map { record =>
+      _admin_tag_result_page("Tag Moved", "Tag path was updated", form, record)
+    }
+
+  def renderAdminTagAttachResult(
+    subsystem: Subsystem,
+    form: Map[String, String],
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    _admin_tag_record(subsystem, "tag_attach", _admin_tag_attach_args(form), requestProperties).map { record =>
+      Page(_simple_page(
+        title = "Tag Attached",
+        subtitle = "TagAttachment was created or already existed",
+        body =
+          s"""${_admin_nav_card(Vector("Tags" -> "/web/admin/tags", "Associations" -> "/web/admin/associations"))}
+             |${_admin_card("Attach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
+             |<p><a class="btn btn-primary" href="/web/admin/tags?tagSpace=${_escape_query(form.getOrElse("tagSpace", ""))}&amp;sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}">Back to Tags</a></p>
+             |${_manual_raw_details("Raw attach result", record)}""".stripMargin
+      ))
+    }
+
+  def renderAdminTagDetachResult(
+    subsystem: Subsystem,
+    form: Map[String, String],
+    requestProperties: Vector[(String, String)] = Vector.empty
+  ): Consequence[Page] =
+    _admin_tag_record(subsystem, "tag_detach", _admin_tag_detach_args(form), requestProperties).map { record =>
+      Page(_simple_page(
+        title = "Tag Detached",
+        subtitle = "TagAttachment was removed",
+        body =
+          s"""${_admin_nav_card(Vector("Tags" -> "/web/admin/tags", "Associations" -> "/web/admin/associations"))}
+             |${_admin_card("Detach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
+             |<p><a class="btn btn-primary" href="/web/admin/tags?tagSpace=${_escape_query(form.getOrElse("tagSpace", ""))}&amp;sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}">Back to Tags</a></p>
+             |${_manual_raw_details("Raw detach result", record)}""".stripMargin
+      ))
+    }
+
   def renderAdminAssociationAttachResult(
     subsystem: Subsystem,
     form: Map[String, String],
@@ -2644,6 +2752,44 @@ object StaticFormAppRenderer {
         Consequence.operationInvalid(s"Association admin operation did not return a record: ${operation} (${other.getClass.getSimpleName})")
     }
 
+  private def _admin_tag_record(
+    subsystem: Subsystem,
+    operation: String,
+    args: Vector[(String, String)],
+    requestProperties: Vector[(String, String)]
+  ): Consequence[Record] =
+    subsystem.executeOperationResponse(_admin_tag_request(operation, args, requestProperties)).flatMap {
+      case OperationResponse.RecordResponse(record) =>
+        Consequence.success(record)
+      case other =>
+        Consequence.operationInvalid(s"Tag admin operation did not return a record: ${operation} (${other.getClass.getSimpleName})")
+    }
+
+  private def _admin_tag_search_record(
+    subsystem: Subsystem,
+    params: Map[String, String],
+    requestProperties: Vector[(String, String)]
+  ): Consequence[Option[Record]] =
+    if (params.get("tagRef").orElse(params.get("tag")).exists(_.trim.nonEmpty) &&
+        params.get("component").exists(_.trim.nonEmpty) &&
+        params.get("entity").orElse(params.get("entityName")).exists(_.trim.nonEmpty))
+      _admin_tag_record(subsystem, "tag_search_entities", _admin_tag_search_args(params), requestProperties).map(Some(_))
+    else
+      Consequence.success(None)
+
+  private def _admin_tag_request(
+    operation: String,
+    args: Vector[(String, String)],
+    requestProperties: Vector[(String, String)]
+  ): ProtocolRequest =
+    ProtocolRequest.of(
+      component = "tag",
+      service = "tag",
+      operation = operation,
+      arguments = args.map { case (key, value) => Argument(key, value) }.toList,
+      properties = requestProperties.map { case (key, value) => Property(key, value, None) }.toList
+    )
+
   private def _admin_association_request(
     operation: String,
     args: Vector[(String, String)],
@@ -2721,10 +2867,191 @@ object StaticFormAppRenderer {
       base
   }
 
+  private def _admin_tag_tree_args(
+    params: Map[String, String]
+  ): Vector[(String, String)] =
+    params.get("tagSpace").filter(_.nonEmpty).map("tagSpace" -> _).toVector
+
+  private def _admin_tag_mutation_args(
+    values: Map[String, String],
+    includeParent: Boolean
+  ): Vector[(String, String)] = {
+    val base = Vector("key", "tagSpace", "usageKind", "sortOrder", "title", "description")
+      .flatMap(key => values.get(key).filter(_.nonEmpty).map(key -> _))
+    val parent =
+      if (includeParent)
+        values.get("parentTagId").filter(_.nonEmpty).map("parentTagId" -> _).toVector ++
+          values.get("parentTagRef").filter(_.nonEmpty).map("parentTagRef" -> _).toVector
+      else
+        Vector.empty
+    base ++ parent
+  }
+
+  private def _admin_tag_update_args(
+    values: Map[String, String]
+  ): Vector[(String, String)] =
+    Vector("tagRef", "tagSpace", "usageKind", "sortOrder", "title", "description", "attributes")
+      .flatMap(key => values.get(key).filter(_.nonEmpty).map(key -> _))
+
+  private def _admin_tag_move_args(
+    values: Map[String, String]
+  ): Vector[(String, String)] =
+    Vector("tagRef", "newParentTagRef", "newKey")
+      .flatMap(key => values.get(key).filter(_.nonEmpty).map(key -> _))
+
+  private def _admin_tag_attach_args(
+    values: Map[String, String]
+  ): Vector[(String, String)] =
+    Vector("sourceEntityId", "tagRef", "tagSpace", "role", "sortOrder")
+      .flatMap(key => values.get(key).filter(_.nonEmpty).map(key -> _))
+
+  private def _admin_tag_detach_args(
+    values: Map[String, String]
+  ): Vector[(String, String)] =
+    Vector("sourceEntityId", "tagRef", "tagSpace", "role")
+      .flatMap(key => values.get(key).filter(_.nonEmpty).map(key -> _))
+
+  private def _admin_tag_search_args(
+    values: Map[String, String]
+  ): Vector[(String, String)] =
+    Vector("component", "entity", "entityName", "tagRef", "tagSpace", "role", "includeDescendants")
+      .flatMap(key => values.get(key).filter(_.nonEmpty).map(key -> _))
+
   private def _blob_admin_is_truthy(
     value: String
   ): Boolean =
     Set("true", "1", "yes", "on").contains(value.trim.toLowerCase(java.util.Locale.ROOT))
+
+  private def _admin_tag_row(
+    record: Record
+  ): String = {
+    val id = record.getString("id").getOrElse("")
+    val path = record.getString("path").getOrElse("")
+    val tagSpace = record.getString("tagSpace").getOrElse("")
+    s"""<tr>
+       |  <td><code>${_escape(path)}</code><div class="small text-muted">${_escape(id)}</div></td>
+       |  <td>${_escape(record.getString("key").getOrElse(""))}</td>
+       |  <td>${_escape(tagSpace)}</td>
+       |  <td>${_escape(record.getString("usageKind").getOrElse(""))}</td>
+       |  <td>${_escape(record.getString("sortOrder").getOrElse(""))}</td>
+       |  <td>${_escape(record.getString("title").getOrElse(""))}</td>
+       |  <td>${_escape(record.getString("description").getOrElse(""))}</td>
+       |  <td>${_admin_tag_update_form(record)}</td>
+       |  <td>${_admin_tag_move_form(record)}</td>
+       |</tr>""".stripMargin
+  }
+
+  private def _admin_tag_filter_form(
+    params: Map[String, String]
+  ): String =
+    s"""<form method="get" action="/web/admin/tags" class="row g-2 align-items-end">
+       |  <div class="col-md-4"><label class="form-label" for="tagAdminTagSpace">TagSpace</label><input class="form-control" id="tagAdminTagSpace" name="tagSpace" value="${_escape(params.getOrElse("tagSpace", ""))}" placeholder="default"></div>
+       |  <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Open</button></div>
+       |  <div class="col-md-2"><a class="btn btn-outline-secondary w-100" href="/web/admin/tags">Default</a></div>
+       |</form>""".stripMargin
+
+  private def _admin_tag_create_form(
+    params: Map[String, String]
+  ): String =
+    s"""<form method="post" action="/web/admin/tags/create" class="row g-2 align-items-end">
+       |  <div class="col-md-2"><label class="form-label" for="tagCreateSpace">TagSpace</label><input class="form-control" id="tagCreateSpace" name="tagSpace" value="${_escape(params.getOrElse("tagSpace", ""))}" placeholder="default"></div>
+       |  <div class="col-md-2"><label class="form-label" for="tagCreateKey">Key</label><input class="form-control" id="tagCreateKey" name="key" required></div>
+       |  <div class="col-md-3"><label class="form-label" for="tagCreateParent">Parent tag id/ref</label><input class="form-control" id="tagCreateParent" name="parentTagRef"></div>
+       |  <div class="col-md-2"><label class="form-label" for="tagCreateUsage">Usage</label><input class="form-control" id="tagCreateUsage" name="usageKind" list="tagUsageOptions" value="general"></div>
+       |  <div class="col-md-1"><label class="form-label" for="tagCreateSort">Sort</label><input class="form-control" id="tagCreateSort" name="sortOrder"></div>
+       |  <div class="col-md-2"><label class="form-label" for="tagCreateTitle">Title</label><input class="form-control" id="tagCreateTitle" name="title"></div>
+       |  <div class="col-md-10"><label class="form-label" for="tagCreateDescription">Description</label><input class="form-control" id="tagCreateDescription" name="description"></div>
+       |  <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Create Tag</button></div>
+       |  <datalist id="tagUsageOptions"><option value="general"><option value="cms"><option value="navigation"><option value="powertype"></datalist>
+       |</form>""".stripMargin
+
+  private def _admin_tag_update_form(
+    record: Record
+  ): String =
+    s"""<form method="post" action="/web/admin/tags/update" class="row g-1 align-items-end">
+       |  <input type="hidden" name="tagRef" value="${_escape(record.getString("id").getOrElse(""))}">
+       |  <input type="hidden" name="tagSpace" value="${_escape(record.getString("tagSpace").getOrElse(""))}">
+       |  <div class="col-12"><input class="form-control form-control-sm" name="title" value="${_escape(record.getString("title").getOrElse(""))}" placeholder="Title"></div>
+       |  <div class="col-12"><input class="form-control form-control-sm" name="description" value="${_escape(record.getString("description").getOrElse(""))}" placeholder="Description"></div>
+       |  <div class="col-6"><input class="form-control form-control-sm" name="usageKind" value="${_escape(record.getString("usageKind").getOrElse("general"))}" list="tagUsageOptions"></div>
+       |  <div class="col-4"><input class="form-control form-control-sm" name="sortOrder" value="${_escape(record.getString("sortOrder").getOrElse(""))}" placeholder="Sort"></div>
+       |  <div class="col-2"><button class="btn btn-outline-primary btn-sm w-100" type="submit">Save</button></div>
+       |</form>""".stripMargin
+
+  private def _admin_tag_move_form(
+    record: Record
+  ): String =
+    s"""<form method="post" action="/web/admin/tags/move" class="row g-1 align-items-end">
+       |  <input type="hidden" name="tagRef" value="${_escape(record.getString("id").getOrElse(""))}">
+       |  <div class="col-12"><input class="form-control form-control-sm" name="newParentTagRef" value="${_escape(record.getString("parentTagId").getOrElse(""))}" placeholder="New parent ref, blank for root"></div>
+       |  <div class="col-8"><input class="form-control form-control-sm" name="newKey" value="${_escape(record.getString("key").getOrElse(""))}" placeholder="New key"></div>
+       |  <div class="col-4"><button class="btn btn-outline-primary btn-sm w-100" type="submit">Move</button></div>
+       |</form>""".stripMargin
+
+  private def _admin_tag_search_form(
+    params: Map[String, String]
+  ): String =
+    s"""<form method="get" action="/web/admin/tags" class="row g-2 align-items-end">
+       |  <div class="col-md-2"><label class="form-label" for="tagSearchSpace">TagSpace</label><input class="form-control" id="tagSearchSpace" name="tagSpace" value="${_escape(params.getOrElse("tagSpace", ""))}" placeholder="default"></div>
+       |  <div class="col-md-2"><label class="form-label" for="tagSearchComponent">Component</label><input class="form-control" id="tagSearchComponent" name="component" value="${_escape(params.getOrElse("component", ""))}" required></div>
+       |  <div class="col-md-2"><label class="form-label" for="tagSearchEntity">Entity</label><input class="form-control" id="tagSearchEntity" name="entity" value="${_escape(params.getOrElse("entity", ""))}" required></div>
+       |  <div class="col-md-3"><label class="form-label" for="tagSearchRef">Tag ref/path</label><input class="form-control" id="tagSearchRef" name="tagRef" value="${_escape(params.getOrElse("tagRef", ""))}" required></div>
+       |  <div class="col-md-1"><label class="form-label" for="tagSearchRole">Role</label><input class="form-control" id="tagSearchRole" name="role" value="${_escape(params.getOrElse("role", "tag"))}"></div>
+       |  <div class="col-md-1"><label class="form-label" for="tagSearchDesc">Desc</label><select class="form-select" id="tagSearchDesc" name="includeDescendants"><option value="true"${if (params.get("includeDescendants").forall(_ != "false")) " selected" else ""}>yes</option><option value="false"${if (params.get("includeDescendants").contains("false")) " selected" else ""}>no</option></select></div>
+       |  <div class="col-md-1"><button class="btn btn-primary w-100" type="submit">Search</button></div>
+       |</form>""".stripMargin
+
+  private def _admin_tag_search_result(
+    params: Map[String, String],
+    record: Record
+  ): String = {
+    val component = params.getOrElse("component", "")
+    val entity = params.getOrElse("entity", params.getOrElse("entityName", ""))
+    val rows = _record_seq(record.asMap.get("data"))
+    val body =
+      if (rows.isEmpty)
+        s"""<tbody>${_admin_empty_table_cell(3, "No visible Entities matched this Tag filter.")}</tbody>"""
+      else
+        s"""<tbody>${rows.map(row => _admin_tag_search_result_row(component, entity, row)).mkString("\n")}</tbody>"""
+    s"""<div class="table-responsive mt-3">
+       |  <table class="table table-sm align-middle">
+       |    <thead><tr><th>Entity</th><th>Title/Name</th><th>Raw</th></tr></thead>
+       |    ${body}
+       |  </table>
+       |</div>""".stripMargin
+  }
+
+  private def _admin_tag_search_result_row(
+    component: String,
+    entity: String,
+    record: Record
+  ): String = {
+    val id = record.getString("id").getOrElse("")
+    val label = record.getString("title").orElse(record.getString("name")).orElse(record.getString("label")).getOrElse("")
+    val componentPath = NamingConventions.toNormalizedSegment(component)
+    val entityPath = NamingConventions.toNormalizedSegment(entity)
+    s"""<tr>
+       |  <td><a href="/web/${_escape_path_segment(componentPath)}/admin/entities/${_escape_path_segment(entityPath)}/${_escape_path_segment(id)}"><code>${_escape(id)}</code></a></td>
+       |  <td>${_escape(label)}</td>
+       |  <td><code>${_escape(record.toString)}</code></td>
+       |</tr>""".stripMargin
+  }
+
+  private def _admin_tag_result_page(
+    title: String,
+    subtitle: String,
+    form: Map[String, String],
+    record: Record
+  ): Page =
+    Page(_simple_page(
+      title = title,
+      subtitle = subtitle,
+      body =
+        s"""${_admin_nav_card(Vector("Tags" -> "/web/admin/tags", "Associations" -> "/web/admin/associations"))}
+           |${_admin_card("Tag result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
+           |<p><a class="btn btn-primary" href="/web/admin/tags?tagSpace=${_escape_query(form.getOrElse("tagSpace", record.getString("tagSpace").getOrElse("")))}">Back to Tags</a></p>
+           |${_manual_raw_details("Raw tag result", record)}""".stripMargin
+    ))
 
   private def _blob_admin_blob_row(
     record: Record
@@ -3021,6 +3348,105 @@ object StaticFormAppRenderer {
        |  <button class="btn btn-outline-danger btn-sm" type="submit">Detach</button>
        |</form>""".stripMargin
   }
+
+  private def _admin_entity_tags_section(
+    subsystem: Subsystem,
+    record: Option[Record],
+    fallbackId: String,
+    values: Map[String, String]
+  ): String = {
+    val sourceId = record.flatMap(_.getString("sourceEntityId")).orElse(record.flatMap(_.getString("id"))).getOrElse(fallbackId)
+    val tagSpace = values.getOrElse("tagSpace", "")
+    val summary = _admin_operation_record(
+      subsystem,
+      "/tag/tag/tag_list_entity_tags",
+      Record.dataAuto(
+        "sourceEntityId" -> sourceId,
+        "tagSpace" -> tagSpace
+      )
+    )
+    val rows = summary.map { r =>
+      val tags = _record_seq(r.asMap.get("tags"))
+      val associations = _record_seq(r.asMap.get("associations"))
+      tags.zipWithIndex.map { case (tag, index) =>
+        _admin_entity_tag_row(sourceId, tagSpace, tag, associations.lift(index))
+      }
+    }.getOrElse(Vector.empty)
+    val table =
+      if (rows.isEmpty)
+        s"""<tbody>${_admin_empty_table_cell(8, "No Tags are attached to this Entity for the selected TagSpace.")}</tbody>"""
+      else
+        s"""<tbody>${rows.mkString("\n")}</tbody>"""
+    s"""<article class="card admin-card mt-3">
+       |  <div class="card-body">
+       |    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between mb-3">
+       |      <h2 class="card-title mb-0">Tags</h2>
+       |      <a class="btn btn-outline-secondary btn-sm" href="/web/admin/tags?tagSpace=${_escape_query(tagSpace)}&amp;sourceEntityId=${_escape_query(sourceId)}">Open Tags</a>
+       |    </div>
+       |    <section class="mb-3">
+       |      <h3 class="h6">Attach Tag</h3>
+       |      ${_admin_entity_tag_attach_form(sourceId, tagSpace)}
+       |    </section>
+       |    <section>
+       |      <h3 class="h6">Attached Tags</h3>
+       |      <div class="table-responsive">
+       |        <table class="table table-sm align-middle">
+       |          <thead><tr><th>Path</th><th>TagSpace</th><th>Role</th><th>Sort</th><th>Usage</th><th>Title</th><th>Description</th><th>Actions</th></tr></thead>
+       |          ${table}
+       |        </table>
+       |      </div>
+       |    </section>
+       |  </div>
+       |</article>""".stripMargin
+  }
+
+  private def _admin_entity_tag_row(
+    sourceId: String,
+    tagSpace: String,
+    record: Record,
+    association: Option[Record]
+  ): String = {
+    val path = record.getString("path").getOrElse("")
+    val role = association.flatMap(_.getString("role")).getOrElse("tag")
+    val sortOrder = association.flatMap(_.getString("sortOrder")).getOrElse("")
+    s"""<tr>
+       |  <td><code>${_escape(path)}</code></td>
+       |  <td>${_escape(record.getString("tagSpace").getOrElse(tagSpace))}</td>
+       |  <td>${_escape(role)}</td>
+       |  <td>${_escape(sortOrder)}</td>
+       |  <td>${_escape(record.getString("usageKind").getOrElse(""))}</td>
+       |  <td>${_escape(record.getString("title").getOrElse(""))}</td>
+       |  <td>${_escape(record.getString("description").getOrElse(""))}</td>
+       |  <td>${_admin_entity_tag_detach_form(sourceId, tagSpace, path, role)}</td>
+       |</tr>""".stripMargin
+  }
+
+  private def _admin_entity_tag_attach_form(
+    sourceId: String,
+    tagSpace: String
+  ): String =
+    s"""<form method="post" action="/web/admin/tags/attach" class="row g-2 align-items-end">
+       |  <input type="hidden" name="sourceEntityId" value="${_escape(sourceId)}">
+       |  <div class="col-md-3"><label class="form-label" for="entityTagAttachSpace">TagSpace</label><input class="form-control" id="entityTagAttachSpace" name="tagSpace" value="${_escape(tagSpace)}" placeholder="default"></div>
+       |  <div class="col-md-4"><label class="form-label" for="entityTagAttachRef">Tag ref/path</label><input class="form-control" id="entityTagAttachRef" name="tagRef" required></div>
+       |  <div class="col-md-2"><label class="form-label" for="entityTagAttachRole">Role</label><input class="form-control" id="entityTagAttachRole" name="role" value="tag" required></div>
+       |  <div class="col-md-1"><label class="form-label" for="entityTagAttachSort">Sort</label><input class="form-control" id="entityTagAttachSort" name="sortOrder"></div>
+       |  <div class="col-md-2"><button class="btn btn-primary w-100" type="submit">Attach</button></div>
+       |</form>""".stripMargin
+
+  private def _admin_entity_tag_detach_form(
+    sourceId: String,
+    tagSpace: String,
+    tagRef: String,
+    role: String
+  ): String =
+    s"""<form method="post" action="/web/admin/tags/detach" class="d-inline">
+       |  <input type="hidden" name="sourceEntityId" value="${_escape(sourceId)}">
+       |  <input type="hidden" name="tagSpace" value="${_escape(tagSpace)}">
+       |  <input type="hidden" name="tagRef" value="${_escape(tagRef)}">
+       |  <input type="hidden" name="role" value="${_escape(role)}">
+       |  <button class="btn btn-outline-danger btn-sm" type="submit">Detach</button>
+       |</form>""".stripMargin
 
   private def _admin_entity_associations_section(
     subsystem: Subsystem,
@@ -3623,6 +4049,7 @@ object StaticFormAppRenderer {
       val readRecord = _admin_entity_read_record(subsystem, componentPath, entityPath, id)
       val body = _admin_entity_record_table_from_record(subsystem, component, componentPath, entityPath, id, readRecord, webDescriptor)
       val images = _admin_entity_images_section(readRecord, id)
+      val tags = _admin_entity_tags_section(subsystem, readRecord, id, values)
       val associations = _admin_entity_associations_section(subsystem, component, entityPath, readRecord, id)
       val nav = _admin_nav_card(Vector(
         s"Back to ${entityLabel} records" -> s"${basePath}${querySuffix}",
@@ -3643,6 +4070,7 @@ object StaticFormAppRenderer {
              |  </div>
              |</article>
              |${images}
+             |${tags}
              |${associations}""".stripMargin
       ))
     }
@@ -6003,6 +6431,7 @@ object StaticFormAppRenderer {
       _admin_entry_card("Data", "Manage concrete data collections and datastore records.", s"/web/${componentPath}/admin/data"),
       _admin_entry_card("Aggregates", "Inspect aggregate records and aggregate-level operations.", s"/web/${componentPath}/admin/aggregates"),
       _admin_entry_card("Views", "Browse read-only view projections and instance detail.", s"/web/${componentPath}/admin/views"),
+      _admin_entry_card("Tags", "Browse TagSpaces and search tagged Entities.", "/web/admin/tags"),
       _admin_entry_card("Descriptor", "Inspect descriptor controls and admin-surface mappings.", s"/web/${componentPath}/admin/descriptor"),
       _admin_entry_card("Forms", "Open controlled operation forms outside the admin CRUD surfaces.", formsPath)
     ))
@@ -6017,6 +6446,7 @@ object StaticFormAppRenderer {
        |  <li><a href="/web/${_escape(componentPath)}/admin/data">Data CRUD</a></li>
        |  <li><a href="/web/${_escape(componentPath)}/admin/aggregates">Aggregate CRUD</a></li>
        |  <li><a href="/web/${_escape(componentPath)}/admin/views">View read</a></li>
+       |  <li><a href="/web/admin/tags">Tags</a></li>
        |</ul>""".stripMargin
   }
 

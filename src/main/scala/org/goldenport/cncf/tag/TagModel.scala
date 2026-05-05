@@ -74,8 +74,18 @@ final case class TagCreate(
   attributes: Map[String, String] = Map.empty
 )
 
+final case class TagUpdate(
+  title: Option[String] = None,
+  description: Option[String] = None,
+  usageKind: Option[TagUsageKind] = None,
+  sortOrder: Option[Int] = None,
+  attributes: Option[Map[String, String]] = None
+)
+
 trait TagRepository {
   def create(create: TagCreate)(using ExecutionContext): Consequence[Tag]
+  def update(ref: String, update: TagUpdate)(using ExecutionContext): Consequence[Tag]
+  def move(ref: String, newParentRef: Option[String], newKey: Option[String])(using ExecutionContext): Consequence[Tag]
   def load(id: EntityId)(using ExecutionContext): Consequence[Option[Tag]]
   def list()(using ExecutionContext): Consequence[Vector[Tag]]
   def list(tagSpace: String)(using ExecutionContext): Consequence[Vector[Tag]]
@@ -120,6 +130,58 @@ final class EntityStoreTagRepository extends TagRepository {
     } yield {
       TagTreeCache.invalidate(normalized.tagSpace)
       _normalize_collection(created)
+    }
+
+  def update(ref: String, update: TagUpdate)(using ctx: ExecutionContext): Consequence[Tag] =
+    for {
+      tag <- resolve(ref)
+      changed = tag.copy(
+        usageKind = update.usageKind.getOrElse(tag.usageKind),
+        sortOrder = update.sortOrder.orElse(tag.sortOrder),
+        title = update.title.orElse(tag.title),
+        description = update.description.orElse(tag.description),
+        updatedAt = Instant.now(),
+        attributes = update.attributes.getOrElse(tag.attributes)
+      )
+      _ <- EntityStore.standard().save(changed)
+      loaded <- load(tag.id)
+      result <- loaded.map(Consequence.success).getOrElse(Consequence.operationNotFound(s"tag:${tag.id.value}"))
+    } yield {
+      TagTreeCache.invalidate(tag.tagSpace)
+      result
+    }
+
+  def move(ref: String, newParentRef: Option[String], newKey: Option[String])(using ctx: ExecutionContext): Consequence[Tag] =
+    for {
+      currentTree <- tree()
+      tag <- currentTree.resolve(ref)
+      newkey <- newKey.map(TagPath.validateKey).getOrElse(Consequence.success(tag.key))
+      parent <- _resolve_move_parent(currentTree, tag, newParentRef)
+      values <- list(tag.tagSpace)
+      _ <- _reject_duplicate_sibling_excluding(values, parent.map(_.id), newkey, tag.id)
+      _ <- _reject_move_cycle(currentTree, tag, parent)
+      oldPath = tag.path
+      newPath = TagPath.childPath(parent.map(_.path), newkey)
+      now = Instant.now()
+      updates = values.collect {
+        case x if x.id.value == tag.id.value =>
+          x.copy(
+            key = newkey,
+            parentTagId = parent.map(_.id),
+            path = newPath,
+            updatedAt = now,
+            attributes = x.attributes + ("path" -> newPath)
+          )
+        case x if _is_descendant_path(x.path, oldPath) =>
+          val suffix = x.path.stripPrefix(oldPath + ".")
+          val path = s"$newPath.$suffix"
+          x.copy(path = path, updatedAt = now, attributes = x.attributes + ("path" -> path))
+      }
+      _ <- updates.foldLeft(Consequence.unit)((z, value) => z.flatMap(_ => EntityStore.standard().save(value)))
+      moved <- load(tag.id).flatMap(_.map(Consequence.success).getOrElse(Consequence.operationNotFound(s"tag:${tag.id.value}")))
+    } yield {
+      TagTreeCache.invalidate(tag.tagSpace)
+      moved
     }
 
   def load(id: EntityId)(using ctx: ExecutionContext): Consequence[Option[Tag]] =
@@ -180,6 +242,38 @@ final class EntityStoreTagRepository extends TagRepository {
       Consequence.argumentInvalid(s"duplicate sibling tag key: $key")
     else
       Consequence.unit
+
+  private def _reject_duplicate_sibling_excluding(values: Vector[Tag], parent: Option[EntityId], key: String, excluded: EntityId): Consequence[Unit] =
+    if (values.exists(x => x.id.value != excluded.value && x.parentTagId.map(_.value) == parent.map(_.value) && x.key == key))
+      Consequence.argumentInvalid(s"duplicate sibling tag key: $key")
+    else
+      Consequence.unit
+
+  private def _resolve_move_parent(tree: TagTree, tag: Tag, ref: Option[String]): Consequence[Option[Tag]] =
+    ref.map(_.trim).filter(_.nonEmpty) match {
+      case Some(value) =>
+        tree.resolve(value).flatMap { parent =>
+          if (parent.tagSpace != tag.tagSpace)
+            Consequence.argumentInvalid(s"parent tag belongs to a different tag space: ${parent.tagSpace}")
+          else
+            Consequence.success(Some(parent))
+        }
+      case None =>
+        Consequence.success(None)
+    }
+
+  private def _reject_move_cycle(tree: TagTree, tag: Tag, parent: Option[Tag]): Consequence[Unit] =
+    parent match {
+      case Some(value) if value.id.value == tag.id.value =>
+        Consequence.argumentInvalid(s"tag cycle detected: ${tag.id.value}")
+      case Some(value) if tree.descendantsOf(tag, includeSelf = false).exists(_.id.value == value.id.value) =>
+        Consequence.argumentInvalid(s"tag cycle detected: ${tag.id.value}")
+      case _ =>
+        Consequence.unit
+    }
+
+  private def _is_descendant_path(path: String, parentPath: String): Boolean =
+    path.startsWith(parentPath + ".")
 
   private def _normalize_collection(tag: Tag): Tag =
     tag.copy(id = _tag_id(tag.id), parentTagId = tag.parentTagId.map(_tag_id))

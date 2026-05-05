@@ -62,22 +62,23 @@ Final semantic direction:
 - A (DONE): TG-01 — Open Phase 20 and freeze Tag hierarchy semantics.
 - B (DONE): TG-02 — Add CNCF builtin Tag model and resident Tag tree.
 - C (DONE): TG-03 — Add TagAttachment Association and tag-expanded Entity search.
-- D (ACTIVE): TG-04 — Add CNCF admin, manual, and projection surfaces.
+- D (DONE): TG-04 — Add CNCF admin, manual, and projection surfaces.
 - E (DONE): TG-05 — Apply Tags to `textus-blog` CMS navigation and search.
-- F (SUSPENDED): TG-06 — Verification, documentation, and phase closure.
+- F (ACTIVE): TG-06 — Verification, documentation, and phase closure.
 
 Resume hint:
 
-- Continue with TG-04. The core Tag model, TagAttachment workflow, resident
-  TagSpace merge, and `textus-blog` driver are implemented. Remaining Phase 20
-  work is generic CNCF admin/manual/projection surfacing plus closure docs.
+- Continue with TG-06. The core Tag model, TagAttachment workflow, resident
+  TagSpace merge, `textus-blog` driver, and generic CNCF admin/manual surfaces
+  are implemented. Remaining Phase 20 work is closure validation and final
+  documentation cleanup.
 
 ## 5. Development Items
 
 - [x] TG-01: Open Phase 20 and freeze Tag hierarchy semantics.
 - [x] TG-02: Add CNCF builtin Tag model and resident Tag tree.
 - [x] TG-03: Add TagAttachment Association and tag-expanded Entity search.
-- [ ] TG-04: Add CNCF admin, manual, and projection surfaces.
+- [x] TG-04: Add CNCF admin, manual, and projection surfaces.
 - [x] TG-05: Apply Tags to `textus-blog` CMS navigation and search.
 - [ ] TG-06: Verification, documentation, and phase closure.
 

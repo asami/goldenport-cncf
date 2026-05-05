@@ -53,6 +53,67 @@ final class TagModelSpec
       repository.create(TagCreate(None, "bad child", None, tagSpace = "dup-space")) shouldBe a[Consequence.Failure[_]]
     }
 
+    "update mutable metadata without changing path" in {
+      given ExecutionContext = ExecutionContext.test()
+      val repository = TagRepository.entityStore()
+      val root = _success(repository.create(TagCreate(None, "update-root", None, tagSpace = "update-space")))
+      val tag = _success(repository.create(TagCreate(None, "target", Some(root.id), tagSpace = "update-space", usageKind = TagUsageKind.General)))
+
+      val updated = _success(repository.update(tag.path, TagUpdate(
+        title = Some("Updated title"),
+        description = Some("Updated description"),
+        usageKind = Some(TagUsageKind.Navigation),
+        sortOrder = Some(7),
+        attributes = Some(Map("scope" -> "admin"))
+      )))
+      val tree = _success(repository.tree("update-space"))
+
+      updated.id shouldBe tag.id
+      updated.key shouldBe "target"
+      updated.parentTagId shouldBe Some(root.id)
+      updated.path shouldBe "update-root.target"
+      updated.title shouldBe Some("Updated title")
+      updated.description shouldBe Some("Updated description")
+      updated.usageKind shouldBe TagUsageKind.Navigation
+      updated.sortOrder shouldBe Some(7)
+      updated.attributes should contain ("scope" -> "admin")
+      tree.resolve("update-root.target").map(_.title) shouldBe Consequence.success(Some("Updated title"))
+    }
+
+    "move a tag and recompute descendant paths" in {
+      given ExecutionContext = ExecutionContext.test()
+      val repository = TagRepository.entityStore()
+      val root = _success(repository.create(TagCreate(None, "move-root", None, tagSpace = "move-space")))
+      val next = _success(repository.create(TagCreate(None, "next-root", None, tagSpace = "move-space")))
+      val child = _success(repository.create(TagCreate(None, "child", Some(root.id), tagSpace = "move-space")))
+      val grandchild = _success(repository.create(TagCreate(None, "leaf", Some(child.id), tagSpace = "move-space")))
+
+      val moved = _success(repository.move(child.id.value, Some(next.path), Some("renamed")))
+      val tree = _success(repository.tree("move-space"))
+
+      moved.id shouldBe child.id
+      moved.parentTagId shouldBe Some(next.id)
+      moved.key shouldBe "renamed"
+      moved.path shouldBe "next-root.renamed"
+      tree.resolve("next-root.renamed").map(_.id) shouldBe Consequence.success(child.id)
+      tree.resolve("next-root.renamed.leaf").map(_.id) shouldBe Consequence.success(grandchild.id)
+    }
+
+    "reject invalid tag moves" in {
+      given ExecutionContext = ExecutionContext.test()
+      val repository = TagRepository.entityStore()
+      val root = _success(repository.create(TagCreate(None, "invalid-move-root", None, tagSpace = "invalid-move-space")))
+      val other = _success(repository.create(TagCreate(None, "other-root", None, tagSpace = "invalid-move-space")))
+      val foreign = _success(repository.create(TagCreate(None, "foreign-root", None, tagSpace = "foreign-move-space")))
+      val child = _success(repository.create(TagCreate(None, "child", Some(root.id), tagSpace = "invalid-move-space")))
+      _success(repository.create(TagCreate(None, "duplicate", Some(other.id), tagSpace = "invalid-move-space")))
+
+      repository.move(root.id.value, Some(child.id.value), None) shouldBe a[Consequence.Failure[_]]
+      repository.move(child.id.value, Some(foreign.id.value), None) shouldBe a[Consequence.Failure[_]]
+      repository.move(child.id.value, Some(other.id.value), Some("duplicate")) shouldBe a[Consequence.Failure[_]]
+      repository.move(child.id.value, Some(other.id.value), Some("bad key")) shouldBe a[Consequence.Failure[_]]
+    }
+
     "publish master descriptor with tag-specific resident tree handled outside entity working set" in {
       val subsystem = DefaultSubsystemFactory.default(Some("command"))
       val tag = subsystem.findComponent(TagComponent.name).getOrElse(fail("Tag component is missing"))
@@ -164,6 +225,43 @@ final class TagModelSpec
         data should have size 1
         data.head.asInstanceOf[Record].getString("id") shouldBe Some(sourceId)
       }
+    }
+
+    "scope tag_update and tag_move by requested tagSpace" in {
+      val subsystem = DefaultSubsystemFactory.default(Some("command"))
+      _record(_success(subsystem.executeOperationResponse(_tag_request(
+        "tag_create",
+        Argument("key", "same"),
+        Argument("tagSpace", TagSpace.Blog)
+      ))))
+      _record(_success(subsystem.executeOperationResponse(_tag_request(
+        "tag_create",
+        Argument("key", "same"),
+        Argument("tagSpace", TagSpace.Operational)
+      ))))
+      _record(_success(subsystem.executeOperationResponse(_tag_request(
+        "tag_create",
+        Argument("key", "newparent"),
+        Argument("tagSpace", TagSpace.Blog)
+      ))))
+
+      val updated = _record(_success(subsystem.executeOperationResponse(_tag_request(
+        "tag_update",
+        Argument("tagPath", "same"),
+        Argument("tagSpace", TagSpace.Blog),
+        Argument("title", "Blog scoped")
+      ))))
+      val moved = _record(_success(subsystem.executeOperationResponse(_tag_request(
+        "tag_move",
+        Argument("tagPath", "same"),
+        Argument("tagSpace", TagSpace.Blog),
+        Argument("newParentTagRef", "newparent"),
+        Argument("newKey", "renamed")
+      ))))
+
+      updated.getString("title") shouldBe Some("Blog scoped")
+      moved.getString("tagSpace") shouldBe Some(TagSpace.Blog)
+      moved.getString("path") shouldBe Some("newparent.renamed")
     }
   }
 

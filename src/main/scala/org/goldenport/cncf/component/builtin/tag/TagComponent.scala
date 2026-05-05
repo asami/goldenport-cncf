@@ -11,13 +11,14 @@ import org.goldenport.cncf.entity.runtime.{EntityKind, EntityMemoryPolicy, Entit
 import org.goldenport.cncf.security.{AdminAuthorizationPolicy, OperationAuthorizationProvider, OperationAuthorizationRule}
 import org.goldenport.cncf.config.RuntimeConfig
 import org.goldenport.cncf.subsystem.Subsystem
-import org.goldenport.cncf.tag.{TagCreate, TagEntityCollections, TagRepository, TagSpace, TagUsageKind, TaggingWorkflow}
+import org.goldenport.cncf.tag.{TagCreate, TagEntityCollections, TagRepository, TagSpace, TagUpdate, TagUsageKind, TaggingWorkflow}
 import org.goldenport.protocol.{Protocol, Request}
 import org.goldenport.protocol.handler.ProtocolHandler
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
 import org.goldenport.record.Record
 import org.goldenport.schema.{DataType, XString}
+import org.goldenport.value.BaseContent
 import org.simplemodeling.model.datatype.EntityId
 
 /*
@@ -66,12 +67,14 @@ object TagComponent {
       val request = spec.RequestDefinition()
       val response = spec.ResponseDefinition(result = List(DataType.Named("Record")))
       val operations = NonEmptyVector.of(
-        new SimpleOperationDefinition("tag_tree", request, response, TreeAction.apply),
-        new SimpleOperationDefinition("tag_create", request, response, CreateAction.apply),
-        new SimpleOperationDefinition("tag_attach", request, response, AttachAction.apply),
-        new SimpleOperationDefinition("tag_detach", request, response, DetachAction.apply),
-        new SimpleOperationDefinition("tag_list_entity_tags", request, response, ListEntityTagsAction.apply),
-        new SimpleOperationDefinition("tag_search_entities", request, response, SearchEntitiesAction.apply)
+        new SimpleOperationDefinition("tag_tree", "Show the effective Tag tree.", "Return the resident Tag tree for the requested TagSpace or effective runtime TagSpaces.", request, response, TreeAction.apply),
+        new SimpleOperationDefinition("tag_create", "Create a Tag.", "Create a strict-tree Tag in a TagSpace through the normal EntityStore path.", request, response, CreateAction.apply),
+        new SimpleOperationDefinition("tag_update", "Update Tag metadata.", "Update mutable Tag metadata without changing key, parent, or path.", request, response, UpdateAction.apply),
+        new SimpleOperationDefinition("tag_move", "Move a Tag.", "Move or rename a Tag, recomputing descendant paths and invalidating the TagSpace tree cache.", request, response, MoveAction.apply),
+        new SimpleOperationDefinition("tag_attach", "Attach a Tag to an Entity.", "Create an idempotent TagAttachment Association for a source Entity.", request, response, AttachAction.apply),
+        new SimpleOperationDefinition("tag_detach", "Detach a Tag from an Entity.", "Remove TagAttachment Associations for a source Entity and Tag.", request, response, DetachAction.apply),
+        new SimpleOperationDefinition("tag_list_entity_tags", "List Entity Tags.", "List Tags attached to a source Entity through TagAttachment Associations.", request, response, ListEntityTagsAction.apply),
+        new SimpleOperationDefinition("tag_search_entities", "Search Entities by Tag.", "Expand a Tag to descendants, find TagAttachment sources, and return EntityStore-visible rows.", request, response, SearchEntitiesAction.apply)
       )
       val service = spec.ServiceDefinition(
         name = "tag",
@@ -97,12 +100,18 @@ object TagComponent {
 
   private final class SimpleOperationDefinition(
     operationName: String,
+    summary: String,
+    description: String,
     request: spec.RequestDefinition,
     response: spec.ResponseDefinition,
     build: Request => OperationRequest
   ) extends spec.OperationDefinition with TagOperationAuthorization {
     val specification: spec.OperationDefinition.Specification =
-      spec.OperationDefinition.Specification(name = operationName, request = request, response = response)
+      spec.OperationDefinition.Specification(
+        content = BaseContent.Builder(operationName).summary(summary).description(description).build(),
+        request = request,
+        response = response
+      )
 
     def createOperationRequest(req: Request): Consequence[OperationRequest] =
       Consequence.success(build(req))
@@ -114,6 +123,14 @@ object TagComponent {
 
   private final case class CreateAction(request: Request) extends QueryAction() {
     def createCall(core: ActionCall.Core): ActionCall = CreateActionCall(core)
+  }
+
+  private final case class UpdateAction(request: Request) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall = UpdateActionCall(core)
+  }
+
+  private final case class MoveAction(request: Request) extends QueryAction() {
+    def createCall(core: ActionCall.Core): ActionCall = MoveActionCall(core)
   }
 
   private final case class AttachAction(request: Request) extends QueryAction() {
@@ -147,13 +164,14 @@ object TagComponent {
     def execute(): Consequence[OperationResponse] = {
       given org.goldenport.cncf.context.ExecutionContext = core.executionContext
       val args = _action_values(core)
-      val parent = _optional_entity_id(args, "parentTagId", "parent_tag_id")
       for {
         key <- _required_string(args, "key")
+        tagSpace = _optional_string(args, "tagSpace", "tag_space").map(TagSpace.normalize).getOrElse(TagRepository.DefaultTagSpace)
+        parent <- _optional_parent_tag_id(args, tagSpace)
         usage <- _optional_string(args, "usageKind", "usage_kind").map(TagUsageKind.parse).getOrElse(Consequence.success(TagUsageKind.General))
         tag <- TagRepository.entityStore().create(TagCreate(
           id = _optional_entity_id(args, "id"),
-          tagSpace = _optional_string(args, "tagSpace", "tag_space").map(TagSpace.normalize).getOrElse(TagRepository.DefaultTagSpace),
+          tagSpace = tagSpace,
           key = key,
           parentTagId = parent,
           usageKind = usage,
@@ -161,6 +179,48 @@ object TagComponent {
           title = _optional_string(args, "title"),
           description = _optional_string(args, "description")
         ))
+      } yield OperationResponse.RecordResponse(tag.toRecord)
+    }
+  }
+
+  private final case class UpdateActionCall(core: ActionCall.Core) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] = {
+      given org.goldenport.cncf.context.ExecutionContext = core.executionContext
+      val args = _action_values(core)
+      for {
+        ref <- _required_string(args, "tagRef", "tag", "tagPath", "tag_path", "id")
+        tagSpace = _optional_tag_space(args)
+        scopedRef <- _scoped_tag_ref(ref, tagSpace)
+        usage <- _optional_string(args, "usageKind", "usage_kind").map(TagUsageKind.parse).getOrElse(Consequence.success(TagUsageKind.General))
+        tag <- TagRepository.entityStore().update(scopedRef, TagUpdate(
+          title = _optional_string(args, "title"),
+          description = _optional_string(args, "description"),
+          usageKind = _optional_string(args, "usageKind", "usage_kind").map(_ => usage),
+          sortOrder = _optional_int(args, "sortOrder", "sort_order"),
+          attributes = _optional_attributes(args)
+        ))
+      } yield OperationResponse.RecordResponse(tag.toRecord)
+    }
+  }
+
+  private final case class MoveActionCall(core: ActionCall.Core) extends ProcedureActionCall {
+    def execute(): Consequence[OperationResponse] = {
+      given org.goldenport.cncf.context.ExecutionContext = core.executionContext
+      val args = _action_values(core)
+      for {
+        ref <- _required_string(args, "tagRef", "tag", "tagPath", "tag_path", "id")
+        tagSpace = _optional_tag_space(args)
+        scopedRef <- _scoped_tag_ref(ref, tagSpace)
+        parent <- _optional_scoped_tag_ref(
+          args,
+          tagSpace,
+          "newParentTagRef", "new_parent_tag_ref", "parentTagRef", "parent_tag_ref", "newParent", "new_parent"
+        )
+        tag <- TagRepository.entityStore().move(
+          scopedRef,
+          parent,
+          _optional_string(args, "newKey", "new_key", "key")
+        )
       } yield OperationResponse.RecordResponse(tag.toRecord)
     }
   }
@@ -268,11 +328,16 @@ object TagComponent {
     sourceId: String,
     collection: EntityCollection[A]
   ): Consequence[Option[EntityId]] =
-    EntityId.parse(sourceId) match {
-      case Consequence.Success(id) =>
-        Consequence.success(Some(id.copy(collection = collection.descriptor.collectionId)))
-      case Consequence.Failure(_) =>
-        _parse_entity_id_value(sourceId, collection.descriptor.collectionId)
+    collection.resolveEntityId(sourceId) match {
+      case Some(id) =>
+        Consequence.success(Some(id))
+      case None =>
+        EntityId.parse(sourceId) match {
+          case Consequence.Success(id) =>
+            Consequence.success(Some(id.copy(collection = collection.descriptor.collectionId)))
+          case Consequence.Failure(_) =>
+            _parse_entity_id_value(sourceId, collection.descriptor.collectionId)
+        }
     }
 
   private def _parse_entity_id_value(
@@ -341,10 +406,65 @@ object TagComponent {
       case other => scala.util.Try(other.toString.trim.toBoolean).toOption
     }.toSeq.headOption
 
+  private def _optional_tag_space(args: Map[String, Any]): Option[String] =
+    _optional_string(args, "tagSpace", "tag_space").map(TagSpace.normalize)
+
+  private def _scoped_tag_ref(
+    ref: String,
+    tagSpace: Option[String]
+  )(using org.goldenport.cncf.context.ExecutionContext): Consequence[String] =
+    tagSpace match {
+      case Some(space) => TagRepository.entityStore().tree(space).flatMap(_.resolve(ref)).map(_.id.value)
+      case None => Consequence.success(ref)
+    }
+
+  private def _optional_scoped_tag_ref(
+    args: Map[String, Any],
+    tagSpace: Option[String],
+    keys: String*
+  )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Option[String]] =
+    _optional_string(args, keys*) match {
+      case Some(ref) => _scoped_tag_ref(ref, tagSpace).map(Some(_))
+      case None => Consequence.success(None)
+    }
+
   private def _optional_entity_id(args: Map[String, Any], keys: String*): Option[EntityId] =
     keys.iterator.flatMap(k => args.get(k)).flatMap {
       case id: EntityId => Some(id)
       case s: String => EntityId.parse(s).toOption
       case other => EntityId.parse(other.toString).toOption
     }.toSeq.headOption
+
+  private def _optional_parent_tag_id(
+    args: Map[String, Any],
+    tagSpace: String
+  )(using org.goldenport.cncf.context.ExecutionContext): Consequence[Option[EntityId]] =
+    _optional_entity_id(args, "parentTagId", "parent_tag_id") match {
+      case Some(id) =>
+        Consequence.success(Some(id))
+      case None =>
+        _optional_string(args, "parentTagRef", "parent_tag_ref", "parentTagPath", "parent_tag_path", "parentPath", "parent_path", "parent") match {
+          case Some(ref) =>
+            TagRepository.entityStore().tree(tagSpace).flatMap(_.resolve(ref)).map(tag => Some(tag.id))
+          case None =>
+            Consequence.success(None)
+        }
+    }
+
+  private def _optional_attributes(args: Map[String, Any]): Option[Map[String, String]] =
+    args.get("attributes").orElse(args.get("attribute")).flatMap {
+      case r: Record => Some(r.asMap.map { case (k, v) => k -> v.toString })
+      case m: scala.collection.Map[?, ?] => Some(m.collect { case (k, v) => k.toString -> v.toString }.toMap)
+      case s: String if s.trim.nonEmpty =>
+        Some(s.split("[,\\n]").toVector.flatMap { entry =>
+          entry.split("=", 2) match {
+            case Array(k, v) if k.trim.nonEmpty => Some(k.trim -> v.trim)
+            case _ => None
+          }
+        }.toMap)
+      case other if other.toString.trim.nonEmpty =>
+        Some(Map("value" -> other.toString.trim))
+      case _ =>
+        None
+    }
 }

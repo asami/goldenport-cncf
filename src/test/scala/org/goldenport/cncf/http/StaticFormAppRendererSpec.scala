@@ -57,7 +57,7 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Apr. 12, 2026
- * @version May.  2, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
@@ -1250,6 +1250,96 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       associationPage should include ("page 1, page size 1")
       associationPage should include ("page=2")
       associationPage should include (target.value)
+    }
+
+    "render generic Tag admin and entity TagAttachment surfaces" in {
+      val subsystem = _management_console_fixture_subsystem()
+      val component = _notice_fixture_component(subsystem)
+      val notice = component.entitySpace.entity[_NoticeEntity]("notice").storage.storeRealm.values.head
+      val source = notice.id
+      val sourceId = source.value
+      given EntityPersistent[_NoticeEntity] = _notice_persistent
+      given ExecutionContext = subsystem.components.find(_.name == "admin").getOrElse(fail("admin component is missing")).logic.executionContext()
+      org.goldenport.cncf.entity.EntityStore.standard().save(notice)
+        .getOrElse(fail(s"admin notice fixture seed failed: ${notice.id.print}"))
+      val root = _tag_record_response(
+        subsystem,
+        "tag_create",
+        "key" -> "admin-tag-root",
+        "tagSpace" -> "admin-tag-space",
+        "title" -> "Admin Tag Root"
+      )
+      val rootPath = root.getString("path").getOrElse(fail("tag path is missing"))
+      val child = _tag_record_response(
+        subsystem,
+        "tag_create",
+        "key" -> "child",
+        "tagSpace" -> "admin-tag-space",
+        "parentTagRef" -> rootPath,
+        "usageKind" -> "cms",
+        "title" -> "Child tag"
+      )
+      val childPath = child.getString("path").getOrElse(fail("child tag path is missing"))
+      val childId = child.getString("id").getOrElse(fail("child tag id is missing"))
+      _tag_record_response(
+        subsystem,
+        "tag_attach",
+        "sourceEntityId" -> childId,
+        "tagSpace" -> "admin-tag-space",
+        "tagRef" -> childPath,
+        "role" -> "tag"
+      )
+      _tag_record_response(
+        subsystem,
+        "tag_attach",
+        "sourceEntityId" -> childId,
+        "tagSpace" -> "admin-tag-space",
+        "tagRef" -> childPath,
+        "role" -> "category",
+        "sortOrder" -> "2"
+      )
+      _tag_record_response(
+        subsystem,
+        "tag_attach",
+        "sourceEntityId" -> sourceId,
+        "tagSpace" -> "admin-tag-space",
+        "tagRef" -> childPath,
+        "role" -> "tag"
+      )
+
+      val tagPage = _page_body(StaticFormAppRenderer.renderAdminTags(subsystem, Map("tagSpace" -> "admin-tag-space")), "Tag admin page")
+      val searchPage = _page_body(StaticFormAppRenderer.renderAdminTags(subsystem, Map(
+        "tagSpace" -> "admin-tag-space",
+        "component" -> "tag",
+        "entity" -> "tag",
+        "tagRef" -> rootPath,
+        "role" -> "tag"
+      )), "Tag search page")
+      val detail = StaticFormAppRenderer.renderComponentAdminEntityDetail(
+        subsystem,
+        "tag",
+        "tag",
+        childId,
+        values = Map("tagSpace" -> "admin-tag-space")
+      ).map(_.body).getOrElse(fail("component entity detail admin is missing"))
+
+      tagPage should include ("Tag Administration")
+      tagPage should include ("Create Tag")
+      tagPage should include ("Search Entities by Tag")
+      tagPage should include ("action=\"/web/admin/tags/create\"")
+      tagPage should include ("action=\"/web/admin/tags/update\"")
+      tagPage should include ("action=\"/web/admin/tags/move\"")
+      tagPage should include ("admin-tag-root.child")
+      searchPage should include ("admin-tag-root.child")
+      searchPage should include (childId)
+      searchPage should include ("/web/tag/admin/entities/tag/")
+      detail should include ("Tags")
+      detail should include ("Attached Tags")
+      detail should include ("action=\"/web/admin/tags/attach\"")
+      detail should include ("action=\"/web/admin/tags/detach\"")
+      detail should include ("admin-tag-root.child")
+      detail should include ("name=\"role\" value=\"category\"")
+      detail should include ("<td>category</td>")
     }
 
     "render component admin storage shape from projection metadata without legacy containers" in {
@@ -8558,6 +8648,32 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       case OperationResponse.RecordResponse(record) => record
     }.getOrElse(fail(s"admin.${service}.${operation} did not return RecordResponse: ${response}"))
   }
+
+  private def _tag_record_response(
+    subsystem: Subsystem,
+    operation: String,
+    args: (String, String)*
+  ): Record = {
+    val request = GRequest.of(
+      component = "tag",
+      service = "tag",
+      operation = operation,
+      arguments = args.map { case (key, value) => Argument(key, value) }.toList
+    )
+    val response = subsystem.executeOperationResponse(request)
+    response.toOption.collect {
+      case OperationResponse.RecordResponse(record) => record
+    }.getOrElse(fail(s"tag.tag.${operation} did not return RecordResponse: ${response}"))
+  }
+
+  private def _page_body(
+    consequence: Consequence[StaticFormAppRenderer.Page],
+    label: String
+  ): String =
+    consequence match {
+      case Consequence.Success(page) => page.body
+      case Consequence.Failure(conclusion) => fail(s"$label is missing: ${conclusion.show}")
+    }
 
   private def _admin_response(
     subsystem: Subsystem,
