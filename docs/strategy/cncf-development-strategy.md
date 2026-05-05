@@ -597,6 +597,39 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - No full-text or embedding search backend implementation.
 - Artifact (work): `docs/phase/phase-20.md`.
 
+### Phase 21: Web Next Stage / Static Form UI
+- Goal: advance the CNCF Web layer after the Phase 12 Static Form baseline by
+  standardizing Bootstrap 5 UI primitives, expanding Textus widgets, and adding
+  reusable dialog-style action surfaces.
+- Status: active; Phase 21 is opened with Static Form UI as the primary driver.
+- Scope:
+- Use CNCF admin/runtime pages, Static Form App pages, and selected
+  `textus-blog` pages as concrete drivers.
+- Keep the Web layer convention-first, server-rendered, and usable without
+  JavaScript.
+- Normalize page shell, breadcrumbs, action bars, cards, responsive tables,
+  forms, alerts, empty states, job panels, and development debug panels around
+  Bootstrap 5.
+- Expand Textus widgets as server-rendered Bootstrap components over the
+  existing property/result/action metadata model.
+- Add reusable dialog-style action surfaces that reuse existing action metadata
+  and provide no-JS fallbacks.
+- Completed so far:
+- Phase 21 work documents are opened and the Static Form UI scope is selected.
+- Remaining:
+- Bootstrap primitive normalization, Textus widget expansion, dialog-style
+  action surfaces, targeted CNCF admin/runtime driver pages, selected
+  `textus-blog` driver pages, verification, documentation, and closure.
+- Non-goals:
+- No SPA framework adoption in this phase.
+- No API gateway or separate SPA hosting mode.
+- No visual design system separate from Bootstrap 5.
+- No broad UI generation or wireframe DSL implementation beyond the Static
+  Form primitives needed in this phase.
+- No component-owned admin page discovery/integration unless a concrete Phase
+  21 UI slice needs it.
+- Artifact (work): `docs/phase/phase-21.md`.
+
 ## 4. Relationship Between Phases
 - Later phases depend on earlier phases.
 - Phase 1.5 constrains Phase 2 and Phase 3.
@@ -611,13 +644,14 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: none; Phase 20 is closed and the next phase is not
-  selected yet.
-- Latest active phase dashboard: none
-- Latest active phase checklist: none
+- Current phase selection: Phase 21 — Web Next Stage / Static Form UI.
+- Latest active phase dashboard: `docs/phase/phase-21.md`
+- Latest active phase checklist: `docs/phase/phase-21-checklist.md`
 - Latest closed phase dashboard: `docs/phase/phase-20.md`
 - Latest closed phase checklist: `docs/phase/phase-20-checklist.md`
-- Candidate next phase areas: AwsComponent/S3 BlobStore provider; Error Model / Consequence-Conclusion Realignment; Search/index planning; DB migration tooling.
+- Candidate next phase areas after Phase 21: AwsComponent/S3 BlobStore
+  provider; Error Model / Consequence-Conclusion Realignment; Search/index
+  planning; DB migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
 
 ## 6. Explicit Non-Goals
@@ -645,20 +679,29 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 18: closed (`docs/phase/phase-18.md`)
 - Phase 19: closed (`docs/phase/phase-19.md`)
 - Phase 20: closed (`docs/phase/phase-20.md`)
+- Phase 21: active (`docs/phase/phase-21.md`)
 
 ## 8. Development Item Status
 
 This section lists active and future development areas. Once a work area is
 completed, it moves to the completed development item history below.
 
-### 8.1 Web Next Stage Candidates
+### 8.1 Web Next Stage / Static Form UI
+Active in Phase 21.
+
+- Phase 21 work documents:
+  - dashboard: `docs/phase/phase-21.md`
+  - checklist: `docs/phase/phase-21-checklist.md`
 - Static Form Web App next step:
-  - Island Architecture introduction on top of the convention-first static baseline
+  - Bootstrap 5 primitive normalization for CNCF admin/runtime, manual, and
+    Static Form App pages
   - richer Textus widget families where concrete application pressure exists
   - stronger dialog-style reusable surfaces
   - application-level job UX baseline is implemented for Form-launched
     asynchronous Command jobs through `/web/{app}/jobs` and
     `/web/{app}/jobs/{jobId}`
+  - Island Architecture remains progressive enhancement and future work rather
+    than the primary Phase 21 implementation surface
 - Search:
   - full-text search planning layer
   - embedding / semantic search backend strategy
