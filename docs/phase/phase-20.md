@@ -13,7 +13,8 @@ This document is a phase dashboard, not a design journal.
 
 - Make `8.5 Tagging and Knowledge Structure` the active development item.
 - Add CNCF builtin hierarchical `Tag` as a `SimpleEntity`-backed master Entity.
-- Treat Tag trees as master data and resident Working Set candidates.
+- Treat Tag trees as master data grouped by TagSpace. Only the TagSpaces used
+  by a runtime context/component are resident.
 - Allow Tags to be used in two practical styles:
   - lightweight CMS-style tags for content navigation and search;
   - powertype-like external classification for ordinary Entities.
@@ -32,8 +33,16 @@ Final semantic direction:
 
 - `Tag` is CNCF builtin master data, not an application-local string list.
 - The Tag hierarchy is a tree in Phase 20.
+- Canonical Tag names/paths use dot notation such as `a.b.c`.
+- TagSpace is a first-class runtime boundary. Operational master TagSpaces,
+  shared application TagSpaces, and user-editable TagSpaces can coexist.
 - Tag tree records are canonical store-backed Entities, while the runtime
-  tree is a resident read structure rebuilt from normal EntityStore paths.
+  tree is a resident read structure rebuilt from normal EntityStore paths for
+  the effective TagSpaces.
+- The effective runtime Tag tree is the merge of Subsystem, Component, and
+  User TagSpaces carried by `ExecutionContext`.
+- `textus-blog` uses a shared `blog` TagSpace. Blog authors add Tags to that
+  shared space rather than receiving private Blog TagSpaces.
 - Entity-to-Tag links are Association-backed and external to the tagged Entity.
 - Tag search expands a selected parent to all active descendant Tags unless the
   caller explicitly requests direct-only matching.

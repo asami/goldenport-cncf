@@ -50,7 +50,7 @@ import org.goldenport.cncf.metrics.EntityAccessMetricsRegistry
  *  version Jan. 31, 2026
  *  version Feb.  4, 2026
  *  version Apr. 30, 2026
- * @version May.  4, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final class Subsystem(
@@ -541,6 +541,10 @@ final class Subsystem(
   private def _association_storage_policy(domain: String): AssociationStoragePolicy =
     if (domain == AssociationDomain.BlobAttachment.value)
       AssociationStoragePolicy.blobAttachmentDefault
+    else if (domain == AssociationDomain.MediaAttachment.value)
+      AssociationStoragePolicy.mediaAttachmentDefault
+    else if (domain == AssociationDomain.TagAttachment.value)
+      AssociationStoragePolicy.tagAttachmentDefault
     else
       AssociationStoragePolicy.shared
 

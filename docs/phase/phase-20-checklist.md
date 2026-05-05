@@ -43,12 +43,22 @@ Open Phase 20 and freeze the CNCF Tag model direction before implementation.
 
 - `Tag` is a CNCF builtin `SimpleEntity`.
 - `Tag` uses `entityKind = master` and default resident Working Set behavior.
+- Tag names/paths use dot notation such as `a.b.c`.
+- TagSpace is an operational/application/user boundary for independent Tag
+  trees. Runtime resolution merges Subsystem, Component, and User TagSpaces
+  from `ExecutionContext`.
+- Only TagSpaces selected by the runtime/component are resident; canonical Tag
+  records remain store-backed.
+- Operational TagSpaces are master-like and maintained by operations. Shared
+  application TagSpaces, such as `blog`, can be edited by application users.
+  User TagSpaces, such as EC personal tags, are supported as a separate usage
+  style.
 - `Tag` can be used as lightweight CMS tagging or powertype-like external
   classification.
 - Entity-to-Tag links are external Association records, not embedded fields on
   the tagged Entity.
-- Tag tree lookup is resident for speed, but canonical records stay in
-  EntityStore.
+- Tag tree lookup is resident for selected TagSpaces, but canonical records
+  stay in EntityStore.
 - Parent Tag search expands descendants by default; direct-only search remains
   an explicit option.
 - Tag display and documentation use existing SimpleEntity name, title,
@@ -77,6 +87,7 @@ navigation, and descendant expansion.
 
 - [ ] Add Tag Entity collection metadata as CNCF builtin master data.
 - [ ] Define Tag-specific fields:
+  - TagSpace;
   - key/code;
   - parent Tag id;
   - path;
@@ -87,6 +98,7 @@ navigation, and descendant expansion.
 - [ ] Validate missing parent, cycle, duplicate sibling key, and invalid
       key/path as deterministic failures.
 - [ ] Add Tag tree loader from normal EntityStore paths.
+- [ ] Add TagSpace-scoped tree cache and runtime effective TagSpace merge.
 - [ ] Add lookup by id, entropy, key, and path.
 - [ ] Add descendant expansion excluding logically deleted Tags.
 - [ ] Expose effective Working Set policy as `resident-all`.
@@ -167,6 +179,7 @@ navigation.
 ### Detailed Tasks
 
 - [ ] Add BlogPost TagAttachment usage without embedding Tag fields in BlogPost.
+- [ ] Use shared `blog` TagSpace for BlogPost tags.
 - [ ] Let Blog editor/register/update accept Tag refs or Tag paths.
 - [ ] Synchronize BlogPost Tags after successful BlogPost mutation.
 - [ ] Add public Blog search by Tag.

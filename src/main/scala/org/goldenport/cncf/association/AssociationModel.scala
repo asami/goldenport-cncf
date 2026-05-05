@@ -13,7 +13,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * Generic entity-to-entity association runtime foundation.
  *
  * @since   Apr. 27, 2026
- * @version May.  4, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class AssociationDomain(value: String) extends Presentable {
@@ -23,6 +23,7 @@ final case class AssociationDomain(value: String) extends Presentable {
 object AssociationDomain {
   val BlobAttachment: AssociationDomain = AssociationDomain("blob_attachment")
   val MediaAttachment: AssociationDomain = AssociationDomain("media_attachment")
+  val TagAttachment: AssociationDomain = AssociationDomain("tag_attachment")
 }
 
 final case class AssociationStoragePolicy(
@@ -43,6 +44,9 @@ object AssociationStoragePolicy {
   val MediaAttachmentCollection: EntityCollectionId =
     EntityCollectionId("cncf", "builtin", "association_media_attachment")
 
+  val TagAttachmentCollection: EntityCollectionId =
+    EntityCollectionId("cncf", "builtin", "association_tag_attachment")
+
   def shared: AssociationStoragePolicy =
     AssociationStoragePolicy()
 
@@ -54,6 +58,11 @@ object AssociationStoragePolicy {
   def mediaAttachmentDefault: AssociationStoragePolicy =
     AssociationStoragePolicy(
       domainCollections = Map(AssociationDomain.MediaAttachment.value -> MediaAttachmentCollection)
+    )
+
+  def tagAttachmentDefault: AssociationStoragePolicy =
+    AssociationStoragePolicy(
+      domainCollections = Map(AssociationDomain.TagAttachment.value -> TagAttachmentCollection)
     )
 }
 

@@ -52,7 +52,7 @@ import org.simplemodeling.model.datatype.{EntityCollectionId, EntityId}
  * @since   Jan.  7, 2026
  *  version Jan. 20, 2026
  *  version Feb. 19, 2026
- * @version May.  2, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 class AdminComponent() extends Component {
@@ -2050,7 +2050,7 @@ object AdminComponent {
     for {
       domain <- _required_string(args, "domain")
       paging <- _paging(args)
-      values <- AssociationRepository.entityStore(AssociationStoragePolicy.shared).list(
+      values <- AssociationRepository.entityStore(_admin_association_storage_policy(domain)).list(
         AssociationFilter(
           domain = AssociationDomain(domain),
           sourceEntityId = _optional_string(args, "sourceEntityId"),
@@ -2104,9 +2104,10 @@ object AdminComponent {
       targetId <- EntityId.parse(target)
       _ <- _validate_admin_association_entity(subsystem, None, sourceId)
       sortOrder <- _optional_int_arg(args, "sortOrder")
+      storagePolicy = _admin_association_storage_policy(domain)
       workflow = AssociationBindingWorkflow(
-        AssociationRepository.entityStore(AssociationStoragePolicy.shared),
-        AssociationStoragePolicy.shared,
+        AssociationRepository.entityStore(storagePolicy),
+        storagePolicy,
         _admin_association_target_validator(subsystem)
       )
       result <- workflow.attachExistingTargetResult(
@@ -2135,7 +2136,7 @@ object AdminComponent {
       target <- _required_string(args, "targetEntityId")
       targetKind <- _required_string(args, "targetKind")
       role <- _required_string(args, "role")
-      repository = AssociationRepository.entityStore(AssociationStoragePolicy.shared)
+      repository = AssociationRepository.entityStore(_admin_association_storage_policy(domain))
       values <- repository.list(AssociationFilter(
         domain = AssociationDomain(domain),
         sourceEntityId = Some(source),
@@ -2149,6 +2150,16 @@ object AdminComponent {
       }
     } yield OperationResponse.RecordResponse(Record.dataAuto("detachedCount" -> values.size))
   }
+
+  private def _admin_association_storage_policy(domain: String): AssociationStoragePolicy =
+    if (domain == AssociationDomain.BlobAttachment.value)
+      AssociationStoragePolicy.blobAttachmentDefault
+    else if (domain == AssociationDomain.MediaAttachment.value)
+      AssociationStoragePolicy.mediaAttachmentDefault
+    else if (domain == AssociationDomain.TagAttachment.value)
+      AssociationStoragePolicy.tagAttachmentDefault
+    else
+      AssociationStoragePolicy.shared
 
   private def _admin_data_update(
     core: ActionCall.Core,

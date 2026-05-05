@@ -735,7 +735,13 @@ Active in Phase 20.
   - dashboard: `docs/phase/phase-20.md`
   - checklist: `docs/phase/phase-20-checklist.md`
 - Add a CNCF builtin hierarchical `Tag` model.
-- Treat Tags as `SimpleEntity`-backed master data with resident tree lookup.
+- Treat Tags as `SimpleEntity`-backed master data with TagSpace-scoped
+  resident tree lookup.
+- Use dot notation such as `a.b.c` as the canonical Tag path/name grammar.
+- Resolve runtime Tags from the effective merge of Subsystem, Component, and
+  User TagSpaces in `ExecutionContext`.
+- Support operational master TagSpaces, shared application TagSpaces such as
+  `blog`, and user-editable TagSpaces for personal tagging use cases.
 - Support Entity-to-Tag links through Associations.
 - Support parent Tag search with descendant expansion.
 - Validate generic Tag management through CNCF admin/runtime.

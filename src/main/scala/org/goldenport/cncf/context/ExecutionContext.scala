@@ -80,7 +80,8 @@ object ExecutionContext {
     runtime: RuntimeContext,
     jobContext: org.goldenport.cncf.job.JobContext,
     framework: FrameworkParameter = FrameworkParameter(),
-    idGeneration: IdGenerationContext = IdGenerationContext.default(IdGenerationContext.DefaultNamespace)
+    idGeneration: IdGenerationContext = IdGenerationContext.default(IdGenerationContext.DefaultNamespace),
+    tagSpaces: TagSpaceContext = TagSpaceContext.default
   ) {
     def major: String = idGeneration.namespace.major
     def minor: String = idGeneration.namespace.minor
@@ -99,9 +100,32 @@ object ExecutionContext {
       def jobContext: org.goldenport.cncf.job.JobContext = cncfCore.jobContext
       def framework: FrameworkParameter = cncfCore.framework
       def idGeneration: IdGenerationContext = cncfCore.idGeneration
+      def tagSpaces: TagSpaceContext = cncfCore.tagSpaces
       def major = cncfCore.major
       def minor = cncfCore.minor
     }
+  }
+
+  final case class TagSpaceContext(
+    subsystem: Vector[String] = Vector.empty,
+    component: Vector[String] = Vector.empty,
+    user: Vector[String] = Vector.empty
+  ) {
+    def effective: Vector[String] =
+      (subsystem ++ component ++ user).map(_.trim).filter(_.nonEmpty).distinct
+
+    def withSubsystem(values: Vector[String]): TagSpaceContext =
+      copy(subsystem = values)
+
+    def withComponent(values: Vector[String]): TagSpaceContext =
+      copy(component = values)
+
+    def withUser(values: Vector[String]): TagSpaceContext =
+      copy(user = values)
+  }
+
+  object TagSpaceContext {
+    val default: TagSpaceContext = TagSpaceContext()
   }
 
   final case class FrameworkParameter(
@@ -262,6 +286,20 @@ object ExecutionContext {
       i.copy(
         cncfCore = i.cncfCore.copy(
           idGeneration = idGeneration
+        )
+      )
+    case _ =>
+      ctx
+  }
+
+  def withTagSpaces(
+    ctx: ExecutionContext,
+    tagSpaces: TagSpaceContext
+  ): ExecutionContext = ctx match {
+    case i: Instance =>
+      i.copy(
+        cncfCore = i.cncfCore.copy(
+          tagSpaces = tagSpaces
         )
       )
     case _ =>

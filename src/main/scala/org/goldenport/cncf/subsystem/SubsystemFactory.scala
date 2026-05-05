@@ -13,6 +13,7 @@ import org.goldenport.cncf.component.builtin.jobcontrol.JobControlComponent
 import org.goldenport.cncf.component.builtin.metrics.MetricsComponent
 import org.goldenport.cncf.component.builtin.messagedeliverystub.MessageDeliveryStubComponent
 import org.goldenport.cncf.component.builtin.specification.SpecificationComponent
+import org.goldenport.cncf.component.builtin.tag.TagComponent
 import org.goldenport.cncf.component.builtin.workflow.WorkflowComponent
 import org.goldenport.cncf.context.{ExecutionContext, GlobalRuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.cli.RunMode
@@ -32,7 +33,7 @@ import org.goldenport.protocol.spec as spec
  *  version Feb. 15, 2026
  *  version Mar. 29, 2026
  *  version Apr. 26, 2026
- * @version May.  1, 2026
+ * @version May.  5, 2026
  * @author  ASAMI, Tomoharu
  */
 object DefaultSubsystemFactory {
@@ -52,6 +53,7 @@ object DefaultSubsystemFactory {
       AuthComponent.Factory,
       _client,
       BlobComponent.Factory,
+      TagComponent.Factory,
       DebugComponent.Factory,
       EventComponent.Factory,
       JobControlComponent.Factory,
