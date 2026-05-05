@@ -19,7 +19,7 @@ used as the closure record for completed Phase 20 work.
 
 ## TG-01: Open Phase 20 and Freeze Tag Hierarchy Semantics
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -76,7 +76,7 @@ Open Phase 20 and freeze the CNCF Tag model direction before implementation.
 
 ## TG-02: CNCF Builtin Tag Model and Resident Tag Tree
 
-Status: TODO
+Status: DONE
 
 ### Objective
 
@@ -85,35 +85,38 @@ navigation, and descendant expansion.
 
 ### Detailed Tasks
 
-- [ ] Add Tag Entity collection metadata as CNCF builtin master data.
-- [ ] Define Tag-specific fields:
+- [x] Add Tag Entity collection metadata as CNCF builtin master data.
+- [x] Define Tag-specific fields:
   - TagSpace;
   - key/code;
   - parent Tag id;
   - path;
   - usage kind: `powertype`, `cms`, `navigation`, or `general`;
   - sort order.
-- [ ] Reuse SimpleEntity descriptive/content attributes for multilingual
+- [x] Reuse SimpleEntity descriptive/content attributes for multilingual
       title, description, and longer Tag explanation.
-- [ ] Validate missing parent, cycle, duplicate sibling key, and invalid
+- [x] Validate missing parent, cycle, duplicate sibling key, and invalid
       key/path as deterministic failures.
-- [ ] Add Tag tree loader from normal EntityStore paths.
-- [ ] Add TagSpace-scoped tree cache and runtime effective TagSpace merge.
-- [ ] Add lookup by id, entropy, key, and path.
-- [ ] Add descendant expansion excluding logically deleted Tags.
-- [ ] Expose effective Working Set policy as `resident-all`.
+- [x] Add Tag tree loader from normal EntityStore paths.
+- [x] Add TagSpace-scoped tree cache and runtime effective TagSpace merge.
+- [x] Add lookup by id, entropy, key, and path.
+- [x] Add descendant expansion excluding logically deleted Tags.
+- [x] Expose effective Working Set policy as `resident-all`.
 
 ### Expected Output
 
 - Tag records can be created, searched, rendered, and described like normal
   SimpleEntities.
 - The resident Tag tree can be rebuilt from canonical Tag records.
+- Effective runtime lookup merges Subsystem, Component, User, and explicit
+  workflow TagSpaces. Merged trees are built from cached per-space resident
+  trees instead of bypassing the TagTree cache.
 
 ---
 
 ## TG-03: TagAttachment Association and Tag-Expanded Entity Search
 
-Status: TODO
+Status: DONE
 
 ### Objective
 
@@ -122,23 +125,26 @@ expansion.
 
 ### Detailed Tasks
 
-- [ ] Add `AssociationDomain.TagAttachment`.
-- [ ] Add TagAttachment storage policy.
-- [ ] Add attach/detach/list workflow for arbitrary source Entity ids.
-- [ ] Make duplicate `(sourceEntityId, tagId, role)` attachment idempotent.
-- [ ] Add `tag_search_entities` behavior:
+- [x] Add `AssociationDomain.TagAttachment`.
+- [x] Add TagAttachment storage policy.
+- [x] Add attach/detach/list workflow for arbitrary source Entity ids.
+- [x] Make duplicate `(sourceEntityId, tagId, role)` attachment idempotent.
+- [x] Add `tag_search_entities` behavior:
   - resolve Tag by id/entropy/key/path;
   - expand descendants by default;
   - find matching source Entity ids from TagAttachment;
   - load/search target Entities through normal EntityStore access scope.
-- [ ] Add direct-only search option with `includeDescendants = false`.
-- [ ] Ensure deleted/out-of-scope Tags and Entities are not returned.
+- [x] Add direct-only search option with `includeDescendants = false`.
+- [x] Ensure deleted/out-of-scope Tags and Entities are not returned.
 
 ### Expected Output
 
 - Tags behave as external classification data and do not change domain Entity
   storage shape.
 - Parent Tag search finds Entities tagged with child Tags.
+- Generic `tag_search_entities` returns source ids plus visible Entity data
+  after EntityStore filtering, rather than returning raw Association source ids
+  alone.
 
 ---
 
@@ -152,13 +158,16 @@ Expose Tag management and Entity tagging through CNCF admin/runtime surfaces.
 
 ### Detailed Tasks
 
-- [ ] Add Tag tree browse surface.
-- [ ] Add Tag create/update/move admin actions.
+- [x] Add runtime operations for Tag tree browse/create, attach/detach,
+      list tags, and Entity search by Tag.
+- [ ] Add generic admin page/UI for Tag tree browse.
+- [ ] Add generic admin create/update/move UI for Tags.
 - [ ] Add Entity detail Tag section.
-- [ ] Add Entity tag attach/detach admin actions.
+- [ ] Add Entity tag attach/detach admin UI affordances.
 - [ ] Add Entity search by Tag admin surface.
 - [ ] Project Tag operation metadata in manual/help/meta output.
-- [ ] Show attached Tag summaries in relevant projection records.
+- [x] Show attached Tag summaries in relevant projection records where the
+      application driver uses Tags.
 
 ### Expected Output
 
@@ -169,7 +178,7 @@ Expose Tag management and Entity tagging through CNCF admin/runtime surfaces.
 
 ## TG-05: `textus-blog` CMS Tag Driver
 
-Status: TODO
+Status: DONE
 
 ### Objective
 
@@ -178,20 +187,22 @@ navigation.
 
 ### Detailed Tasks
 
-- [ ] Add BlogPost TagAttachment usage without embedding Tag fields in BlogPost.
-- [ ] Use shared `blog` TagSpace for BlogPost tags.
-- [ ] Let Blog editor/register/update accept Tag refs or Tag paths.
-- [ ] Synchronize BlogPost Tags after successful BlogPost mutation.
-- [ ] Add public Blog search by Tag.
-- [ ] Ensure parent Tag search includes BlogPosts tagged with child Tags.
-- [ ] Ensure public Tag search returns only published and active BlogPosts.
-- [ ] Add lightweight Tag summaries to Blog list/detail response projections.
-- [ ] Keep existing Blog response compatibility where possible.
+- [x] Add BlogPost TagAttachment usage without embedding Tag fields in BlogPost.
+- [x] Use shared `blog` TagSpace for BlogPost tags.
+- [x] Let Blog editor/register/update accept Tag refs or Tag paths.
+- [x] Synchronize BlogPost Tags after successful BlogPost mutation.
+- [x] Add public Blog search by Tag.
+- [x] Ensure parent Tag search includes BlogPosts tagged with child Tags.
+- [x] Ensure public Tag search returns only published and active BlogPosts.
+- [x] Add lightweight Tag summaries to Blog list/detail response projections.
+- [x] Keep existing Blog response compatibility where possible.
 
 ### Expected Output
 
 - `textus-blog` validates CMS-style tags, public tag navigation, and
   descendant search as the application driver for Phase 20.
+- Blog uses the shared `blog` TagSpace. Tags are shared across Blog authors,
+  while tagged BlogPosts remain filtered by normal public lifecycle visibility.
 
 ---
 
@@ -205,13 +216,13 @@ Verify Phase 20 behavior, document decisions, and close the phase.
 
 ### Detailed Tasks
 
-- [ ] Add CNCF specs for Tag model, tree, attachment, search, admin, and
-      projection behavior.
-- [ ] Add `textus-blog` specs for BlogPost tag sync and public tag search.
-- [ ] Run CNCF focused Tag specs.
-- [ ] Run CNCF `sbt --batch test`.
-- [ ] Run `textus-blog` focused `ComponentFactorySpec`.
-- [ ] Run `textus-blog` `sbt --batch test`.
-- [ ] Run `git diff --check` in touched repos.
+- [x] Add CNCF specs for Tag model, tree, attachment, and search behavior.
+- [ ] Add CNCF specs for generic admin UI/projection behavior.
+- [x] Add `textus-blog` specs for BlogPost tag sync and public tag search.
+- [x] Run CNCF focused Tag specs.
+- [x] Run CNCF `sbt --batch test`.
+- [x] Run `textus-blog` focused `ComponentFactorySpec`.
+- [x] Run `textus-blog` `sbt --batch test`.
+- [x] Run `git diff --check` in touched repos.
 - [ ] Record deferred RDF/Knowledge Graph and DAG/polyhierarchy work.
 - [ ] Mark all Phase 20 items DONE or explicitly deferred before closure.

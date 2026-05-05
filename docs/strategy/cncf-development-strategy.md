@@ -564,7 +564,8 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 ### Phase 20: Hierarchical Tagging and Knowledge Structure
 - Goal: add CNCF builtin hierarchical Tags and validate them through CNCF
   admin/runtime and `textus-blog`.
-- Status: open.
+- Status: open; core Tag runtime and `textus-blog` driver implemented,
+  generic admin/manual/projection surfacing remains active.
 - Scope:
 - Add `Tag` as a `SimpleEntity`-backed builtin master Entity.
 - Treat the Tag hierarchy as a strict tree in this phase.
@@ -580,6 +581,13 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   arbitrary Entity tag attach/detach, and tag-expanded Entity search.
 - Use `textus-blog` as the application driver for BlogPost tags, public tag
   navigation, and parent-tag descendant search.
+- Completed so far:
+- Runtime Tag model, TagSpace-scoped resident tree cache, effective
+  Subsystem/Component/User/explicit TagSpace merge, TagAttachment Association,
+  generic tag operations, and `textus-blog` shared `blog` TagSpace integration.
+- Remaining:
+- Generic CNCF admin UI/manual/projection surfacing and phase closure
+  documentation.
 - Non-goals:
 - No RDF store, RDF import/export, or external knowledge graph integration in
   this phase.
@@ -744,8 +752,15 @@ Active in Phase 20.
   `blog`, and user-editable TagSpaces for personal tagging use cases.
 - Support Entity-to-Tag links through Associations.
 - Support parent Tag search with descendant expansion.
-- Validate generic Tag management through CNCF admin/runtime.
+- Validate generic Tag management through CNCF runtime operations, then expose
+  it through admin/manual/projection surfaces.
 - Validate CMS-style Tags through `textus-blog` BlogPost navigation/search.
+- Implemented core scope includes Tag tree creation/resolution, resident
+  TagTree cache use for effective TagSpaces, TagAttachment attach/detach/list,
+  tag-expanded Entity search through EntityStore filtering, and shared Blog
+  TagSpace navigation/search.
+- Remaining Phase 20 scope is generic admin UI/manual/projection surfacing and
+  closure documentation.
 - Keep RDF and external knowledge graph integration under the separate RDF
   development item.
 

@@ -59,26 +59,26 @@ Final semantic direction:
 
 ## 4. Active Work Stack
 
-- A (ACTIVE): TG-01 — Open Phase 20 and freeze Tag hierarchy semantics.
-- B (SUSPENDED): TG-02 — Add CNCF builtin Tag model and resident Tag tree.
-- C (SUSPENDED): TG-03 — Add TagAttachment Association and tag-expanded Entity search.
-- D (SUSPENDED): TG-04 — Add CNCF admin, manual, and projection surfaces.
-- E (SUSPENDED): TG-05 — Apply Tags to `textus-blog` CMS navigation and search.
+- A (DONE): TG-01 — Open Phase 20 and freeze Tag hierarchy semantics.
+- B (DONE): TG-02 — Add CNCF builtin Tag model and resident Tag tree.
+- C (DONE): TG-03 — Add TagAttachment Association and tag-expanded Entity search.
+- D (ACTIVE): TG-04 — Add CNCF admin, manual, and projection surfaces.
+- E (DONE): TG-05 — Apply Tags to `textus-blog` CMS navigation and search.
 - F (SUSPENDED): TG-06 — Verification, documentation, and phase closure.
 
 Resume hint:
 
-- Start with TG-01 by documenting the Tag tree, TagAttachment, descendant-search,
-  admin driver, and `textus-blog` driver contracts in the checklist. Then move
-  to TG-02 implementation.
+- Continue with TG-04. The core Tag model, TagAttachment workflow, resident
+  TagSpace merge, and `textus-blog` driver are implemented. Remaining Phase 20
+  work is generic CNCF admin/manual/projection surfacing plus closure docs.
 
 ## 5. Development Items
 
-- [ ] TG-01: Open Phase 20 and freeze Tag hierarchy semantics.
-- [ ] TG-02: Add CNCF builtin Tag model and resident Tag tree.
-- [ ] TG-03: Add TagAttachment Association and tag-expanded Entity search.
+- [x] TG-01: Open Phase 20 and freeze Tag hierarchy semantics.
+- [x] TG-02: Add CNCF builtin Tag model and resident Tag tree.
+- [x] TG-03: Add TagAttachment Association and tag-expanded Entity search.
 - [ ] TG-04: Add CNCF admin, manual, and projection surfaces.
-- [ ] TG-05: Apply Tags to `textus-blog` CMS navigation and search.
+- [x] TG-05: Apply Tags to `textus-blog` CMS navigation and search.
 - [ ] TG-06: Verification, documentation, and phase closure.
 
 Detailed task breakdown and progress tracking are recorded in
