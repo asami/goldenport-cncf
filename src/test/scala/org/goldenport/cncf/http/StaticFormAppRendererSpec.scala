@@ -253,6 +253,8 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
 
       home should include ("Blob Admin")
       home should include ("/web/blob/admin/blobs")
+      home should include ("class=\"card admin-card")
+      home should include ("class=\"row g-3\"")
       home should include ("Authorization requirements")
       home should include ("collection:blob:delete")
       home should include ("association:blob_attachment:create/delete/search/list")
@@ -260,15 +262,23 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       list should include ("Blob Admin Blobs")
       list should include (id)
       list should include ("/web/blob/admin/blobs/")
+      list should include ("class=\"table table-sm table-hover align-middle mb-0\"")
       detail should include ("Blob metadata detail")
       detail should include ("https://example.test/cover.png")
       detail should include (s"/web/blob/admin/blobs/${id}/delete")
+      detail should include ("class=\"admin-action-row d-flex flex-wrap gap-2\"")
       detail should include ("Raw Blob metadata")
       delete should include ("Delete Blob")
       delete should include ("name=\"force\"")
+      delete should include ("class=\"admin-action-row d-flex flex-wrap gap-2\"")
       associations should include ("Blob Admin Associations")
+      associations should include ("class=\"row g-3\"")
+      associations should include ("class=\"table table-sm table-hover align-middle mb-0\"")
       associations should include ("action=\"/web/blob/admin/associations/attach\"")
       associations should include ("action=\"/web/blob/admin/associations/detach\"")
+      associations should include ("data-bs-toggle=\"modal\"")
+      associations should include ("class=\"modal fade\"")
+      associations should include ("<noscript>")
       associations should include ("article-1")
       associations should include ("mainImage")
       store should include ("Blob Admin Store")
@@ -478,7 +488,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       ))))
 
       attach.status.code shouldBe 200
-      attach.as[String].unsafeRunSync() should include ("Blob Association Attached")
+      val attachBody = attach.as[String].unsafeRunSync()
+      attachBody should include ("Blob Association Attached")
+      attachBody should include ("class=\"admin-action-row d-flex flex-wrap gap-2\"")
       attached.getInt("fetchedCount") shouldBe Some(1)
 
       val detach = server.routes(null).orNotFound.run(_post_form_request(
@@ -492,7 +504,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       ))))
 
       detach.status.code shouldBe 200
-      detach.as[String].unsafeRunSync() should include ("Blob Association Detached")
+      val detachBody = detach.as[String].unsafeRunSync()
+      detachBody should include ("Blob Association Detached")
+      detachBody should include ("class=\"admin-action-row d-flex flex-wrap gap-2\"")
       detached.getInt("fetchedCount") shouldBe Some(0)
 
       val delete = server.routes(null).orNotFound.run(_post_form_request(
@@ -501,7 +515,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       )).unsafeRunSync()
 
       delete.status.code shouldBe 200
-      delete.as[String].unsafeRunSync() should include ("Blob Deleted")
+      val deleteBody = delete.as[String].unsafeRunSync()
+      deleteBody should include ("Blob Deleted")
+      deleteBody should include ("class=\"admin-action-row d-flex flex-wrap gap-2\"")
       subsystem.executeOperationResponse(_blob_request("admin_get_blob", Property("id", firstId, None))) shouldBe a[Consequence.Failure[_]]
     }
 
@@ -1280,6 +1296,11 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       associationPage should include ("page 1, page size 1")
       associationPage should include ("page=2")
       associationPage should include (target.value)
+      associationPage should include ("class=\"row g-3\"")
+      associationPage should include ("class=\"table table-sm table-hover align-middle mb-0\"")
+      associationPage should include ("data-bs-toggle=\"modal\"")
+      associationPage should include ("class=\"modal fade\"")
+      associationPage should include ("<noscript>")
     }
 
     "render generic Tag admin and entity TagAttachment surfaces" in {
@@ -1393,6 +1414,9 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       detail should include ("Attached Tags")
       detail should include ("action=\"/web/admin/tags/attach\"")
       detail should include ("action=\"/web/admin/tags/detach\"")
+      detail should include ("data-bs-toggle=\"modal\"")
+      detail should include ("class=\"modal fade\"")
+      detail should include ("<noscript>")
       detail should include ("admin-tag-root.child")
       detail should include ("name=\"sourceEntityId\" value=\"" + childId + "\"")
       detail should include ("name=\"tagSpace\" value=\"admin-tag-space\"")

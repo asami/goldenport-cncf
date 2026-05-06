@@ -701,7 +701,10 @@ Active in Phase 21.
     conservative Bootstrap feedback/status variants
   - WN-04 reusable dialog-style action surfaces are implemented through
     `textus:confirm-action` Bootstrap modal markup with no-JS link/form fallback
-  - WN-05 is the next active slice for CNCF admin/runtime driver pages
+  - WN-05 CNCF admin/runtime driver pages are implemented for Blob admin,
+    generic Association admin, result action rows, and destructive detach
+    confirmation surfaces
+  - WN-06 is the next active slice for selected `textus-blog` driver pages
   - application-level job UX baseline is implemented for Form-launched
     asynchronous Command jobs through `/web/{app}/jobs` and
     `/web/{app}/jobs/{jobId}`

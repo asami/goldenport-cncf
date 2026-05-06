@@ -168,7 +168,7 @@ introducing a separate client-side action model.
 
 ## WN-05: CNCF Admin/Runtime Driver Pages
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -176,22 +176,31 @@ Apply the Phase 21 primitives to targeted CNCF admin/runtime pages.
 
 ### Detailed Tasks
 
-- [ ] Apply Bootstrap primitive cleanup to selected dashboard/admin/detail
+- [x] Apply Bootstrap primitive cleanup to selected dashboard/admin/detail
       pages.
-- [ ] Keep system/admin routes and response shapes stable.
-- [ ] Preserve existing job result and development debug panel behavior.
-- [ ] Add focused renderer specs for the targeted pages.
+- [x] Keep system/admin routes and response shapes stable.
+- [x] Preserve existing job result and development debug panel behavior.
+- [x] Add focused renderer specs for the targeted pages.
 
 ### Expected Output
 
 - CNCF admin/runtime pages validate the common UI primitives under real
   framework output.
 
+### Completion Notes
+
+- Blob admin, generic Association admin, and Tag/Association result navigation
+  now use Bootstrap admin cards, responsive tables, and action rows.
+- Generic TagAttachment/Association/BlobAttachment detach controls use
+  confirmation modal markup with no-JS fallback.
+- Dashboard, performance anchors, job result pages, application job pages, and
+  development debug panel behavior remain unchanged.
+
 ---
 
 ## WN-06: `textus-blog` Driver Pages
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

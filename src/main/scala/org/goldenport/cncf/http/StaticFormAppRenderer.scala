@@ -2549,16 +2549,14 @@ object StaticFormAppRenderer {
       title = "Blob Admin",
       subtitle = "Blob metadata, associations, and store diagnostics",
       body =
-        s"""<article>
-           |  <h2>Management</h2>
-           |  <p>Use these pages to inspect Blob metadata, manage entity associations, and run controlled Blob admin actions.</p>
-           |  ${_admin_entry_cards(Vector(
+        s"""${_admin_card("Management",
+             s"""<p>Use these pages to inspect Blob metadata, manage entity associations, and run controlled Blob admin actions.</p>
+                |${_admin_entry_cards(Vector(
              _admin_entry_card("Blobs", "List Blob metadata rows and open detail pages.", "/web/blob/admin/blobs"),
              _admin_entry_card("Associations", "Inspect, attach, and detach Blob-to-entity association records.", "/web/blob/admin/associations"),
              _admin_entry_card("Store Status", "Inspect the active BlobStore backend status.", "/web/blob/admin/store"),
              _admin_entry_card("Delete", "Open a Blob detail page to run controlled delete with optional force.", "/web/blob/admin/blobs")
-           ))}
-           |</article>
+           ))}""".stripMargin)}
            |${_admin_card("Authorization requirements",
              """<p>Blob admin actions use the existing admin operation gate plus generic resource policies.</p>
                |<ul>
@@ -2593,17 +2591,15 @@ object StaticFormAppRenderer {
         subtitle = "Read-only Blob metadata inventory",
         body =
           s"""${nav}
-             |<article>
-             |  <h2>Blobs</h2>
-             |  <p>Showing metadata rows only. Payload bytes remain in BlobStore.</p>
-             |  <div class="table-responsive mt-3">
-             |    <table class="table table-sm align-middle">
-             |      <thead><tr><th>ID</th><th>Kind</th><th>Source</th><th>Filename</th><th>Content Type</th><th>Bytes</th><th>Digest</th><th>Display URL</th><th>Actions</th></tr></thead>
-             |      ${table}
-             |    </table>
-             |  </div>
-             |  ${paging}
-             |</article>
+             |${_admin_card("Blobs",
+               s"""<p>Showing metadata rows only. Payload bytes remain in BlobStore.</p>
+                  |<div class="table-responsive mt-3">
+                  |  <table class="table table-sm table-hover align-middle mb-0">
+                  |    <thead><tr><th>ID</th><th>Kind</th><th>Source</th><th>Filename</th><th>Content Type</th><th>Bytes</th><th>Digest</th><th>Display URL</th><th>Actions</th></tr></thead>
+                  |    ${table}
+                  |  </table>
+                  |</div>
+                  |${paging}""".stripMargin)}
              |${_manual_raw_details("Raw Blob list", record)}""".stripMargin
       ))
     }
@@ -2626,7 +2622,7 @@ object StaticFormAppRenderer {
           s"""${nav}
              |${_admin_card("Metadata", _field_table(_blob_admin_blob_fields(record)))}
              |${_admin_card("Access URLs", _field_table(_blob_admin_url_fields(record)))}
-             |${_admin_card("Actions", s"""<p><a class="btn btn-outline-danger" href="/web/blob/admin/blobs/${_escape_path_segment(id)}/delete">Delete Blob</a></p>""")}
+             |${_admin_card("Actions", s"""<div class="admin-action-row d-flex flex-wrap gap-2"><a class="btn btn-outline-danger" href="/web/blob/admin/blobs/${_escape_path_segment(id)}/delete">Delete Blob</a></div>""")}
              |${_manual_raw_details("Raw Blob metadata", record)}""".stripMargin
       ))
     }
@@ -2653,8 +2649,10 @@ object StaticFormAppRenderer {
            |    <input class="form-check-input" type="checkbox" id="blobAdminForceDelete" name="force" value="true">
            |    <label class="form-check-label" for="blobAdminForceDelete">Force delete and remove referencing Blob associations</label>
            |  </div>
-           |  <button class="btn btn-danger" type="submit">Delete Blob</button>
-           |  <a class="btn btn-outline-secondary" href="/web/blob/admin/blobs/${_escape_path_segment(id)}">Cancel</a>
+           |  <div class="admin-action-row d-flex flex-wrap gap-2">
+           |    <button class="btn btn-danger" type="submit">Delete Blob</button>
+           |    <a class="btn btn-outline-secondary" href="/web/blob/admin/blobs/${_escape_path_segment(id)}">Cancel</a>
+           |  </div>
            |</form>""".stripMargin
       Page(_simple_page(
         title = s"Delete Blob ${_escape(id)}",
@@ -2683,7 +2681,7 @@ object StaticFormAppRenderer {
         body =
           s"""${_admin_nav_card(Vector("Blobs" -> "/web/blob/admin/blobs", "Associations" -> "/web/blob/admin/associations", "Blob admin" -> "/web/blob/admin"))}
              |${_admin_card("Delete result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
-             |<p><a class="btn btn-primary" href="/web/blob/admin/blobs">Back to Blobs</a> <a class="btn btn-outline-secondary" href="/web/blob/admin/associations">Associations</a></p>
+             |${_admin_action_row(Vector("Back to Blobs" -> "/web/blob/admin/blobs", "Associations" -> "/web/blob/admin/associations"))}
              |${_manual_raw_details("Raw delete result", record)}""".stripMargin
       ))
     }
@@ -2714,24 +2712,18 @@ object StaticFormAppRenderer {
         subtitle = "Read-only Blob-to-entity association inventory",
         body =
           s"""${nav}
-             |<article>
-             |  <h2>Attach Blob</h2>
-             |  ${attach}
-             |</article>
-             |<article>
-             |  <h2>Filters</h2>
-             |  ${filters}
-             |</article>
-             |<article>
-             |  <h2>Associations</h2>
-             |  <div class="table-responsive mt-3">
-             |    <table class="table table-sm align-middle">
-             |      <thead><tr><th>Association</th><th>Source Entity</th><th>Blob</th><th>Role</th><th>Sort</th><th>Domain</th><th>Collection</th><th>Actions</th></tr></thead>
-             |      ${table}
-             |    </table>
-             |  </div>
-             |  ${paging}
-             |</article>
+             |<div class="row g-3">
+             |  <div class="col-12 col-xl-6">${_admin_card("Attach Blob", attach)}</div>
+             |  <div class="col-12 col-xl-6">${_admin_card("Filters", filters)}</div>
+             |</div>
+             |${_admin_card("Associations",
+               s"""<div class="table-responsive mt-3">
+                  |  <table class="table table-sm table-hover align-middle mb-0">
+                  |    <thead><tr><th>Association</th><th>Source Entity</th><th>Blob</th><th>Role</th><th>Sort</th><th>Domain</th><th>Collection</th><th>Actions</th></tr></thead>
+                  |    ${table}
+                  |  </table>
+                  |</div>
+                  |${paging}""".stripMargin)}
              |${_manual_raw_details("Raw association list", record)}""".stripMargin
       ))
     }
@@ -2748,7 +2740,7 @@ object StaticFormAppRenderer {
         body =
           s"""${_admin_nav_card(Vector("Associations" -> "/web/blob/admin/associations", "Blob admin" -> "/web/blob/admin"))}
              |${_admin_card("Attach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
-             |<p><a class="btn btn-primary" href="/web/blob/admin/associations?sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}">Back to Associations</a> <a class="btn btn-outline-secondary" href="/web/blob/admin/blobs/${_escape_path_segment(form.getOrElse("id", ""))}">Blob detail</a></p>
+             |${_admin_action_row(Vector("Back to Associations" -> s"/web/blob/admin/associations?sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}", "Blob detail" -> s"/web/blob/admin/blobs/${_escape_path_segment(form.getOrElse("id", ""))}"))}
              |${_manual_raw_details("Raw attach result", record)}""".stripMargin
       ))
     }
@@ -2765,7 +2757,7 @@ object StaticFormAppRenderer {
         body =
           s"""${_admin_nav_card(Vector("Associations" -> "/web/blob/admin/associations", "Blob admin" -> "/web/blob/admin"))}
              |${_admin_card("Detach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
-             |<p><a class="btn btn-primary" href="/web/blob/admin/associations?sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}">Back to Associations</a> <a class="btn btn-outline-secondary" href="/web/blob/admin/blobs/${_escape_path_segment(form.getOrElse("id", ""))}">Blob detail</a></p>
+             |${_admin_action_row(Vector("Back to Associations" -> s"/web/blob/admin/associations?sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}", "Blob detail" -> s"/web/blob/admin/blobs/${_escape_path_segment(form.getOrElse("id", ""))}"))}
              |${_manual_raw_details("Raw detach result", record)}""".stripMargin
       ))
     }
@@ -2790,24 +2782,18 @@ object StaticFormAppRenderer {
         subtitle = "Generic Entity-to-Entity Association inventory",
         body =
           s"""${_admin_nav_card(Vector("System admin" -> "/web/system/admin", "Blob associations" -> "/web/blob/admin/associations"))}
-             |<article>
-             |  <h2>Attach Association</h2>
-             |  ${attach}
-             |</article>
-             |<article>
-             |  <h2>Filters</h2>
-             |  ${filters}
-             |</article>
-             |<article>
-             |  <h2>Associations</h2>
-             |  <div class="table-responsive mt-3">
-             |    <table class="table table-sm align-middle">
-             |      <thead><tr><th>Association</th><th>Source Entity</th><th>Target Entity</th><th>Target kind</th><th>Role</th><th>Sort</th><th>Domain</th><th>Actions</th></tr></thead>
-             |      ${table}
-             |    </table>
-             |  </div>
-             |  ${paging}
-             |</article>
+             |<div class="row g-3">
+             |  <div class="col-12 col-xl-6">${_admin_card("Attach Association", attach)}</div>
+             |  <div class="col-12 col-xl-6">${_admin_card("Filters", filters)}</div>
+             |</div>
+             |${_admin_card("Associations",
+               s"""<div class="table-responsive mt-3">
+                  |  <table class="table table-sm table-hover align-middle mb-0">
+                  |    <thead><tr><th>Association</th><th>Source Entity</th><th>Target Entity</th><th>Target kind</th><th>Role</th><th>Sort</th><th>Domain</th><th>Actions</th></tr></thead>
+                  |    ${table}
+                  |  </table>
+                  |</div>
+                  |${paging}""".stripMargin)}
              |${_manual_raw_details("Raw association list", record)}""".stripMargin
       ))
     }
@@ -2929,7 +2915,7 @@ object StaticFormAppRenderer {
         body =
           s"""${_admin_nav_card(Vector("Tags" -> "/web/admin/tags", "Associations" -> "/web/admin/associations"))}
              |${_admin_card("Attach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
-             |<p><a class="btn btn-primary" href="/web/admin/tags?tagSpace=${_escape_query(form.getOrElse("tagSpace", ""))}&amp;sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}">Back to Tags</a></p>
+             |${_admin_action_row(Vector("Back to Tags" -> s"/web/admin/tags?tagSpace=${_escape_query(form.getOrElse("tagSpace", ""))}&sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}"))}
              |${_manual_raw_details("Raw attach result", record)}""".stripMargin
       ))
     }
@@ -2946,7 +2932,7 @@ object StaticFormAppRenderer {
         body =
           s"""${_admin_nav_card(Vector("Tags" -> "/web/admin/tags", "Associations" -> "/web/admin/associations"))}
              |${_admin_card("Detach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
-             |<p><a class="btn btn-primary" href="/web/admin/tags?tagSpace=${_escape_query(form.getOrElse("tagSpace", ""))}&amp;sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}">Back to Tags</a></p>
+             |${_admin_action_row(Vector("Back to Tags" -> s"/web/admin/tags?tagSpace=${_escape_query(form.getOrElse("tagSpace", ""))}&sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}"))}
              |${_manual_raw_details("Raw detach result", record)}""".stripMargin
       ))
     }
@@ -2963,7 +2949,7 @@ object StaticFormAppRenderer {
         body =
           s"""${_admin_nav_card(Vector("Associations" -> "/web/admin/associations", "Blob associations" -> "/web/blob/admin/associations"))}
              |${_admin_card("Attach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
-             |<p><a class="btn btn-primary" href="/web/admin/associations?domain=${_escape_query(form.getOrElse("domain", ""))}&amp;sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}">Back to Associations</a></p>
+             |${_admin_action_row(Vector("Back to Associations" -> s"/web/admin/associations?domain=${_escape_query(form.getOrElse("domain", ""))}&sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}"))}
              |${_manual_raw_details("Raw attach result", record)}""".stripMargin
       ))
     }
@@ -2980,7 +2966,7 @@ object StaticFormAppRenderer {
         body =
           s"""${_admin_nav_card(Vector("Associations" -> "/web/admin/associations", "Blob associations" -> "/web/blob/admin/associations"))}
              |${_admin_card("Detach result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
-             |<p><a class="btn btn-primary" href="/web/admin/associations?domain=${_escape_query(form.getOrElse("domain", ""))}&amp;sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}">Back to Associations</a></p>
+             |${_admin_action_row(Vector("Back to Associations" -> s"/web/admin/associations?domain=${_escape_query(form.getOrElse("domain", ""))}&sourceEntityId=${_escape_query(form.getOrElse("sourceEntityId", ""))}"))}
              |${_manual_raw_details("Raw detach result", record)}""".stripMargin
       ))
     }
@@ -3351,7 +3337,7 @@ object StaticFormAppRenderer {
       body =
         s"""${_admin_nav_card(Vector("Tags" -> "/web/admin/tags", "Associations" -> "/web/admin/associations"))}
            |${_admin_card("Tag result", _field_table(record.asMap.toVector.map { case (k, v) => k -> _display_value(v) }.sortBy(_._1)))}
-           |<p><a class="btn btn-primary" href="/web/admin/tags?tagSpace=${_escape_query(form.getOrElse("tagSpace", record.getString("tagSpace").getOrElse("")))}">Back to Tags</a></p>
+           |${_admin_action_row(Vector("Back to Tags" -> s"/web/admin/tags?tagSpace=${_escape_query(form.getOrElse("tagSpace", record.getString("tagSpace").getOrElse("")))}"))}
            |${_manual_raw_details("Raw tag result", record)}""".stripMargin
     ))
 
@@ -3412,12 +3398,14 @@ object StaticFormAppRenderer {
     val source = record.getString("sourceEntityId").getOrElse("")
     val blobid = record.getString("targetEntityId").getOrElse("")
     val role = record.getString("role").getOrElse("")
-    s"""<form method="post" action="/web/blob/admin/associations/detach" class="d-inline ms-2">
-       |  <input type="hidden" name="sourceEntityId" value="${_escape(source)}">
-       |  <input type="hidden" name="id" value="${_escape(blobid)}">
-       |  <input type="hidden" name="role" value="${_escape(role)}">
-       |  <button class="btn btn-outline-danger btn-sm" type="submit">Detach</button>
-       |</form>""".stripMargin
+    _admin_confirm_post_form(
+      action = "/web/blob/admin/associations/detach",
+      label = "Detach",
+      title = "Detach Blob association",
+      message = s"Detach Blob ${blobid} from Entity ${source}?",
+      hiddenFields = Vector("sourceEntityId" -> source, "id" -> blobid, "role" -> role),
+      formClass = "d-inline ms-2"
+    )
   }
 
   private def _admin_association_row(
@@ -3445,14 +3433,19 @@ object StaticFormAppRenderer {
     val target = record.getString("targetEntityId").getOrElse("")
     val targetKind = record.getString("targetKind").getOrElse("")
     val role = record.getString("role").getOrElse("")
-    s"""<form method="post" action="/web/admin/associations/detach" class="d-inline">
-       |  <input type="hidden" name="domain" value="${_escape(domain)}">
-       |  <input type="hidden" name="sourceEntityId" value="${_escape(source)}">
-       |  <input type="hidden" name="targetEntityId" value="${_escape(target)}">
-       |  <input type="hidden" name="targetKind" value="${_escape(targetKind)}">
-       |  <input type="hidden" name="role" value="${_escape(role)}">
-       |  <button class="btn btn-outline-danger btn-sm" type="submit">Detach</button>
-       |</form>""".stripMargin
+    _admin_confirm_post_form(
+      action = "/web/admin/associations/detach",
+      label = "Detach",
+      title = "Detach Association",
+      message = s"Detach ${targetKind} ${target} from Entity ${source}?",
+      hiddenFields = Vector(
+        "domain" -> domain,
+        "sourceEntityId" -> source,
+        "targetEntityId" -> target,
+        "targetKind" -> targetKind,
+        "role" -> role
+      )
+    )
   }
 
   private def _blob_admin_blob_fields(
@@ -3643,12 +3636,14 @@ object StaticFormAppRenderer {
   ): String = {
     val id = record.getString("id").getOrElse("")
     val role = record.getString("role").getOrElse("")
-    s"""<form method="post" action="/web/blob/admin/associations/detach" class="d-inline ms-2">
-       |  <input type="hidden" name="sourceEntityId" value="${_escape(sourceId)}">
-       |  <input type="hidden" name="id" value="${_escape(id)}">
-       |  <input type="hidden" name="role" value="${_escape(role)}">
-       |  <button class="btn btn-outline-danger btn-sm" type="submit">Detach</button>
-       |</form>""".stripMargin
+    _admin_confirm_post_form(
+      action = "/web/blob/admin/associations/detach",
+      label = "Detach",
+      title = "Detach Entity image",
+      message = s"Detach Blob ${id} from Entity ${sourceId}?",
+      hiddenFields = Vector("sourceEntityId" -> sourceId, "id" -> id, "role" -> role),
+      formClass = "d-inline ms-2"
+    )
   }
 
   private def _admin_entity_tags_section(
@@ -3742,13 +3737,18 @@ object StaticFormAppRenderer {
     tagRef: String,
     role: String
   ): String =
-    s"""<form method="post" action="/web/admin/tags/detach" class="d-inline">
-       |  <input type="hidden" name="sourceEntityId" value="${_escape(sourceId)}">
-       |  <input type="hidden" name="tagSpace" value="${_escape(tagSpace)}">
-       |  <input type="hidden" name="tagRef" value="${_escape(tagRef)}">
-       |  <input type="hidden" name="role" value="${_escape(role)}">
-       |  <button class="btn btn-outline-danger btn-sm" type="submit">Detach</button>
-       |</form>""".stripMargin
+    _admin_confirm_post_form(
+      action = "/web/admin/tags/detach",
+      label = "Detach",
+      title = "Detach Tag",
+      message = s"Detach Tag ${tagRef} from Entity ${sourceId}?",
+      hiddenFields = Vector(
+        "sourceEntityId" -> sourceId,
+        "tagSpace" -> tagSpace,
+        "tagRef" -> tagRef,
+        "role" -> role
+      )
+    )
 
   private def _admin_entity_associations_section(
     subsystem: Subsystem,
@@ -4878,6 +4878,54 @@ object StaticFormAppRenderer {
         s"""<a class="${css}" href="${_escape(href)}">${_escape(label)}</a>"""
     }.mkString("\n")
     s"""<div class="admin-action-row d-flex flex-wrap gap-2">${items}</div>"""
+  }
+
+  private def _admin_confirm_post_form(
+    action: String,
+    label: String,
+    title: String,
+    message: String,
+    hiddenFields: Vector[(String, String)],
+    formClass: String = "d-inline",
+    triggerClass: String = "btn btn-outline-danger btn-sm"
+  ): String = {
+    val modalid = _admin_confirm_modal_id(action, hiddenFields)
+    val hidden = hiddenFields.map { case (name, value) =>
+      s"""<input type="hidden" name="${_escape(name)}" value="${_escape(value)}">"""
+    }.mkString("\n")
+    s"""<button class="${_escape(triggerClass)}" type="button" data-bs-toggle="modal" data-bs-target="#${modalid}">${_escape(label)}</button>
+       |<div class="modal fade" id="${modalid}" tabindex="-1" aria-labelledby="${modalid}-title" aria-hidden="true">
+       |  <div class="modal-dialog">
+       |    <div class="modal-content">
+       |      <div class="modal-header">
+       |        <h2 class="modal-title h5" id="${modalid}-title">${_escape(title)}</h2>
+       |        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+       |      </div>
+       |      <div class="modal-body"><p class="mb-0">${_escape(message)}</p></div>
+       |      <div class="modal-footer">
+       |        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+       |        <form method="post" action="${_escape(action)}" class="${_escape(formClass)}">
+       |          ${hidden}
+       |          <button class="btn btn-danger" type="submit">${_escape(label)}</button>
+       |        </form>
+       |      </div>
+       |    </div>
+       |  </div>
+       |</div>
+       |<noscript>
+       |  <form method="post" action="${_escape(action)}" class="${_escape(formClass)}">
+       |    ${hidden}
+       |    <button class="${_escape(triggerClass)}" type="submit">${_escape(label)}</button>
+       |  </form>
+       |</noscript>""".stripMargin
+  }
+
+  private def _admin_confirm_modal_id(
+    action: String,
+    hiddenFields: Vector[(String, String)]
+  ): String = {
+    val seed = (action +: hiddenFields.map { case (k, v) => s"${k}=${v}" }).mkString("|")
+    s"admin-confirm-${java.lang.Integer.toUnsignedString(seed.hashCode)}"
   }
 
   private def _admin_table(

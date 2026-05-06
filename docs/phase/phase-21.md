@@ -55,14 +55,14 @@ Final semantic direction:
 - B (DONE): WN-02 — Normalize Bootstrap 5 page primitives.
 - C (DONE): WN-03 — Expand Textus widget card/list/feedback surfaces.
 - D (DONE): WN-04 — Add reusable dialog-style action surfaces.
-- E (ACTIVE): WN-05 — Apply UI primitives to CNCF admin/runtime pages.
-- F (TODO): WN-06 — Apply selected improvements to `textus-blog`.
+- E (DONE): WN-05 — Apply UI primitives to CNCF admin/runtime pages.
+- F (ACTIVE): WN-06 — Apply selected improvements to `textus-blog`.
 - G (TODO): WN-07 — Verification, documentation, and phase closure.
 
 Resume hint:
 
-- Continue with WN-05 CNCF admin/runtime driver pages. Use the WN-02 Bootstrap
-  primitive baseline and WN-03/WN-04 widget family as the rendering base.
+- Continue with WN-06 `textus-blog` driver pages. Keep CNCF generic renderer
+  behavior stable and use the WN-02/WN-03/WN-04/WN-05 baseline as the UI base.
 
 ## 5. Development Items
 
@@ -70,7 +70,7 @@ Resume hint:
 - [x] WN-02: Normalize Bootstrap 5 page primitives.
 - [x] WN-03: Expand Textus widget card/list/feedback surfaces.
 - [x] WN-04: Add reusable dialog-style action surfaces.
-- [ ] WN-05: Apply UI primitives to CNCF admin/runtime pages.
+- [x] WN-05: Apply UI primitives to CNCF admin/runtime pages.
 - [ ] WN-06: Apply selected improvements to `textus-blog`.
 - [ ] WN-07: Verification, documentation, and phase closure.
 
