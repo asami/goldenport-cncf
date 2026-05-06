@@ -221,8 +221,10 @@ CQRS is realized as an internal structure of the Engine.
 
 **Important Principle**
 
-All Commands are Job-based,  
-but not all Jobs are persisted at the same level.
+Historical note: Phase 6 treated all Commands as Job-based. Phase 22 changes
+the default for ordinary one-Entity CRUD-style Commands to synchronous direct
+execution, with Job management selected explicitly by Command execution policy.
+When Commands are Job-managed, not all Jobs are persisted at the same level.
 
 ---
 
@@ -260,7 +262,8 @@ CNCF elevates UML’s static model into an executable architecture.
 3. Actions must pass through ComponentActionEntry  
 4. The Engine is the sole executor of Actions  
 5. Business logic resides exclusively in ActionLogic  
-6. Commands are executed as Jobs  
+6. Commands are executed directly by default and as Jobs when Command
+   execution policy selects Job management
 7. Job persistence level is determined by policy  
 8. CNCF execution MUST be OperationCall-centered; no parallel execution
    pipeline is permitted.

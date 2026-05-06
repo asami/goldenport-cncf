@@ -7,7 +7,7 @@ import org.goldenport.protocol.{Protocol, Request}
 import org.goldenport.protocol.Property
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.protocol.spec as spec
-import org.goldenport.cncf.action.{Action, ActionCall, ProcedureActionCall}
+import org.goldenport.cncf.action.{Action, ActionCall, CommandExecutionPolicy, ProcedureActionCall}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.operation.CmlOperationDefinition
 import org.goldenport.cncf.testutil.TestComponentFactory
@@ -17,7 +17,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 22, 2026
- * @version Apr. 25, 2026
+ *  version Apr. 25, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicOperationDefinitionSemanticsSpec
@@ -186,7 +187,7 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       }
     }
 
-    "execute generic action as async job when CML operation kind is COMMAND" in {
+    "execute generic action synchronously when CML operation kind is COMMAND without async metadata" in {
       Given("a component operation defined as COMMAND in operationDefinitions")
       val component = _component()
 
@@ -200,10 +201,80 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       When("the action is executed")
       val result = component.logic.executeAction(action.asInstanceOf[Action], ExecutionContext.create())
 
-      Then("the command default path returns job id response")
+      Then("the command default path returns the operation response directly")
       result match {
         case Consequence.Success(OperationResponse.Scalar(value)) =>
-          value should not be "save-ok"
+          value shouldBe "save-ok"
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+    }
+
+    "execute generic command as async job when legacy execution metadata is async" in {
+      Given("a component operation defined as COMMAND with execution=async")
+      val component = _component()
+
+      val req = Request.of(
+        component = component.name,
+        service = "entity",
+        operation = "savePersonAsync"
+      )
+      val action = component.logic.makeOperationRequest(req).toOption.getOrElse(fail("action creation failed"))
+
+      When("the action is executed")
+      val result = component.logic.executeAction(action.asInstanceOf[Action], ExecutionContext.create())
+
+      Then("the legacy async path returns a job id response")
+      result match {
+        case Consequence.Success(OperationResponse.Scalar(value)) =>
+          value should not be "save-async-ok"
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+    }
+
+    "prefer typed command execution policy over legacy execution metadata" in {
+      Given("a command operation with execution=async but typed sync direct policy")
+      val component = _component()
+
+      val req = Request.of(
+        component = component.name,
+        service = "entity",
+        operation = "savePersonTypedPolicy"
+      )
+      val action = component.logic.makeOperationRequest(req).toOption.getOrElse(fail("action creation failed"))
+
+      When("the action is executed")
+      val result = component.logic.executeAction(action.asInstanceOf[Action], ExecutionContext.create())
+
+      Then("the typed policy wins and the operation returns directly")
+      result match {
+        case Consequence.Success(OperationResponse.Scalar(value)) =>
+          value shouldBe "save-typed-ok"
+        case other =>
+          fail(s"unexpected result: $other")
+      }
+    }
+
+    "ignore invalid typed command execution policy instead of overriding legacy execution metadata" in {
+      Given("a command operation with execution=async and an invalid typed policy string")
+      val component = _component()
+
+      val req = Request.of(
+        component = component.name,
+        service = "entity",
+        operation = "savePersonInvalidTypedPolicy"
+      )
+      val action = component.logic.makeOperationRequest(req).toOption.getOrElse(fail("action creation failed"))
+
+      When("the action is executed")
+      val result = component.logic.executeAction(action.asInstanceOf[Action], ExecutionContext.create())
+
+      Then("the invalid typed policy does not collapse the command into direct sync execution")
+      CommandExecutionPolicy.parse("managedByJob=treu") shouldBe None
+      result match {
+        case Consequence.Success(OperationResponse.Scalar(value)) =>
+          value should not be "save-invalid-policy-ok"
         case other =>
           fail(s"unexpected result: $other")
       }
@@ -228,10 +299,11 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
       When("the action is executed")
       val result = component.logic.executeAction(action.asInstanceOf[Action], ExecutionContext.create())
 
-      Then("the request values are validated during action creation and the command returns the default async response")
+      Then("the request values are validated during action creation and the command returns the operation response directly")
       result match {
-        case Consequence.Success(OperationResponse.Scalar(value)) =>
-          value.toString.nonEmpty shouldBe true
+        case Consequence.Success(OperationResponse.RecordResponse(record)) =>
+          record.getString("addressCountry") shouldBe Some("JP")
+          record.getString("postalCode") shouldBe Some("160-0022")
         case other =>
           fail(s"unexpected result: $other")
       }
@@ -251,6 +323,9 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
                 _RecordOperation("fetchAddress"),
                 _ValidatedRecordOperation("fetchAddressValidated"),
                 _ActionOperation("savePerson", "save-ok"),
+                _ActionOperation("savePersonAsync", "save-async-ok"),
+                _ActionOperation("savePersonTypedPolicy", "save-typed-ok"),
+                _ActionOperation("savePersonInvalidTypedPolicy", "save-invalid-policy-ok"),
                 _ValidatedCommandOperation("saveAddressValidated")
               )
             )
@@ -293,6 +368,32 @@ final class ComponentLogicOperationDefinitionSemanticsSpec
             name = "savePerson",
             kind = "COMMAND",
             inputType = "SavePerson",
+            outputType = "SavePersonResult",
+            inputValueKind = "COMMAND_VALUE"
+          ),
+          CmlOperationDefinition(
+            name = "savePersonAsync",
+            kind = "COMMAND",
+            execution = Some("async"),
+            inputType = "SavePersonAsync",
+            outputType = "SavePersonResult",
+            inputValueKind = "COMMAND_VALUE"
+          ),
+          CmlOperationDefinition(
+            name = "savePersonTypedPolicy",
+            kind = "COMMAND",
+            execution = Some("async"),
+            commandExecutionPolicy = Some(CommandExecutionPolicy.default),
+            inputType = "SavePersonTypedPolicy",
+            outputType = "SavePersonResult",
+            inputValueKind = "COMMAND_VALUE"
+          ),
+          CmlOperationDefinition(
+            name = "savePersonInvalidTypedPolicy",
+            kind = "COMMAND",
+            execution = Some("async"),
+            commandExecutionPolicy = CommandExecutionPolicy.parse("managedByJob=treu"),
+            inputType = "SavePersonInvalidTypedPolicy",
             outputType = "SavePersonResult",
             inputValueKind = "COMMAND_VALUE"
           ),

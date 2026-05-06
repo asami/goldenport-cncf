@@ -47,7 +47,9 @@ Resume hint:
 
 - [x] JM-01: Define canonical Job model (`JobId`, state, timestamps, correlation) and lifecycle transitions.
 - [x] JM-02: Implement Job query read model (status/trace/timeline) and result retrieval API (sync-equivalent response shape).
-- [x] JM-03: Implement Job control command model (`cancel`, `retry`, `suspend`, `resume`) and command execution mode (`async default`, `sync option`) with policy checks.
+- [x] JM-03: Implement Job control command model (`cancel`, `retry`, `suspend`, `resume`) and command execution mode baseline (`async default`, `sync option`) with policy checks.
+  Phase 22 supersedes the default for ordinary application Commands: sync
+  direct/no Job is now the default unless async Job execution is explicit.
 - [x] JM-04: Integrate Job/event correlation and replay interaction rules.
 - [x] JM-05: Add executable specifications for lifecycle transitions, query consistency, control semantics, async/sync command behavior, and failure paths.
 

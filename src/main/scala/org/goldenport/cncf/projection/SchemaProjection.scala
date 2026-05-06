@@ -5,7 +5,7 @@ import org.goldenport.cncf.component.Component
 
 /*
  * @since   Mar.  5, 2026
- * @version May.  6, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 object SchemaProjection {
@@ -54,6 +54,11 @@ object SchemaProjection {
             "outputType" -> x.outputType,
             "inputValueKind" -> x.inputValueKind,
             "visibility" -> x.visibility,
+            "commandKind" -> x.commandKind,
+            "commandExecutionProperties" -> x.commandExecutionProperties,
+            "commandExecutionPolicy" -> x.commandExecutionPolicy,
+            "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionMode,
+            "commandExecutionPolicySource" -> x.commandExecutionPolicySource,
             "parameters" -> x.parameters
           )
         }

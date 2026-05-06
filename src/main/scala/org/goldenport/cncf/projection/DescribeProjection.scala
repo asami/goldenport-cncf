@@ -2,10 +2,11 @@ package org.goldenport.cncf.projection
 
 import org.goldenport.record.Record
 import org.goldenport.cncf.component.Component
+import org.goldenport.cncf.naming.NamingConventions
 
 /*
  * @since   Mar.  5, 2026
- * @version May.  6, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 object DescribeProjection {
@@ -65,6 +66,11 @@ object DescribeProjection {
             "outputType" -> x.outputType,
             "inputValueKind" -> x.inputValueKind,
             "visibility" -> x.visibility,
+            "commandKind" -> x.commandKind,
+            "commandExecutionProperties" -> x.commandExecutionProperties,
+            "commandExecutionPolicy" -> x.commandExecutionPolicy,
+            "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionMode,
+            "commandExecutionPolicySource" -> x.commandExecutionPolicySource,
             "parameters" -> x.parameters,
             "childEntityBindings" -> x.childEntityBindings,
             "associationBinding" -> x.associationBinding,
@@ -106,6 +112,14 @@ object DescribeProjection {
           "summary" -> s"Operation ${service.name}.${operation.name}",
           "arguments" -> operation.specification.request.parameters.toVector.map(parameter_record),
           "returns" -> render_operation_returns(operation),
+          "commandExecution" -> component.operationDefinitions
+            .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
+            .map(x => Record.data(
+              "commandKind" -> x.commandKind,
+              "commandExecutionProperties" -> x.commandExecutionProperties,
+              "commandExecutionPolicy" -> x.commandExecutionPolicyRecord,
+              "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionPolicy.legacyModeLabel
+            )),
           "childEntityBindings" -> childentitybindings,
           "associationBinding" -> associationbinding,
           "imageBinding" -> imagebinding

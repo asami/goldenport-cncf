@@ -10,7 +10,8 @@ import org.goldenport.datatype.I18nString
 /*
  * @since   Mar.  5, 2026
  *  version Mar. 28, 2026
- * @version Apr. 30, 2026
+ *  version Apr. 30, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 object HelpProjection {
@@ -121,6 +122,7 @@ object HelpProjection {
         val childEntityBindings = operation_child_entity_bindings(component, operation).map(child_entity_binding_record)
         val associationBinding = operation_association_binding(component, operation).map(association_binding_record)
         val imageBinding = operation_image_binding(component, operation).map(image_binding_record)
+        val commandExecution = _command_execution_record(component, operation)
         HelpModel(
           `type` = "operation",
           name = operationName,
@@ -136,6 +138,7 @@ object HelpProjection {
           childEntityBindings = childEntityBindings,
           associationBinding = associationBinding,
           imageBinding = imageBinding,
+          commandExecution = commandExecution,
           usage = Vector(s"command ${_operation_cli_selector(componentName, serviceName, operationName)}")
         )
       case Target.NotFound(target) =>
@@ -170,6 +173,7 @@ object HelpProjection {
       "childEntityBindings" -> model.childEntityBindings,
       "associationBinding" -> model.associationBinding,
       "imageBinding" -> model.imageBinding,
+      "commandExecution" -> model.commandExecution,
       "domainContexts" -> model.domainContexts.map(_context_record),
       "domainSystemContexts" -> model.domainSystemContexts.map(_system_context_record),
       "domainContextMaps" -> model.domainContextMaps.map(_context_map_record),
@@ -180,6 +184,21 @@ object HelpProjection {
 
   private def _trim_string(p: Option[String]): Option[String] =
     p.map(_.trim).filter(_.nonEmpty)
+
+  private def _command_execution_record(
+    component: Component,
+    operation: OperationDefinition
+  ): Option[Record] =
+    component.operationDefinitions
+      .find(x => NamingConventions.equivalentByNormalized(x.name, operation.name))
+      .map { x =>
+        Record.data(
+          "commandKind" -> x.commandKind,
+          "commandExecutionProperties" -> x.commandExecutionProperties,
+          "commandExecutionPolicy" -> x.commandExecutionPolicyRecord,
+          "effectiveCommandExecutionMode" -> x.effectiveCommandExecutionPolicy.legacyModeLabel
+        )
+      }
 
   private def _trim_i18n(p: Option[I18nString]): Option[String] =
     p.map(_.displayMessage.trim).filter(_.nonEmpty)

@@ -7,7 +7,7 @@ import org.goldenport.protocol.Request
 import org.goldenport.protocol.Response
 import org.goldenport.protocol.operation.{OperationRequest, OperationResponse}
 import org.goldenport.record.Record
-import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, ProcedureActionCall, QueryAction, ResourceAccess}
+import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode, CommandExecutionPolicy, CommandInterfaceMode, CommandJobRunMode, ProcedureActionCall, QueryAction, ResourceAccess}
 import cats.~>
 import org.goldenport.cncf.context.{DataStoreContext, EntitySpaceContext, EntityStoreContext, ExecutionContext, GlobalRuntimeContext, RuntimeContext, ScopeContext, ScopeKind}
 import org.goldenport.cncf.config.RuntimeConfig
@@ -27,7 +27,8 @@ import org.goldenport.cncf.operation.CmlOperationDefinition
  *  version Jan. 20, 2026
  *  version Feb. 25, 2026
  *  version Mar. 31, 2026
- * @version Apr. 24, 2026
+ *  version Apr. 24, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 /**
@@ -178,40 +179,32 @@ case class ComponentLogic(
     action: Action,
     ctx: ExecutionContext
   ): Consequence[OperationResponse] = {
-    val mode = action match {
+    val policy = action match {
       case command: CommandAction =>
-        _effective_command_execution_mode(action, command, ctx)
+        _effective_command_execution_policy(action, command, ctx)
       case _ =>
-        CommandExecutionMode.AsyncJob
+        ctx.framework.commandExecutionMode
+          .map(CommandExecutionPolicy.fromLegacyMode)
+          .orElse(_operation_execution_policy(action.request.operation))
+          .getOrElse(CommandExecutionPolicy.default)
     }
-    mode match {
-      case CommandExecutionMode.AsyncJob =>
-        val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Async)
-        submitJob(List(task), ctx, option).map { jobid =>
-          _note_job_response(ctx, jobid)
-          OperationResponse.Scalar(jobid.value)
+    if (!policy.managedByJob) {
+      execute(createActionCall(action, ctx))
+    } else {
+      val runmode = policy.jobRunMode match {
+        case CommandJobRunMode.Sync => JobRunMode.Sync
+        case CommandJobRunMode.Async => JobRunMode.Async
+      }
+      val option = _default_submit_option(List(task)).copy(runMode = runmode)
+      submitJob(List(task), ctx, option).flatMap { jobid =>
+        _note_job_response(ctx, jobid)
+        policy.interfaceMode match {
+          case CommandInterfaceMode.Async =>
+            Consequence.success(OperationResponse.Scalar(jobid.value))
+          case CommandInterfaceMode.Sync =>
+            awaitJobResult(jobid)
         }
-      case CommandExecutionMode.AsyncJobAndAwait =>
-        val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Async)
-        submitJob(List(task), ctx, option).flatMap { jobid =>
-          _note_job_response(ctx, jobid)
-          awaitJobResult(jobid)
-        }
-      case CommandExecutionMode.SyncJob =>
-        val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Sync)
-        submitJob(List(task), ctx, option).flatMap { jobid =>
-          _note_job_response(ctx, jobid)
-          awaitJobResult(jobid)
-        }
-      case CommandExecutionMode.SyncJobAsyncInterface =>
-        val option = _default_submit_option(List(task)).copy(runMode = JobRunMode.Async)
-        submitJob(List(task), ctx, option).flatMap { jobid =>
-          _note_job_response(ctx, jobid)
-          val _ = awaitJobResult(jobid)
-          Consequence.success(OperationResponse.Scalar(jobid.value))
-        }
-      case CommandExecutionMode.SyncDirectNoJob =>
-        execute(createActionCall(action, ctx))
+      }
     }
   }
 
@@ -231,28 +224,26 @@ case class ComponentLogic(
       case _ => None
     }
 
-  private def _effective_command_execution_mode(
+  private def _effective_command_execution_policy(
     action: Action,
     command: CommandAction,
     ctx: ExecutionContext
-  ): CommandExecutionMode =
-    ctx.framework.commandExecutionMode.getOrElse {
-      _operation_execution_mode(action.request.operation).getOrElse {
+  ): CommandExecutionPolicy =
+    ctx.framework.commandExecutionMode.map(CommandExecutionPolicy.fromLegacyMode).getOrElse {
+      _operation_execution_policy(action.request.operation).getOrElse {
         if (_is_command_script_combo(action))
-          CommandExecutionMode.SyncDirectNoJob
+          CommandExecutionPolicy.default
         else
-          command.commandExecutionMode
+          CommandExecutionPolicy.fromLegacyMode(command.commandExecutionMode)
       }
     }
 
-  private def _operation_execution_mode(
+  private def _operation_execution_policy(
     operationname: String
-  ): Option[CommandExecutionMode] =
+  ): Option[CommandExecutionPolicy] =
     component.operationDefinitions.find(_.name == operationname).flatMap { definition =>
-      definition.execution.map(_.trim.toLowerCase).collect {
-        case "sync" => CommandExecutionMode.SyncDirectNoJob
-        case "async" => CommandExecutionMode.AsyncJob
-      }
+      definition.commandExecutionPolicy
+        .orElse(definition.execution.flatMap(CommandExecutionPolicy.fromLegacyExecution))
     }
 
   private def _is_command_script_combo(action: Action): Boolean = {

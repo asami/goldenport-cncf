@@ -19,7 +19,7 @@ used as the closure record for completed Phase 22 work.
 
 ## JM-01: Command Execution Policy Normalization
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -27,20 +27,20 @@ Normalize Command sync/async execution policy before broadening Job usage.
 
 ### Detailed Tasks
 
-- [ ] Audit current Command execution behavior and Phase 6 async-default
+- [x] Audit current Command execution behavior and Phase 6 async-default
       compatibility assumptions.
-- [ ] Define Command metadata:
+- [x] Define Command metadata:
   - `commandKind`;
   - `commandExecutionProperties`;
   - `commandExecutionPolicy`.
-- [ ] Make ordinary one-Entity CRUD-style Commands synchronous by default.
-- [ ] Preserve explicit async Job execution through operation metadata or
+- [x] Make ordinary one-Entity CRUD-style Commands synchronous by default.
+- [x] Preserve explicit async Job execution through operation metadata or
       runtime override.
-- [ ] Define how effective execution policy drives Form/Web UX:
+- [x] Define how effective execution policy drives Form/Web UX:
   - sync Commands return ordinary result pages;
   - async Job Commands return application job result and “My jobs” navigation.
-- [ ] Keep existing explicitly async Command and Job behavior compatible.
-- [ ] Add focused specs for policy defaults, explicit overrides, and metadata
+- [x] Keep existing explicitly async Command and Job behavior compatible.
+- [x] Add focused specs for policy defaults, explicit overrides, and metadata
       projection.
 
 ### Expected Output
@@ -58,11 +58,22 @@ Normalize Command sync/async execution policy before broadening Job usage.
 - Do not add user notification runtime in JM-01.
 - Do not make every Command async merely because CQRS names it a Command.
 
+### Completion Notes
+
+- `CommandExecutionPolicy` is now the canonical three-axis policy surface:
+  caller interface mode, Job run mode, and managed-by-Job.
+- The default Command path is synchronous direct execution without Job
+  management.
+- Legacy `CommandExecutionMode` and `execution=sync|async` remain compatibility
+  inputs.
+- Projection/help output exposes command execution metadata and the effective
+  legacy mode label.
+
 ---
 
 ## JM-02: Job Entity Management
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

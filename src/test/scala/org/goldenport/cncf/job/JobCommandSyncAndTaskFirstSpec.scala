@@ -4,7 +4,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import org.goldenport.Consequence
 import org.goldenport.protocol.Protocol
 import org.goldenport.protocol.operation.OperationResponse
-import org.goldenport.cncf.action.{Action, ActionCall, CommandAction}
+import org.goldenport.cncf.action.{Action, ActionCall, CommandAction, CommandExecutionMode}
 import org.goldenport.cncf.component.{Component, ComponentId, ComponentInit, ComponentInstanceId, ComponentOrigin}
 import org.goldenport.cncf.context.ExecutionContext
 import org.goldenport.cncf.testutil.TestComponentFactory
@@ -15,7 +15,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 22, 2026
- * @version May.  4, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobCommandSyncAndTaskFirstSpec
@@ -43,14 +43,17 @@ final class JobCommandSyncAndTaskFirstSpec
       }
     }
 
-    "keep task-first invariant for command execution path" in {
-      Given("a command action executed through component logic")
+    "keep task-first invariant for explicit async command execution path" in {
+      Given("an explicit async command action executed through component logic")
       TestComponentFactory.withEmptySubsystem("job_command_sync_task_first_spec") { subsystem =>
         val component = _component(subsystem)
         val ctx = ExecutionContext.test()
         val executed = new AtomicBoolean(false)
         val action = new CommandAction() {
           val request = org.goldenport.protocol.Request.ofOperation("taskfirst")
+          override def commandExecutionMode: CommandExecutionMode =
+            CommandExecutionMode.AsyncJob
+
           override def createCall(core: ActionCall.Core): ActionCall = {
             val self = this
             val c = core

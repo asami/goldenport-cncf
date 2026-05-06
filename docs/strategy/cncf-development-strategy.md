@@ -985,8 +985,9 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-Phase 22 is active. `9.14 Job Management` is the selected development item, and
-the first active slice is JM-01 Command Execution Policy Normalization.
+Phase 22 is active. `9.14 Job Management` is the selected development item.
+JM-01 Command Execution Policy Normalization is complete; JM-02 Job Entity
+Management is the active slice.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1182,8 +1183,8 @@ Work documents:
 
 Active stack:
 
-- JM-01: Command Execution Policy Normalization.
-- JM-02: Job Entity Management.
+- JM-01: Command Execution Policy Normalization. DONE.
+- JM-02: Job Entity Management. ACTIVE.
 - JM-03: JCL Profile / Execution Profile Difference Checking.
 - JM-04: Task Transaction and Compensation Boundary.
 - JM-05: User Job Notification Policy.

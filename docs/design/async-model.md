@@ -9,6 +9,17 @@ Event, and asynchronous execution semantics.
 
 This document is normative.
 
+Phase 22 note:
+
+    - The Phase 6 baseline treated Commands as asynchronous Job executions by
+      default.
+    - Phase 22 supersedes that default for application Commands: ordinary
+      one-Entity CRUD-style Commands are synchronous direct executions unless
+      operation metadata or runtime configuration explicitly opts into Job
+      management.
+    - Asynchrony remains a first-class design choice, but it is no longer the
+      implicit default for every Command.
+
 For the canonical timer and scheduling boundary around asynchronous execution,
 see:
 
@@ -55,8 +66,12 @@ Characteristics:
     - intent-oriented
     - targets a specific capability
     - expects execution to occur
-    - asynchronous by default
-    - results are observed indirectly
+    - synchronous direct execution by default for ordinary one-Entity
+      CRUD-style operations
+    - asynchronous Job execution when explicitly requested by command execution
+      policy or runtime override
+    - results are observed directly for synchronous Commands and indirectly for
+      async Job Commands
 
 A Command does not guarantee:
 
@@ -99,7 +114,8 @@ Key differences:
     - Command
         * expresses intent
         * expects action
-        * usually initiates a Job
+        * may initiate a Job when command execution policy requests Job
+          management
 
     - Event
         * expresses fact
@@ -118,7 +134,8 @@ Asynchronous execution is anchored by Jobs.
 
 Rules:
 
-    - every Command execution is tracked as a Job
+    - async Command execution is tracked as a Job
+    - synchronous direct Command execution is not necessarily tracked as a Job
     - Event-triggered execution is also tracked as Jobs
     - Jobs provide observability and lifecycle control
     - this rule applies at operation-call and event-driven execution granularity

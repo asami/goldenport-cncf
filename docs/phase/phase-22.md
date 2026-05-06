@@ -56,8 +56,8 @@ Final semantic direction:
 
 ## 4. Active Work Stack
 
-- A (ACTIVE): JM-01 — Command Execution Policy Normalization.
-- B (TODO): JM-02 — Job Entity Management.
+- A (DONE): JM-01 — Command Execution Policy Normalization.
+- B (ACTIVE): JM-02 — Job Entity Management.
 - C (TODO): JM-03 — JCL Profile / Execution Profile Difference Checking.
 - D (TODO): JM-04 — Task Transaction and Compensation Boundary.
 - E (TODO): JM-05 — User Job Notification Policy.
@@ -65,13 +65,13 @@ Final semantic direction:
 
 Resume hint:
 
-- Continue with JM-01. Do not implement Job Entity, JCL profile checking, Task
-  compensation, or user notification before Command execution policy defaults
-  and metadata are normalized.
+- Continue with JM-02. Command execution policy defaults and metadata are now
+  normalized; do not pull JCL profile checking, Task compensation, or user
+  notification into Job Entity management unless explicitly selected.
 
 ## 5. Development Items
 
-- [ ] JM-01: Command Execution Policy Normalization.
+- [x] JM-01: Command Execution Policy Normalization.
 - [ ] JM-02: Job Entity Management.
 - [ ] JM-03: JCL Profile / Execution Profile Difference Checking.
 - [ ] JM-04: Task Transaction and Compensation Boundary.

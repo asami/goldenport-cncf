@@ -1,11 +1,13 @@
 package org.goldenport.cncf.operation
 
 import org.goldenport.cncf.security.OperationAuthorizationRule
+import org.goldenport.cncf.action.CommandExecutionPolicy
+import org.goldenport.record.Record
 
 /*
  * @since   Mar. 22, 2026
  *  version Mar. 28, 2026
- * @version May.  2, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class CmlOperationAssociationBinding(
@@ -152,6 +154,9 @@ final case class CmlOperationDefinition(
   kind: String,
   summary: Option[String] = None,
   execution: Option[String] = None,
+  commandKind: Option[String] = None,
+  commandExecutionProperties: Record = Record.empty,
+  commandExecutionPolicy: Option[CommandExecutionPolicy] = None,
   implementation: Option[String] = None,
   entityName: Option[String] = None,
   entityNames: Vector[String] = Vector.empty,
@@ -169,7 +174,15 @@ final case class CmlOperationDefinition(
   childEntityBindings: Vector[CmlOperationChildEntityBinding] = Vector.empty,
   associationBinding: Option[CmlOperationAssociationBinding] = None,
   imageBinding: Option[CmlOperationImageBinding] = None
-)
+) {
+  def effectiveCommandExecutionPolicy: CommandExecutionPolicy =
+    commandExecutionPolicy
+      .orElse(execution.flatMap(CommandExecutionPolicy.fromLegacyExecution))
+      .getOrElse(CommandExecutionPolicy.default)
+
+  def commandExecutionPolicyRecord: Record =
+    effectiveCommandExecutionPolicy.toRecord
+}
 
 trait ChildEntityBindingOperationDefinition {
   def childEntityBindings: Vector[CmlOperationChildEntityBinding]

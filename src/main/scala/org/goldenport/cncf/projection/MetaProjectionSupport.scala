@@ -13,7 +13,7 @@ import org.goldenport.cncf.operation.{AssociationBindingOperationDefinition, Chi
 
 /*
  * @since   Mar.  5, 2026
- * @version May.  6, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 private[projection] object MetaProjectionSupport {
@@ -55,6 +55,11 @@ private[projection] object MetaProjectionSupport {
     outputType: String,
     inputValueKind: String,
     visibility: Option[String],
+    commandKind: Option[String],
+    commandExecutionProperties: Record,
+    commandExecutionPolicy: Record,
+    effectiveCommandExecutionMode: String,
+    commandExecutionPolicySource: String,
     parameters: Vector[Record],
     childEntityBindings: Vector[Record] = Vector.empty,
     associationBinding: Option[Record] = None,
@@ -392,6 +397,14 @@ private[projection] object MetaProjectionSupport {
           outputType = x.outputType,
           inputValueKind = x.inputValueKind,
           visibility = x.visibility,
+          commandKind = x.commandKind,
+          commandExecutionProperties = x.commandExecutionProperties,
+          commandExecutionPolicy = x.commandExecutionPolicyRecord,
+          effectiveCommandExecutionMode = x.effectiveCommandExecutionPolicy.legacyModeLabel,
+          commandExecutionPolicySource = x.commandExecutionPolicy
+            .map(_ => "typed-policy")
+            .orElse(x.execution.map(_ => "legacy-execution"))
+            .getOrElse("default"),
           parameters = x.parameters.map { p =>
             Record.data(
               "name" -> p.name,

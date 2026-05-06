@@ -20,7 +20,8 @@ import org.scalatest.wordspec.AnyWordSpec
 
 /*
  * @since   Mar. 21, 2026
- * @version Mar. 28, 2026
+ *  version Mar. 28, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class ComponentLogicCommandScriptExecutionModeSpec
@@ -29,6 +30,42 @@ final class ComponentLogicCommandScriptExecutionModeSpec
   with GivenWhenThen {
 
   "ComponentLogic command/script execution mode" should {
+    "use SyncDirectNoJob for an unspecified command action" in {
+      val component = TestComponentFactory.create("default_command_execution_mode", Protocol.empty)
+      val action = _command_action("default_sync", "ok")
+
+      withRuntimeMode(RunMode.Command) {
+        Given("a command action without execution metadata")
+        When("executing through ComponentLogic")
+        val result = component.logic.executeAction(action)
+
+        Then("response is returned directly and no job is recorded")
+        result shouldBe Consequence.success(OperationResponse.Scalar("ok"))
+        _metrics(component) shouldBe (0, 0, 0, 0)
+      }
+    }
+
+    "preserve explicit AsyncJob command action behavior" in {
+      val component = TestComponentFactory.create("explicit_async_command_execution_mode", Protocol.empty)
+      val action = _command_action("explicit_async", "ok", mode = Some(CommandExecutionMode.AsyncJob))
+
+      withRuntimeMode(RunMode.Command) {
+        Given("a command action that explicitly requests AsyncJob")
+        When("executing through ComponentLogic")
+        val response = component.logic.executeAction(action).toOption.getOrElse(fail("execution failed"))
+        val jobid = response match {
+          case OperationResponse.Scalar(v) =>
+            JobId.parse(v.toString).toOption.getOrElse(fail("response is not JobId scalar"))
+          case _ =>
+            fail("response is not scalar")
+        }
+
+        Then("interface returns a JobId and the job is recorded")
+        jobid.value.nonEmpty shouldBe true
+        eventuallyCompleted(component)
+      }
+    }
+
     "use SyncDirectNoJob for command + SCRIPT combination" in {
       val component = TestComponentFactory.create("script_execution_mode", Protocol.empty)
       val action = _script_action()
@@ -117,10 +154,13 @@ final class ComponentLogicCommandScriptExecutionModeSpec
 
   private def _command_action(
     operation: String,
-    value: String
+    value: String,
+    mode: Option[CommandExecutionMode] = None
   ): CommandAction =
     new CommandAction() {
       val request = Request.ofOperation(operation)
+      override def commandExecutionMode: CommandExecutionMode =
+        mode.getOrElse(super.commandExecutionMode)
 
       override def createCall(core: ActionCall.Core): ActionCall = {
         val self = this
@@ -139,8 +179,18 @@ final class ComponentLogicCommandScriptExecutionModeSpec
     value: String,
     executed: AtomicBoolean
   ): CommandAction =
+    _command_action(operation, value, executed, None)
+
+  private def _command_action(
+    operation: String,
+    value: String,
+    executed: AtomicBoolean,
+    mode: Option[CommandExecutionMode]
+  ): CommandAction =
     new CommandAction() {
       val request = Request.ofOperation(operation)
+      override def commandExecutionMode: CommandExecutionMode =
+        mode.getOrElse(super.commandExecutionMode)
 
       override def createCall(core: ActionCall.Core): ActionCall = {
         val self = this
@@ -155,6 +205,15 @@ final class ComponentLogicCommandScriptExecutionModeSpec
         }
       }
     }
+
+  private def eventuallyCompleted(component: Component): Unit = {
+    var i = 0
+    while (i < 100 && _metrics(component)._3 == 0) {
+      Thread.sleep(10L)
+      i += 1
+    }
+    _metrics(component)._3 shouldBe 1
+  }
 
   private def _metrics(component: Component): (Int, Int, Int, Int) =
     component.jobEngine.metrics match {

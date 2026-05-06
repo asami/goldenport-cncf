@@ -68,10 +68,10 @@ not to model business meaning.
 4. Relationship to Command and Event
 ----------------------------------------------------------------------
 
-Both Command and Event execution
-are typically managed as Jobs.
+Command and Event execution
+may be managed as Jobs when execution policy requires Job management.
 
-    - Command → Job with intent and expectation
+    - Command → direct execution or Job with intent and expectation
     - Event   → Job with reactive execution
 
 Key differences:
