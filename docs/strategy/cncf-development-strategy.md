@@ -684,524 +684,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 20: closed (`docs/phase/phase-20.md`)
 - Phase 21: closed (`docs/phase/phase-21.md`)
 
-## 8. Development Item Status
-
-This section lists active and future development areas. Once a work area is
-completed, it moves to the completed development item history below.
-
-### 8.1 Web Next Stage / Static Form UI
-Closed in Phase 21.
-
-- Phase 21 work documents:
-  - dashboard: `docs/phase/phase-21.md`
-  - checklist: `docs/phase/phase-21-checklist.md`
-- Phase 21 completed slices so far:
-  - WN-02 Bootstrap 5 primitive normalization is implemented for targeted
-    CNCF admin/runtime, system console, job/admin result, and shared result
-    sections
-  - WN-03 Textus widget card/list/feedback surfaces are implemented for
-    card-list layout, empty-state actions, source-driven nav lists, and
-    conservative Bootstrap feedback/status variants
-  - WN-04 reusable dialog-style action surfaces are implemented through
-    `textus:confirm-action` Bootstrap modal markup with no-JS link/form fallback
-  - WN-05 CNCF admin/runtime driver pages are implemented for Blob admin,
-    generic Association admin, result action rows, and destructive detach
-    confirmation surfaces
-  - WN-06 `textus-blog` driver pages are implemented for user post
-    list/results, editor/fallback edit Bootstrap cards, selected tag filter
-    parity, and modal-style image/import surfaces
-  - WN-07 Phase 21 backlog / status synchronization is complete; WN-08 through
-    WN-15 are explicit Phase 21 backlog items
-  - WN-08 Search UI / Query / Semantic Search Alignment is implemented through
-    `WebSearchQueryPlanner`, admin entity search cards, View search metadata,
-    and deterministic unsupported feedback for semantic/hybrid modes without a
-    backend
-  - WN-09 Web/UI Generation and Static Form Layout Composition is completed as
-    a contract-only slice through `docs/design/static-form-ui-generation-contract.md`
-  - application-level job UX baseline is implemented for Form-launched
-    asynchronous Command jobs through `/web/{app}/jobs` and
-    `/web/{app}/jobs/{jobId}`
-- In develop mode, Form/HTML operation result pages can show collapsed
-  observability and debugging information, including execution result metadata
-  and CallTree, at the end of the web page.
-- Phase 21 work items:
-  - WN-11 Broader Bootstrap 5 Admin/App Polish (done)
-  - WN-12 Subsystem Web App Composition From Component Web (done)
-  - WN-13 Progressive Enhancement / Island Boundary Contract (done)
-  - WN-14 SPA Hosting / API Gateway Boundary Design (done)
-  - WN-15 Application Developer Documentation Completion (done)
-- Phase 21 is closed.
-- WN-11 completed a CNCF renderer-owned admin/runtime polish pass for
-  performance diagnostics, form operation pages, default form results, and Web
-  Descriptor detail pages.
-- Search work now has a full-text planning and no-JS Bootstrap UI baseline.
-  Semantic/hybrid mode is exposed as a capability surface, but embedding/vector
-  backend integration remains deferred.
-- Web/UI generation work defines the composition contract above Static Form
-  primitives and the split between generated fallback/scaffold UI and
-  hand-written static pages. WN-10 adds the `WEB-INF` layout/partial runtime
-  contract for reusable header, footer, navigation, sidebar, and page shell
-  composition.
-- Subsystem Web composition work allows Component CARs to contribute Web
-  pages that render as articles inside Subsystem/deemed-subsystem shells, while
-  login/logout/account-style pages can opt out with screen mode. The
-  `textus-blog` driver validates the deemed-subsystem path for both static
-  pages and form result templates.
-- WN-13 defines app-local JavaScript as valid Static Form progressive
-  enhancement when no-JS links/forms/results remain authoritative. It does not
-  add a `data-textus-island` attribute, core island loader, registry,
-  WebDescriptor island schema, or island asset dependency resolution.
-- WN-14 defines SPA hosting and API gateway as explicit deployment boundaries,
-  not implicit extensions of the current Static Form baseline. It does not add
-  a SPA framework, catch-all router, API gateway runtime, WebDescriptor SPA
-  schema, or alternate authorization path. CNCF can host a minimal same-origin
-  static SPA for internal/prototype use, but production-grade CNCF-hosted SPA
-  mode still requires app-scoped fallback routing, SPA asset lifecycle,
-  auth/session/CSRF policy, REST exposure policy, and a dedicated SPA-mode
-  developer guide.
-- WN-15 completes the developer-facing Web documentation path. The basic Web
-  application line is REST-first: CNCF exposes application-tier operations and
-  a Web-tier application may use any Web technology over those REST APIs.
-  Static Form Web UI is CNCF's lightweight built-in path for the management
-  console, development-time checking and debugging, prototypes, and simple
-  internal-use application screens, including component Web composition inside
-  subsystem shells.
-- Source references:
-  - `docs/phase/phase-12.md`
-  - `docs/phase/phase-12-checklist.md`
-  - `docs/notes/phase-12-web-closure.md`
-
-### 8.2 Event Mechanism Extension
-Closed in Phase 13. This remains a reference area for Phase 14+ extensions and regressions.
-
-- Phase 13 baseline:
-  - subsystem-level shared event wiring
-  - component subscription bootstrap
-  - event-to-action dispatch and continuation/job semantics
-  - boundary-aware reception policy selection by subsystem origin, event name,
-    event kind, and selectors
-  - same-subsystem default sync reception
-  - async new-job same-saga reception
-  - async new-job new-saga reception
-  - internal await support
-  - executable specifications and observability coverage
-- Future extensions beyond the Phase 13 baseline:
-  - async same-job same-transaction reception
-  - sync-with-async-fallback reception policy
-  - ABAC-aware reception policy selection
-  - richer event classification beyond name/kind/selectors
-  - source component/componentlet specific policy overrides
-  - finalized saga-id propagation contract
-  - transaction outcome event lanes:
-    - transaction-success domain events for committed domain changes,
-      projections, read-side updates, and downstream actions;
-    - transaction-failure / rollback events for operational failure and
-      rollback facts that must not be projected as committed domain changes;
-    - compensation / recovery-required events for cleanup and human recovery
-      signals.
-  - align transaction outcome events with EventStore/EventBus lanes,
-    ActionCall / UoW transaction boundaries, Job lifecycle records, and
-    existing non-transactional / error event concepts.
-- Source references:
-  - `docs/phase/phase-13.md`
-  - `docs/phase/phase-13-checklist.md`
-  - `docs/journal/2026/04/event-mechanism-extension-work-items.md`
-  - `docs/notes/event-reception-policy-selection.md`
-  - `docs/journal/2026/04/phase-13-closure-result-2026-04-22.md`
-  - `docs/journal/2026/04/textus-sample-app-event-phase-13-closure-handoff-2026-04-22.md`
-
-### 8.3 Security
-- Phase 16 closed the first auth/session and user-account baseline.
-- Future security work is extension-oriented:
-  - provider replacement and multiple-provider precedence beyond the first
-    provider baseline
-  - real email/SMS message-delivery providers after the stub-backed path
-  - external identity/federation
-  - audit logging expansion beyond current lifecycle and operation records
-  - first-class arbitrary ACL lists
-  - general subject grant administration UI
-  - full role-definition lifecycle and role-to-capability registry
-  - organization-grade policy management beyond the Blob-required surfaces
-- Source references:
-  - `docs/phase/phase-16.md`
-  - `docs/phase/phase-16-checklist.md`
-
-### 8.4 Metrics and Observability
-- Metrics collection
-- Observability integration
-  - OpenTelemetry support
-
-### 8.5 Tagging and Knowledge Structure
-Completed in Phase 20.
-
-- Phase 20 work documents:
-  - dashboard: `docs/phase/phase-20.md`
-  - checklist: `docs/phase/phase-20-checklist.md`
-- Add a CNCF builtin hierarchical `Tag` model.
-- Treat Tags as `SimpleEntity`-backed master data with TagSpace-scoped
-  resident tree lookup.
-- Use dot notation such as `a.b.c` as the canonical Tag path/name grammar.
-- Resolve runtime Tags from the effective merge of Subsystem, Component, and
-  User TagSpaces in `ExecutionContext`.
-- Support operational master TagSpaces, shared application TagSpaces such as
-  `blog`, and user-editable TagSpaces for personal tagging use cases.
-- Support Entity-to-Tag links through Associations.
-- Support parent Tag search with descendant expansion.
-- Validate generic Tag management through CNCF runtime operations and expose it
-  through admin/manual/projection surfaces.
-- Validate CMS-style Tags through `textus-blog` BlogPost navigation/search.
-- Implemented core scope includes Tag tree creation/resolution, resident
-  TagTree cache use for effective TagSpaces, TagAttachment attach/detach/list,
-  tag-expanded Entity search through EntityStore filtering, and shared Blog
-  TagSpace navigation/search.
-- Phase 20 is closed. Keep RDF and external knowledge graph integration under
-  the separate RDF development item. Keep DAG/polyhierarchy Tag graphs as
-  future scope outside Phase 20.
-
-### 8.6 RDF Integration
-- RDF-based data representation
-- External knowledge graph integration
-
-### 8.7 Builtin Blob Management Component
-Completed in Phase 18.
-
-- Closed dashboard: `docs/phase/phase-18.md`
-- Closed checklist: `docs/phase/phase-18-checklist.md`
-- Source note: `docs/journal/2026/04/blob-management-component-specification-note.md`
-- Completed scope is recorded in Completed Development Item History section 9.7.
-
-### 8.8 AwsComponent
-Future component development item.
-
-- Provide AWS-facing integrations outside CNCF core so CNCF itself does not
-  depend on AWS SDKs or AWS deployment assumptions.
-- Initial scope includes S3/S3-compatible BlobStore provider support for the
-  BlobStore SPI introduced in Phase 18.
-- AwsComponent may provide:
-  - BlobStore provider implementation for S3/S3-compatible object storage;
-  - deployment-specific public base URL or signed URL integration;
-  - AWS credential/configuration handling owned by the component, not by CNCF
-    core;
-  - future AWS service adapters when they are useful as CNCF components.
-- CNCF core remains responsible for the generic BlobStore SPI, Blob metadata,
-  Blob content route fallback, authorization, and projection contracts.
-- AwsComponent remains optional. Local and in-memory BlobStores continue to
-  serve development and executable-spec use cases.
-
-### 8.9 BlogComponent Entity Image Usage
-Completed in Phase 19.
-
-- Closed dashboard: `docs/phase/phase-19.md`
-- Closed checklist: `docs/phase/phase-19-checklist.md`
-- Completed scope is recorded in Completed Development Item History section
-  9.8.
-- Development driver: `textus-blog` `BlogComponent`
-- Purpose:
-  - make the ordinary Entity-to-image binding usage concrete after Phase 18;
-  - model Blog authoring as a user-account owned flow with draft/published and
-    active/inactive state;
-  - keep public Blog references limited to published active posts while
-    protected author/admin operations own draft, publish, deactivate, and image
-    synchronization flows;
-  - validate primary, inline, thumbnail, and ordered supporting image roles as
-    CNCF BlobAttachment Association roles rather than direct entity fields;
-  - handle article body `img` tags as image occurrences that can be reconciled
-    with managed Blob metadata and inline Association rows;
-  - support Blog file-tree import by using reusable CNCF HTML tree values rather
-    than Blog-specific parsing code;
-  - use managed Blob ZIP archives as the production Blog file-tree import
-    input while keeping local `treeRootPath` as a development driver path;
-  - keep `registerPost` as the lower-level normalized HTML/Blob-reference
-    boundary, with local path payload registration owned by `importPostTree`;
-  - use Association-only image links for BlogPost, including primary image
-    selection by role priority;
-  - expose associated Blob images through reusable `BlobProjection` output with
-    `images` plus derived `representativeImage`;
-  - expose associated images on Entity admin detail pages and surface
-    image-capable operation metadata in manual/help output;
-  - expose public Blog content through a CNCF-backed AtomFeed model and
-    `application/atom+xml` renderer;
-  - expose a component-owned Blog Web app that validates anonymous read,
-    authenticated editor save, filebundle upload import, and Blob image picker
-    flows;
-  - keep image-specific metadata on top of a reusable `associationBinding`
-    operation contract so non-image Entity associations can use the same
-    source/target binding structure later;
-  - support operation child Entity binding for aggregate-like registration
-    flows where the parent result id is injected into child records;
-  - consume generated relationship definitions for association, aggregation,
-    and composition, with composition child-parent-id-field storage feeding
-    operation child Entity binding and embedded value object storage documenting
-    parent-field `VALUE` ownership;
-  - validate the generated relationship metadata in `textus-blog` by declaring
-    BlogPost image BlobAttachment links and inline image occurrence composition
-    in BlogComponent CML;
-  - expose and fix CNCF runtime/Web/projection/generator gaps using a real
-    component driver.
-- Scope boundary:
-  - Blob payload storage, Blob metadata, authorization, and content routes
-    remain owned by the Phase 18 Blob foundation;
-  - S3/S3-compatible provider work remains under AwsComponent;
-  - `BlogComponent` owns blog semantics, while CNCF owns reusable image binding
-    runtime/Web/projection behavior.
-
-### 8.10 Error Model / Consequence-Conclusion Realignment
-Future platform development item.
-
-- `8.10-A Consequence/Conclusion-based failure diagnostics` is now the active
-  cleanup slice for the diagnostics work first exposed by Phase 18 Blob
-  metrics. The implementation direction is:
-  - reusable framework and builtin components emit ordinary
-    `Consequence.Failure(Conclusion)` values;
-  - `Cause.Kind` carries coarse mechanism classification such as capability,
-    permission, guard, relation, format, policy, limit, and inconsistency;
-  - `Descriptor.Facet` carries machine-readable detail such as parameter,
-    field path, policy, algorithm, capability, permission, guard, relation, and
-    reason;
-  - metrics, dashboards, Web/admin diagnostics, and observability records
-    project diagnostics from `Conclusion` structure;
-  - component-local failure labels are not a public or compatibility surface.
-- Revisit the core `Consequence` / `Conclusion` / `Observation` model before
-  adding more component-local error classification surfaces.
-- Clarify `Status` structure and semantics:
-  - `Status.detailCodes` are application-owned semantic error codes.
-    Reusable framework or builtin components must not write component-specific
-    detail codes into this field.
-  - `Status.detailCode` / `Status.detailCodes` and `strategies` do not yet have
-    the intended shape and need a core-level redesign.
-  - External projections such as CLI, HTTP, Web, metrics, and dashboards must
-    derive their behavior from the corrected structured `Conclusion` model, not
-    from component-local message parsing or private diagnostic taxonomies.
-- Clarify the boundary between logic-bearing failure semantics and descriptive
-  observability:
-  - `Conclusion` remains the execution/control-flow failure value.
-  - `Observation` remains descriptive and projection-oriented.
-  - Operational diagnostics may project coarse failure groups from
-    `Conclusion.status` and `Observation.taxonomy`, but must not create a
-    parallel application-specific error structure inside reusable components.
-- Promote or rewrite the existing draft notes into a normative design/spec once
-  the core model is corrected:
-  - `docs/notes/error-semantics.md`
-  - `docs/notes/conclusion-observation-design.md`
-  - `docs/notes/observation-descriptor-error-notification-guideline.md`
-- Blob follows the `Consequence` / `Conclusion` error model. BL-10E added the
-  immediate shared validation support needed by Blob: `Cause.Kind` provides
-  coarse mechanism classification and `Descriptor.Facet` provides
-  machine-readable detail. Reusable validation distinctions such as payload
-  byte-size, MIME-kind, digest, expected-size, content-type, and external URL policy are
-    projected from structured `Conclusion` data instead of component-local
-    `Status.detailCodes` or message parsing.
-- Remaining work in this item is broader platform cleanup: the intended
-  `Status.detailCode` / `detailCodes` / `strategies` shape, possible
-  `Cause.Kind` refinements beyond ordinary validation, and cross-component
-  Observation semantics that are not required to complete Blob.
-
-### 8.11 Media Attributes Model Cleanup
-Future platform development item.
-
-- Revisit `MediaAttributes` after the Phase 19 media/entity work has enough
-  application feedback.
-- Clarify which metadata belongs on reusable media values versus concrete
-  media Entities such as Image, Video, Audio, Attachment, and generic Blob.
-- Keep media-specific attributes out of unrelated domain objects; domain
-  Entities should point to media through associations or content references
-  rather than embedding ad hoc media fields.
-- Align media metadata with Textus URN/media reference behavior, BlobStore
-  payload metadata, representative image projection, and future thumbnail /
-  derived rendition work.
-
-### 8.12 ServiceCall Fallback
-Future platform development item.
-
-- Add fallback behavior for `ServiceCall` failures.
-- The fallback contract should be explicit about which failures are eligible
-  for fallback, whether fallback runs synchronously or as a Job/Event
-  continuation, and how fallback results are represented in `Consequence` /
-  `Conclusion` / observability output.
-- Fallback must be declared by policy. It should not become an implicit retry
-  or silent alternate path, and diagnostics should show the original failure,
-  selected fallback, and fallback result.
-- Avoid implicit retry-like behavior in ordinary service calls; fallback should
-  be declared by policy and visible in diagnostics.
-- Align this with the broader error model cleanup and event/job continuation
-  policy.
-
-### 8.13 Compensation Recovery Events
-Future platform development item.
-
-- Introduce a recovery-required event for cases where compensation itself
-  cannot fully clean up partial work.
-- Target examples include compensation-of-compensation situations where
-  in-progress Entities, associations, media links, side-storage records, or
-  other derived state can remain after automated compensation fails or becomes
-  ambiguous.
-- The event should carry enough structured context for human recovery:
-  source operation/job, affected Entity ids, attempted compensation steps,
-  remaining partial artifacts, failure cause, and suggested recovery surface.
-- This is a human-in-the-loop recovery signal, not a silent best-effort
-  cleanup. It should integrate with admin diagnostics, Job/Event history, and
-  future recovery dashboards.
-- This item is related to transaction outcome lanes: compensation failure
-  should publish to a recovery-required lane rather than to ordinary committed
-  domain-event projection flow.
-
-### 8.14 Workflow Active-State Working Set Policy
-Future platform development item.
-
-- Add an explicit Working Set policy for `entityKind = workflow` Entities whose
-  active state should be resident while completed or inactive records remain
-  store-backed.
-- The policy should define the state field, active values, inactive/completed
-  values, and transition/update-time residency re-evaluation.
-- `entityKind = workflow` remains only an active-residency candidate until this
-  policy is explicitly configured by an application.
-- Completed, cancelled, archived, or otherwise inactive workflow records should
-  be evicted from the Working Set when their state changes.
-
-### 8.15 Entity and Aggregate Version Conflict Policy
-Future platform development item.
-
-- Add a first-class optimistic locking / version conflict policy for Entity and
-  Aggregate updates.
-- Define a canonical concurrency token such as revision, version, or equivalent
-  store-backed metadata, and allow update paths to carry an expected token.
-- `entity_save`, `entity_update`, Aggregate update, and state transition paths
-  should reject stale updates deterministically when the stored token no longer
-  matches the expected token.
-- Resident Working Set values must not bypass the store-backed version check.
-- Intentional overwrite or repair should require an explicit force/repair API
-  rather than ordinary save/update behavior.
-
-### 8.16 Distributed Component Runtime
-Future distributed-system development item.
-
-- Defer distributed scheduler, distributed cache coherence, and clustered
-  Working Set behavior to the distributed-system phase.
-- The intended component clustering model is multiple component instances with
-  a master/slave structure: the master handles read/write, slaves handle read
-  only, and a slave may be promoted when the master fails.
-- This item owns master election/promotion, write ownership, slave cache refresh,
-  cross-instance View/Working Set coherence, and distributed Job/Event
-  ownership.
-- Current CNCF runtime hardening should preserve boundaries so a future
-  distributed implementation can replace or extend the in-process `JobEngine`,
-  Working Set, and View cache behavior.
-
-### 8.17 Job Management
-Future platform development item.
-
-- Define Command execution policy before broadening Job usage. CQRS makes
-  state-changing operations Commands, but application UX and runtime cost still
-  decide whether a Command is executed synchronously or as a Job.
-- Default policy should be synchronous for ordinary CRUD-style Commands that
-  create or update one Entity in one transaction. Creating a Job Entity has
-  runtime and storage overhead, so simple one-Entity create/update/delete
-  operations should not become Jobs by default.
-- Heavy Commands should opt into Job execution explicitly. Examples include
-  import/export, bulk operations, long-running transforms, external
-  `ServiceCall` continuations, retry/compensation-heavy flows, and one-Entity
-  operations whose domain work is known to be expensive.
-- Add Command definition metadata for:
-  - `commandKind`: CRUD, import/export, bulk, workflow step, maintenance,
-    repair, or another stable command classification;
-  - `commandExecutionProperties`: expected duration, idempotency, retryability,
-    compensation requirement, external-call usage, progress reporting, and
-    result visibility;
-  - `commandExecutionPolicy`: sync, async Job, sync-with-Job fallback, or
-    fire-and-forget where explicitly allowed.
-- Use the Command execution policy to drive Form/Web UX. Synchronous Commands
-  return the ordinary result page, while async Job Commands return the standard
-  application job result and “My jobs” navigation.
-- Add user notification support before relying on async Jobs for ordinary
-  application operations. Users need completion, failure, retry/exhausted, and
-  recovery-required notifications tied to the application Job result page, not
-  only operator/admin diagnostics.
-- Notification policy should distinguish in-page Job result polling, application
-  notification center entries, optional email/message delivery, and admin-only
-  operational alerts. The Command/Job definition should declare which
-  user-facing notifications are expected.
-- Align this policy with JCL-based Job behavior. A Job-started Command should
-  be able to supply or derive a JCL profile, while synchronous Commands remain
-  normal transaction-scoped operation execution unless their definition opts
-  into Job execution.
-- Manage Job as a first-class Entity rather than only as an engine-local runtime
-  record. Job state, result, diagnostics, CallTree, tasks, and lifecycle should
-  be visible through ordinary Entity/admin/user-facing management surfaces where
-  appropriate.
-- Make Job behavior definable by JCL. A Job launch should be able to specify
-  the intended JCL profile, while the runtime records the actual Job behavior
-  profile for inspection.
-- JCL is not a complete direct-control script for all Job behavior. Some runtime
-  behavior is Event-driven or owned by external continuation points, so JCL
-  should describe intended control, state, tasks, compensation, and constraints
-  while the engine records any runtime deviations.
-- Add difference checking between declared JCL and observed execution:
-  - detect mismatches between intended and actual behavior;
-  - suggest JCL extensions when the observed profile contains legitimate
-    behavior not yet represented in JCL;
-  - allow operators or developers to reflect the difference into JCL, or treat
-    it as an error depending on policy.
-- Add a reconstruction path from actual Job execution profiles back into JCL.
-  This is intended to help evolve JCL from runtime evidence while keeping
-  contradiction handling explicit.
-- Jobs have state and state transitions. Job control operations should be
-  state-aware and should be able to allow, deny, suspend, resume, retry, cancel,
-  or repair behavior based on the current state.
-- Treat Task as the transaction unit inside a Job. Aggregate execution is a
-  Task, and Task boundaries are the natural place to define transactional
-  success/failure and compensation.
-- Support compensation between Tasks. Compensation should be explicit enough to
-  integrate with Job state, recovery-required events, and human recovery
-  diagnostics when automatic cleanup is incomplete.
-
-### 8.18 Saga Management
-Future distributed-collaboration development item.
-
-- Manage Saga as a first-class Saga Entity.
-- Treat Saga as the distributed and long-running extension of Job management
-  across multiple Subsystems, multiple machines, and longer time horizons.
-- Add support for long-running process sharing across components, component
-  clusters, and remote runtimes.
-- This item owns cross-component Saga coordination, correlation/causation/saga
-  identity propagation, remote retry, remote compensation, and failure
-  observability across cluster boundaries.
-- Saga management should reuse the Job/JCL concepts where practical, but its
-  ownership, persistence, compensation, and observability boundaries are
-  distributed rather than local to one in-process JobEngine.
-- This is separate from the current in-process event/job baseline and from the
-  local `WorkflowEngine` baseline.
-
-### 8.19 Persistent Materialized View Store
-Future scalability development item.
-
-- Consider persistent materialized view storage only after CNCF has enough
-  adoption pressure to justify read-side scaling beyond runtime memory cache.
-- The current v1 model remains store-backed canonical Entities plus
-  `ViewCollection` runtime memory cache with invalidate-on-write.
-- A future materialized view store would own durable projection rows,
-  incremental synchronization, replay/rebuild, stale projection detection, and
-  query/index optimization.
-- Blog/CMS list, slug index, feed, and author dashboard projections are
-  candidate drivers when runtime memory cache becomes insufficient.
-
-### 8.20 Runtime Namespace Descriptor Defaults
-Future platform hardening item.
-
-- Continue the runtime namespace policy after the initial `single/global`
-  implementation baseline.
-- Runtime configuration keys `textus.id.namespace.major` and
-  `textus.id.namespace.minor` are the primary override surface, and CNCF
-  default remains `single/global`.
-- Add SAR descriptor defaults and CAR deemed-subsystem defaults ahead of the
-  CNCF default when those descriptor fields are introduced.
-- Keep system, subsystem, and component identity outside `EntityId.major` /
-  `EntityId.minor`; those layer identifiers belong in descriptors, collection
-  namespace, runtime metadata, and observability context.
-- Remove or migrate remaining fixture and generated-code assumptions that still
-  use `sys/sys` where they are not deliberately testing legacy compatibility or
-  a different non-EntityId namespace axis.
-
-## 9. Completed Development Item History
+## 8. Completed Development Item History
 
 This section is different from the Phase Overview above.
 
@@ -1213,7 +696,7 @@ This section is different from the Phase Overview above.
   this section is written from the viewpoint of completed work areas rather
   than from the viewpoint of chronological planning.
 
-### 9.1 Web Layer
+### 8.1 Web Layer
 Completed in Phase 12.
 
 - Closed dashboard: `docs/phase/phase-12.md`
@@ -1229,7 +712,7 @@ Completed in Phase 12.
   - shortid, job UX baseline, result/detail navigation, and action metadata normalization
   - executable specifications and sample-app smoke validation through `textus-sample-app`
 
-### 9.2 Component Wiring and Subsystem Construction
+### 8.2 Component Wiring and Subsystem Construction
 Completed in Phase 11.
 
 - Closed dashboard: `docs/phase/phase-11.md`
@@ -1240,7 +723,7 @@ Completed in Phase 11.
   - executable wiring and assembly specifications
   - sample-facing wiring rules
 
-### 9.3 Execution Layer Expansion
+### 8.3 Execution Layer Expansion
 Completed in Phase 14.
 
 - Closed dashboard: `docs/phase/phase-14.md`
@@ -1254,7 +737,7 @@ Completed in Phase 14.
   - explicit saga-id propagation
   - explicit-rule-only ABAC matching in event reception
 
-### 9.4 Job Scheduling and Timer Boundary
+### 8.4 Job Scheduling and Timer Boundary
 Completed in Phase 15.
 
 - Closed dashboard: `docs/phase/phase-15.md`
@@ -1266,7 +749,7 @@ Completed in Phase 15.
   - bounded one-shot delayed root job start
   - `Consequence[JobId]` job submission contract for ordinary submit-time failures
 
-### 9.5 Authentication Baseline and Cwitter Runtime Hardening
+### 8.5 Authentication Baseline and Cwitter Runtime Hardening
 Completed in Phase 16.
 
 - Closed dashboard: `docs/phase/phase-16.md`
@@ -1292,7 +775,7 @@ Completed in Phase 16.
   - SAR override model that preserves component CAR defaults and overrides by
     field
 
-### 9.6 SimpleEntity Storage Shape
+### 8.6 SimpleEntity Storage Shape
 Completed in Phase 17.
 
 - Closed dashboard: `docs/phase/phase-17.md`
@@ -1311,7 +794,7 @@ Completed in Phase 17.
   - storage-shape metadata projection for component describe/schema
   - storage-shape visibility in Web manual and component admin entity pages
 
-### 9.7 Builtin Blob Management Component
+### 8.7 Builtin Blob Management Component
 Completed in Phase 18.
 
 - Closed dashboard: `docs/phase/phase-18.md`
@@ -1349,14 +832,14 @@ Completed in Phase 18.
   - S3/S3-compatible BlobStore implementation is tracked under AwsComponent,
     not CNCF core.
   - Broader ACL administration, subject grant UI, role lifecycle UI, and
-    organization-grade policy management remain under 8.3 Security.
+    organization-grade policy management remain under 9.3 Security.
   - `Status.detailCode` / `Status.detailCodes` / `strategies` redesign and
-    broader Observation semantics remain under 8.9.
+    broader Observation semantics remain under 9.7.
   - Retention policy, signed URLs, configurable MIME allowlists, thumbnail
     generation, virus scanning, and resumable upload remain future Blob/AWS
     hardening work.
 
-### 9.8 BlogComponent Entity Image Usage
+### 8.8 BlogComponent Entity Image Usage
 Completed in Phase 19.
 
 - Closed dashboard: `docs/phase/phase-19.md`
@@ -1415,3 +898,348 @@ Completed in Phase 19.
     persistent materialized view storage remain future development items.
   - Runtime namespace SAR/CAR descriptor defaults and remaining accidental
     `sys/sys` cleanup remain under Runtime Namespace Descriptor Defaults.
+
+### 8.9 Event Mechanism Extension
+Completed in Phase 13.
+
+- Closed dashboard: `docs/phase/phase-13.md`
+- Closed checklist: `docs/phase/phase-13-checklist.md`
+- Completed scope:
+  - subsystem-level shared event wiring
+  - component subscription bootstrap
+  - event-to-action dispatch and continuation/job semantics
+  - boundary-aware reception policy selection by subsystem origin, event name,
+    event kind, and selectors
+  - same-subsystem default sync reception
+  - async new-job same-saga reception
+  - async new-job new-saga reception
+  - internal await support
+  - executable specifications and observability coverage
+- Deferred scope remains under 9.2 Event Mechanism Follow-ups.
+
+### 8.10 Tagging and Knowledge Structure
+Completed in Phase 20.
+
+- Closed dashboard: `docs/phase/phase-20.md`
+- Closed checklist: `docs/phase/phase-20-checklist.md`
+- Completed scope:
+  - CNCF builtin hierarchical `Tag` model
+  - `SimpleEntity`-backed master Tag records with TagSpace-scoped resident tree
+    lookup
+  - dot notation such as `a.b.c` as canonical Tag path/name grammar
+  - effective runtime merge of Subsystem, Component, and User TagSpaces in
+    `ExecutionContext`
+  - operational master TagSpaces, shared application TagSpaces such as `blog`,
+    and user-editable TagSpaces for personal tagging
+  - Entity-to-Tag links through Associations
+  - parent Tag search with descendant expansion
+  - CNCF runtime/admin/manual/projection Tag management surfaces
+  - `textus-blog` BlogPost tag navigation/search driver
+  - resident TagTree cache use for effective TagSpaces
+  - tag-expanded Entity search through EntityStore filtering
+- Deferred scope remains under 9.5 Knowledge Structure Follow-ups.
+
+### 8.11 Web Next Stage / Static Form UI
+Completed in Phase 21.
+
+- Closed dashboard: `docs/phase/phase-21.md`
+- Closed checklist: `docs/phase/phase-21-checklist.md`
+- Completed scope:
+  - Bootstrap 5 primitive normalization for CNCF admin/runtime, system console,
+    job/admin result, and shared result sections
+  - Textus widget card/list/feedback surfaces, including card-list layout,
+    empty-state actions, source-driven nav lists, and conservative Bootstrap
+    feedback/status variants
+  - `textus:confirm-action` dialog-style action surfaces with Bootstrap modal
+    markup and no-JS fallback
+  - CNCF admin/runtime driver page polish for Blob admin, Association admin,
+    result action rows, destructive detach confirmation, performance
+    diagnostics, form operation pages, default form results, and Web Descriptor
+    detail pages
+  - selected `textus-blog` driver page polish for user post list/results,
+    editor/fallback edit Bootstrap cards, selected tag filter parity, and
+    modal-style image/import surfaces
+  - application-level Job UX baseline for Form-launched asynchronous Commands
+    through `/web/{app}/jobs` and `/web/{app}/jobs/{jobId}`
+  - development-mode collapsed execution debug panel and CallTree display for
+    Form/HTML operation result pages
+  - full-text Web search planning/UI baseline through `WebSearchQueryPlanner`,
+    admin entity search cards, View search metadata, and deterministic
+    unsupported feedback for semantic/hybrid modes without a backend
+  - Static Form UI generation contract and `WEB-INF` layout/partial contract
+  - Subsystem Web app composition from Component Web, including the
+    `textus-blog` deemed-subsystem driver
+  - Progressive Enhancement / Island boundary contract
+  - SPA hosting / API gateway boundary design, including CNCF-hosted minimal SPA
+    boundary note
+  - application developer documentation path and Web document index updates
+- Deferred scope remains under 9.1 Web Next Stage Follow-ups.
+
+## 9. Development Item Status
+
+This final section lists planned active and future development areas only.
+Completed work areas are recorded in section 8. When a development item closes,
+remove its completion record from this section and add or update the
+corresponding completed-history entry.
+
+No current phase is selected after Phase 21 closure. The next active item should
+be chosen explicitly from the planned areas below.
+
+### 9.1 Web Next Stage Follow-ups
+Future Web/platform development item.
+
+- Production-grade CNCF-hosted SPA mode remains future work. CNCF can host a
+  minimal same-origin static SPA for internal/prototype use, but first-class SPA
+  mode still needs app-scoped History API fallback, SPA asset lifecycle,
+  auth/session/CSRF policy, REST exposure policy, and a dedicated SPA-mode
+  developer guide.
+- Island Architecture runtime remains deferred. CNCF does not yet provide a
+  `data-textus-island` standard attribute, core island loader, registry,
+  WebDescriptor island schema, or island asset dependency resolution.
+- External API gateway runtime remains deferred. REST remains the operation
+  execution surface, but gateway concerns such as public API exposure policy,
+  rate limiting, authentication translation, and cross-origin policy need their
+  own explicit design.
+- Component-owned admin page discovery beyond explicit Web composition remains
+  future work.
+
+### 9.2 Event Mechanism Follow-ups
+Future event/runtime development item.
+
+- Add async same-job same-transaction reception.
+- Add sync-with-async-fallback reception policy.
+- Add ABAC-aware reception policy selection.
+- Add richer event classification beyond name/kind/selectors.
+- Add source component/componentlet specific policy overrides.
+- Finalize saga-id propagation contract.
+- Add transaction outcome event lanes:
+  - transaction-success domain events for committed domain changes, projections,
+    read-side updates, and downstream actions;
+  - transaction-failure / rollback events for operational failure and rollback
+    facts that must not be projected as committed domain changes;
+  - compensation / recovery-required events for cleanup and human recovery
+    signals.
+- Align transaction outcome events with EventStore/EventBus lanes, ActionCall /
+  UoW transaction boundaries, Job lifecycle records, and existing
+  non-transactional / error event concepts.
+
+### 9.3 Security
+Future security development item.
+
+- Provider replacement and multiple-provider precedence beyond the first
+  provider baseline.
+- Real email/SMS message-delivery providers after the stub-backed path.
+- External identity/federation.
+- Audit logging expansion beyond current lifecycle and operation records.
+- First-class arbitrary ACL lists.
+- General subject grant administration UI.
+- Full role-definition lifecycle and role-to-capability registry.
+- Organization-grade policy management beyond the Blob-required surfaces.
+
+### 9.4 Metrics and Observability
+Future observability development item.
+
+- Metrics collection expansion.
+- OpenTelemetry support.
+
+### 9.5 Knowledge Structure Follow-ups
+Future knowledge-structure development item.
+
+- RDF-based data representation.
+- External knowledge graph integration.
+- DAG/polyhierarchy Tag graphs beyond the Phase 20 strict tree model.
+
+### 9.6 AwsComponent
+Future component development item.
+
+- Provide AWS-facing integrations outside CNCF core so CNCF itself does not
+  depend on AWS SDKs or AWS deployment assumptions.
+- Initial scope includes S3/S3-compatible BlobStore provider support for the
+  BlobStore SPI introduced in Phase 18.
+- AwsComponent may provide:
+  - BlobStore provider implementation for S3/S3-compatible object storage;
+  - deployment-specific public base URL or signed URL integration;
+  - AWS credential/configuration handling owned by the component, not by CNCF
+    core;
+  - future AWS service adapters when they are useful as CNCF components.
+- CNCF core remains responsible for the generic BlobStore SPI, Blob metadata,
+  Blob content route fallback, authorization, and projection contracts.
+- AwsComponent remains optional. Local and in-memory BlobStores continue to
+  serve development and executable-spec use cases.
+
+### 9.7 Error Model / Consequence-Conclusion Realignment
+Future platform development item.
+
+- Revisit the core `Consequence` / `Conclusion` / `Observation` model before
+  adding more component-local error classification surfaces.
+- Make reusable framework and builtin components emit ordinary
+  `Consequence.Failure(Conclusion)` values.
+- Use `Cause.Kind` for coarse mechanism classification such as capability,
+  permission, guard, relation, format, policy, limit, and inconsistency.
+- Use `Descriptor.Facet` for machine-readable details such as parameter, field
+  path, policy, algorithm, capability, permission, guard, relation, and reason.
+- Project metrics, dashboards, Web/admin diagnostics, and observability records
+  from structured `Conclusion` data rather than component-local labels or
+  message parsing.
+- Clarify `Status.detailCode` / `Status.detailCodes` / `strategies` semantics
+  and rewrite the draft notes into a normative design/spec.
+
+### 9.8 Media Attributes Model Cleanup
+Future platform development item.
+
+- Revisit `MediaAttributes` after the Phase 19 media/entity work has enough
+  application feedback.
+- Clarify which metadata belongs on reusable media values versus concrete media
+  Entities such as Image, Video, Audio, Attachment, and generic Blob.
+- Keep media-specific attributes out of unrelated domain objects; domain
+  Entities should point to media through associations or content references
+  rather than embedding ad hoc media fields.
+- Align media metadata with Textus URN/media reference behavior, BlobStore
+  payload metadata, representative image projection, and future thumbnail /
+  derived rendition work.
+
+### 9.9 ServiceCall Fallback
+Future platform development item.
+
+- Add fallback behavior for `ServiceCall` failures.
+- The fallback contract should be explicit about which failures are eligible for
+  fallback, whether fallback runs synchronously or as a Job/Event continuation,
+  and how fallback results are represented in `Consequence` / `Conclusion` /
+  observability output.
+- Fallback must be declared by policy. It should not become an implicit retry or
+  silent alternate path, and diagnostics should show the original failure,
+  selected fallback, and fallback result.
+- Align this with the broader error model cleanup and event/job continuation
+  policy.
+
+### 9.10 Compensation Recovery Events
+Future platform development item.
+
+- Introduce a recovery-required event for cases where compensation itself cannot
+  fully clean up partial work.
+- Target compensation-of-compensation situations where in-progress Entities,
+  associations, media links, side-storage records, or other derived state can
+  remain after automated compensation fails or becomes ambiguous.
+- The event should carry enough structured context for human recovery: source
+  operation/job, affected Entity ids, attempted compensation steps, remaining
+  partial artifacts, failure cause, and suggested recovery surface.
+- This is a human-in-the-loop recovery signal, not a silent best-effort cleanup.
+  It should integrate with admin diagnostics, Job/Event history, and future
+  recovery dashboards.
+
+### 9.11 Workflow Active-State Working Set Policy
+Future platform development item.
+
+- Add an explicit Working Set policy for `entityKind = workflow` Entities whose
+  active state should be resident while completed or inactive records remain
+  store-backed.
+- Define the state field, active values, inactive/completed values, and
+  transition/update-time residency re-evaluation.
+- `entityKind = workflow` remains only an active-residency candidate until this
+  policy is explicitly configured by an application.
+- Completed, cancelled, archived, or otherwise inactive workflow records should
+  be evicted from the Working Set when their state changes.
+
+### 9.12 Entity and Aggregate Version Conflict Policy
+Future platform development item.
+
+- Add a first-class optimistic locking / version conflict policy for Entity and
+  Aggregate updates.
+- Define a canonical concurrency token such as revision, version, or equivalent
+  store-backed metadata, and allow update paths to carry an expected token.
+- `entity_save`, `entity_update`, Aggregate update, and state transition paths
+  should reject stale updates deterministically when the stored token no longer
+  matches the expected token.
+- Resident Working Set values must not bypass the store-backed version check.
+- Intentional overwrite or repair should require an explicit force/repair API
+  rather than ordinary save/update behavior.
+
+### 9.13 Distributed Component Runtime
+Future distributed-system development item.
+
+- Defer distributed scheduler, distributed cache coherence, and clustered
+  Working Set behavior to the distributed-system phase.
+- The intended component clustering model is multiple component instances with a
+  master/slave structure: the master handles read/write, slaves handle read
+  only, and a slave may be promoted when the master fails.
+- This item owns master election/promotion, write ownership, slave cache
+  refresh, cross-instance View/Working Set coherence, and distributed Job/Event
+  ownership.
+- Current CNCF runtime hardening should preserve boundaries so a future
+  distributed implementation can replace or extend the in-process `JobEngine`,
+  Working Set, and View cache behavior.
+
+### 9.14 Job Management
+Future platform development item.
+
+- Define Command execution policy before broadening Job usage. CQRS makes
+  state-changing operations Commands, but application UX and runtime cost still
+  decide whether a Command is executed synchronously or as a Job.
+- Default policy should be synchronous for ordinary CRUD-style Commands that
+  create or update one Entity in one transaction. Heavy Commands should opt into
+  Job execution explicitly.
+- Add Command definition metadata for `commandKind`,
+  `commandExecutionProperties`, and `commandExecutionPolicy`.
+- Use Command execution policy to drive Form/Web UX: synchronous Commands return
+  ordinary result pages, async Job Commands return application job result and
+  “My jobs” navigation.
+- Add user notification support before relying on async Jobs for ordinary
+  application operations.
+- Manage Job as a first-class Entity rather than only as an engine-local runtime
+  record.
+- Make Job behavior definable by JCL, allow Job launch with an intended JCL
+  profile, and record the actual execution profile for inspection.
+- Add difference checking between declared JCL and observed execution, plus a
+  reconstruction path from execution profiles back into JCL.
+- Jobs have state and state transitions; Job control operations should be
+  state-aware.
+- Treat Task as the transaction unit inside a Job. Aggregate execution is a
+  Task, and Task boundaries are the natural place to define transactional
+  success/failure and compensation.
+- Support compensation between Tasks and integrate incomplete cleanup with
+  recovery-required events and human recovery diagnostics.
+
+### 9.15 Saga Management
+Future distributed-collaboration development item.
+
+- Manage Saga as a first-class Saga Entity.
+- Treat Saga as the distributed and long-running extension of Job management
+  across multiple Subsystems, multiple machines, and longer time horizons.
+- Add support for long-running process sharing across components, component
+  clusters, and remote runtimes.
+- This item owns cross-component Saga coordination, correlation/causation/saga
+  identity propagation, remote retry, remote compensation, and failure
+  observability across cluster boundaries.
+- Saga management should reuse the Job/JCL concepts where practical, but its
+  ownership, persistence, compensation, and observability boundaries are
+  distributed rather than local to one in-process JobEngine.
+
+### 9.16 Persistent Materialized View Store
+Future scalability development item.
+
+- Consider persistent materialized view storage only after CNCF has enough
+  adoption pressure to justify read-side scaling beyond runtime memory cache.
+- The current v1 model remains store-backed canonical Entities plus
+  `ViewCollection` runtime memory cache with invalidate-on-write.
+- A future materialized view store would own durable projection rows,
+  incremental synchronization, replay/rebuild, stale projection detection, and
+  query/index optimization.
+- Blog/CMS list, slug index, feed, and author dashboard projections are
+  candidate drivers when runtime memory cache becomes insufficient.
+
+### 9.17 Runtime Namespace Descriptor Defaults
+Future platform hardening item.
+
+- Continue the runtime namespace policy after the initial `single/global`
+  implementation baseline.
+- Runtime configuration keys `textus.id.namespace.major` and
+  `textus.id.namespace.minor` are the primary override surface, and CNCF default
+  remains `single/global`.
+- Add SAR descriptor defaults and CAR deemed-subsystem defaults ahead of the
+  CNCF default when those descriptor fields are introduced.
+- Keep system, subsystem, and component identity outside `EntityId.major` /
+  `EntityId.minor`; those layer identifiers belong in descriptors, collection
+  namespace, runtime metadata, and observability context.
+- Remove or migrate remaining fixture and generated-code assumptions that still
+  use `sys/sys` where they are not deliberately testing legacy compatibility or
+  a different non-EntityId namespace axis.
