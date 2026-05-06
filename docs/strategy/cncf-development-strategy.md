@@ -693,9 +693,11 @@ Active in Phase 21.
   - dashboard: `docs/phase/phase-21.md`
   - checklist: `docs/phase/phase-21-checklist.md`
 - Static Form Web App next step:
-  - Bootstrap 5 primitive normalization for CNCF admin/runtime, manual, and
-    Static Form App pages
-  - richer Textus widget families where concrete application pressure exists
+  - WN-02 Bootstrap 5 primitive normalization is implemented for targeted
+    CNCF admin/runtime, system console, job/admin result, and shared result
+    sections
+  - WN-03 expands richer Textus widget families where concrete application
+    pressure exists
   - stronger dialog-style reusable surfaces
   - application-level job UX baseline is implemented for Form-launched
     asynchronous Command jobs through `/web/{app}/jobs` and

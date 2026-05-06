@@ -63,7 +63,7 @@ implementation driver.
 
 ## WN-02: Normalize Bootstrap 5 Page Primitives
 
-Status: TODO
+Status: DONE
 
 ### Objective
 
@@ -71,23 +71,36 @@ Consolidate common CNCF Web rendering patterns around Bootstrap 5 primitives.
 
 ### Detailed Tasks
 
-- [ ] Normalize page shell, breadcrumbs, nav/action bars, cards, alerts, empty
+- [x] Normalize page shell, breadcrumbs, nav/action bars, cards, alerts, empty
       states, responsive tables, and form layouts.
-- [ ] Keep admin and operational pages dense but readable.
-- [ ] Remove targeted ad hoc grid/link/list markup where Bootstrap primitives
+- [x] Keep admin and operational pages dense but readable.
+- [x] Remove targeted ad hoc grid/link/list markup where Bootstrap primitives
       fit.
-- [ ] Keep local asset behavior and no-CDN deployment assumptions intact.
+- [x] Keep local asset behavior and no-CDN deployment assumptions intact.
 
 ### Expected Output
 
 - Generated/admin pages share recognizable Bootstrap page primitives.
 - Responsive behavior does not depend on application-specific layout CSS.
 
+### Completion Notes
+
+- `_simple_page` no longer applies global card-like styling to every
+  `<article>` element. Framed panels use explicit Bootstrap card classes.
+- `StaticFormAppRenderer` now has shared private primitives for admin cards,
+  action rows, list-group navigation, and responsive tables.
+- Targeted system admin, component admin, system console, assembly diagnostics,
+  job/admin result, and create/update result pages preserve existing routes
+  while using Bootstrap 5 primitives.
+- Focused `StaticFormAppRendererSpec`, `Test/compile`, and full CNCF
+  `sbt --batch test` passed during the implementation slice. WN-07 keeps final
+  phase-level verification and closure checks.
+
 ---
 
 ## WN-03: Expand Textus Widget Card/List/Feedback Surfaces
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

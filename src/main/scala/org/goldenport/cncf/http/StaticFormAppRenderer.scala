@@ -2336,16 +2336,14 @@ object StaticFormAppRenderer {
       subtitle = "Runtime assembly diagnostics",
       body =
         s"""${_admin_nav_card(Vector("System dashboard" -> "/web/system/dashboard", "System admin" -> "/web/system/admin", "Assembly report" -> "/web/system/admin/assembly/report"))}
-           |<article>
-           |  <h2>Warnings</h2>
-           |  <p>${report.warnings.size} warning(s). Assembly warnings are diagnostics, not health errors.</p>
-           |  <div class="table-responsive">
-           |    <table class="table table-sm table-hover align-middle">
-           |      <thead><tr><th>Kind</th><th>Severity</th><th>Component</th><th>Message</th><th>Selected</th><th>Dropped</th></tr></thead>
-           |      <tbody>${rows}</tbody>
-           |    </table>
-           |  </div>
-           |</article>""".stripMargin
+           |${_admin_card(
+             "Warnings",
+             s"""<p>${report.warnings.size} warning(s). Assembly warnings are diagnostics, not health errors.</p>
+                |${_admin_table(
+                  Some("<tr><th>Kind</th><th>Severity</th><th>Component</th><th>Message</th><th>Selected</th><th>Dropped</th></tr>"),
+                  rows
+                )}""".stripMargin
+           )}""".stripMargin
     ))
   }
 
@@ -2360,10 +2358,7 @@ object StaticFormAppRenderer {
       subtitle = "Runtime assembly report",
       body =
         s"""${_admin_nav_card(Vector("System dashboard" -> "/web/system/dashboard", "System admin" -> "/web/system/admin", "Assembly warnings" -> "/web/system/admin/assembly/warnings"))}
-           |<article>
-           |  <h2>Report</h2>
-           |  ${_raw_format_tabs(json, yaml, "assembly-report")}
-           |</article>""".stripMargin
+           |${_admin_card("Report", _raw_format_tabs(json, yaml, "assembly-report"))}""".stripMargin
     ))
   }
 
@@ -2380,20 +2375,19 @@ object StaticFormAppRenderer {
       title = "System Admin Jobs",
       subtitle = "Persistent job debug and calltree inspection",
       body =
-        s"""<article>
-           |  <h2>Navigation</h2>
-           |  <p><a href="/web/system/admin">System admin</a> · <a href="/web/system/dashboard">System dashboard</a> · <a href="/form/admin/execution/history">Execution history</a></p>
-           |</article>
-           |<article>
-           |  <h2>Debug Jobs</h2>
-           |  <p>Query requests normally run directly. Requests submitted with <code>--debug.trace-job</code> are retained here for operational debugging.</p>
-           |  <div class="table-responsive mt-3">
-           |    <table class="table table-sm align-middle">
-           |      <thead><tr><th>Job</th><th>Status</th><th>Target</th><th>Result</th><th>Trace</th><th>Updated</th><th>Actions</th></tr></thead>
-           |      <tbody>${rows}</tbody>
-           |    </table>
-           |  </div>
-           |</article>""".stripMargin
+        s"""${_admin_nav_card(Vector(
+             "System admin" -> "/web/system/admin",
+             "System dashboard" -> "/web/system/dashboard",
+             "Execution history" -> "/form/admin/execution/history"
+           ))}
+           |${_admin_card(
+             "Debug Jobs",
+             s"""<p>Query requests normally run directly. Requests submitted with <code>--debug.trace-job</code> are retained here for operational debugging.</p>
+                |${_admin_table(
+                  Some("<tr><th>Job</th><th>Status</th><th>Target</th><th>Result</th><th>Trace</th><th>Updated</th><th>Actions</th></tr>"),
+                  rows
+                )}""".stripMargin
+           )}""".stripMargin
     ))
   }
 
@@ -2423,13 +2417,14 @@ object StaticFormAppRenderer {
       title = s"System Admin Job ${model.jobId.value}",
       subtitle = "Job-managed trace and calltree detail",
       body =
-        s"""<article>
-           |  <h2>Navigation</h2>
-           |  <p><a href="/web/system/admin/jobs">Debug jobs</a> · <a href="/web/system/jobs/${_escape_path_segment(model.jobId.value)}">System job result</a> · <a href="/web/system/admin">System admin</a></p>
-           |</article>
-           |<article>
-           |  <h2>Summary</h2>
-           |  <dl class="row">
+        s"""${_admin_nav_card(Vector(
+             "Debug jobs" -> "/web/system/admin/jobs",
+             "System job result" -> s"/web/system/jobs/${_escape_path_segment(model.jobId.value)}",
+             "System admin" -> "/web/system/admin"
+           ))}
+           |${_admin_card(
+             "Summary",
+             s"""<dl class="row mb-0">
            |    <dt class="col-sm-3">Job ID</dt><dd class="col-sm-9"><code>${_escape(model.jobId.value)}</code></dd>
            |    <dt class="col-sm-3">Status</dt><dd class="col-sm-9">${_escape(model.status.toString)}</dd>
            |    <dt class="col-sm-3">Persistence</dt><dd class="col-sm-9">${_escape(model.persistence.toString)}</dd>
@@ -2437,20 +2432,23 @@ object StaticFormAppRenderer {
            |    <dt class="col-sm-3">Result</dt><dd class="col-sm-9">${_escape(model.resultSummary.message.getOrElse(""))}</dd>
            |    <dt class="col-sm-3">Trace ID</dt><dd class="col-sm-9"><code>${_escape(model.lineage.correlationId.getOrElse(model.debug.parameters.getOrElse("traceId", "")))}</code></dd>
            |    <dt class="col-sm-3">Updated</dt><dd class="col-sm-9">${_escape(model.updatedAt.toString)}</dd>
-           |  </dl>
-           |</article>
-           |<article>
-           |  <h2>Calltree</h2>
-           |  ${calltree}
-           |</article>
-           |<article>
-           |  <h2>Tasks</h2>
-           |  <div class="table-responsive"><table class="table table-sm"><thead><tr><th>Task</th><th>Status</th><th>Component</th><th>Operation</th><th>Message</th><th>Started</th><th>Finished</th></tr></thead><tbody>${taskrows}</tbody></table></div>
-           |</article>
-           |<article>
-           |  <h2>Timeline</h2>
-           |  <div class="table-responsive"><table class="table table-sm"><thead><tr><th>#</th><th>Kind</th><th>At</th><th>Task</th><th>Note</th></tr></thead><tbody>${eventrows}</tbody></table></div>
-           |</article>""".stripMargin
+           |  </dl>""".stripMargin
+           )}
+           |${_admin_card("Calltree", calltree)}
+           |${_admin_card(
+             "Tasks",
+             _admin_table(
+               Some("<tr><th>Task</th><th>Status</th><th>Component</th><th>Operation</th><th>Message</th><th>Started</th><th>Finished</th></tr>"),
+               taskrows
+             )
+           )}
+           |${_admin_card(
+             "Timeline",
+             _admin_table(
+               Some("<tr><th>#</th><th>Kind</th><th>At</th><th>Task</th><th>Note</th></tr>"),
+               eventrows
+             )
+           )}""".stripMargin
     ))
   }
 
@@ -3982,10 +3980,10 @@ object StaticFormAppRenderer {
         title = s"${_escape(component.name)} Web Descriptor",
         subtitle = "Component Management Console descriptor view",
         body =
-          s"""<article>
-             |  <h2>Navigation</h2>
-             |  <p><a href="/web/${componentPath}/admin">Component admin</a> · <a href="/web/system/admin/descriptor">System descriptor</a></p>
-             |</article>
+          s"""${_admin_nav_card(Vector(
+               "Component admin" -> s"/web/${componentPath}/admin",
+               "System descriptor" -> "/web/system/admin/descriptor"
+             ))}
              |${_web_descriptor_section_nav}
              |${_web_descriptor_control_tables(webDescriptor, Some(componentPath))}
              |${_web_descriptor_asset_composition_table(webDescriptor, Some(componentPath))}
@@ -4014,7 +4012,7 @@ object StaticFormAppRenderer {
         Page(_simple_page(
           title = "System Manual",
           subtitle = "Read-only runtime reference",
-          body = """<article><h2>No components</h2><p>No component reference entries are available.</p></article>"""
+          body = _admin_card("No components", "<p>No component reference entries are available.</p>")
         ))
     }
 
@@ -4028,45 +4026,55 @@ object StaticFormAppRenderer {
       else subsystem.components
     val componentLinks = effectiveComponents.map { component =>
       val path = NamingConventions.toNormalizedSegment(component.name)
-      s"""<li><strong>${_escape(component.name)}</strong>: <a href="/web/${_escape(path)}">App</a> · <a href="/web/${_escape(path)}/admin">Admin</a> · <a href="/web/${_escape(path)}/manual">Manual</a></li>"""
+      s"""<div class="list-group-item">
+         |  <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center">
+         |    <strong>${_escape(component.name)}</strong>
+         |    ${_admin_action_row(Vector(
+           "App" -> s"/web/${_escape(path)}",
+           "Admin" -> s"/web/${_escape(path)}/admin",
+           "Manual" -> s"/web/${_escape(path)}/manual"
+         ), primary = false)}
+         |  </div>
+         |</div>""".stripMargin
     }.mkString("\n")
     val recommendations =
       if (componentLinks.isEmpty)
-        """<article>
-          |  <h2>Recommended Links</h2>
-          |  <ul>
-          |    <li><a href="/web/system/manual">System manual</a></li>
-          |    <li><a href="/web/system/admin">System admin</a></li>
-          |    <li><a href="/web/system/dashboard">System dashboard</a></li>
-          |    <li><a href="/web/system/performance">Performance</a></li>
-          |  </ul>
-          |</article>""".stripMargin
+        _admin_card(
+          "Recommended Links",
+          _admin_link_list_group(Vector(
+            "System manual" -> "/web/system/manual",
+            "System admin" -> "/web/system/admin",
+            "System dashboard" -> "/web/system/dashboard",
+            "Performance" -> "/web/system/performance"
+          ))
+        )
       else
-        s"""<article>
-           |  <h2>Recommended Links</h2>
-           |  <ul>
-           |    <li><a href="/web/system/manual">System manual</a></li>
-           |    <li><a href="/web/system/admin">System admin</a></li>
-           |    <li><a href="/web/system/dashboard">System dashboard</a></li>
-           |    <li><a href="/web/system/performance">Performance</a></li>
-           |    ${componentLinks}
-           |  </ul>
-           |</article>""".stripMargin
+        _admin_card(
+          "Recommended Links",
+          s"""${_admin_link_list_group(Vector(
+               "System manual" -> "/web/system/manual",
+               "System admin" -> "/web/system/admin",
+               "System dashboard" -> "/web/system/dashboard",
+               "Performance" -> "/web/system/performance"
+             ))}
+             |<h3 class="h6 mt-3">Components</h3>
+             |<div class="list-group">${componentLinks}</div>""".stripMargin
+        )
     Page(_simple_page(
       title = "CNCF Runtime Help",
       subtitle = "Development and demo entry points",
       body =
-        s"""<article>
-           |  <h2>Runtime</h2>
-           |  <div class="table-responsive"><table class="table table-sm">
-           |    <tbody>
-           |      <tr><th>Subsystem</th><td>${_escape(subsystem.name)}</td></tr>
-           |      <tr><th>Operation mode</th><td>${_escape(runtime.operationMode.name)}</td></tr>
-           |      <tr><th>Components</th><td>${effectiveComponents.size}</td></tr>
-           |    </tbody>
-           |  </table></div>
-           |  <p>This page is shown only outside production when no explicit root or <code>/web</code> route is configured.</p>
-           |</article>
+        s"""${_admin_card(
+             "Runtime",
+             s"""${_admin_table(
+                  None,
+                  s"""<tr><th>Subsystem</th><td>${_escape(subsystem.name)}</td></tr>
+                     |<tr><th>Operation mode</th><td>${_escape(runtime.operationMode.name)}</td></tr>
+                     |<tr><th>Components</th><td>${effectiveComponents.size}</td></tr>""".stripMargin,
+                  tableClass = "table table-sm align-middle mb-0"
+                )}
+                |<p class="mt-3 mb-0">This page is shown only outside production when no explicit root or <code>/web</code> route is configured.</p>""".stripMargin
+           )}
            |${recommendations}""".stripMargin
     ))
   }
@@ -4546,18 +4554,16 @@ object StaticFormAppRenderer {
       title = s"${_escape(componentName)} ${_escape(entityLabel)} Update Result",
       subtitle = "Entity record update submission baseline",
       body =
-        s"""<article>
-           |  <h2>Navigation</h2>
-           |  <p><a href="${_escape(webBasePath)}/${_escape(id)}">Detail</a> · <a href="${_escape(webBasePath)}">Back to ${_escape(entityLabel)} records</a> · <a href="${_escape(webBasePath)}/${_escape(id)}/edit">Edit again</a></p>
-           |</article>
-           |<article>
-           |  <h2>Update submitted</h2>
-           |  <p>${_escape(message)}</p>
-           |  <div class="table-responsive"><table class="table table-sm">
-           |    <thead>${_admin_result_rows(applied, resultStatus, message)}</thead>
-           |    <tbody>${rows}</tbody>
-           |  </table></div>
-           |</article>""".stripMargin
+        s"""${_admin_nav_card(Vector(
+             "Detail" -> s"${webBasePath}/${id}",
+             s"Back to ${entityLabel} records" -> webBasePath,
+             "Edit again" -> s"${webBasePath}/${id}/edit"
+           ))}
+           |${_admin_card(
+             "Update submitted",
+             s"""<p>${_escape(message)}</p>
+                |${_admin_table(Some(_admin_result_rows(applied, resultStatus, message)), rows)}""".stripMargin
+           )}""".stripMargin
     ))
   }
 
@@ -4578,18 +4584,15 @@ object StaticFormAppRenderer {
       title = s"${_escape(componentName)} ${_escape(entityLabel)} Create Result",
       subtitle = "Entity record create submission baseline",
       body =
-        s"""<article>
-           |  <h2>Navigation</h2>
-           |  <p><a href="${_escape(webBasePath)}">Back to ${_escape(entityLabel)} records</a> · <a href="${_escape(webBasePath)}/new">Create another</a></p>
-           |</article>
-           |<article>
-           |  <h2>Create submitted</h2>
-           |  <p>${_escape(message)}</p>
-           |  <div class="table-responsive"><table class="table table-sm">
-           |    <thead>${_admin_result_rows(applied, resultStatus, message)}</thead>
-           |    <tbody>${rows}</tbody>
-           |  </table></div>
-           |</article>""".stripMargin
+        s"""${_admin_nav_card(Vector(
+             s"Back to ${entityLabel} records" -> webBasePath,
+             "Create another" -> s"${webBasePath}/new"
+           ))}
+           |${_admin_card(
+             "Create submitted",
+             s"""<p>${_escape(message)}</p>
+                |${_admin_table(Some(_admin_result_rows(applied, resultStatus, message)), rows)}""".stripMargin
+           )}""".stripMargin
     ))
   }
 
@@ -4851,6 +4854,43 @@ object StaticFormAppRenderer {
        |  </div>
        |</article>""".stripMargin
   }
+
+  private def _admin_link_list_group(
+    links: Vector[(String, String)]
+  ): String = {
+    val items = links.map { case (label, href) =>
+      s"""<a class="list-group-item list-group-item-action" href="${_escape(href)}">${_escape(label)}</a>"""
+    }.mkString("\n")
+    s"""<div class="list-group">${items}</div>"""
+  }
+
+  private def _admin_action_row(
+    links: Vector[(String, String)],
+    primary: Boolean = true
+  ): String = {
+    val items = links.zipWithIndex.map {
+      case ((label, href), index) =>
+        val css =
+          if (primary && index == 0)
+            "btn btn-primary"
+          else
+            "btn btn-outline-secondary"
+        s"""<a class="${css}" href="${_escape(href)}">${_escape(label)}</a>"""
+    }.mkString("\n")
+    s"""<div class="admin-action-row d-flex flex-wrap gap-2">${items}</div>"""
+  }
+
+  private def _admin_table(
+    head: Option[String],
+    rows: String,
+    tableClass: String = "table table-sm table-hover align-middle mb-0"
+  ): String =
+    s"""<div class="table-responsive">
+       |  <table class="${_escape(tableClass)}">
+       |    ${head.map(x => s"<thead>${x}</thead>").getOrElse("")}
+       |    <tbody>${rows}</tbody>
+       |  </table>
+       |</div>""".stripMargin
 
   private def _admin_card(
     title: String,
@@ -6086,18 +6126,16 @@ object StaticFormAppRenderer {
       title = s"${_escape(componentName)} ${_escape(_title_label(dataPath))} Data Update Result",
       subtitle = "Data record update submission baseline",
       body =
-        s"""<article>
-           |  <h2>Navigation</h2>
-           |  <p><a href="${_escape(webBasePath)}/${_escape(id)}">Detail</a> · <a href="${_escape(webBasePath)}">Back to ${_escape(_title_label(dataPath))} records</a> · <a href="${_escape(webBasePath)}/${_escape(id)}/edit">Edit again</a></p>
-           |</article>
-           |<article>
-           |  <h2>Update submitted</h2>
-           |  <p>${_escape(message)}</p>
-           |  <div class="table-responsive"><table class="table table-sm">
-           |    <thead>${_admin_result_rows(applied, resultStatus, message)}</thead>
-           |    <tbody>${_submitted_fields_rows(values)}</tbody>
-           |  </table></div>
-           |</article>""".stripMargin
+        s"""${_admin_nav_card(Vector(
+             "Detail" -> s"${webBasePath}/${id}",
+             s"Back to ${_title_label(dataPath)} records" -> webBasePath,
+             "Edit again" -> s"${webBasePath}/${id}/edit"
+           ))}
+           |${_admin_card(
+             "Update submitted",
+             s"""<p>${_escape(message)}</p>
+                |${_admin_table(Some(_admin_result_rows(applied, resultStatus, message)), _submitted_fields_rows(values))}""".stripMargin
+           )}""".stripMargin
     ))
   }
 
@@ -6116,18 +6154,15 @@ object StaticFormAppRenderer {
       title = s"${_escape(componentName)} ${_escape(_title_label(dataPath))} Data Create Result",
       subtitle = "Data record create submission baseline",
       body =
-        s"""<article>
-           |  <h2>Navigation</h2>
-           |  <p><a href="${_escape(webBasePath)}">Back to ${_escape(_title_label(dataPath))} records</a> · <a href="${_escape(webBasePath)}/new">Create another</a></p>
-           |</article>
-           |<article>
-           |  <h2>Create submitted</h2>
-           |  <p>${_escape(message)}</p>
-           |  <div class="table-responsive"><table class="table table-sm">
-           |    <thead>${_admin_result_rows(applied, resultStatus, message)}</thead>
-           |    <tbody>${_submitted_fields_rows(values)}</tbody>
-           |  </table></div>
-           |</article>""".stripMargin
+        s"""${_admin_nav_card(Vector(
+             s"Back to ${_title_label(dataPath)} records" -> webBasePath,
+             "Create another" -> s"${webBasePath}/new"
+           ))}
+           |${_admin_card(
+             "Create submitted",
+             s"""<p>${_escape(message)}</p>
+                |${_admin_table(Some(_admin_result_rows(applied, resultStatus, message)), _submitted_fields_rows(values))}""".stripMargin
+           )}""".stripMargin
     ))
   }
 
@@ -6179,15 +6214,17 @@ object StaticFormAppRenderer {
       title = "System Console",
       subtitle = "Controlled operation entry",
       body =
-        s"""<article>
-           |  <h2>Navigation</h2>
-           |  <p><a href="/web/system/dashboard">System dashboard</a> · <a href="/web/system/admin">Admin configuration</a> · <a href="/web/system/performance">Performance details</a> · <a href="/web/system/manual">Manual</a></p>
-           |</article>
-           |<article>
-           |  <h2>Operation forms</h2>
-           |  <p>Console links to operation forms. It does not execute operations inline.</p>
-           |  ${_component_form_list(subsystem.components)}
-           |</article>""".stripMargin
+        s"""${_admin_nav_card(Vector(
+             "System dashboard" -> "/web/system/dashboard",
+             "Admin configuration" -> "/web/system/admin",
+             "Performance details" -> "/web/system/performance",
+             "Manual" -> "/web/system/manual"
+           ))}
+           |${_admin_card(
+             "Operation forms",
+             s"""<p>Console links to operation forms. It does not execute operations inline.</p>
+                |${_component_form_list(subsystem.components)}""".stripMargin
+           )}""".stripMargin
     ))
 
   private def _find_component(
@@ -6536,40 +6573,40 @@ object StaticFormAppRenderer {
       val technicalDetails =
         s"""<details class="mt-3">
            |  <summary>Technical details</summary>
-           |  <article class="mt-3">
+           |  <div class="mt-3">
            |    <h3>${_escape(component.name)}</h3>
-           |    <p>Version ${_escape(version)}</p>
+           |    <p class="text-body-secondary">Version ${_escape(version)}</p>
            |    ${componentlets}
            |    ${services}
-           |  </article>
+           |  </div>
            |</details>""".stripMargin
-      s"""<article>
-         |  <h2>${_escape(component.name)}</h2>
-         |  <p>Version ${_escape(version)}</p>
-         |  ${cards}
-         |  ${technicalDetails}
-         |</article>""".stripMargin
+      _admin_card(
+        component.name,
+        s"""<p class="text-body-secondary">Version ${_escape(version)}</p>
+           |${cards}
+           |${technicalDetails}""".stripMargin
+      )
     }.mkString("\n")
     val componentInventory =
       if (componentFormsPath.isEmpty)
         _system_admin_component_inventory(components)
       else
         ""
+    val runtimeRows =
+      s"""<tr><th>CNCF version</th><td>${_escape(CncfVersion.current)}</td></tr>
+         |<tr><th>Subsystem</th><td>${_escape(subsystemName)}</td></tr>
+         |<tr><th>Subsystem version</th><td>${_escape(subsystemVersion.getOrElse("unversioned"))}</td></tr>
+         |<tr><th>Components</th><td>${components.size}</td></tr>""".stripMargin
+    val runtimeCard =
+      _admin_card(
+        "Runtime",
+        _admin_table(None, runtimeRows, tableClass = "table table-sm align-middle mb-0")
+      )
     _simple_page(
       title = title,
       subtitle = subtitle,
       body =
-        s"""<article>
-           |  <h2>Runtime</h2>
-           |  <div class="table-responsive"><table class="table table-sm">
-           |    <tbody>
-           |      <tr><th>CNCF version</th><td>${_escape(CncfVersion.current)}</td></tr>
-           |      <tr><th>Subsystem</th><td>${_escape(subsystemName)}</td></tr>
-           |      <tr><th>Subsystem version</th><td>${_escape(subsystemVersion.getOrElse("unversioned"))}</td></tr>
-           |      <tr><th>Components</th><td>${components.size}</td></tr>
-           |    </tbody>
-           |  </table></div>
-           |</article>
+        s"""${runtimeCard}
            |${_admin_nav_card(Vector(
              "Dashboard" -> dashboardPath,
              "Performance details" -> performancePath,
@@ -6579,10 +6616,7 @@ object StaticFormAppRenderer {
            |${componentInventory}
            |${_admin_operational_details(operationalDetails)}
            |${_component_admin_actions(componentFormsPath)}
-           |<article>
-           |  <h2>Web Descriptor</h2>
-           |  ${_web_descriptor_summary(webDescriptor, descriptorPath)}
-           |</article>
+           |${_admin_card("Web Descriptor", _web_descriptor_summary(webDescriptor, descriptorPath))}
            |${_admin_runtime_configuration(runtimeConfiguration)}
            |${_admin_job_control(runtimeConfiguration)}
            |${componentBlocks}""".stripMargin
@@ -6593,39 +6627,37 @@ object StaticFormAppRenderer {
     configuration: Option[ResolvedConfiguration]
   ): String =
     configuration.map { _ =>
-      """<article>
-        |  <h2>Job Control</h2>
-        |  <p>Job control entry points are reserved for system admin operations. Use builtin job and event surfaces as the authoritative source for cross-component continuation observability.</p>
-        |  <div class="card mb-3"><div class="card-body">
-        |    <h3 class="h5">Operator Checklist</h3>
-        |    <ul class="mb-0">
-        |      <li>Use <code>job_control.job.get_job_status</code> for source/target component, reception policy, task relation, transaction relation, and task summary.</li>
-        |      <li>Use <code>job_control.job.load_job_history</code> for per-task execution timeline.</li>
-        |      <li>Use <code>event.event.load_event</code> for dispatch contract, policy source, and unsupported-policy rejection evidence.</li>
-        |      <li>Use <code>job_control.job_admin.load_job_events</code> for job-to-event cross-links.</li>
-        |    </ul>
-        |  </div></div>
-        |  <ul>
-        |    <li><a href="/web/system/admin/jobs">Debug jobs</a></li>
-        |    <li><a href="/form/admin/execution/diagnostics">Execution diagnostics</a></li>
-        |    <li><a href="/form/admin/execution/history">Execution history</a></li>
-        |    <li><a href="/form/admin/execution/calltree">Latest calltree</a></li>
-        |  </ul>
-        |  <p>Mutation actions must require explicit admin authorization, confirmation for destructive actions, and audit logging before they are enabled.</p>
-        |</article>""".stripMargin
+      _admin_card(
+        "Job Control",
+        s"""<p>Job control entry points are reserved for system admin operations. Use builtin job and event surfaces as the authoritative source for cross-component continuation observability.</p>
+           |<h3 class="h6 mt-3">Operator Checklist</h3>
+           |<div class="list-group mb-3">
+           |  <div class="list-group-item">Use <code>job_control.job.get_job_status</code> for source/target component, reception policy, task relation, transaction relation, and task summary.</div>
+           |  <div class="list-group-item">Use <code>job_control.job.load_job_history</code> for per-task execution timeline.</div>
+           |  <div class="list-group-item">Use <code>event.event.load_event</code> for dispatch contract, policy source, and unsupported-policy rejection evidence.</div>
+           |  <div class="list-group-item">Use <code>job_control.job_admin.load_job_events</code> for job-to-event cross-links.</div>
+           |</div>
+           |${_admin_link_list_group(Vector(
+             "Debug jobs" -> "/web/system/admin/jobs",
+             "Execution diagnostics" -> "/form/admin/execution/diagnostics",
+             "Execution history" -> "/form/admin/execution/history",
+             "Latest calltree" -> "/form/admin/execution/calltree"
+           ))}
+           |<p class="mt-3 mb-0">Mutation actions must require explicit admin authorization, confirmation for destructive actions, and audit logging before they are enabled.</p>""".stripMargin
+      )
     }.getOrElse("")
 
   private def _admin_runtime_configuration(
     configuration: Option[ResolvedConfiguration]
   ): String =
     configuration.map { config =>
-      s"""<article>
-         |  <h2>Runtime Configuration</h2>
-         |  <p>Resolved runtime configuration values are read-only. Sensitive values are masked.</p>
-         |  <p>Configuration mutation must use a separate admin action surface with explicit admin authorization and audit logging.</p>
-         |  ${_effective_runtime_configuration_table(config)}
-         |  ${_runtime_configuration_table(config)}
-         |</article>""".stripMargin
+      _admin_card(
+        "Runtime Configuration",
+        s"""<p>Resolved runtime configuration values are read-only. Sensitive values are masked.</p>
+           |<p>Configuration mutation must use a separate admin action surface with explicit admin authorization and audit logging.</p>
+           |${_effective_runtime_configuration_table(config)}
+           |${_runtime_configuration_table(config)}""".stripMargin
+      )
     }.getOrElse("")
 
   private def _effective_runtime_configuration_table(
@@ -6699,24 +6731,27 @@ object StaticFormAppRenderer {
     html: Option[String]
   ): String =
     html.map { body =>
-      s"""<article>
-         |  <h2>Operational Details</h2>
-         |  ${body}
-         |</article>""".stripMargin
+      _admin_card("Operational Details", body)
     }.getOrElse("")
 
   private def _system_admin_operational_details: String =
     """<div class="row g-3">
       |  <div class="col-12 col-lg-6">
-      |    <section>
-      |      <h3>Assembly</h3>
-      |      <p><a href="/web/system/admin/assembly/warnings">Assembly warnings</a> · <a href="/web/system/admin/assembly/report">Assembly report</a></p>
+      |    <section class="h-100">
+      |      <h3 class="h6">Assembly</h3>
+      |      <div class="list-group">
+      |        <a class="list-group-item list-group-item-action" href="/web/system/admin/assembly/warnings">Assembly warnings</a>
+      |        <a class="list-group-item list-group-item-action" href="/web/system/admin/assembly/report">Assembly report</a>
+      |      </div>
       |    </section>
       |  </div>
       |  <div class="col-12 col-lg-6">
-      |    <section>
-      |      <h3>Execution</h3>
-      |      <p><a href="/form/admin/execution/history">Execution history</a> · <a href="/form/admin/execution/calltree">Latest calltree</a></p>
+      |    <section class="h-100">
+      |      <h3 class="h6">Execution</h3>
+      |      <div class="list-group">
+      |        <a class="list-group-item list-group-item-action" href="/form/admin/execution/history">Execution history</a>
+      |        <a class="list-group-item list-group-item-action" href="/form/admin/execution/calltree">Latest calltree</a>
+      |      </div>
       |    </section>
       |  </div>
       |</div>""".stripMargin
@@ -6764,18 +6799,18 @@ object StaticFormAppRenderer {
   ): String =
     formsPath.map { path =>
       val componentPath = path.stripPrefix("/form/")
-      s"""<article>
-         |  <h2>Management Console Home</h2>
+      s"""<section class="admin-section">
+         |  <h2 class="h5">Management Console Home</h2>
          |  <p>Use the cards below for ordinary management work. Operation selectors and protocol paths stay available as technical reference only.</p>
          |  ${_component_admin_management_cards(componentPath, path)}
          |  <details class="mt-3">
          |    <summary>Technical details</summary>
          |    <div class="mt-3">
-         |      <p><a href="${_escape(path)}">Operation forms</a></p>
+         |      ${_admin_action_row(Vector("Operation forms" -> path), primary = false)}
          |      ${_component_admin_management_links(path)}
          |    </div>
          |  </details>
-         |</article>""".stripMargin
+         |</section>""".stripMargin
     }.getOrElse("")
 
   private def _component_admin_management_cards(
@@ -6796,14 +6831,14 @@ object StaticFormAppRenderer {
     formsPath: String
   ): String = {
     val componentPath = formsPath.stripPrefix("/form/")
-    s"""<h3>Managed Data</h3>
-       |<ul>
-       |  <li><a href="/web/${_escape(componentPath)}/admin/entities">Entity CRUD</a></li>
-       |  <li><a href="/web/${_escape(componentPath)}/admin/data">Data CRUD</a></li>
-       |  <li><a href="/web/${_escape(componentPath)}/admin/aggregates">Aggregate CRUD</a></li>
-       |  <li><a href="/web/${_escape(componentPath)}/admin/views">View read</a></li>
-       |  <li><a href="/web/admin/tags">Tags</a></li>
-       |</ul>""".stripMargin
+    s"""<h3 class="h6">Managed Data</h3>
+       |${_admin_link_list_group(Vector(
+         "Entity CRUD" -> s"/web/${componentPath}/admin/entities",
+         "Data CRUD" -> s"/web/${componentPath}/admin/data",
+         "Aggregate CRUD" -> s"/web/${componentPath}/admin/aggregates",
+         "View read" -> s"/web/${componentPath}/admin/views",
+         "Tags" -> "/web/admin/tags"
+       ))}""".stripMargin
   }
 
   private def _web_descriptor_summary(
@@ -6822,7 +6857,7 @@ object StaticFormAppRenderer {
        |    <tr><th>Admin entries</th><td>${descriptor.admin.size}</td></tr>
        |  </tbody>
        |</table></div>
-       |<p><a href="${_escape(descriptorPath)}">Completed descriptor JSON</a></p>
+       |${_admin_action_row(Vector("Completed descriptor JSON" -> descriptorPath), primary = false)}
        |${_web_descriptor_app_list(descriptor)}
        |${_web_descriptor_route_list(descriptor)}
        |${_web_descriptor_exposure_list(descriptor)}
@@ -7406,14 +7441,14 @@ object StaticFormAppRenderer {
          |  <td><a href="/form/${componentPath}">Forms</a></td>
          |</tr>""".stripMargin
     }.mkString("\n")
-    s"""<article>
-       |  <h2>Component Management Console</h2>
-       |  <p>Use component admin pages for ordinary entity/data/view/aggregate work. System admin stays read-only.</p>
-       |  <div class="table-responsive"><table class="table table-sm table-hover align-middle">
-       |    <thead><tr><th>Component</th><th>Admin</th><th>Descriptor</th><th>Forms</th></tr></thead>
-       |    <tbody>${rows}</tbody>
-       |  </table></div>
-       |</article>""".stripMargin
+    _admin_card(
+      "Component Management Console",
+      s"""<p>Use component admin pages for ordinary entity/data/view/aggregate work. System admin stays read-only.</p>
+         |${_admin_table(
+           Some("<tr><th>Component</th><th>Admin</th><th>Descriptor</th><th>Forms</th></tr>"),
+           rows
+         )}""".stripMargin
+    )
   }
 
   private def _admin_surface_relative_path(
@@ -8636,11 +8671,11 @@ object StaticFormAppRenderer {
         subtitle = subtitle,
         body = body,
         extraHead =
-          """|    article { background: #ffffff; border: 1px solid #d9dee5; border-radius: 8px; padding: 20px; }
-             |    h2 { margin: 0 0 14px; font-size: 20px; }
-             |    h3 { margin: 16px 0 8px; font-size: 16px; }
-             |    p { margin: 0; color: #4d5662; }
-             |    li { margin: 6px 0; }
+          """|    .admin-card, .manual-card, .textus-card { margin-bottom: 1rem; }
+             |    .admin-section { margin-bottom: 1rem; }
+             |    .admin-section > h2 { margin-bottom: .75rem; }
+             |    .admin-action-row { margin-top: 1rem; }
+             |    .admin-empty-state { color: var(--bs-secondary-color); }
              |""".stripMargin
       )),
       assetCompletion
@@ -9947,16 +9982,32 @@ object StaticFormAppRenderer {
   }
 
   private def _component_reference_list(components: Vector[Component]): String =
-    components.map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
-      s"""<p><strong>${_escape(component.name)}</strong> · <a href="/web/${componentPath}/dashboard">Dashboard</a> · <a href="/web/${componentPath}/admin">Admin</a> · <a href="/form/${componentPath}">Forms</a></p>"""
-    }.mkString("\n")
+    s"""<div class="list-group">
+       |${components.map { component =>
+         val componentPath = NamingConventions.toNormalizedSegment(component.name)
+         s"""  <div class="list-group-item">
+            |    <div class="d-flex flex-wrap justify-content-between gap-2 align-items-center">
+            |      <strong>${_escape(component.name)}</strong>
+            |      ${_admin_action_row(Vector(
+              "Dashboard" -> s"/web/${componentPath}/dashboard",
+              "Admin" -> s"/web/${componentPath}/admin",
+              "Forms" -> s"/form/${componentPath}"
+            ), primary = false)}
+            |    </div>
+            |  </div>""".stripMargin
+       }.mkString("\n")}
+       |</div>""".stripMargin
 
   private def _component_form_list(components: Vector[Component]): String =
-    components.map { component =>
-      val componentPath = NamingConventions.toNormalizedSegment(component.name)
-      s"""<p><strong>${_escape(component.name)}</strong> · <a href="/form/${componentPath}">Operation forms</a></p>"""
-    }.mkString("\n")
+    s"""<div class="list-group">
+       |${components.map { component =>
+         val componentPath = NamingConventions.toNormalizedSegment(component.name)
+         s"""  <a class="list-group-item list-group-item-action d-flex flex-wrap justify-content-between gap-2 align-items-center" href="/form/${componentPath}">
+            |    <strong>${_escape(component.name)}</strong>
+            |    <span class="badge text-bg-secondary">Operation forms</span>
+            |  </a>""".stripMargin
+       }.mkString("\n")}
+       |</div>""".stripMargin
 
   private def _job_metrics(subsystem: Subsystem): (Int, Int, Int, Int) =
     subsystem.jobEngine.metrics.map(x => (x.running, x.queued, x.completed, x.failed)).getOrElse((0, 0, 0, 0))
