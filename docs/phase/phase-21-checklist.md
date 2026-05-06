@@ -100,7 +100,7 @@ Consolidate common CNCF Web rendering patterns around Bootstrap 5 primitives.
 
 ## WN-03: Expand Textus Widget Card/List/Feedback Surfaces
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -108,23 +108,35 @@ Add or harden reusable Textus widgets for common Static Form UI surfaces.
 
 ### Detailed Tasks
 
-- [ ] Implement/harden card, record-card, card-list, summary-card, feedback,
+- [x] Implement/harden card, record-card, card-list, summary-card, feedback,
       empty-state, and navigation/list widgets.
-- [ ] Reuse existing source/view/property binding and schema field ordering.
-- [ ] Ensure widgets render Bootstrap 5 classes and work in fragment and full
+- [x] Reuse existing source/view/property binding and schema field ordering.
+- [x] Ensure widgets render Bootstrap 5 classes and work in fragment and full
       document templates.
-- [ ] Keep existing widget aliases and compatibility behavior.
+- [x] Keep existing widget aliases and compatibility behavior.
 
 ### Expected Output
 
 - Static Form templates can express common result/detail/list pages without
   hand-written repetitive Bootstrap markup.
 
+### Completion Notes
+
+- `textus:card-list` supports responsive `cols`, `md`, and `lg` layout
+  attributes while preserving paging and view-column behavior.
+- `textus:empty-state` can render a primary action with `action-label` and
+  `action-href`.
+- `textus:nav-list` supports JSON source arrays with `label`, `href`,
+  optional `class`, and optional `method`; non-GET entries render forms.
+- Focused `StaticFormAppRendererSpec` covers WN-03 widget aliases, Bootstrap
+  output, hidden-field filtering, empty states, action rendering, and full HTML
+  asset completion.
+
 ---
 
 ## WN-04: Reusable Dialog-Style Action Surfaces
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 

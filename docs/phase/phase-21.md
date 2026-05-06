@@ -53,22 +53,22 @@ Final semantic direction:
 
 - A (DONE): WN-01 — Open Phase 21 and freeze Static Form UI scope.
 - B (DONE): WN-02 — Normalize Bootstrap 5 page primitives.
-- C (ACTIVE): WN-03 — Expand Textus widget card/list/feedback surfaces.
-- D (TODO): WN-04 — Add reusable dialog-style action surfaces.
+- C (DONE): WN-03 — Expand Textus widget card/list/feedback surfaces.
+- D (ACTIVE): WN-04 — Add reusable dialog-style action surfaces.
 - E (TODO): WN-05 — Apply UI primitives to CNCF admin/runtime pages.
 - F (TODO): WN-06 — Apply selected improvements to `textus-blog`.
 - G (TODO): WN-07 — Verification, documentation, and phase closure.
 
 Resume hint:
 
-- Continue with WN-03 Textus widget card/list/feedback expansion. Keep WN-02
-  Bootstrap page primitive cleanup as the baseline for renderer-owned pages.
+- Continue with WN-04 reusable dialog-style action surfaces. Use the WN-02
+  Bootstrap primitive baseline and WN-03 widget family as the rendering base.
 
 ## 5. Development Items
 
 - [x] WN-01: Open Phase 21 and freeze Static Form UI scope.
 - [x] WN-02: Normalize Bootstrap 5 page primitives.
-- [ ] WN-03: Expand Textus widget card/list/feedback surfaces.
+- [x] WN-03: Expand Textus widget card/list/feedback surfaces.
 - [ ] WN-04: Add reusable dialog-style action surfaces.
 - [ ] WN-05: Apply UI primitives to CNCF admin/runtime pages.
 - [ ] WN-06: Apply selected improvements to `textus-blog`.

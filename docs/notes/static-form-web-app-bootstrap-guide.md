@@ -269,8 +269,10 @@ expresses the required shape:
 - `textus:error-panel` for error projection.
 - `textus:action-group` for related actions.
 - `textus:nav-list` for simple navigation.
-- `textus:card` / card-list style widgets for repeated summaries when
-  available.
+- `textus:card`, `textus:record-card`, and `textus:card-list` for repeated
+  summaries and detail cards.
+- `textus:summary-card`, `textus:alert`, `textus:empty-state`, and
+  `textus:status-badge` for metric, status, warning, and empty states.
 
 Widgets must render ordinary Bootstrap-compatible HTML. If a widget cannot
 produce the expected Bootstrap structure, improve the shared widget rather than

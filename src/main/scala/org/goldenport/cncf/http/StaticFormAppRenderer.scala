@@ -9130,11 +9130,33 @@ object StaticFormAppRenderer {
         val body = objects.map { obj =>
           s"""<div class="col">${_record_card_html(obj, columns, attrs)}</div>"""
         }.mkString("\n")
-        s"""<div class="row row-cols-1 row-cols-md-2 g-3 mt-3">${body}</div>"""
+        s"""<div class="${_card_list_row_class(attrs)}">${body}</div>"""
       }
     }.getOrElse(_empty_state(attrs.getOrElse("empty", "No records")))
     s"""${cards}<div class="mt-3">${_render_pagination(attrs, properties)}</div>"""
   }
+
+  private def _card_list_row_class(
+    attrs: Map[String, String]
+  ): String = {
+    val cols = _bootstrap_col_count(attrs.get("cols"), 1)
+    val md = _bootstrap_col_count(attrs.get("md"), 2)
+    val lg = attrs.get("lg").flatMap(_bootstrap_col_count_option)
+    (Vector("row", s"row-cols-${cols}", s"row-cols-md-${md}") ++
+      lg.map(x => s"row-cols-lg-${x}") ++
+      Vector("g-3", "mt-3")).mkString(" ")
+  }
+
+  private def _bootstrap_col_count(
+    value: Option[String],
+    default: Int
+  ): Int =
+    value.flatMap(_bootstrap_col_count_option).getOrElse(default)
+
+  private def _bootstrap_col_count_option(
+    value: String
+  ): Option[Int] =
+    scala.util.Try(value.trim.toInt).toOption.filter(x => x >= 1 && x <= 6)
 
   private def _record_json(json: Json): Option[Json] =
     json.asObject.map(_ => json).orElse {
@@ -9233,7 +9255,17 @@ object StaticFormAppRenderer {
   private def _empty_state(
     message: String
   ): String =
-    s"""<div class="alert alert-secondary textus-empty-state" role="status">${_escape(message)}</div>"""
+    _empty_state(message, None)
+
+  private def _empty_state(
+    message: String,
+    action: Option[(String, String)]
+  ): String = {
+    val actionHtml = action.map { case (label, href) =>
+      s"""<div class="mt-2"><a class="btn btn-sm btn-primary" href="${_escape(href)}">${_escape(label)}</a></div>"""
+    }.getOrElse("")
+    s"""<div class="alert alert-secondary textus-empty-state" role="status">${_escape(message)}${actionHtml}</div>"""
+  }
 
   private def _render_summary_card(
     attrs: Map[String, String],
@@ -9389,7 +9421,11 @@ object StaticFormAppRenderer {
     }
     if (shouldRender) {
       val message = _attr_value(attrs, "message", properties).getOrElse("No records")
-      _empty_state(message)
+      val action = for {
+        label <- _attr_value(attrs, "action-label", properties)
+        href <- _attr_value(attrs, "action-href", properties)
+      } yield label -> href
+      _empty_state(message, action)
     } else {
       ""
     }
@@ -9442,7 +9478,8 @@ object StaticFormAppRenderer {
       case "secondary" => "secondary"
       case "light" => "light"
       case "dark" => "dark"
-      case _ => "info"
+      case "info" => "info"
+      case _ => "secondary"
     }
 
   private def _status_variant(
@@ -9478,19 +9515,28 @@ object StaticFormAppRenderer {
     properties: FormPageProperties
   ): String = {
     val style = attrs.getOrElse("style", "buttons").trim.toLowerCase(java.util.Locale.ROOT)
-    val items = attrs.get("items").toVector.flatMap(_.split("\\|").toVector).flatMap(_nav_item(_, properties))
+    val items =
+      attrs.get("items").toVector.flatMap(_.split("\\|").toVector).flatMap(_nav_item(_, properties)) ++
+        attrs.get("source").toVector.flatMap(source => _source_json(source, properties).toVector.flatMap(_nav_items_from_json(_, properties)))
     if (items.isEmpty)
       ""
     else if (style == "list")
-      s"""<nav class="textus-nav-list"><div class="list-group">${items.map { case (label, href, css) => s"""<a class="list-group-item list-group-item-action ${_escape(css)}" href="${_escape(href)}">${_escape(label)}</a>""" }.mkString}</div></nav>"""
+      s"""<nav class="textus-nav-list"><div class="list-group">${items.map(_nav_item_html(_, listStyle = true, properties)).mkString}</div></nav>"""
     else
-      s"""<nav class="d-flex flex-wrap gap-2 mt-3 textus-nav-list">${items.map { case (label, href, css) => s"""<a class="${_escape(css)}" href="${_escape(href)}">${_escape(label)}</a>""" }.mkString}</nav>"""
+      s"""<nav class="d-flex flex-wrap gap-2 mt-3 textus-nav-list">${items.map(_nav_item_html(_, listStyle = false, properties)).mkString}</nav>"""
   }
+
+  private final case class NavListItem(
+    label: String,
+    href: String,
+    css: String,
+    method: String = "GET"
+  )
 
   private def _nav_item(
     text: String,
     properties: FormPageProperties
-  ): Option[(String, String, String)] = {
+  ): Option[NavListItem] = {
     val index = text.indexOf(':')
     if (index < 0)
       None
@@ -9503,7 +9549,51 @@ object StaticFormAppRenderer {
           rest.take(last).trim -> rest.drop(last + 1).trim
         else
           rest -> "btn btn-outline-secondary"
-      Some((_resolve_attr_value(label, properties), _resolve_attr_value(href, properties), css))
+      Some(NavListItem(_resolve_attr_value(label, properties), _resolve_attr_value(href, properties), css))
+    }
+  }
+
+  private def _nav_items_from_json(
+    json: Json,
+    properties: FormPageProperties
+  ): Vector[NavListItem] =
+    json.asArray.getOrElse(Vector.empty).flatMap(_.asObject).flatMap { obj =>
+      val values = obj.toMap
+      for {
+        label <- values.get("label").map(_json_cell).filter(_.nonEmpty)
+        href <- values.get("href").map(_json_cell).filter(_.nonEmpty)
+      } yield {
+        val css = values.get("class").map(_json_cell).filter(_.nonEmpty).getOrElse("btn btn-outline-secondary")
+        val method = values.get("method").map(_json_cell).filter(_.nonEmpty).getOrElse("GET")
+        NavListItem(
+          _resolve_attr_value(label, properties),
+          _resolve_attr_value(href, properties),
+          css,
+          method
+        )
+      }
+    }
+
+  private def _nav_item_html(
+    item: NavListItem,
+    listStyle: Boolean,
+    properties: FormPageProperties
+  ): String = {
+    val method = item.method.trim.toUpperCase(java.util.Locale.ROOT)
+    if (method == "GET") {
+      val css =
+        if (listStyle)
+          s"list-group-item list-group-item-action ${item.css}"
+        else
+          item.css
+      s"""<a class="${_escape(css)}" href="${_escape(item.href)}">${_escape(item.label)}</a>"""
+    } else {
+      val css =
+        if (listStyle)
+          s"list-group-item list-group-item-action ${item.css}"
+        else
+          item.css
+      _action_form_html(method, item.href, css, item.label, _render_hidden_context(Map.empty, properties))
     }
   }
 

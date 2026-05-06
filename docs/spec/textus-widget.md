@@ -11,9 +11,9 @@ template programming language.
 
 ## Status
 
-This spec defines the widget contract and early widget vocabulary. Existing
-implemented widgets are normative compatibility requirements. Card, layout,
-navigation, and feedback widgets are the next expansion surface.
+This spec defines the widget contract and implemented widget vocabulary.
+Implemented widgets are normative compatibility requirements. Dialog-style
+action surfaces and broader layout widgets remain later expansion work.
 
 ## Notation
 
@@ -640,6 +640,8 @@ Implemented baseline attributes:
 - `columns`: comma-separated fallback column list.
 - `page`, `page-size`, `total`, `href`, `has-next`: same metadata attributes
   as `textus:pagination`.
+- `cols`, `md`, `lg`: optional Bootstrap responsive card column counts. The
+  default is equivalent to `cols="1" md="2"`.
 - `title`, `subtitle`: forwarded to each record card.
 - `detail-href`, `detail-label`: forwarded to each record card so list results
   can provide detail navigation without hand-written table/card markup.
@@ -740,6 +742,10 @@ Implemented baseline attributes:
   `:class` segment is treated as a CSS class only when it looks like a
   Bootstrap/Textus class.
 - `style`: `buttons` by default. `list` renders Bootstrap list-group links.
+- `source`: optional JSON array source. Each entry should provide `label` and
+  `href`, and may provide `class` and `method`. `GET` entries render links;
+  non-`GET` entries render forms using the same action rendering convention as
+  `textus:action-link`.
 
 Widget attributes support both double-quoted and single-quoted values. This is
 important for static HTML fragments where a value itself contains a URL or
@@ -800,6 +806,8 @@ Implemented baseline attributes:
 - `source`: optional collection source. If the source resolves to a non-empty
   collection, nothing is rendered.
 - `message`: literal message, property name, or `${property.name}` reference.
+- `action-label` and `action-href`: optional primary action. The action is
+  rendered only when both are present.
 
 ### `textus:status-badge` / `textus-status-badge`
 
