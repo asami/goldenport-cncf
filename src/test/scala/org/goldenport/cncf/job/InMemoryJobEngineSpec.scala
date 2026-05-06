@@ -4,12 +4,17 @@ import java.time.{Duration, Instant}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
+import cats.~>
 import org.goldenport.Consequence
 import org.goldenport.protocol.Request
 import org.goldenport.protocol.Response
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, CommandAction, ResourceAccess}
-import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.context.{DataStoreContext, EntityStoreContext, ExecutionContext, RuntimeContext}
+import org.goldenport.cncf.datastore.DataStoreSpace
+import org.goldenport.cncf.entity.{EntityStore, EntityStoreSpace}
+import org.goldenport.cncf.http.FakeHttpDriver
+import org.goldenport.cncf.unitofwork.{UnitOfWork, UnitOfWorkOp}
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
@@ -17,7 +22,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Jan.  4, 2026
  *  version Apr. 22, 2026
- * @version May.  4, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen with JobEngineTestFixture {
@@ -53,6 +58,47 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
         case JobResult.Failure(c) =>
           fail(c.toString)
       }
+      jobEngine.shutdown()
+    }
+
+    "synchronize persistent jobs to the Job SimpleEntity management record" in {
+      import JobEntity.given
+
+      val jobEngine = createJobEngine()
+      given ExecutionContext = ExecutionContext.test()
+      val jobid = _jobid(jobEngine.submit(List(_ValueTask("managed")), summon[ExecutionContext], JobSubmitOption(runMode = JobRunMode.Sync)))
+
+      val entity = EntityStore.standard().load[JobEntity](JobEntity.entityId(jobid)).toOption.flatten
+
+      entity.flatMap(_.record.getString("jobId")) shouldBe Some(jobid.value)
+      entity.flatMap(_.record.getString("status")) shouldBe Some("Succeeded")
+      entity.flatMap(_.record.getString("resultMessage")) shouldBe Some("ok")
+      jobEngine.shutdown()
+    }
+
+    "skip Job SimpleEntity management records for ephemeral runtime jobs" in {
+      import JobEntity.given
+
+      val jobEngine = createJobEngine()
+      given ExecutionContext = ExecutionContext.test()
+      val jobid = _jobid(jobEngine.submit(
+        List(_ValueTask("ephemeral")),
+        summon[ExecutionContext],
+        JobSubmitOption(persistence = JobPersistencePolicy.Ephemeral, runMode = JobRunMode.Sync)
+      ))
+
+      EntityStore.standard().load[JobEntity](JobEntity.entityId(jobid)).toOption.flatten shouldBe None
+      jobEngine.shutdown()
+    }
+
+    "record diagnostics when Job SimpleEntity synchronization fails" in {
+      val jobEngine = createJobEngine()
+      val ctx = _context_without_job_entity_datastore()
+      val jobid = _jobid(jobEngine.submit(List(_ValueTask("diagnostic")), ctx, JobSubmitOption(runMode = JobRunMode.Sync)))
+      val model = jobEngine.query(jobid).getOrElse(fail("job read model is missing"))
+
+      model.debug.parameters.get("cncf.job.entitySync") shouldBe Some("failed")
+      model.debug.executionNotes.exists(_.startsWith("job-entity-sync-failed:")) shouldBe true
       jobEngine.shutdown()
     }
 
@@ -349,6 +395,31 @@ class InMemoryJobEngineSpec extends AnyWordSpec with Matchers with GivenWhenThen
       release.await(2, TimeUnit.SECONDS)
       TaskSucceeded(OperationResponse.Scalar(value))
     }
+  }
+
+  private def _context_without_job_entity_datastore(): ExecutionContext = {
+    val base = ExecutionContext.test()
+    lazy val ctx: ExecutionContext = ExecutionContext.withRuntimeContext(base, runtime)
+    lazy val runtime: RuntimeContext = new RuntimeContext(
+      core = RuntimeContext.core(
+        name = "job-entity-sync-failure-test",
+        parent = None,
+        observabilityContext = base.observability,
+        httpDriverOption = Some(FakeHttpDriver.okText("nop")),
+        datastore = Some(DataStoreContext(new DataStoreSpace())),
+        entitystore = Some(EntityStoreContext(new EntityStoreSpace()))
+      ),
+      unitOfWorkSupplier = () => new UnitOfWork(ctx),
+      unitOfWorkInterpreterFn = new (UnitOfWorkOp ~> Consequence) {
+        def apply[A](fa: UnitOfWorkOp[A]): Consequence[A] =
+          Consequence.failure("unitOfWorkInterpreter is not used in this fixture")
+      },
+      commitAction = uow => { val _ = uow.commit(); () },
+      abortAction = uow => { val _ = uow.rollback(); () },
+      disposeAction = _ => (),
+      token = "job-entity-sync-failure-test"
+    )
+    ctx
   }
 
   private final case class _ConcurrencyTask(

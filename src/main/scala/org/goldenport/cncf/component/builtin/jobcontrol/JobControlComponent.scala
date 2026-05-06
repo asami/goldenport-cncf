@@ -3,9 +3,10 @@ package org.goldenport.cncf.component.builtin.jobcontrol
 import cats.data.NonEmptyVector
 import org.goldenport.Consequence
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, CommandAction, ProcedureActionCall, QueryAction}
-import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentId, ComponentInstanceId}
+import org.goldenport.cncf.component.{Component, ComponentCreate, ComponentDescriptor, ComponentId, ComponentInstanceId}
+import org.goldenport.cncf.entity.runtime.{EntityKind, EntityMemoryPolicy, EntityRuntimeDescriptor, PartitionStrategy, WorkingSetPolicy, WorkingSetPolicySource}
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobBatchDefinition, JobBatchSubmissionResult, JobControlCommand, JobControlRequest, JobDefinition, JobFailureHook, JobId, JobPersistencePolicy, JobResult, JobSubmitOption}
-import org.goldenport.cncf.job.{JobQueryReadModel, JobTimelinePage}
+import org.goldenport.cncf.job.{JobEntityCollections, JobQueryReadModel, JobTimelinePage}
 import org.goldenport.cncf.event.ReceptionDomainEvent
 import org.goldenport.cncf.subsystem.resolver.OperationResolver
 import org.goldenport.cncf.event.EventStore
@@ -22,10 +23,13 @@ import org.goldenport.value.BaseContent
 /*
  * @since   Mar. 28, 2026
  *  version Mar. 29, 2026
- * @version Apr. 22, 2026
+ *  version Apr. 22, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponent() extends Component {
+  override def componentDescriptors: Vector[ComponentDescriptor] =
+    super.componentDescriptors ++ JobControlComponent.componentDescriptors
 }
 
 object JobControlComponent {
@@ -49,6 +53,25 @@ object JobControlComponent {
 
   val name: String = "job_control"
   val componentId: ComponentId = ComponentId(name)
+
+  def componentDescriptors: Vector[ComponentDescriptor] =
+    Vector(ComponentDescriptor(
+      componentName = Some(name),
+      entityRuntimeDescriptors = Vector(
+        EntityRuntimeDescriptor(
+          entityName = "job",
+          collectionId = JobEntityCollections.Job,
+          memoryPolicy = EntityMemoryPolicy.StoreOnly,
+          partitionStrategy = PartitionStrategy.byOrganizationMonthUTC,
+          maxPartitions = 12,
+          maxEntitiesPerPartition = 10000,
+          entityKind = EntityKind.Workflow,
+          entityKindExplicit = true,
+          workingSetPolicy = Some(WorkingSetPolicy.Disabled),
+          workingSetPolicySource = Some(WorkingSetPolicySource.Code)
+        )
+      )
+    ))
 
   object Factory extends Component.SinglePrimaryBundleFactory {
     protected def create_Component(params: ComponentCreate): Component =

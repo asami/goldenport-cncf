@@ -4,6 +4,7 @@ import java.time.Instant
 import org.goldenport.Consequence
 import org.goldenport.Conclusion
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.entity.runtime.{EntityKind, WorkingSetPolicy}
 import org.goldenport.cncf.job.{ActionId, ActionTask, JobEngineTestFixture, JobPersistencePolicy, JobSubmitOption, JobTask, TaskOutcome, TaskSucceeded, TaskFailed}
 import org.goldenport.cncf.testutil.SubsystemTestFixture
 import org.goldenport.provisional.conclusion.Disposition
@@ -14,11 +15,20 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Apr. 21, 2026
  *  version Apr. 22, 2026
- * @version May.  4, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlComponentSpec extends AnyWordSpec with Matchers with JobEngineTestFixture {
   "JobControlComponent" should {
+    "expose Job as a workflow SimpleEntity management descriptor" in {
+      val descriptors = JobControlComponent.componentDescriptors.flatMap(_.entityRuntimeDescriptors)
+      val job = descriptors.find(_.entityName == "job").get
+
+      job.entityKind shouldBe EntityKind.Workflow
+      job.workingSetPolicy shouldBe Some(WorkingSetPolicy.Disabled)
+      job.collectionId.name shouldBe "job"
+    }
+
     "expose event-triggered lineage and policy source on job inspection surfaces" in {
       SubsystemTestFixture.withSubsystem(SubsystemTestFixture.Startup.Default(Some("command"))) { subsystem =>
         val admin = subsystem.components.find(_.name == "admin").get

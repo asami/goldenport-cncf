@@ -16,13 +16,14 @@ import org.goldenport.record.io.RecordEncoder
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, QueryAction}
 import org.goldenport.cncf.component.{Component, ComponentLogic}
 import org.goldenport.cncf.context.ExecutionContext
+import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.cncf.event.{EventId, EventLane, EventRecord, EventStore}
 import org.goldenport.cncf.observability.ObservabilityEngine
 
 /*
  * @since   Jan.  4, 2026
  *  version Mar. 30, 2026
- * @version May.  4, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final case class JobId(
@@ -679,29 +680,7 @@ final class InMemoryJobEngine(
     }
 
   def query(jobId: JobId): Option[JobQueryReadModel] =
-    _get_record(jobId).map { record =>
-      val tasks = _task_page(record, 0, math.max(record.taskReadModels.size, 1))
-      val timeline = _timeline_page(record, 0, math.max(record.timeline.size, 1))
-      JobQueryReadModel(
-        jobId = record.id,
-        status = record.status,
-        persistence = record.persistence,
-        origin = _origin(record),
-        submitter = JobSubmitter.from(record.submittedContext),
-        createdAt = record.createdAt,
-        updatedAt = record.updatedAt,
-        scheduledStartAt = record.scheduledStartAt,
-        tasks = tasks,
-        timeline = timeline,
-        traceTree = _trace_tree(record),
-        debug = record.debug,
-        lineage = _event_lineage(record),
-        retry = record.retry,
-        resultSummary = _result_summary(record),
-        calltree = record.debug.calltree,
-        result = record.result.collect { case JobResult.Success(res) => res }
-      )
-    }
+    _get_record(jobId).map(_read_model)
 
   override def listJobs(
     limit: Int = 100,
@@ -715,7 +694,7 @@ final class InMemoryJobEngine(
       .sortBy(_.updatedAt)
       .reverse
       .take(math.max(0, limit))
-      .flatMap(record => query(record.id))
+      .map(_read_model)
   }
 
   def queryTasks(jobId: JobId, offset: Int = 0, limit: Int = 100): Option[JobTaskPage] =
@@ -1623,6 +1602,30 @@ final class InMemoryJobEngine(
       case JobPersistencePolicy.Ephemeral => JobDataOrigin.Runtime
     }
 
+  private def _read_model(record: JobRecord): JobQueryReadModel = {
+    val tasks = _task_page(record, 0, math.max(record.taskReadModels.size, 1))
+    val timeline = _timeline_page(record, 0, math.max(record.timeline.size, 1))
+    JobQueryReadModel(
+      jobId = record.id,
+      status = record.status,
+      persistence = record.persistence,
+      origin = _origin(record),
+      submitter = JobSubmitter.from(record.submittedContext),
+      createdAt = record.createdAt,
+      updatedAt = record.updatedAt,
+      scheduledStartAt = record.scheduledStartAt,
+      tasks = tasks,
+      timeline = timeline,
+      traceTree = _trace_tree(record),
+      debug = record.debug,
+      lineage = _event_lineage(record),
+      retry = record.retry,
+      resultSummary = _result_summary(record),
+      calltree = record.debug.calltree,
+      result = record.result.collect { case JobResult.Success(res) => res }
+    )
+  }
+
   private def _update_record_(
     jobid: JobId,
     status: JobStatus,
@@ -1641,13 +1644,45 @@ final class InMemoryJobEngine(
       _put_record(f(current))
     }
 
-  private def _put_record(record: JobRecord): Unit =
+  private def _put_record(record: JobRecord): Unit = {
     record.persistence match {
       case JobPersistencePolicy.Persistent =>
         _durable_jobs.put(record.id, record)
+        _sync_job_entity_(record)
       case JobPersistencePolicy.Ephemeral =>
         _runtime_jobs.put(record.id, record)
     }
+  }
+
+  private def _sync_job_entity_(record: JobRecord): Unit = {
+    given ExecutionContext = record.submittedContext
+    val entity = JobEntity.from(_read_model(record))
+    val _ = EntityStore.standard().save(entity) match {
+      case Consequence.Success(_) =>
+        ()
+      case Consequence.Failure(conclusion) =>
+        _record_job_entity_sync_failure_(record, conclusion)
+    }
+  }
+
+  private def _record_job_entity_sync_failure_(
+    record: JobRecord,
+    conclusion: Conclusion
+  ): Unit = {
+    val message = s"job-entity-sync-failed: ${conclusion.show}"
+    val annotated = record.copy(
+      debug = record.debug.copy(
+        parameters = record.debug.parameters + ("cncf.job.entitySync" -> "failed"),
+        executionNotes =
+          if (record.debug.executionNotes.contains(message))
+            record.debug.executionNotes
+          else
+            record.debug.executionNotes :+ message
+      ),
+      updatedAt = _now_()
+    )
+    _durable_jobs.put(record.id, annotated)
+  }
 
   private def _get_record(jobid: JobId): Option[JobRecord] =
     Option(_durable_jobs.get(jobid)).orElse(Option(_runtime_jobs.get(jobid)))

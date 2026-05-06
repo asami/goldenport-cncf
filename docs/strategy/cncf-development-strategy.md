@@ -986,8 +986,9 @@ remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
 Phase 22 is active. `9.14 Job Management` is the selected development item.
-JM-01 Command Execution Policy Normalization is complete; JM-02 Job Entity
-Management is the active slice.
+JM-01 Command Execution Policy Normalization and JM-02 Job Entity Management
+are complete; JM-03 JCL Profile / Execution Profile Difference Checking is
+the active slice.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1184,8 +1185,8 @@ Work documents:
 Active stack:
 
 - JM-01: Command Execution Policy Normalization. DONE.
-- JM-02: Job Entity Management. ACTIVE.
-- JM-03: JCL Profile / Execution Profile Difference Checking.
+- JM-02: Job Entity Management. DONE.
+- JM-03: JCL Profile / Execution Profile Difference Checking. ACTIVE.
 - JM-04: Task Transaction and Compensation Boundary.
 - JM-05: User Job Notification Policy.
 - JM-06: Phase 22 verification and closure.
@@ -1203,8 +1204,8 @@ Active stack:
   “My jobs” navigation.
 - Add user notification support before relying on async Jobs for ordinary
   application operations.
-- Manage Job as a first-class Entity rather than only as an engine-local runtime
-  record.
+- Manage Job as a first-class SimpleEntity management record synchronized from
+  JobEngine lifecycle snapshots while keeping JobEngine as execution authority.
 - Make Job behavior definable by JCL, allow Job launch with an intended JCL
   profile, and record the actual execution profile for inspection.
 - Add difference checking between declared JCL and observed execution, plus a

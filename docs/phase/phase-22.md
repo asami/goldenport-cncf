@@ -7,9 +7,9 @@ status = active
 This work document opens Phase 22 and makes `9.14 Job Management` the
 current development item.
 
-Phase 22 starts by normalizing Command execution policy. Broader Job Entity,
-JCL, Task transaction, compensation, and user notification work is tracked in
-later JM slices and must not be pulled into JM-01.
+Phase 22 started by normalizing Command execution policy and then made Job a
+store-backed SimpleEntity management projection. JCL, Task transaction,
+compensation, and user notification work is tracked in later JM slices.
 
 This document is a phase dashboard, not a design journal.
 
@@ -22,7 +22,8 @@ This document is a phase dashboard, not a design journal.
 - Keep ordinary one-Entity CRUD-style Commands synchronous by default.
 - Require async Job execution to be explicit by operation metadata or runtime
   override.
-- Manage Job as a first-class Entity in a later slice.
+- Manage Job as a first-class SimpleEntity management record synchronized from
+  JobEngine lifecycle snapshots.
 - Make Job behavior definable by JCL, allow Job launch with an intended JCL
   profile, and compare declared JCL with observed execution profiles.
 - Treat Task as the transaction unit inside a Job and define compensation
@@ -48,7 +49,8 @@ Final semantic direction:
 
 - No Scala/runtime behavior change in the Phase 22 opening slice.
 - No broadening of Job usage before Command execution policy is normalized.
-- No Job Entity implementation in JM-01.
+- Job Entity management is limited to the synchronized management/search record;
+  JobEngine remains the execution authority.
 - No JCL profile difference checking or reconstruction in JM-01.
 - No Task compensation implementation in JM-01.
 - No user notification runtime in JM-01.
@@ -57,22 +59,23 @@ Final semantic direction:
 ## 4. Active Work Stack
 
 - A (DONE): JM-01 — Command Execution Policy Normalization.
-- B (ACTIVE): JM-02 — Job Entity Management.
-- C (TODO): JM-03 — JCL Profile / Execution Profile Difference Checking.
+- B (DONE): JM-02 — Job Entity Management.
+- C (ACTIVE): JM-03 — JCL Profile / Execution Profile Difference Checking.
 - D (TODO): JM-04 — Task Transaction and Compensation Boundary.
 - E (TODO): JM-05 — User Job Notification Policy.
 - F (TODO): JM-06 — Phase 22 verification and closure.
 
 Resume hint:
 
-- Continue with JM-02. Command execution policy defaults and metadata are now
-  normalized; do not pull JCL profile checking, Task compensation, or user
-  notification into Job Entity management unless explicitly selected.
+- Continue with JM-03. Job is now exposed as a store-backed SimpleEntity
+  management record synchronized from JobEngine lifecycle state; do not pull
+  Task compensation, user notification, or distributed Saga work into JCL
+  profile checking unless explicitly selected.
 
 ## 5. Development Items
 
 - [x] JM-01: Command Execution Policy Normalization.
-- [ ] JM-02: Job Entity Management.
+- [x] JM-02: Job Entity Management.
 - [ ] JM-03: JCL Profile / Execution Profile Difference Checking.
 - [ ] JM-04: Task Transaction and Compensation Boundary.
 - [ ] JM-05: User Job Notification Policy.

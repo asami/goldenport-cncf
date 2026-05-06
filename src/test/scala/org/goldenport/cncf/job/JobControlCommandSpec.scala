@@ -5,6 +5,7 @@ import org.goldenport.protocol.Request
 import org.goldenport.protocol.operation.OperationResponse
 import org.goldenport.cncf.action.{Action, ActionCall, ActionEngine, CommandAction}
 import org.goldenport.cncf.context.{ExecutionContext, SecurityContext}
+import org.goldenport.cncf.entity.EntityStore
 import org.goldenport.provisional.observation.Taxonomy
 import org.scalatest.GivenWhenThen
 import org.scalatest.matchers.should.Matchers
@@ -13,7 +14,7 @@ import org.scalatest.wordspec.AnyWordSpec
 /*
  * @since   Mar. 21, 2026
  *  version Apr. 22, 2026
- * @version May.  4, 2026
+ * @version May.  7, 2026
  * @author  ASAMI, Tomoharu
  */
 final class JobControlCommandSpec
@@ -117,6 +118,28 @@ final class JobControlCommandSpec
         case _ =>
           fail("expected failure")
       }
+    }
+
+    "refresh the Job SimpleEntity management record after control transitions" in {
+      import JobEntity.given
+
+      Given("a running persistent job and content-manager privilege")
+      val engine = createJobEngine()
+      val task = ActionTask(ActionId.generate(), _sleep_action("managed-cancel", 500L, "ok"), ActionEngine.create(), None)
+      val submittedCtx = ExecutionContext.test()
+      val jobid = _jobid(engine.submit(List(task), submittedCtx))
+      awaitStatus(engine, jobid, Set(JobStatus.Running, JobStatus.Succeeded))
+
+      given ExecutionContext = ExecutionContext.test(SecurityContext.Privilege.ApplicationContentManager)
+
+      When("cancel is requested")
+      val result = engine.control(jobid, JobControlRequest(JobControlCommand.Cancel))
+      result shouldBe a[Consequence.Success[_]]
+      awaitStatus(engine, jobid, Set(JobStatus.Cancelled))
+
+      Then("the Job Entity status is updated")
+      val loaded = EntityStore.standard().load[JobEntity](JobEntity.entityId(jobid))(using JobEntity.entityPersistent, submittedCtx).toOption.flatten
+      loaded.flatMap(_.record.getString("status")) shouldBe Some("Cancelled")
     }
   }
 

@@ -73,7 +73,7 @@ Normalize Command sync/async execution policy before broadening Job usage.
 
 ## JM-02: Job Entity Management
 
-Status: ACTIVE
+Status: DONE
 
 ### Objective
 
@@ -82,11 +82,11 @@ record.
 
 ### Detailed Tasks
 
-- [ ] Define the Job Entity model and lifecycle state.
-- [ ] Preserve compatibility with existing JobEngine runtime records.
-- [ ] Connect Job state and state transitions to Job control operations.
-- [ ] Expose Job Entity records through application and admin result surfaces.
-- [ ] Define the storage and migration boundary between runtime JobEngine
+- [x] Define the Job Entity model and lifecycle state.
+- [x] Preserve compatibility with existing JobEngine runtime records.
+- [x] Connect Job state and state transitions to Job control operations.
+- [x] Expose Job Entity records through application and admin result surfaces.
+- [x] Define the storage and migration boundary between runtime JobEngine
       state and canonical Job Entity state.
 
 ### Expected Output
@@ -100,11 +100,25 @@ record.
 - Do not require Job Entity creation for synchronous one-Entity CRUD-style
   Commands.
 
+### Completion Notes
+
+- `job_control` now exposes a built-in `job` SimpleEntity descriptor with
+  `entityKind = workflow` and store-backed management policy.
+- Persistent JobEngine records synchronize lightweight Job Entity records on
+  submit, lifecycle transitions, control transitions, retry/recovery metadata,
+  and result summary updates.
+- `JobEngine` remains the execution authority. Existing Job read models,
+  result/timeline/calltree pages, and control operations continue to use the
+  JobEngine runtime path.
+- Ephemeral/debug runtime Jobs stay out of the Job Entity store and remain
+  visible through the existing runtime read model according to persistence
+  policy.
+
 ---
 
 ## JM-03: JCL Profile / Execution Profile Difference Checking
 
-Status: TODO
+Status: ACTIVE
 
 ### Objective
 
