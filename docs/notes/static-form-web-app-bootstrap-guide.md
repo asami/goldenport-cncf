@@ -362,6 +362,20 @@ HTML-compatible `textus-include` notation.
 Prefer HTML partials in v1. Older Jade/Pug-style layouts are historical
 reference material, not the Static Form runtime contract.
 
+Subsystem-owned Web shells can compose Component Web content when the Component
+Web app explicitly opts in with `apps[].composition: article`. In that mode,
+ordinary Component pages are rendered as article content inside the Subsystem
+layout and shell partials. Pages such as login, logout, or account flows should
+declare `pages.<name>.mode: screen` when they need to own the full page rather
+than appear inside the shared article region.
+
+Use this ownership split:
+
+- Subsystem/deemed-subsystem: header, footer, sidebar, global navigation,
+  auth/session affordances, and common page shell.
+- Component CAR: page content, local content partials, component assets, and
+  component-specific form/result fragments.
+
 ## Responsive Rules
 
 Static Form Web App pages should work at desktop, tablet, and phone widths.

@@ -39,6 +39,17 @@ Reusable shell composition is provided by the WN-10 `WEB-INF` convention:
 - `${content}` is the layout content slot;
 - `${partial.name}` resolves private `WEB-INF/partials` HTML files.
 
+Subsystem Web composition is provided by the WN-12 component-Web contract:
+
+- Component Web apps opt in with `apps[].composition: article`.
+- `pages.*.mode: article` embeds the Component page as `${content}` in the
+  Subsystem shell.
+- `pages.*.mode: screen` lets login/logout/account-style pages own the full
+  screen and bypass article embedding.
+- Subsystem/deemed-subsystem `WEB-INF` layouts and shell partials provide the
+  shared header, footer, sidebar, and navigation. Component pages may still use
+  their own local includes inside the article content.
+
 ## Page Kinds
 
 Supported generated page kinds are:
@@ -91,7 +102,8 @@ WN-09 explicitly does not implement:
 - a new runtime renderer separate from `StaticFormAppRenderer`;
 - reusable header/footer/nav/sidebar partials, implemented by WN-10 through
   the `WEB-INF` layout/partial contract;
-- component-owned admin page discovery/integration, which is WN-12;
+- component-owned admin page discovery beyond the WN-12 article/screen
+  composition contract;
 - Island Architecture or SPA/API gateway hosting, which are WN-13 and WN-14.
 
 The older wireframe DSL notes remain historical draft references for future

@@ -39,6 +39,19 @@ final case class WebDescriptor(
       val l = lhs.map(x => key(x) -> x).toMap
       keys.flatMap(k => r.get(k).orElse(l.get(k)))
     }
+    def merge_apps(lhs: Vector[WebDescriptor.App], rhs: Vector[WebDescriptor.App]): Vector[WebDescriptor.App] = {
+      val r = rhs.map(x => x.normalizedName -> x).toMap
+      val l = lhs.map(x => x.normalizedName -> x).toMap
+      val keys = (lhs.map(_.normalizedName) ++ rhs.map(_.normalizedName)).distinct
+      keys.flatMap { key =>
+        (l.get(key), r.get(key)) match {
+          case (Some(left), Some(right)) => Some(left.mergeOverride(right))
+          case (Some(left), None) => Some(left)
+          case (None, Some(right)) => Some(right)
+          case _ => None
+        }
+      }
+    }
 
     copy(
       defaultView =
@@ -50,7 +63,7 @@ final case class WebDescriptor(
         else rhs.auth,
       authorization = authorization ++ rhs.authorization,
       form = form ++ rhs.form,
-      apps = merge_vector(apps, rhs.apps)(_.normalizedName),
+      apps = merge_apps(apps, rhs.apps),
       routes = merge_vector(routes, rhs.routes)(_.normalizedPathText),
       pages = pages ++ rhs.pages,
       theme = theme.merge(rhs.theme),
@@ -107,6 +120,20 @@ final case class WebDescriptor(
       app.matches(name, Vector.empty) ||
         app.normalizedName == org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(name)
     ).flatMap(_.layoutName)
+
+  def appComposition(name: String): WebDescriptor.ComponentWebComposition =
+    apps.find(app =>
+      app.matches(name, Vector.empty) ||
+        app.normalizedName == org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(name)
+    ).map(_.composition).getOrElse(WebDescriptor.ComponentWebComposition.Disabled)
+
+  def staticPageMode(
+    appName: String,
+    page: Vector[String]
+  ): WebDescriptor.PageMode =
+    staticPageCustomization(appName, page)
+      .flatMap(_.mode)
+      .getOrElse(WebDescriptor.PageMode.Article)
 
   def themeFor(appName: Option[String] = None): WebDescriptor.Theme =
     appName
@@ -343,10 +370,55 @@ object WebDescriptor {
     heading: Option[String] = None,
     subtitle: Option[String] = None,
     layout: Option[String] = None,
+    mode: Option[PageMode] = None,
+    modeRaw: Option[String] = None,
     submitLabel: Option[String] = None,
     fields: Vector[String] = Vector.empty,
     controls: Map[String, FormControl] = Map.empty
   )
+
+  enum PageMode {
+    case Article
+    case Screen
+
+    def name: String =
+      this match {
+        case Article => "article"
+        case Screen => "screen"
+      }
+  }
+
+  object PageMode {
+    def parse(value: String): Option[PageMode] =
+      value.trim.toLowerCase(java.util.Locale.ROOT) match {
+        case "article" | "embed" | "embedded" => Some(Article)
+        case "screen" | "full-screen" | "fullscreen" | "page" => Some(Screen)
+        case _ => None
+      }
+  }
+
+  enum ComponentWebComposition {
+    case Disabled
+    case Article
+
+    def name: String =
+      this match {
+        case Disabled => "disabled"
+        case Article => "article"
+      }
+
+    def isArticle: Boolean =
+      this == Article
+  }
+
+  object ComponentWebComposition {
+    def parse(value: String): Option[ComponentWebComposition] =
+      value.trim.toLowerCase(java.util.Locale.ROOT) match {
+        case "disabled" | "disable" | "none" | "false" | "off" => Some(Disabled)
+        case "article" | "embed" | "embedded" | "subsystem-shell" => Some(Article)
+        case _ => None
+      }
+  }
 
   enum TotalCountPolicy {
     case Disabled
@@ -392,7 +464,9 @@ object WebDescriptor {
     route: Option[String] = None,
     assets: Assets = Assets(),
     theme: Theme = Theme(),
-    layout: Option[String] = None
+    layout: Option[String] = None,
+    composition: ComponentWebComposition = ComponentWebComposition.Disabled,
+    compositionRaw: Option[String] = None
   ) {
     def normalizedName: String =
       _normalize_app_segment(name)
@@ -408,6 +482,22 @@ object WebDescriptor {
 
     def layoutName: Option[String] =
       layout.map(_.trim).filter(_.nonEmpty)
+
+    def mergeOverride(rhs: App): App =
+      copy(
+        name = rhs.name,
+        path = Option(rhs.path).map(_.trim).filter(_.nonEmpty).getOrElse(path),
+        kind =
+          if (rhs.kind.trim.nonEmpty && rhs.kind != "static-form") rhs.kind
+          else kind,
+        root = rhs.root.orElse(root),
+        route = rhs.route.orElse(route),
+        assets = assets.merge(rhs.assets),
+        theme = theme.merge(rhs.theme),
+        layout = rhs.layout.orElse(layout),
+        composition = rhs.compositionRaw.map(_ => rhs.composition).getOrElse(composition),
+        compositionRaw = rhs.compositionRaw.orElse(compositionRaw)
+      )
 
     def effectivePath: String =
       Option(path).map(_.trim).filter(_.nonEmpty).getOrElse(effectiveRoot)
@@ -590,9 +680,31 @@ object WebDescriptor {
     descriptor: WebDescriptor,
     path: Path
   ): Consequence[WebDescriptor] =
-    _validate_routes(descriptor.routes, path).map { routes =>
-      descriptor.copy(routes = routes)
+    _validate_web_composition(descriptor, path).flatMap { descriptor =>
+      _validate_routes(descriptor.routes, path).map { routes =>
+        descriptor.copy(routes = routes)
+      }
     }
+
+  private def _validate_web_composition(
+    descriptor: WebDescriptor,
+    path: Path
+  ): Consequence[WebDescriptor] = {
+    val invalidApp =
+      descriptor.apps.collectFirst {
+        case app if app.compositionRaw.exists(raw => ComponentWebComposition.parse(raw).isEmpty) =>
+          s"invalid app composition in ${path}: ${app.name}=${app.compositionRaw.get}"
+      }
+    val invalidPage =
+      descriptor.pages.collectFirst {
+        case (name, page) if page.modeRaw.exists(raw => PageMode.parse(raw).isEmpty) =>
+          s"invalid page mode in ${path}: ${name}=${page.modeRaw.get}"
+      }
+    invalidApp.orElse(invalidPage) match {
+      case Some(message) => Consequence.resourceInvalid(message)
+      case None => Consequence.success(descriptor)
+    }
+  }
 
   private def _validate_routes(
     routes: Vector[Route],
@@ -726,15 +838,20 @@ object WebDescriptor {
       .getOrElse(Map.empty)
 
   private def _page_customization(record: Record): PageCustomization =
+  {
+    val modeRaw = _string(record, "mode").orElse(_string(record, "pageMode")).orElse(_string(record, "page-mode"))
     PageCustomization(
       title = _string(record, "title"),
       heading = _string(record, "heading"),
       subtitle = _string(record, "subtitle").orElse(_string(record, "description")),
       layout = _string(record, "layout"),
+      mode = modeRaw.flatMap(PageMode.parse),
+      modeRaw = modeRaw,
       submitLabel = _string(record, "submitLabel").orElse(_string(record, "submit-label")),
       fields = _string_vector(record, "fields"),
       controls = _form_controls(record)
     )
+  }
 
   private def _apps(record: Record): Vector[App] =
     record.getAny("apps") match {
@@ -748,6 +865,10 @@ object WebDescriptor {
       name <- record.getString("name").map(_.trim).filter(_.nonEmpty)
     } yield {
       val root = record.getString("root").map(_.trim).filter(_.nonEmpty)
+      val compositionRaw =
+        _string(record, "composition")
+          .orElse(_string(record, "webComposition"))
+          .orElse(_string(record, "web-composition"))
       App(
         name = name,
         path = record.getString("path").map(_.trim).filter(_.nonEmpty).orElse(root).getOrElse(""),
@@ -756,7 +877,9 @@ object WebDescriptor {
         route = record.getString("route").map(_.trim).filter(_.nonEmpty),
         theme = _theme(record),
         assets = _assets(record),
-        layout = _string(record, "layout")
+        layout = _string(record, "layout"),
+        composition = compositionRaw.flatMap(ComponentWebComposition.parse).getOrElse(ComponentWebComposition.Disabled),
+        compositionRaw = compositionRaw
       )
     }
 

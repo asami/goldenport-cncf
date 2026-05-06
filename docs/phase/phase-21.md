@@ -62,7 +62,7 @@ Final semantic direction:
 - I (DONE): WN-09 — Web/UI Generation and Static Form Layout Composition.
 - J (DONE): WN-10 — Reusable Header/Footer/Nav/Sidebar/Layout Partials.
 - K (ACTIVE): WN-11 — Broader Bootstrap 5 Admin/App Polish.
-- L (TODO): WN-12 — Component-Owned Web Admin Page Integration.
+- L (DONE): WN-12 — Subsystem Web App Composition From Component Web.
 - M (TODO): WN-13 — Island Architecture Progressive Enhancement.
 - N (TODO): WN-14 — SPA Hosting / API Gateway Boundary Design.
 - O (TODO): WN-15 — Application Developer Documentation Completion.
@@ -86,7 +86,7 @@ Resume hint:
 - [x] WN-09: Web/UI Generation and Static Form Layout Composition.
 - [x] WN-10: Reusable Header/Footer/Nav/Sidebar/Layout Partials.
 - [ ] WN-11: Broader Bootstrap 5 Admin/App Polish.
-- [ ] WN-12: Component-Owned Web Admin Page Integration.
+- [x] WN-12: Subsystem Web App Composition From Component Web.
 - [ ] WN-13: Island Architecture Progressive Enhancement.
 - [ ] WN-14: SPA Hosting / API Gateway Boundary Design.
 - [ ] WN-15: Application Developer Documentation Completion.
@@ -109,7 +109,7 @@ Phase 21 can close only when:
 - At least one CNCF admin/runtime page group and one selected application page
   group validate the new UI primitives.
 - Search UI, UI generation, reusable layout partials, broader Bootstrap polish,
-  component-owned admin integration, Island Architecture, SPA/API gateway
+  component-Web subsystem composition, Island Architecture, SPA/API gateway
   boundary design, and developer documentation are completed or explicitly
   moved out of Phase 21 by decision.
 - Tests cover renderer/widget behavior and targeted driver pages.

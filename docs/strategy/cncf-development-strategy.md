@@ -622,17 +622,16 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
   full-text search planning/UI baseline, and the Static Form UI generation
   composition contract are implemented as partial Phase 21 slices.
 - Remaining:
-- Phase 21 continues with reusable layout partials, broader Bootstrap polish,
-  component-owned admin integration, Island Architecture, SPA/API gateway
-  boundary design, and application developer documentation completion.
+- Phase 21 continues with broader Bootstrap polish, Island Architecture,
+  SPA/API gateway boundary design, and application developer documentation
+  completion.
 - Non-goals:
 - No SPA framework adoption before WN-14 defines the explicit hosting boundary.
 - No implicit API gateway or separate SPA hosting mode.
 - No visual design system separate from Bootstrap 5.
 - No broad UI generation, file generation, or standalone wireframe DSL outside
   the Static Form layout composition contract.
-- No component-owned admin page discovery/integration before WN-12 defines the
-  descriptor and admin shell contract.
+- No Component Web page composition without explicit descriptor opt-in.
 - Artifact (work): `docs/phase/phase-21.md`.
 
 ## 4. Relationship Between Phases
@@ -728,7 +727,7 @@ Active in Phase 21.
   and CallTree, at the end of the web page.
 - Phase 21 active/future backlog:
   - WN-11 Broader Bootstrap 5 Admin/App Polish (active)
-  - WN-12 Component-Owned Web Admin Page Integration
+  - WN-12 Subsystem Web App Composition From Component Web (done)
   - WN-13 Island Architecture Progressive Enhancement
   - WN-14 SPA Hosting / API Gateway Boundary Design
   - WN-15 Application Developer Documentation Completion
@@ -742,9 +741,9 @@ Active in Phase 21.
   hand-written static pages. WN-10 adds the `WEB-INF` layout/partial runtime
   contract for reusable header, footer, navigation, sidebar, and page shell
   composition.
-- Web admin integration work allows component CARs to provide component-owned
-  admin pages while CNCF keeps admin authorization, navigation composition, and
-  system-level framing.
+- Subsystem Web composition work allows Component CARs to contribute Web
+  pages that render as articles inside Subsystem/deemed-subsystem shells, while
+  login/logout/account-style pages can opt out with screen mode.
 - Island Architecture, SPA hosting, and API gateway are Phase 21 backlog items
   to define explicitly, not implicit extensions of the current Static Form
   baseline.

@@ -410,32 +410,38 @@ Bootstrap 5 standards.
 
 ---
 
-## WN-12: Component-Owned Web Admin Page Integration
+## WN-12: Subsystem Web App Composition From Component Web
 
-Status: TODO
+Status: DONE
 
 ### Objective
 
-Allow component CARs to contribute component-specific admin pages while CNCF
-keeps the system-level admin shell and authorization boundary.
+Allow Subsystem Web apps to compose Component-provided Web pages into a shared
+Subsystem shell while preserving full-screen override pages for login/logout
+and account flows.
 
 ### Detailed Tasks
 
-- [ ] Define the descriptor contract for component-owned admin pages.
-- [ ] Let the system admin console discover and link component admin pages.
-- [ ] Keep CNCF responsible for admin authorization, navigation composition,
-      and system-level framing.
-- [ ] Keep component CARs responsible for component-specific admin content and
-      local admin routes.
+- [x] Add `apps[].composition` for explicit Component Web article embedding.
+- [x] Add `pages.*.mode` with `article` and `screen` semantics.
+- [x] Resolve Subsystem/deemed-subsystem `WEB-INF` layouts and shell partials
+      for article-composed Component pages.
+- [x] Keep screen-mode pages on the Component/app/page layout path.
+- [x] Keep existing `/web/{app}` and `/web/{component}/{app}` routes stable.
 
 ### Expected Output
 
-- Component-specific admin functions can appear in the CNCF admin surface
-  without hard-coding them into the core renderer.
+- Component Web content can be embedded as article content inside a Subsystem
+  Web shell without hard-coding the Component into the core renderer.
+- Login/logout/account pages can opt out of article embedding with
+  `mode: screen`.
 
 ### Guardrails
 
-- Do not let component pages bypass CNCF admin authorization.
+- Composition is explicit opt-in; existing Component Web apps remain unchanged
+  by default.
+- Component-local `WEB-INF` partials must not override Subsystem shell
+  header/footer/sidebar partials.
 
 ---
 

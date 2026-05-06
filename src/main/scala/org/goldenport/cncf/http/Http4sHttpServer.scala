@@ -62,6 +62,11 @@ final class Http4sHttpServer(
     html: String,
     appliedLayout: Boolean
   )
+  private enum WebTemplatePartScope {
+    case Default
+    case ComponentContent
+    case SubsystemShell
+  }
 
   def start(args: Array[String] = Array.empty): Unit = {
     val _ = args
@@ -2423,6 +2428,24 @@ final class Http4sHttpServer(
       _component_web_roots() ++
       _subsystem_descriptor_web_root().toVector
 
+  private def _web_resource_roots(
+    scope: WebTemplatePartScope
+  ): Vector[WebResourceRoot] =
+    scope match {
+      case WebTemplatePartScope.Default => _web_resource_roots()
+      case WebTemplatePartScope.ComponentContent => _component_content_web_roots()
+      case WebTemplatePartScope.SubsystemShell => _subsystem_shell_web_roots()
+    }
+
+  private[http] def _component_content_web_roots(): Vector[WebResourceRoot] =
+    _component_web_roots() ++
+      _web_descriptor_config_root().toVector ++
+      _subsystem_descriptor_web_root().toVector
+
+  private[http] def _subsystem_shell_web_roots(): Vector[WebResourceRoot] =
+    _web_descriptor_config_root().toVector ++
+      _subsystem_descriptor_web_root().toVector
+
   private[http] def _component_web_roots(): Vector[WebResourceRoot] =
     engine.runtimeSubsystem.components
       .flatMap(_.artifactMetadata.flatMap(_.archivePath))
@@ -2496,13 +2519,19 @@ final class Http4sHttpServer(
     webAppName: String,
     page: Vector[String],
     content: String
-  ): Consequence[StaticFormAppRenderer.Page] =
+  ): Consequence[StaticFormAppRenderer.Page] = {
+    val composition = engine.webDescriptor.appComposition(webAppName)
+    val pageMode = engine.webDescriptor.staticPageMode(webAppName, page)
+    val composeSubsystemArticle =
+      composition.isArticle && pageMode == WebDescriptor.PageMode.Article
     _compose_web_template(
       webAppName,
       page,
       content,
       _static_page_layout(webAppName, page),
-      allowImplicitDefault = true
+      allowImplicitDefault = true,
+      subsystemShell = composeSubsystemArticle,
+      requireLayout = composeSubsystemArticle
     ).map { composed =>
       val needsTemplateRendering =
         composed.appliedLayout ||
@@ -2519,6 +2548,7 @@ final class Http4sHttpServer(
       else
         StaticFormAppRenderer.Page(composed.html)
     }
+  }
 
   private[http] def _web_app_static_html_candidates(
     webAppName: String,
@@ -2563,21 +2593,27 @@ final class Http4sHttpServer(
     page: Vector[String],
     content: String,
     explicitLayout: Option[String],
-    allowImplicitDefault: Boolean
+    allowImplicitDefault: Boolean,
+    subsystemShell: Boolean = false,
+    requireLayout: Boolean = false
   ): Consequence[WebTemplateComposition] = {
     val normalizedLayout = explicitLayout.map(_.trim).filter(_.nonEmpty)
     val layoutName =
       normalizedLayout.filterNot(_.equalsIgnoreCase("none"))
     val noLayout = normalizedLayout.exists(_.equalsIgnoreCase("none"))
-    val withIncludes = _expand_template_partials(webAppName, page, content)
-    if (noLayout || (StaticFormAppRenderer.isHtmlDocumentTemplate(content) && layoutName.isEmpty))
+    val layoutScope =
+      if (subsystemShell) WebTemplatePartScope.SubsystemShell else WebTemplatePartScope.Default
+    val contentScope =
+      if (subsystemShell) WebTemplatePartScope.ComponentContent else WebTemplatePartScope.Default
+    val withIncludes = _expand_template_partials(webAppName, page, content, contentScope)
+    if (noLayout || (!requireLayout && StaticFormAppRenderer.isHtmlDocumentTemplate(content) && layoutName.isEmpty))
       Consequence.success(WebTemplateComposition(withIncludes, appliedLayout = false))
     else {
       layoutName match {
         case Some(name) =>
-          _layout_content(webAppName, name) match {
+          _layout_content(webAppName, name, layoutScope) match {
             case Some(layout) =>
-              _apply_layout(webAppName, page, name, layout, withIncludes).map(WebTemplateComposition(_, appliedLayout = true))
+              _apply_layout(webAppName, page, name, layout, withIncludes, layoutScope).map(WebTemplateComposition(_, appliedLayout = true))
             case None =>
               Consequence.resourceInvalid(s"Static Form layout not found: ${name}")
           }
@@ -2585,11 +2621,14 @@ final class Http4sHttpServer(
           if (!allowImplicitDefault)
             Consequence.success(WebTemplateComposition(withIncludes, appliedLayout = false))
           else
-            _layout_content(webAppName, "default") match {
+            _layout_content(webAppName, "default", layoutScope) match {
               case Some(layout) =>
-                _apply_layout(webAppName, page, "default", layout, withIncludes).map(WebTemplateComposition(_, appliedLayout = true))
+                _apply_layout(webAppName, page, "default", layout, withIncludes, layoutScope).map(WebTemplateComposition(_, appliedLayout = true))
               case None =>
-                Consequence.success(WebTemplateComposition(withIncludes, appliedLayout = false))
+                if (requireLayout)
+                  Consequence.resourceInvalid("Static Form subsystem shell layout not found: default")
+                else
+                  Consequence.success(WebTemplateComposition(withIncludes, appliedLayout = false))
             }
       }
     }
@@ -2600,26 +2639,28 @@ final class Http4sHttpServer(
     page: Vector[String],
     layoutName: String,
     layout: String,
-    content: String
+    content: String,
+    scope: WebTemplatePartScope
   ): Consequence[String] =
     if (!layout.contains("${content}"))
       Consequence.resourceInvalid(s"Static Form layout lacks $${content} slot: ${layoutName}")
     else {
       val withContent = layout.replace("${content}", content)
-      Consequence.success(_expand_template_partials(webAppName, page, withContent))
+      Consequence.success(_expand_template_partials(webAppName, page, withContent, scope))
     }
 
   private def _expand_template_partials(
     webAppName: String,
     page: Vector[String],
-    template: String
+    template: String,
+    scope: WebTemplatePartScope = WebTemplatePartScope.Default
   ): String = {
     @annotation.tailrec
     def loop(value: String, remaining: Int): String =
       if (remaining <= 0)
         value
       else {
-        val next = _expand_textus_includes(webAppName, page, _expand_partial_placeholders(webAppName, page, value))
+        val next = _expand_textus_includes(webAppName, page, _expand_partial_placeholders(webAppName, page, value, scope), scope)
         if (next == value) next else loop(next, remaining - 1)
       }
     loop(template, 8)
@@ -2628,22 +2669,24 @@ final class Http4sHttpServer(
   private def _expand_partial_placeholders(
     webAppName: String,
     page: Vector[String],
-    template: String
+    template: String,
+    scope: WebTemplatePartScope
   ): String =
     """\$\{partial\.([A-Za-z0-9_.-]+)\}""".r.replaceAllIn(template, m =>
-      java.util.regex.Matcher.quoteReplacement(_partial_content(webAppName, page, m.group(1)).getOrElse(""))
+      java.util.regex.Matcher.quoteReplacement(_partial_content(webAppName, page, m.group(1), scope).getOrElse(""))
     )
 
   private def _expand_textus_includes(
     webAppName: String,
     page: Vector[String],
-    template: String
+    template: String,
+    scope: WebTemplatePartScope
   ): String = {
     val include = """<textus(?::include|-include)\b([^>]*)></textus(?::include|-include)>""".r
     include.replaceAllIn(template, m => {
       val attrs = _template_attrs(m.group(1))
       java.util.regex.Matcher.quoteReplacement(
-        attrs.get("name").flatMap(_partial_content(webAppName, page, _)).getOrElse("")
+        attrs.get("name").flatMap(_partial_content(webAppName, page, _, scope)).getOrElse("")
       )
     })
   }
@@ -2656,25 +2699,27 @@ final class Http4sHttpServer(
 
   private def _layout_content(
     webAppName: String,
-    name: String
+    name: String,
+    scope: WebTemplatePartScope = WebTemplatePartScope.Default
   ): Option[String] =
     if (!_safe_template_part_name(name))
       None
     else
-      _web_resource_roots().view.flatMap { root =>
+      _web_resource_roots(scope).view.flatMap { root =>
         _web_inf_layout_candidates(webAppName, name).view.flatMap(root.readText)
       }.headOption
 
   private def _partial_content(
     webAppName: String,
     page: Vector[String],
-    name: String
+    name: String,
+    scope: WebTemplatePartScope = WebTemplatePartScope.Default
   ): Option[String] =
     if (!_safe_template_part_name(name))
       None
     else
-      _web_resource_roots().view.flatMap { root =>
-        _web_inf_partial_candidates(webAppName, page, name).view.flatMap(root.readText)
+      _web_resource_roots(scope).view.flatMap { root =>
+        _web_inf_partial_candidates(webAppName, page, name, scope).view.flatMap(root.readText)
       }.headOption
 
   private def _web_inf_layout_candidates(
@@ -2691,7 +2736,8 @@ final class Http4sHttpServer(
   private def _web_inf_partial_candidates(
     webAppName: String,
     page: Vector[String],
-    name: String
+    name: String,
+    scope: WebTemplatePartScope
   ): Vector[Path] = {
     val webAppPath = org.goldenport.cncf.naming.NamingConventions.toNormalizedSegment(webAppName)
     val localPage = _web_inf_page_path(page)
@@ -2703,10 +2749,15 @@ final class Http4sHttpServer(
     }
     val globalFlat = Vector(Paths.get("WEB-INF", "partials", s"${name}.html"))
     val globalApp = Vector(Paths.get(webAppPath, "WEB-INF", "partials", s"${name}.html"))
-    if (_is_flat_web_root_app(webAppName))
-      localFlat ++ localApp ++ globalFlat ++ globalApp
-    else
-      localApp ++ localFlat ++ globalApp ++ globalFlat
+    scope match {
+      case WebTemplatePartScope.ComponentContent =>
+        localApp ++ localFlat ++ globalApp ++ globalFlat
+      case _ =>
+        if (_is_flat_web_root_app(webAppName))
+          localFlat ++ localApp ++ globalFlat ++ globalApp
+        else
+          localApp ++ localFlat ++ globalApp ++ globalFlat
+    }
   }
 
   private def _web_inf_page_path(

@@ -2421,6 +2421,143 @@ final class StaticFormAppRendererSpec extends AnyWordSpec with Matchers {
       lowerWebInf.status.code shouldBe 404
     }
 
+    "compose component Web pages into a subsystem shell only when explicitly enabled" in {
+      val root = Files.createTempDirectory("cncf-web-composition-root-")
+      Files.writeString(
+        root.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: notice-board
+          |      composition: article
+          |  pages:
+          |    login:
+          |      mode: screen
+          |      layout: login
+          |  routes:
+          |    - path: /web/board
+          |      kind: alias
+          |      target:
+          |        component: notice-board
+          |        app: notice-board
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      Files.createDirectories(root.resolve("WEB-INF").resolve("layouts"))
+      Files.createDirectories(root.resolve("WEB-INF").resolve("partials"))
+      Files.createDirectories(root.resolve("notice-board").resolve("WEB-INF").resolve("layouts"))
+      Files.createDirectories(root.resolve("notice-board").resolve("WEB-INF").resolve("partials"))
+      Files.createDirectories(root.resolve("notice-board"))
+      Files.writeString(
+        root.resolve("WEB-INF").resolve("layouts").resolve("default.html"),
+        """<!doctype html><html><body>${partial.header}${partial.navigation}<aside>${partial.sidebar}</aside><article>${content}</article>${partial.footer}</body></html>""",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(root.resolve("WEB-INF").resolve("partials").resolve("header.html"), "<header>Subsystem Header</header>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("WEB-INF").resolve("partials").resolve("navigation.html"), "<nav>Subsystem Navigation</nav>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("WEB-INF").resolve("partials").resolve("sidebar.html"), "<nav>Subsystem Sidebar</nav>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("WEB-INF").resolve("partials").resolve("footer.html"), "<footer>Subsystem Footer</footer>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("notice-board").resolve("WEB-INF").resolve("partials").resolve("header.html"), "<header>Component Header</header>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("notice-board").resolve("WEB-INF").resolve("partials").resolve("navigation.html"), "<nav>Component Navigation</nav>", StandardCharsets.UTF_8)
+      Files.writeString(root.resolve("notice-board").resolve("WEB-INF").resolve("layouts").resolve("login.html"), "<!doctype html><html><body><main class=\"login-screen\">${content}</main></body></html>", StandardCharsets.UTF_8)
+      Files.writeString(
+        root.resolve("notice-board").resolve("publicblogs.html"),
+        """<section><textus-include name="navigation"></textus-include><h1>Public notices</h1></section>""",
+        StandardCharsets.UTF_8
+      )
+      Files.writeString(root.resolve("notice-board").resolve("login.html"), "<section>Login Screen</section>", StandardCharsets.UTF_8)
+      val subsystem = _management_console_fixture_subsystem(
+        Configuration(Map(
+          RuntimeConfig.WebDescriptorKey -> ConfigurationValue.StringValue(root.resolve("web-descriptor.yaml").toString)
+        ))
+      )
+      val server = new Http4sHttpServer(new HttpExecutionEngine(subsystem))
+
+      val articleResponse = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/publicblogs"))).unsafeRunSync()
+      val articleHtml = articleResponse.as[String].unsafeRunSync()
+      val screenResponse = server.routes(null).orNotFound.run(Request[IO](Method.GET, Uri.unsafeFromString("/web/board/login"))).unsafeRunSync()
+      val screenHtml = screenResponse.as[String].unsafeRunSync()
+
+      articleResponse.status.code shouldBe 200
+      articleHtml should include ("Subsystem Header")
+      articleHtml should include ("Subsystem Navigation")
+      articleHtml should include ("Subsystem Sidebar")
+      articleHtml should include ("Subsystem Footer")
+      articleHtml should include ("Component Navigation")
+      articleHtml should include ("<article><section>")
+      articleHtml should not include ("Component Header")
+      screenResponse.status.code shouldBe 200
+      screenHtml should include ("login-screen")
+      screenHtml should include ("Login Screen")
+      screenHtml should not include ("Subsystem Header")
+      screenHtml should not include ("<article>")
+    }
+
+    "merge subsystem Web app composition override without dropping component app assets" in {
+      val componentDescriptor = WebDescriptor(
+        apps = Vector(WebDescriptor.App(
+          name = "blog",
+          path = "/web/blog",
+          root = Some("/web/blog"),
+          route = Some("/web/blog"),
+          assets = WebDescriptor.Assets(css = Vector("/web/blog/assets/blog.css"), js = Vector("/web/blog/assets/blog.js")),
+          layout = Some("reader")
+        ))
+      )
+      val subsystemDescriptor = WebDescriptor(
+        apps = Vector(WebDescriptor.App(
+          name = "blog",
+          composition = WebDescriptor.ComponentWebComposition.Article,
+          compositionRaw = Some("article")
+        ))
+      )
+
+      val app = componentDescriptor.mergeOverride(subsystemDescriptor).apps.headOption.getOrElse(fail("merged app is missing"))
+
+      app.path shouldBe "/web/blog"
+      app.root shouldBe Some("/web/blog")
+      app.route shouldBe Some("/web/blog")
+      app.assets.css should contain ("/web/blog/assets/blog.css")
+      app.assets.js should contain ("/web/blog/assets/blog.js")
+      app.layout shouldBe Some("reader")
+      app.composition shouldBe WebDescriptor.ComponentWebComposition.Article
+    }
+
+    "reject invalid Web app composition and page mode values" in {
+      val invalidComposition = Files.createTempDirectory("cncf-web-invalid-composition-")
+      Files.writeString(
+        invalidComposition.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: notice-board
+          |      composition: sideways
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+      val invalidMode = Files.createTempDirectory("cncf-web-invalid-page-mode-")
+      Files.writeString(
+        invalidMode.resolve("web-descriptor.yaml"),
+        """web:
+          |  apps:
+          |    - name: notice-board
+          |  pages:
+          |    login:
+          |      mode: popup
+          |""".stripMargin,
+        StandardCharsets.UTF_8
+      )
+
+      WebDescriptor.load(invalidComposition.resolve("web-descriptor.yaml")) match {
+        case Consequence.Success(_) => fail("invalid app composition should fail")
+        case Consequence.Failure(conclusion) =>
+          conclusion.toString should include ("invalid app composition")
+      }
+      WebDescriptor.load(invalidMode.resolve("web-descriptor.yaml")) match {
+        case Consequence.Success(_) => fail("invalid page mode should fail")
+        case Consequence.Failure(conclusion) =>
+          conclusion.toString should include ("invalid page mode")
+      }
+    }
+
     "fail deterministically when an explicit Static Form layout is missing" in {
       val root = Files.createTempDirectory("cncf-web-missing-layout-root-")
       Files.writeString(
