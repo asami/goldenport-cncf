@@ -649,10 +649,12 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Notes contain execution details and results for each phase.
 
 ## Process Status Pointers
-- Current phase selection: none selected after Phase 21 closure.
+- Current phase selection: Phase 22 — Job Management.
+- Current active phase dashboard: `docs/phase/phase-22.md`
+- Current active phase checklist: `docs/phase/phase-22-checklist.md`
 - Latest closed phase dashboard: `docs/phase/phase-21.md`
 - Latest closed phase checklist: `docs/phase/phase-21-checklist.md`
-- Candidate next phase areas after Phase 21: AwsComponent/S3 BlobStore
+- Candidate next phase areas after Phase 22: AwsComponent/S3 BlobStore
   provider; Error Model / Consequence-Conclusion Realignment; Search/index
   planning; DB migration tooling.
 - Status interpretation rules: `docs/rules/stage-status-and-checklist-convention.md`
@@ -683,6 +685,7 @@ AI agent work in Phase 3 remains exploratory/PoC in scope; it must not be treate
 - Phase 19: closed (`docs/phase/phase-19.md`)
 - Phase 20: closed (`docs/phase/phase-20.md`)
 - Phase 21: closed (`docs/phase/phase-21.md`)
+- Phase 22: active (`docs/phase/phase-22.md`)
 
 ## 8. Completed Development Item History
 
@@ -982,8 +985,8 @@ Completed work areas are recorded in section 8. When a development item closes,
 remove its completion record from this section and add or update the
 corresponding completed-history entry.
 
-No current phase is selected after Phase 21 closure. The next active item should
-be chosen explicitly from the planned areas below.
+Phase 22 is active. `9.14 Job Management` is the selected development item, and
+the first active slice is JM-01 Command Execution Policy Normalization.
 
 ### 9.1 Web Next Stage Follow-ups
 Future Web/platform development item.
@@ -1170,7 +1173,21 @@ Future distributed-system development item.
   Working Set, and View cache behavior.
 
 ### 9.14 Job Management
-Future platform development item.
+Active in Phase 22.
+
+Work documents:
+
+- Dashboard: `docs/phase/phase-22.md`
+- Checklist: `docs/phase/phase-22-checklist.md`
+
+Active stack:
+
+- JM-01: Command Execution Policy Normalization.
+- JM-02: Job Entity Management.
+- JM-03: JCL Profile / Execution Profile Difference Checking.
+- JM-04: Task Transaction and Compensation Boundary.
+- JM-05: User Job Notification Policy.
+- JM-06: Phase 22 verification and closure.
 
 - Define Command execution policy before broadening Job usage. CQRS makes
   state-changing operations Commands, but application UX and runtime cost still
